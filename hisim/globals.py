@@ -1,0 +1,341 @@
+#   Generic/Built-in
+import os
+import json
+import sqlite3
+import pandas as pd
+import pickle
+import sys
+import inspect
+
+import pdb
+
+
+__authors__ = "Vitor Hugo Bellotto Zago"
+__copyright__ = "Copyright 2021, the House Infrastructure Project"
+__credits__ = ["Dr. Noah Pflugradt"]
+__license__ = "MIT"
+__version__ = "0.1"
+__maintainer__ = "Vitor Hugo Bellotto Zago"
+__email__ = "vitor.zago@rwth-aachen.de"
+__status__ = "development"
+
+# Retrieves hisim directory absolute path
+hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+hisim_inputs = os.path.join(hisim_abs_path, "inputs")
+hisim_postprocessing_img = os.path.join(hisim_abs_path, "postprocessing", "report")
+
+HISIMPATH       = {"results": os.path.join(hisim_abs_path, "results"),
+                   "inputs" : os.path.join(hisim_abs_path, "inputs"),
+                   "cache_dir": os.path.join(hisim_abs_path, "inputs", "cache"),
+                   "cache_indices": os.path.join(hisim_abs_path, "inputs", "cache", "cache_indices.json"),
+                   "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
+
+                   "weather": {"Aachen": os.path.join(hisim_inputs,
+                                                      "weather",
+                                                      "test-reference-years_1995-2012_1-location",
+                                                      "data_processed",
+                                                      "aachen_center")},
+                   "housing": os.path.join(hisim_inputs,
+                                           "housing",
+                                           "data_processed",
+                                           "episcope-tabula.csv"),
+                   "occupancy": {"CH01": {"number_of_residents": [os.path.join(hisim_inputs,
+                                                                               "loadprofiles",
+                                                                               "electrical-warmwater-presence-load_1-family",
+                                                                               "data_processed",
+                                                                               "BodilyActivityLevel.High.HH1.json"),
+                                                                  os.path.join(hisim_inputs,
+                                                                               "loadprofiles",
+                                                                               "electrical-warmwater-presence-load_1-family",
+                                                                               "data_processed",
+                                                                               "BodilyActivityLevel.Low.HH1.json")],
+                                          "electricity_consumption": os.path.join(hisim_inputs,
+                                                                               "loadprofiles",
+                                                                               "electrical-warmwater-presence-load_1-family",
+                                                                               "data_processed",
+                                                                               "SumProfiles.HH1.Electricity.csv"),
+                                          "water_consumption": os.path.join(hisim_inputs,
+                                                                                "loadprofiles",
+                                                                                "electrical-warmwater-presence-load_1-family",
+                                                                                "data_processed",
+                                                                                "SumProfiles.HH1.Warm Water.csv")}},
+                   "photovoltaic": {"modules": os.path.join(hisim_inputs,
+                                                            "photovoltaic",
+                                                            "data_processed",
+                                                            "sandia_modules.csv"),
+                                    "inverters": os.path.join(hisim_inputs,
+                                                             "photovoltaic",
+                                                             "data_processed",
+                                                             "sandia_inverters.csv")},
+                   "smart_appliances": os.path.join(hisim_inputs,
+                                                    "smart_devices",
+                                                    "data_processed",
+                                                    "smart_devices.json"),
+                   "tasks": [os.path.join(hisim_inputs,
+                                          "loadprofiles",
+                                          "electrical-load_2-smart-appliances",
+                                          "data_processed",
+                                          "FlexibilityEvents.HH1.json"),
+                             os.path.join(hisim_inputs,
+                                          "loadprofiles",
+                                          "electrical-load_2-smart-appliances",
+                                          "data_processed",
+                                          "FlexibilityEvents2.HH1.json")],
+                   "electric_vehicle": [ os.path.join("D:", os.sep, "Work", "CHR01", "Results.HH1.sqlite"),
+                                         os.path.join("D:", os.sep, "Work", "CHR01", "Results.General.sqlite")],
+
+                   "frank_data": os.path.join(hisim_inputs,
+                                              "loadprofiles",
+                                              "electrical-spaceheating-warmwater-photovoltaic_1-household",
+                                              "data_raw",
+                                              "VDI 4655"),
+
+                   "report": os.path.join(hisim_abs_path,"results","report.pdf"),
+                   "advanced_battery": {"parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"),
+                                        "reference_case": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "reference_case", "ref_case_data.npz")},
+                   "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
+                   "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy")}
+
+
+class Outputs:
+
+    def __init__(self):
+        self.number_of_outputs = 0
+
+    def add(self):
+        output_index = self.number_of_outputs
+        self.number_of_outputs = self.number_of_outputs + 1
+        return output_index
+
+def open_cache():
+    if os.path.isdir(HISIMPATH["cache_dir"]) is False:
+        os.mkdir(HISIMPATH["cache_dir"])
+    if os.path.isfile(HISIMPATH["cache_indices"]) is False:
+        with open(HISIMPATH["cache_indices"], 'w') as f:
+            json.dump({}, f)
+
+    with open(HISIMPATH["cache_indices"]) as file:
+        cache_index = json.load(file)
+
+    entries_to_be_deleted = []
+    for classname in cache_index:
+        if os.path.isfile(os.path.join(HISIMPATH["cache_dir"], (cache_index[classname][0]["filepath"]))) is False:
+            entries_to_be_deleted.append(classname)
+
+    if len(entries_to_be_deleted) > 0:
+        for entry in entries_to_be_deleted:
+            del cache_index[entry]
+
+        with open(os.path.join(HISIMPATH["cache_indices"]), "w") as file:
+            json.dump(cache_index, file, indent=4)
+
+    return cache_index
+
+def load_smart_appliance(name):
+    with open(HISIMPATH["smart_appliances"]) as f:
+        data = json.load(f)
+    return data[name]
+
+def get_cache(classname, parameters):
+    filename = None
+    cache_absolute_filepath = None
+
+    all_caches = open_cache()
+
+    if classname in all_caches:
+        for in_cache in all_caches[classname]:
+            if all(elem in in_cache["parameters"] for elem in parameters):
+                filename = in_cache["filepath"]
+                break
+
+    if filename is not None:
+        cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
+
+    return cache_absolute_filepath
+
+def save_cache(classname, parameters, database=None):
+    """
+    Saves calculated data from component class to cache directory
+    and registers the library indices in cache_indices.json
+
+    :param classname: Name of Component Class
+    :param parameters: Parameters that defined the Component Class
+    :param database: Data from the Component Class
+    :return:
+    """
+
+
+    def get_next_file():
+        list_cache_files = [x.name for x in os.scandir(HISIMPATH["cache_dir"])]
+        counter = 0
+
+        for cache_file in list_cache_files:
+           if name_profile in cache_file:
+               cache_file_number = int(cache_file[3:6])
+               if counter < cache_file_number:
+                    counter = cache_file_number
+
+        return str(counter + 1)
+
+    name_profile = str.lower(classname)
+
+    #with open(os.path.join(HISIMPATH["cache_dir"], "cache_indices.json")) as f:
+    #    cache_index = json.load(f)
+    cache_index = open_cache()
+
+    if classname in cache_index:
+        n_files = len(cache_index[classname])
+        i_next_file = str(n_files + 1)
+    else:
+        cache_index[classname] = {}
+        i_next_file = str(1)
+
+    csv_file = "{}_{}.csv".format(name_profile, i_next_file.zfill(3))
+    next_dict = {"parameters": parameters, "filepath": csv_file }
+
+    if cache_index[classname]:
+        cache_index[classname].append(next_dict)
+    else:
+        cache_index[classname] = [next_dict]
+
+    with open(os.path.join(HISIMPATH["cache_dir"], "cache_indices.json"), "w") as f:
+         json.dump(cache_index, f, indent=4)
+
+    if database is None:
+        return os.path.join(HISIMPATH["cache_dir"], csv_file)
+    else:
+        database.to_csv(os.path.join(HISIMPATH["cache_dir"], csv_file), sep=",", decimal=".", index=False, encoding = "cp1252")
+
+def load_export_load_profile_generator(target):
+    """
+    Returns the paths for the SQL exported files from
+    the Load Profile Generator
+    """
+    targetpath = os.path.join(HISIMPATH["LoadProfileGenerator_export_directory"], target)
+    if os.path.exists(targetpath):
+        EXPORTPATH = {"electric_vehicle": [os.path.join(targetpath, "Results.HH1.sqlite"),
+                                           os.path.join(targetpath, "Results.General.sqlite")]}
+        return EXPORTPATH
+    else:
+        raise Warning("Target export from Load Profile Generator does not exist")
+        return None
+
+def get_ev_data(target):
+    """
+    Testing function to import EV Data
+    To be soon obsolete
+    """
+    cache_filepath = get_cache("Vehicle", ["CH01"])
+    def open_sql(path, table_name):
+        sql_file = sqlite3.connect(path)
+        return pd.read_sql("SELECT * FROM {};".format(table_name), sql_file)
+    def open_ev_json(filepath):
+        with open(filepath) as f:
+            data = json.load(f)
+        return data["Values"]
+
+    FILEPATH = load_export_load_profile_generator(target=target)
+    if FILEPATH is None:
+        FILEPATH = HISIMPATH
+
+    ev_files = dict()
+    filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
+    list_columns = []
+    list_values = []
+    for index, row in filepaths.iterrows():
+        json_info = json.loads(row["Json"])
+        if "Charging" in json_info["FileName"] and "png" not in json_info["FileName"]:
+            filepath = os.path.normpath(json_info["FullFileName"])
+            filepath_list = filepath.split(os.sep)
+            ev_files[filepath_list[-1].split(".")[0]] = json_info["FullFileName"]
+            list_columns.append(filepath_list[-1].split(".")[0])
+            list_values.append(open_ev_json(json_info["FullFileName"]))
+    list_values = list(map(list, zip(*list_values)))
+    ev_pd = pd.DataFrame(list_values, columns=list_columns)
+
+    # Trying to pass to pandas
+    activations = open_sql(FILEPATH["electric_vehicle"][0], "DeviceActivationEntries")
+    number_of_car_activations = 0
+    device_activation_entries = []
+    for index, column in activations.iterrows():
+        if "Car" in column['AffordanceName']:
+            active = json.loads(column['Json'])
+            device_activation_entries.append(active)
+            number_of_car_activations += 1
+
+
+    transportation_devices = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDevices")
+    for index, vehicle in transportation_devices.iterrows():
+        if "Charging" in vehicle["Name"]:
+            vehicle_info = json.loads(vehicle['Json'])
+            battery_stored_energy_meters = vehicle_info["FullRangeInMeters"]
+            convert_factor = vehicle_info["EnergyToDistanceFactor"]
+            battery_stored_energy_wh = battery_stored_energy_meters * convert_factor
+
+    discharge = []
+    load = []
+    for index, row in ev_pd.iterrows():
+        load.append(row["Soc"] * battery_stored_energy_wh)
+        if index == 0:
+            discharge.append(0)
+        else:
+            diff = load[-1] - load[-2]
+            if diff < 0:
+                discharge.append(diff)
+            else:
+                discharge.append(0)
+
+    ev_pd["Load"] = load
+    ev_pd["Discharge"] = discharge
+    data = [ev_pd["CarLocation"].tolist()]
+    data.append(discharge)
+    data = list(map(list, zip(*data)))
+    data_parameters = ["CarLocation", "Discharging"]
+    database = pd.DataFrame(data, columns=data_parameters)
+
+    save_cache("Vehicle", ["CH01"], database)
+
+    return ev_pd, device_activation_entries
+
+def get_last_pickle():
+    stored_results_list = os.listdir(HISIMPATH["results"])
+    execution_dates = []
+    for index, result_dir in enumerate(stored_results_list):
+        temp = result_dir.split("_")
+        execution_dates.append("{}_{}".format(temp[-2],temp[-1]))
+
+    dir_index = execution_dates.index(max(execution_dates))
+    latest_dir = stored_results_list[dir_index]
+    latest_dir_path = os.path.join(HISIMPATH["results"], latest_dir)
+    for file in os.listdir(latest_dir_path):
+        if file.endswith(".pkl"):
+            pickle_file = file
+            break
+
+    filepath = os.path.join(latest_dir_path, pickle_file)
+    with open(filepath, 'rb') as input:
+        extracted_pickle = pickle.load(input)
+    return extracted_pickle, latest_dir_path, latest_dir
+
+def del_file_type(dirname, filetype):
+    dir_path = os.path.join(HISIMPATH["results"], dirname)
+    for file in os.listdir(dir_path):
+        if file.endswith(filetype):
+            os.remove(os.path.join(dir_path,file))
+
+def open_pickle(dirname):
+    dir_path = os.path.join(HISIMPATH["results"],dirname)
+    for file in os.listdir(dir_path):
+        if file.endswith(".pkl"):
+            pickle_file = file
+            break
+
+    filepath = os.path.join(dir_path, pickle_file)
+    with open(filepath, 'rb') as input:
+        extracted_pickle = pickle.load(input)
+    return extracted_pickle, dir_path
+
+if __name__ == "__main__":
+    save_cache()
+
+

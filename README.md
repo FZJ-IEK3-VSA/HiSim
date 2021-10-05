@@ -1,9 +1,5 @@
 
 <a href="https://www.fz-juelich.de/iek/iek-3/EN/Home/home_node.html"><img src="https://www.fz-juelich.de/SharedDocs/Bilder/INM/INM-1/EN/FZj_Logo.jpg?__blob=normal" alt="Forschungszentrum Juelich Logo" width="230px"></a>
-<a href="https://www.hs-emden-leer.de/">
-<img src="https://www.hs-emden-leer.de/typo3conf/ext/fr_sitepackage_hs_emden_leer/Resources/Public/Images/logo-header-normal.svg" alt="Hochschule Emden/Leer" width="230px"></a>
-
-
 
 # HiSim - House Infrastructure Simulator
 HiSim is a Python package for simulation and analysis of household scenarios using modern components as alternative to fossil fuel based ones. This package integrates load profiles generation of electricity consumption, heating demand, electricity generation, and strategies of smart strategies of modern components, such as heat pump, battery, electric vehicle or thermal energy storage. HiSim is a package under development by Forschungszentrum Jülich und Hochschule Emden/Leer.
@@ -142,3 +138,28 @@ generates a report.
 
 
 
+
+## License
+
+MIT License
+
+Copyright (C) 2020-2021 Noah Pflugradt, Vitor Zago, Frank Burkard, Tjarko Tjaden, Leander Kotzur, Detlef Stolten
+
+You should have received a copy of the MIT License along with this program.
+If not, see https://opensource.org/licenses/MIT
+
+
+## About Us 
+<a href="https://www.fz-juelich.de/iek/iek-3/DE/Home/home_node.html"><img src="https://www.fz-juelich.de/SharedDocs/Bilder/IEK/IEK-3/Abteilungen2015/VSA_DepartmentPicture_2019-02-04_459x244_2480x1317.jpg?__blob=normal" alt="Institut TSA"></a> 
+
+We are the [Institute of Energy and Climate Research - Techno-economic Systems Analysis (IEK-3)](https://www.fz-juelich.de/iek/iek-3/DE/Home/home_node.html) belonging to the [Forschungszentrum Jülich](www.fz-juelich.de/). Our interdisciplinary institute's research is focusing on energy-related process and systems analyses. Data searches and system simulations are used to determine energy and mass balances, as well as to evaluate performance, emissions and costs of energy systems. The results are used for performing comparative assessment studies between the various systems. Our current priorities include the development of energy strategies, in accordance with the German Federal Government’s greenhouse gas reduction targets, by designing new infrastructures for sustainable and secure energy supply chains and by conducting cost analysis studies for integrating new technologies into future energy market frameworks.
+
+## Contributions and Users
+
+This software is developed together with the **Hochschule Emden/Leer** inside the project "Piegstrom".
+
+## Acknowledgement
+
+This work was supported by the Helmholtz Association under the Joint Initiative ["Energy System 2050   A Contribution of the Research Field Energy"](https://www.helmholtz.de/en/research/energy/energy_system_2050/).
+
+<a href="https://www.helmholtz.de/en/"><img src="https://www.helmholtz.de/fileadmin/user_upload/05_aktuelles/Marke_Design/logos/HG_LOGO_S_ENG_RGB.jpg" alt="Helmholtz Logo" width="200px" style="float:right"></a>

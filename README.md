@@ -16,7 +16,7 @@ Clone repository
 To clone this repository, enter the following command to your terminal:
 
 ```python
-git clone GITHUB_LINK_TO_REPOSITORY
+git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
 ```
 
 Virtual Environment

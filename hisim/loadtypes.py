@@ -28,6 +28,7 @@ class LoadTypes(str, enum.Enum):
 
     Volume = "Volume"
     Temperature = "Temperature"
+    Time = "Time"
 
     # Substance
     Gas = "Gas"
@@ -64,7 +65,6 @@ class Units(str, enum.Enum):
     # Volume per time
     l_per_timestep = "Liter per timestep"
 
-
     # Mass
     kg = "kg"
 
@@ -76,6 +76,9 @@ class Units(str, enum.Enum):
 
     # Degrees
     Degrees = "Degrees"
+
+    # Time
+    Seconds = "s"
 
 
 

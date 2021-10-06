@@ -5,3 +5,4 @@ seaborn
 reportlab
 pvlib
 openpyxl
+pytest

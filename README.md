@@ -35,8 +35,8 @@ source hisimvenv/bin/activate
 ```
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 ```python
-conda create -n hisimvenv python=x.x anaconda
-source activate hisimvenv
+conda create -n hisimvenv python=3.8
+conda activate hisimvenv
 ```
 With the successful activation, `hisim` is ready to be locally installed.
 

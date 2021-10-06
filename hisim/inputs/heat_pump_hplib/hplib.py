@@ -16,7 +16,7 @@ def load_database() -> pd.DataFrame:
     df : pd.DataFrame
         Content of the database
     """
-    df = pd.read_csv('hplib_database.csv')
+    df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv')
     return df
 
 
@@ -44,7 +44,7 @@ def get_parameters(model: str, group_id: int = 0,
     parameters : pd.DataFrame
         Data frame containing the model parameters.
     """
-    df = pd.read_csv('hplib_database.csv', delimiter=',')
+    df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
     df = df.loc[df['Model'] == model]
     parameters = pd.DataFrame()
     parameters['Manufacturer']=(df['Manufacturer'].values.tolist())
@@ -117,7 +117,7 @@ def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataF
     parameters : pd.DataFrame
         Data frame containing the model parameters.
     """
-    df = pd.read_csv('hplib_database.csv', delimiter=',')
+    df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
     df = df.loc[df['Model'] == model]
     parameters = pd.DataFrame()
 

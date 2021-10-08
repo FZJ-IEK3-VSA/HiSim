@@ -74,7 +74,7 @@ are based on compatibility and desired control over their functionality. These c
 to form a setup function. The setup defined by user is passed to the``HiSim``framework, which links all the inputs
 and outputs of the components as shown in the figure below [@inproceedings].
 
-![Framework](./img/framework_diagram.svg)
+![Framework](./img/framework_diagram.png)
 
 After connecting and testing all the links, the ``HiSim`` framework  performs all the time steps
 simulations for the user defined timeline. The postprocessing automatically outputs carpet, sankey, line plots and

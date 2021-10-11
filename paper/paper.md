@@ -24,7 +24,6 @@ affiliations:
 date: 1 October 2021
 bibliography: paper.bib
 ---
-# [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5366883.svg)]
 # Summary
 
 High volatility and low availability of renewables are the major hurdles in combating climate

@@ -70,7 +70,7 @@ The ``HiSim`` library uses a pipeline for more better flexibility, packing up th
 The devices, load profiles and controllers are structured as components. The connection among the components
 are based on compatibility and desired control over their functionality. These components are ordered and connected
 to form a setup function. The setup defined by user is passed to the``HiSim`` framework, which links all the inputs
-and outputs of the components as shown in the figure below [@inproceedings].
+and outputs of the components as shown in the figure below.
 
 ![Framework [@hisimframework]](./img/framework_diagram.png)
 

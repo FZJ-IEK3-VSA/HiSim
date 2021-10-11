@@ -13,8 +13,6 @@ from components.configuration import PhysicsConfig
 from components.configuration import LoadConfig
 from functools import lru_cache
 
-
-
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]

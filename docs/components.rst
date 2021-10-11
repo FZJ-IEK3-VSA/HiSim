@@ -1,16 +1,5 @@
-components package
+Components
 ==================
-
-Submodules
-----------
-
-components.PFM module
----------------------
-
-.. automodule:: components.PFM
-   :members:
-   :undoc-members:
-   :show-inheritance:
 
 components.advanced\_battery module
 -----------------------------------
@@ -33,25 +22,8 @@ components.building module
 
 .. automodule:: components.building
    :members:
-   :undoc-members:
    :show-inheritance:
-
-components.chp\_system module
------------------------------
-
-.. automodule:: components.chp_system
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-components.configuration module
--------------------------------
-
-.. automodule:: components.configuration
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
+<!---
 components.controllable module
 ------------------------------
 
@@ -227,6 +199,7 @@ components.weather module
    :members:
    :undoc-members:
    :show-inheritance:
+--->
 
 Module contents
 ---------------

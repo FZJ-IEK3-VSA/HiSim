@@ -49,13 +49,13 @@ on commercial technical data from current market devices.
 
 # A statement of need
 Simulation and analysis of home demand side management strategies require either commercial software
-([@witzig2010polysun,@carrasco2010pv]) and a combination of a plethora of tools ([@holmgren2018pvlib,@pflugradt2016modellierung]), that can be only compatible through manually merging.
+([@witzig2010polysun] and [@carrasco2010pv]) and a combination of a plethora of tools ([@holmgren2018pvlib] and [@pflugradt2016modellierung]), that can be only compatible through manually merging.
 The ``HiSim`` library uses a pipeline for more better flexibility, packing up these tools and current appliances:
 
 - Popular photovoltaic Python library pvlib [@holmgren2018pvlib], to simulate PV system electricity generation
 (https://doi.org/10.5281/zenodo.5366883)
 - European building stock database by EPISCOPE/TABULA [@loga2016tabula], covering the most common houses from multiple European countries.
-- Thermal Building 5R1C [@jayathissa2017optimising][@ISO13790] to calculate household heating and cooling demands for an entire year.
+- Thermal Building 5R1C [@jayathissa2017optimising,@ISO13790] to calculate household heating and cooling demands for an entire year.
 - Load Profile Generator [@pflugradt2016modellierung], behavior simulator that generates electricity and warm water load profiles.
 - Database for appliances on version 0.1:
     - Heat pumps

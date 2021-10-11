@@ -6,6 +6,12 @@
 Welcome to House Infrastructure Simulator's documentation!
 ==========================================================
 
+Installation
+==========================================================
+
+Collaboration
+==========================================================
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:

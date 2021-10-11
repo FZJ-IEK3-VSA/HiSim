@@ -23,7 +23,9 @@ components.building module
 .. automodule:: components.building
    :members:
    :show-inheritance:
+
 <!---
+
 components.controllable module
 ------------------------------
 
@@ -199,7 +201,7 @@ components.weather module
    :members:
    :undoc-members:
    :show-inheritance:
---->
+
 
 Module contents
 ---------------
@@ -208,3 +210,5 @@ Module contents
    :members:
    :undoc-members:
    :show-inheritance:
+
+--->

@@ -3,13 +3,23 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to House Infrastructure Simulator's documentation!
+Welcome to HiSim's documentation!
 ==========================================================
 
 Installation
-==========================================================
+---------------------------------------------------------
 
-Collaboration
+.. toctree::
+   :maxdepth: 2
+   :caption:
+
+   installation
+
+License
+=========================================================
+HiSim is distruibuted under `MIT License <https://github.com/FZJ-IEK3-VSA/HiSim/blob/main/LICENSE>`_.
+
+Modules
 ==========================================================
 
 .. toctree::
@@ -18,8 +28,8 @@ Collaboration
 
    modules
 
-
-
+Contribution
+============================================================
 
 Indices and tables
 ==================

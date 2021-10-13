@@ -49,7 +49,7 @@ class HeatStorage(Component):
     def __init__(self,
                  V_SP= 500,
                  temperature_of_warm_water_extratcion=35,
-                 ambient_temperature = 15,
+                 ambient_temperature = 0,
                  sim_params=None):
         super().__init__("HeatStorageTjarko")
         self.V_SP = V_SP
@@ -151,20 +151,20 @@ class HeatStorage(Component):
     def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w:float):
         production=0
         #function to add all possible mass flows
-        if self.input_mass1.SourceOutput and self.input_temp1.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass1)*c_w*(stsv.get_input_value(self.input_temp1))+production
+        if self.input_mass1.SourceOutput and self.input_temp1.SourceOutput and stsv.get_input_value(self.input_temp1) is not None:
+            production=stsv.get_input_value(self.input_mass1)*c_w*(273.15+stsv.get_input_value(self.input_temp1))+production
 
-        if self.input_mass2.SourceOutput and self.input_temp2.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass2)*c_w*(stsv.get_input_value(self.input_temp2))+production
+        if self.input_mass2.SourceOutput and self.input_temp2.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
+            production=stsv.get_input_value(self.input_mass2)*c_w*(273.15+stsv.get_input_value(self.input_temp2))+production
 
-        if self.input_mass3.SourceOutput and self.input_temp3.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass3)*c_w*(stsv.get_input_value(self.input_temp3))+production
+        if self.input_mass3.SourceOutput and self.input_temp3.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
+            production=stsv.get_input_value(self.input_mass3)*c_w*(273.15+stsv.get_input_value(self.input_temp3))+production
 
-        if self.input_mass4.SourceOutput and self.input_temp4.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass4)*c_w*(stsv.get_input_value(self.input_temp4))+production
+        if self.input_mass4.SourceOutput and self.input_temp4.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
+            production=stsv.get_input_value(self.input_mass4)*c_w*(273.15+stsv.get_input_value(self.input_temp4))+production
 
-        if self.input_mass5.SourceOutput and self.input_temp5.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass5)*c_w*(stsv.get_input_value(self.input_temp5))+production
+        if self.input_mass5.SourceOutput and self.input_temp5.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
+            production=stsv.get_input_value(self.input_mass5)*c_w*(273.15+stsv.get_input_value(self.input_temp5))+production
 
         return production
 

@@ -146,9 +146,7 @@ def basic_household(my_sim):
     my_heat_storage.connect_input(my_heat_storage.InputTemp1,
                                my_heat_pump.ComponentName,
                                my_heat_pump.TemperatureOutput)
-    my_heat_storage.connect_input(my_heat_storage.InputTemp1,
-                               my_heat_pump.ComponentName,
-                               my_heat_pump.TemperatureOutput)
+
 
     my_sim.add_component(my_heat_storage)
 

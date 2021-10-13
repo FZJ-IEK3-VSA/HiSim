@@ -198,7 +198,7 @@ class Controller(cp.Component):
         # So Gas_Heater and CHP can heat up Storage, if Heat Pump didn't heat up enough
         # What to do with too much heat?
         # Idea of 2-Punkt-Regelung mit Hysterese
-        temperature_storage_target = 60  # festzulegen
+        temperature_storage_target = 50  # festzulegen
         control_signal_chp = 0
         control_signal_gas_heater = 0
         control_signal_heat_pump= 0
@@ -208,21 +208,21 @@ class Controller(cp.Component):
 
         # WarmWaterStorage
         if delta_temperature >= 10:
-            control_signal_heatpump = 1
+            control_signal_heat_pump = 1
             control_signal_chp = 1
             control_signal_gas_heater = 1
         elif delta_temperature > 5 and delta_temperature < 10:
             # heat storage
             # look at state of signal of heating componentens
             # if signal was above zero put on more heating systems
-            control_signal_heatpump=1
+            control_signal_heat_pump=1
             if self.state.control_signal_chp < 1:
                 control_signal_chp = 1
                 control_signal_gas_heater = 0.5
             elif self.state.control_signal_chp == 1:
                 control_signal_gas_heater = 1
         elif delta_temperature > 0 and delta_temperature <= 5:
-            control_signal_heatpump = 1
+            control_signal_heat_pump = 1
             if self.state.control_signal_chp < 1:
                 control_signal_chp = 1
             elif self.state.control_signal_chp == 1:
@@ -236,8 +236,8 @@ class Controller(cp.Component):
 
         self.state.control_signal_gas_heater = control_signal_gas_heater
         self.state.control_signal_chp = control_signal_chp
+        self.state.control_signal_chp = control_signal_heat_pump
         stsv.set_output_value(self.control_signal_heat_pump, control_signal_heat_pump)
-
         stsv.set_output_value(self.control_signal_gas_heater, control_signal_gas_heater)
         stsv.set_output_value(self.control_signal_chp, control_signal_chp)
 

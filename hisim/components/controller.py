@@ -35,6 +35,7 @@ class Controller(cp.Component):
 
     ControlSignalGasHeater="ControlSignalGasHeater"
     ControlSignalChp="ControlSignalChp"
+    ControlSignalHeatPump="ControlSignalHeatPump"
 
     def __init__(self,
                  sim_params=None):

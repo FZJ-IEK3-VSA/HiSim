@@ -50,18 +50,14 @@ class HeatStorage(Component):
     def __init__(self,
                  timesteps: int,
                  V_SP= 500,
-                 P_h_HS_nenn = 1000,
-                 TmaxHS = 95,
                  temperature_of_warm_water_extratcion=35,
+                 ambient_temperature = 15,
                  sim_params=None):
         super().__init__("HeatStorageTjarko")
         self.V_SP = V_SP
-        self.timesteps = timesteps
-        self.P_h_HS_nenn = P_h_HS_nenn
-        self.TmaxHS = TmaxHS
         self.sim_params = sim_params
         self.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
-        #self.seconds_per_timestep = seconds_per_timestep
+        self.ambient_temperature = ambient_temperature
 
 
 
@@ -182,31 +178,23 @@ class HeatStorage(Component):
 
     def calculate_new_storage_temperature (self,seconds_per_timestep: int, T_sp: float, production: float, last = float ):
 
-        P_h_HS = self.P_h_HS_nenn * SignalHeizstab # Signal = 0 oder 1
-        T_ext_SP = stsv.get_input_value(self.temperature_outside)
+        T_ext_SP = self.ambient_temperature
 
         m_SP_h =  self.V_SP *0.99 # Vereinfachung
         UA_SP = 0.0038 * self.V_SP + 0.85 #Heatloss Storage
 
         dt=seconds_per_timestep
         c_w=4182
-        SignalHeizstab=1
 
         #calcutae new Storage Temp.
-        T_SP = T_sp + (1/(m_SP_h*c_w))*(production+P_h_HS - last - UA_SP*(T_sp-T_ext_SP))*dt
+        T_SP = T_sp + (1/(m_SP_h*c_w))*(production - last - UA_SP*(T_sp-T_ext_SP))*dt
         #T_SP = T_sp + (dt/(m_SP_h*c_w))*(P_h_HS*(T_sp-T_ext_SP) - last*(T_sp-T_ext_SP) - UA_SP*(T_sp-T_ext_SP))
         #Correction Calculation
         T_sp_k = (T_sp+T_SP)/2
         T_vl = T_sp_k+2.5
 
-        #Correction if Heat Rod can#t heat anymore because TmaxHS is to low
-        if T_vl > self.TmaxHS:
-            SignalHeizstab=0
-
-        P_h_HS=SignalHeizstab*self.P_h_HS_nenn
-
         # calcutae new Storage Temp.
-        T_SP = T_sp + (1/(m_SP_h*c_w))*(P_h_HS - last - UA_SP*(T_sp_k-T_ext_SP))*dt
+        T_SP = T_sp + (1/(m_SP_h*c_w))*( production- last - UA_SP*(T_sp_k-T_ext_SP))*dt
 
         return T_SP, UA_SP
 

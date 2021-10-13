@@ -13,9 +13,10 @@ import loadtypes as lt
 # class ControllerState:
 #    def __init__(self):
 class ControllerState:
-    def __init__(self, control_signal_gas_heater: int, control_signal_chp: int):
+    def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: int):
         self.control_signal_gas_heater = control_signal_gas_heater
         self.control_signal_chp = control_signal_chp
+        self.control_signal_heat_pump = control_signal_heat_pump
 
 class Controller(cp.Component):
     #Inputs
@@ -40,7 +41,7 @@ class Controller(cp.Component):
     def __init__(self,
                  sim_params=None):
         super().__init__("Controller")
-        self.state = ControllerState(control_signal_gas_heater=0, control_signal_chp=0)
+        self.state = ControllerState(control_signal_heat_pump=0,control_signal_gas_heater=0, control_signal_chp=0)
         self.previous_state = copy.copy(self.state)
 
         ###Inputs
@@ -48,7 +49,7 @@ class Controller(cp.Component):
         self.temperature_storage: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                      self.StorageTemperature,
                                                                      lt.LoadTypes.Water,
-                                                                     lt.Units.Celcius,
+                                                                     lt.Units.Celsius,
                                                                      False)
 
 
@@ -112,6 +113,12 @@ class Controller(cp.Component):
                                                                          lt.LoadTypes.Any,
                                                                          lt.Units.Percent,
                                                                          False)
+        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                         self.ControlSignalHeatPump,
+                                                                         lt.LoadTypes.Any,
+                                                                         lt.Units.Percent,
+                                                                         False)
+
 
     def build(self, mode):
         self.mode = mode
@@ -135,7 +142,7 @@ class Controller(cp.Component):
 
         electricity_to_or_from_battery_target = electricity_input
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence: bool):
         # @Vitor: Was passiert mit Output-Werten die nicht gesetzt werden?
 
         ###ELECTRICITY
@@ -194,23 +201,32 @@ class Controller(cp.Component):
         temperature_storage_target = 60  # festzulegen
         control_signal_chp = 0
         control_signal_gas_heater = 0
+        control_signal_heat_pump= 0
         delta_temperature = temperature_storage_target - stsv.get_input_value(self.temperature_storage)
 
         # Idea: Storage berechnet Bedarf an Wärme der benötigt wird um +5 Grad Celsius von heating and warm zu erreichen
 
         # WarmWaterStorage
-        if delta_temperature > 5 and delta_temperature < 10:
+        if delta_temperature >= 10:
+            control_signal_heatpump = 1
+            control_signal_chp = 1
+            control_signal_gas_heater = 1
+        elif delta_temperature > 5 and delta_temperature < 10:
             # heat storage
             # look at state of signal of heating componentens
             # if signal was above zero put on more heating systems
+            control_signal_heatpump=1
+            if self.state.control_signal_chp < 1:
+                control_signal_chp = 1
+                control_signal_gas_heater = 0.5
+            elif self.state.control_signal_chp == 1:
+                control_signal_gas_heater = 1
+        elif delta_temperature > 0 and delta_temperature <= 5:
+            control_signal_heatpump = 1
             if self.state.control_signal_chp < 1:
                 control_signal_chp = 1
             elif self.state.control_signal_chp == 1:
-                control_signal_gas_heater = 1
-
-        elif delta_temperature >= 10:
-            control_signal_chp = 1
-            control_signal_gas_heater = 1
+                control_signal_gas_heater = 0.5
             # Storage warm enough. Try to turn off Heaters
         elif delta_temperature <= 0:
             control_signal_gas_heater = 0
@@ -220,6 +236,8 @@ class Controller(cp.Component):
 
         self.state.control_signal_gas_heater = control_signal_gas_heater
         self.state.control_signal_chp = control_signal_chp
+        stsv.set_output_value(self.control_signal_heat_pump, control_signal_heat_pump)
+
         stsv.set_output_value(self.control_signal_gas_heater, control_signal_gas_heater)
         stsv.set_output_value(self.control_signal_chp, control_signal_chp)
 

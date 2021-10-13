@@ -41,14 +41,12 @@ class HeatStorage(Component):
     InputTemp5="InputTemp5"
 
     # Outputs
-    HeatingWaterOutputTemperature="WaterOutputTemperature"
     WaterOutputTemperature="WaterOutputTemperature"
 
     #StorageWarmWaterTemperature="StorageWarmWaterTemperature"
     StorageEnergyLoss="StorageEnergyLoss"
 
     def __init__(self,
-                 timesteps: int,
                  V_SP= 500,
                  temperature_of_warm_water_extratcion=35,
                  ambient_temperature = 15,
@@ -58,19 +56,13 @@ class HeatStorage(Component):
         self.sim_params = sim_params
         self.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
         self.ambient_temperature = ambient_temperature
-
+        self.cw=4812
 
 
 
         self.state = HeatStorageTjarkoState(T_sp=30)
         self.previous_state = copy.copy(self.state)
 
-
-        self.temperature_outside : ComponentInput = self.add_input(self.ComponentName,
-                                                                         self.OutsideTemperature,
-                                                                         lt.LoadTypes.Temperature,
-                                                                         lt.Units.Celcius,
-                                                                         True)
 
         self.thermal_demand_heating_water : ComponentInput = self.add_input(self.ComponentName,
                                                                          self.ThermalDemandHeatingWater,
@@ -112,33 +104,33 @@ class HeatStorage(Component):
         self.input_temp1: ComponentInput = self.add_input(self.ComponentName,
                                                           self.InputTemp1,
                                                           lt.LoadTypes.Water,
-                                                          lt.Units.Celcius,
+                                                          lt.Units.Celsius,
                                                           False)
         self.input_temp2: ComponentInput = self.add_input(self.ComponentName,
                                                           self.InputTemp2,
                                                           lt.LoadTypes.Water,
-                                                          lt.Units.Celcius,
+                                                          lt.Units.Celsius,
                                                           False)
         self.input_temp3: ComponentInput = self.add_input(self.ComponentName,
                                                           self.InputTemp3,
                                                           lt.LoadTypes.Water,
-                                                          lt.Units.Celcius,
+                                                          lt.Units.Celsius,
                                                           False)
         self.input_temp4: ComponentInput = self.add_input(self.ComponentName,
                                                           self.InputTemp4,
                                                           lt.LoadTypes.Water,
-                                                          lt.Units.Celcius,
+                                                          lt.Units.Celsius,
                                                           False)
         self.input_temp5: ComponentInput = self.add_input(self.ComponentName,
                                                           self.InputTemp5,
                                                           lt.LoadTypes.Water,
-                                                          lt.Units.Celcius,
+                                                          lt.Units.Celsius,
                                                           False)
 
         self.T_sp_C : ComponentOutput = self.add_output(self.ComponentName,
                                                       self.WaterOutputTemperature,
                                                       lt.LoadTypes.Temperature,
-                                                      lt.Units.Celcius)
+                                                      lt.Units.Celsius)
         self.UA_SP_C : ComponentOutput = self.add_output(self.ComponentName,
                                                       self.StorageEnergyLoss,
                                                       lt.LoadTypes.Any,
@@ -153,30 +145,30 @@ class HeatStorage(Component):
     def i_restore_state(self):
         self.state = copy.deepcopy(self.previous_state)
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def adding_all_possible_mass_flows(self):
+    def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w:float):
         production=0
         #function to add all possible mass flows
         if self.input_mass1.SourceOutput and self.input_temp1.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass1)*c_w*(stsv.get_input_value(self.input_temp1)-T_sp)+production
+            production=stsv.get_input_value(self.input_mass1)*c_w*(stsv.get_input_value(self.input_temp1))+production
 
         if self.input_mass2.SourceOutput and self.input_temp2.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass2)*c_w*(stsv.get_input_value(self.input_temp2)-T_sp)+production
+            production=stsv.get_input_value(self.input_mass2)*c_w*(stsv.get_input_value(self.input_temp2))+production
 
         if self.input_mass3.SourceOutput and self.input_temp3.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass3)*c_w*(stsv.get_input_value(self.input_temp3)-T_sp)+production
+            production=stsv.get_input_value(self.input_mass3)*c_w*(stsv.get_input_value(self.input_temp3))+production
 
         if self.input_mass4.SourceOutput and self.input_temp4.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass4)*c_w*(stsv.get_input_value(self.input_temp4)-T_sp)+production
+            production=stsv.get_input_value(self.input_mass4)*c_w*(stsv.get_input_value(self.input_temp4))+production
 
         if self.input_mass5.SourceOutput and self.input_temp5.SourceOutput is not None:
-            production=stsv.get_input_value(self.input_mass5)*c_w*(stsv.get_input_value(self.input_temp5)-T_sp)+production
+            production=stsv.get_input_value(self.input_mass5)*c_w*(stsv.get_input_value(self.input_temp5))+production
 
         return production
 
-    def calculate_new_storage_temperature (self,seconds_per_timestep: int, T_sp: float, production: float, last = float ):
+    def calculate_new_storage_temperature (self,seconds_per_timestep: int,T_sp: float, production: float, last : float,c_w: float ):
 
         T_ext_SP = self.ambient_temperature
 
@@ -184,7 +176,7 @@ class HeatStorage(Component):
         UA_SP = 0.0038 * self.V_SP + 0.85 #Heatloss Storage
 
         dt=seconds_per_timestep
-        c_w=4182
+
 
         #calcutae new Storage Temp.
         T_SP = T_sp + (1/(m_SP_h*c_w))*(production - last - UA_SP*(T_sp-T_ext_SP))*dt
@@ -208,16 +200,16 @@ class HeatStorage(Component):
         last_var =stsv.get_input_value(self.thermal_demand_heating_water)+4182*stsv.get_input_value(self.demand_warm_water)*self.temperature_of_warm_water_extratcion
 
 
-        production_var = adding_all_possible_mass_flows()
+        production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw)
 
 
-        result = calculate_new_storage_temperature(T_sp=T_sp_var, production = production_var, last=last_var)
+        result = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep ,T_sp=T_sp_var, production = production_var, last=last_var,c_w=self.cw)
 
 
-        self.state.T_sp=result(0)
+        self.state.T_sp=result[0]
 
         stsv.set_output_value(self.T_sp_C, self.state.T_sp)
-        stsv.set_output_value(self.UA_SP_C, result(1))
+        stsv.set_output_value(self.UA_SP_C, result[1])
         #Output Massenstrom von Wasser entspricht dem Input Massenstrom. Nur Temperatur hat sich geändert. Wie ist das zu behandelN?
 
 

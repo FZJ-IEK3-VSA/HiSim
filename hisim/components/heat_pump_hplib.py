@@ -150,7 +150,7 @@ class HeatPumpHplib(Component):
     def i_restore_state(self):
         self.state = deepcopy(self.previous_state)
 
-    def i_doublecheck(self):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep : int, force_convergence: bool):

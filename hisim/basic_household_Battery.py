@@ -1,4 +1,3 @@
-basic_household_new.pyimport inspect
 import os
 import sys
 import simulator as sim
@@ -67,15 +66,15 @@ def basic_household(my_sim):
     my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_parameters(my_sim_params)
-
+    '''
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile)
     my_sim.add_component(my_occupancy)
-
+    '''
     # Build Weather
     my_weather = weather.Weather(location=location)
     my_sim.add_component(my_weather)
-
+    '''
     # Build building
     my_building = building.Building(building_code=building_code,
                                         bClass=building_class,
@@ -110,13 +109,17 @@ def basic_household(my_sim):
                               my_occupancy.ComponentName,
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
-
+    '''
     # Build heat pump 
     my_heat_pump = heat_pump_hplib.HeatPumpHplib(model=hp_manufacturer, 
                                                     group_id=hp_type,
                                                     t_in=hp_t_input,
                                                     t_out=hp_t_output,
                                                     p_th_set=hp_thermal_power)
+    my_heat_storage = storage.HeatStorage(V_SP = wws_volume,
+                                          temperature_of_warm_water_extratcion = wws_temp_outlet,
+                                          ambient_temperature=wws_temp_ambient)
+    my_controller = controller.Controller()
     my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,
                                my_controller.ComponentName,
                                my_controller.ControlSignalHeatPump)
@@ -125,7 +128,7 @@ def basic_household(my_sim):
                                my_weather.TemperatureOutside)
     my_heat_pump.connect_input(my_heat_pump.TemperatureInputSecondary,
                                my_heat_storage.ComponentName,
-                               my_heat_storage.HeatingWaterOutputTemperature)
+                               my_heat_storage.WaterOutputTemperature)
     my_heat_pump.connect_input(my_heat_pump.TemperatureInputPrimary,
                                my_weather.ComponentName,
                                my_weather.TemperatureOutside)
@@ -136,22 +139,24 @@ def basic_household(my_sim):
 
 
     # Build heat storage
-    my_heat_storage = storage.HeatStorage(V_SP = wws_volume,
-                                          temperature_of_warm_water_extratcion = wws_temp_outlet,
-                                          ambient_temperature=wws_temp_ambient)
-    my_heat_storage.connect_input(my_heat_storage.ThermalDemandHeatingWater,
-                               ???.ComponentName,
-                               ???.TemperatureOutside)
-    my_heat_storage.connect_input(my_heat_storage.OutsideTemperature,
-                               my_weather.ComponentName,
-                               my_weather.TemperatureOutside)
-    
-    ThermalDemandHeatingWater
-    InputMass1
-    InputTemp1
-    my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_heat_pump.ComponentName,
-                              my_heat_pump.ThermalEnergyDelivered)
+
+    my_heat_storage.connect_input(my_heat_storage.InputMass1,
+                               my_heat_pump.ComponentName,
+                               my_heat_pump.MassFlowOutput)
+    my_heat_storage.connect_input(my_heat_storage.InputTemp1,
+                               my_heat_pump.ComponentName,
+                               my_heat_pump.TemperatureOutput)
+    my_heat_storage.connect_input(my_heat_storage.InputTemp1,
+                               my_heat_pump.ComponentName,
+                               my_heat_pump.TemperatureOutput)
+
+    my_sim.add_component(my_heat_storage)
+
+    my_controller.connect_input(my_controller.StorageTemperature,
+                               my_heat_storage.ComponentName,
+                               my_heat_storage.WaterOutputTemperature)
+    my_sim.add_component(my_controller)
+
 
 def basic_household_implicit(my_sim):
     pass

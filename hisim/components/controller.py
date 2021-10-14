@@ -70,7 +70,7 @@ class Controller(cp.Component):
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,
                                                                               False)
-        self.electricity_to_electrolyzer_target: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_to_electrolyzer_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityToElectrolyzerReal,
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,

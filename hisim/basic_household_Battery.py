@@ -8,6 +8,7 @@ from components import building
 from components import heat_pump_hplib
 from components import controller
 from components import storage
+from components import pvs
 
 __authors__ = "Max Hillen, Tjarko Tjaden"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -47,6 +48,14 @@ def basic_household(my_sim):
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
     building_class = "medium"
     initial_temperature = 23
+
+    # Set photovoltaic system
+    time = 2019
+    power = 10E3
+    load_module_data = False
+    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
+    integrateInverter = True
+    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
 
     # Set heat pump
     hp_manufacturer = "Generic"
@@ -153,13 +162,49 @@ def basic_household(my_sim):
 
     my_sim.add_component(my_heat_storage)
     '''
+    my_photovoltaic_system = pvs.PVSystem(time=year,
+                                          location=location,
+                                          power=power,
+                                          load_module_data=load_module_data,
+                                          module_name=module_name,
+                                          integrateInverter=integrateInverter,
+                                          inverter_name=inverter_name,
+                                          sim_params=my_sim_params)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
+                                         my_weather.ComponentName,
+                                         my_weather.TemperatureOutside)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance,
+                                         my_weather.ComponentName,
+                                         my_weather.DirectNormalIrradiance)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradianceExtra,
+                                         my_weather.ComponentName,
+                                         my_weather.DirectNormalIrradianceExtra)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.DiffuseHorizontalIrradiance,
+                                         my_weather.ComponentName,
+                                         my_weather.DiffuseHorizontalIrradiance)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.GlobalHorizontalIrradiance,
+                                         my_weather.ComponentName,
+                                         my_weather.GlobalHorizontalIrradiance)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.Azimuth,
+                                         my_weather.ComponentName,
+                                         my_weather.Azimuth)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.ApparentZenith,
+                                         my_weather.ComponentName,
+                                         my_weather.ApparentZenith)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.WindSpeed,
+                                         my_weather.ComponentName,
+                                         my_weather.WindSpeed)
+    my_sim.add_component(my_photovoltaic_system)
+    '''
     my_controller = controller.Controller()
 
-    my_controller.connect_input(my_controller.StorageTemperature,
-                               my_heat_storage.ComponentName,
-                               my_heat_storage.WaterOutputTemperature)
-    my_sim.add_component(my_controller)
 
+    my_controller.connect_input(my_controller.ElectricityOutputPvs,
+                               my_pvs.ComponentName,
+                               my_pvs.ElectricityOutput)
+    
+    my_sim.add_component(my_controller)
+    '''
 
 def basic_household_implicit(my_sim):
     pass

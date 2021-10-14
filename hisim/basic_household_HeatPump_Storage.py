@@ -120,6 +120,12 @@ def basic_household(my_sim):
                                           temperature_of_warm_water_extratcion = wws_temp_outlet,
                                           ambient_temperature=wws_temp_ambient)
     my_controller = controller.Controller()
+
+    my_controller.connect_input(my_controller.StorageTemperature,
+                               my_heat_storage.ComponentName,
+                               my_heat_storage.WaterOutputTemperature)
+    my_sim.add_component(my_controller)
+
     my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,
                                my_controller.ComponentName,
                                my_controller.ControlSignalHeatPump)
@@ -146,14 +152,11 @@ def basic_household(my_sim):
     my_heat_storage.connect_input(my_heat_storage.InputTemp1,
                                my_heat_pump.ComponentName,
                                my_heat_pump.TemperatureOutput)
-
+    #Demand an Heating Water anschließen
 
     my_sim.add_component(my_heat_storage)
 
-    my_controller.connect_input(my_controller.StorageTemperature,
-                               my_heat_storage.ComponentName,
-                               my_heat_storage.WaterOutputTemperature)
-    my_sim.add_component(my_controller)
+
 
 
 def basic_household_implicit(my_sim):

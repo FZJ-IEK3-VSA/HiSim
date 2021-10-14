@@ -66,15 +66,15 @@ def basic_household(my_sim):
     my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_parameters(my_sim_params)
-    '''
+
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile)
     my_sim.add_component(my_occupancy)
-    '''
+
     # Build Weather
     my_weather = weather.Weather(location=location)
     my_sim.add_component(my_weather)
-    '''
+
     # Build building
     my_building = building.Building(building_code=building_code,
                                         bClass=building_class,
@@ -109,6 +109,7 @@ def basic_household(my_sim):
                               my_occupancy.ComponentName,
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
+
     '''
     # Build heat pump 
     my_heat_pump = heat_pump_hplib.HeatPumpHplib(model=hp_manufacturer, 
@@ -119,7 +120,7 @@ def basic_household(my_sim):
     my_heat_storage = storage.HeatStorage(V_SP = wws_volume,
                                           temperature_of_warm_water_extratcion = wws_temp_outlet,
                                           ambient_temperature=wws_temp_ambient)
-    my_controller = controller.Controller()
+                                          
     my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,
                                my_controller.ComponentName,
                                my_controller.ControlSignalHeatPump)
@@ -151,6 +152,8 @@ def basic_household(my_sim):
                                my_heat_pump.TemperatureOutput)
 
     my_sim.add_component(my_heat_storage)
+    '''
+    my_controller = controller.Controller()
 
     my_controller.connect_input(my_controller.StorageTemperature,
                                my_heat_storage.ComponentName,

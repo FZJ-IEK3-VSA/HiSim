@@ -207,30 +207,32 @@ class Controller(cp.Component):
         # Idea: Storage berechnet Bedarf an Wärme der benötigt wird um +5 Grad Celsius von heating and warm zu erreichen
 
         # WarmWaterStorage
-        if delta_temperature >= 10:
-            control_signal_heat_pump = 1
-            control_signal_chp = 1
-            control_signal_gas_heater = 1
-        elif delta_temperature > 5 and delta_temperature < 10:
-            # heat storage
-            # look at state of signal of heating componentens
-            # if signal was above zero put on more heating systems
-            control_signal_heat_pump=1
-            if self.state.control_signal_chp < 1:
+        if stsv.get_input_value(self.temperature_storage) > 0:
+            if delta_temperature >= 10:
+                control_signal_heat_pump = 1
                 control_signal_chp = 1
-                control_signal_gas_heater = 0.5
-            elif self.state.control_signal_chp == 1:
                 control_signal_gas_heater = 1
-        elif delta_temperature > 0 and delta_temperature <= 5:
-            control_signal_heat_pump = 1
-            if self.state.control_signal_chp < 1:
-                control_signal_chp = 1
-            elif self.state.control_signal_chp == 1:
-                control_signal_gas_heater = 0.5
-            # Storage warm enough. Try to turn off Heaters
-        elif delta_temperature <= 0:
-            control_signal_gas_heater = 0
-            control_signal_chp = 0
+            elif delta_temperature > 5 and delta_temperature < 10:
+                # heat storage
+                # look at state of signal of heating componentens
+                # if signal was above zero put on more heating systems
+                control_signal_heat_pump=1
+                if self.state.control_signal_chp < 1:
+                    control_signal_chp = 1
+                    control_signal_gas_heater = 0.5
+                elif self.state.control_signal_chp == 1:
+                    control_signal_gas_heater = 1
+            elif delta_temperature > 0 and delta_temperature <= 5:
+                control_signal_heat_pump = 1
+                if self.state.control_signal_chp < 1:
+                    control_signal_chp = 1
+                elif self.state.control_signal_chp == 1:
+                    control_signal_gas_heater = 0.5
+                # Storage warm enough. Try to turn off Heaters
+            elif delta_temperature <= 0:
+                control_signal_heat_pump = 0
+                control_signal_gas_heater = 0
+                control_signal_chp = 0
 
         # HeatStorage
 

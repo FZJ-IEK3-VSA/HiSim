@@ -182,11 +182,11 @@ class HeatStorage(Component):
         T_SP = T_sp + (1/(m_SP_h*c_w))*(production - last - UA_SP*(T_sp-T_ext_SP))*dt
         #T_SP = T_sp + (dt/(m_SP_h*c_w))*(P_h_HS*(T_sp-T_ext_SP) - last*(T_sp-T_ext_SP) - UA_SP*(T_sp-T_ext_SP))
         #Correction Calculation
-        T_sp_k = (T_sp+T_SP)/2
-        T_vl = T_sp_k+2.5
+        #T_sp_k = (T_sp+T_SP)/2
+        #T_vl = T_sp_k+2.5
 
         # calcutae new Storage Temp.
-        T_SP = T_sp + (1/(m_SP_h*c_w))*( production- last - UA_SP*(T_sp_k-T_ext_SP))*dt
+        #T_SP = T_sp + (1/(m_SP_h*c_w))*( production- last - UA_SP*(T_sp_k-T_ext_SP))*dt
 
         return T_SP, UA_SP
 

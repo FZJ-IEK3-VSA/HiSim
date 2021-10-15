@@ -13,10 +13,11 @@ import loadtypes as lt
 # class ControllerState:
 #    def __init__(self):
 class ControllerState:
-    def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: int):
+    def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: int,temperature_storage_target_C: float):
         self.control_signal_gas_heater = control_signal_gas_heater
         self.control_signal_chp = control_signal_chp
         self.control_signal_heat_pump = control_signal_heat_pump
+        self.temperature_storage_target_C=temperature_storage_target_C
 
 class Controller(cp.Component):
     #Inputs
@@ -39,11 +40,15 @@ class Controller(cp.Component):
     ControlSignalHeatPump="ControlSignalHeatPump"
 
     def __init__(self,
-                 sim_params=None):
+                 sim_params=None,
+                 temperature_storage_target = 55,
+                 temperature_storage_target_hysteresis=50):
         super().__init__("Controller")
-        self.state = ControllerState(control_signal_heat_pump=0,control_signal_gas_heater=0, control_signal_chp=0)
-        self.previous_state = copy.copy(self.state)
 
+        self.temperature_storage_target=temperature_storage_target
+        self.temperature_storage_target_hysteresis=temperature_storage_target_hysteresis
+        self.state = ControllerState(control_signal_heat_pump=0,control_signal_gas_heater=0, control_signal_chp=0,temperature_storage_target_C=self.temperature_storage_target)
+        self.previous_state = copy.copy(self.state)
         ###Inputs
 
         self.temperature_storage: cp.ComponentInput = self.add_input(self.ComponentName,
@@ -142,7 +147,7 @@ class Controller(cp.Component):
 
         electricity_to_or_from_battery_target = electricity_input
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence = True):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence : bool):
         # @Vitor: Was passiert mit Output-Werten die nicht gesetzt werden?
 
         ###ELECTRICITY
@@ -198,16 +203,19 @@ class Controller(cp.Component):
         # So Gas_Heater and CHP can heat up Storage, if Heat Pump didn't heat up enough
         # What to do with too much heat?
         # Idea of 2-Punkt-Regelung mit Hysterese
-        temperature_storage_target = 50  # festzulegen
+
         control_signal_chp = 0
         control_signal_gas_heater = 0
         control_signal_heat_pump= 0
-        delta_temperature = temperature_storage_target - stsv.get_input_value(self.temperature_storage)
+        delta_temperature = self.state.temperature_storage_target_C - stsv.get_input_value(self.temperature_storage)
 
         # Idea: Storage berechnet Bedarf an Wärme der benötigt wird um +5 Grad Celsius von heating and warm zu erreichen
+        if timestep==65:
+            print("65")
 
         # WarmWaterStorage
         if stsv.get_input_value(self.temperature_storage) > 0:
+            self.state.temperature_storage_target_C = self.temperature_storage_target
             if delta_temperature >= 10:
                 control_signal_heat_pump = 1
                 control_signal_chp = 1
@@ -230,10 +238,17 @@ class Controller(cp.Component):
                     control_signal_gas_heater = 0.5
                 # Storage warm enough. Try to turn off Heaters
             elif delta_temperature <= 0:
+                self.state.temperature_storage_target_C = self.temperature_storage_target_hysteresis
                 control_signal_heat_pump = 0
                 control_signal_gas_heater = 0
                 control_signal_chp = 0
 
+        #1Lösungansatz
+        #Wenn Speicher einmal warm genug war, heize erst auf, wenn der Speicher -5 Grad unter Zieltemperatur ist
+        #Zwei Solltemperaturen hat, x1=50, x2=55, wenn einmal 55 erreicht ist, ist neue Zieltemperautr 50, wenn 50 unterschritten ist
+        #dann lege wieder auf 55 fest
+        #2Lösungansat:
+        #force_convergence
         # HeatStorage
 
         self.state.control_signal_gas_heater = control_signal_gas_heater

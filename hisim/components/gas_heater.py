@@ -32,19 +32,19 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"
 
-    def __init__(self, name: str, P_th_min=1000, P_th_max=12000, eff_th_min=0.6, eff_th_max=0.9, temperature_max=80, temperaturedelta=10):
-        super().__init__(name)
+    def __init__(self, P_th_min=1000, P_th_max=12000, eff_th_min=0.6, eff_th_max=0.9, temperature_max=80, temperaturedelta=10):
+        super().__init__("GasHeater")
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celcius, True)
+        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
 
 
         self.mass_out: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutput, lt.LoadTypes.Water, lt.Units.kg_per_sec)
-        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celcius)
+        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celsius)
         self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, GasHeater.GasDemand, lt.LoadTypes.Gas, lt.Units.kWh)
         self.p_th: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                      field_name=self.ThermalOutputPower,
-                                                     load_type=LoadTypes.Heating,
-                                                     unit=Units.Watt)
+                                                     load_type=lt.LoadTypes.Heating,
+                                                     unit=lt.Units.Watt)
 
         self.P_th_min = P_th_min
         self.P_th_max = P_th_max
@@ -53,6 +53,8 @@ class GasHeater(Component):
         self.temperature_max = temperature_max
         self.temperaturedelta = temperaturedelta
 
+    def write_to_report(self):
+        pass
 
     def i_save_state(self):
         pass
@@ -60,7 +62,10 @@ class GasHeater(Component):
     def i_restore_state(self):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+        pass
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
         control_signal = stsv.get_input_value(self.control_signal)
         if control_signal > 1:
             raise Exception("Expected a control signal between 0 and 1")

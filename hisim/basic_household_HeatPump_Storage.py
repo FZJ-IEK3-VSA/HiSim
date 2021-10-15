@@ -8,6 +8,7 @@ from components import building
 from components import heat_pump_hplib
 from components import controller
 from components import storage
+from components import gas_heater
 
 __authors__ = "Max Hillen, Tjarko Tjaden"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -124,7 +125,9 @@ def basic_household(my_sim):
     my_controller.connect_input(my_controller.StorageTemperature,
                                my_heat_storage.ComponentName,
                                my_heat_storage.WaterOutputTemperature)
-    my_sim.add_component(my_controller)
+
+
+
 
     my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,
                                my_controller.ComponentName,
@@ -141,22 +144,35 @@ def basic_household(my_sim):
     my_heat_pump.connect_input(my_heat_pump.TemperatureAmbient,
                                my_weather.ComponentName,
                                my_weather.TemperatureOutside)
-    my_sim.add_component(my_heat_pump)
+
 
 
     # Build heat storage
 
-    my_heat_storage.connect_input(my_heat_storage.InputTemp1,
-                               my_heat_pump.ComponentName,
-                               my_heat_pump.TemperatureOutput)
-    my_heat_storage.connect_input(my_heat_storage.InputMass1,
-                               my_heat_pump.ComponentName,
-                               my_heat_pump.MassFlowOutput)
 
+
+
+    my_gas_heater=gas_heater.GasHeater()
+    my_gas_heater.connect_input(my_gas_heater.ControlSignal,
+                               my_controller.ComponentName,
+                               my_controller.ControlSignalGasHeater)
+
+    my_gas_heater.connect_input(my_gas_heater.MassflowInputTemperature,
+                               my_heat_storage.ComponentName,
+                               my_heat_storage.WaterOutputTemperature)
+
+    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower1,
+                               my_heat_pump.ComponentName,
+                               my_heat_pump.ThermalOutputPower)
+    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower2,
+                               my_gas_heater.ComponentName,
+                               my_gas_heater.ThermalOutputPower)
     #Demand an Heating Water anschließen
+    my_sim.add_component(my_heat_pump)
+    my_sim.add_component(my_gas_heater)
 
     my_sim.add_component(my_heat_storage)
-
+    my_sim.add_component(my_controller)
 
 
 

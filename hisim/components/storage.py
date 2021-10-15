@@ -76,22 +76,22 @@ class HeatStorage(Component):
                                                            lt.Units.Watt,
                                                            False)
         self.thermal_input_power2: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.ThermalInputPower1,
+                                                          self.ThermalInputPower2,
                                                           lt.LoadTypes.Heating,
                                                           lt.Units.Watt,
                                                           False)
         self.thermal_input_power3: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.ThermalInputPower1,
+                                                          self.ThermalInputPower3,
                                                           lt.LoadTypes.Heating,
                                                           lt.Units.Watt,
                                                           False)
         self.thermal_input_power4: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.ThermalInputPower1,
+                                                          self.ThermalInputPower4,
                                                           lt.LoadTypes.Heating,
                                                           lt.Units.Watt,
                                                           False)
         self.thermal_input_power5: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.ThermalInputPower1,
+                                                          self.ThermalInputPower5,
                                                           lt.LoadTypes.Heating,
                                                           lt.Units.Watt,
                                                           False)

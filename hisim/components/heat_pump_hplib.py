@@ -200,9 +200,9 @@ class HeatPumpHplib(Component):
         on_off_previous = self.state.on_off_previous
         
         # Overwrite on_off to realize minimum time of or time off
-        if on_off_previous == 1 & time_on < time_on_min:
+        if on_off_previous == 1 and time_on < time_on_min:
             on_off=1
-        elif on_off_previous == 0 & time_off < time_off_min:
+        elif on_off_previous == 0 and time_off < time_off_min:
             on_off=0
 
         # OnOffSwitch
@@ -220,8 +220,8 @@ class HeatPumpHplib(Component):
             # Calulate outputs
             p_th = 0
             p_el = 0
-            cop = None
-            t_out = None
+            cop = 0
+            t_out = 0
             m_dot = 0
             time_off = time_off + seconds_per_timestep
             time_on = 0

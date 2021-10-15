@@ -90,6 +90,7 @@ def basic_household(my_sim):
                                         initial_temperature=initial_temperature,
                                         sim_params=my_sim_params,
                                         seconds_per_timestep=seconds_per_timestep)
+    '''
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
                               my_building.Altitude)
@@ -119,7 +120,7 @@ def basic_household(my_sim):
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
 
-    '''
+    
     # Build heat pump 
     my_heat_pump = heat_pump_hplib.HeatPumpHplib(model=hp_manufacturer, 
                                                     group_id=hp_type,
@@ -162,7 +163,7 @@ def basic_household(my_sim):
 
     my_sim.add_component(my_heat_storage)
     '''
-    my_photovoltaic_system = pvs.PVSystem(time=year,
+    my_photovoltaic_system = pvs.PVSystem(time=time,
                                           location=location,
                                           power=power,
                                           load_module_data=load_module_data,
@@ -195,16 +196,16 @@ def basic_household(my_sim):
                                          my_weather.ComponentName,
                                          my_weather.WindSpeed)
     my_sim.add_component(my_photovoltaic_system)
-    '''
+
     my_controller = controller.Controller()
 
 
     my_controller.connect_input(my_controller.ElectricityOutputPvs,
-                               my_pvs.ComponentName,
-                               my_pvs.ElectricityOutput)
+                               my_photovoltaic_system.ComponentName,
+                               my_photovoltaic_system.ElectricityOutput)
     
     my_sim.add_component(my_controller)
-    '''
+
 
 def basic_household_implicit(my_sim):
     pass

@@ -146,12 +146,13 @@ def basic_household(my_sim):
 
     # Build heat storage
 
-    my_heat_storage.connect_input(my_heat_storage.InputMass1,
-                               my_heat_pump.ComponentName,
-                               my_heat_pump.MassFlowOutput)
     my_heat_storage.connect_input(my_heat_storage.InputTemp1,
                                my_heat_pump.ComponentName,
                                my_heat_pump.TemperatureOutput)
+    my_heat_storage.connect_input(my_heat_storage.InputMass1,
+                               my_heat_pump.ComponentName,
+                               my_heat_pump.MassFlowOutput)
+
     #Demand an Heating Water anschließen
 
     my_sim.add_component(my_heat_storage)

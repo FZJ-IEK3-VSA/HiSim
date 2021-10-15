@@ -29,16 +29,11 @@ class HeatStorage(Component):
     ThermalDemandWarmWater="ThermalDemandHeating" # Warmwater for showering, washing etc...
 
     OutsideTemperature="OutsideTemperature"
-    InputMass1="InputMass1"
-    InputMass2="InputMass2"
-    InputMass3="InputMass3"
-    InputMass4="InputMass4"
-    InputMass5="InputMass5"
-    InputTemp1="InputTemp1"
-    InputTemp2="InputTemp2"
-    InputTemp3="InputTemp3"
-    InputTemp4="InputTemp4"
-    InputTemp5="InputTemp5"
+    ThermalInputPower1="ThermalInputPower1"
+    ThermalInputPower2="ThermalInputPower2"
+    ThermalInputPower3="ThermalInputPower3"
+    ThermalInputPower4="ThermalInputPower4"
+    ThermalInputPower5="ThermalInputPower5"
 
     # Outputs
     WaterOutputTemperature="WaterOutputTemperature"
@@ -75,57 +70,32 @@ class HeatStorage(Component):
                                                                          lt.Units.Liter,
                                                                          False)
 
-        self.input_mass1 : ComponentInput = self.add_input(self.ComponentName,
-                                                           self.InputMass1,
-                                                           lt.LoadTypes.Water,
-                                                           lt.Units.kg_per_sec,
+        self.thermal_input_power1 : ComponentInput = self.add_input(self.ComponentName,
+                                                           self.ThermalInputPower1,
+                                                           lt.LoadTypes.Heating,
+                                                           lt.Units.Watt,
                                                            False)
-        self.input_mass2: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputMass2,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.kg_per_sec,
+        self.thermal_input_power2: ComponentInput = self.add_input(self.ComponentName,
+                                                          self.ThermalInputPower1,
+                                                          lt.LoadTypes.Heating,
+                                                          lt.Units.Watt,
                                                           False)
-        self.input_mass3: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputMass3,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.kg_per_sec,
+        self.thermal_input_power3: ComponentInput = self.add_input(self.ComponentName,
+                                                          self.ThermalInputPower1,
+                                                          lt.LoadTypes.Heating,
+                                                          lt.Units.Watt,
                                                           False)
-        self.input_mass4: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputMass4,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.kg_per_sec,
+        self.thermal_input_power4: ComponentInput = self.add_input(self.ComponentName,
+                                                          self.ThermalInputPower1,
+                                                          lt.LoadTypes.Heating,
+                                                          lt.Units.Watt,
                                                           False)
-        self.input_mass5: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputMass5,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.kg_per_sec,
+        self.thermal_input_power5: ComponentInput = self.add_input(self.ComponentName,
+                                                          self.ThermalInputPower1,
+                                                          lt.LoadTypes.Heating,
+                                                          lt.Units.Watt,
                                                           False)
 
-        self.input_temp1: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputTemp1,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.Celsius,
-                                                          False)
-        self.input_temp2: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputTemp2,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.Celsius,
-                                                          False)
-        self.input_temp3: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputTemp3,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.Celsius,
-                                                          False)
-        self.input_temp4: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputTemp4,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.Celsius,
-                                                          False)
-        self.input_temp5: ComponentInput = self.add_input(self.ComponentName,
-                                                          self.InputTemp5,
-                                                          lt.LoadTypes.Water,
-                                                          lt.Units.Celsius,
-                                                          False)
 
         self.T_sp_C : ComponentOutput = self.add_output(self.ComponentName,
                                                       self.WaterOutputTemperature,
@@ -151,21 +121,21 @@ class HeatStorage(Component):
     def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w:float):
         production=0
         #function to add all possible mass flows
-        if self.input_mass1.SourceOutput and self.input_temp1.SourceOutput and stsv.get_input_value(self.input_temp1) is not None:
-            production=stsv.get_input_value(self.input_mass1)*c_w*(273.15+stsv.get_input_value(self.input_temp1))+production
+        if self.thermal_input_power1.SourceOutput is not None:
+            production=stsv.get_input_value(self.thermal_input_power1)+ production
 
-        if self.input_mass2.SourceOutput and self.input_temp2.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
-            production=stsv.get_input_value(self.input_mass2)*c_w*(273.15+stsv.get_input_value(self.input_temp2))+production
-
-        if self.input_mass3.SourceOutput and self.input_temp3.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
-            production=stsv.get_input_value(self.input_mass3)*c_w*(273.15+stsv.get_input_value(self.input_temp3))+production
-
-        if self.input_mass4.SourceOutput and self.input_temp4.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
-            production=stsv.get_input_value(self.input_mass4)*c_w*(273.15+stsv.get_input_value(self.input_temp4))+production
-
-        if self.input_mass5.SourceOutput and self.input_temp5.SourceOutput and stsv.get_input_value(self.input_temp1)is not None:
-            production=stsv.get_input_value(self.input_mass5)*c_w*(273.15+stsv.get_input_value(self.input_temp5))+production
-
+        if self.thermal_input_power2.SourceOutput is not None:
+            production=stsv.get_input_value(self.thermal_input_power2)+ production
+            
+        if self.thermal_input_power3.SourceOutput is not None:
+            production=stsv.get_input_value(self.thermal_input_power3)+ production
+            
+        if self.thermal_input_power4.SourceOutput is not None:
+            production=stsv.get_input_value(self.thermal_input_power4)+ production
+            
+        if self.thermal_input_power5.SourceOutput is not None:
+            production=stsv.get_input_value(self.thermal_input_power5)+ production
+            
         return production
 
     def calculate_new_storage_temperature (self,seconds_per_timestep: int,T_sp: float, production: float, last : float,c_w: float ):

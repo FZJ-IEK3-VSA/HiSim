@@ -30,6 +30,7 @@ class GasHeater(Component):
     MassflowOutput= "Hot Water Energy Output"
     MassflowOutputTemperature= "MassflowOutputTemperature"
     GasDemand = "GasDemand"
+    ThermalOutputPower="ThermalOutputPower"
 
     def __init__(self, name: str, P_th_min=1000, P_th_max=12000, eff_th_min=0.6, eff_th_max=0.9, temperature_max=80, temperaturedelta=10):
         super().__init__(name)
@@ -40,6 +41,10 @@ class GasHeater(Component):
         self.mass_out: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutput, lt.LoadTypes.Water, lt.Units.kg_per_sec)
         self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celcius)
         self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, GasHeater.GasDemand, lt.LoadTypes.Gas, lt.Units.kWh)
+        self.p_th: ComponentOutput = self.add_output(object_name=self.ComponentName,
+                                                     field_name=self.ThermalOutputPower,
+                                                     load_type=LoadTypes.Heating,
+                                                     unit=Units.Watt)
 
         self.P_th_min = P_th_min
         self.P_th_max = P_th_max
@@ -76,7 +81,9 @@ class GasHeater(Component):
         cw = 4182
         mass_out_temp=self.temperaturedelta+stsv.get_input_value(self.mass_inp_temp)
         mass_out=gas_power/(cw*mass_out_temp)
+        p_th=cw*mass_out*(mass_out_temp-stsv.get_input_value(self.mass_inp_temp))
 
+        stsv.set_output_value(self.p_th, p_th)  # efficiency
         stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # efficiency
         stsv.set_output_value(self.mass_out, mass_out)  # efficiency
         stsv.set_output_value(self.gas_demand, gas_power)  # gas consumption

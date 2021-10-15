@@ -142,7 +142,7 @@ class Controller(cp.Component):
 
         electricity_to_or_from_battery_target = electricity_input
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence = True):
         # @Vitor: Was passiert mit Output-Werten die nicht gesetzt werden?
 
         ###ELECTRICITY

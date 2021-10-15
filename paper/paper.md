@@ -39,9 +39,9 @@ bibliography: paper.bib
 
 High volatility and low availability of renewables are the major hurdles in combating climate change. Modern households and their residents employ a variety of devices to suffice their basic needs. Given the house structure and the family behavior, the overall usage of these devices during a certain period of time are represented by electricity consumption and thermal demand profiles.  Due to scale and complexity, house energy systems require a sophisticated simulation environment.
 
-In the last year, the Python package ``House Infrastructure Simulator``, for short ``HiSim``, was developed in Forschungszentrum J\"{u}lich under the MIT-License with a generic, extendable framework to enable the simulation of a household using a list of connected components, e.g., photovoltaic systems, thermal storages, heat pumps, electric car charging stations and others. 
+In the last year, the Python package ``House Infrastructure Simulator``, for short ``HiSim``, was developed in Forschungszentrum Jülich under the MIT-License with a generic, extendable framework to enable the simulation of a household using a list of connected components, e.g., photovoltaic systems, thermal storages, heat pumps, electric car charging stations and others. 
 
-For the first release, ``HiSim`` comes with a limited number of predefined components that can easily be extended by the user. The framework enables the user to connect new components to existing systems and simulate the resulting system at a high temporal resolution. Therefore, ``HiSim`` provides means to determine electricity, heating and cooling demands for arbitrary houses and family configurations. The main aim of the ``HiSim`` development is an extendable, fast and straightforward tool for parameter studies, with possible parallelization for large scale simulations on clusters, supported by a backend in a webservice and other applications.
+For the first release, ``HiSim`` comes with a limited number of predefined components that can easily be extended by the user. The framework enables the user to connect new components to existing systems and simulate the resulting system at a high temporal resolution. In other words, ``HiSim`` provides means to determine electricity, heating and cooling demands for arbitrary houses and family configurations. The main aim of the ``HiSim`` development is an extendable, fast and straightforward tool for parameter studies, with possible parallelization for large scale simulations on clusters, supported by a backend in a webservice and other applications.
 
 # Method
 
@@ -58,7 +58,7 @@ The software grew out of a research project to create guidelines for proper ener
 - Popular photovoltaic Python library pvlib [@holmgren2018pvlib], to simulate PV system electricity generation
 (https://doi.org/10.5281/zenodo.5366883)
 - European building stock database by EPISCOPE/TABULA [@loga2016tabula], covering the most common houses from multiple European countries.
-- Thermal Building 5R1C method [@jayathissa2017optimising,@ISO13790] to calculate household heating and cooling demands for an entire year.
+- Thermal Building 5R1C method [@jayathissa2017optimising,ISO13790] to calculate household heating and cooling demands for an entire year.
 - LoadProfileGenerator Connector for using the output of the LoadProfileGenerator.de, a behavior simulator that generates electricity and warm water load profiles.
 - Database for appliances on version 0.1:
     - Heat pumps
@@ -69,16 +69,13 @@ The software grew out of a research project to create guidelines for proper ener
     - Dishwashers
     - Electric vehicles
 
-HiSim has a postprocessing modules that automatically outputs carpet, sankey, line plots and
-generates a final report of the simulation run.
-
 # A statement of need
 
 While some software packages overlap slightly with ``HiSim`` purposes, e.g., Polysun [@witzig2010polysun], PVSol [@carrasco2010pv], Homer [@homersoftware], EnergyPlus [@energyplus], TRNSYS [@beckman1994trnsys], those have very different approaches.
 
-Polysun and PVSol aim primarily for craftsmen to specific size systems using a detailed and user-friendlily graphical interface. Because these are commercial tools for Windows operating systems, using them for large simulations and parameter studies on a cluster can be cumbersome or even impractical. TRNSYS is also on home energy system software, that due to historical reasons has been implemented in FORTRAN with extensive customization and high optimization for memory usage, all of which requiring from the user a steep learning curve. Being a commercial tool targeted for single processors, TRNSYS is limited both in the extendability and the ability for employment in parameter studies on a large cluster. Although EnergyPlus is a free, open-source, cross-platform software, it comes with similar drawbacks as TRNSYS. Being highly customizable, EnergyPlus requires extensive experience just to obtain the first significant results. Moreover, EnergyPlus has a strong basis on thermal building analysis, but lacks any type of simulation regarding electricity consumption by home appliances. Homer Pro provides best means for microgrid design optimization, but with less consideration on high resolution consumer energy load profiles.
+Polysun and PVSol aim primarily for craftsmen to specific size systems using a detailed and user-friendlily graphical interface. Because these are commercial tools for Windows operating systems, using them for large simulations and parameter studies on a cluster can be cumbersome or even impractical. TRNSYS is also on home energy system software, that due to historical reasons has been implemented in FORTRAN with extensive customization and high optimization for memory usage, all of which requiring from the user a steep learning curve. Being a commercial tool targeted for single processors, TRNSYS is limited both in the extendability and the ability for employment in parameter studies on a large cluster. Although EnergyPlus is a free, open-source, cross-platform software, it comes with similar drawbacks as TRNSYS. Being highly customizable, EnergyPlus requires extensive experience just to obtain the first significant results. Moreover, EnergyPlus has a strong basis on thermal building analysis, but lacks any type of simulation regarding electricity consumption by home appliances. Finally, Homer Pro provides the best means for microgrid design optimization, but does not support high resolution consumer energy load profiles.
 
-``HiSim`` bungles together Python libraries, building stock database, thermal building model based on ISO Standards as well as commercial data from the latest appliances to compile a one workflow for a household energy simulator. Its framework allows an easy and fast implementation of new components, and automatically generate the plots for the outputs as well as the results report.
+``HiSim`` bundles together Python libraries, building stock database, thermal building model based on ISO Standards as well as commercial data from the latest appliances to compile a one workflow for a household energy simulator. Its framework allows an easy and fast implementation of new components, and automatically generate the plots for the outputs as well as the results report.
 
 # Target audience
 The scientific community involved in household energy management and building optimization can find here a great tool

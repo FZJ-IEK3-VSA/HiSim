@@ -701,12 +701,12 @@ class Building(cp.Component):
 
 
         cache_filepath = globals.get_cache(classname=self.ComponentName, parameters=self.parameters)
-        if cache_filepath is not None:
-            self.solar_gain_through_windows = pd.read_csv(cache_filepath, sep=',', decimal='.')['solar_gain_through_windows'].tolist()
-        else:
+        if cache_filepath is None:
             self.cache = [0] * self.timesteps
             self.cache_path = globals.save_cache(self.ComponentName, self.parameters)
             self.cache_length = self.timesteps
+        else:
+            self.solar_gain_through_windows = pd.read_csv(cache_filepath, sep=',', decimal='.')['solar_gain_through_windows'].tolist()
 
     #@cached(cache=LRUCache(maxsize=16))
     def get_solar_gain_through_windows(self, altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith):

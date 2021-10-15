@@ -17,7 +17,7 @@ Installation
 
 License
 =========================================================
-HiSim is distruibuted under `MIT License <https://github.com/FZJ-IEK3-VSA/HiSim/blob/main/LICENSE>`_.
+HiSim is distributed under `MIT License <https://github.com/FZJ-IEK3-VSA/HiSim/blob/main/LICENSE>`_ .
 
 Modules
 ==========================================================

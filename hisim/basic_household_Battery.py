@@ -138,7 +138,7 @@ def basic_household(my_sim):
                                my_weather.ComponentName,
                                my_weather.TemperatureOutside)
     my_heat_pump.connect_input(my_heat_pump.TemperatureInputSecondary,
-                               my_heat_storage.ComponentName,
+                               my_heat_storage.ComponentName,eir
                                my_heat_storage.WaterOutputTemperature)
     my_heat_pump.connect_input(my_heat_pump.TemperatureInputPrimary,
                                my_weather.ComponentName,

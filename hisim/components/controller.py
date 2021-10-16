@@ -210,9 +210,16 @@ class Controller(cp.Component):
         delta_temperature = self.state.temperature_storage_target_C - stsv.get_input_value(self.temperature_storage)
 
         # Idea: Storage berechnet Bedarf an Wärme der benötigt wird um +5 Grad Celsius von heating and warm zu erreichen
-        if timestep==65:
-            print("65")
-
+        if timestep == 80:
+            print("80")
+        if timestep == 81:
+            print("81")
+        if timestep == 82:
+            print("82")
+        if timestep==83:
+            print("83")
+        if timestep == 66:
+            print("66")
         # WarmWaterStorage
         if stsv.get_input_value(self.temperature_storage) > 0:
             self.state.temperature_storage_target_C = self.temperature_storage_target

@@ -151,7 +151,7 @@ def basic_household(my_sim):
 
 
 
-
+    '''
     my_gas_heater=gas_heater.GasHeater()
     my_gas_heater.connect_input(my_gas_heater.ControlSignal,
                                my_controller.ComponentName,
@@ -160,16 +160,16 @@ def basic_household(my_sim):
     my_gas_heater.connect_input(my_gas_heater.MassflowInputTemperature,
                                my_heat_storage.ComponentName,
                                my_heat_storage.WaterOutputTemperature)
-
+    '''
     my_heat_storage.connect_input(my_heat_storage.ThermalInputPower1,
                                my_heat_pump.ComponentName,
                                my_heat_pump.ThermalOutputPower)
-    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower2,
-                               my_gas_heater.ComponentName,
-                               my_gas_heater.ThermalOutputPower)
+    #my_heat_storage.connect_input(my_heat_storage.ThermalInputPower2,
+    #                           my_gas_heater.ComponentName,
+    #                          my_gas_heater.ThermalOutputPower)
     #Demand an Heating Water anschließen
     my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_gas_heater)
+    #my_sim.add_component(my_gas_heater)
 
     my_sim.add_component(my_heat_storage)
     my_sim.add_component(my_controller)

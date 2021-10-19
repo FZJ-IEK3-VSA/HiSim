@@ -1,3 +1,5 @@
+.. _installation:
+
 Installation
 =====================================================================
 # HiSim - House Infrastructure Simulator

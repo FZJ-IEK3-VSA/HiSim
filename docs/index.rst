@@ -6,14 +6,10 @@
 Welcome to HiSim's documentation!
 ==========================================================
 
+Please see the :ref:`installation`
+
 Installation
 ---------------------------------------------------------
-
-.. toctree::
-   :maxdepth: 2
-   :caption:
-
-   installation
 
 License
 =========================================================
@@ -27,6 +23,7 @@ Modules
    :caption: Contents:
 
    modules
+   installation
 
 Contribution
 ============================================================

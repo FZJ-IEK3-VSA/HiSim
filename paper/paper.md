@@ -61,7 +61,7 @@ The software grew out of a research project to create guidelines for proper ener
 - Thermal Building 5R1C method [@jayathissa2017optimising,ISO13790] to calculate household heating and cooling demands for an entire year.
 - LoadProfileGenerator Connector for using the output of the LoadProfileGenerator.de, a behavior simulator that generates electricity and warm water load profiles.
 - Database for appliances on version 0.1:
-    - Heat pumps
+    - Heat pumps [@hplib]
     - Batteries
     - EV chargers
     - Washing machines
@@ -71,9 +71,9 @@ The software grew out of a research project to create guidelines for proper ener
 
 # A statement of need
 
-While some software packages overlap slightly with ``HiSim`` purposes, e.g., Polysun [@witzig2010polysun], PVSol [@carrasco2010pv], Homer [@homersoftware], EnergyPlus [@energyplus], TRNSYS [@beckman1994trnsys], those have very different approaches.
+While some software packages overlap slightly with ``HiSim`` purposes, e.g., Polysun [@polysunsoftware], PVSol [@pvsolsoftware], Homer [@homersoftware], EnergyPlus [@energyplussoftware], TRNSYS [@trnsyssoftware], those have very different approaches.
 
-Polysun and PVSol aim primarily for craftsmen to specific size systems using a detailed and user-friendlily graphical interface. Because these are commercial tools for Windows operating systems, using them for large simulations and parameter studies on a cluster can be cumbersome or even impractical. TRNSYS is also on home energy system software, that due to historical reasons has been implemented in FORTRAN with extensive customization and high optimization for memory usage, all of which requiring from the user a steep learning curve. Being a commercial tool targeted for single processors, TRNSYS is limited both in the extendability and the ability for employment in parameter studies on a large cluster. Although EnergyPlus is a free, open-source, cross-platform software, it comes with similar drawbacks as TRNSYS. Being highly customizable, EnergyPlus requires extensive experience just to obtain the first significant results. Moreover, EnergyPlus has a strong basis on thermal building analysis, but lacks any type of simulation regarding electricity consumption by home appliances. Finally, Homer Pro provides the best means for microgrid design optimization, but does not support high resolution consumer energy load profiles.
+Polysun and PVSol aim primarily for craftsmen to specific size systems using a detailed and user-friendlily graphical interface. The lack of a command-line interface to use them for large simulations and parameter studies on a cluster can be cumbersome or even impractical. TRNSYS is also on home energy system software, that due to historical reasons has been implemented in FORTRAN with extensive customization and high optimization for memory usage, all of which requiring from the user a steep learning curve. Being a commercial tool targeted for single processors, TRNSYS is limited both in the extendability and the ability for employment in parameter studies on a large cluster. Although EnergyPlus is a free, open-source, cross-platform software, it comes with similar drawbacks as TRNSYS. Being highly customizable, EnergyPlus requires extensive experience just to obtain the first significant results. Moreover, EnergyPlus has a strong basis on thermal building analysis, but lacks any type of simulation regarding electricity consumption by home appliances. Finally, Homer Pro provides the best means for microgrid design optimization, but does not support high resolution consumer energy load profiles.
 
 ``HiSim`` bundles together Python libraries, building stock database, thermal building model based on ISO Standards as well as commercial data from the latest appliances to compile a one workflow for a household energy simulator. Its framework allows an easy and fast implementation of new components, and automatically generate the plots for the outputs as well as the results report.
 

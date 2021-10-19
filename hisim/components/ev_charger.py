@@ -31,7 +31,7 @@ class Vehicle_Pure(cp.Component):
     model : str
         Electric vehicle model
     soc : float
-        Initial state of charge of battery before
+        Initial state of charge of advanced_battery before
         simulation
     profile : str
         Family profile imported from LPG. The family
@@ -118,7 +118,7 @@ class Vehicle_Pure(cp.Component):
             ev_pd = pd.DataFrame(list_values, columns=list_columns)
 
 
-            # Gets battery information to calculate discharging while not at home
+            # Gets advanced_battery information to calculate discharging while not at home
             transportation_devices = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDevices")
             for index, vehicle in transportation_devices.iterrows():
                 if "Charging" in vehicle["Name"]:
@@ -208,7 +208,7 @@ class Vehicle(cp.Component):
     model : str
         Electric vehicle model
     soc : float
-        Initial state of charge of battery before
+        Initial state of charge of advanced_battery before
         simulation
     """
     BeforeCapacity = "BeforeCapacity"
@@ -290,7 +290,7 @@ class Vehicle(cp.Component):
 class SimpleStorageState:
     """
     Simplistic implementation for any type
-    of energy state storage. Relevant for battery,
+    of energy state storage. Relevant for advanced_battery,
     electric vehicles, etc, to store or withdraw
     certain amount of energy of a predefined storage
 
@@ -548,7 +548,7 @@ class EVCharger(cp.Component):
                 raise Exception("State {} has not been implemented! "
                                 "Please check EVCharger and EVChargerController".format(state))
 
-        # Discharges battery according to electric vehicle use
+        # Discharges advanced_battery according to electric vehicle use
         elif self.electric_vehicle.discharge[timestep] != 0.0:
             connected_to_charging_station = 0
             driving = 1

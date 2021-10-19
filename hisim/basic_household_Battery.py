@@ -1,6 +1,10 @@
 import os
 import sys
+import globals
+import numpy as np
 import simulator as sim
+import loadtypes
+import start_simulation
 import components as cps
 from components import occupancy
 from components import weather
@@ -9,6 +13,11 @@ from components import heat_pump_hplib
 from components import controller
 from components import storage
 from components import pvs
+from components import advanced_battery
+from components import configuration
+
+from components.csvloader import CSVLoader
+
 
 __authors__ = "Max Hillen, Tjarko Tjaden"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -19,7 +28,9 @@ __maintainer__ = "Max Hillen"
 __email__ = "max.hillen@fz-juelich.de"
 __status__ = "development"
 
-def basic_household(my_sim):
+power = 10E3
+capacitiy=10
+def basic_household(my_sim,capacity=capacitiy,power=power):
     """
     This setup function represents an household including
     electric and thermal consumption and a heatpump.
@@ -51,11 +62,12 @@ def basic_household(my_sim):
 
     # Set photovoltaic system
     time = 2019
-    power = 10E3
+
     load_module_data = False
     module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
     integrateInverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
+    # Set Battery
 
     # Set heat pump
     hp_manufacturer = "Generic"
@@ -76,20 +88,51 @@ def basic_household(my_sim):
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_parameters(my_sim_params)
 
+    #ElectricityDemand
+    csv_load_power_demand = CSVLoader(component_name="csv_load_power",
+                                      csv_filename="Lastprofile/SOSO/Orginal/EFH_Bestand_TRY_5_Profile_1min.csv",
+                                      column=0,
+                                      loadtype=loadtypes.LoadTypes.Electricity,
+                                      unit=loadtypes.Units.Watt,
+                                      column_name="power_demand",
+                                      simulation_parameters=my_sim_params,
+                                      multiplier=6)
+    my_sim.add_component(csv_load_power_demand)
+
     # Build occupancy
-    my_occupancy = occupancy.Occupancy(profile=occupancy_profile)
-    my_sim.add_component(my_occupancy)
+    #my_occupancy = occupancy.Occupancy(profile=occupancy_profile)
+    #my_sim.add_component(my_occupancy)
 
     # Build Weather
     my_weather = weather.Weather(location=location)
     my_sim.add_component(my_weather)
 
     # Build building
+    '''
     my_building = building.Building(building_code=building_code,
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
                                         sim_params=my_sim_params,
                                         seconds_per_timestep=seconds_per_timestep)
+    '''
+    #Build Battery
+    fparameter = np.load(globals.HISIMPATH["bat_parameter"])
+    my_battery = advanced_battery.AdvancedBattery(parameter=fparameter,sim_params=my_sim_params,capacity=capacity)
+
+    #Build Controller
+    my_controller = controller.Controller()
+    '''
+        residual_power = CSVLoader(component_name="residual_power",
+                               csv_filename="advanced_battery/Pr_ideal_1min.csv",
+                               column=0,
+                               loadtype=loadtypes.LoadTypes.Electricity,
+                               unit=loadtypes.Units.Watt,
+                               column_name="Pr_ideal_1min",
+                               simulation_parameters=sim_param)
+
+        sim.add_component(residual_power)
+    '''
+
     '''
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
@@ -119,8 +162,8 @@ def basic_household(my_sim):
                               my_occupancy.ComponentName,
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
-
-    
+    '''
+    '''
     # Build heat pump 
     my_heat_pump = heat_pump_hplib.HeatPumpHplib(model=hp_manufacturer, 
                                                     group_id=hp_type,
@@ -197,14 +240,27 @@ def basic_household(my_sim):
                                          my_weather.WindSpeed)
     my_sim.add_component(my_photovoltaic_system)
 
-    my_controller = controller.Controller()
 
 
+    my_battery.connect_input(my_battery.LoadingPowerInput,
+                               my_controller.ComponentName,
+                               my_controller.ElectricityToOrFromBatteryTarget)
+
+    my_controller.connect_input(my_controller.ElectricityToOrFromBatteryReal,
+                               my_battery.ComponentName,
+                               my_battery.ACBatteryPower)
+
+
+    my_controller.connect_input(my_controller.ElectricityConsumptionBuilding,
+                               csv_load_power_demand.ComponentName,
+                               csv_load_power_demand.Output1)
     my_controller.connect_input(my_controller.ElectricityOutputPvs,
                                my_photovoltaic_system.ComponentName,
                                my_photovoltaic_system.ElectricityOutput)
-    
+
+    my_sim.add_component(my_battery)
     my_sim.add_component(my_controller)
+
 
 
 def basic_household_implicit(my_sim):

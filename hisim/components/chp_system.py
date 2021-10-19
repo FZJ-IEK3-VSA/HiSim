@@ -7,7 +7,7 @@ from math import floor
 import pandas as pd
 import os
 import globals
-
+'''
 class CHPConfig:
 
     # system_name = "BlueGEN15"
@@ -61,7 +61,7 @@ class CHPState:
 class CHP(Component):
 
     # Inputs
-    ControlSignal = "ControlSignal" # at which Procentage is the GasHeater modulating [0..1]
+    ControlSignal = "ControlSignal" # at which Procentage is the CHP modulating [0..1]
     MassflowInputTemperature = "MassflowInputTemperature"
     #OperatingModelSignal="OperatingModelSignal" #-->Wärme oder Stromgeführt. Nötig?
 
@@ -279,3 +279,4 @@ class CHP(Component):
         # zu ändern, da gas_demand=!gas_power
         stsv.set_output_value(self.gas_demand, th_power)
         stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
+'''

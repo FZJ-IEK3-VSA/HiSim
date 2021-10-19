@@ -252,7 +252,7 @@ class HouseholdWarmWaterDemandWatt(Component):
         if force_convergence:
             return
         """
-        The warmwater demand is given in Watt by the VDI 4655 profiles.
+        The warmwater demand is given in Watt by the SOSO profiles.
         The temperature levels are given by the conig file.
         The input mass from the warmwater storage is given in kg/s and is converted to kg/timestep.
         """

@@ -88,7 +88,7 @@ HISIMPATH       = {"results": os.path.join(hisim_abs_path, "results"),
                                               "loadprofiles",
                                               "electrical-spaceheating-warmwater-photovoltaic_1-household",
                                               "data_raw",
-                                              "VDI 4655"),
+                                              "SOSO"),
 
                    "report": os.path.join(hisim_abs_path,"results","report.pdf"),
                    "advanced_battery": {"parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"),

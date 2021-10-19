@@ -13,11 +13,12 @@ import loadtypes as lt
 # class ControllerState:
 #    def __init__(self):
 class ControllerState:
-    def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: int,temperature_storage_target_C: float):
+    def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: int,temperature_storage_target_C: float,timestep_of_hysteresis:int):
         self.control_signal_gas_heater = control_signal_gas_heater
         self.control_signal_chp = control_signal_chp
         self.control_signal_heat_pump = control_signal_heat_pump
         self.temperature_storage_target_C=temperature_storage_target_C
+        self.timestep_of_hysteresis = timestep_of_hysteresis
 
 class Controller(cp.Component):
     #Inputs
@@ -47,7 +48,7 @@ class Controller(cp.Component):
 
         self.temperature_storage_target=temperature_storage_target
         self.temperature_storage_target_hysteresis=temperature_storage_target_hysteresis
-        self.state = ControllerState(control_signal_heat_pump=0,control_signal_gas_heater=0, control_signal_chp=0,temperature_storage_target_C=self.temperature_storage_target)
+        self.state = ControllerState(control_signal_heat_pump=0,control_signal_gas_heater=0, control_signal_chp=0,temperature_storage_target_C=self.temperature_storage_target,timestep_of_hysteresis=0)
         self.previous_state = copy.copy(self.state)
         ###Inputs
 
@@ -80,7 +81,7 @@ class Controller(cp.Component):
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,
                                                                               False)
-        self.electricity_from_chp_target: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_from_chp_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityFromCHPReal,
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,
@@ -132,6 +133,7 @@ class Controller(cp.Component):
         pass
 
     def i_save_state(self):
+        #abändern, siehe Storage
         pass
         self.previous_state = self.state
 
@@ -147,9 +149,11 @@ class Controller(cp.Component):
 
         electricity_to_or_from_battery_target = electricity_input
 
+    def peak_shaving(self):
+        pass
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence : bool):
-        # @Vitor: Was passiert mit Output-Werten die nicht gesetzt werden?
-
+        if force_convergence:
+            return
         ###ELECTRICITY
         electricity_to_or_from_battery_target = 0
         electricity_to_electrolyzer_target = 0
@@ -159,7 +163,10 @@ class Controller(cp.Component):
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
         delta_demand = stsv.get_input_value(self.electricity_output_pvs) - stsv.get_input_value(self.electricity_consumption_building)
-
+        #if timestep == 60*12*3:
+        #    print(timestep)
+        #if timestep == 60 * 12 * 3+60*2:
+        #    print(timestep)
         # Check if Battery is Component of Simulation
         if self.electricity_to_or_from_battery_real.SourceOutput is not None:
             electricity_to_or_from_battery_target = delta_demand
@@ -167,7 +174,7 @@ class Controller(cp.Component):
         # electricity_not_used_battery of Charge or Discharge
         electricity_not_used_battery = electricity_to_or_from_battery_target - stsv.get_input_value(
             self.electricity_to_or_from_battery_real)
-
+        #more electricity than needed
         if delta_demand > 0:
             ####Problems here by Calculation? Because won#t calculate Zero if delta_demand=electricity_to_or_from_battery_target, instead calculate 0.0000010
             # Check if enough electricity is there to charge CHP (finds real solution after 2 Iteration-Steps)
@@ -182,12 +189,12 @@ class Controller(cp.Component):
 
         elif delta_demand < 0:
 
-            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_to_or_from_chp_real.SourceOutput is not None:
+            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.SourceOutput is not None:
                 electricity_from_chp_target = delta_demand - stsv.get_input_value(
                     self.electricity_to_or_from_battery_real)
 
             # Positive sing, because Electricity will flow out of grid->Consumption of Electricity
-            electricity_to_or_from_grid = -delta_demand - stsv.get_input_value(
+            electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
                 self.electricity_to_or_from_battery_real) - stsv.get_input_value(self.electricity_from_chp_real)
 
         # else:
@@ -210,53 +217,39 @@ class Controller(cp.Component):
         delta_temperature = self.state.temperature_storage_target_C - stsv.get_input_value(self.temperature_storage)
 
         # Idea: Storage berechnet Bedarf an Wärme der benötigt wird um +5 Grad Celsius von heating and warm zu erreichen
-        if timestep == 80:
-            print("80")
-        if timestep == 81:
-            print("81")
-        if timestep == 82:
-            print("82")
-        if timestep==83:
-            print("83")
-        if timestep == 66:
-            print("66")
+
+
+        #if timestep == 82:
+        #    print("82")
+        #if timestep==83:
+        #   print("83")
+
         # WarmWaterStorage
         if stsv.get_input_value(self.temperature_storage) > 0:
-            self.state.temperature_storage_target_C = self.temperature_storage_target
-            if delta_temperature >= 10:
+            if delta_temperature > 0:
                 control_signal_heat_pump = 1
                 control_signal_chp = 1
                 control_signal_gas_heater = 1
-            elif delta_temperature > 5 and delta_temperature < 10:
-                # heat storage
-                # look at state of signal of heating componentens
-                # if signal was above zero put on more heating systems
-                control_signal_heat_pump=1
-                if self.state.control_signal_chp < 1:
-                    control_signal_chp = 1
-                    control_signal_gas_heater = 0.5
-                elif self.state.control_signal_chp == 1:
-                    control_signal_gas_heater = 1
-            elif delta_temperature > 0 and delta_temperature <= 5:
-                control_signal_heat_pump = 1
-                if self.state.control_signal_chp < 1:
-                    control_signal_chp = 1
-                elif self.state.control_signal_chp == 1:
-                    control_signal_gas_heater = 0.5
-                # Storage warm enough. Try to turn off Heaters
-            elif delta_temperature <= 0:
-                self.state.temperature_storage_target_C = self.temperature_storage_target_hysteresis
-                control_signal_heat_pump = 0
-                control_signal_gas_heater = 0
-                control_signal_chp = 0
+                self.state.temperature_storage_target_C = self.temperature_storage_target
 
-        #1Lösungansatz
-        #Wenn Speicher einmal warm genug war, heize erst auf, wenn der Speicher -5 Grad unter Zieltemperatur ist
-        #Zwei Solltemperaturen hat, x1=50, x2=55, wenn einmal 55 erreicht ist, ist neue Zieltemperautr 50, wenn 50 unterschritten ist
-        #dann lege wieder auf 55 fest
-        #2Lösungansat:
-        #force_convergence
-        # HeatStorage
+
+            elif delta_temperature <= 0:
+                if self.state.temperature_storage_target_C == self.temperature_storage_target and self.state.timestep_of_hysteresis != timestep:
+                    self.state.temperature_storage_target_C = self.temperature_storage_target_hysteresis
+                    self.state.timestep_of_hysteresis = timestep
+                elif self.state.temperature_storage_target_C != self.temperature_storage_target and self.state.timestep_of_hysteresis != timestep:
+                    control_signal_heat_pump = 0
+                    control_signal_gas_heater = 0
+                    control_signal_chp = 0
+
+            #elif delta_temperature <= 0 and hysteresis_switch = 0:
+
+
+
+        # Control Signals müssen in den echten/richtigen State
+        #
+
+
 
         self.state.control_signal_gas_heater = control_signal_gas_heater
         self.state.control_signal_chp = control_signal_chp
@@ -265,3 +258,30 @@ class Controller(cp.Component):
         stsv.set_output_value(self.control_signal_gas_heater, control_signal_gas_heater)
         stsv.set_output_value(self.control_signal_chp, control_signal_chp)
 
+
+'''
+if delta_temperature >= 10:
+   control_signal_heat_pump = 1
+   control_signal_chp = 1
+   control_signal_gas_heater = 1
+   self.state.temperature_storage_target_C = self.temperature_storage_target
+elif delta_temperature > 5 and delta_temperature < 10:
+   # heat storage
+   # look at state of signal of heating componentens
+   # if signal was above zero put on more heating systems
+   control_signal_heat_pump=1
+   if self.state.control_signal_chp < 1:
+       control_signal_chp = 1
+       control_signal_gas_heater = 0.5
+   elif self.state.control_signal_chp == 1:
+       control_signal_gas_heater = 1
+   self.state.temperature_storage_target_C = self.temperature_storage_target
+elif delta_temperature > 0 and delta_temperature <= 5:
+   control_signal_heat_pump = 1
+   if self.state.control_signal_chp < 1:
+       control_signal_chp = 1
+   elif self.state.control_signal_chp == 1:
+       control_signal_gas_heater = 0.5
+   self.state.temperature_storage_target_C = self.temperature_storage_target
+   # Storage warm enough. Try to turn off Heaters
+'''

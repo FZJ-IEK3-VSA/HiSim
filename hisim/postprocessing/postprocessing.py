@@ -249,18 +249,35 @@ class PostProcessor:
                 solar_gain_through_windows = abs(sum(entry.Results))* self.time_correction_factor
             if entry.ObjectName == "Occupancy" and entry.FieldName == "HeatingByResidents":
                 internal_gains = abs(sum(entry.Results)*self.time_correction_factor)
+            if entry.ObjectName == "Controller" and entry.FieldName == "ElectricityToOrFromGrid":
+                total_electricity_intogrid = sum(x for x in entry.Results if x < 0) * self.time_correction_factor
+                total_electricity_fromgrid = sum(x for x in entry.Results if x > 0) * self.time_correction_factor
+            if entry.ObjectName == "csv_load_power" and entry.FieldName == "CSV Profile":
+                total_electricity_consumed = sum(entry.Results) * self.time_correction_factor
+            if entry.ObjectName == "csv_load_heat_demand" and entry.FieldName == "CSV Profile":
+                total_heat_demand = sum(entry.Results) * self.time_correction_factor
+            if entry.ObjectName == "PVSystem" and entry.FieldName == "ElectricityOutput":
+                total_electricity_produced = sum(entry.Results) * self.time_correction_factor
 
         # Writes self-consumption and autarky
         if total_electricity_consumed is not None:
-            if total_electricity_not_covered is not None:
-                autarky = ( ( total_electricity_consumed - total_electricity_not_covered ) / total_electricity_consumed ) * 100
+            if total_electricity_fromgrid is not None:
+                autarky = ( ( total_electricity_consumed - total_electricity_fromgrid ) / total_electricity_consumed ) * 100
                 text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
                 self.write_to_report(text)
-                text = ["Not Covered: {:.0f} kWh".format(total_electricity_not_covered * 1E-3)]
+                text = ["Not Covered: {:.0f} kWh".format(total_electricity_fromgrid * 1E-3)]
                 self.write_to_report(text)
                 text = ["Autarky: {:.3}%".format(autarky)]
                 self.write_to_report(text)
 
+
+                ownconsumption= ((total_electricity_produced+total_electricity_intogrid)/total_electricity_produced) * 100
+                text = ["Produced: {:.0f} kWh".format(total_electricity_produced * 1E-3)]
+                self.write_to_report(text)
+                text = ["IntoGrid: {:.0f} kWh".format(-total_electricity_intogrid * 1E-3)]
+                self.write_to_report(text)
+                text = ["OwnConsumption: {:.3}%".format(ownconsumption)]
+                self.write_to_report(text)
         # Writes performance of heat pump
         if heat_pump_heating is not None:
             self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
@@ -282,6 +299,9 @@ class PostProcessor:
             self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
             if building_area is not None:
                 self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
+
+        if total_heat_demand is not None:
+            self.write_to_report(["Absolute Heat Demand [kWh]: {:.0f}".format(1E-3*total_heat_demand)])
 
     def write_components_to_report(self):
         """

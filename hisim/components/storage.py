@@ -25,7 +25,7 @@ class HeatStorageTjarkoState:
 class HeatStorage(Component):
 
     # Inputs
-    ThermalDemandHeatingWater="ThermalDemandHeating" # Heating Water to regulate room Temperature
+    ThermalDemandHeatingWater="ThermalDemandHeatingWater" # Heating Water to regulate room Temperature
     ThermalDemandWarmWater="ThermalDemandHeating" # Warmwater for showering, washing etc...
 
     OutsideTemperature="OutsideTemperature"
@@ -44,7 +44,7 @@ class HeatStorage(Component):
     def __init__(self,
                  V_SP= 500,
                  temperature_of_warm_water_extratcion=35,
-                 ambient_temperature = 0,
+                 ambient_temperature = 15,
                  sim_params=None):
         super().__init__("HeatStorageTjarko")
         self.V_SP = V_SP
@@ -61,7 +61,7 @@ class HeatStorage(Component):
 
         self.thermal_demand_heating_water : ComponentInput = self.add_input(self.ComponentName,
                                                                          self.ThermalDemandHeatingWater,
-                                                                         lt.LoadTypes.Water,
+                                                                         lt.LoadTypes.WarmWater,
                                                                          lt.Units.Watt,
                                                                          False)
         self.demand_warm_water : ComponentInput = self.add_input(self.ComponentName,
@@ -144,7 +144,6 @@ class HeatStorage(Component):
 
         m_SP_h =  self.V_SP *0.99 # Vereinfachung
         UA_SP = 0.0038 * self.V_SP + 0.85 #Heatloss Storage
-
         dt=seconds_per_timestep
 
 

@@ -1,6 +1,7 @@
 import os
 import sys
 import simulator as sim
+import loadtypes
 import components as cps
 from components import occupancy
 from components import weather
@@ -9,7 +10,7 @@ from components import heat_pump_hplib
 from components import controller
 from components import storage
 from components import gas_heater
-
+from components.csvloader import CSVLoader
 __authors__ = "Max Hillen, Tjarko Tjaden"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -48,6 +49,7 @@ def basic_household(my_sim):
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
     building_class = "medium"
     initial_temperature = 23
+    #Heat demand
 
     # Set heat pump
     hp_manufacturer = "Generic"
@@ -63,11 +65,23 @@ def basic_household(my_sim):
 
     ##### Build Components #####
 
+
     # Build system parameters
     my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_parameters(my_sim_params)
-    '''
+
+     # Build heat demand
+    csv_load_heat_demand = CSVLoader(component_name="csv_load_heat_demand",
+                                      csv_filename="Lastprofile/SOSO/Orginal/EFH_Bestand_TRY_5_Profile_1min.csv",
+                                      column=1,
+                                      loadtype=loadtypes.LoadTypes.WarmWater,
+                                      unit=loadtypes.Units.Watt,
+                                      column_name="heat_demand",
+                                      simulation_parameters=my_sim_params,
+                                      multiplier=10000/ 1000)
+    my_sim.add_component(csv_load_heat_demand)
+    '''                                    
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile)
     my_sim.add_component(my_occupancy)
@@ -126,7 +140,9 @@ def basic_household(my_sim):
                                my_heat_storage.ComponentName,
                                my_heat_storage.WaterOutputTemperature)
 
-
+    my_heat_storage.connect_input(my_heat_storage.ThermalDemandHeatingWater,
+                               csv_load_heat_demand.ComponentName,
+                               csv_load_heat_demand.Output1)
 
 
     my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,

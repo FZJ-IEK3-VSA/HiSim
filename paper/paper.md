@@ -1,10 +1,11 @@
 
 ---
-title: 'HiSim: House Infrastructure Simulation'
+title: 'BESIM: Building Energy Simulation'
 tags:
   - Python
-  - House Demand Side Management
-  - Home Load Profile
+  - Building Demand Side Management
+  - Load Profile
+  - Photovoltaics
 authors:
   - name: Vitor Hugo Bellotto Zago
     orcid: 0000-0002-3791-4557
@@ -37,15 +38,15 @@ bibliography: paper.bib
 ---
 # Summary
 
-High volatility and low availability of renewables are the major hurdles in combating climate change. Modern households and their residents employ a variety of devices to suffice their basic needs. Given the house structure and the family behavior, the overall usage of these devices during a certain period of time are represented by electricity consumption and thermal demand profiles.  Due to scale and complexity, house energy systems require a sophisticated simulation environment.
+High volatility and low availability of renewables are the major hurdles in combating climate change. Modern buildings and their occupants employ a variety of devices to suffice their basic needs. Given the house structure and the occupants behavior, the overall usage of these devices during a certain period of time are represented by electricity consumption and thermal demand profiles.  Due to scale and complexity, building energy systems require a sophisticated simulation environment.
 
-In the last year, the Python package ``House Infrastructure Simulator``, for short ``HiSim``, was developed in Forschungszentrum Jülich under the MIT-License with a generic, extendable framework to enable the simulation of a household using a list of connected components, e.g., photovoltaic systems, thermal storages, heat pumps, electric car charging stations and others. 
+In the last year, the Python package ``Building Energy Simulator``, for short ``BESIM``, was developed in Forschungszentrum Jülich under the MIT-License with a generic, extendable framework to enable the simulation of a building using a list of connected components, e.g., photovoltaic systems, thermal storages, heat pumps, electric car charging stations and others. 
 
-For the first release, ``HiSim`` comes with a limited number of predefined components that can easily be extended by the user. The framework enables the user to connect new components to existing systems and simulate the resulting system at a high temporal resolution. In other words, ``HiSim`` provides means to determine electricity, heating and cooling demands for arbitrary houses and family configurations. The main aim of the ``HiSim`` development is an extendable, fast and straightforward tool for parameter studies, with possible parallelization for large scale simulations on clusters, supported by a backend in a webservice and other applications.
+For the first release, ``BESIM`` comes with a limited number of predefined components that can easily be extended by the user. The framework enables the user to connect new components to existing systems and simulate the resulting system at a high temporal resolution. In other words, ``BESIM`` provides means to determine electricity, heating and cooling demands for arbitrary building and occupant configurations. The main aim of the ``BESIM`` development is an extendable, fast and straightforward tool for parameter studies, with possible parallelization for large scale simulations on clusters, supported by a backend in a webservice and other applications.
 
 # Method
 
-``HiSim`` framework is based on the idea of independent, object oriented components with inputs and outputs that can be connected in arbitrary configurations to create a specific energy system. The user arranges a house energy system through a setup function, where the components and connections are defined. This setup function is passed to the simulator in ``HiSim``, which performs all the connections and compatibility checks among the components as shown in the figure below.
+``BESIM`` framework is based on the idea of independent, object oriented components with inputs and outputs that can be connected in arbitrary configurations to create a specific energy system. The user arranges a house energy system through a setup function, where the components and connections are defined. This setup function is passed to the simulator in ``BESIM``, which performs all the connections and compatibility checks among the components as shown in the figure below.
 
 ![Framework [@hisimframework]](./img/framework_diagram.png)
 
@@ -71,12 +72,12 @@ The software grew out of a research project to create guidelines for proper ener
 
 # A statement of need
 
-While some software packages overlap slightly with ``HiSim`` purposes, e.g., Polysun [@polysunsoftware], PVSol [@pvsolsoftware], Homer [@homersoftware], EnergyPlus [@energyplussoftware], TRNSYS [@trnsyssoftware], those have very different approaches.
+While some software packages overlap slightly with ``BESIM`` purposes, e.g., Polysun [@polysunsoftware], PVSol [@pvsolsoftware], Homer [@homersoftware], EnergyPlus [@energyplussoftware], TRNSYS [@trnsyssoftware], those have very different approaches.
 
 Polysun and PVSol aim primarily for craftsmen to specific size systems using a detailed and user-friendlily graphical interface. The lack of a command-line interface to use them for large simulations and parameter studies on a cluster can be cumbersome or even impractical. TRNSYS is also on home energy system software, that due to historical reasons has been implemented in FORTRAN with extensive customization and high optimization for memory usage, all of which requiring from the user a steep learning curve. Being a commercial tool targeted for single processors, TRNSYS is limited both in the extendability and the ability for employment in parameter studies on a large cluster. Although EnergyPlus is a free, open-source, cross-platform software, it comes with similar drawbacks as TRNSYS. EnergyPlus has a strong basis on thermal building analysis, but lacks any type of simulation regarding electricity consumption by home appliances. Being highly customizable, EnergyPlus requires extensive experience just to obtain the first significant results. 
 Finally, Homer Pro provides the best means for microgrid design optimization, but does not support high resolution consumer energy load profiles.
 
-``HiSim`` bundles together Python libraries, building stock database, thermal building model based on ISO Standards as well as commercial data from the latest appliances to compile a one workflow for a household energy simulator. Its framework allows an easy and fast implementation of new components, and automatically generate the plots for the outputs as well as the results report.
+``BESIM`` bundles together Python libraries, building stock database, thermal building model based on ISO Standards as well as commercial data from the latest appliances to compile a one workflow for a household energy simulator. Its framework allows an easy and fast implementation of new components, and automatically generate the plots for the outputs as well as the results report.
 
 # Target audience
 The scientific community involved in household energy management and building optimization can find here a great tool

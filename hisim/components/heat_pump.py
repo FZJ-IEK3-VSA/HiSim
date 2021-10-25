@@ -10,9 +10,7 @@ import globals
 import component as cp
 import loadtypes as lt
 
-from components.extended_storage import WaterSlice
-from components.storage import WarmWaterStorageConfig
-from components.storage import PhysicsConfig
+
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',

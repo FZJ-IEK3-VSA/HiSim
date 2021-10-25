@@ -329,7 +329,7 @@ class HydrogenStorage(Component):
     def __init__(self, component_name, config: HydrogenStorageConfig, seconds_per_timestep):
         super().__init__(component_name)
         self.charging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, True)
-        self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, True)
+        self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
 
         self.current_fill: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.CurrentHydrogenFillLevel, lt.LoadTypes.Hydrogen, lt.Units.kg)
         self.current_fill_percent: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.CurrentHydrogenFillLevelPercent, lt.LoadTypes.Hydrogen, lt.Units.Percent)

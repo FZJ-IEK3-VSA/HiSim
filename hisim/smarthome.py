@@ -27,7 +27,10 @@ if __name__ == '__main__':
     list_for_PV_size = [1, 5, 10, 20, 50, 100]*1000
     for index_b, pv_power in enumerate(list_for_PV_size):
            my_cfg = cfg_automator.ConfigurationGenerator()
-           my_cfg.pvs["power"] = pv_power
+           my_cfg.PVSystem["power"] = pv_power
+
+           my_cfg.add_advanced_battery(capacity=10)
+           my_cfg.add_controller()
            my_cfg.dump()
            command_line = "python hisim.py smarthome smarthome_setup"
            os.system(command_line)

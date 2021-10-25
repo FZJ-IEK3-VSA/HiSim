@@ -1,13 +1,26 @@
 from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 import loadtypes as lt
 import copy
+from components.configuration import PhysicsConfig
 from math import pi
 from math import floor
 
 import pandas as pd
 import os
 import globals
-'''
+
+class CHPConfigSimple:
+    is_modulating = True
+    P_el_min = 2_000        # [W]
+    P_th_min = 3_000        # [W]
+    eff_el_min = 0.2        # [-]
+    eff_th_min = 0.5        # [-]
+
+    P_el_max = 3_000        # [W]
+    P_th_max = 4_000        # [W]
+    eff_el_max = 0.4        # [-]
+    eff_th_max = 0.55       # [-]
+
 class CHPConfig:
 
     # system_name = "BlueGEN15"
@@ -17,7 +30,7 @@ class CHPConfig:
     # system_name = "HOMER"
     system_name = "BlueGen BG15"
 
-    df = pd.read_excel(os.path.join(globals.HISIMPATH["inputs"], 'mock_up_efficiencies.xlsx'), index_col=0)
+    df = pd.read_excel(os.path.join(globals.HISIMPATH["chp_system"], 'mock_up_efficiencies.xlsx'), index_col=0)
 
     df_specific = df.loc[str(system_name)]
 
@@ -71,13 +84,13 @@ class CHP(Component):
     ElectricityOutput="ElectricityOutput"
     GasDemand = "GasDemand"
     NumberofCycles = "NumberofCycles"
-
-    def __init__(self,timesteps: int, name="CHP",min_operation_time=60, min_idle_time=15):
+    ThermalOutputPower = "ThermalOutputPower"
+    def __init__(self, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen"):
         super().__init__(name)
-        self.timesteps = timesteps
 
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
+        self. gas_type = gas_type #Gas Type can be "Hydrogen" or "Methan"
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
         self.state = CHPState(start_timestep=int(0),cycle_number=0)
@@ -99,14 +112,15 @@ class CHP(Component):
         #Inputs
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, CHP.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
         #self.operating_mode_signal: ComponentInput = self.add_input(self.ComponentName, CHP.OperatingModelSignal, lt.LoadTypes.Gas, lt.Units.Percent, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, CHP.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celcius, True)
+        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, CHP.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
 
         #Outputs
         self.mass_out: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutput, lt.LoadTypes.Water, lt.Units.kg_per_sec)
-        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celcius)
+        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celsius)
         self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, CHP.GasDemand, lt.LoadTypes.Gas, lt.Units.kWh)
-        self.electricity_outputC: ComponentOutput = self.add_output(self.ComponentName, CHP.ElectricityOutput, lt.LoadTypes.Electricity, lt.Units.Watt)
+        self.el_power: ComponentOutput = self.add_output(self.ComponentName, CHP.ElectricityOutput, lt.LoadTypes.Electricity, lt.Units.Watt)
         self.number_of_cyclesC: ComponentOutput = self.add_output(self.ComponentName, CHP.NumberofCycles, lt.LoadTypes.Any, lt.Units.Any)
+        self.th_power: ComponentOutput = self.add_output(self.ComponentName, CHP.ThermalOutputPower, lt.LoadTypes.Heating, lt.Units.Watt)
 
 
 
@@ -177,9 +191,9 @@ class CHP(Component):
 
                 if mass_out > self.mass_flow_max:
                     mass_out = self.mass_flow_max
-                    mass_out_temp = self.mass_inp_temp + th_power / (mass_out * cw)
+                    mass_out_temp = stsv.get_input_value(self.mass_inp_temp) + th_power / (mass_out * cw)
 
-            # CHP doens't want to shut and its activated--> so its stays activated
+            # CHP doens't want to shut off and its activated--> so its stays activated
             else:
                 # Calculate Eff_th
                 d_eff_th = (self.eff_th_max - self.eff_th_min)
@@ -209,8 +223,10 @@ class CHP(Component):
 
                 if mass_out > self.mass_flow_max:
                     mass_out = self.mass_flow_max
-                    mass_out_temp = self.mass_inp_temp + th_power / (mass_out * cw)
+                    mass_out_temp = stsv.get_input_value(self.mass_inp_temp) + th_power / (mass_out * cw)
 
+            p_th = (mass_out_temp - stsv.get_input_value(self.mass_inp_temp) )* cw * mass_out
+            stsv.set_output_value(self.p_th, p_th)  # ThermalPowerOutput
             stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # mass output temp
             stsv.set_output_value(self.mass_out, mass_out)  # mass output flow
             stsv.set_output_value(self.electricity_outputC, el_power)  # mass output flow
@@ -257,7 +273,7 @@ class CHP(Component):
 
             if mass_out > self.mass_flow_max:
                 mass_out = self.mass_flow_max
-                mass_out_temp = self.mass_inp_temp + th_power / (mass_out * cw)
+                mass_out_temp = stsv.get_input_value(self.mass_inp_temp) + th_power / (mass_out * cw)
 
             self.state = CHPState(start_timestep=timestep,
                                   electricity_output = el_power,
@@ -273,10 +289,20 @@ class CHP(Component):
             el_power = 0
             th_power = 0
 
+       # th_power = (mass_out_temp - stsv.get_input_value(self.mass_inp_temp) )* cw * mass_out
+
+        if self.gas_type == "Hydrogen":
+            gas_demand= P_total /PhysicsConfig.hydrogen_specific_fuel_value_per_kg
+        elif self.gas_type == "Methan":
+            gas_demand= P_total /PhysicsConfig.natural_gas_specific_fuel_value_per_kg
+        else:
+            raise Exception("No Gas chosen which is integrated in System")
+
+
+        stsv.set_output_value(self.th_power, th_power)  # ThermalPowerOutput
         stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # mass output temp
         stsv.set_output_value(self.mass_out, mass_out)  # mass output flow
-        stsv.set_output_value(self.electricity_outputC, el_power)  # mass output flow
+        stsv.set_output_value(self.el_power, el_power)  # mass output flow
         # zu ändern, da gas_demand=!gas_power
-        stsv.set_output_value(self.gas_demand, th_power)
+        stsv.set_output_value(self.gas_demand, gas_demand) #CHP runs with
         stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
-'''

@@ -15,8 +15,10 @@ from components import storage
 from components import pvs
 from components import advanced_battery
 from components import configuration
-
+from components import chp_system
+from components.hydrogen_generator import Electrolyzer ,HydrogenStorage
 from components.csvloader import CSVLoader
+from components.configuration import HydrogenStorageConfig, ElectrolyzerConfig
 
 
 __authors__ = "Max Hillen, Tjarko Tjaden"
@@ -70,6 +72,16 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     # Set Battery
 
+    #Set CHP
+    min_operation_time = 60
+    min_idle_time = 15
+    gas_type = "Hydrogen"
+    #Set Electrolyzer
+    electrolyzer_c = ElectrolyzerConfig()
+
+    #Set Hydrogen Storage
+    hydrogen_storage_c=HydrogenStorageConfig()
+
     # Set heat pump
     hp_manufacturer = "Generic"
     hp_type = 1 # air/water | regulated
@@ -107,6 +119,21 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
     # Build Weather
     my_weather = weather.Weather(location=location)
     my_sim.add_component(my_weather)
+
+    # Build CHP
+    my_chp = chp_system.CHP(min_operation_time=min_operation_time,
+                            min_idle_time=min_idle_time,
+                            gas_type=gas_type)
+
+
+    #Build Electrolyzer
+
+    my_electrolyzer = Electrolyzer(component_name="Electrolyzer",
+                                    config=electrolyzer_c,
+                                    seconds_per_timestep=my_sim_params.seconds_per_timestep)
+    my_hydrogen_storage = HydrogenStorage(component_name="HydrogenStorage",
+                                        config=hydrogen_storage_c,
+                                        seconds_per_timestep=my_sim_params.seconds_per_timestep)
 
     # Build building
     '''
@@ -257,12 +284,37 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
     my_controller.connect_input(my_controller.ElectricityConsumptionBuilding,
                                csv_load_power_demand.ComponentName,
                                csv_load_power_demand.Output1)
+
     my_controller.connect_input(my_controller.ElectricityOutputPvs,
                                my_photovoltaic_system.ComponentName,
                                my_photovoltaic_system.ElectricityOutput)
 
+
+
+    my_electrolyzer.connect_input(my_electrolyzer.ElectricityInput,
+                               my_controller.ComponentName,
+                               my_controller.ElectricityToElectrolyzerTarget)
+
+    my_controller.connect_input(my_controller.ElectricityToElectrolyzerReal,
+                               my_electrolyzer.ComponentName,
+                               my_electrolyzer.UnusedPower)
+
+    my_hydrogen_storage.connect_input(my_hydrogen_storage.ChargingHydrogenAmount,
+                                   my_electrolyzer.ComponentName,
+                                   my_electrolyzer.HydrogenOutput)
+    '''
+    my_hydrogen_storage.connect_input(my_hydrogen_storage.DischargingHydrogenAmount,
+                                   my_chp.ComponentName,
+                                   my_chp.GasDemand)
+    my_chp.connect_input(my_chp.ControlSignal,
+                           my_controller.ComponentName,
+                           my_controller.ControlSignalChp)                               
+    '''
     #my_sim.add_component(my_battery)
     my_sim.add_component(my_controller)
+    my_sim.add_component(my_electrolyzer)
+    my_sim.add_component(my_hydrogen_storage)
+
 
 
 

@@ -5,7 +5,9 @@ import component
 import inspect
 import shutil
 import sys
-
+import loadtypes
+import globals as gb
+import numpy as np
 from inspect import isclass
 from pkgutil import iter_modules
 from pathlib import Path as gg
@@ -127,10 +129,13 @@ class ConfigurationGenerator:
                    "model": "sonnenBatterie 10 - 16,5 kWh",
                    "soc": 10 / 15,
                    "base": False}
+        self.AdvancedBattery = {"parameter": None,
+                                "capacity": None}
         self.FlexibilityController = {"mode": 1}
 
+
         if set is None:
-            self.add_base()
+            self.add_basic_setup()
 
     def set_order(self, order):
         self.order = order
@@ -163,12 +168,21 @@ class ConfigurationGenerator:
         self.data["Building"] = self.Building
         self.order.append("Building")
 
+    def add_csv_load_power(self):
+        self.data["CSVLoader"] = self.CSVLoader
+        self.order.append("CSVLoader")
+
+    def add_controller(self):
+        self.data["Controller"] = self.Controller
+        self.order.append("Controller")
+
     def add_basic_setup(self):
         self.add_sim_param()
+        self.add_csv_load_power()
         self.add_weather()
-        self.add_occupancy()
+        #self.add_occupancy()
         self.add_pvs()
-        self.add_building()
+        #self.add_building()
 
     def add_heat_pump(self, mode=None):
         self.data["HeatPumpController"] = self.HeatPumpController
@@ -191,6 +205,11 @@ class ConfigurationGenerator:
     def add_battery(self):
         self.data["Battery"] = self.Battery
         self.order.append("Battery")
+
+    def add_advanced_battery(self,capacity):
+        self.data["AdvancedBattery"] = self.AdvancedBattery
+        self.data["AdvancedBattery"]["capacity"] = capacity
+        self.order.append("AdvancedBattery")
 
     def add_dummy(self,
                   electricity=None,
@@ -259,6 +278,10 @@ class SmartHome:
                     self.add_thermal_energy_storage(my_sim)
                 if component == "Dummy":
                     self.add_dummy(my_sim)
+                if component == "AdvancedBattery":
+                    self.add_advanced_battery(my_sim)
+                if component == "Controller":
+                    self.add_advanced_battery(my_sim)
             self.close(my_sim)
         else:
             raise Exception("No configuration file!")
@@ -280,7 +303,7 @@ class SmartHome:
 
     def add_occupancy(self, my_sim):
         # Sets Occupancy
-        self.occupancy = Occupancy(**self.cfg["Occupancy"], sim_params=self.time)
+        self.occupancy = Occupancy(**self.cfg["Occupancy"])
         my_sim.add_component(self.occupancy)
         self.add_to_electricity_grid_consumption(my_sim, self.occupancy)
 
@@ -291,8 +314,8 @@ class SmartHome:
         my_sim.add_component(self.pvs)
 
         # Sets base grid with PVSystem
-        self.electricity_grids.append(ElectricityGrid(name="BaseloadAndPVSystem", grid=[self.occupancy, "Subtract", self.pvs]))
-        my_sim.add_component(self.electricity_grids[-1])
+        #self.electricity_grids.append(ElectricityGrid(name="BaseloadAndPVSystem", grid=[self.occupancy, "Subtract", self.pvs]))
+        #my_sim.add_component(self.electricity_grids[-1])
 
     def add_building(self, my_sim):
         # Sets Residence
@@ -302,10 +325,11 @@ class SmartHome:
 
     def basic_setup(self, my_sim):
         self.add_sim_param(my_sim)
+        self.add_csv_load_power(my_sim)
         self.add_weather(my_sim)
-        self.add_occupancy(my_sim)
+        #self.add_occupancy(my_sim)
         self.add_pvs(my_sim)
-        self.add_building(my_sim)
+        #self.add_building(my_sim)
 
     def add_heat_pump(self, my_sim):
         # Sets Heat Pump
@@ -404,6 +428,7 @@ class SmartHome:
         self.add_to_electricity_grid(my_sim, self.dummy)
 
     def add_battery(self, my_sim):
+
         self.battery_controller = BatteryController()
 
         self.battery_controller.connect_electricity(self.electricity_grids[-1])
@@ -417,6 +442,41 @@ class SmartHome:
         self.add_to_electricity_grid_consumption(my_sim, self.battery)
         self.add_to_electricity_grid(my_sim, self.battery)
 
+
+    def add_advanced_battery(self,my_sim):
+
+        self.advanced_battery = AdvancedBattery(**self.cfg["AdvancedBattery"],sim_params=my_sim)
+
+        my_sim.add_component(self.advanced_battery)
+
+    def add_csv_load_power(self,my_sim):
+        self.csv_load_power_demand = CSVLoader(component_name="csv_load_power",
+                                          csv_filename="Lastprofile/SOSO/Orginal/EFH_Bestand_TRY_5_Profile_1min.csv",
+                                          column=0,
+                                          loadtype=loadtypes.LoadTypes.Electricity,
+                                          unit=loadtypes.Units.Watt,
+                                          column_name="power_demand",
+                                          simulation_parameters=my_sim,
+                                          multiplier=6)
+        my_sim.add_component(self.csv_load_power_demand)
+
+    def add_controller(self,my_sim):
+
+        self.controller = Controller()
+        self.controller.connect_input(self.controller.ElectricityToOrFromBatteryReal,
+                                    self.advanced_battery.ComponentName,
+                                    self.advanced_battery.ACBatteryPower)
+        self.controller.connect_input(self.controller.ElectricityConsumptionBuilding,
+                                    self.csv_load_power_demand.ComponentName,
+                                    self.csv_load_power_demand.Output1)
+        self.controller.connect_input(self.controller.ElectricityOutputPvs,
+                                    self.pvs.ComponentName,
+                                    self.pvs.ElectricityOutput)
+        my_sim.add_component(self.controller)
+
+        self.advanced_battery.connect_input(self.advanced_battery.LoadingPowerInput,
+                                            self.controller.ComponentName,
+                                            self.controller.ElectricityToOrFromBatteryTarget)
     def add_thermal_energy_storage(self, my_sim):
         wws_c = WarmWaterStorageConfig()
         self.tes = ThermalEnergyStorage2(component_name="MyStorage", config=wws_c, sim_params=self.time)
@@ -441,10 +501,11 @@ class SmartHome:
         my_sim.add_component(self.tes)
 
     def close(self, my_sim):
-        my_last_grid = ElectricityGrid(name="Consumed", grid=[self.electricity_grid_consumption[-1]])
-        my_sim.add_component(my_last_grid)
-        my_final_grid_positive = ElectricityGrid(name="NotConveredConsumed", grid=[self.electricity_grids[-1]], signal="Positive")
-        my_sim.add_component(my_final_grid_positive)
+        pass
+        #my_last_grid = ElectricityGrid(name="Consumed", grid=[self.electricity_grid_consumption[-1]])
+        #my_sim.add_component(my_last_grid)
+        #my_final_grid_positive = ElectricityGrid(name="NotConveredConsumed", grid=[self.electricity_grids[-1]], signal="Positive")
+        #my_sim.add_component(my_final_grid_positive)
 
 if __name__ == "__main__":
     delete_all_results()

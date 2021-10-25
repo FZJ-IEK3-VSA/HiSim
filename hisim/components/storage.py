@@ -42,7 +42,7 @@ class HeatStorage(Component):
     StorageEnergyLoss="StorageEnergyLoss"
 
     def __init__(self,
-                 V_SP= 500,
+                 V_SP= 1000,
                  temperature_of_warm_water_extratcion=35,
                  ambient_temperature = 15,
                  sim_params=None):

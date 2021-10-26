@@ -138,3 +138,4 @@ inputs/cache
 .idea/HiSim.iml
 .idea/workspace.xml
 .DS_Store
+hisim/inputs/cache/cache_indices.json

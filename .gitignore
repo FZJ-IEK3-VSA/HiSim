@@ -137,3 +137,4 @@ inputs/cache
 .idea/inspectionProfiles/profiles_settings.xml
 .idea/HiSim.iml
 .idea/workspace.xml
+.DS_Store

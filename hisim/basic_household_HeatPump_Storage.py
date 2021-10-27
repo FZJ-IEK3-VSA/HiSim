@@ -75,7 +75,7 @@ def basic_household(my_sim):
 
      # Build heat demand
     csv_load_heat_demand = CSVLoader(component_name="csv_load_heat_demand",
-                                      csv_filename="Lastprofile/SOSO/Orginal/EFH_Bestand_TRY_5_Profile_1min.csv",
+                                      csv_filename="loadprofiles/EFH_Bestand_TRY_5_Profile_1min.csv",
                                       column=1,
                                       loadtype=loadtypes.LoadTypes.WarmWater,
                                       unit=loadtypes.Units.Watt,
@@ -150,7 +150,7 @@ def basic_household(my_sim):
 
 
 
-    '''
+
     my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,
                                my_controller.ComponentName,
                                my_controller.ControlSignalHeatPump)
@@ -166,16 +166,12 @@ def basic_household(my_sim):
     my_heat_pump.connect_input(my_heat_pump.TemperatureAmbient,
                                my_weather.ComponentName,
                                my_weather.TemperatureOutside)
-    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower1,
-                               my_heat_pump.ComponentName,
-                               my_heat_pump.ThermalOutputPower)
-    '''
 
     # Build heat storage
 
 
 
-
+    """
     my_gas_heater=gas_heater.GasHeater()
     my_gas_heater.connect_input(my_gas_heater.ControlSignal,
                                my_controller.ComponentName,
@@ -192,24 +188,23 @@ def basic_household(my_sim):
                                my_heat_storage.ComponentName,
                                my_heat_storage.WaterOutputTemperature)
 
+    """
     my_heat_storage.connect_input(my_heat_storage.ThermalDemandHeatingWater,
                                csv_load_heat_demand.ComponentName,
                                csv_load_heat_demand.Output1)
 
 
 
-    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower2,
-                               my_gas_heater.ComponentName,
-                              my_gas_heater.ThermalOutputPower)
-    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower3,
-                               my_chp_system.ComponentName,
-                              my_chp_system.ThermalOutputPower)
+    my_heat_storage.connect_input(my_heat_storage.ThermalInputPower1,
+                               my_heat_pump.ComponentName,
+                               my_heat_pump.ThermalOutputPower)
+
 
     #Demand an Heating Water anschließen
     my_sim.add_component(my_heat_storage)
-    #my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_gas_heater)
-    my_sim.add_component(my_chp_system)
+    my_sim.add_component(my_heat_pump)
+    #my_sim.add_component(my_gas_heater)
+    #my_sim.add_component(my_chp_system)
 
 
     my_sim.add_component(my_controller)

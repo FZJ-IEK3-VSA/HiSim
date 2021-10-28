@@ -130,3 +130,12 @@ dmypy.json
 
 # cache folders
 inputs/cache
+.idea/vcs.xml
+.idea/misc.xml
+.idea/modules.xml
+.idea/inspectionProfiles/Project_Default.xml
+.idea/inspectionProfiles/profiles_settings.xml
+.idea/HiSim.iml
+.idea/workspace.xml
+.DS_Store
+hisim/inputs/cache/cache_indices.json

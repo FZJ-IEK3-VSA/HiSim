@@ -30,7 +30,7 @@ __maintainer__ = "Max Hillen"
 __email__ = "max.hillen@fz-juelich.de"
 __status__ = "development"
 #power=E3 10E3 25E3 100E3
-power = 20E3
+power = 500E3
 #capacitiy=  25 100
 capacitiy=100
 def basic_household(my_sim,capacity=capacitiy,power=power):
@@ -150,7 +150,7 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
 
 
     #Build Controller
-    my_controller = controller.Controller()
+    my_controller = controller.Controller(strategy="seasonal_storage")
     '''
         residual_power = CSVLoader(component_name="residual_power",
                                csv_filename="advanced_battery/Pr_ideal_1min.csv",
@@ -312,8 +312,10 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
     '''
     #my_sim.add_component(my_battery)
     my_sim.add_component(my_controller)
-    my_sim.add_component(my_electrolyzer)
     my_sim.add_component(my_hydrogen_storage)
+    my_sim.add_component(my_electrolyzer)
+
+
 
 
 

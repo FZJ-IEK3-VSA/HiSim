@@ -28,7 +28,7 @@ __maintainer__ = "Max Hillen"
 __email__ = "max.hillen@fz-juelich.de"
 __status__ = "development"
 #power=E3 10E3 25E3 100E3
-power = 20E3
+power = 10E3
 #capacitiy=  25 100
 capacitiy=100
 def basic_household(my_sim,capacity=capacitiy,power=power):
@@ -115,15 +115,15 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
                                         initial_temperature=initial_temperature,
                                         sim_params=my_sim_params,
                                         seconds_per_timestep=seconds_per_timestep)
-                                        
+    '''
     #Build Battery
     fparameter = np.load(globals.HISIMPATH["bat_parameter"])
     my_battery = advanced_battery.AdvancedBattery(parameter=fparameter,sim_params=my_sim_params,capacity=capacity)                                    
-    '''
+
 
 
     #Build Controller
-    my_controller = controller.Controller()
+    my_controller = controller.Controller(strategy= "peak_shaving_into_grid",limit_to_shave=4)
     '''
         residual_power = CSVLoader(component_name="residual_power",
                                csv_filename="advanced_battery/Pr_ideal_1min.csv",
@@ -244,7 +244,7 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
     my_sim.add_component(my_photovoltaic_system)
 
 
-    '''
+
     my_battery.connect_input(my_battery.LoadingPowerInput,
                                my_controller.ComponentName,
                                my_controller.ElectricityToOrFromBatteryTarget)
@@ -252,7 +252,7 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
     my_controller.connect_input(my_controller.ElectricityToOrFromBatteryReal,
                                my_battery.ComponentName,
                                my_battery.ACBatteryPower)
-    '''
+
 
     my_controller.connect_input(my_controller.ElectricityConsumptionBuilding,
                                csv_load_power_demand.ComponentName,
@@ -261,7 +261,7 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
                                my_photovoltaic_system.ComponentName,
                                my_photovoltaic_system.ElectricityOutput)
 
-    #my_sim.add_component(my_battery)
+    my_sim.add_component(my_battery)
     my_sim.add_component(my_controller)
 
 

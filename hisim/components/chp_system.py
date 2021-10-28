@@ -76,6 +76,7 @@ class CHP(Component):
     # Inputs
     ControlSignal = "ControlSignal" # at which Procentage is the CHP modulating [0..1]
     MassflowInputTemperature = "MassflowInputTemperature"
+    ElectricityFromCHPTarget="ElectricityFromCHPTarget"
     #OperatingModelSignal="OperatingModelSignal" #-->Wärme oder Stromgeführt. Nötig?
 
     #Output
@@ -85,12 +86,13 @@ class CHP(Component):
     GasDemand = "GasDemand"
     NumberofCycles = "NumberofCycles"
     ThermalOutputPower = "ThermalOutputPower"
-    def __init__(self, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen"):
+    def __init__(self, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen",operating_mode="both"):
         super().__init__(name)
-
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
         self. gas_type = gas_type #Gas Type can be "Hydrogen" or "Methan"
+        self.operating_mode=operating_mode #operating_mode=["both","heat","electricity"]
+
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
         self.state = CHPState(start_timestep=int(0),cycle_number=0)
@@ -110,9 +112,10 @@ class CHP(Component):
         self.delta_T=CHPConfig.delta_T
 
         #Inputs
-        self.control_signal: ComponentInput = self.add_input(self.ComponentName, CHP.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
+        self.control_signal: ComponentInput = self.add_input(self.ComponentName, CHP.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, False)
         #self.operating_mode_signal: ComponentInput = self.add_input(self.ComponentName, CHP.OperatingModelSignal, lt.LoadTypes.Gas, lt.Units.Percent, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, CHP.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
+        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, CHP.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, False)
+        self.electricity_target: ComponentInput = self.add_input(self.ComponentName, CHP.ElectricityFromCHPTarget, lt.LoadTypes.Electricity, lt.Units.Watt, False)
 
         #Outputs
         self.mass_out: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutput, lt.LoadTypes.Water, lt.Units.kg_per_sec)
@@ -141,11 +144,26 @@ class CHP(Component):
 
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
-        control_signal = stsv.get_input_value(self.control_signal)
+        if self.operating_mode=="heat":
+            control_signal = stsv.get_input_value(self.control_signal)
+        elif self.operating_mode=="electricity":
+            control_signal = ((stsv.get_input_value(self.electricity_target)/self.P_el_max-self.eff_el_min))/(self.eff_el_max-self.eff_el_min)
+            if control_signal > 1:
+                control_signal=1
+        elif self.operating_mode=="both":
+            if ((stsv.get_input_value(self.electricity_target)/self.P_el_max-self.eff_el_min))/(self.eff_el_max-self.eff_el_min) <= stsv.get_input_value(self.control_signal):
+                control_signal=stsv.get_input_value(self.control_signal)
+            else:
+                control_signal=((stsv.get_input_value(self.electricity_target) / self.P_el_max - self.eff_el_min)) / (self.eff_el_max - self.eff_el_min)
+                if control_signal > 1:
+                    control_signal=1
+
         if control_signal > 1:
             raise Exception("Expected a control signal between 0 and 1")
         if control_signal < 0:
             raise Exception("Expected a control signal between 0 and 1")
+
+
         cw=4182
         ## Calculation.Electric Energy deliverd
         ### CHP is on
@@ -155,7 +173,7 @@ class CHP(Component):
 
             #Minimium running time has been reached and the CHP wants to shut off -->so it shuts off
             if timestep >= self.state.start_timestep + self.min_operation_time and control_signal == 0:
-                el_power=0
+
                 self.state = CHPState(start_timestep=timestep,
                                            cycle_number=self.number_of_cycles,
                                            electricity_output=el_power)

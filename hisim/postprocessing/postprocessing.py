@@ -338,8 +338,7 @@ class PostProcessor:
                 self.write_to_report(text)
                 text = ["OwnConsumption: {:.3}%".format(ownconsumption)]
                 self.write_to_report(text)
-        if total_electricity_produced and total_electricity_consumed is not None:
-            pass
+
         # Writes performance of heat pump
         if heat_pump_heating is not None:
             self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])

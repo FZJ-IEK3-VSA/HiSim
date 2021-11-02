@@ -78,7 +78,7 @@ def get_default_args(obj, parameter=None):
             #return [item
             #        for item in inspect.getmembers(obj)
             #        if item[0] not in boring]
-            boring = dir(type('dummy', (object,), {}))
+            #boring = dir(type('dummy', (object,), {}))
             return [item for item in inspect.getmembers(obj)]
     else:
         if inspect.isfunction(obj):
@@ -108,23 +108,21 @@ class ConfigurationGenerator:
 
     def __init__(self, set=None):
         self.data = {}
-        self.order = []
+        self.components = {}
 
         component_class_children = get_subclasses(component.Component)
         for component_class in component_class_children:
             sig = get_default_args(globals()[component_class], "__init__")
             default_args = get_default_args(sig)
+
+            # Remove the simulation parameters of the list
             if "sim_params" in default_args:
                 del default_args["sim_params"]
-            setattr(self, component_class, default_args)
 
-        self.Vehicle = {"manufacturer": "Tesla",
-                   "model": "Model 3 v3",
-                   "soc": 1.0,
-                   "profile": "CH01"}
-        self.EVCharger = {"manufacturer": "myenergi",
-                         "name": "Wallbox ZAPPI 222TW"}
-        self.EVChargerController = {"mode": 3}
+            # Set every component as an attribute of this class
+            #setattr(self, component_class, default_args)
+            self.components[component_class] = default_args
+
         self.Battery = {"manufacturer": "sonnen",
                    "model": "sonnenBatterie 10 - 16,5 kWh",
                    "soc": 10 / 15,
@@ -133,109 +131,31 @@ class ConfigurationGenerator:
                                 "capacity": None}
         self.FlexibilityController = {"mode": 1}
 
-
-        if set is None:
-            self.add_basic_setup()
-
-    def set_order(self, order):
-        self.order = order
+        self.add_basic_setup2()
 
     def dump(self):
-        self.data["Order"] = self.order
+        print(self.data)
         with open(HISIMPATH["cfg"], "w") as f:
             json.dump(self.data, f, indent=4)
 
-    def add_sim_param(self, custom=None):
-        if custom is None:
-            self.data["SimulationParameters"] = self.SimulationParameters
-        else:
-            self.data["SimulationParameters"] = self.SimulationParametersDay
-        self.order.append("SimulationParameters")
+    def add_component(self, name):
+        self.data[name] = self.components[name]
 
-    def add_weather(self):
-        self.data["Weather"] = self.Weather
-        self.order.append("Weather")
+    def print_components(self):
+        print(self.components)
 
-    def add_occupancy(self):
-        self.data["Occupancy"] = self.Occupancy
-        self.order.append("Occupancy")
+    def add_basic_setup2(self):
+        #self.add_sim_param()
+        self.add_component("SimulationParameters")
+        self.add_component("CSVLoader")
+        self.add_component("Weather")
+        self.add_component("Occupancy")
+        self.add_component("Building")
 
-    def add_pvs(self):
-        self.data["PVSystem"] = self.PVSystem
-        self.order.append("PVSystem")
 
-    def add_building(self):
-        self.data["Building"] = self.Building
-        self.order.append("Building")
 
-    def add_csv_load_power(self):
-        self.data["CSVLoader"] = self.CSVLoader
-        self.order.append("CSVLoader")
 
-    def add_controller(self):
-        self.data["Controller"] = self.Controller
-        self.order.append("Controller")
 
-    def add_basic_setup(self):
-        self.add_sim_param()
-        self.add_csv_load_power()
-        self.add_weather()
-        #self.add_occupancy()
-        self.add_pvs()
-        #self.add_building()
-
-    def add_heat_pump(self, mode=None):
-        self.data["HeatPumpController"] = self.HeatPumpController
-        if mode is not None:
-            self.data["HeatPumpController"]["mode"] = mode
-
-        self.data["HeatPump"] = self.HeatPump
-        self.order.append("HeatPump")
-
-    def add_ev_charger(self, mode=None):
-        self.data["EVChargerController"] = self.EVChargerController
-        if mode is not None:
-            self.data["EVChargerController"]["mode"] = mode
-
-        self.data["Vehicle_Pure"] = self.Vehicle_Pure
-
-        self.data["EVCharger"] = self.EVCharger
-        self.order.append("EVCharger")
-
-    def add_battery(self):
-        self.data["Battery"] = self.Battery
-        self.order.append("Battery")
-
-    def add_advanced_battery(self,capacity):
-        self.data["AdvancedBattery"] = self.AdvancedBattery
-        self.data["AdvancedBattery"]["capacity"] = capacity
-        self.order.append("AdvancedBattery")
-
-    def add_dummy(self,
-                  electricity=None,
-                  heat=None,
-                  capacity=None,
-                  initial_temperature=None):
-        if electricity is not None:
-            self.Dummy["electricity"] = electricity
-        if heat is not None:
-            self.Dummy["heat"] = heat
-        if capacity is not None:
-            self.Dummy["capacity"] = capacity
-        if initial_temperature is not None:
-            self.Dummy["initial_temperature"] = initial_temperature
-        self.data["Dummy"] = self.Dummy
-        self.order.append("Dummy")
-
-    def add_flexibility_controller(self, mode=None):
-        self.data["FlexibilityController"] = self.FlexibilityController
-        if mode is not None:
-            self.data["FlexibilityController"]["mode"] = mode
-        self.order.append("FlexibilityController")
-
-    def add_thermal_energy_storage(self):
-        self.data["ThermalEnergyStorage"] = 0
-        self.order.append("ThermalEnergyStorage")
 
 class SmartHome:
 

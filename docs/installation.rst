@@ -9,39 +9,39 @@ Clone repository
 -----------------------
 To clone this repository, enter the following command to your terminal:
 
-```python
+``python
 git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
-```
+``
 
-Virtual Environment
+Set Virtual Environment
 -----------------------
 Before installing `hisim`, it is recommended to set up a python virtual environment. Let `hisimvenv` be the name of virtual environment to be created. For Windows users, setting the virtual environment in the path `\hisim` is done with the command line:
 
-```python
+``python
 python -m venv hisimvenv
-```
+``
 
 After its creation, the virtual environment can be activated in the same directory:
-```python
+``python
 hisimvenv\Scripts\activate
-```
+``
 For Linux/Mac users, the virtual environment is set up and activated as follows:
 
-```python
+``python
 virtual hisimvenv
 source hisimvenv/bin/activate
-```
+``
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
-```python
+``python
 conda create -n hisimvenv python=3.8
 conda activate hisimvenv
-```
+``
 With the successful activation, `hisim` is ready to be locally installed.
 
 Install package
 ------------------------
 After setting up the virtual environment, install the package to your local libraries:
 
-```python
+``python
 python setup.py install
-```
+``

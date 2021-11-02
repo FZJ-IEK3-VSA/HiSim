@@ -1,118 +1,31 @@
-.. House Infrastructure Simulator documentation master file, created by
+.. Building Energy Simulator documentation master file, created by
    sphinx-quickstart on Thu Oct  7 17:06:08 2021.
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
+.. image:: http://www.fz-juelich.de/SharedDocs/Bilder/IBG/IBG-3/DE/Plant-soil-atmosphere%20exchange%20processes/INPLAMINT%20(BONARES)/Bild3.jpg?__blob=poster
+    :target: http://www.fz-juelich.de/iek/iek-3/EN/Forschung/_Process-and-System-Analysis/_node.html
+    :width: 230px
+    :alt: Forschungszentrum Juelich Logo
+    :align: right
+
 Welcome to BESIM's documentation!
 ==========================================================
 
-What is BESIM?
-
-It is an open-source Python-package for simulation in building energy systems, similar to Polysun and TRNSYS, and has been under continuous development as part of the project PiegStrom. ``BESIM`` contains a time step simulation engine and an extendable framework for integration.
-
-Time Step Simulation Principle:
--------------------------------
-
-A building energy system can be composed of multiple components, e.g., ``Building``, ``Thermal Energy Storage`` (TES), ``Heat Pump``, ``Battery``, ``Photovoltaic system`` or ``Electric Vehicle``. In such a system, the components are interconnected, exchanging information, mass fluxes or energy within every time step. These connections take place though inputs and outputs.
-
-Inputs and outputs are nothing but shared values among the components. In other words, once a component performed its internal calculations, all its output values are updated, and so are the input values of other components that they are connected to. The updated input values are used for the internal calculation, which themselves generate new output values, and so on progressively through all components.
-
-:numref:`circularsubstitution`.
-
-.. _timestepsimulation:
-
-.. figure:: img/time_step_simulation.svg
-   :width: 400
-   :align: center
-   :alt: Alternative text
-
-   Building Energy System and its Components Connections
-..
-   [comment] BESIM is using currently the simplest convergence method: Circular Substitution with an Anti-Oscillation-Switch. The framework splits the time into discrete steps
-   where every run the calculation for each time step
-   * Each component is called with the input values from the previous component.
-   * But there are frequently circular dependencies.
-   * Those require a solver inside a step.
-   * The solver needs to iterate until a solution is reached.
-
-In some cases, a chain of associations, a building energy system might have a circular connection as seen by :numref:`timestepsimulation`:
-
-Circular Substitution with an Anti-Oscillation-Switch Method:
--------------------------------------------------------------
-
-Circular Substitution works in an iterative manner within one single time step, overwriting common shared inputs and outputs among the components. To illustrate this concept, take a home energy system containing a building, a heat pump controller, a heat pump and a thermal energy storage depicted in :numref:`circularsubstitution`.
-
-Once the setup function has been implemented and the components and connects have been passed to the Simulator, the simulator itself run all the internal calculations time steps for every single component, sequentially, as they were added to the simulator. To correctly determine the values of all outputs for a specific time step, the Simulator performs multiple iterations. The process of going through these iterations and converging to the correct outputs is called Anti-Oscillation-Switch.
-
-In the :numref:`circularsubstitution` example, the Simulator starts with the Building. In the first try of the current time step, the component `Building` carries the values of the previous time step. Since this is the first time step, all default values are set to zero. Once ``Simulator`` performs the internal calculation of ``Building``, the output `Building Heating Demand` is updated, as shown in :numref:`buildingfirstiteration` .
-
-.. _buildingfirstiteration:
-
-.. figure:: img/building_iteration_1.svg
-   :width: 300
-   :align: center
-   :alt: Building In The First Iteration
-
-   Component Building in the first iteration
-
-Next, ``Simulator`` performs the internal calculation of ``Thermal Energy Storage``. Since this is the first time step as well, the output values is filled with the simulation start value as shown in :numref:`btesiter`.
-
-.. _btesiter:
-
-.. figure:: img/building_tes_iteration_1.svg
-   :width: 400
-   :align: center
-   :alt: Building and TES in the first iteration
-
-   Building and TES in the first iteration
-
-Analogously, ``Simulator`` performs the internal calculation of ``Heat Pump`` and ``Heat Pump Controller``. Given the heating requirement from ``Building``, ``Heat Pump`` and ``Heat Pump Controller`` updates their outputs to start the heating process, as shown in :numref:`firstiteration`.
-
-.. _firstiteration:
-
-.. figure:: img/iteration_1.svg
-   :width: 600
-   :align: center
-   :alt: First Iteration
-
-   First Iteration
-
-..
-   [comment] the building perform its internal calculations and update the output values.
-   [comment]
-   [comment] * Call first component
-   [comment] * Feed Output of the first component to the second component
-   [comment] * All values that are not available yet stay 0
-   [comment] * Then feed output of component 1 and 2 to the 3rd component
-   [comment] * Repeat in a circle until values stop changing (convergence)
-   [comment]
-
-If after 10 iterations no convergence has been reached, tell all oscillating components to just stick to the last value. (Anti-Oscillation-Switch)
-
-.. _circularsubstitution:
-
-.. figure:: img/hisim_iterations.svg
-  :width: 800
-  :align: center
-  :alt: Alternative text
-
-  Circular Substitution
-
-Installation
----------------------------------------------------------
-
-Please, check the :ref:`installation` procedures to install ``BESIM`` in your local machine.
-
-Modules
-==========================================================
+`BESIM` is an open-source Python-package for simulation in building energy systems, and has been under continuous development as part of the project PiegStrom. `BESIM` contains a time step simulation engine and an extendable framework for integration. Please, check the :ref:`installation` procedures to install `BESIM` in your local machine.
 
 .. toctree::
    :maxdepth: 1
    :caption: Contents:
 
-   modules
    installation
    tutorial
+   strategy
+   componentsworkflow
+   modules
+
+Documentation Reference
+==============================
 
 * :ref:`genindex`
 * :ref:`modindex`
@@ -139,7 +52,7 @@ Copyright (C) 2020-2021 Noah Pflugradt, Vitor Zago, Frank Burkard, Tjarko Tjaden
 Contribution
 ============================================================
 
-This software is developed together with the **Hochschule Emden/Leer** inside the project "Piegstrom".
+This software is developed together with the **Hochschule Emden/Leer** inside the project `Piegstrom`.
 
 Acknowledgement
 ================================================
@@ -153,4 +66,3 @@ This work was supported by the Helmholtz Association under the Joint Initiative 
    :align: left
    :width: 200
    :alt: Helmholtz Logo
-

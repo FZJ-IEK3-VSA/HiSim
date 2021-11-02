@@ -7,9 +7,6 @@ hisim
    cfg_automator
    component
    components
-   globals
    hisim
-   inputs
-   loadtypes
    postprocessing
    simulator

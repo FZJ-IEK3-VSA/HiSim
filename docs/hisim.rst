@@ -1,4 +1,4 @@
-hisim module
+BESIM Classes
 ============
 
 .. automodule:: hisim

@@ -94,7 +94,8 @@ HISIMPATH       = {"results": os.path.join(hisim_abs_path, "results"),
                    "advanced_battery": {"parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"),
                                         "reference_case": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "reference_case", "ref_case_data.npz")},
                    "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
-                   "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy")}
+                   "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"),
+                   "hplib_database":os.path.join(hisim_abs_path, "inputs", "heat_pump_hplib", "hplib_database.csv")}
 
 
 class Outputs:

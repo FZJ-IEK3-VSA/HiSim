@@ -26,7 +26,7 @@ class HeatPumpHplib(Component):
     """
 
     # Inputs
-    Mode = "Mode"                                               # 0 = on, 1 = heating, 2 = cooling
+    Mode = "Mode"                                               # 0 = off, 1 = heating, 2 = cooling
     TemperatureInputPrimary = "TemperatureInputPrimary"         # °C
     TemperatureInputSecondary = "TemperatureInputSecondary"     # °C
     TemperatureAmbient = "TemperatureAmbient"                   # °C

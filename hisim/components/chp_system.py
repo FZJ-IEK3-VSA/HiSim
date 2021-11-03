@@ -77,15 +77,17 @@ class CHP(Component):
     ControlSignal = "ControlSignal" # at which Procentage is the CHP modulating [0..1]
     MassflowInputTemperature = "MassflowInputTemperature"
     ElectricityFromCHPTarget="ElectricityFromCHPTarget"
+    HydrogenNotReleased="HydrogenNotReleased"
     #OperatingModelSignal="OperatingModelSignal" #-->Wärme oder Stromgeführt. Nötig?
 
     #Output
     MassflowOutput= "Hot Water Energy Output"
     MassflowOutputTemperature= "MassflowOutputTemperature"
     ElectricityOutput="ElectricityOutput"
-    GasDemand = "GasDemand"
+    GasDemandTarget = "GasDemandTarget"
     NumberofCycles = "NumberofCycles"
     ThermalOutputPower = "ThermalOutputPower"
+    GasDemandReal="GasDemandReal"
     def __init__(self, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen",operating_mode="both"):
         super().__init__(name)
         self.min_operation_time = min_operation_time
@@ -116,14 +118,17 @@ class CHP(Component):
         #self.operating_mode_signal: ComponentInput = self.add_input(self.ComponentName, CHP.OperatingModelSignal, lt.LoadTypes.Gas, lt.Units.Percent, True)
         self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, CHP.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, False)
         self.electricity_target: ComponentInput = self.add_input(self.ComponentName, CHP.ElectricityFromCHPTarget, lt.LoadTypes.Electricity, lt.Units.Watt, False)
+        self.hydrogen_not_released: ComponentInput = self.add_input(self.ComponentName, CHP.HydrogenNotReleased, lt.LoadTypes.Gas, lt.Units.kg,False)
+
 
         #Outputs
         self.mass_out: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutput, lt.LoadTypes.Water, lt.Units.kg_per_sec)
         self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celsius)
-        self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, CHP.GasDemand, lt.LoadTypes.Gas, lt.Units.kWh)
+        self.gas_demand_target: ComponentOutput = self.add_output(self.ComponentName, CHP.GasDemandTarget, lt.LoadTypes.Gas, lt.Units.kg_per_sec)
         self.el_power: ComponentOutput = self.add_output(self.ComponentName, CHP.ElectricityOutput, lt.LoadTypes.Electricity, lt.Units.Watt)
         self.number_of_cyclesC: ComponentOutput = self.add_output(self.ComponentName, CHP.NumberofCycles, lt.LoadTypes.Any, lt.Units.Any)
         self.th_power: ComponentOutput = self.add_output(self.ComponentName, CHP.ThermalOutputPower, lt.LoadTypes.Heating, lt.Units.Watt)
+        self.gas_demand_real_used: ComponentOutput = self.add_output(self.ComponentName, CHP.GasDemandReal, lt.LoadTypes.Gas, lt.Units.kg_per_sec)
 
 
 
@@ -142,63 +147,48 @@ class CHP(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
          pass
 
+    def simulate_chp(self,control_signal:float,stsv: SingleTimeStepValues,timestep:int):
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
-        if self.operating_mode=="heat":
-            control_signal = stsv.get_input_value(self.control_signal)
-        elif self.operating_mode=="electricity":
-            control_signal = ((stsv.get_input_value(self.electricity_target)/self.P_el_max-self.eff_el_min))/(self.eff_el_max-self.eff_el_min)
-            if control_signal > 1:
-                control_signal=1
-        elif self.operating_mode=="both":
-            if ((stsv.get_input_value(self.electricity_target)/self.P_el_max-self.eff_el_min))/(self.eff_el_max-self.eff_el_min) <= stsv.get_input_value(self.control_signal):
-                control_signal=stsv.get_input_value(self.control_signal)
-            else:
-                control_signal=((stsv.get_input_value(self.electricity_target) / self.P_el_max - self.eff_el_min)) / (self.eff_el_max - self.eff_el_min)
-                if control_signal > 1:
-                    control_signal=1
-
-        if control_signal > 1:
-            raise Exception("Expected a control signal between 0 and 1")
-        if control_signal < 0:
-            raise Exception("Expected a control signal between 0 and 1")
-
-
-        cw=4182
+        cw = 4182
         ## Calculation.Electric Energy deliverd
         ### CHP is on
         if self.state.activation != 0:
             self.number_of_cycles = self.state.cycle_number
             # Checks if the minimum running time has been reached
 
-            #Minimium running time has been reached and the CHP wants to shut off -->so it shuts off
+            # Minimium running time has been reached and the CHP wants to shut off -->so it shuts off
             if timestep >= self.state.start_timestep + self.min_operation_time and control_signal == 0:
 
-                self.state = CHPState(start_timestep=timestep,
-                                           cycle_number=self.number_of_cycles,
-                                           electricity_output=el_power)
                 # all Outputs zero
-                mass_out_temp=0
-                mass_out=0
-                el_power=0
-                th_power=0
+                mass_out_temp = 0
+                mass_out = 0
+                el_power = 0
+                th_power = 0
+                eff_el_real = 0
+                eff_th_real = 0
+
+                self.state = CHPState(start_timestep=timestep,
+                                      cycle_number=self.number_of_cycles,
+                                      electricity_output=el_power)
+
                 stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # mass output temp
                 stsv.set_output_value(self.mass_out, mass_out)  # mass output flow
-                stsv.set_output_value(self.electricity_outputC, el_power)  # mass output flow
+                stsv.set_output_value(self.el_power, el_power)  # mass output flow
+                stsv.set_output_value(self.th_power, th_power)  # mass output flow
+
                 # zu ändern, da gas_demand=!gas_power
-                stsv.set_output_value(self.gas_demand, th_power)
                 stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
-                return
+                return el_power, th_power, eff_el_real, eff_th_real
 
 
 
-            #Minimium running time has not been reached and the CHP wants to shut off -->so it won't shut off
+            # Minimium running time has not been reached and the CHP wants to shut off -->so it won't shut off
             elif timestep < self.state.start_timestep + self.min_operation_time and control_signal == 0:
                 # CHP doesn't want to run but has to, therefore is going to run in minimum power
 
                 maximum_power_th = self.P_th_min
                 eff_th_real = self.eff_th_min
-                eff_el_real=self.eff_el_min
+                eff_el_real = self.eff_el_min
                 maximum_power_el = self.P_el_min
 
                 th_power = maximum_power_th * eff_th_real
@@ -243,25 +233,21 @@ class CHP(Component):
                     mass_out = self.mass_flow_max
                     mass_out_temp = stsv.get_input_value(self.mass_inp_temp) + th_power / (mass_out * cw)
 
-            p_th = (mass_out_temp - stsv.get_input_value(self.mass_inp_temp) )* cw * mass_out
-            stsv.set_output_value(self.p_th, p_th)  # ThermalPowerOutput
+            th_power = (mass_out_temp - stsv.get_input_value(self.mass_inp_temp)) * cw * mass_out
+            stsv.set_output_value(self.th_power, th_power)  # ThermalPowerOutput
             stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # mass output temp
             stsv.set_output_value(self.mass_out, mass_out)  # mass output flow
-            stsv.set_output_value(self.electricity_outputC, el_power)  # mass output flow
+            stsv.set_output_value(self.el_power, el_power)  # mass output flow
             # zu ändern, da gas_demand=!gas_power
-            stsv.set_output_value(self.gas_demand, th_power)  # gas consumption
             stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
-            return
-                #run in power of control_signal
-
-
+            return el_power, th_power, eff_el_real, eff_th_real
+            # run in power of control_signal
 
         ### CHP is Off
-        #CHP wants to start and waited long enough since last start--> so it starts
+        # CHP wants to start and waited long enough since last start--> so it starts
         if control_signal != 0 and (timestep >= self.state.start_timestep + self.min_idle_time):
             self.number_of_cycles = self.number_of_cycles + 1
             number_of_cycles = self.number_of_cycles
-
 
             # Calculate Eff_th
             d_eff_th = (self.eff_th_max - self.eff_th_min)
@@ -294,33 +280,89 @@ class CHP(Component):
                 mass_out_temp = stsv.get_input_value(self.mass_inp_temp) + th_power / (mass_out * cw)
 
             self.state = CHPState(start_timestep=timestep,
-                                  electricity_output = el_power,
+                                  electricity_output=el_power,
                                   cycle_number=number_of_cycles)
 
 
 
-        #CHP wants to starts but didn't wait long enough since last start -> so it won't start
+        # CHP wants to starts but didn't wait long enough since last start -> so it won't start
         else:
-            #all Outputs should be zero, because CHP can't start
+            # all Outputs should be zero, because CHP can't start
             mass_out_temp = 0
             mass_out = 0
             el_power = 0
             th_power = 0
-
-       # th_power = (mass_out_temp - stsv.get_input_value(self.mass_inp_temp) )* cw * mass_out
-
-        if self.gas_type == "Hydrogen":
-            gas_demand= P_total /PhysicsConfig.hydrogen_specific_fuel_value_per_kg
-        elif self.gas_type == "Methan":
-            gas_demand= P_total /PhysicsConfig.natural_gas_specific_fuel_value_per_kg
-        else:
-            raise Exception("No Gas chosen which is integrated in System")
-
+            eff_el_real = 0
+            eff_th_real = 0
 
         stsv.set_output_value(self.th_power, th_power)  # ThermalPowerOutput
         stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # mass output temp
         stsv.set_output_value(self.mass_out, mass_out)  # mass output flow
         stsv.set_output_value(self.el_power, el_power)  # mass output flow
         # zu ändern, da gas_demand=!gas_power
-        stsv.set_output_value(self.gas_demand, gas_demand) #CHP runs with
         stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
+
+        return el_power, th_power, eff_el_real, eff_th_real
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+        if self.operating_mode=="heat":
+            control_signal = stsv.get_input_value(self.control_signal)
+        elif self.operating_mode=="electricity":
+            control_signal = ((stsv.get_input_value(self.electricity_target)/self.P_el_max-self.eff_el_min))/(self.eff_el_max-self.eff_el_min)
+            if control_signal > 1:
+                control_signal=1
+        elif self.operating_mode=="both":
+            if ((stsv.get_input_value(self.electricity_target)/self.P_el_max-self.eff_el_min))/(self.eff_el_max-self.eff_el_min) <= stsv.get_input_value(self.control_signal):
+                control_signal=stsv.get_input_value(self.control_signal)
+            else:
+                control_signal=((stsv.get_input_value(self.electricity_target) / self.P_el_max - self.eff_el_min)) / (self.eff_el_max - self.eff_el_min)
+                if control_signal > 1:
+                    control_signal=1
+
+        if control_signal > 1:
+            raise Exception("Expected a control signal between 0 and 1")
+        if control_signal < 0:
+            raise Exception("Expected a control signal between 0 and 1")
+
+
+        el_power, th_power, eff_el_real, eff_th_real=self.simulate_chp(control_signal=control_signal, stsv=stsv, timestep=timestep)
+        #Check if enough hydrogen is in the tank
+        if el_power==0 and th_power==0:
+            gas_demand_target=0
+            gas_demand_real_used=0
+        else:
+            if self.gas_type == "Hydrogen":
+                gas_demand_target= ((el_power/eff_el_real)+(th_power/eff_th_real ))/(PhysicsConfig.hydrogen_specific_fuel_value_per_kg*1000)
+                if stsv.get_input_value(self.hydrogen_not_released)==0:
+                    #Gas Demand can completly be charged from storage
+                    gas_demand_real_used=gas_demand_target
+
+                elif stsv.get_input_value(self.hydrogen_not_released)<0:
+                    print("Fault, bc. GasDemandpossible>gasdemandtarget")
+                    print(timestep)
+
+                elif stsv.get_input_value(self.hydrogen_not_released)>0:
+                    #not enough Gas for running CHP on power demanded/calculated before
+                    #to simplify, turn of CHP complelty, also when minimum running time isn't reached, bec. no Hydrogen is there
+
+                    stsv.set_output_value(self.th_power, 0)  # ThermalPowerOutput
+                    stsv.set_output_value(self.mass_out_temp, 0)  # mass output temp
+                    stsv.set_output_value(self.mass_out, 0)  # mass output flow
+                    stsv.set_output_value(self.el_power, 0)  # mass output flow
+                    self.number_of_cycles = self.state.cycle_number
+                    el_power=0
+                    self.state = CHPState(start_timestep=timestep,
+                                          cycle_number=self.number_of_cycles,
+                                          electricity_output=el_power)
+
+                    stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
+                    gas_demand_real_used=0
+            elif self.gas_type == "Methan":
+                gas_demand_target= ((el_power/eff_el_real)+(th_power/eff_th_real ))/PhysicsConfig.natural_gas_specific_fuel_value_per_kg
+                gas_demand_real_used=gas_demand_target
+            else:
+                raise Exception("No Gas chosen which is integrated in System")
+
+
+        stsv.set_output_value(self.gas_demand_target, gas_demand_target) #CHP runs with
+        stsv.set_output_value(self.gas_demand_real_used, gas_demand_real_used)  # ThermalPowerOutput

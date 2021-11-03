@@ -397,6 +397,8 @@ class Controller(cp.Component):
                                                   timestep_of_hysteresis=self.state.timestep_of_hysteresis_ww)
 
 
+
+        '''
         if self.state.temperature_storage_target_ww_C != self.temperature_storage_target_warm_water and self.state.timestep_of_hysteresis_ww != timestep:
             control_signal_choose_storage=1
             stsv.set_output_value(self.control_signal_choose_storage, control_signal_choose_storage)
@@ -415,3 +417,4 @@ class Controller(cp.Component):
                                                       temperature_storage_target_C=self.state.temperature_storage_target_hw_C,
                                                       timestep_of_hysteresis=self.state.timestep_of_hysteresis_hw)
 
+        '''

@@ -39,7 +39,7 @@ class ElectrolyzerSimulation:
         self.waste_energy = config.waste_energy
         self.pressure_hydrogen_output = config.pressure_hydrogen_output     # not used so far
 
-    def convert_electricity(self, electricity_input, seconds_per_timestep):
+    def convert_electricity(self, electricity_input, seconds_per_timestep,charging_hydrogen_real,hydrogen_not_stored,timestep):
         """
         Electricity from electricity distributor (combination of PV, Grid, CHP and demand) will be converted to hydrogen
 
@@ -63,6 +63,32 @@ class ElectrolyzerSimulation:
         assert self.min_hydrogen_production_rate <= hydrogen_output_liter <= self.max_hydrogen_production_rate
         # kg/s = l/s / 1000 * kg/m³
         hydrogen_output = (hydrogen_output_liter / 1000) * PhysicsConfig.hydrogen_density
+        if timestep== 143047:
+            print(2)
+
+        if hydrogen_not_stored ==0:
+            oxygen_output = hydrogen_output * (88.8 / 11.2)
+            return hydrogen_output, oxygen_output, power_level,electricity_input
+
+        #a part can be converted
+        elif hydrogen_not_stored>0 and hydrogen_not_stored<hydrogen_output:
+            hydrogen_output_real=charging_hydrogen_real/seconds_per_timestep
+            hydrogen_output_liter_real= hydrogen_output_real*1000/PhysicsConfig.hydrogen_density
+            power_level_real=self.min_power_percent+(hydrogen_output_liter_real - self.min_hydrogen_production_rate)*(self.max_power_percent - self.min_power_percent)/(self.max_hydrogen_production_rate - self.min_hydrogen_production_rate)
+            electricity_input_real = self.min_power + (self.max_power - self.min_power)*(power_level_real -  self.min_power_percent)/(100 - self.min_power_percent)
+
+            oxygen_output = hydrogen_output_real * (88.8 / 11.2)
+            return hydrogen_output_real, oxygen_output, power_level_real,electricity_input_real
+        #nothing can be converted
+        elif hydrogen_not_stored==hydrogen_output:
+            hydrogen_output=0
+            oxygen_output=0
+            power_level=0
+            electricity_input=0
+            return hydrogen_output, oxygen_output, power_level,electricity_input
+        else:
+            print("Fehler")
+            print(timestep)
 
         """
         # if there are more datapoints given
@@ -91,13 +117,14 @@ class ElectrolyzerSimulation:
         # Water consists out of H2O. The molecular weight is 11.2% Hydrogen and 88.8% Oxygen.
         # This means: From the calculated hydrogen mass, the oxygen mass can be inferred
         # this is just a fun fact and is not needed for simulation
-        oxygen_output = hydrogen_output * (88.8 / 11.2)
 
-        return hydrogen_output, oxygen_output, power_level
 
 class Electrolyzer(Component):
     # input
     ElectricityInput = "Electricity Input"              # W
+    HydrogenStorageEnergyDemand="HydrogenStorageEnergyDemand " #W
+    ChargingHydrogenAmountReal="ChargingHydrogenAmountReal" #kg/s
+    HydrogenNotStored="HydrogenNotStored"
 
     # output
     WaterDemand = "Water Demand"                        # kg/s
@@ -112,6 +139,9 @@ class Electrolyzer(Component):
         super().__init__(component_name)
         # input
         self.electricity_input: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.ElectricityInput, lt.LoadTypes.Electricity, lt.Units.Watt, True)
+        self.charging_hydrogen_real: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.ChargingHydrogenAmountReal, lt.LoadTypes.Hydrogen, lt.Units.kg, True)
+        self.hydrogen_not_stored: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.HydrogenNotStored, lt.LoadTypes.Hydrogen, lt.Units.kg, True)
+
         # output
         self.water_demand: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.WaterDemand, lt.LoadTypes.Water, lt.Units.kg_per_sec)
         self.hydrogen_output: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.HydrogenOutput, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec)
@@ -120,6 +150,8 @@ class Electrolyzer(Component):
         self.unused_power: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.UnusedPower, lt.LoadTypes.Electricity, lt.Units.Watt)
         self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.Any, lt.Units.Any)
         self.power_level: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.PowerLevel, lt.LoadTypes.Any, lt.Units.Percent)
+        self.hydrogen_storage_energy_demand: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.HydrogenStorageEnergyDemand, lt.LoadTypes.Electricity, lt.Units.Watt)
+
 
         # self
         self.electrolyzer = ElectrolyzerSimulation(config)
@@ -156,12 +188,14 @@ class Electrolyzer(Component):
         elif electricity_input < 0:
             print("Electricity to electrolyzer is negative")
             raise ValueError
-
+        if timestep==143047:
+            print("stop")
         if electricity_input >= ElectrolyzerConfig.min_power:
-            hydrogen_output, oxygen_output, power_level = self.electrolyzer.convert_electricity(electricity_input, self.seconds_per_timestep)
+            hydrogen_output, oxygen_output, power_level,electricity_input_real = self.electrolyzer.convert_electricity(electricity_input, self.seconds_per_timestep,stsv.get_input_value(self.charging_hydrogen_real) , stsv.get_input_value(self.hydrogen_not_stored)/seconds_per_timestep,timestep)
             # the losses ae included in the efficiency providedd by supplyer and are not calculated separately
             losses_this_timestep = ElectrolyzerConfig.waste_energy
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
+            unused_power=unused_power+electricity_input-electricity_input_real
         # water is split into these products
         water_consumption = hydrogen_output + oxygen_output
         try:
@@ -208,7 +242,7 @@ class HydrogenStorageSimulation:
         assert self.max_charging_rate > (ElectrolyzerConfig.max_hydrogen_production_rate / 1000 * PhysicsConfig.hydrogen_density)
         assert self.max_discharging_rate > chp.CHPConfig.P_total_max / PhysicsConfig.hydrogen_specific_fuel_value_per_kg
 
-    def store(self, hydrogen_input: float, seconds_per_timestep):
+    def store(self, hydrogen_input: float, seconds_per_timestep,timestep:int):
         """
         Notice: Write return statement and the function goes back to to the caller method immediately
         Storage function:
@@ -228,7 +262,8 @@ class HydrogenStorageSimulation:
                     delta_not_stored [kg]   Amount of hydrogen which was not stored in this timestep
         """
         max_charging = self.max_charging_rate * seconds_per_timestep
-
+        if timestep==143047:
+            print("stop")
         delta_not_stored = 0
         if hydrogen_input > max_charging:
             delta_not_stored = hydrogen_input - max_charging
@@ -242,10 +277,11 @@ class HydrogenStorageSimulation:
             return hydrogen_input, energy_demand, delta_not_stored
         elif self.fill >= self.max_capacity:
             # tank is already full
-            hydrogen_input = 0
+
             energy_demand = 0
             # limitation by tanksize and charging rate
             delta_not_stored += hydrogen_input
+            hydrogen_input = 0
             return hydrogen_input, energy_demand, delta_not_stored
         if self.fill < self.max_capacity:
             # fits partially
@@ -253,6 +289,7 @@ class HydrogenStorageSimulation:
             amount_stored = self.max_capacity - self.fill
             self.fill += amount_stored
             delta_not_stored = hydrogen_input - amount_stored
+            delta_not_stored=round(delta_not_stored,8)
             energy_demand = amount_stored * self.energy_to_charge * 3600 * 1000 / seconds_per_timestep    # w
             return amount_stored, energy_demand, delta_not_stored
         raise Exception("forgotten case")
@@ -325,6 +362,7 @@ class HydrogenStorage(Component):
     HydrogenNotReleased = "Hydrogen Not Released"                           # kg
     HydrogenStorageEnergyDemand = "Hydrogen Storage Energy Demand"          # W
     HydrogenLosses = "Hydrogen Losses"                                      # kg
+    ChargingHydrogenAmountReal="ChargingHydrogenAmountReal"                 # kg/s
 
     def __init__(self, component_name, config: HydrogenStorageConfig, seconds_per_timestep):
         super().__init__(component_name)
@@ -338,6 +376,7 @@ class HydrogenStorage(Component):
         self.hydrogen_not_released: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenNotReleased, lt.LoadTypes.Hydrogen, lt.Units.kg)
         self.hydrogen_storage_energy_demand: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenStorageEnergyDemand, lt.LoadTypes.Electricity, lt.Units.Watt)
         self.hydrogen_losses: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenLosses, lt.LoadTypes.Hydrogen, lt.Units.kg)
+        self.charging_hydrogen_real: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.ChargingHydrogenAmountReal, lt.LoadTypes.Hydrogen, lt.Units.kg)
 
         self.hydrogenstorage = HydrogenStorageSimulation(config)
 
@@ -384,19 +423,22 @@ class HydrogenStorage(Component):
             # to check previous if command
             # a heat stick in the storage tank would be better --> direct use of el.Energy
             raise Exception("Tank cant be charged and discharged in the same timestep. Use existing Hydrogen! Delta:" + str(delta))
-
+        if timestep == 143047:
+            print("lol")
         if charging_amount > 0:
-            hydrogen_input, charging_energy_demand, hydrogen_not_stored = self.hydrogenstorage.store(charging_amount, self.seconds_per_timestep)
+            hydrogen_input, charging_energy_demand, hydrogen_not_stored = self.hydrogenstorage.store(charging_amount, self.seconds_per_timestep,timestep=timestep)
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
         if discharging_amount > 0:
             hydrogen_output, discharging_energy_demand, hydrogen_not_released = self.hydrogenstorage.withdraw(discharging_amount, self.seconds_per_timestep)
 
+        charging_hydrogen_real= hydrogen_input
         losses_this_timestep = self.hydrogenstorage.storage_losses(self.seconds_per_timestep)
 
         energy_demand = charging_energy_demand + discharging_energy_demand          # W
         actual_delta = (hydrogen_input - hydrogen_output - losses_this_timestep) / self.seconds_per_timestep      # kg/s
         percent_fill = self.hydrogenstorage.fill / HydrogenStorageConfig.max_capacity
 
+        stsv.set_output_value(self.charging_hydrogen_real, charging_hydrogen_real)
         stsv.set_output_value(self.hydrogen_storage_energy_demand, energy_demand)
         stsv.set_output_value(self.hydrogen_losses, losses_this_timestep)
         stsv.set_output_value(self.storage_delta, actual_delta)

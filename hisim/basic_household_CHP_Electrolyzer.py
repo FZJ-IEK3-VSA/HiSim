@@ -30,7 +30,7 @@ __maintainer__ = "Max Hillen"
 __email__ = "max.hillen@fz-juelich.de"
 __status__ = "development"
 #power=E3 10E3 25E3 100E3
-power = 500E3
+power = 1000E3
 #capacitiy=  25 100
 capacitiy=100
 def basic_household(my_sim,capacity=capacitiy,power=power):
@@ -295,27 +295,53 @@ def basic_household(my_sim,capacity=capacitiy,power=power):
                                my_controller.ComponentName,
                                my_controller.ElectricityToElectrolyzerTarget)
 
+
+    my_electrolyzer.connect_input(my_electrolyzer.HydrogenNotStored,
+                               my_hydrogen_storage.ComponentName,
+                               my_hydrogen_storage.HydrogenNotStored)
+
     my_controller.connect_input(my_controller.ElectricityToElectrolyzerReal,
                                my_electrolyzer.ComponentName,
                                my_electrolyzer.UnusedPower)
+    my_controller.connect_input(my_controller.ElectricityFromCHPReal,
+                               my_chp.ComponentName,
+                               my_chp.ElectricityOutput)
+
 
     my_hydrogen_storage.connect_input(my_hydrogen_storage.ChargingHydrogenAmount,
                                    my_electrolyzer.ComponentName,
                                    my_electrolyzer.HydrogenOutput)
+    my_hydrogen_storage.connect_input(my_hydrogen_storage.DischargingHydrogenAmountTarget,
+                                   my_chp.ComponentName,
+                                   my_chp.GasDemandTarget)
     '''
     my_hydrogen_storage.connect_input(my_hydrogen_storage.DischargingHydrogenAmount,
                                    my_chp.ComponentName,
                                    my_chp.GasDemand)
+    '''
+    my_chp.connect_input(my_chp.HydrogenNotReleased,
+                           my_hydrogen_storage.ComponentName,
+                           my_hydrogen_storage.HydrogenNotReleased)
+
     my_chp.connect_input(my_chp.ControlSignal,
                            my_controller.ComponentName,
                            my_controller.ControlSignalChp)                               
-    '''
+    my_chp.connect_input(my_chp.ElectricityFromCHPTarget,
+                           my_controller.ComponentName,
+                           my_controller.ElectricityFromCHPTarget)
+
+
+
+
+
     #my_sim.add_component(my_battery)
+
     my_sim.add_component(my_controller)
-    my_sim.add_component(my_hydrogen_storage)
+
+
+    my_sim.add_component(my_chp)
     my_sim.add_component(my_electrolyzer)
-
-
+    my_sim.add_component(my_hydrogen_storage)
 
 
 

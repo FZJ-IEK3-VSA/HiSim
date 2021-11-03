@@ -13,7 +13,7 @@ from pkgutil import iter_modules
 from pathlib import Path as gg
 from importlib import import_module
 
-## IMPORT ALL COMPONENT CLASSES DYNAMICALLY
+# IMPORT ALL COMPONENT CLASSES DYNAMICALLY
 # DIRTY CODE. GIVE ME BETTER SUGGESTIONS
 
 # iterate through the modules in the current package
@@ -43,116 +43,72 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def delete_all_results():
-    directorypath = globals.HISIMPATH["results"]
-    filelist = [f for f in os.listdir(directorypath)]
-    for f in filelist:
-        if os.path.isdir(os.path.join(directorypath, f)):
-            shutil.rmtree(os.path.join(directorypath, f))
 
 def get_subclasses(classname=None):
     """
     Return a list of all the children classes
     in this module from parent class classname
-
-
     """
     list_of_children = [cls.__name__ for cls in classname.__subclasses__()]
     return list_of_children
-
-def get_default_args(obj, parameter=None):
-    """
-    Get the default argument of either a function or
-    a class
-
-    :param obj: a function or class
-    :param parameter:
-    :return: a dictionary or list of the arguments
-    """
-    if parameter == None:
-        if inspect.isfunction(obj):
-            signature = inspect.signature(obj)
-            return {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
-        if inspect.isclass(obj):
-            #boring = dir(type('dummy', (object,), {}))
-            #return [item
-            #        for item in inspect.getmembers(obj)
-            #        if item[0] not in boring]
-            #boring = dir(type('dummy', (object,), {}))
-            return [item for item in inspect.getmembers(obj)]
-    else:
-        if inspect.isfunction(obj):
-            signature = inspect.signature(obj)
-            sig_dict = {k: v.default for k, v in signature.parameters.items() if v.default is not inspect.Parameter.empty}
-            return sig_dict[parameter]
-        if inspect.isclass(obj):
-            #boring = dir(type('dummy', (object,), {}))
-            #return [item
-            #        for item in inspect.getmembers(obj)
-            #        if item[0] not in boring]
-            boring = dir(type('dummy', (object,), {}))
-            return [item for item in inspect.getmembers(obj) if item[0] in parameter][0][1]
 
 class ConfigurationGenerator:
     SimulationParameters = {"year": 2019,
                             "seconds_per_timestep": 60,
                             "method": "full_year"}
-    SimulationParametersDay = {"year": 2019,
-                               "seconds_per_timestep": 60,
-                               "method": "one_day_only"}
-    Battery = {"manufacturer": "sonnen",
-               "model": "sonnenBatterie 10 - 16,5 kWh",
-               "soc": 10/15,
-               "base": False}
-    FlexibilityController = {"mode": 1}
 
     def __init__(self, set=None):
         self.data = {}
         self.components = {}
+        self.load_component_modules()
+        self.add_sim_param()
+
+    def load_component_modules(self):
+        def get_default_parameters_from_constructor(cls):
+            """
+            Get the default argument of either a function or
+            a class
+
+            :param obj: a function or class
+            :param parameter:
+            :return: a dictionary or list of the arguments
+            """
+            class_component = globals()[cls]
+            constructor_function_var = [item for item in inspect.getmembers(class_component) if item[0] in "__init__"][0][1]
+            sig = inspect.signature(constructor_function_var)
+            return {k: v.default for k, v in sig.parameters.items() if
+                            v.default is not inspect.Parameter.empty}
 
         component_class_children = get_subclasses(component.Component)
         for component_class in component_class_children:
-            sig = get_default_args(globals()[component_class], "__init__")
-            default_args = get_default_args(sig)
+            default_args = get_default_parameters_from_constructor(component_class)
 
             # Remove the simulation parameters of the list
             if "sim_params" in default_args:
                 del default_args["sim_params"]
 
-            # Set every component as an attribute of this class
-            #setattr(self, component_class, default_args)
+            # Save every component in the dictionary attribute
             self.components[component_class] = default_args
 
-        self.Battery = {"manufacturer": "sonnen",
-                   "model": "sonnenBatterie 10 - 16,5 kWh",
-                   "soc": 10 / 15,
-                   "base": False}
-        self.AdvancedBattery = {"parameter": None,
-                                "capacity": None}
-        self.FlexibilityController = {"mode": 1}
-
-        self.add_basic_setup2()
+    def add_sim_param(self):
+        self.data["SimulationParameters"] = self.SimulationParameters
 
     def dump(self):
-        print(self.data)
         with open(HISIMPATH["cfg"], "w") as f:
             json.dump(self.data, f, indent=4)
 
-    def add_component(self, name):
-        self.data[name] = self.components[name]
+    def add_component(self, user_components_name):
+        if isinstance(user_components_name, list):
+            for user_component_name in user_components_name:
+                self.data[user_component_name] = self.components[user_component_name]
+        else:
+            self.data[user_components_name] = self.components[user_components_name]
 
     def print_components(self):
-        print(self.components)
+        print(json.dumps(self.components, sort_keys=True, indent=4))
 
-    def add_basic_setup2(self):
-        #self.add_sim_param()
-        self.add_component("SimulationParameters")
-        self.add_component("CSVLoader")
-        self.add_component("Weather")
-        self.add_component("Occupancy")
-        self.add_component("Building")
-
-
+    def print_component(self, name):
+        print(json.dumps(self.components[name], sort_keys=True, indent=4))
 
 
 

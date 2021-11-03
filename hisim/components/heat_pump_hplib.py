@@ -26,7 +26,7 @@ class HeatPumpHplib(Component):
     """
 
     # Inputs
-    OnOffSwitch = "OnOffSwitch"                                 # 1 = on, 0 = 0ff
+    Mode = "Mode"                                               # 0 = on, 1 = heating, 2 = cooling
     TemperatureInputPrimary = "TemperatureInputPrimary"         # °C
     TemperatureInputSecondary = "TemperatureInputSecondary"     # °C
     TemperatureAmbient = "TemperatureAmbient"                   # °C
@@ -35,6 +35,7 @@ class HeatPumpHplib(Component):
     ThermalOutputPower = "ThermalOutputPower"                   # W
     ElectricalInputPower = "ElectricalInputPower"               # W
     COP = "COP"                                                 # -
+    EER = "EER"                                                 # -
     TemperatureOutput = "TemperatureOutput"                     # °C
     MassFlowOutput = "MassFlowOutput"                           # kg/s
     TimeOn = "TimeOn"                                           # s
@@ -43,7 +44,8 @@ class HeatPumpHplib(Component):
     def __init__(self, model: str, group_id: int = None, t_in: float = None, t_out: float = None,
                  p_th_set: float = None):
         """
-        Loads the parameters of the specified heat pump.
+        Loads the parameters of the specified heat pump and creates the object HeatPump 
+        for simulation purpose.
 
         Parameters
         ----------
@@ -57,22 +59,13 @@ class HeatPumpHplib(Component):
             only for model "Generic": Output temperature :math:`T` at secondary side of the heat pump. [°C]
         p_th_set : numeric, default 0
             only for model "Generic": Thermal output power at setpoint t_in, t_out. [W]
-
-        Returns
-        ----------
-        parameters : pd.DataFrame
-            Data frame containing the model parameters.
         """
         super().__init__(name="HeatPump")
 
         self.model = model
-
         self.group_id = group_id
-
         self.t_in = t_in
-
         self.t_out = t_out
-
         self.p_th_set = p_th_set
 
         # Component has states
@@ -83,9 +76,16 @@ class HeatPumpHplib(Component):
         self.parameters = hpl.get_parameters(self.model, self.group_id,
                                              self.t_in, self.t_out, self.p_th_set)
 
+        # Create HeatPump object for simulation purpose
+        self.HeatPump = hpl.HeatPump(self.parameters)
+
+        # Set minimum on- and off-time of heat pump
+        self.time_on_min = 600 # [s]
+        self.time_off_min = self.time_on_min
+
         # Define component inputs
-        self.on_off_switch: ComponentInput = self.add_input(object_name=self.ComponentName,
-                                                            field_name=self.OnOffSwitch,
+        self.mode: ComponentInput = self.add_input(object_name=self.ComponentName,
+                                                            field_name=self.Mode,
                                                             load_type=LoadTypes.Any,
                                                             unit=Units.Any,
                                                             mandatory=True)
@@ -124,6 +124,11 @@ class HeatPumpHplib(Component):
                                                      load_type=LoadTypes.Any,
                                                      unit=Units.Any)
 
+        self.eer: ComponentOutput = self.add_output(object_name=self.ComponentName,
+                                                     field_name=self.EER,
+                                                     load_type=LoadTypes.Any,
+                                                     unit=Units.Any)
+
         self.t_out: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                       field_name=self.TemperatureOutput,
                                                       load_type=LoadTypes.Heating,
@@ -159,14 +164,14 @@ class HeatPumpHplib(Component):
 
         Parameters
         ----------
-        t_in_primary : numeric
-            Input temperature on primary side :math:`T` (air, brine, water). [°C]
-        t_in_secondary : numeric
-            Input temperature on secondary side :math:`T` from heating storage or system. [°C]
-        parameters : pd.DataFrame
-            Data frame containing the heat pump parameters from hplib.getParameters().
-        t_amb : numeric, default 0
-            Ambient / Outdoor temperature :math:'T' of the air, which can have impact on the electrical power consumption [°C]
+        timestep : int
+            ...
+        stsv : SingleTimeStepValue
+            ...
+        seconds_per_timestep : int
+            ...
+        force_convergence: bool
+            ...
 
         Returns
         -------
@@ -175,7 +180,9 @@ class HeatPumpHplib(Component):
         p_el : numeric
             Electrical input Power. [W]
         cop : numeric
-            Coefficient of performance.
+            Coefficient of performance in case of heating.
+        eer : numeric
+            Energy efficieny ration in case of cooling.
         t_out : numeric
             Output temperature :math:`T` at secondary side of the heat pump. [°C]
         m_dot : numeric
@@ -186,42 +193,40 @@ class HeatPumpHplib(Component):
             Time how long the heat pump has not run. [s]
         """ 
         
-        # Parameter
-        time_on_min = 600 # [s]
-        time_off_min = time_on_min
-        
         # Load input values
-        on_off = stsv.get_input_value(self.on_off_switch)
+        mode = stsv.get_input_value(self.mode)
         t_in_primary = stsv.get_input_value(self.t_in_primary)
         t_in_secondary = stsv.get_input_value(self.t_in_secondary)
         t_amb = stsv.get_input_value(self.t_amb)
         time_on = self.state.time_on
         time_off = self.state.time_off
-        on_off_previous = self.state.on_off_previous
+        mode_previous = self.state.mode_previous
         
-        # Overwrite on_off to realize minimum time of or time off
-        if on_off_previous == 1 & time_on < time_on_min:
-            on_off=1
-        elif on_off_previous == 0 & time_off < time_off_min:
-            on_off=0
+        # Overwrite mode to realize minimum time on or time off
+        if mode_previous == 1 and time_on < self.time_on_min:
+            mode=1
+        elif mode_previous == 0 and time_off < self.time_off_min:
+            mode=0
 
-        # OnOffSwitch
-        if on_off == 1:
+        # Mode (0=off, 1=heating, 2=cooling)
+        if mode == 1:
             # Calulate outputs
-            results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb)
-            p_th=results['P_th'].values[0]
-            p_el=results['P_el'].values[0]
-            cop=results['COP'].values[0]
-            t_out=results['T_out'].values[0]
-            m_dot=results['m_dot'].values[0]
+            results = self.HeatPump.simulate(t_in_primary, t_in_secondary, t_amb, mode)
+            p_th=results['P_th']
+            p_el=results['P_el']
+            cop=results['COP']
+            eer=results['EER']
+            t_out=results['T_out']
+            m_dot=results['m_dot']
             time_on = time_on + seconds_per_timestep
             time_off = 0
         else:
             # Calulate outputs
             p_th = 0
             p_el = 0
-            cop = None
-            t_out = None
+            cop = 0
+            eer = 0
+            t_out = 0
             m_dot = 0
             time_off = time_off + seconds_per_timestep
             time_on = 0
@@ -230,6 +235,7 @@ class HeatPumpHplib(Component):
         stsv.set_output_value(self.p_th, p_th)
         stsv.set_output_value(self.p_el, p_el)
         stsv.set_output_value(self.cop, cop)
+        stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.t_out, t_out)
         stsv.set_output_value(self.m_dot, m_dot)
         stsv.set_output_value(self.time_on, time_on)
@@ -238,7 +244,7 @@ class HeatPumpHplib(Component):
         # write values to state
         self.state.time_on = time_on
         self.state.time_off = time_off
-        self.state.on_off_previous = on_off
+        self.state.mode = mode
 
 @dataclass
 class HeatPumpState:
@@ -252,5 +258,5 @@ class HeatPumpState:
     """
     time_on: int = 0
     time_off: int = 0
-    on_off_previous: int = 0
+    mode_previous: int = 1
     

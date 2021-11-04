@@ -43,14 +43,22 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+class ComponentsConnection:
 
-def get_subclasses(classname=None):
-    """
-    Return a list of all the children classes
-    in this module from parent class classname
-    """
-    list_of_children = [cls.__name__ for cls in classname.__subclasses__()]
-    return list_of_children
+    def __init__(self,
+                 first_component,
+                 second_component,
+                 method=None):
+        self.first_component = first_component
+        self.second_component = second_component
+        if method == "Automatic" or method is None:
+            self.method = "Automatic"
+            self.run()
+
+    def run(self):
+        self.configuration = {"First Component" : self.first_component,
+                              "Second Component" : self.second_component,
+                              "Method": self.method}
 
 class ConfigurationGenerator:
     SimulationParameters = {"year": 2019,
@@ -58,12 +66,15 @@ class ConfigurationGenerator:
                             "method": "full_year"}
 
     def __init__(self, set=None):
-        self.data = {}
-        self.components = {}
         self.load_component_modules()
-        self.add_sim_param()
+
+        self._simulation_parameters = {}
+        self._components = {}
+        self._connections = {}
+
 
     def load_component_modules(self):
+        self.preloaded_components = {}
         def get_default_parameters_from_constructor(cls):
             """
             Get the default argument of either a function or
@@ -79,7 +90,9 @@ class ConfigurationGenerator:
             return {k: v.default for k, v in sig.parameters.items() if
                             v.default is not inspect.Parameter.empty}
 
-        component_class_children = get_subclasses(component.Component)
+        classname = component.Component
+        component_class_children = [cls.__name__ for cls in classname.__subclasses__()]
+
         for component_class in component_class_children:
             default_args = get_default_parameters_from_constructor(component_class)
 
@@ -88,94 +101,100 @@ class ConfigurationGenerator:
                 del default_args["sim_params"]
 
             # Save every component in the dictionary attribute
-            self.components[component_class] = default_args
+            self.preloaded_components[component_class] = default_args
 
-    def add_sim_param(self):
-        self.data["SimulationParameters"] = self.SimulationParameters
-
-    def dump(self):
-        with open(HISIMPATH["cfg"], "w") as f:
-            json.dump(self.data, f, indent=4)
+    def add_simulation_parameters(self, my_simulation_parameters = None):
+        if my_simulation_parameters is None:
+            self._simulation_parameters = self.SimulationParameters
+        else:
+            pass
 
     def add_component(self, user_components_name):
         if isinstance(user_components_name, list):
             for user_component_name in user_components_name:
-                self.data[user_component_name] = self.components[user_component_name]
+                self._components[user_component_name] = self.preloaded_components[user_component_name]
+        elif isinstance(user_components_name, dict):
+            for user_component_name, parameters in user_components_name.items():
+                self._components[user_component_name] = parameters
         else:
-            self.data[user_components_name] = self.components[user_components_name]
+            self._components[user_components_name] = self.preloaded_components[user_components_name]
+
+    def add_connection(self, connection_components):
+        number_of_connections = len(self._connections)
+        i_connection = number_of_connections + 1
+        connection_name = "Connection{}_{}_{}".format(i_connection,
+                                                      connection_components.first_component,
+                                                      connection_components.second_component)
+        self._connections[connection_name] = connection_components.configuration
 
     def print_components(self):
-        print(json.dumps(self.components, sort_keys=True, indent=4))
+        print(json.dumps(self._components, sort_keys=True, indent=4))
 
     def print_component(self, name):
-        print(json.dumps(self.components[name], sort_keys=True, indent=4))
+        print(json.dumps(self._components[name], sort_keys=True, indent=4))
 
+    def dump(self):
+        self.data = {"SimulationParameters": self._simulation_parameters,
+                     "Components": self._components,
+                     "Connections": self._connections}
+        with open(HISIMPATH["cfg"], "w") as f:
+            json.dump(self.data, f, indent=4)
 
+class SetupFunction:
 
-
-class SmartHome:
-
-    def __init__(self, function=None, mode=None):
+    def __init__(self):
         if os.path.isfile(HISIMPATH["cfg"]):
             with open(os.path.join(HISIMPATH["cfg"])) as file:
-                cfg = json.load(file)
-            self.cfg = cfg
-        else:
-            self.cfg = None
-        self.function = function
-        self.mode = mode
+                self.cfg = json.load(file)
+        self._components = []
+        self._connections = []
         self.electricity_grids : List[ElectricityGrid] = []
         self.electricity_grid_consumption : List[ElectricityGrid] = []
 
     def build(self, my_sim):
-        if self.cfg is not None:
-            for component in self.cfg["Order"]:
+        self.add_simulation_parameters(my_sim)
+        for comp in self.cfg["Components"]:
+            if comp in globals():
+                self.add_component(comp, my_sim)
+        for connection_key, connection_value in self.cfg["Connections"].items():
+            self.add_connection(connection_value, my_sim)
 
-                if component == "SimulationParameters":
-                    self.add_sim_param(my_sim)
-                if component == "Weather":
-                    #command = "self.add_{}(my_sim)".format(component.lower())
-                    self.add_weather(my_sim)
-                if component == "Occupancy":
-                    self.add_occupancy(my_sim)
-                if component == "PVSystem":
-                    self.add_pvs(my_sim)
-                if component == "Building":
-                    self.add_building(my_sim)
-                if component == "HeatPump":
-                    self.add_heat_pump(my_sim)
-                if component == "EVCharger":
-                    self.add_ev_charger(my_sim)
-                if component == "Battery":
-                    self.add_battery(my_sim)
-                if component == "FlexibilityController":
-                    self.add_flexibility(my_sim)
-                if component == "ThermalEnergyStorage":
-                    self.add_thermal_energy_storage(my_sim)
-                if component == "Dummy":
-                    self.add_dummy(my_sim)
-                if component == "AdvancedBattery":
-                    self.add_advanced_battery(my_sim)
-                if component == "Controller":
-                    self.add_advanced_battery(my_sim)
-            self.close(my_sim)
-        else:
-            raise Exception("No configuration file!")
-
-    def add_sim_param(self, my_sim):
+    def add_simulation_parameters(self, my_sim):
         # Timeline configuration
         method = self.cfg["SimulationParameters"]["method"]
         self.cfg["SimulationParameters"].pop("method", None)
         if method == "full_year":
-            self.time: simulator.SimulationParameters = simulator.SimulationParameters.full_year(**self.cfg["SimulationParameters"])
+            self._simulation_parameters: simulator.SimulationParameters = simulator.SimulationParameters.full_year(**self.cfg["SimulationParameters"])
         elif method == "one_day_only":
-            self.time: simulator.SimulationParameters = simulator.SimulationParameters.one_day_only(**self.cfg["SimulationParameters"])
-        my_sim.set_parameters(self.time)
+            self._simulation_parameters: simulator.SimulationParameters = simulator.SimulationParameters.one_day_only(**self.cfg["SimulationParameters"])
+        my_sim.set_parameters(self._simulation_parameters)
 
-    def add_weather(self, my_sim):
-        # Sets Weather
-        self.weather = Weather(**self.cfg["Weather"])
-        my_sim.add_component(self.weather)
+    def add_component(self, comp, my_sim, electricity_output=None):
+        # Save parameters of class
+        # Retrieve class signature
+        signature = inspect.signature(globals()[comp])
+        # Find if it has SimulationParameters and pass value
+        for parameter_name in signature.parameters:
+            if signature.parameters[parameter_name].annotation == component.SimulationParameters:
+                self.cfg["Components"][comp][parameter_name] = my_sim.SimulationParameters
+        self._components.append(globals()[comp](**self.cfg["Components"][comp]))
+        # Add last listed component to Simulator object
+        my_sim.add_component(self._components[-1])
+        if electricity_output is not None:
+            pass
+            #self.add_to_electricity_grid_consumption(my_sim, self.occupancy)
+
+    def add_connection(self, connection, my_sim):
+        for component in self._components:
+            if type(component).__name__ == connection["Second Component"]:
+                second_component = component
+            elif type(component).__name__ == connection["First Component"]:
+                first_component = component
+
+        if connection["Method"] == "Automatic":
+            second_component.connect_similar_inputs(first_component)
+
+
 
     def add_occupancy(self, my_sim):
         # Sets Occupancy
@@ -192,6 +211,7 @@ class SmartHome:
         # Sets base grid with PVSystem
         #self.electricity_grids.append(ElectricityGrid(name="BaseloadAndPVSystem", grid=[self.occupancy, "Subtract", self.pvs]))
         #my_sim.add_component(self.electricity_grids[-1])
+
 
     def add_building(self, my_sim):
         # Sets Residence
@@ -255,53 +275,6 @@ class SmartHome:
         self.electricity_grid_consumption.append(ElectricityGrid(name=electricity_grid_label, grid=list_components))
         my_sim.add_component(self.electricity_grid_consumption[-1])
 
-    def add_ev_charger(self, my_sim):
-        # Sets Electric Vehicle
-        self.my_electric_vehicle = Vehicle_Pure(**self.cfg["Vehicle_Pure"])
-
-        # Sets EV Charger Controller
-        self.ev_charger_controller = EVChargerController(**self.cfg["EVChargerController"])
-
-        # Sets EV Charger
-        self.ev_charger = EVCharger(**self.cfg["EVCharger"],
-                                    electric_vehicle=self.my_electric_vehicle,
-                                    sim_params=self.time)
-
-        #########################################################################################################
-        self.ev_charger_controller.connect_electricity(self.electricity_grids[-1])
-        self.ev_charger_controller.connect_similar_inputs(self.ev_charger)
-        my_sim.add_component(self.ev_charger_controller)
-
-        self.ev_charger.connect_electricity(self.electricity_grids[-1])
-        self.ev_charger.connect_similar_inputs(self.ev_charger_controller)
-        my_sim.add_component(self.ev_charger)
-
-        self.add_to_electricity_grid_consumption(my_sim, self.ev_charger)
-        self.add_to_electricity_grid(my_sim, self.ev_charger)
-
-    def add_flexibility(self, my_sim):
-        self.flexible_controller = Controller(**self.cfg["FlexibilityController"])
-        self.controllable = Controllable()
-
-        if int(self.cfg["FlexibilityController"]["mode"]) == 1:
-            self.flexible_controller.connect_electricity(self.electricity_grids[0])
-        else:
-            self.flexible_controller.connect_electricity(self.electricity_grids[-1])
-        my_sim.add_component(self.flexible_controller)
-
-        self.controllable.connect_similar_inputs(self.flexible_controller)
-        my_sim.add_component(self.controllable)
-
-        self.add_to_electricity_grid_consumption(my_sim, self.controllable)
-        self.add_to_electricity_grid(my_sim, self.controllable)
-
-    def add_dummy(self, my_sim):
-
-        self.dummy = Dummy(**self.cfg["Dummy"], sim_params=self.time)
-        my_sim.add_component(self.dummy)
-
-        self.add_to_electricity_grid_consumption(my_sim, self.dummy)
-        self.add_to_electricity_grid(my_sim, self.dummy)
 
     def add_battery(self, my_sim):
 
@@ -317,13 +290,6 @@ class SmartHome:
 
         self.add_to_electricity_grid_consumption(my_sim, self.battery)
         self.add_to_electricity_grid(my_sim, self.battery)
-
-
-    def add_advanced_battery(self,my_sim):
-
-        self.advanced_battery = AdvancedBattery(**self.cfg["AdvancedBattery"],sim_params=my_sim)
-
-        my_sim.add_component(self.advanced_battery)
 
     def add_csv_load_power(self,my_sim):
         self.csv_load_power_demand = CSVLoader(component_name="csv_load_power",
@@ -353,42 +319,6 @@ class SmartHome:
         self.advanced_battery.connect_input(self.advanced_battery.LoadingPowerInput,
                                             self.controller.ComponentName,
                                             self.controller.ElectricityToOrFromBatteryTarget)
-    def add_thermal_energy_storage(self, my_sim):
-        wws_c = WarmWaterStorageConfig()
-        self.tes = ThermalEnergyStorage2(component_name="MyStorage", config=wws_c, sim_params=self.time)
 
-        # storage
-        self.tes.connect_input(self.tes.HeatPump_ChargingSideInput_mass, self.heat_pump.ComponentName, self.heat_pump.WaterOutput_mass)
-        self.tes.connect_input(self.tes.HeatPump_ChargingSideInput_temperature, self.heat_pump.ComponentName, self.heat_pump.WaterOutput_temperature)
-
-        #self.tes.connect_input(self.tes.Heating_DischargingSideInput_mass, householdheatdemand.ComponentName, householdheatdemand.MassOutput)
-        #self.tes.connect_input(self.tes.Heating_DischargingSideInput_temperature, householdheatdemand.ComponentName, householdheatdemand.TemperatureOutput)
-        self.tes.connect_input(self.tes.WW_DischargingSideInput_mass, self.occupancy.ComponentName, self.occupancy.WW_MassOutput)
-        self.tes.connect_input(self.tes.WW_DischargingSideInput_temperature, self.occupancy.ComponentName, self.occupancy.WW_TemperatureOutput)
-
-
-        self.occupancy.connect_input(self.occupancy.WW_MassInput, self.tes.ComponentName, self.tes.WW_DischargingSideOutput_mass)
-        self.occupancy.connect_input(self.occupancy.WW_TemperatureInput, self.tes.ComponentName, self.tes.WW_DischargingSideOutput_temperature)
-
-        self.heat_pump.connect_input(self.heat_pump.WaterConsumption, self.occupancy.ComponentName, self.occupancy.WaterConsumption)
-        self.heat_pump.connect_input(self.heat_pump.WaterInput_mass, self.tes.ComponentName, self.tes.HeatPump_ChargingSideOutput_mass)
-        self.heat_pump.connect_input(self.heat_pump.WaterInput_temperature, self.tes.ComponentName, self.tes.HeatPump_ChargingSideOutput_temperature)
-
-        my_sim.add_component(self.tes)
-
-    def close(self, my_sim):
+    def close(self):
         pass
-        #my_last_grid = ElectricityGrid(name="Consumed", grid=[self.electricity_grid_consumption[-1]])
-        #my_sim.add_component(my_last_grid)
-        #my_final_grid_positive = ElectricityGrid(name="NotConveredConsumed", grid=[self.electricity_grids[-1]], signal="Positive")
-        #my_sim.add_component(my_final_grid_positive)
-
-if __name__ == "__main__":
-    delete_all_results()
-
-
-    #component_class = get_subclasses(component.Component)
-    #sig = get_default_args(globals()[component_class[3]], "__init__")
-    #args = get_default_args(sig)
-    #print(args)
-    #print()

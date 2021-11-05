@@ -9,10 +9,19 @@
     :alt: Forschungszentrum Juelich Logo
     :align: right
 
-Welcome to BESIM's documentation!
+Welcome to HiSim's documentation!
 ==========================================================
 
-`BESIM` is an open-source Python-package for simulation in building energy systems, and has been under continuous development as part of the project PiegStrom. `BESIM` contains a time step simulation engine and an extendable framework for integration. Please, check the :ref:`installation` procedures to install `BESIM` in your local machine.
+`HiSim` is an open-source Python-package for simulation in building energy systems, and has been under continuous development as part of the project PiegStrom. `HiSim` contains a time step simulation engine and an extendable framework for integration. Please, check the :ref:`installation` procedures to install `HiSim` in your local machine.
+
+.. _scheme:
+
+.. figure:: _images/framework_diagram.svg
+   :width: 600
+   :align: center
+   :alt: None
+
+   HiSim Scheme
 
 .. toctree::
    :maxdepth: 1
@@ -23,6 +32,9 @@ Welcome to BESIM's documentation!
    strategy
    componentsworkflow
    modules
+
+
+
 
 Documentation Reference
 ==============================
@@ -45,7 +57,7 @@ We are the `Institute of Energy and Climate Research - Techno-economic Systems A
 
 License
 =========================================================
-BESIM is distributed under `MIT License <https://github.com/FZJ-IEK3-VSA/BESIM/blob/main/LICENSE>`_ .
+HiSim is distributed under `MIT License <https://github.com/FZJ-IEK3-VSA/HiSim/blob/main/LICENSE>`_ .
 
 Copyright (C) 2020-2021 Noah Pflugradt, Vitor Zago, Frank Burkard, Tjarko Tjaden, Leander Kotzur, Detlef Stolten
 

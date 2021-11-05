@@ -1,7 +1,7 @@
 BESIM Classes
 ============
 
-.. automodule:: hisim
+.. automodule:: HiSim Structure
    :members:
    :undoc-members:
    :show-inheritance:

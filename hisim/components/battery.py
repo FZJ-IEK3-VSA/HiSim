@@ -51,7 +51,6 @@ class ControllableState:
         self.stored_energy = discharge + self.stored_energy
         self.chargeWh = discharge
 
-
 class Battery(cp.Component):
     # Imports
     ElectricityInput = "ElectricityInput"
@@ -67,10 +66,10 @@ class Battery(cp.Component):
                  model="sonnenBatterie 10 - 11,5 kWh",
                  soc=10/15,
                  base=False,
-                 sim_params=None):
+                 my_simulation_parameters=None):
         super().__init__("Battery")
 
-        self.build(manufacturer=manufacturer, model=model, base=base, sim_params=sim_params)
+        self.build(manufacturer=manufacturer, model=model, base=base, sim_params=my_simulation_parameters)
 
         self.state = SimpleStorageState(max_var_val=self.max_var_stored_energy,
                                         min_var_val=self.min_var_stored_energy,
@@ -118,7 +117,7 @@ class Battery(cp.Component):
                 break
 
         if battery_found == False:
-            raise Exception("Heat pump model not registered in the database")
+            raise Exception("Battery model not registered in the database")
 
         self.max_stored_energy = battery['Capacity'] * 1E3
         self.min_stored_energy = self.max_stored_energy * 0.0

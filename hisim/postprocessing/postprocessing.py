@@ -320,49 +320,49 @@ class PostProcessor:
 
 
         # Writes self-consumption and autarky
-        if total_electricity_consumed is not None:
-            if total_electricity_fromgrid is not None:
-                autarky = ( ( total_electricity_consumed - total_electricity_fromgrid ) / total_electricity_consumed ) * 100
-                text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
-                self.write_to_report(text)
-                text = ["Not Covered: {:.0f} kWh".format(total_electricity_fromgrid * 1E-3)]
-                self.write_to_report(text)
-                text = ["Autarky: {:.3}%".format(autarky)]
-                self.write_to_report(text)
+        #if total_electricity_consumed is not None:
+        #    if total_electricity_fromgrid is not None:
+        #        autarky = ( ( total_electricity_consumed - total_electricity_fromgrid ) / total_electricity_consumed ) * 100
+        #        text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["Not Covered: {:.0f} kWh".format(total_electricity_fromgrid * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["Autarky: {:.3}%".format(autarky)]
+        #        self.write_to_report(text)
 
 
-                ownconsumption= ((total_electricity_produced+total_electricity_intogrid)/total_electricity_produced) * 100
-                text = ["Produced: {:.0f} kWh".format(total_electricity_produced * 1E-3)]
-                self.write_to_report(text)
-                text = ["IntoGrid: {:.0f} kWh".format(-total_electricity_intogrid * 1E-3)]
-                self.write_to_report(text)
-                text = ["OwnConsumption: {:.3}%".format(ownconsumption)]
-                self.write_to_report(text)
+        #        ownconsumption= ((total_electricity_produced+total_electricity_intogrid)/total_electricity_produced) * 100
+        #        text = ["Produced: {:.0f} kWh".format(total_electricity_produced * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["IntoGrid: {:.0f} kWh".format(-total_electricity_intogrid * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["OwnConsumption: {:.3}%".format(ownconsumption)]
+        #        self.write_to_report(text)
 
-        # Writes performance of heat pump
-        if heat_pump_heating is not None:
-            self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
-            self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
-            self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
-            self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
-            self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
-            if building_area is not None:
-                self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
+        ## Writes performance of heat pump
+        #if heat_pump_heating is not None:
+        #    self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
+        #    self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
+        #    self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
+        #    self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
+        #    self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
+        #    if building_area is not None:
+        #        self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
 
-        # Writes building solar gains
-        if solar_gain_through_windows is not None:
-            self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
-            if building_area is not None:
-                self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
+        ## Writes building solar gains
+        #if solar_gain_through_windows is not None:
+        #    self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
+        #    if building_area is not None:
+        #        self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
 
-        # Writes building internal gains
-        if internal_gains is not None:
-            self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
-            if building_area is not None:
-                self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
+        ## Writes building internal gains
+        #if internal_gains is not None:
+        #    self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
+        #    if building_area is not None:
+        #        self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
 
-        #if total_heat_demand is not None:
-        #    self.write_to_report(["Absolute Heat Demand [kWh]: {:.0f}".format(1E-3*total_heat_demand)])
+        ##if total_heat_demand is not None:
+        ##    self.write_to_report(["Absolute Heat Demand [kWh]: {:.0f}".format(1E-3*total_heat_demand)])
 
     def write_components_to_report(self):
         """

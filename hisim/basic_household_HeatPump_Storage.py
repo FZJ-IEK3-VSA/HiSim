@@ -144,14 +144,14 @@ def basic_household(my_sim):
     my_controller = controller.Controller()
     my_chp_system = chp_system.CHP()
 
-    my_controller.connect_input(my_controller.StorageTemperature,
+    my_controller.connect_input(my_controller.StorageTemperatureHeatingWater,
                                my_heat_storage.ComponentName,
                                my_heat_storage.WaterOutputTemperature)
 
 
 
 
-    my_heat_pump.connect_input(my_heat_pump.OnOffSwitch,
+    my_heat_pump.connect_input(my_heat_pump.Mode,
                                my_controller.ComponentName,
                                my_controller.ControlSignalHeatPump)
     my_heat_pump.connect_input(my_heat_pump.TemperatureInputPrimary,

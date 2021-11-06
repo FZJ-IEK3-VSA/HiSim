@@ -50,7 +50,6 @@ class Controller(cp.Component):
     CheckPeakShaving="CheckPeakShaving"
 
     def __init__(self,
-                 sim_params=None,
                  temperature_storage_target_warm_water = 55,
                  temperature_storage_target_heating_water =40,
                  temperature_storage_target_hysteresis=50,

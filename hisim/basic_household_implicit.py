@@ -1,11 +1,17 @@
 import inspect
+import numpy as np
 import os
+import globals
+
 import sys
 import simulator as sim
 import components as cps
 from components import occupancy
 from components import weather
 from components import pvs
+from components import advanced_battery
+from components import controller
+
 from components import building
 #from components import heat_pump
 from components import sumbuilder
@@ -29,18 +35,14 @@ def basic_household_implicit(my_sim: sim.Simulator):
 if __name__ == '__main__':
 
     pvs_powers = [5E3, 10E3, 15E3, 20E3]
-    battery_models = ["sonnenBatterie 10 - 5,5 kWh",
-                      "sonnenBatterie 10 - 11,5 kWh",
-                      "sonnenBatterie 10 - 16,5 kWh",
-                      "sonnenBatterie 10 - 22 kWh"]
+    capacity = [5,10]
     for pvs_power in pvs_powers:
-        for battery_model in battery_models:
+        for capacity in capacity:
             # Create configuration object
             my_cfg = ConfigurationGenerator()
 
             # Set simulation parameters
             my_cfg.add_simulation_parameters()
-
             ####################################################################################################################
             # Set components
             my_csv_loader = {"CSVLoader": {"component_name": "csv_load_power",
@@ -52,48 +54,58 @@ if __name__ == '__main__':
                                                  "multiplier": 3}}
 
             my_cfg.add_component(my_csv_loader)
+            #Weather
             my_cfg.add_component("Weather")
-
+            #PVS
             my_pvs = {"PVSystem": {"power": pvs_power}}
             my_cfg.add_component(my_pvs)
-            #my_cfg.add_component("PVSystem")
 
-            my_cfg.add_component("BatteryController")
+            #Battery
+            fparameter = np.load(globals.HISIMPATH["bat_parameter"])
 
-            my_bat = {"Battery": {"model": battery_model}}
-            my_cfg.add_component(my_bat)
-            #my_cfg.add_component("Battery")
+            my_battery = {"AdvancedBattery": {"parameter": 0,
+                                              "simulation_parameters":my_cfg.SimulationParameters,
+                                              "capacity": capacity}}
+            my_cfg.add_component(my_battery)
+
+
+            #Controller
+            my_controller = {"Controller": {"temperature_storage_target_warm_water": 50,
+                                              "temperature_storage_target_heating_water": 40,
+                                              "temperature_storage_target_hysteresis": 40,
+                                              "strategy": "optimize_own_consumption",
+                                              "limit_to_shave": 0}}
+            my_cfg.add_component(my_controller)
 
             ####################################################################################################################
             # Set concatenations
-            my_concatenation = ComponentsConcatenation(component_name="Sum_PVSystem_CSVLoader",
-                                                       operation="Subtract",
-                                                       first_component="CSVLoader",
-                                                       second_component="PVSystem",
-                                                       first_component_output="Output1",
-                                                       second_component_output="ElectricityOutput")
-            my_cfg.add_concatenation(my_concatenation)
-
             ####################################################################################################################
             # Set connections
             my_connection_component = ComponentsConnection(first_component="Weather",
                                                            second_component="PVSystem")
             my_cfg.add_connection(my_connection_component)
-            my_bat_con = ComponentsConnection(first_component="BatteryController",
-                                              second_component="Battery")
-            my_cfg.add_connection(my_bat_con)
-            my_bat_controller = ComponentsConnection(first_component="Sum_PVSystem_CSVLoader",
-                                                     second_component="BatteryController",
+
+            my_pvs_to_controller = ComponentsConnection(first_component="PVSystem",
+                                                     second_component="Controller",
                                                      method="Manual",
-                                                     first_component_output="Output",
-                                                     second_component_input="ElectricityInput")
-            my_cfg.add_connection(my_bat_controller)
-            my_connection_component_pvs_bat = ComponentsConnection(first_component="Sum_PVSystem_CSVLoader",
-                                                                   second_component="Battery",
-                                                                   method="Manual",
-                                                                   first_component_output="Output",
-                                                                   second_component_input="ElectricityInput")
-            my_cfg.add_connection(my_connection_component_pvs_bat)
+                                                     first_component_output="ElectricityOutput",
+                                                     second_component_input="ElectricityOutputPvs")
+            my_cfg.add_connection(my_pvs_to_controller)
+
+            my_battery_to_controller = ComponentsConnection(first_component="Controller",
+                                                     second_component="AdvancedBattery",
+                                                     method="Manual",
+                                                     first_component_output="ElectricityToOrFromBatteryTarget",
+                                                     second_component_input="LoadingPowerInput")
+            my_cfg.add_connection(my_battery_to_controller)
+
+            my_controller_to_battery = ComponentsConnection(first_component="AdvancedBattery",
+                                                     second_component="Controller",
+                                                     method="Manual",
+                                                     first_component_output="ACBatteryPower",
+                                                     second_component_input="ElectricityToOrFromBatteryReal")
+            my_cfg.add_connection(my_controller_to_battery)
+
 
             # Export configuration file
             my_cfg.dump()

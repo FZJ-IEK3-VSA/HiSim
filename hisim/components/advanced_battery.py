@@ -24,7 +24,7 @@ class AdvancedBattery(Component):
     def __init__(self, parameter, sim_params,capacity):
         super().__init__("AdvancedBattery")
 
-        self.build(parameter, sim_params=sim_params, capacity=capacity)
+        self.build(parameter, simulation_parameters=sim_params, capacity=capacity)
 
         self.state = AdvancedBatteryState(soc=0.0, P_bs=0.0, _th=False)
         self.previous_state = copy.copy(self.state)

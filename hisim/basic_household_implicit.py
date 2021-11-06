@@ -63,7 +63,7 @@ if __name__ == '__main__':
             #Battery
             fparameter = np.load(globals.HISIMPATH["bat_parameter"])
 
-            my_battery = {"AdvancedBattery": {"parameter": 0,
+            my_battery = {"AdvancedBattery": {"parameter": fparameter,
                                               "simulation_parameters":my_cfg.SimulationParameters,
                                               "capacity": capacity}}
             my_cfg.add_component(my_battery)

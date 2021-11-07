@@ -41,7 +41,7 @@ if __name__ == '__main__':
             # Create configuration object
             my_cfg = ConfigurationGenerator()
 
-            # Set simulation parameters
+            # Set simulation param eters
             my_cfg.add_simulation_parameters()
             ####################################################################################################################
             # Set components
@@ -63,8 +63,8 @@ if __name__ == '__main__':
             #Battery
             fparameter = np.load(globals.HISIMPATH["bat_parameter"])
 
-            my_battery = {"AdvancedBattery": {"parameter": fparameter,
-                                              "simulation_parameters":my_cfg.SimulationParameters,
+            my_battery = {"AdvancedBattery": {"parameter": 0,
+                                              "sim_params":my_cfg.SimulationParameters,
                                               "capacity": capacity}}
             my_cfg.add_component(my_battery)
 

@@ -32,7 +32,7 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"
 
-    def __init__(self, P_th_min=1000, P_th_max=12000, eff_th_min=0.6, eff_th_max=0.9, temperature_max=80, temperaturedelta=10):
+    def __init__(self,temperaturedelta=10):
         super().__init__("GasHeater")
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
         self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
@@ -46,11 +46,11 @@ class GasHeater(Component):
                                                      load_type=lt.LoadTypes.Heating,
                                                      unit=lt.Units.Watt)
 
-        self.P_th_min = P_th_min
-        self.P_th_max = P_th_max
-        self.eff_th_min = eff_th_min
-        self.eff_th_max = eff_th_max
-        self.temperature_max = temperature_max
+        self.P_th_min = GasHeaterConfig.P_th_min
+        self.P_th_max = GasHeaterConfig.P_th_max
+        self.eff_th_min = GasHeaterConfig.eff_th_min
+        self.eff_th_max = GasHeaterConfig.eff_th_max
+        self.temperature_max = GasHeaterConfig.temperature_max
         self.temperaturedelta = temperaturedelta
 
     def write_to_report(self):

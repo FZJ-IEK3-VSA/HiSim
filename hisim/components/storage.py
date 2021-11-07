@@ -17,9 +17,10 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-class HeatStorageTjarkoState:
-    def __init__(self, T_sp: float):
-        self.T_sp = T_sp
+class HeatStorageState:
+    def __init__(self, T_sp_ww: float,T_sp_hw: float):
+        self.T_sp_ww = T_sp_ww
+        self.T_sp_hw = T_sp_hw
 
 
 class HeatStorage(Component):
@@ -27,6 +28,7 @@ class HeatStorage(Component):
     # Inputs
     ThermalDemandHeatingWater="ThermalDemandHeatingWater" # Heating Water to regulate room Temperature
     ThermalDemandWarmWater="ThermalDemandHeating" # Warmwater for showering, washing etc...
+    ControlSignalChooseStorage="ControlSignalChooseStorage"
 
     OutsideTemperature="OutsideTemperature"
     ThermalInputPower1="ThermalInputPower1"
@@ -36,18 +38,21 @@ class HeatStorage(Component):
     ThermalInputPower5="ThermalInputPower5"
 
     # Outputs
-    WaterOutputTemperature="WaterOutputTemperature"
+    WaterOutputTemperatureHeatingWater="WaterOutputTemperatureHeatingWater"
+    WaterOutputTemperatureWarmWater="WaterOutputTemperatureWarmWater"
 
     #StorageWarmWaterTemperature="StorageWarmWaterTemperature"
     StorageEnergyLoss="StorageEnergyLoss"
 
     def __init__(self,
-                 V_SP= 1000,
+                 V_SP_heating_water= 1000,
+                 V_SP_warm_water=200,
                  temperature_of_warm_water_extratcion=35,
                  ambient_temperature = 15,
                  sim_params=None):
-        super().__init__("HeatStorageTjarko")
-        self.V_SP = V_SP
+        super().__init__("HeatStorage")
+        self.V_SP_heating_water = V_SP_heating_water
+        self.V_SP_warm_water = V_SP_warm_water
         self.sim_params = sim_params
         self.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
         self.ambient_temperature = ambient_temperature
@@ -55,7 +60,7 @@ class HeatStorage(Component):
 
 
 
-        self.state = HeatStorageTjarkoState(T_sp=30)
+        self.state = HeatStorageState(T_sp_ww=30,T_sp_hw=30)
         self.previous_state = copy.copy(self.state)
 
 
@@ -64,10 +69,17 @@ class HeatStorage(Component):
                                                                          lt.LoadTypes.WarmWater,
                                                                          lt.Units.Watt,
                                                                          False)
+
+
         self.demand_warm_water : ComponentInput = self.add_input(self.ComponentName,
                                                                          self.ThermalDemandWarmWater,
                                                                          lt.LoadTypes.Water,
                                                                          lt.Units.Liter,
+                                                                         False)
+        self.control_signal_choose_storage: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                         self.ControlSignalChooseStorage,
+                                                                         lt.LoadTypes.Any,
+                                                                         lt.Units.Any,
                                                                          False)
 
         self.thermal_input_power1 : ComponentInput = self.add_input(self.ComponentName,
@@ -97,8 +109,12 @@ class HeatStorage(Component):
                                                           False)
 
 
-        self.T_sp_C : ComponentOutput = self.add_output(self.ComponentName,
-                                                      self.WaterOutputTemperature,
+        self.T_sp_C_hw : ComponentOutput = self.add_output(self.ComponentName,
+                                                      self.WaterOutputTemperatureHeatingWater,
+                                                      lt.LoadTypes.Temperature,
+                                                      lt.Units.Celsius)
+        self.T_sp_C_ww : ComponentOutput = self.add_output(self.ComponentName,
+                                                      self.WaterOutputTemperatureWarmWater,
                                                       lt.LoadTypes.Temperature,
                                                       lt.Units.Celsius)
         self.UA_SP_C : ComponentOutput = self.add_output(self.ComponentName,
@@ -138,7 +154,7 @@ class HeatStorage(Component):
             
         return production
 
-    def calculate_new_storage_temperature (self,seconds_per_timestep: int,T_sp: float, production: float, last : float,c_w: float ):
+    def calculate_new_storage_temperature (self,seconds_per_timestep: int,T_sp: float, production: float, last : float,c_w: float,V_sp: float ):
 
         T_ext_SP = self.ambient_temperature
 
@@ -164,21 +180,38 @@ class HeatStorage(Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
 
-        T_sp_var=self.state.T_sp #Start-Temp-Storage
+        T_sp_var_ww=self.state.T_sp_ww #Start-Temp-Storage
+        T_sp_var_hw=self.state.T_sp_hw #Start-Temp-Storage
 
-        last_var =stsv.get_input_value(self.thermal_demand_heating_water)+4182*stsv.get_input_value(self.demand_warm_water)*self.temperature_of_warm_water_extratcion
+        last_var_ww =4182*stsv.get_input_value(self.demand_warm_water)*self.temperature_of_warm_water_extratcion
+        last_var_hw =stsv.get_input_value(self.thermal_demand_heating_water)
+
+        if self.control_signal_choose_storage == 1: #choose to heat up warm water storage
+            production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw,V_sp=self.V_SP_warm_water)
+            result_ww = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_ww,
+                                                            production=production_var, last=last_var_ww, c_w=self.cw)
+            production_var=0
+            result_hw = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_hw,
+                                                            production=production_var, last=last_var_hw, c_w=self.cw)
+
+        elif self.control_signal_choose_storage == 2: #choose to heat up heating water storage
+            production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw,V_sp=self.V_SP_heating_water)
+            result_hw = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_hw,
+                                                            production=production_var, last=last_var_hw, c_w=self.cw)
+            production_var=0
+            result_ww = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_ww,
+                                                            production=production_var, last=last_var_ww, c_w=self.cw)
+        else:
+            print("chooses no storage to heat up")
 
 
-        production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw)
 
+        self.state.T_sp_ww=result_ww[0]
+        self.state.T_sp_hw=result_hw[0]
 
-        result = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep ,T_sp=T_sp_var, production = production_var, last=last_var,c_w=self.cw)
-
-
-        self.state.T_sp=result[0]
-
-        stsv.set_output_value(self.T_sp_C, self.state.T_sp)
-        stsv.set_output_value(self.UA_SP_C, result[1])
+        stsv.set_output_value(self.T_sp_C_ww, self.state.T_sp_ww)
+        stsv.set_output_value(self.T_sp_C_hw, self.state.T_sp_hw)
+        stsv.set_output_value(self.UA_SP_C, result_ww[1]+result_hw[1])
         #Output Massenstrom von Wasser entspricht dem Input Massenstrom. Nur Temperatur hat sich geändert. Wie ist das zu behandelN?
 
 

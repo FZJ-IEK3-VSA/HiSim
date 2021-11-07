@@ -52,15 +52,17 @@ class Controller(cp.Component):
     def __init__(self,
                  temperature_storage_target_warm_water = 55,
                  temperature_storage_target_heating_water =40,
-                 temperature_storage_target_hysteresis=50,
+                 temperature_storage_target_hysteresis_ww=50,
+                 temperature_storage_target_hysteresis_hw=35,
                  strategy = "optimize_own_consumption",
                  limit_to_shave=0):
         super().__init__("Controller")
 
         self.temperature_storage_target_warm_water=temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water=temperature_storage_target_heating_water
+        self.temperature_storage_target_hysteresis_hw=temperature_storage_target_hysteresis_hw
 
-        self.temperature_storage_target_hysteresis=temperature_storage_target_hysteresis
+        self.temperature_storage_target_hysteresis_ww=temperature_storage_target_hysteresis_ww
         self.strategy=strategy
         #strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
         self.limit_to_shave= limit_to_shave
@@ -390,30 +392,27 @@ class Controller(cp.Component):
                                                   delta_temperature=delta_temperature,
                                                   timestep=timestep,
                                                   temperature_storage=stsv.get_input_value(self.temperature_storage_warm_water),
-                                                  temperature_storage_target=self.temperature_storage_target_warm_water,
-                                                  temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis,
+                                                  temperature_storage_target=self.temperature_storage_target_warm_water_ww,
+                                                  temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_Ww,
                                                   temperature_storage_target_C=self.state.temperature_storage_target_ww_C,
                                                   timestep_of_hysteresis=self.state.timestep_of_hysteresis_ww)
 
 
-
-        '''
         if self.state.temperature_storage_target_ww_C != self.temperature_storage_target_warm_water and self.state.timestep_of_hysteresis_ww != timestep:
-            control_signal_choose_storage=1
+            control_signal_choose_storage=2 # choose storage Heating Water
             stsv.set_output_value(self.control_signal_choose_storage, control_signal_choose_storage)
         else:
-            control_signal_choose_storage = 0
+            control_signal_choose_storage = 1 # choose Storage warm water
             stsv.set_output_value(self.control_signal_choose_storage, control_signal_choose_storage)
 
-        if control_signal_choose_storage == 1:
+        if control_signal_choose_storage == 2:
             delta_temperature = self.state.temperature_storage_target_hw_C - stsv.get_input_value(self.temperature_storage_heating_water_water)
             self.state.temperature_storage_target_hw_C, self.state.timestep_of_hysteresis_hw = self.simulate_storage(stsv=stsv,
                                                       delta_temperature=delta_temperature,
                                                       timestep=timestep,
                                                       temperature_storage=stsv.get_input_value(self.temperature_storage_heating_water),
                                                       temperature_storage_target=self.temperature_storage_target_heating_water,
-                                                      temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis,
+                                                      temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_hw,
                                                       temperature_storage_target_C=self.state.temperature_storage_target_hw_C,
                                                       timestep_of_hysteresis=self.state.timestep_of_hysteresis_hw)
 
-        '''

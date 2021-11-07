@@ -107,7 +107,6 @@ class ConfigurationGenerator:
 
     def __init__(self, set=None):
         self.load_component_modules()
-
         self._simulation_parameters = {}
         self._components = {}
         self._concatenations = {}

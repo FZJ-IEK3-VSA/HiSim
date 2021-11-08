@@ -226,7 +226,7 @@ class SetupFunction:
         my_sim.add_component(self._components[-1])
         if electricity_output is not None:
             pass
-            #self.add_to_electricity_grid_consumption(my_sim, self.occupancy)
+            #ToDo: Implement electricity sum here.
 
     def add_grouping(self, grouping, my_sim):
         for component in self._components:
@@ -245,6 +245,9 @@ class SetupFunction:
         my_sim.add_component(my_concatenated_component)
 
     def add_connection(self, connection):
+        first_component = None
+        second_component = None
+
         for component in self._components:
             if component.ComponentName == connection["Second Component"]:
                 second_component = component
@@ -259,19 +262,7 @@ class SetupFunction:
                                                src_object_name=first_component.ComponentName,
                                                src_field_name=getattr(first_component, connection["First Component Output"]))
             except ValueError:
-                print("What?")
-
-
-
-    def add_occupancy(self, my_sim):
-        # Sets Occupancy
-        self.occupancy = Occupancy(**self.cfg["Occupancy"])
-        my_sim.add_component(self.occupancy)
-        self.add_to_electricity_grid_consumption(my_sim, self.occupancy)
-
-        # Sets base grid with PVSystem
-        #self.electricity_grids.append(ElectricityGrid(name="BaseloadAndPVSystem", grid=[self.occupancy, "Subtract", self.pvs]))
-        #my_sim.add_component(self.electricity_grids[-1])
+                print("Incorrect Connection")
 
     def add_to_electricity_grid(self, my_sim, next_component, electricity_grid_label=None):
         n_consumption_components = len(self.electricity_grids)
@@ -300,49 +291,4 @@ class SetupFunction:
         my_sim.add_component(self.electricity_grid_consumption[-1])
 
 
-    def add_battery(self, my_sim):
 
-        self.battery_controller = BatteryController()
-
-        self.battery_controller.connect_electricity(self.electricity_grids[-1])
-        my_sim.add_component(self.battery_controller)
-
-        self.battery = Battery(**self.cfg["Battery"], sim_params=self.time)
-        self.battery.connect_similar_inputs(self.battery_controller)
-        self.battery.connect_electricity(self.electricity_grids[-1])
-        my_sim.add_component(self.battery)
-
-        self.add_to_electricity_grid_consumption(my_sim, self.battery)
-        self.add_to_electricity_grid(my_sim, self.battery)
-
-    def add_csv_load_power(self,my_sim):
-        self.csv_load_power_demand = CSVLoader(component_name="csv_load_power",
-                                          csv_filename="Lastprofile/SOSO/Orginal/EFH_Bestand_TRY_5_Profile_1min.csv",
-                                          column=0,
-                                          loadtype=loadtypes.LoadTypes.Electricity,
-                                          unit=loadtypes.Units.Watt,
-                                          column_name="power_demand",
-                                          simulation_parameters=my_sim,
-                                          multiplier=6)
-        my_sim.add_component(self.csv_load_power_demand)
-
-    def add_controller(self,my_sim):
-
-        self.controller = Controller()
-        self.controller.connect_input(self.controller.ElectricityToOrFromBatteryReal,
-                                    self.advanced_battery.ComponentName,
-                                    self.advanced_battery.ACBatteryPower)
-        self.controller.connect_input(self.controller.ElectricityConsumptionBuilding,
-                                    self.csv_load_power_demand.ComponentName,
-                                    self.csv_load_power_demand.Output1)
-        self.controller.connect_input(self.controller.ElectricityOutputPvs,
-                                    self.pvs.ComponentName,
-                                    self.pvs.ElectricityOutput)
-        my_sim.add_component(self.controller)
-
-        self.advanced_battery.connect_input(self.advanced_battery.LoadingPowerInput,
-                                            self.controller.ComponentName,
-                                            self.controller.ElectricityToOrFromBatteryTarget)
-
-    def close(self):
-        pass

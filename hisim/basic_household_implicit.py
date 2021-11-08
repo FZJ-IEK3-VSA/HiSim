@@ -36,7 +36,7 @@ def basic_household_implicit(my_sim: sim.Simulator):
 if __name__ == '__main__':
 
     pvs_powers = [5E3, 10E3, 15E3, 20E3]
-    capacity = [5,10]
+    capacity = [5, 10]
     for pvs_power in pvs_powers:
         for capacity in capacity:
             # Create configuration object

@@ -114,7 +114,7 @@ if __name__ == '__main__':
         my_cfg.add_connection(my_connection_component)
 
         #Outputs from Weather
-
+        '''
         my_weather_to_heat_pump_a = ComponentsConnection(first_component="Weather",
                                                  second_component="HeatPumpHplib",
                                                  method="Manual",
@@ -128,7 +128,7 @@ if __name__ == '__main__':
                                                  first_component_output="TemperatureOutside",
                                                  second_component_input="TemperatureAmbient")
         my_cfg.add_connection(my_weather_to_heat_pump_b)
-
+        '''
         #Outputs from PVSystem
         my_pvs_to_controller = ComponentsConnection(first_component="PVSystem",
                                                  second_component="Controller",
@@ -168,7 +168,7 @@ if __name__ == '__main__':
         my_cfg.add_connection(my_gas_heater_to_heat_storage)
 
         #Outputs from HeatPump
-        '''
+
         my_heat_pump_to_heat_storage = ComponentsConnection(first_component="HeatPumpHplib",
                                                  second_component="HeatStorage",
                                                  method="Manual",
@@ -183,7 +183,7 @@ if __name__ == '__main__':
                                                  second_component_input="ElectricityDemandHeatPump")
         my_cfg.add_connection(my_heat_pump_to_controller)
         
-        '''
+
         #Outputs from Storage
         my_storage_to_controller_a = ComponentsConnection(first_component="HeatStorage",
                                                  second_component="Controller",

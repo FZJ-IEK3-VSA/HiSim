@@ -21,10 +21,10 @@ class AdvancedBattery(Component):
     ACBatteryPower = "AC Battery Power"
     StateOfCharge = "State Of Charge"
 
-    def __init__(self, parameter, sim_params,capacity):
+    def __init__(self, parameter, my_simulation_parameters,capacity):
         super().__init__("AdvancedBattery")
 
-        self.build(parameter, sim_params=sim_params, capacity=capacity)
+        self.build(parameter, sim_params=my_simulation_parameters, capacity=capacity)
 
         self.state = AdvancedBatteryState(soc=0.0, P_bs=0.0, _th=False)
         self.previous_state = copy.copy(self.state)

@@ -11,6 +11,7 @@ from components import weather
 from components import pvs
 from components import advanced_battery
 from components import controller
+from components import heat_pump_hplib
 
 from components import building
 #from components import heat_pump

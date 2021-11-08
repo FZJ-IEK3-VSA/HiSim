@@ -40,7 +40,7 @@ class HeatStorage(Component):
     # Outputs
     WaterOutputTemperatureHeatingWater="WaterOutputTemperatureHeatingWater"
     WaterOutputTemperatureWarmWater="WaterOutputTemperatureWarmWater"
-
+    WaterOutputStorageforHeaters="WaterOutputStorageforHeaters"
     #StorageWarmWaterTemperature="StorageWarmWaterTemperature"
     StorageEnergyLoss="StorageEnergyLoss"
 
@@ -121,7 +121,10 @@ class HeatStorage(Component):
                                                       self.StorageEnergyLoss,
                                                       lt.LoadTypes.Any,
                                                       lt.Units.Watt)
-
+        self.T_sp_C : ComponentOutput = self.add_output(self.ComponentName,
+                                                      self.WaterOutputStorageforHeaters,
+                                                      lt.LoadTypes.Temperature,
+                                                      lt.Units.Celsius)
 
     def write_to_report(self):
         pass
@@ -190,6 +193,7 @@ class HeatStorage(Component):
             production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw,V_sp=self.V_SP_warm_water)
             result_ww = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_ww,
                                                             production=production_var, last=last_var_ww, c_w=self.cw)
+            T_sp_C=result_ww[0]
             production_var=0
             result_hw = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_hw,
                                                             production=production_var, last=last_var_hw, c_w=self.cw)
@@ -198,6 +202,7 @@ class HeatStorage(Component):
             production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw,V_sp=self.V_SP_heating_water)
             result_hw = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_hw,
                                                             production=production_var, last=last_var_hw, c_w=self.cw)
+            T_sp_C = result_hw[0]
             production_var=0
             result_ww = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_ww,
                                                             production=production_var, last=last_var_ww, c_w=self.cw)
@@ -208,9 +213,9 @@ class HeatStorage(Component):
 
         self.state.T_sp_ww=result_ww[0]
         self.state.T_sp_hw=result_hw[0]
-
         stsv.set_output_value(self.T_sp_C_ww, self.state.T_sp_ww)
         stsv.set_output_value(self.T_sp_C_hw, self.state.T_sp_hw)
+        stsv.set_output_value(self.T_sp_C, T_sp_C)
         stsv.set_output_value(self.UA_SP_C, result_ww[1]+result_hw[1])
         #Output Massenstrom von Wasser entspricht dem Input Massenstrom. Nur Temperatur hat sich geändert. Wie ist das zu behandelN?
 

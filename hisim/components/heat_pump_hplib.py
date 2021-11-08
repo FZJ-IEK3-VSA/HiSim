@@ -60,7 +60,7 @@ class HeatPumpHplib(Component):
         p_th_set : numeric, default 0
             only for model "Generic": Thermal output power at setpoint t_in, t_out. [W]
         """
-        super().__init__(name="HeatPump")
+        super().__init__(name="HeatPumpHplib")
 
         self.model = model
         self.group_id = group_id

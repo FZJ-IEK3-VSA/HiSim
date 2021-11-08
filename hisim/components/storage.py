@@ -189,6 +189,9 @@ class HeatStorage(Component):
         last_var_ww =4182*stsv.get_input_value(self.demand_warm_water)*self.temperature_of_warm_water_extratcion
         last_var_hw =stsv.get_input_value(self.thermal_demand_heating_water)
 
+        result_ww=[0,0]
+        result_hw=[0,0]
+
         if self.control_signal_choose_storage == 1: #choose to heat up warm water storage
             production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw,V_sp=self.V_SP_warm_water)
             result_ww = self.calculate_new_storage_temperature(seconds_per_timestep=seconds_per_timestep, T_sp=T_sp_var_ww,

@@ -257,6 +257,7 @@ class SetupFunction:
             second_component.connect_similar_inputs(first_component)
         elif connection["Method"] == "Manual":
             try:
+                print("2")
                 second_component.connect_input(input_fieldname=getattr(second_component, connection["Second Component Input"]),
                                                src_object_name=first_component.ComponentName,
                                                src_field_name=getattr(first_component, connection["First Component Output"]))

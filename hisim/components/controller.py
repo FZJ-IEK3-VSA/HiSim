@@ -61,7 +61,6 @@ class Controller(cp.Component):
         self.temperature_storage_target_warm_water=temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water=temperature_storage_target_heating_water
         self.temperature_storage_target_hysteresis_hw=temperature_storage_target_hysteresis_hw
-
         self.temperature_storage_target_hysteresis_ww=temperature_storage_target_hysteresis_ww
         self.strategy=strategy
         #strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
@@ -392,8 +391,8 @@ class Controller(cp.Component):
                                                   delta_temperature=delta_temperature,
                                                   timestep=timestep,
                                                   temperature_storage=stsv.get_input_value(self.temperature_storage_warm_water),
-                                                  temperature_storage_target=self.temperature_storage_target_warm_water_ww,
-                                                  temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_Ww,
+                                                  temperature_storage_target=self.temperature_storage_target_warm_water,
+                                                  temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_ww,
                                                   temperature_storage_target_C=self.state.temperature_storage_target_ww_C,
                                                   timestep_of_hysteresis=self.state.timestep_of_hysteresis_ww)
 

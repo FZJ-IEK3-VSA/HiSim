@@ -47,13 +47,21 @@ if __name__ == '__main__':
         # Set components
         my_csv_loader_warm_water = {"CSVLoader": {"component_name": "csv_load_power",
                                              "csv_filename": os.path.join("loadprofiles", "EFH_Bestand_TRY_5_Profile_1min.csv"),
-                                             "column": 0,
+                                             "column": 2,
+                                             "loadtype": loadtypes.LoadTypes.Electricity,
+                                             "unit": loadtypes.Units.Watt,
+                                             "column_name": "power_demand",
+                                             "multiplier": 3}}
+        my_cfg.add_component(my_csv_loader_warm_water)
+        my_csv_loader_heating_water = {"CSVLoader": {"component_name": "csv_load_power",
+                                             "csv_filename": os.path.join("loadprofiles", "EFH_Bestand_TRY_5_Profile_1min.csv"),
+                                             "column": 1,
                                              "loadtype": loadtypes.LoadTypes.Electricity,
                                              "unit": loadtypes.Units.Watt,
                                              "column_name": "power_demand",
                                              "multiplier": 3}}
 
-        my_cfg.add_component(my_csv_loader_warm_water)
+        my_cfg.add_component(my_csv_loader_heating_water)
         #Weather
         my_cfg.add_component("Weather")
         #PVS
@@ -64,15 +72,15 @@ if __name__ == '__main__':
         my_chp = {"CHP": {"min_operation_time": 60,
                                           "min_idle_time":15,
                                           "gas_type": "Methan",
-                                          "operating_mode": "both"}}
+                                          "operating_mode": "heat"}}
         my_cfg.add_component(my_chp)
 
 
         #Controller
-        my_controller = {"Controller": {"temperature_storage_target_warm_water": 55,
-                                          "temperature_storage_target_heating_water": 40,
-                                          "temperature_storage_target_hysteresis_ww": 50,
-                                          "temperature_storage_target_hysteresis_hw": 35,
+        my_controller = {"Controller": {"temperature_storage_target_warm_water": 35,
+                                          "temperature_storage_target_heating_water": 55,
+                                          "temperature_storage_target_hysteresis_ww": 30,
+                                          "temperature_storage_target_hysteresis_hw": 50,
                                           "strategy": "optimize_own_consumption",
                                           "limit_to_shave": 0}}
         my_cfg.add_component(my_controller)

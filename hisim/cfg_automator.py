@@ -221,7 +221,13 @@ class SetupFunction:
         for parameter_name in signature.parameters:
             if signature.parameters[parameter_name].annotation == component.SimulationParameters or parameter_name == "my_simulation_parameters":
                 self.cfg["Components"][comp][parameter_name] = my_sim.SimulationParameters
-        self._components.append(globals()[comp](**self.cfg["Components"][comp]))
+        try:
+            self._components.append(globals()[comp](**self.cfg["Components"][comp]))
+        except Exception as e:
+            print("Adding Component {} resulted in a failure".format(comp))
+            print("Please, investigate implementation mistakes in this Component.")
+            print(e)
+            sys.exit(1)
         # Add last listed component to Simulator object
         my_sim.add_component(self._components[-1])
         if electricity_output is not None:

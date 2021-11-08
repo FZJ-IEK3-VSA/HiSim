@@ -21,10 +21,10 @@ class AdvancedBattery(Component):
     ACBatteryPower = "AC Battery Power"
     StateOfCharge = "State Of Charge"
 
-    def __init__(self, parameter, sim_params,capacity):
+    def __init__(self, parameter, capacity, my_simulation_parameters):
         super().__init__("AdvancedBattery")
 
-        self.build(parameter, sim_params=sim_params, capacity=capacity)
+        self.build(parameter, sim_params=my_simulation_parameters, capacity=capacity)
 
         self.state = AdvancedBatteryState(soc=0.0, P_bs=0.0, _th=False)
         self.previous_state = copy.copy(self.state)
@@ -46,8 +46,8 @@ class AdvancedBattery(Component):
                                                        lt.LoadTypes.Any,
                                                        lt.Units.Any)
 
-    def build(self, parameter, sim_params,capacity):
-        self.BatMod_AC(d=parameter, _dt=sim_params.seconds_per_timestep,cap=capacity)
+    def build(self, parameter, sim_params, capacity):
+        self.BatMod_AC(d=parameter, _dt=sim_params.seconds_per_timestep, cap=capacity)
 
     def BatMod_AC(self, d, _dt, cap):
         """Performance Simulation function for AC-coupled advanced_battery systems
@@ -60,6 +60,7 @@ class AdvancedBattery(Component):
         # Loading of particular variables
         self._dt = _dt
         self._E_BAT = cap
+        print(d[1])
         self._eta_BAT = d[1]
         self._t_CONSTANT = d[2]
         self._P_SYS_SOC0_DC = d[3]

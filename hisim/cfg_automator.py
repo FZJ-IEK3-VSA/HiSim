@@ -73,7 +73,7 @@ class ComponentsConnection:
                               "First Component Output" : self.first_component_output,
                               "Second Component Input" : self.second_component_input}
 
-class ComponentsConcatenation:
+class ComponentsGrouping:
 
     def __init__(self,
                  component_name,
@@ -98,8 +98,6 @@ class ComponentsConcatenation:
                               "First Component Output": self.first_component_output,
                               "Second Component Output": self.second_component_output}
 
-
-
 class ConfigurationGenerator:
     SimulationParameters = {"year": 2019,
                             "seconds_per_timestep": 60,
@@ -109,7 +107,7 @@ class ConfigurationGenerator:
         self.load_component_modules()
         self._simulation_parameters = {}
         self._components = {}
-        self._concatenations = {}
+        self._groupings = {}
         self._connections = {}
 
     def load_component_modules(self):
@@ -158,8 +156,8 @@ class ConfigurationGenerator:
         else:
             self._components[user_components_name] = self.preloaded_components[user_components_name]
 
-    def add_concatenation(self, concatenation_components):
-        self._concatenations[concatenation_components.component_name] = concatenation_components.configuration
+    def add_grouping(self, grouping_components):
+        self._groupings[grouping_components.component_name] = grouping_components.configuration
 
     def add_connection(self, connection_components):
         number_of_connections = len(self._connections)
@@ -178,7 +176,7 @@ class ConfigurationGenerator:
     def dump(self):
         self.data = {"SimulationParameters": self._simulation_parameters,
                      "Components": self._components,
-                     "Concatenations": self._concatenations,
+                     "Groupings": self._groupings,
                      "Connections": self._connections}
         with open(HISIMPATH["cfg"], "w") as f:
             json.dump(self.data, f, indent=4)
@@ -191,7 +189,7 @@ class SetupFunction:
                 self.cfg = json.load(file)
         self._components = []
         self._connections = []
-        self._concatenations = []
+        self._groupings = []
         self.electricity_grids : List[ElectricityGrid] = []
         self.electricity_grid_consumption : List[ElectricityGrid] = []
 
@@ -200,8 +198,8 @@ class SetupFunction:
         for comp in self.cfg["Components"]:
             if comp in globals():
                 self.add_component(comp, my_sim)
-        for concatenation_key, concatenation_value in self.cfg["Concatenations"].items():
-            self.add_concatenation(concatenation_value, my_sim)
+        for grouping_key, grouping_value in self.cfg["Groupings"].items():
+            self.add_grouping(grouping_value, my_sim)
         for connection_key, connection_value in self.cfg["Connections"].items():
             self.add_connection(connection_value)
 
@@ -230,19 +228,19 @@ class SetupFunction:
             pass
             #self.add_to_electricity_grid_consumption(my_sim, self.occupancy)
 
-    def add_concatenation(self, concatenation, my_sim):
+    def add_grouping(self, grouping, my_sim):
         for component in self._components:
-            if type(component).__name__ == concatenation["Second Component"]:
+            if type(component).__name__ == grouping["Second Component"]:
                 second_component = component
-            elif type(component).__name__ == concatenation["First Component"]:
+            elif type(component).__name__ == grouping["First Component"]:
                 first_component = component
 
-        my_concatenated_component = CalculateOperation(name=concatenation["Component Name"])
+        my_concatenated_component = CalculateOperation(name=grouping["Component Name"])
         my_concatenated_component.connect_input(src_object_name=first_component.ComponentName,
-                                                src_field_name=getattr(first_component, concatenation["First Component Output"]))
-        my_concatenated_component.add_operation(operation=concatenation["Operation"])
+                                                src_field_name=getattr(first_component, grouping["First Component Output"]))
+        my_concatenated_component.add_operation(operation=grouping["Operation"])
         my_concatenated_component.connect_input(src_object_name=second_component.ComponentName,
-                                                src_field_name=getattr(second_component, concatenation["Second Component Output"]))
+                                                src_field_name=getattr(second_component, grouping["Second Component Output"]))
         self._components.append(my_concatenated_component)
         my_sim.add_component(my_concatenated_component)
 

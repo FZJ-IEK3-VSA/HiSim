@@ -16,7 +16,7 @@ from components import building
 #from components import heat_pump
 from components import sumbuilder
 import simulator as sim
-from cfg_automator import ConfigurationGenerator, SetupFunction, ComponentsConnection, ComponentsConcatenation
+from cfg_automator import ConfigurationGenerator, SetupFunction, ComponentsConnection, ComponentsGrouping
 import loadtypes
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -78,7 +78,7 @@ if __name__ == '__main__':
             my_cfg.add_component(my_controller)
 
             ####################################################################################################################
-            # Set concatenations
+            # Set groupings
             ####################################################################################################################
             # Set connections
             my_connection_component = ComponentsConnection(first_component="Weather",

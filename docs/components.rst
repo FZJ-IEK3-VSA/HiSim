@@ -1,7 +1,7 @@
-Components
-==================
+List of Component modules
+===========================
 
-components.advanced\_battery module
+advanced\_battery
 -----------------------------------
 
 .. automodule:: components.advanced_battery
@@ -9,7 +9,7 @@ components.advanced\_battery module
    :undoc-members:
    :show-inheritance:
 
-components.battery module
+battery
 -------------------------
 
 .. automodule:: components.battery
@@ -17,196 +17,143 @@ components.battery module
    :undoc-members:
    :show-inheritance:
 
-components.building module
+building
 --------------------------
 
 .. automodule:: components.building
    :members:
    :show-inheritance:
 
-..
-    components.controllable module
-    ------------------------------
 
-    .. automodule:: components.controllable
-       :members:
-       :undoc-members:
-       :show-inheritance:
+controllable
+------------------------------
 
-    components.controller module
-    ----------------------------
+.. automodule:: components.controllable
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-    .. automodule:: components.controller
-       :members:
-       :undoc-members:
-       :show-inheritance:
+controller
+----------------------------
 
-    components.csvloader module
-    ---------------------------
+.. automodule:: components.controller
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-    .. automodule:: components.csvloader
-       :members:
-       :undoc-members:
-       :show-inheritance:
+csvloader
+---------------------------
 
-    components.demand module
-    ------------------------
+.. automodule:: components.csvloader
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
-    .. automodule:: components.demand
-       :members:
-       :undoc-members:
-       :show-inheritance:
+demand
+------------------------
 
-    components.dummy module
-    -----------------------
-
-    .. automodule:: components.dummy
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.ev\_charger module
-    -----------------------------
-
-    .. automodule:: components.ev_charger
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.extended\_controller module
-    --------------------------------------
-
-    .. automodule:: components.extended_controller
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.extended\_storage module
-    -----------------------------------
-
-    .. automodule:: components.extended_storage
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.gas\_heater module
-    -----------------------------
-
-    .. automodule:: components.gas_heater
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.heat\_pump module
-    ----------------------------
-
-    .. automodule:: components.heat_pump
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.hydrogen\_generator module
-    -------------------------------------
-
-    .. automodule:: components.hydrogen_generator
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.occupancy module
-    ---------------------------
-
-    .. automodule:: components.occupancy
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.pvs module
-    ---------------------
-
-    .. automodule:: components.pvs
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.random\_numbers module
-    ---------------------------------
-
-    .. automodule:: components.random_numbers
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.simple\_controller module
-    ------------------------------------
-
-    .. automodule:: components.simple_controller
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.simple\_storage module
-    ---------------------------------
-
-    .. automodule:: components.simple_storage
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.smart\_controller module
-    -----------------------------------
-
-    .. automodule:: components.smart_controller
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.storage module
-    -------------------------
-
-    .. automodule:: components.storage
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.sumbuilder module
-    ----------------------------
-
-    .. automodule:: components.sumbuilder
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.template module
-    --------------------------
-
-    .. automodule:: components.template
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.transformer module
-    -----------------------------
-
-    .. automodule:: components.transformer
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-    components.weather module
-    -------------------------
-
-    .. automodule:: components.weather
-       :members:
-       :undoc-members:
-       :show-inheritance:
+.. automodule:: components.demand
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 
-    Module contents
-    ---------------
 
-    .. automodule:: components
-       :members:
-       :undoc-members:
-       :show-inheritance:
+heat\_pump
+----------------------------
+
+.. automodule:: components.heat_pump
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+hydrogen\_generator
+-------------------------------------
+
+.. automodule:: components.hydrogen_generator
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+occupancy
+---------------------------
+
+.. automodule:: components.occupancy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+pvs
+---------------------
+
+.. automodule:: components.pvs
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+random\_numbers
+---------------------------------
+
+.. automodule:: components.random_numbers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+simple\_storage
+---------------------------------
+
+.. automodule:: components.simple_storage
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+storage
+-------------------------
+
+.. automodule:: components.storage
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+sumbuilder
+----------------------------
+
+.. automodule:: components.sumbuilder
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+template
+--------------------------
+
+.. automodule:: components.template
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+transformer
+-----------------------------
+
+.. automodule:: components.transformer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+weather
+-------------------------
+
+.. automodule:: components.weather
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+Module contents
+---------------
+
+.. automodule:: components
+   :members:
+   :undoc-members:
+   :show-inheritance:
 

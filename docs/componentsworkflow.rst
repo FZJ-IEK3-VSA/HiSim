@@ -5,10 +5,10 @@ Components Workflow
 
 Understanding components is an essential part of `HiSim`. For the basic simulations, the requirements to handle components are twofold:
 
-* create an object to be implemented within the `setup function`
+* create an Component object to be implemented within the `setup function`
 * connect Component objects among themselves.
 
-The examples implemented in *HiSim* are used here as
+The snippets showed here are found in the examples file `basic_household.py`.
 
 Create a Component object
 --------------------------------------
@@ -31,7 +31,7 @@ In the following example, the object component *PVSystem* (for Photovoltaic Syst
 Connect Component objects
 --------------------------------------
 
-To pass and receive information, fluxes and energy among the components during the simulation, it is first necessary to connect them. The class *Component* as well as all its children have the method *connect_input* to connect to previously instantiated *Components* objects. The inputs to be connected can be found in the implementation as *ComponentInput* attributes. For example, in the Component class *PVSystem*, the following *ComponentInput* is passed as an attribute of the class:
+To pass and receive information, fluxes and energy among the components during the simulation, it is necessary to connect them. The class *Component* as well as all its children have the method *connect_input* to connect to previously instantiated *Components* objects. The inputs to be connected can be found in the implementation as *ComponentInput* attributes. For example, in the Component class *PVSystem*, the following *ComponentInput* is passed as an attribute of the class:
 
 .. code-block:: python
 
@@ -53,7 +53,7 @@ Take the Component *PVSystem* object used as an example in the previous section.
 
 * input_fieldname: The *ComponentInput* name is *DirectNormalIrradiance*, hence *my_photovoltaic_system.DirectNormalIrradiance*
 * src_object_name: name of *Component* owner of the *ComponentOutput* to be connected to the object *PVSystem* is the object class *Weather*, hence *my_weather.ComponentName*
-* src_field_name: *ComponentOutput* from the object class *Weather* is *DirectNormalIrradiance*
+* src_field_name: *ComponentOutput* from the object class *Weather* is *DirectNormalIrradiance*, therefore *my_weather.DirectNormalIrrandiance*.
 
 .. code-block:: python
 
@@ -62,5 +62,5 @@ Take the Component *PVSystem* object used as an example in the previous section.
                                          my_weather.DirectNormalIrradiance)
 
 
-The names of *ComponentInput* and *ComponentOutput* do not have to be the same necessarily.
+The names of *ComponentInput* and *ComponentOutput* do not have to be necessarily the same.
 

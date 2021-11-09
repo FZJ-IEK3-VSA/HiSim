@@ -12,7 +12,7 @@
 Welcome to HiSim's documentation!
 ==========================================================
 
-`HiSim` is an open-source Python-package for simulation in building energy systems, and has been under continuous development as part of the project PiegStrom. `HiSim` contains a time step simulation engine and an extendable framework for integration. Please, check the :ref:`installation` procedures to install `HiSim` in your local machine.
+`HiSim` is an open-source Python-package for simulation in building energy systems, and has been under continuous development as part of the project PiegStrom. `HiSim` contains a time step simulation engine and an extendable framework for integration. The `HiSim` includes multiple components that as discrete elements define together the entire of a designed building energy system. Some of the current included components are Building, PV-System, Battery, Seasonal Hydrogen Storage, Gas Heater, Weather and Occupancy Load Profiles (See :numref:`scheme`)
 
 .. _scheme:
 
@@ -22,6 +22,10 @@ Welcome to HiSim's documentation!
    :alt: None
 
    HiSim Scheme
+
+The goal of this package to enable a free fast to implement investigation of different building energy system strategies considering the many load profiles, physical conditions and alternative components from fossil fuel sources. The user can also design their own components to be implemented in its own building energy system.
+
+Please, check the :ref:`installation` procedures to install `HiSim` in your local machine.
 
 .. toctree::
    :maxdepth: 1

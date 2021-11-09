@@ -1,12 +1,10 @@
-hisim
+HiSim Package Structure
 =====
 
 .. toctree::
    :maxdepth: 4
 
-   cfg_automator
    component
    components
-   hisim
    postprocessing
    simulator

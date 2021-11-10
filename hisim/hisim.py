@@ -45,7 +45,6 @@ def main(path_to_module: str, function_in_module: str):
     my_post_processor.run()
 
 if __name__ == "__main__":
-    #logging.basicConfig(level=logging.DEBUG)
     if len(sys.argv) < 3:
         print("need two arguments")
         quit()
@@ -53,4 +52,3 @@ if __name__ == "__main__":
     functionname = sys.argv[2]
     print("calling " + functionname + " from " + filename)
     main(filename, functionname)
-

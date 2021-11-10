@@ -5,7 +5,7 @@ import inspect
 import subprocess
 #import tkinter as tk
 import tkinter.filedialog as filedialog
-
+import numpy as np
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
@@ -249,39 +249,120 @@ class PostProcessor:
                 solar_gain_through_windows = abs(sum(entry.Results))* self.time_correction_factor
             if entry.ObjectName == "Occupancy" and entry.FieldName == "HeatingByResidents":
                 internal_gains = abs(sum(entry.Results)*self.time_correction_factor)
+            if entry.ObjectName == "Controller" and entry.FieldName == "ElectricityToOrFromGrid":
+                total_electricity_intogrid = sum(x for x in entry.Results if x < 0) * self.time_correction_factor
+                total_electricity_fromgrid = sum(x for x in entry.Results if x > 0) * self.time_correction_factor
+            if entry.ObjectName == "csv_load_power" and entry.FieldName == "CSV Profile":
+                total_electricity_consumed = sum(entry.Results) * self.time_correction_factor
+                electricity_consumed_for_peakshaving=entry.Results * self.time_correction_factor
+            if entry.ObjectName == "csv_load_heat_demand" and entry.FieldName == "CSV Profile":
+                total_heat_demand = sum(entry.Results) * self.time_correction_factor
+            if entry.ObjectName == "PVSystem" and entry.FieldName == "ElectricityOutput":
+                total_electricity_produced = sum(entry.Results) * self.time_correction_factor
+                pv_output_for_peakshaving=entry.Results * self.time_correction_factor
+
+
+        # Writes biggest Peak to shave
+        if total_electricity_consumed and total_electricity_produced is not None:
+            delta=np.array( electricity_consumed_for_peakshaving-pv_output_for_peakshaving )
+
+            percentage_to_peak_shave_from_grid=[0.6,0.7,0.8,0.9]
+
+            text = ["Size of biggest Peak from grid: {:.2f} kWh".format(np.max(delta) * 1E-3)]
+            self.write_to_report(text)
+            for y in percentage_to_peak_shave_from_grid:
+                delta_t=np.argwhere(delta > (np.max(delta) * y))
+                first_num = delta_t[0][0]
+                counter = 0
+                max_counter = 0
+                x=0
+                while x < len(delta_t):
+
+                    if delta_t[x][0] == first_num + 1:
+                        counter += 1
+                        first_num = delta_t[x][0]
+                    else:
+                        counter = 0
+                        first_num = delta_t[x][0]
+                    if max_counter <= counter:
+                        max_counter=counter
+                    x=+x+1
+
+                text = ["For Peakshaving to {}%from highest Peak from grid, Battery has to hold back a loaded capacity: minimum of {:.2f} kWh for {} minutes".format(y*100,np.max(delta)*(1-y)* 1E-3, max_counter*60*self.time_correction_factor)]
+                self.write_to_report(text)
+
+
+            delta=np.array( -electricity_consumed_for_peakshaving+pv_output_for_peakshaving )
+            percentage_to_peak_shave_into_grid=[0.4,0.6,0.8,]
+            text = ["Size of biggest Peak into grid: {:.2f} kWh".format(np.max(delta) * 1E-3)]
+            self.write_to_report(text)
+            for y in percentage_to_peak_shave_into_grid:
+                delta_t=np.argwhere(delta > (np.max(delta) * y))
+                first_num = delta_t[0][0]
+                counter = 0
+                max_counter = 0
+                x=0
+                while x < len(delta_t):
+
+                    if delta_t[x][0] == first_num + 1:
+                        counter += 1
+                        first_num = delta_t[x][0]
+                    else:
+                        counter = 0
+                        first_num = delta_t[x][0]
+                    if max_counter <= counter:
+                        max_counter=counter
+                    x=+x+1
+
+                text = ["For Peakshaving to {}%from highest Peak into grid, Battery has to hold back a free capacity: minimum of {:.2f} kWh for {} minutes".format(y*100,np.min(delta)*(1-y)* -1E-3, max_counter*60*self.time_correction_factor)]
+                self.write_to_report(text)
+            #percentage_to_peak_shave_feed_into_grid
+
 
         # Writes self-consumption and autarky
-        if total_electricity_consumed is not None:
-            if total_electricity_not_covered is not None:
-                autarky = ( ( total_electricity_consumed - total_electricity_not_covered ) / total_electricity_consumed ) * 100
-                text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
-                self.write_to_report(text)
-                text = ["Not Covered: {:.0f} kWh".format(total_electricity_not_covered * 1E-3)]
-                self.write_to_report(text)
-                text = ["Autarky: {:.3}%".format(autarky)]
-                self.write_to_report(text)
+        #if total_electricity_consumed is not None:
+        #    if total_electricity_fromgrid is not None:
+        #        autarky = ( ( total_electricity_consumed - total_electricity_fromgrid ) / total_electricity_consumed ) * 100
+        #        text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["Not Covered: {:.0f} kWh".format(total_electricity_fromgrid * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["Autarky: {:.3}%".format(autarky)]
+        #        self.write_to_report(text)
 
-        # Writes performance of heat pump
-        if heat_pump_heating is not None:
-            self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
-            self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
-            self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
-            self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
-            self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
-            if building_area is not None:
-                self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
 
-        # Writes building solar gains
-        if solar_gain_through_windows is not None:
-            self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
-            if building_area is not None:
-                self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
+        #        ownconsumption= ((total_electricity_produced+total_electricity_intogrid)/total_electricity_produced) * 100
+        #        text = ["Produced: {:.0f} kWh".format(total_electricity_produced * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["IntoGrid: {:.0f} kWh".format(-total_electricity_intogrid * 1E-3)]
+        #        self.write_to_report(text)
+        #        text = ["OwnConsumption: {:.3}%".format(ownconsumption)]
+        #        self.write_to_report(text)
 
-        # Writes building internal gains
-        if internal_gains is not None:
-            self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
-            if building_area is not None:
-                self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
+        ## Writes performance of heat pump
+        #if heat_pump_heating is not None:
+        #    self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
+        #    self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
+        #    self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
+        #    self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
+        #    self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
+        #    if building_area is not None:
+        #        self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
+
+        ## Writes building solar gains
+        #if solar_gain_through_windows is not None:
+        #    self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
+        #    if building_area is not None:
+        #        self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
+
+        ## Writes building internal gains
+        #if internal_gains is not None:
+        #    self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
+        #    if building_area is not None:
+        #        self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
+
+        ##if total_heat_demand is not None:
+        ##    self.write_to_report(["Absolute Heat Demand [kWh]: {:.0f}".format(1E-3*total_heat_demand)])
 
     def write_components_to_report(self):
         """

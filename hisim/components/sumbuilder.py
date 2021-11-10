@@ -11,7 +11,7 @@ class CalculateOperation(cp.Component):
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
     Output = "Output"
 
-    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units):
+    def __init__(self, name: str, loadtype: lt.LoadTypes = lt.LoadTypes.Any, unit: lt.Units = lt.Units.Any):
         super().__init__(name)
         self.operations: List[str] = []
         self.loadtype = loadtype

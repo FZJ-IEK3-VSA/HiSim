@@ -19,9 +19,9 @@ __status__ = "development"
 
 class HeatPumpHplib(Component):
     """
-    Simulate heat pump efficiency (cop) as well as electrical (p_el) & 
+    Simulate heat pump efficiency (cop) as well as electrical (p_el) &
     thermal power (p_th), massflow (m_dot) and output temperature (t_out).
-    Relevant simulation parameters are loaded within the init for a 
+    Relevant simulation parameters are loaded within the init for a
     specific or generic heat pump type.
     """
 
@@ -60,7 +60,7 @@ class HeatPumpHplib(Component):
         p_th_set : numeric, default 0
             only for model "Generic": Thermal output power at setpoint t_in, t_out. [W]
         """
-        super().__init__(name="HeatPump")
+        super().__init__(name="HeatPumpHplib")
 
         self.model = model
         self.group_id = group_id
@@ -91,43 +91,43 @@ class HeatPumpHplib(Component):
                                                             mandatory=True)
 
         self.t_in_primary: ComponentInput = self.add_input(object_name=self.ComponentName,
-                                                   field_name=self.TemperatureInputPrimary,
-                                                   load_type=LoadTypes.Temperature,
-                                                   unit=Units.Celsius,
-                                                   mandatory=True)
-        
+                                                           field_name=self.TemperatureInputPrimary,
+                                                           load_type=LoadTypes.Temperature,
+                                                           unit=Units.Celsius,
+                                                           mandatory=True)
+
         self.t_in_secondary: ComponentInput = self.add_input(object_name=self.ComponentName,
-                                                   field_name=self.TemperatureInputSecondary,
-                                                   load_type=LoadTypes.Temperature,
-                                                   unit=Units.Celsius,
-                                                   mandatory=True)
-        
+                                                             field_name=self.TemperatureInputSecondary,
+                                                             load_type=LoadTypes.Temperature,
+                                                             unit=Units.Celsius,
+                                                             mandatory=True)
+
         self.t_amb: ComponentInput = self.add_input(object_name=self.ComponentName,
-                                                   field_name=self.TemperatureAmbient,
-                                                   load_type=LoadTypes.Temperature,
-                                                   unit=Units.Celsius,
-                                                   mandatory=True)
+                                                    field_name=self.TemperatureAmbient,
+                                                    load_type=LoadTypes.Temperature,
+                                                    unit=Units.Celsius,
+                                                    mandatory=True)
 
         # Define component outputs
         self.p_th: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                      field_name=self.ThermalOutputPower,
                                                      load_type=LoadTypes.Heating,
                                                      unit=Units.Watt)
-        
+
         self.p_el: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                      field_name=self.ElectricalInputPower,
                                                      load_type=LoadTypes.Electricity,
                                                      unit=Units.Watt)
 
         self.cop: ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                     field_name=self.COP,
-                                                     load_type=LoadTypes.Any,
-                                                     unit=Units.Any)
+                                                    field_name=self.COP,
+                                                    load_type=LoadTypes.Any,
+                                                    unit=Units.Any)
 
         self.eer: ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                     field_name=self.EER,
-                                                     load_type=LoadTypes.Any,
-                                                     unit=Units.Any)
+                                                    field_name=self.EER,
+                                                    load_type=LoadTypes.Any,
+                                                    unit=Units.Any)
 
         self.t_out: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                       field_name=self.TemperatureOutput,
@@ -138,16 +138,16 @@ class HeatPumpHplib(Component):
                                                       field_name=self.MassFlowOutput,
                                                       load_type=LoadTypes.Volume,
                                                       unit=Units.kg_per_sec)
-        
+
         self.time_on: ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                      field_name=self.TimeOn,
-                                                      load_type=LoadTypes.Time,
-                                                      unit=Units.Seconds)
-        
+                                                        field_name=self.TimeOn,
+                                                        load_type=LoadTypes.Time,
+                                                        unit=Units.Seconds)
+
         self.time_off: ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                      field_name=self.TimeOff,
-                                                      load_type=LoadTypes.Time,
-                                                      unit=Units.Seconds)
+                                                         field_name=self.TimeOff,
+                                                         load_type=LoadTypes.Time,
+                                                         unit=Units.Seconds)
 
     def i_save_state(self):
         self.previous_state = deepcopy(self.state)
@@ -155,10 +155,10 @@ class HeatPumpHplib(Component):
     def i_restore_state(self):
         self.state = deepcopy(self.previous_state)
 
-    def i_doublecheck(self):
+    def i_doublecheck(self, delta_demand: float, stsv: SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep : int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
         """
         Performs the simulation of the heat pump model.
 
@@ -232,7 +232,7 @@ class HeatPumpHplib(Component):
             m_dot = 0
             time_off = time_off + seconds_per_timestep
             time_on = 0
-        
+
         # write values for output time series
         stsv.set_output_value(self.p_th, p_th)
         stsv.set_output_value(self.p_el, p_el)

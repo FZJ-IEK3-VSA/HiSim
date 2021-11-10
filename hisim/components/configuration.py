@@ -90,7 +90,7 @@ class HydrogenStorageConfig:
     min_capacity = 0                    # [kg_H2]
     max_capacity = 500                  # [kg_H2]
 
-    starting_fill = 400                 # [kg_H2]
+    starting_fill = 0              # [kg_H2]
 
     max_charging_rate_hour = 2          # [kg/h]
     max_discharging_rate_hour = 2       # [kg/h]

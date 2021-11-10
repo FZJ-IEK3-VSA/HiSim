@@ -201,10 +201,10 @@ class PVSystem(cp.Component):
                  module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
                  integrateInverter=True,
                  inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-                 sim_params=None):
+                 my_simulation_parameters=None):
         super().__init__("PVSystem")
 
-        self.build(time, location, power, load_module_data, module_name, integrateInverter, inverter_name, sim_params)
+        self.build(time, location, power, load_module_data, module_name, integrateInverter, inverter_name, my_simulation_parameters)
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                         self.TemperatureOutside,

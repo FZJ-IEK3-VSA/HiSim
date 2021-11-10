@@ -73,8 +73,8 @@ def test_heat_pump_hplib():
     print(stsv.values)
     # Check
     assert p_th_set == stsv.values[4]
-    assert 6850.73996774512 == stsv.values[5]
-    assert 1.4596963316491838 == stsv.values[6]
+    assert 7074.033573088874 == stsv.values[5]
+    assert 1.4136206588052005 == stsv.values[6]
     assert 0 == stsv.values[7]
     assert 52.0 == stsv.values[8]
     assert 0.47619047619047616 == stsv.values[9]

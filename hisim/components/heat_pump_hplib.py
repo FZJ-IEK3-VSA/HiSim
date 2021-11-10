@@ -205,11 +205,13 @@ class HeatPumpHplib(Component):
         # Overwrite mode to realize minimum time on or time off
         if mode_previous == 1 and time_on < self.time_on_min:
             mode=1
+        if mode_previous == 2 and time_on < self.time_on_min:
+            mode=2
         elif mode_previous == 0 and time_off < self.time_off_min:
             mode=0
 
         # Mode (0=off, 1=heating, 2=cooling)
-        if mode == 1:
+        if mode == 1 or 2:
             # Calulate outputs
             results = self.HeatPump.simulate(t_in_primary, t_in_secondary, t_amb, mode)
             p_th=results['P_th']
@@ -244,7 +246,7 @@ class HeatPumpHplib(Component):
         # write values to state
         self.state.time_on = time_on
         self.state.time_off = time_off
-        self.state.mode = mode
+        self.state.mode_previous = mode
 
 @dataclass
 class HeatPumpState:
@@ -257,6 +259,6 @@ class HeatPumpState:
         Stores the state of the runtime in seconds value from :py:class:`~hisim.component.HeatPump`.
     """
     time_on: int = 0
-    time_off: int = 0
-    mode_previous: int = 1
+    time_off: int = 600
+    mode_previous: int = 0
     

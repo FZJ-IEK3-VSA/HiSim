@@ -18,9 +18,9 @@ def load_database() -> pd.DataFrame:
     df : pd.DataFrame
         Content of the database
     """
-
     df = pd.read_csv(cwd()+r'/hplib_database.csv')
     return df
+
 
 def get_parameters(model: str, group_id: int = 0,
                    t_in: int = 0, t_out: int = 0, p_th: int = 0) -> pd.DataFrame:
@@ -50,12 +50,12 @@ def get_parameters(model: str, group_id: int = 0,
     df = pd.read_csv(cwd()+r'/hplib_database.csv', delimiter=',')
     df = df.loc[df['Model'] == model]
     parameters = pd.DataFrame()
-    parameters['Manufacturer'] = (df['Manufacturer'].values.tolist())
+    parameters['Manufacturer']=(df['Manufacturer'].values.tolist())
     parameters['Model'] = (df['Model'].values.tolist())
     try:
-        parameters['MAPE_COP'] = df['MAPE_COP'].values.tolist()
-        parameters['MAPE_P_el'] = df['MAPE_P_el'].values.tolist()
-        parameters['MAPE_P_th'] = df['MAPE_P_th'].values.tolist()
+        parameters['MAPE_COP']=df['MAPE_COP'].values.tolist()
+        parameters['MAPE_P_el']=df['MAPE_P_el'].values.tolist()
+        parameters['MAPE_P_th']=df['MAPE_P_th'].values.tolist()
     except:
         pass
     parameters['P_th_h_ref [W]'] = (df['P_th_h_ref [W]'].values.tolist())
@@ -94,7 +94,7 @@ def get_parameters(model: str, group_id: int = 0,
 
     if model == 'Generic':
         parameters = parameters.iloc[group_id - 1:group_id]
-
+        
         p_th_ref = fit_p_th_ref(t_in, t_out, group_id, p_th)
         parameters.loc[:, 'P_th_h_ref [W]'] = p_th_ref
         t_in_hp = [-7,0,10] # air/water, brine/water, water/water
@@ -104,19 +104,18 @@ def get_parameters(model: str, group_id: int = 0,
         p2_cop = parameters['p2_COP [-]'].array[0]
         p3_cop = parameters['p3_COP [-]'].array[0]
         p4_cop = parameters['p4_COP [-]'].array[0]
-        if (p1_cop * t_in + p2_cop * t_out + p3_cop + p4_cop * t_amb_fix) <= 1.0:
+        if (p1_cop * t_in + p2_cop * t_out + p3_cop + p4_cop * t_amb_fix)<=1.0:
             raise ValueError('COP too low! Increase t_in or decrease t_out.')
         if group_id == 1 or group_id == 4:
             t_in_fix = t_in_hp[0]
         if group_id == 2 or group_id == 5:
             t_in_fix = t_in_hp[1]
         if group_id == 3 or group_id == 6:
-            t_in_fix = t_in_hp[2]
+            t_in_fix = t_in_hp[2]    
         cop_ref = p1_cop * t_in_fix + p2_cop * t_out_fix + p3_cop + p4_cop * t_amb_fix
         p_el_ref = p_th_ref / cop_ref
         parameters.loc[:, 'P_el_h_ref [W]'] = p_el_ref
         parameters.loc[:, 'COP_ref'] = cop_ref
-
         if group_id==1:
             try:
                 p1_eer = parameters['p1_EER [-]'].array[0]
@@ -130,6 +129,7 @@ def get_parameters(model: str, group_id: int = 0,
             except:
                 pass
     return parameters
+
 
 def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataFrame:
     """
@@ -170,7 +170,7 @@ def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataF
     parameters['p2_COP [-]'] = (df['p2_COP [-]'].values.tolist())
     parameters['p3_COP [-]'] = (df['p3_COP [-]'].values.tolist())
     parameters['p4_COP [-]'] = (df['p4_COP [-]'].values.tolist())
-
+    
     if model == 'Generic':
         parameters = parameters.iloc[group_id - 1:group_id]
         parameters.loc[:, 'P_th_h_ref [W]'] = p_th
@@ -186,7 +186,7 @@ def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataF
         if group_id == 2 or group_id == 5:
             t_in_fix = t_in_hp[1]
         if group_id == 3 or group_id == 6:
-            t_in_fix = t_in_hp[2]
+            t_in_fix = t_in_hp[2]  
         cop_ref = p1_cop * t_in_fix + p2_cop * t_out_fix + p3_cop + p4_cop * t_amb_fix
         p_el_ref = p_th / cop_ref
         parameters.loc[:, 'P_el_h_ref [W]'] = p_el_ref
@@ -196,7 +196,7 @@ def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataF
 
 def fit_p_th_ref(t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> Any:
     """
-    Determine the thermal output power in [W] at reference conditions (T_in = [-7, 0, 10] ,
+    Determine the thermal output power in [W] at reference conditions (T_in = [-7, 0, 10] , 
     T_out=52, T_amb=-7) for a given set point for a generic heat pump, using a least-square method.
 
     Parameters
@@ -221,9 +221,9 @@ def fit_p_th_ref(t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> A
     return p_th
 
 
-def fit_func_p_th_ref(p_th: int, t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> int:
+def fit_func_p_th_ref(p_th:  int, t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> int:
     """
-    Helper function to determine difference between given and calculated
+    Helper function to determine difference between given and calculated 
     thermal output power in [W].
 
     Parameters
@@ -250,7 +250,7 @@ def fit_func_p_th_ref(p_th: int, t_in: int, t_out: int, group_id: int, p_th_set_
         t_amb = -7
     parameters = get_parameters_fit(model='Generic', group_id=group_id, p_th=p_th)
     df = simulate(t_in, t_out - 5, parameters, t_amb)
-    p_th_calc = df.P_th.values[0]
+    p_th_calc=df.P_th.values[0]
     p_th_diff = p_th_calc - p_th_set_point
     return p_th_diff
 
@@ -284,7 +284,7 @@ def simulate(t_in_primary: any, t_in_secondary: any, parameters: pd.DataFrame,
         EER = Energy Efficiency Ratio.
         P_el = Electrical input Power. [W]
         P_th = Thermal output power. [W]
-        m_dot = Mass flow at secondary side of the heat pump. [kg/s]
+        m_dot = Mass flow at secondary side of the heat pump. [kg/s]        
     """
 
     DELTA_T = 5 # Inlet temperature is supposed to be heated up by 5 K

@@ -6,3 +6,5 @@ reportlab
 pvlib
 openpyxl
 pytest
+sphinx
+sphinx-rtd-theme

@@ -88,13 +88,13 @@ def basic_household_explicit(my_sim):
     my_sim.add_component(my_weather)
 
     my_photovoltaic_system = pvs.PVSystem(time=time,
-                                              location=location,
-                                              power=power,
-                                              load_module_data=load_module_data,
-                                              module_name=module_name,
-                                              integrateInverter=integrateInverter,
-                                              inverter_name=inverter_name,
-                                              sim_params=my_sim_params)
+                                          location=location,
+                                          power=power,
+                                          load_module_data=load_module_data,
+                                          module_name=module_name,
+                                          integrateInverter=integrateInverter,
+                                          inverter_name=inverter_name,
+                                          sim_params=my_sim_params)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
                                          my_weather.ComponentName,
                                          my_weather.TemperatureOutside)

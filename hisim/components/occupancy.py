@@ -176,7 +176,6 @@ class Occupancy(cp.Component):
             #stsv.set_output_value(self.demand_satisfied, demand_satisfied)
             #stsv.set_output_value(self.energy_discharged, energy_discharged)
 
-
         stsv.set_output_value(self.number_of_residentsC, self.number_of_residents[timestep])
         stsv.set_output_value(self.heating_by_residentsC, self.heating_by_residents[timestep])
         stsv.set_output_value(self.electricity_outputC, self.electricity_consumption[timestep])

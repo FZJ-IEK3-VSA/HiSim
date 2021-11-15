@@ -5,9 +5,9 @@ name: Testing for JOSS paper
 
 on:
   push:
-    branches: [ joss ]
+    branches: [ main ]
   pull_request:
-    branches: [ joss ]
+    branches: [ main ]
 
 jobs:
   build:

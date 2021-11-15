@@ -23,6 +23,18 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+"""
+The functions cited in this module are at some degree based on the tsib project:
+
+[tsib-kotzur]:
+Kotzur, Leander, Detlef Stolten, and Hermann-Josef Wagner. Future grid load of the residential building sector. No. RWTH-2018-231872. Lehrstuhl für Brennstoffzellen (FZ Jülich), 2019.
+ID: http://hdl.handle.net/2128/21115
+    http://nbn-resolving.org/resolver?verb=redirect&identifier=urn:nbn:de:0001-2019020614
+    
+The implementation of the tsib project can be found under the following repository:
+https://github.com/FZJ-IEK3-VSA/tsib
+"""
+
 temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
 
 @lru_cache(maxsize=16)
@@ -90,6 +102,8 @@ def simPhotovoltaicSimple(
     Simulates a defined PV array with the Sandia PV Array Performance Model.
     The implementation is done in accordance with following tutorial:
     https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
+
+    Based on the tsib project @[tsib-kotzur] (Check header)
 
     Parameters
     ----------
@@ -325,6 +339,8 @@ class PVSystem(cp.Component):
         """
         Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
+        Based on the tsib project @[tsib-kotzur] (Check header)
+
         Parameters
         -------
         try_num: int (default: 4)
@@ -440,6 +456,8 @@ class PVSystem(cp.Component):
         The implementation is done in accordance with following tutorial:
         https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
 
+        Based on the tsib project @[tsib-kotzur] (Check header)
+
         Parameters
         ----------
         tmy_data: pandas.DataFrame(), required
@@ -554,6 +572,8 @@ def readTRY(location="Aachen", year=2010):
     """
     Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
+    Based on the tsib project @[tsib-kotzur] (Check header)
+
     Parameters
     -------
     try_num: int (default: 4)
@@ -599,6 +619,8 @@ def readTRY(location="Aachen", year=2010):
 def calculateDNI(directHI, lon, lat, zenith_tol=87.0):
     """
     Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
+
+    Based on the tsib project @[tsib-kotzur] (Check header)
 
     Parameters
     ----------

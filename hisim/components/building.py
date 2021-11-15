@@ -22,6 +22,16 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+"""
+The functions cited in this module are at some degree based on the RC_BuildingSimulator project:
+
+[rc_buildingsimulator-jayathissa]:
+Jayathissa, Prageeth, et al. "Optimising building net energy demand with dynamic BIPV shading." Applied Energy 202 (2017): 726-735.
+
+The implementation of the RC_BuildingSimulator project can be found under the following repository:
+https://github.com/architecture-building-systems/RC_BuildingSimulator
+"""
+
 @lru_cache(maxsize=16)
 def calc_solar_gains(sun_azimuth,
                      DNI,
@@ -497,6 +507,7 @@ class Building(cp.Component):
         """
         Definition to simplify calc_phi_m_tot
         # (C.6) in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         return 1.0 / (1.0 / self.h_ve_adj + 1.0 / self.h_tr_is)
 
@@ -505,6 +516,7 @@ class Building(cp.Component):
         """
         Definition to simplify calc_phi_m_tot
         # (C.7) in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         return self.h_tr_1 + self.h_tr_w
 
@@ -513,6 +525,7 @@ class Building(cp.Component):
         """
         Definition to simplify calc_phi_m_tot
         # (C.8) in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         return 1.0 / (1.0 / self.h_tr_2 + 1.0 / self.h_tr_ms)
 
@@ -522,10 +535,14 @@ class Building(cp.Component):
         The opperative temperature is a weighted average of the air and mean radiant temperatures.
         It is not used in any further calculation at this stage
         # (C.12) in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         return 0.3 * self.t_air + 0.7 * self.t_s
 
     def get_h_tr_w(self):
+        """
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
+        """
         # h_tr_w: conductance between exterior temperature and surface temperature
         # Objects: Doors, windows, curtain walls and windowed walls ISO 7.2.2.2
         ws = ["Window_1", "Window_2", "Door_1"]
@@ -536,8 +553,10 @@ class Building(cp.Component):
             self.h_tr_w += float(self.buildingdata["H_Transmission_" + w].values[0])
 
     def get_h_tr_em(self):
+        """
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
+        """
         # Conductance of opaque surfaces to exterior [W/K]
-        #opaque_walls = ["Wall_1", "Wall_2", "Wall_3"
         opaque_walls = ["Wall_1", "Wall_2", "Wall_3", "Roof_1", "Roof_2","Floor_1","Floor_2"]
         # h_tr_em_inv = 0.0
         # for ow in opaque_walls:
@@ -561,6 +580,9 @@ class Building(cp.Component):
 
 
     def get_h_tr_is(self):
+        """
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
+        """
         # h_tr_is: conductance between air temperature and surface temperature
         self.h_tr_is = self.A_t * self.h_is
 
@@ -570,6 +592,9 @@ class Building(cp.Component):
     def get_h_ve_adj(self):
         # Ventilation
         if self.ven_method == "RC_BuildingSimulator":
+            """
+            Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
+            """
             ach_vent = 1.5
             ach_infl = 0.5
             ventilation_efficiency = 0.6
@@ -714,7 +739,7 @@ class Building(cp.Component):
         Calculates the thermal solar gain passed to
         the building through the windows
 
-        :return:
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         solar_gains = 0.0
         #parameters = [altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith]
@@ -752,6 +777,7 @@ class Building(cp.Component):
         Determines node temperatures and computes derivation to determine the new node temperatures
         Used in: has_demand(), solve_energy(), calc_energy_demand()
         # section C.3 in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
 
         # Updates flows
@@ -788,7 +814,7 @@ class Building(cp.Component):
         Note that this equation has diverged slightly from the standard
         as the heating/cooling node can enter any node depending on the
         emission system selected
-
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
 
         # Calculates the heat flows to various points of the building based on the breakdown in section C.2, formulas C.1-C.3
@@ -808,6 +834,7 @@ class Building(cp.Component):
         """
         Primary Equation, calculates the temperature of the next time step
         # (C.4) in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
 
         self.t_m_next = ((t_m_prev * ((self.c_m / 3600.0) - 0.5 * (self.h_tr_3 + self.h_tr_em))) +
@@ -820,6 +847,7 @@ class Building(cp.Component):
         calc_t_m_next so it's not so long to write out
         # (C.5) in [C.3 ISO 13790]
         # h_ve = h_ve_adj and t_supply = t_out [9.3.2 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
 
         t_supply = t_out  # ASSUMPTION: Supply air comes straight from the outside air
@@ -833,6 +861,7 @@ class Building(cp.Component):
         """
         Temperature used for the calculations, average between newly calculated and previous bulk temperature
         # (C.9) in [C.3 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         return (t_m_prev + self.t_m_next)/2
 
@@ -841,6 +870,7 @@ class Building(cp.Component):
         Calculate the temperature of the inside room surfaces
         # (C.10) in [C.3 ISO 13790]
         # h_ve = h_ve_adj and t_supply = t_out [9.3.2 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
 
         t_supply = t_out  # ASSUMPTION: Supply air comes straight from the outside air
@@ -854,6 +884,7 @@ class Building(cp.Component):
         Calculate the temperature of the air node
         # (C.11) in [C.3 ISO 13790]
         # h_ve = h_ve_adj and t_supply = t_out [9.3.2 ISO 13790]
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
 
         t_supply = t_out
@@ -863,7 +894,9 @@ class Building(cp.Component):
                       t_supply + self.phi_ia) / (self.h_tr_is + self.h_ve_adj)
 
 class Window(object):
-    """docstring for Window"""
+    """
+    Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
+    """
     def __init__(self,
                  azimuth_tilt=None,
                  alititude_tilt=90,
@@ -951,6 +984,14 @@ class Window(object):
     def calc_direct_solar_factor(self, sun_altitude, sun_azimuth, apparent_zenith):
         """
         Calculates the cosine of the angle of incidence on the window
+
+        Commented equations, that provide a direct calculation, were derived in:
+
+        Proportion of the radiation incident on the window (cos of the incident ray)
+        ref:Quaschning, Volker, and Rolf Hanitsch. "Shade calculations in photovoltaic systems."
+        ISES Solar World Conference, Harare. 1995.
+
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         sun_altitude_rad = math.radians(sun_altitude)
         sun_azimuth_rad = math.radians(sun_azimuth)
@@ -959,13 +1000,6 @@ class Window(object):
 
         direct_factor = math.cos(aoi) / (math.sin(sun_altitude_rad))
 
-
-
-        """
-        Proportion of the radiation incident on the window (cos of the incident ray)
-        ref:Quaschning, Volker, and Rolf Hanitsch. "Shade calculations in photovoltaic systems."
-        ISES Solar World Conference, Harare. 1995.
-        """
         # Solution from the above mentioned study
         #direct_factor = (math.cos(sun_altitude_rad) * math.sin(self.alititude_tilt_rad) * \
         #                math.cos(sun_azimuth_rad - self.azimuth_tilt_rad) + \
@@ -988,7 +1022,10 @@ class Window(object):
         return direct_factor
 
     def calc_diffuse_solar_factor(self):
-        """Calculates the proportion of diffuse radiation"""
+        """Calculates the proportion of diffuse radiation
+
+        Based on the tsib project @[rc_buildingsimulator-jayathissa] (Check header)
+        """
         # Proportion of incident light on the window surface
         return (1 + math.cos(self.alititude_tilt_rad)) / 2
 

@@ -1,7 +1,7 @@
 
 <a href="https://www.fz-juelich.de/iek/iek-3/EN/Home/home_node.html"><img src="https://www.fz-juelich.de/SharedDocs/Bilder/INM/INM-1/EN/FZj_Logo.jpg?__blob=normal" alt="Forschungszentrum Juelich Logo" width="230px"></a>
 
-# HiSim - House Infrastructure Simulator
+# HiSim - Household Infrastructure and Building Simulator
 HiSim is a Python package for simulation and analysis of household scenarios using modern components as alternative to fossil fuel based ones. This package integrates load profiles generation of electricity consumption, heating demand, electricity generation, and strategies of smart strategies of modern components, such as heat pump, battery, electric vehicle or thermal energy storage. HiSim is a package under development by Forschungszentrum Jülich und Hochschule Emden/Leer. For detailed documentation, please access [ReadTheDocs](https://household-infrastructure-simulator.readthedocs.io/en/latest/) of this repository. 
 
 
@@ -133,9 +133,6 @@ Post Processing
 -----------
 After the simulator runs all time steps, the post processing (`postprocessing.py`) reads the persistent saved results, plots the data and
 generates a report.
-
-
-
 
 ## License
 

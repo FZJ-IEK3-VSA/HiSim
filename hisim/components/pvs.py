@@ -132,16 +132,6 @@ def simPhotovoltaicSimple(
     Returns
     --------
     """
-    # data = {"DNI": DNI,
-    #        "DHI": DHI,
-    #        "GHI": GHI,
-    #        "apparent_zenith": apparent_zenith,
-    #        "DryBulb": temperature,
-    #        "Wspd": wind_speed}
-
-    # solpos = {"apparent_zenith": apparent_zenith,
-    #          "azimuth": azimuth}
-
     # automatic pd time series in future pvlib version
     # calculate airmass
     airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)
@@ -485,16 +475,6 @@ class PVSystem(cp.Component):
         Returns
         --------
         """
-        #data = {"DNI": DNI,
-        #        "DHI": DHI,
-        #        "GHI": GHI,
-        #        "apparent_zenith": apparent_zenith,
-        #        "DryBulb": temperature,
-        #        "Wspd": wind_speed}
-
-        #solpos = {"apparent_zenith": apparent_zenith,
-        #          "azimuth": azimuth}
-
         # automatic pd time series in future pvlib version
         # calculate airmass
         airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)

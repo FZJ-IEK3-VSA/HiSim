@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 # cache folders
-inputs/cache
+hisim/inputs/cache/*
+

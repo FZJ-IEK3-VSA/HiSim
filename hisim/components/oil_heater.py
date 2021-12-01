@@ -23,9 +23,9 @@ class OilheaterState:
     """
     This data class saves the state of the simulation results.
     """
-    time_on: int = 0
-    time_off: int = 0
-    on_off: int = 0
+    time_on:            int = 0
+    time_off :          int = 0
+    full_medium_off :   int = 0
 
     def update_state( self, stateC, seconds_per_timestep ):
         """
@@ -40,15 +40,20 @@ class OilheaterState:
         """
         
         # on switch
-        if stateC == 1:
+        if stateC == 2:
             self.time_on = self.time_on + seconds_per_timestep
             self.time_off = 0
-            self.on_off = 1
+            self.full_medium_off = 2
+            
+        elif stateC == 1:
+            self.time_on = self.time_on + seconds_per_timestep
+            self.time_off = 0
+            self.full_medium_off = 1
             
         else:
             self.time_off = self.time_off + seconds_per_timestep
             self.time_on = 0
-            self.on_off = 0
+            self.full_medium_off = 0
 
 class OilHeater( cp.Component ):
     """
@@ -61,7 +66,7 @@ class OilHeater( cp.Component ):
     
     # Outputs
     ThermalEnergyDelivered =    "ThermalEnergyDelivered"
-    ElectricityOutput =         "ElectricityOutput"
+    ElectricityOutput =         "ElectricityOutput" #this definition is useful in sumbuilder, but of corse it is electricity input needed
     NumberOfCycles =            "NumberOfCycles"
 
     def __init__( self, max_power: int, min_off_time : int, min_on_time : int ):
@@ -149,19 +154,19 @@ class OilHeater( cp.Component ):
         stateC = stsv.get_input_value( self.stateC )
         
         # Overwrite control signal stateC to realize minimum time on or time off
-        if self.state.on_off == 1 and self.state.time_on < self.min_on_time * 60 :
+        if self.state.full_medium_off == 2 and self.state.time_on < self.min_on_time * 60 :
+            stateC = 2
+        if self.state.full_medium_off == 1 and self.state.time_on < self.min_on_time * 60 :
             stateC = 1
-        if self.state.on_off == 0 and self.state.time_off < self.min_off_time * 60:
+        if self.state.full_medium_off == 0 and self.state.time_off < self.min_off_time * 60:
             stateC = 0
-            if timestep < 100:
-                print( self.state.on_off, self.state.time_off, self.min_off_time * 60 )
             
         #update state class accordingly
         self.state.update_state( stateC = stateC , seconds_per_timestep = seconds_per_timestep )
         
         # write values for output time series
-        stsv.set_output_value( self.thermal_energy_delivered, self.max_power * self.state.on_off )
-        stsv.set_output_value( self.electricity_output, self.max_power * self.state.on_off )
+        stsv.set_output_value( self.thermal_energy_delivered, self.max_power * self.state.full_medium_off / 2 )
+        stsv.set_output_value( self.electricity_output, self.max_power * self.state.full_medium_off / 2 )
         
 class OilHeaterController( cp.Component ):
     """
@@ -180,7 +185,7 @@ class OilHeaterController( cp.Component ):
     
     # Inputs
     TemperatureMean = "Residence Temperature"
-    ElectricityInput = "ElectricityInput"
+    TemperatureOutside = "Temperature Outside"
 
     # Outputs
     StateC = "StateC"
@@ -197,16 +202,18 @@ class OilHeaterController( cp.Component ):
         self.build( t_air_heating = t_air_heating,
                     offset = offset )
 
-        self.t_mC: cp.ComponentOutput = self.add_input(self.ComponentName,
+        #inputs
+        self.t_mC: cp.ComponentOutput = self.add_input( self.ComponentName,
                                                     self.TemperatureMean,
                                                     lt.LoadTypes.Temperature,
                                                     lt.Units.Celsius,
-                                                    True)
-        self.electricity_inputC = self.add_input(self.ComponentName,
-                                                 self.ElectricityInput,
-                                                 lt.LoadTypes.Electricity,
-                                             lt.Units.Watt,
-                                                 False)
+                                                    True )
+        self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                     self.TemperatureOutside,
+                                                     lt.LoadTypes.Any,
+                                                     lt.Units.Celsius,
+                                                     True) 
+        #outputs
         self.stateC = self.add_output(self.ComponentName,
                                       self.StateC,
                                       lt.LoadTypes.Any,
@@ -215,18 +222,18 @@ class OilHeaterController( cp.Component ):
     def build( self, t_air_heating, offset ):
         
         #initialize control mode
-        self.on_off = 0
-        self.previous_on_off = 0
+        self.full_medium_off = 0
+        self.previous_full_medium_off = 0
 
         # Configuration
         self.t_set_heating = t_air_heating
         self.offset = offset
 
     def i_save_state(self):
-        self.previous_on_off = self.on_off
+        self.previous_full_medium_off = self.full_medium_off
 
     def i_restore_state(self):
-        self.on_off = self.previous_on_off
+        self.full_medium_off = self.previous_full_medium_off
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
@@ -236,18 +243,41 @@ class OilHeaterController( cp.Component ):
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             stateC = 0
+            pass
         else:
             # Retrieves inputs
             t_m_old = stsv.get_input_value( self.t_mC )
-            electricity_input = stsv.get_input_value( self.electricity_inputC )
+            T_out =   stsv.get_input_value( self.t_outC )
+            T_diff = t_m_old - T_out
     
             minimum_heating_set_temp = self.t_set_heating - self.offset
             heating_set_temp = self.t_set_heating
-        
+            maximum_heating_set_temp = self.t_set_heating + self.offset
+            
+            #below comfortband heating goes to maximum
             if t_m_old < minimum_heating_set_temp:
-                stateC = 1
-            elif t_m_old < heating_set_temp and electricity_input > 0:
-                stateC = 1
+                stateC = 2
+                
+            #in lower half of comfort band 
+            elif t_m_old >= minimum_heating_set_temp and t_m_old < heating_set_temp:
+                #heating goes to maximum on cold days
+                if T_diff >= 20:
+                    stateC = 2
+                #heating is turned on medium on medium days
+                elif T_diff < 20 and T_diff >= 10:
+                    stateC = 1
+                #heating is not touched on warm days
+                else:
+                    stateC = 0
+                    
+            #in upper half of comfort band
+            elif t_m_old >= heating_set_temp and t_m_old < maximum_heating_set_temp:
+                if T_diff >= 20:
+                    stateC = 1
+                else:
+                    stateC = 0
+            
+            #room temperature exceeds comfort band
             else:
                 stateC = 0
 

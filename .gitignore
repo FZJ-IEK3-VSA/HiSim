@@ -131,3 +131,6 @@ dmypy.json
 # cache folders
 hisim/inputs/cache/*
 
+#new results
+examples/results/*
+

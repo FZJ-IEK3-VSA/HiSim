@@ -119,10 +119,6 @@ def basic_household_Oilheater_explicit( my_sim ):
                                          my_weather.WindSpeed )
     my_sim.add_component( my_photovoltaic_system )
 
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid( name="BaseLoad",
-                                                                      grid=[my_occupancy, "Subtract", my_photovoltaic_system ] )
-    my_sim.add_component(my_base_electricity_load_profile)
-
     my_building = building.Building( building_code=building_code,
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
@@ -162,9 +158,12 @@ def basic_household_Oilheater_explicit( my_sim ):
     my_oilheater_controller.connect_input( my_oilheater_controller.TemperatureMean,
                                            my_building.ComponentName,
                                            my_building.TemperatureMean )
-    my_oilheater_controller.connect_input( my_oilheater_controller.ElectricityInput,
-                                           my_base_electricity_load_profile.ComponentName,
-                                           my_base_electricity_load_profile.ElectricityOutput )
+    my_oilheater_controller.connect_input( my_oilheater_controller.TemperatureOutside,
+                                            my_weather.ComponentName,
+                                            my_weather.TemperatureOutside )
+    # my_oilheater_controller.connect_input( my_oilheater_controller.ElectricityInput,
+    #                                         my_base_electricity_load_profile.ComponentName,
+    #                                         my_base_electricity_load_profile.ElectricityOutput )
     my_sim.add_component( my_oilheater_controller )
 
     my_oilheater = oil_heater.OilHeater( max_power = max_power,
@@ -179,6 +178,12 @@ def basic_household_Oilheater_explicit( my_sim ):
     my_building.connect_input( my_building.ThermalEnergyDelivered,
                                my_oilheater.ComponentName,
                                my_oilheater.ThermalEnergyDelivered )
+    
+    my_base_electricity_load_profile = sumbuilder.ElectricityGrid( name="BaseLoad",
+                                                                      grid = [my_occupancy, "Subtract", my_photovoltaic_system,
+                                                                              "Sum", my_oilheater ] )
+    my_sim.add_component( my_base_electricity_load_profile )
+    
 
 def basic_household_Oilheater_implicit( my_sim ):
     pass

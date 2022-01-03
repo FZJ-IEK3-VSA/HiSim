@@ -21,6 +21,18 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+"""
+The functions cited in this module are at some degree based on the tsib project:
+
+[tsib-kotzur]:
+Kotzur, Leander, Detlef Stolten, and Hermann-Josef Wagner. Future grid load of the residential building sector. No. RWTH-2018-231872. Lehrstuhl für Brennstoffzellen (FZ Jülich), 2019.
+ID: http://hdl.handle.net/2128/21115
+    http://nbn-resolving.org/resolver?verb=redirect&identifier=urn:nbn:de:0001-2019020614
+
+The implementation of the tsib project can be found under the following repository:
+https://github.com/FZJ-IEK3-VSA/tsib
+"""
+
 class Weather(Component):
     """
     Provide thermal and solar conditions of local weather
@@ -285,6 +297,8 @@ def readTRY(location="Aachen", year=2015):
     """
     Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
+    Based on the tsib project @[tsib-kotzur] (Check header)
+
     Parameters
     -------
     try_num: int (default: 4)
@@ -337,6 +351,8 @@ def readTRY(location="Aachen", year=2015):
 def calculateDNI(directHI, lon, lat, zenith_tol=87.0):
     """
     Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
+
+    Based on the tsib project @[tsib-kotzur] (Check header)
 
     Parameters
     ----------

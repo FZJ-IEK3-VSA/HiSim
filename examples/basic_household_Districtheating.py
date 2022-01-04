@@ -8,7 +8,7 @@ from components import occupancy
 from components import weather
 from components import pvs
 from components import building
-from components import oil_heater
+from components import district_heating
 from components import sumbuilder
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
@@ -16,16 +16,16 @@ __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Johanna Ganglbauer"
-__email__ = "johanna.ganglbauer@4wardenergy.at"
+__maintainer__ = "Vitor Hugo Bellotto Zago"
+__email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def basic_household_Oilheater_explicit( my_sim ):
+def basic_household_Districtheating_explicit( my_sim ):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
-    electricity and heating needs covered by the photovoltaic
-    system and a simple oil heater.
+    electricity need covered by the photovoltaic
+    system and the heating need covered by district heating.
 
     - Simulation Parameters
     - Components
@@ -33,7 +33,7 @@ def basic_household_Oilheater_explicit( my_sim ):
         - Weather
         - Photovoltaic System
         - Building
-        - Oil heater
+        - DistrictHeating
     """
 
     ##### System Parameters #####
@@ -61,14 +61,12 @@ def basic_household_Oilheater_explicit( my_sim ):
     building_class = "medium"
     initial_temperature = 23
 
-    # Set Oil heater controller
+    # Set Controller of district heating and District Heating
     t_air_heating = 21.0
-    offset = 3.0
-
-    # Set Oil Heater
-    max_power = 5000
-    min_on_time = 60
-    min_off_time = 15
+    tol = 1e-3 #tolerance of set point -> considered in control
+    max_power = 15000
+    min_power = 1000
+    efficiency = 0.85
 
     ##### Build Components #####
 
@@ -118,6 +116,10 @@ def basic_household_Oilheater_explicit( my_sim ):
                                          my_weather.ComponentName,
                                          my_weather.WindSpeed )
     my_sim.add_component( my_photovoltaic_system )
+    
+    my_base_electricity_load_profile = sumbuilder.ElectricityGrid( name = "BaseLoad",
+                                                                      grid = [ my_occupancy, "Subtract", my_photovoltaic_system ] )
+    my_sim.add_component(my_base_electricity_load_profile)
 
     my_building = building.Building( building_code=building_code,
                                         bClass=building_class,
@@ -153,37 +155,26 @@ def basic_household_Oilheater_explicit( my_sim ):
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
 
-    my_oilheater_controller = oil_heater.OilHeaterController(   t_air_heating = t_air_heating,
-                                                                offset = offset )
-    my_oilheater_controller.connect_input( my_oilheater_controller.TemperatureMean,
+    my_district_heating_controller = district_heating.DistrictHeatingController(    max_power = max_power,
+                                                                                    min_power = min_power,
+                                                                                    t_air_heating = t_air_heating,
+                                                                                    tol = tol )
+    my_district_heating_controller.connect_input( my_district_heating_controller.TemperatureMean,
                                            my_building.ComponentName,
                                            my_building.TemperatureMean )
-    my_oilheater_controller.connect_input( my_oilheater_controller.TemperatureOutside,
-                                            my_weather.ComponentName,
-                                            my_weather.TemperatureOutside )
-    # my_oilheater_controller.connect_input( my_oilheater_controller.ElectricityInput,
-    #                                         my_base_electricity_load_profile.ComponentName,
-    #                                         my_base_electricity_load_profile.ElectricityOutput )
-    my_sim.add_component( my_oilheater_controller )
+    my_sim.add_component( my_district_heating_controller )
 
-    my_oilheater = oil_heater.OilHeater( max_power = max_power,
-                                         min_off_time = min_off_time,
-                                         min_on_time = min_on_time )
-    my_oilheater.connect_input( my_oilheater.StateC,
-                                my_oilheater_controller.ComponentName,
-                                my_oilheater_controller.StateC )
-
-    my_sim.add_component( my_oilheater )
+    my_district_heating = district_heating.DistrictHeating(    max_power = max_power,
+                                                               min_power = min_power,
+                                                               efficiency = efficiency )
+    my_district_heating.connect_input( my_district_heating.signal,
+                                       my_district_heating_controller.ComponentName,
+                                       my_district_heating_controller.signal )
+    my_sim.add_component( my_district_heating )
 
     my_building.connect_input( my_building.ThermalEnergyDelivered,
-                               my_oilheater.ComponentName,
-                               my_oilheater.ThermalEnergyDelivered )
-    
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid( name="BaseLoad",
-                                                                      grid = [my_occupancy, "Subtract", my_photovoltaic_system,
-                                                                              "Sum", my_oilheater ] )
-    my_sim.add_component( my_base_electricity_load_profile )
-    
+                               my_district_heating.ComponentName,
+                               my_district_heating.ThermalEnergyDelivered )
 
-def basic_household_Oilheater_implicit( my_sim ):
+def basic_household_DistrictHeating_implicit( my_sim ):
     pass

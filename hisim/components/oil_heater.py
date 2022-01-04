@@ -8,13 +8,13 @@ import component as cp
 import loadtypes as lt
 import copy as copy
 
-__authors__ = "Tjarko Tjaden, Kai Rösken"
+__authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Johanna Ganglbauer"
-__email__ = "johanna.ganglbauer@4wardenergy.at"
+__maintainer__ = "Vitor Hugo Bellotto Zago"
+__email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
@@ -58,11 +58,11 @@ class OilheaterState:
 class OilHeater( cp.Component ):
     """
     Oil heater implementation. Oil heater heats up oil transmittant with electricity ( efficiency = 1 ).
-    The oil heater can be either switched on or switched off, there is no intermediate level.
+    The oil heater can be switched on with maximum power, with medium power, or switched off - there are three power levels.
     """
     
     # Inputs
-    StateC =                     "StateC" #0 if switched off, 1 if switched on
+    StateC =                     "StateC" #0 if switched off, 1 if switched on with medium power, 2 if switched on with maximum power
     
     # Outputs
     ThermalEnergyDelivered =    "ThermalEnergyDelivered"
@@ -83,7 +83,7 @@ class OilHeater( cp.Component ):
         
         super( ).__init__( name = 'OilHeater' )
         
-        #introduce parameters of heat pump
+        #introduce parameters of oil heater
         self.build( max_power = max_power,
                     min_off_time = min_off_time,
                     min_on_time = min_on_time )
@@ -147,7 +147,7 @@ class OilHeater( cp.Component ):
     
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool ):
         """
-        Performs the simulation of the heat pump model.
+        Performs the simulation of the oil heater.
         """ 
         
         # Load control signal stateC value ( 1 means on 0 means off )
@@ -197,7 +197,7 @@ class OilHeaterController( cp.Component ):
                  t_air_heating: float = 20.0,
                  offset: float = 2.0 ):
         
-        super().__init__( "HeatPumpController" )
+        super().__init__( "OilheaterController" )
         
         self.build( t_air_heating = t_air_heating,
                     offset = offset )
@@ -214,7 +214,7 @@ class OilHeaterController( cp.Component ):
                                                      lt.Units.Celsius,
                                                      True) 
         #outputs
-        self.stateC = self.add_output(self.ComponentName,
+        self.stateC = self.add_output( self.ComponentName,
                                       self.StateC,
                                       lt.LoadTypes.Any,
                                       lt.Units.Any)

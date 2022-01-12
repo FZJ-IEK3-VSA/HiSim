@@ -40,7 +40,7 @@ def basic_household_Districtheating_explicit( my_sim ):
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 15
 
     # Set weather
     location = "Aachen"
@@ -63,7 +63,7 @@ def basic_household_Districtheating_explicit( my_sim ):
 
     # Set Controller of district heating and District Heating
     t_air_heating = 21.0
-    tol = 1e-3 #tolerance of set point -> considered in control
+    tol = 1e-2 #tolerance of set point -> considered in control
     max_power = 15000
     min_power = 1000
     efficiency = 0.85
@@ -72,15 +72,15 @@ def basic_household_Districtheating_explicit( my_sim ):
 
     # Build system parameters
     my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year( year=year,
-                                                                                 seconds_per_timestep=seconds_per_timestep )
+                                                                                  seconds_per_timestep = seconds_per_timestep )
     my_sim.set_parameters(my_sim_params)
 
     # Build occupancy
-    my_occupancy = occupancy.Occupancy( profile = occupancy_profile )
+    my_occupancy = occupancy.Occupancy( profile = occupancy_profile, seconds_per_timestep = seconds_per_timestep )
     my_sim.add_component( my_occupancy )
 
     # Build Weather
-    my_weather = weather.Weather( location=location )
+    my_weather = weather.Weather( location=location, year = year, seconds_per_timestep = seconds_per_timestep )
     my_sim.add_component( my_weather )
 
     my_photovoltaic_system = pvs.PVSystem( time=time,
@@ -124,8 +124,8 @@ def basic_household_Districtheating_explicit( my_sim ):
     my_building = building.Building( building_code=building_code,
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
-                                        sim_params=my_sim_params )
-                                        #seconds_per_timestep=seconds_per_timestep)
+                                        sim_params=my_sim_params,
+                                        seconds_per_timestep=seconds_per_timestep )
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
                               my_building.Altitude)

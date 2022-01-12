@@ -75,7 +75,10 @@ class Carpet(Chart):
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
     def plot(self):
-        database = self.data.values.reshape(365, 24 * 60)
+        xdims = 365 #number of days
+        ydims = int( len( self.data ) / 365 ) #number of calculated timesteps per day
+        y_steps_per_hour = int( ydims / 24 )
+        database = self.data.values.reshape( xdims, ydims )
         if np.max(np.abs(self.data.values)) > 1.5E3:
             database = database * 1E-3
             self.units = "k{}".format(self.units)
@@ -93,7 +96,7 @@ class Carpet(Chart):
         plt.colorbar(plot).set_label(self.units)
 
 
-        y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
+        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour ).tolist()
         # y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
         ax.set_yticks(y_ticks)
         y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)

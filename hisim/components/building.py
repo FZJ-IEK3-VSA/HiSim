@@ -275,7 +275,9 @@ class Building(cp.Component):
             dni_extra = stsv.get_input_value(self.DNIextraC) #/ self.seconds_per_timestep
             apparent_zenith = stsv.get_input_value(self.apparent_zenithC)
 
-        occupancy_heat_gain = stsv.get_input_value(self.occupancy_heat_gainC) / self.seconds_per_timestep
+        #occupancy_heat_gain = stsv.get_input_value(self.occupancy_heat_gainC) / self.seconds_per_timestep
+        #I guess you wanted to transfer W to Wh
+        occupancy_heat_gain = stsv.get_input_value(self.occupancy_heat_gainC) * self.seconds_per_timestep / 3600
         t_out = stsv.get_input_value(self.t_outC)
 
 
@@ -333,7 +335,9 @@ class Building(cp.Component):
 
         # Only with HeatPump
         elif self.thermal_energy_deliveredC.SourceOutput is not None:
-            thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC) / seconds_per_timestep
+            #thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC) / seconds_per_timestep
+            #I guess you wanted to transfer W to Wh
+            thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC) * self.seconds_per_timestep / 3600
         else:
             thermal_energy_delivered = 10
 
@@ -396,12 +400,15 @@ class Building(cp.Component):
 
     def build(self, bClass, buildingcode, seconds_per_timestep, sim_params):
         if sim_params is not None:
-            self.time_correction_factor = 1 / sim_params.seconds_per_timestep
+            #self.time_correction_factor = 1 / sim_params.seconds_per_timestep
+            self.time_correction_factor = sim_params.seconds_per_timestep / 3600
             self.seconds_per_timestep = sim_params.seconds_per_timestep
             self.timesteps = sim_params.timesteps
         else:
             self.seconds_per_timestep = seconds_per_timestep
-            self.time_correction_factor = 1/seconds_per_timestep
+            #self.time_correction_factor = 1/seconds_per_timestep
+            #I guess you wanted to transfer W to Wh
+            self.time_correction_factor = seconds_per_timestep / 3600
             self.timesteps = int(1E3)
 
         self.parameters = [ bClass, buildingcode ]

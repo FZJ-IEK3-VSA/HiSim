@@ -58,10 +58,12 @@ class Weather(Component):
     WindSpeed = "WindSpeed"
 
     def __init__(self,
-                 location="Aachen"):
+                 location = "Aachen",
+                 year = 2015,
+                 seconds_per_timestep = 60 ):
         super().__init__(name="Weather")
 
-        self.build(location)
+        self.build( location, year, seconds_per_timestep )
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -128,7 +130,7 @@ class Weather(Component):
         stsv.set_output_value(self.wind_speedC, self.Wspd[timestep])
         stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith[timestep])
 
-    def build(self, location):
+    def build( self, location, year, seconds_per_timestep ):
         parameters = [ location ]
         cache_filepath = globals.get_cache(classname="Weather", parameters=parameters)
         if cache_filepath is not None:
@@ -144,26 +146,26 @@ class Weather(Component):
                 self.apparent_zenith = my_weather['apparent_zenith'].tolist()
                 self.Wspd = my_weather['Wspd'].tolist()
         else:
-             tmy_data, location = readTRY(location=location)
-             self.DNI = self.interpolate(tmy_data['DNI'])
-             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
+             tmy_data, location = readTRY( location = location )
+             self.DNI = self.interpolate( tmy_data['DNI'], year, seconds_per_timestep )
+             # calculate extra terrestrial radiation- needed for perez array diffuse irradiance models
              dni_extra = pd.Series(
-                 pvlib.irradiance.get_extra_radiation(self.DNI.index), index=self.DNI.index
-             )
+                 pvlib.irradiance.get_extra_radiation( self.DNI.index ), index = self.DNI.index
+                     )
 
              #DNI_data = self.interpolate(tmy_data['DNI'], 2015)
-             self.temperature = self.interpolate(tmy_data['T'])
+             self.temperature = self.interpolate( tmy_data['T'], year, seconds_per_timestep )
              self.DryBulb = self.temperature
              self.DNIextra = dni_extra
-             self.DHI = self.interpolate(tmy_data['DHI'])
-             self.GHI = self.interpolate(tmy_data['GHI'])
+             self.DHI = self.interpolate( tmy_data['DHI'], year, seconds_per_timestep )
+             self.GHI = self.interpolate( tmy_data['GHI'], year, seconds_per_timestep )
 
 
-             solpos = pvlib.solarposition.get_solarposition(self.DNI.index, location['latitude'], location['longitude'])
+             solpos = pvlib.solarposition.get_solarposition( self.DNI.index, location['latitude'], location['longitude'] )
              self.altitude = solpos['elevation']
              self.azimuth = solpos['azimuth']
              self.apparent_zenith = solpos['apparent_zenith']
-             self.Wspd = self.interpolate(tmy_data['Wspd'])
+             self.Wspd = self.interpolate( tmy_data['Wspd'], year, seconds_per_timestep )
 
              solardata = [self.DNI.tolist(),
                           self.DHI.tolist(),
@@ -188,15 +190,16 @@ class Weather(Component):
                                           'DNIextra'])
              globals.save_cache("Weather", parameters, database)
 
-    def interpolate(self, pd_database, year=2015):
+    def interpolate( self, pd_database, year = 2015, seconds_per_timestep = 60 ):
         firstday = pd.Series([0.0], index=[
             pd.to_datetime(datetime.datetime(year-1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
         lastday = pd.Series(pd_database[-1], index=[
             pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert("Europe/Berlin")])
+        #print( seconds_per_timestep, pd_database.resample( str( seconds_per_timestep ) + 'S' ).asfreq( ) )
         #pd_database = pd_database.append(firstday)
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
-        return pd_database.resample('1T').asfreq().interpolate(method='linear')
+        return pd_database.resample( str( seconds_per_timestep ) + 'S' ).asfreq().interpolate( method='linear' )
 
     def test_altitude_azimuth(self, latitude_deg, longitude_deg):
         year = 2015

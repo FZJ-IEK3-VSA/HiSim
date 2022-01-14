@@ -159,7 +159,7 @@ class Building(cp.Component):
         self.previous_state = self.state.self_copy()
 
     #===================================================================================================================
-
+        #the name might be misleading, usually energy is given in Wh or Joule and power is given in W, here it is power actually
         self.thermal_energy_deliveredC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                                         self.ThermalEnergyDelivered,
                                                                         lt.LoadTypes.Heating,
@@ -232,10 +232,10 @@ class Building(cp.Component):
         #                                                self.TemperatureAir,
         #                                                lt.LoadTypes.Temperature,
         #                                                lt.Units.Celsius)
-        self.total_energy_to_residenceC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.total_power_to_residenceC : cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                            self.TotalEnergyToResidence,
-                                                                           lt.LoadTypes.Any,
-                                                                           lt.Units.Any)
+                                                                           lt.LoadTypes.Heating,
+                                                                           lt.Units.Watt)
         self.solar_gain_through_windowsC : cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                              self.SolarGainThroughWindows,
                                                                              lt.LoadTypes.Heating,
@@ -354,21 +354,22 @@ class Building(cp.Component):
 
         # Performs calculations
         if hasattr(self, "solar_gain_through_windows") is False:
+            #@JG I guess you wanted to transfer W to Wh
             solar_gain_through_windows = self.get_solar_gain_through_windows(altitude=altitude,
                                                                              azimuth=azimuth,
                                                                              DNI=DNI,
                                                                              DHI=DHI,
                                                                              GHI=GHI,
                                                                              dni_extra=dni_extra,
-                                                                             apparent_zenith=apparent_zenith) / self.seconds_per_timestep
+                                                                             apparent_zenith=apparent_zenith) * self.seconds_per_timestep / 3600
         else:
-            solar_gain_through_windows = self.solar_gain_through_windows[timestep]
+            solar_gain_through_windows = self.solar_gain_through_windows[timestep] * self.seconds_per_timestep / 3600
 
-        t_m, t_air, t_s, phi_loss = self.calc_temperatures_crank_nicolson(energy_demand=thermal_energy_delivered,
-                                              internal_gains=occupancy_heat_gain,
-                                              solar_gains=solar_gain_through_windows,
-                                              t_out=t_out,
-                                              t_m_prev=t_m_prev)
+        t_m, t_air, t_s, phi_loss = self.calc_temperatures_crank_nicolson( energy_demand = thermal_energy_delivered,
+                                              internal_gains = occupancy_heat_gain,
+                                              solar_gains = solar_gain_through_windows,
+                                              t_out = t_out,
+                                              t_m_prev = t_m_prev)
 
         self.state.t_m = t_m
         #self.state.t_m = t_m
@@ -382,8 +383,8 @@ class Building(cp.Component):
         #stsv.set_output_value(self.t_mC, t_air)
         stsv.set_output_value(self.t_mC, t_m)
         #stsv.set_output_value(self.t_airC, t_air)
-        stsv.set_output_value(self.total_energy_to_residenceC, phi_loss)
-        stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows*seconds_per_timestep)
+        stsv.set_output_value(self.total_power_to_residenceC, phi_loss * 3600 / self.seconds_per_timestep )
+        stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows * 3600 / self.seconds_per_timestep ) #convert Wh back to W
 
         #stsv.set_output_value(self.internal_lossC, internal_loss)
         #stsv.set_output_value(self.stored_energy_variationC, stored_energy_variation)
@@ -749,13 +750,16 @@ class Building(cp.Component):
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         solar_gains = 0.0
+        
         #parameters = [altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith]
         #def calc_solar_gainxs(window):
         #    return window.calc_solar_gains(*parameters)
 
 
         #windows = self.windows
-        if (DNI == 0 and DHI == 0 and GHI == 0) is False:
+        #if (DNI == 0 and DHI == 0 and GHI == 0) is False:
+        #@Johanna: looks good, but is very bad - somehow turns out to be always False -> so take the easy way
+        if ( DNI != 0 or DHI != 0 or GHI != 0 ) :
         #if (DNI == 0 and DHI == 0 and GHI == 0 and dni_extra == 0) is False:
             #a_pool = Pool()
             #result = a_pool.starmap(calc_solar_gainxs, windows)

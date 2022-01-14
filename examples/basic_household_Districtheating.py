@@ -40,7 +40,7 @@ def basic_household_Districtheating_explicit( my_sim ):
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set weather
     location = "Aachen"

@@ -58,10 +58,11 @@ class Weather(Component):
     WindSpeed = "WindSpeed"
 
     def __init__(self,
-                 location="Aachen"):
+                 location="Aachen",
+                 my_simulation_parameters=None):
         super().__init__(name="Weather")
 
-        self.build(location)
+        self.build(location,my_simulation_parameters)
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -128,21 +129,37 @@ class Weather(Component):
         stsv.set_output_value(self.wind_speedC, self.Wspd[timestep])
         stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith[timestep])
 
-    def build(self, location):
+    def build(self, location,my_simulation_parameters):
+        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
         cache_filepath = globals.get_cache(classname="Weather", parameters=parameters)
         if cache_filepath is not None:
                 my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding = "cp1252")
-                self.temperature = my_weather['t_out'].tolist()
-                self.DryBulb = self.temperature
-                self.DHI = my_weather['DHI'].tolist()
-                self.DNI = np.float64(my_weather['DNI'].tolist())
-                self.DNIextra = my_weather['DNIextra'].tolist()
-                self.GHI = my_weather['GHI'].tolist()
-                self.altitude = my_weather['altitude'].tolist()
-                self.azimuth = my_weather['azimuth'].tolist()
-                self.apparent_zenith = my_weather['apparent_zenith'].tolist()
-                self.Wspd = my_weather['Wspd'].tolist()
+                my_weather.index=pd.date_range("2015-01-01 00:00","2015-12-31 23:59",freq="1min",tz="Europe/Berlin")
+                if seconds_per_timestep!=60:
+                    self.temperature = my_weather['t_out'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.DryBulb = self.temperature
+                    self.DHI = my_weather['DHI'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.DNI = np.float64(my_weather['DNI'].resample(str(seconds_per_timestep)+"S").mean().tolist())
+                    self.DNIextra = my_weather['DNIextra'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.GHI = my_weather['GHI'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.altitude = my_weather['altitude'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.azimuth = my_weather['azimuth'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.apparent_zenith = my_weather['apparent_zenith'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+                    self.Wspd = my_weather['Wspd'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+
+                else:
+                    self.temperature = my_weather['t_out'].tolist()
+                    self.DryBulb = self.temperature
+                    self.DHI = my_weather['DHI'].tolist()
+                    self.DNI = np.float64(my_weather['DNI'].tolist())
+                    self.DNIextra = my_weather['DNIextra'].tolist()
+                    self.GHI = my_weather['GHI'].tolist()
+                    self.altitude = my_weather['altitude'].tolist()
+                    self.azimuth = my_weather['azimuth'].tolist()
+                    self.apparent_zenith = my_weather['apparent_zenith'].tolist()
+                    self.Wspd = my_weather['Wspd'].tolist()
+
         else:
              tmy_data, location = readTRY(location=location)
              self.DNI = self.interpolate(tmy_data['DNI'])
@@ -188,12 +205,27 @@ class Weather(Component):
                                           'DNIextra'])
              globals.save_cache("Weather", parameters, database)
 
+             if seconds_per_timestep != 60:
+                 self.temperature = self.temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.DryBulb = self.temperature
+                 self.DHI = self.DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.DNI = np.float64( self.DNI.resample(str(seconds_per_timestep) + "S").mean().tolist())
+                 self.DNIextra = self.DNIextra.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.GHI = self.GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.altitude = self.altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.azimuth = self.azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.apparent_zenith = self.apparent_zenith.resample(
+                     str(seconds_per_timestep) + "S").mean().tolist()
+                 self.Wspd = self.Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
+
+
+
     def interpolate(self, pd_database, year=2015):
         firstday = pd.Series([0.0], index=[
             pd.to_datetime(datetime.datetime(year-1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
         lastday = pd.Series(pd_database[-1], index=[
             pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert("Europe/Berlin")])
-        #pd_database = pd_database.append(firstday)
+        pd_database = pd_database.append(firstday)
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
         return pd_database.resample('1T').asfreq().interpolate(method='linear')
@@ -314,7 +346,7 @@ def readTRY(location="Aachen", year=2015):
             filepath + ".dat", sep=r"\s+", skiprows=([i for i in range(0, 31)])
         )
         data.index = pd.date_range(
-            "{}-01-01 00:00:00".format(year), periods=8760, freq="H", tz="Europe/Berlin"
+            "{}-01-01 00:30:00".format(year), periods=8760, freq="H", tz="Europe/Berlin"
         )
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(columns={"D": "DHI",

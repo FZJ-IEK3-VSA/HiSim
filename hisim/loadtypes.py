@@ -73,6 +73,7 @@ class Units(str, enum.Enum):
 
     # Degrees
     Celsius = "°C"
+    Kelvin = 'K'
 
     # Degrees
     Degrees = "Degrees"

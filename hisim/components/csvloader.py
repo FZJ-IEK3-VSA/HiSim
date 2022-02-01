@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 import loadtypes as lt
-import globals
+import utils
 import component as cp
 
 class CSVLoader(cp.Component):
@@ -61,7 +61,7 @@ class CSVLoader(cp.Component):
         self.multiplier = multiplier
 
         # ? self.column = column
-        df = pd.read_csv(os.path.join(globals.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal)
+        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal)
         dfcolumn = df.iloc[:, [column]]
 
         if len(dfcolumn) < simulation_parameters.timesteps:

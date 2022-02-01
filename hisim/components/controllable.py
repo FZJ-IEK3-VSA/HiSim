@@ -2,13 +2,14 @@
 import json
 import numpy as np
 import copy
+import matplotlib.pyplot as plt
 from typing import List
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from globals import HISIMPATH
-import loadtypes as lt
-import matplotlib.pyplot as plt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim. utils import HISIMPATH
+from hisim import loadtypes as lt
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

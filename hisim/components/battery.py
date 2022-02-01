@@ -4,7 +4,7 @@ import copy
 # Owned
 import component as cp
 import loadtypes as lt
-import globals
+import utils
 from components.ev_charger import SimpleStorageState
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -109,7 +109,7 @@ class Battery(cp.Component):
         self.seconds_per_timestep = sim_params.seconds_per_timestep
 
         # Gets flexibilities, including heat pump
-        battery_database = globals.load_smart_appliance("Battery")
+        battery_database = utils.load_smart_appliance("Battery")
 
         battery_found = False
         for battery in battery_database:

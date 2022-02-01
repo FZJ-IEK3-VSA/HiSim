@@ -1,6 +1,6 @@
-import component
-from components import occupancy
-import cProfile
+from hisim import component
+from hisim.components import occupancy
+#from hisim import cProfile
 
 
 def test_occupancy():

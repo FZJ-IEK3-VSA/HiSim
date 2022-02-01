@@ -9,7 +9,7 @@ import pandas as pd
 # Owned
 import component as cp
 import loadtypes as lt
-import globals
+import utils
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -59,7 +59,7 @@ class Vehicle_Pure(cp.Component):
             raise Exception("Invalid State Of Charge.")
 
         # Gets flexibilities, including heat pump
-        electric_vehicle_database = globals.load_smart_appliance("Electric Vehicle")
+        electric_vehicle_database = utils.load_smart_appliance("Electric Vehicle")
 
         electric_vehicle_found = False
         for electric_vehicle in electric_vehicle_database:
@@ -83,7 +83,7 @@ class Vehicle_Pure(cp.Component):
         self.model = model
         self.capacity = capacity
 
-        cache_filepath = globals.get_cache("Vehicle", [target])
+        cache_filepath = utils.get_cache("Vehicle", [target])
         if cache_filepath is not None:
             self.car_in_charging_station = pd.read_csv(cache_filepath, sep=',', decimal='.')[
                 'CarInChargingStation'].tolist()
@@ -98,9 +98,9 @@ class Vehicle_Pure(cp.Component):
                     data = json.load(f)
                 return data["Values"]
 
-            FILEPATH = globals.load_export_load_profile_generator(target=target)
+            FILEPATH = utils.load_export_load_profile_generator(target=target)
             if FILEPATH is None:
-                FILEPATH = globals.HISIMPATH
+                FILEPATH = utils.HISIMPATH
 
             ev_files = dict()
             filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
@@ -181,7 +181,7 @@ class Vehicle_Pure(cp.Component):
             self.car_in_charging_station = car_in_charging_station
             self.discharge = discharge_stats
 
-            globals.save_cache("Vehicle", [target], database)
+            utils.save_cache("Vehicle", [target], database)
 
     def i_save_state(self):
         pass
@@ -247,7 +247,7 @@ class Vehicle(cp.Component):
             raise Exception("Invalid State Of Charge.")
 
         # Gets flexibilities, including heat pump
-        electric_vehicle_database = globals.load_smart_appliance("Electric Vehicle")
+        electric_vehicle_database = utils.load_smart_appliance("Electric Vehicle")
 
         electric_vehicle_found = False
         for electric_vehicle in electric_vehicle_database:
@@ -474,7 +474,7 @@ class EVCharger(cp.Component):
         self.time_correction_factor = 1 / sim_params.seconds_per_timestep
         self.seconds_per_timestep = sim_params.seconds_per_timestep
 
-        electric_vehicle_charger_database = globals.load_smart_appliance("Wallbox")
+        electric_vehicle_charger_database = utils.load_smart_appliance("Wallbox")
         evcharger_found = False
         for evcharger in electric_vehicle_charger_database:
             if evcharger["Manufacturer"] == manufacturer and evcharger["Name"] == name:

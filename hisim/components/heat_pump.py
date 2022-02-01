@@ -6,13 +6,13 @@ import seaborn
 from math import pi
 
 # Owned
-import globals
-import component as cp
-import loadtypes as lt
+import hisim.utils as utils
+from hisim import component as cp
+import hisim.loadtypes as lt
 
-from components.extended_storage import WaterSlice
-from components.storage import WarmWaterStorageConfig
-from components.storage import PhysicsConfig
+from hisim.components.extended_storage import WaterSlice
+from hisim.components.configuration import WarmWaterStorageConfig
+from hisim.components.configuration import PhysicsConfig
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -188,7 +188,7 @@ class HeatPump(cp.Component):
         # Simulation parameters
 
         # Retrieves heat pump from database - BEGIN
-        heat_pumps_database = globals.load_smart_appliance("Heat Pump")
+        heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
         heat_pump_found = False
         for heat_pump in heat_pumps_database:

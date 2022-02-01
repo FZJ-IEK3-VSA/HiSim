@@ -3,9 +3,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 # Import modules from HiSim
-from component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
-from loadtypes import LoadTypes, Units
-from inputs.heat_pump_hplib import hplib as hpl
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.loadtypes import LoadTypes, Units
+from hisim.inputs.heat_pump_hplib import hplib as hpl
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

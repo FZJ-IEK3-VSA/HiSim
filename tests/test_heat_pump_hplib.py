@@ -1,6 +1,6 @@
-import component as cp
-from components.heat_pump_hplib import HeatPumpHplib
-import loadtypes as lt
+from hisim import component as cp
+from hisim.components.heat_pump_hplib import HeatPumpHplib
+from hisim import loadtypes as lt
 
 def test_heat_pump_hplib():
 

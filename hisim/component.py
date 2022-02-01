@@ -3,8 +3,8 @@ import logging
 from typing import List, Optional
 import datetime
 
-# Owned
-import loadtypes as lt
+# Package
+from hisim import loadtypes as lt
 
 
 class SimulationParameters:
@@ -59,6 +59,7 @@ class ComponentInput:
 class SingleTimeStepValues:
     def __init__(self, number_of_values: int):
         self.values = [0.0] * number_of_values  # np.ndarray([number_of_values], dtype=float)
+        self.dict = {}
 
     def copy_values_from_other(self, other):
         self.values = other.values[:]  # [x for x in other.values]

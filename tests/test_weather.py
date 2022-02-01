@@ -1,10 +1,11 @@
-import component
-from components import weather
+from hisim import component
+from hisim.components import weather
 
 def test_weather():
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(8)
-
-    my_weather = weather.Weather("Aachen")
+    mysim: sim.SimulationParameters = component.SimulationParameters.full_year(year=2021,
+                                                                           seconds_per_timestep=60)
+    my_weather = weather.Weather("Aachen", mysim)
     my_weather.t_outC.GlobalIndex = 0
     my_weather.DNIC.GlobalIndex = 1
     my_weather.DHIC.GlobalIndex = 2

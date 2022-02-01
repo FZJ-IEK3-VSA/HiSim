@@ -7,10 +7,11 @@ import pvlib
 import numpy as np
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
-from globals import HISIMPATH
-import globals
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.simulator import SimulationParameters
+from hisim import loadtypes as lt
+from hisim.utils import HISIMPATH
+from hisim import utils
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -71,9 +72,11 @@ class Weather(Component):
 
     def __init__(self,
                  location="Aachen",
-                 my_simulation_parameters=None):
+                 my_simulation_parameters: SimulationParameters = None):
         super().__init__(name="Weather")
-
+        if(my_simulation_parameters is None):
+            raise Exception("Simparameters was none")
+        
         self.build(location,my_simulation_parameters)
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
@@ -144,7 +147,7 @@ class Weather(Component):
     def build(self, location,my_simulation_parameters):
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
-        cache_filepath = globals.get_cache(classname="Weather", parameters=parameters)
+        cache_filepath = utils.get_cache(classname="Weather", parameters=parameters)
         if cache_filepath is not None:
                 my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding = "cp1252")
                 my_weather.index=pd.date_range("2015-01-01 00:00","2015-12-31 23:59",freq="1min",tz="Europe/Berlin")
@@ -215,7 +218,7 @@ class Weather(Component):
                                           'DryBulb',
                                           'Wspd',
                                           'DNIextra'])
-             globals.save_cache("Weather", parameters, database)
+             utils.save_cache("Weather", parameters, database)
 
              if seconds_per_timestep != 60:
                  self.temperature = self.temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()

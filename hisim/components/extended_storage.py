@@ -3,10 +3,10 @@ from math import pi
 import math
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
-from components.configuration import PhysicsConfig
-from components.configuration import WarmWaterStorageConfig
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import loadtypes as lt
+from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import WarmWaterStorageConfig
 #from components.extended_storage import WaterSlice
 
 class WaterSlice:

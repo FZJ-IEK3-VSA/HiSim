@@ -11,7 +11,7 @@ from functools import lru_cache
 # Owned
 import component as cp
 import loadtypes as lt
-import globals
+import utils
 
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -339,7 +339,7 @@ class PVSystem(cp.Component):
             The year. Only data for 2010 and 2030 available
         """
         # get the correct file path
-        filepath = os.path.join(globals.HISIMPATH["weather"][location])
+        filepath = os.path.join(utils.HISIMPATH["weather"][location])
 
         # get the geoposition
         with open(filepath + ".dat", encoding="utf-8") as fp:
@@ -361,7 +361,7 @@ class PVSystem(cp.Component):
     def build(self, time, location, power, load_module_data, module_name, integrateInverter, inverter_name, sim_param):
         parameters = [location]
 
-        cache_filepath = globals.get_cache(classname="PVSystem", parameters=parameters)
+        cache_filepath = utils.get_cache(classname="PVSystem", parameters=parameters)
         if cache_filepath is not None:
             self.output = pd.read_csv(cache_filepath, sep=',', decimal='.')['output'].tolist()
         else:
@@ -374,15 +374,15 @@ class PVSystem(cp.Component):
             else:
                 self.data = [0] * sim_param.timesteps
                 self.data_length = sim_param.timesteps
-            self.database_path = globals.save_cache("PVSystem", parameters)
+            self.database_path = utils.save_cache("PVSystem", parameters)
 
         self.modules = pd.read_csv(
-            os.path.join(globals.HISIMPATH["photovoltaic"]["modules"]),
+            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
             index_col=0,
         )
 
         self.inverters = pd.read_csv(
-            os.path.join(globals.HISIMPATH["photovoltaic"]["inverters"]),
+            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]),
             index_col=0,
         )
 
@@ -562,7 +562,7 @@ def readTRY(location="Aachen", year=2010):
         The year. Only data for 2010 and 2030 available
     """
     # get the correct file path
-    filepath = os.path.join(globals.HISIMPATH["weather"][location])
+    filepath = os.path.join(utils.HISIMPATH["weather"][location])
 
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as fp:

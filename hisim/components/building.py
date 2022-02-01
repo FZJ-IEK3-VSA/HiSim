@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 
 # Owned
-import globals
+import utils
 import component as cp
 import loadtypes as lt
 
@@ -678,7 +678,7 @@ class Building(cp.Component):
         self.get_h_ve_adj()
 
     def get_building(self, buildingcode):
-        df = pd.read_csv(globals.HISIMPATH["housing"],
+        df = pd.read_csv(utils.HISIMPATH["housing"],
                          decimal=",",
                          sep=";",
                          encoding="cp1252",
@@ -733,10 +733,10 @@ class Building(cp.Component):
                 self.windows_area += area
 
 
-        cache_filepath = globals.get_cache(classname=self.ComponentName, parameters=self.parameters)
+        cache_filepath = utils.get_cache(classname=self.ComponentName, parameters=self.parameters)
         if cache_filepath is None:
             self.cache = [0] * self.timesteps
-            self.cache_path = globals.save_cache(self.ComponentName, self.parameters)
+            self.cache_path = utils.save_cache(self.ComponentName, self.parameters)
             self.cache_length = self.timesteps
         else:
             self.solar_gain_through_windows = pd.read_csv(cache_filepath, sep=',', decimal='.')['solar_gain_through_windows'].tolist()

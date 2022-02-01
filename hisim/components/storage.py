@@ -3,7 +3,7 @@ import copy
 import numpy as np
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 import component as cp
 import loadtypes as lt
 

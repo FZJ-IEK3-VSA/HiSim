@@ -1,9 +1,8 @@
-import component as cp
-import components as cps
-from components import heat_pump
-from components import controller
-from components import controllable
-import loadtypes as lt
+from hisim import component as cp
+from hisim.components import heat_pump
+from hisim.components import genericsurpluscontroller
+from hisim.components import controllable
+from hisim import loadtypes as lt
 
 def test_smart_device_library():
     """
@@ -37,7 +36,7 @@ def test_smart_device():
                                                        lt.Units.Watt)
 
     # Create Controller
-    my_flexible_controller = controller.Controller(mode=1)
+    my_flexible_controller = genericsurpluscontroller.GenericSurplusController(mode=1)
     # Create Controllable
     my_controllable = controllable.Controllable("Washing")
 

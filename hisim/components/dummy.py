@@ -5,10 +5,10 @@ import numpy as np
 # Owned
 from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from components.ev_charger import SimpleStorageState
-from globals import HISIMPATH
+from utils import HISIMPATH
 import loadtypes as lt
-from globals import load_smart_appliance
-import globals
+from utils import load_smart_appliance
+import utils
 import pdb
 
 __authors__ = "Vitor Hugo Bellotto Zago"

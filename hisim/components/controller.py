@@ -3,8 +3,8 @@
 # Owned
 import copy
 import numpy as np
-import component as cp
-import loadtypes as lt
+from hisim import component as cp
+from hisim import loadtypes as lt
 
 
 # idead of the class. Save ControlSignal of Componentes in lasttimestep

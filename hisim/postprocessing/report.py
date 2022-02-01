@@ -7,7 +7,7 @@ from reportlab.platypus import Table
 import copy
 import time
 import os
-import globals
+import utils
 
 
 class Report:
@@ -36,12 +36,12 @@ class Report:
         story = []
 
         # Inserts HiSim logo
-        logo = os.path.join(globals.hisim_postprocessing_img, "hisim_logo.png")
+        logo = os.path.join(utils.hisim_postprocessing_img, "hisim_logo.png")
         im1 = Image(logo, 2*inch, inch)
         im1.hAlign = "LEFT"
 
         # Inserts FZJ logo
-        logo = os.path.join(globals.hisim_postprocessing_img, "fzj_logo.jpg")
+        logo = os.path.join(utils.hisim_postprocessing_img, "fzj_logo.jpg")
         im2 = Image(logo, 2*inch, inch)
         im2.hAlign = "RIGHT"
 

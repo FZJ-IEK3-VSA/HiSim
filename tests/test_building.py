@@ -1,8 +1,8 @@
-import component
-from components import occupancy
-from components import weather
-from components import building
-import loadtypes as lt
+from hisim import component
+from hisim.components import occupancy 
+from hisim.components import weather
+from hisim.components import building
+import hisim.loadtypes as lt
 
 def test_building():
     # Sets inputs
@@ -17,8 +17,9 @@ def test_building():
     # Set Occupancy
     my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile)
 
+    my_simulation_parameters = component.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     # Set Weather
-    my_weather = weather.Weather(weather_location)
+    my_weather = weather.Weather(weather_location, my_simulation_parameters)
 
     # Set Residence
     my_residence = building.Building(building_code=building_code, bClass=bClass, seconds_per_timestep=60)
@@ -70,4 +71,4 @@ def test_building():
     print("Residence: {}\n".format(stsv.values[10:]))
     # #assert False
     print(stsv.values[11])
-    assert stsv.values[11] == 22.98246611066824
+    assert (stsv.values[11] - 22.98) <0.01

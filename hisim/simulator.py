@@ -17,10 +17,10 @@ import warnings
 import time
 
 # Owned
-import postprocessing.postprocessing as pp
+from hisim.postprocessing import postprocessing as pp
 import component as cp
 import loadtypes as lt
-import globals
+import utils
 
 class ComponentWrapper:
     def __init__(self, component: cp.Component, is_cachable: bool):

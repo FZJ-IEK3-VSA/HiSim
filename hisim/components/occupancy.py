@@ -4,12 +4,12 @@ import json
 import numpy as np
 
 # Owned
-import component as cp
-import loadtypes as lt
-import globals
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim import utils
 
-from components.configuration import HouseholdWarmWaterDemandConfig
-from components.configuration import PhysicsConfig
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.components.configuration import PhysicsConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -186,7 +186,7 @@ class Occupancy(cp.Component):
         self.profile = profile
         parameters = [profile]
 
-        cache_filepath = globals.get_cache(classname="Occupancy", parameters=parameters)
+        cache_filepath = utils.get_cache(classname="Occupancy", parameters=parameters)
         if cache_filepath is not None:
             self.number_of_residents = pd.read_csv(cache_filepath, sep=',', decimal='.', encoding = "cp1252")[
                 'number_of_residents'].tolist()
@@ -206,7 +206,7 @@ class Occupancy(cp.Component):
 
             #load occupancy profile
             occupancy_profile = []
-            filepaths = globals.HISIMPATH["occupancy"][profile]['number_of_residents']
+            filepaths = utils.HISIMPATH["occupancy"][profile]['number_of_residents']
             for filepath in filepaths:
                 with open(filepath) as json_file:
                     json_filex = json.load(json_file)
@@ -222,9 +222,9 @@ class Occupancy(cp.Component):
             self.number_of_residents = [ 0 ] * steps_desired
             
             #load electricity consumption and water consumption
-            pre_electricity_consumption = pd.read_csv( globals.HISIMPATH["occupancy"][profile]["electricity_consumption"],
+            pre_electricity_consumption = pd.read_csv( utils.HISIMPATH["occupancy"][profile]["electricity_consumption"],
                                                       sep = ";", decimal = ",", encoding = "cp1252")
-            pre_water_consumption = pd.read_csv(globals.HISIMPATH["occupancy"][profile]["water_consumption"],
+            pre_water_consumption = pd.read_csv(utils.HISIMPATH["occupancy"][profile]["water_consumption"],
                                                 sep=";", decimal=",", encoding = "cp1252")
             
             #convert electricity consumption and water consumption to desired format and unit
@@ -265,7 +265,7 @@ class Occupancy(cp.Component):
                                                    'heating_by_residents',
                                                    'electricity_consumption',
                                                    'water_consumption'])
-            globals.save_cache("Occupancy", parameters, database)
+            utils.save_cache("Occupancy", parameters, database)
 
     def write_to_report(self):
         lines = []

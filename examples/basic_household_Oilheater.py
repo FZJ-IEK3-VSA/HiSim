@@ -2,14 +2,14 @@
 import inspect
 import os
 import sys
-import simulator as sim
-import components as cps
-from components import occupancy
-from components import weather
-from components import pvs
-from components import building
-from components import oil_heater
-from components import sumbuilder
+from  hisim import simulator as sim
+from  hisim import components as cps
+from hisim.components import occupancy
+from hisim.components import weather
+from hisim.components import pvs
+from hisim.components import building
+from hisim.components import oil_heater
+from hisim.components import sumbuilder
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

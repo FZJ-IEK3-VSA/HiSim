@@ -6,6 +6,8 @@ import scipy
 from scipy.optimize import curve_fit
 from typing import Any, Tuple
 
+import os
+import inspect
 
 def load_database() -> pd.DataFrame:
     """
@@ -16,7 +18,9 @@ def load_database() -> pd.DataFrame:
     df : pd.DataFrame
         Content of the database
     """
-    df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv')
+    path =  os.path.dirname(__file__)
+    print(path)
+    df = pd.read_csv(path + '/hplib_database.csv', delimiter=',')
     return df
 
 
@@ -44,7 +48,9 @@ def get_parameters(model: str, group_id: int = 0,
     parameters : pd.DataFrame
         Data frame containing the model parameters.
     """
-    df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
+    #print(os.getcwd())
+    #df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
+    df = load_database()
     df = df.loc[df['Model'] == model]
     parameters = pd.DataFrame()
     parameters['Manufacturer']=(df['Manufacturer'].values.tolist())
@@ -117,7 +123,9 @@ def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataF
     parameters : pd.DataFrame
         Data frame containing the model parameters.
     """
-    df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
+    #mypath = os.path.dirname(inspect.getfile(inspect))
+    #df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
+    df = load_database()
     df = df.loc[df['Model'] == model]
     parameters = pd.DataFrame()
 

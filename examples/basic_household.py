@@ -1,7 +1,7 @@
 import inspect
 import os
 import sys
-import simulator as sim
+from hisim.simulator import Simulator as sim
 import components as cps
 from components import occupancy
 from components import weather

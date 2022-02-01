@@ -11,7 +11,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0, parentdir)
 
 # Owned
-import globals
+import utils
 import loadtypes as lt
 import pickle
 #from . import charts
@@ -52,17 +52,17 @@ class PostProcessor:
     def open_latest_pickle(self):
         sim_pickle, dirpath, dirname = self.get_lastest_pickle()
         self.dirname = dirname
-        #globals.del_file_type(dirname, ".png")
+        #utils.del_file_type(dirname, ".png")
         self.get_pickle_attributes(sim_pickle)
 
     def set_dir_results(self, dirname=None):
         if dirname is None:
-            dirname = filedialog.askdirectory(initialdir=globals.HISIMPATH["results"])
+            dirname = filedialog.askdirectory(initialdir=utils.HISIMPATH["results"])
         self.dirname = dirname
 
     def open_pickle(self, dirname):
-        sim_pickle, dirpath = globals.open_pickle(dirname)
-        globals.del_file_type(dirname, ".png")
+        sim_pickle, dirpath = utils.open_pickle(dirname)
+        utils.del_file_type(dirname, ".png")
         self.get_pickle_attributes(sim_pickle)
 
     def get_lastest_pickle(self):

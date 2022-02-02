@@ -41,6 +41,8 @@ class ComponentOutput:
         self.GlobalIndex: int = -1
         self.SankeyFlowDirection: bool = sankey_flow_direction
 
+    def get_pretty_name(self):
+        return self.ObjectName + " - " + self.DisplayName + " [" + self.LoadType + " - " + self.Unit + "]"
 
 class ComponentInput:
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units, mandatory: bool):
@@ -78,6 +80,14 @@ class SingleTimeStepValues:
             if abs(previous_values.values[i] - self.values[i]) > 0.0001:
                 return False
         return True
+
+    def get_differences_for_error_msg(self, previous_values, outputs: List[ComponentOutput]):
+        count = len(self.values)
+        error_msg = ""
+        for i in range(count):
+            if abs(previous_values.values[i] - self.values[i]) > 0.0001:
+                error_msg += outputs[i].get_pretty_name() + " previously: " + str(previous_values.values[i]) + " currently: " + str(self.values[i])
+        return error_msg
 
     def print(self):
         print()

@@ -1,8 +1,8 @@
-from hisim_main import component
-from hisim_main.components import occupancy
-from hisim_main.components import weather
-from hisim_main.components import building
-import hisim_main.loadtypes as lt
+from hisim import component
+from hisim.components import occupancy
+from hisim.components import weather
+from hisim.components import building
+import hisim.loadtypes as lt
 
 def test_building():
     # Sets inputs

@@ -1,5 +1,5 @@
-from hisim_main import component
-from hisim_main.components import occupancy
+from hisim import component
+from hisim.components import occupancy
 #from hisim import cProfile
 
 

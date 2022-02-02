@@ -1,8 +1,8 @@
-from hisim_main import component as cp
+from hisim import component as cp
 #import components as cps
 #import components
-from hisim_main.components import heat_pump
-from hisim_main import loadtypes as lt
+from hisim.components import heat_pump
+from hisim import loadtypes as lt
 
 def test_heat_pump():
 

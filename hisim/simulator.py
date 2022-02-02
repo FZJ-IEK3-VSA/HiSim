@@ -267,15 +267,17 @@ class Simulator:
                 #break
                 # todo: replace with epsilon-based check
                 continue_calculation = False
-	 # Copies actual values to previous variable
-            previous_values.copy_values_from_other(stsv)
+
+
 
             if iterative_tries > 10:
                 force_convergence = True
             if iterative_tries > 100:
                 # return "error"
-                raise Exception("More than 100 tries in time step " + str(timestep))
-
+                list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
+                raise Exception("More than 100 tries in time step " + str(timestep) + "\n" + list_of_changed_values)
+            # Copies actual values to previous variable
+            previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
 
         for wr in self.WrappedComponents:
@@ -351,6 +353,7 @@ class Simulator:
                 simulation_status += "| Total Time: {minutes}:{seconds} min ".format(**e)
                 simulation_status += "| Speed: {:.0f} step/s ".format(steps_per_second)
                 simulation_status += "| Time Left: {minutes}:{seconds} min".format(**d)
+                simulation_status += "| Avg. iterations {:.1f}".format(average_iteration_tries)
                 print(simulation_status)
 
         if len(all_result_lines) != self.SimulationParameters.timesteps:
@@ -360,7 +363,7 @@ class Simulator:
         entry: cp.ComponentOutput
         np_results = np.array(all_result_lines)
         for index, entry in enumerate(self.all_outputs):
-            column_name = entry.ObjectName + " - " + entry.DisplayName + " [" + entry.LoadType + " - " + entry.Unit + "]"
+            column_name = entry.get_pretty_name()
             columNames.append(column_name)
             logging.debug("Output column: " + column_name)
             self.all_outputs[index].Results = np_results[:, index]

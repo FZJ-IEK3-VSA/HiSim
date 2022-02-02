@@ -3,6 +3,7 @@ import math
 import pvlib
 import pandas as pd
 import numpy as np
+import os
 
 # Owned
 import utils
@@ -734,7 +735,7 @@ class Building(cp.Component):
 
 
         cache_filepath = utils.get_cache(classname=self.ComponentName, parameters=self.parameters)
-        if cache_filepath is None:
+        if cache_filepath is None or  (not os.path.isfile(cache_filepath)):
             self.cache = [0] * self.timesteps
             self.cache_path = utils.save_cache(self.ComponentName, self.parameters)
             self.cache_length = self.timesteps

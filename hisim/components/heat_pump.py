@@ -31,6 +31,8 @@ __status__ = "development"
 
 class HeatPumpState:
 
+    def clone(self):
+        return HeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
     def __init__(self,
                  start_timestep=None,
                  thermal_energy_delivered = 0.0,
@@ -246,11 +248,11 @@ class HeatPump(cp.Component):
         return self.cop_coef[0] * t_out + self.cop_coef[1]
 
     def i_save_state(self):
-        self.previous_state = copy.deepcopy(self.state)
+        self.previous_state = self.state.clone()
         self.number_of_cycles_previous = self.number_of_cycles
 
     def i_restore_state(self):
-        self.state = copy.deepcopy(self.previous_state)
+        self.state = self.previous_state.clone() # copy.deepcopy(self.previous_state)
         self.number_of_cycles = self.number_of_cycles_previous
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):

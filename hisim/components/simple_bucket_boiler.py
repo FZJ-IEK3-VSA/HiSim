@@ -6,8 +6,8 @@ import seaborn
 from math import pi
 
 # Owned
-import component as cp
-import loadtypes as lt
+import hisim.component as cp
+import hisim.loadtypes as lt
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -28,29 +28,33 @@ class BoilerState:
     """
     This data class saves the state of the simulation results.
     """
-    energy :        float = 0 #kJ
-    temperature :   float = 273 + 50 #K
-    
-    def __init__( self, volume ):
+
+    def __init__( self, volume_in_l:float, temperature_in_K:float ):
         """
         Parameters
         ----------
         volume : float
             Volume of boiler in liters.
         """
-        self.energy_from_temperature( volume )
-    
-    def energy_from_temperature( self, volume ):
+        self.temperature_in_K: float = temperature_in_K
+        self.volume_in_l = volume_in_l
+
+    def clone(self):
+        return BoilerState(self.volume_in_l, self.temperature_in_K)
+
+
+    def energy_from_temperature( self ) -> float:
         "converts temperature of storage (K) into energy contained in storage (kJ)"
         #0.977 is the density of water in kg/l
         #4.182 is the specific heat of water in kJ / ( K * kg )
-        self.energy = self.temperature * volume * 0.977 * 4.182 #energy given in kJ
-        
-    def temperature_from_energy( self, volume ):
-        "converts energy contained in storage (kJ) into temperature (K)"
+        return self.temperature_in_K * self.volume_in_l * 0.977 * 4.182 #energy given in kJ
+
+
+    def set_temperature_from_energy( self, energy_in_kJ):
+     #   "converts energy contained in storage (kJ) into temperature (K)"
         #0.977 is the density of water in kg/l
         #4.182 is the specific heat of water in kJ / ( K * kg )
-        self.temperature = self.energy / ( volume * 0.977 * 4.182 ) #temperature given in K
+        self.temperature_in_K = energy_in_kJ / ( self.volume_in_l * 0.977 * 4.182 ) #temperature given in K
         
     
 class Boiler( cp.Component ):
@@ -79,7 +83,7 @@ class Boiler( cp.Component ):
 
     # obligatory Outputs
     StorageTemperature = "StorageTemperature"
-    
+
     #availble Outputs
     ElectricityOutput = "ElectricityOutput"
     HydrogenOutput = "HydrogenOutput"
@@ -91,8 +95,8 @@ class Boiler( cp.Component ):
         self.build( definition, fuel )
         
         #initialize Boiler State
-        self.state = BoilerState( volume = self.volume )
-        self.previous_state = BoilerState( volume = self.volume )
+        self.state = BoilerState( volume_in_l = self.volume, temperature_in_K=273+50 )
+        self.previous_state = self.state.clone()
         
         #inputs
         self.use_WW : cp.ComponentOutput = self.add_input( self.ComponentName,
@@ -160,10 +164,10 @@ class Boiler( cp.Component ):
         return lines
 
     def i_save_state( self ):
-        self.previous_state = copy.deepcopy( self.state )
+        self.previous_state = self.state.clone()
 
     def i_restore_state( self ):
-        self.state = copy.deepcopy( self.previous_state )
+        self.state = self.previous_state.clone()
 
     def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
@@ -180,15 +184,16 @@ class Boiler( cp.Component ):
         #0.977 density of water in kg/l
         #4.182 specific heat of water in kJ K^(-1) kg^(-1)
         #1e-3 conversion J to kJ
-        self.state.energy = self.state.energy - ( self.state.temperature - 293 ) * self.surface * self.u * seconds_per_timestep * 1e-3 \
+        energy = self.state.energy_from_temperature()
+        new_energy = energy - ( self.state.temperature_in_K - 293 ) * self.surface * self.u * seconds_per_timestep * 1e-3 \
                                               - WW_consumption * ( self.T_warmwater - self.T_drainwater ) * 0.977 * 4.182 \
                                               + signal * self.P_on * self.efficiency * seconds_per_timestep * 1e-3
                                               
         #convert new energy to new temperature
-        self.state.temperature_from_energy( volume = self.volume )
+        self.state.set_temperature_from_energy( new_energy)
         
         #save outputs
-        stsv.set_output_value( self.storageT, self.state.temperature )
+        stsv.set_output_value( self.storageT, self.state.temperature_in_K )
         
         if self.fuel == 'electricity':
              stsv.set_output_value( self.electricity_output_c, self.P_on * signal )
@@ -278,6 +283,10 @@ class BoilerController(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+
+        if force_convergence: # please stop oscillating!
+            return
+
 
         # Retrieves inputs
         T_control = stsv.get_input_value( self.T_water )

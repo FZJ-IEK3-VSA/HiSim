@@ -263,9 +263,9 @@ class AdvancedBatteryController(Component):
         load = stsv.get_input_value(self.inputC)
 
         if load < 0.0:
-            state = 1
+            state = 1.0
         elif load > 0.0:
-            state = - 1
+            state = - 1.0
         else:
             state = 0.0
 

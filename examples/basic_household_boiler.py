@@ -95,7 +95,7 @@ def basic_household_boiler_explicit( my_sim ):
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather = weather.Weather(location=location)
+    my_weather = weather.Weather(location=location, my_simulation_parameters=my_sim_params)
     my_sim.add_component(my_weather)
 
     my_photovoltaic_system = pvs.PVSystem(time=time,

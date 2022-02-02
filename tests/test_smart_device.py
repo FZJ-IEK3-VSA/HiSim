@@ -1,8 +1,8 @@
-from hisim import component as cp
-from hisim.components import heat_pump
-from hisim.components import genericsurpluscontroller
-from hisim.components import controllable
-from hisim import loadtypes as lt
+from hisim_main import component as cp
+from hisim_main.components import heat_pump
+from hisim_main.components import genericsurpluscontroller
+from hisim_main.components import controllable
+from hisim_main import loadtypes as lt
 
 def test_smart_device_library():
     """

@@ -20,7 +20,15 @@ def main(path_to_module: str, function_in_module: str):
             #    sys.path.append(dirs)
         else:
             raise ValueError("Directory location of module location is nonexistent!\nDirectory entered: {}".format(path_to_be_added))
-    filepath = os.path.join(path_to_be_added, "{}.py".format(module_filename))
+    suffix =module_filename[-3:]
+    if suffix != ".py":
+        module_fullfilename = "{}.py".format(module_filename)
+    else:
+        module_fullfilename = module_filename
+        module_filename = module_filename[:-3]
+    print(module_fullfilename)
+    print(module_filename)
+    filepath = os.path.join(path_to_be_added, module_fullfilename)
     if os.path.isfile(filepath):
         # Get setup function to executable
         targetmodule = importlib.import_module(module_filename)

@@ -205,11 +205,11 @@ class BatteryController(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
         load = stsv.get_input_value(self.inputC)
-
+        state:float = 0
         if load < 0.0:
             state = 1
         elif load > 0.0:
-            state = - 1
+            state = -1
         else:
             state = 0.0
 

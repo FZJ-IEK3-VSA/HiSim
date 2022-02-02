@@ -7,7 +7,7 @@ from typing import List
 
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim. utils import HISIMPATH
+from hisim.utils import HISIMPATH
 from hisim import loadtypes as lt
 
 

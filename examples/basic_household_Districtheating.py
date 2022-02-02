@@ -80,7 +80,7 @@ def basic_household_Districtheating_explicit( my_sim ):
     my_sim.add_component( my_occupancy )
 
     # Build Weather
-    my_weather = weather.Weather( location=location, year = year, seconds_per_timestep = seconds_per_timestep )
+    my_weather = weather.Weather( location=location, my_simulation_parameters=my_sim_params )
     my_sim.add_component( my_weather )
 
     my_photovoltaic_system = pvs.PVSystem( time=time,

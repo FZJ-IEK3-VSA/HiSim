@@ -199,7 +199,7 @@ class WarmWaterStorage:
         if ws.height == 0:
             pass
         else:
-            collected_height_so_far = 0
+            collected_height_so_far:float = 0
             pushed_out_slice = WaterSlice(self.diameter, 0, 0)
             while collected_height_so_far < ws.height:              # ws.height bezieht sich auf das neu eingebrachte slice
                 height_still_needed = ws.height - collected_height_so_far
@@ -303,7 +303,7 @@ class WaterSlice:
 
     def __init__(self, tank_diameter: float, height: float, temperature: float):
         self.diameter = tank_diameter
-        self.height = height
+        self.height:float = height
         self.temperature = temperature
         self.density = 1000     # kg/(m^3)
         self.specific_heat_capacity = 4180  # J/kg*K

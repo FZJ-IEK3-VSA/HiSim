@@ -1,14 +1,10 @@
-import inspect
-import os
-import sys
-from hisim.simulator import Simulator as sim
-import components as cps
-from components import occupancy
-from components import weather
-from components import pvs
-from components import building
-from components import heat_pump
-from components import sumbuilder
+from hisim.simulator import SimulationParameters
+from hisim.components import occupancy
+from hisim.components import weather
+from hisim.components import pvs
+from hisim.components import building
+from hisim.components import heat_pump
+from hisim.components import sumbuilder
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -75,7 +71,7 @@ def basic_household_explicit(my_sim):
     ##### Build Components #####
 
     # Build system parameters
-    my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+    my_sim_params: SimulationParameters = SimulationParameters.full_year(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_parameters(my_sim_params)
 
@@ -84,7 +80,7 @@ def basic_household_explicit(my_sim):
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather = weather.Weather(location=location)
+    my_weather = weather.Weather(location=location, my_simulation_parameters= my_sim_params)
     my_sim.add_component(my_weather)
 
     my_photovoltaic_system = pvs.PVSystem(time=time,

@@ -2,14 +2,14 @@
 import numpy as np
 
 # Owned
-from hisim.simulator import Simulator
-from hisim.component import SimulationParameters
-from hisim.components.random_numbers import RandomNumbers
-from hisim.components.transformer import Transformer
-from hisim.components.sumbuilder import SumBuilderForTwoInputs
-from hisim.components.advanced_battery import AdvancedBattery
-from hisim import loadtypes
-from hisim import utils
+from hisim_main.simulator import Simulator
+from hisim_main.component import SimulationParameters
+from hisim_main.components.random_numbers import RandomNumbers
+from hisim_main.components.transformer import Transformer
+from hisim_main.components.sumbuilder import SumBuilderForTwoInputs
+from hisim_main.components.advanced_battery import AdvancedBattery
+from hisim_main import loadtypes
+from hisim_main import utils
 
 def first_example(my_sim: Simulator):
     """

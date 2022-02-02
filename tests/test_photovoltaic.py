@@ -1,7 +1,7 @@
-from hisim import component
-from hisim.components import weather
-from hisim.components import pvs
-from hisim import simulator as sim
+from hisim_main import component
+from hisim_main.components import weather
+from hisim_main.components import pvs
+from hisim_main import simulator as sim
 
 def test_photovoltaic():
     # Sets inputs

@@ -3,7 +3,7 @@ from components import occupancy
 from components import weather
 from components import building
 import loadtypes as lt
-
+import simulator as sim
 def test_building():
     # Sets inputs
     weather_location = "Aachen"
@@ -11,14 +11,19 @@ def test_building():
     building_code="DE.N.SFH.05.Gen.ReEx.001.001"
     bClass="medium"
     seconds_per_timestep = 60
-
+    year=2019
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(13)
 
+
+    my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+                                                                                 seconds_per_timestep=seconds_per_timestep)
+
+    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=my_sim_params)
     # Set Occupancy
     my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile)
 
     # Set Weather
-    my_weather = weather.Weather(weather_location)
+
 
     # Set Residence
     my_residence = building.Building(building_code=building_code, bClass=bClass, seconds_per_timestep=60)
@@ -70,4 +75,4 @@ def test_building():
     print("Residence: {}\n".format(stsv.values[10:]))
     # #assert False
     print(stsv.values[11])
-    assert stsv.values[11] == 22.98246611066824
+    assert stsv.values[11] == 22.981377611647737

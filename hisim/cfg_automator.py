@@ -276,12 +276,12 @@ class ConfigurationGenerator:
     def print_component(self, name):
         print(json.dumps(self._components[name], sort_keys=True, indent=4))
 
-    def dump(self,number_of_simulation):
+    def dump(self):
         self.data = {"SimulationParameters": self._simulation_parameters,
                      "Components": self._components,
                      "Groupings": self._groupings,
                      "Connections": self._connections}
-        with open(""+HISIMPATH["cfg"]+"/cfg"+str(number_of_simulation)+".json", "w") as f:
+        with open(""+HISIMPATH["cfg"], "w") as f:
             json.dump(self.data, f, indent=4)
 
     def run(self):
@@ -305,11 +305,11 @@ class ConfigurationGenerator:
 
 class SetupFunction:
 
-    def __init__(self,number_of_simulation):
-        if os.path.isfile(""+HISIMPATH["cfg"]+"/cfg"+str(number_of_simulation)+".json"):
-            with open(os.path.join(""+HISIMPATH["cfg"]+"/cfg"+str(number_of_simulation)+".json")) as file:
+    def __init__(self):
+        if os.path.isfile(""+HISIMPATH["cfg"]):
+            with open(os.path.join(""+HISIMPATH["cfg"])) as file:
                 self.cfg = json.load(file)
-            os.remove(""+HISIMPATH["cfg"]+"/cfg"+str(number_of_simulation)+".json")
+            os.remove(""+HISIMPATH["cfg"])
         self.cfg_raw = copy.deepcopy(self.cfg)
         self._components = []
         self._connections = []

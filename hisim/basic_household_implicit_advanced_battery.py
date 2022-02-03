@@ -52,10 +52,10 @@ if __name__ == '__main__':
                                                  "unit": loadtypes.Units.Watt,
                                                  "column_name": "power_demand",
                                                  "multiplier": 3}}
-
+            my_cfg.add_component("Weather")
             my_cfg.add_component(my_csv_loader)
             # Weather
-            my_cfg.add_component("Weather")
+
             # PVS
             my_pvs = {"PVSystem": {"power": pvs_power}}
             my_cfg.add_component(my_pvs)

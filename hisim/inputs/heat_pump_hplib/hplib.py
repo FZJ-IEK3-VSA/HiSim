@@ -105,7 +105,7 @@ def get_parameters(model: str, group_id: int = 0,
     return parameters
 
 
-def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataFrame:
+def get_parameters_fit(model: str, group_id: int = 0, p_th: float = 0) -> pd.DataFrame:
     """
     Helper function for leastsquare fit of thermal output power at reference set point.
 
@@ -170,7 +170,7 @@ def get_parameters_fit(model: str, group_id: int = 0, p_th: int = 0) -> pd.DataF
     return parameters
 
 
-def fit_p_th_ref(t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> Any:
+def fit_p_th_ref(t_in: float, t_out: float, group_id: float, p_th_set_point: float) -> Any:
     """
     Determine the thermal output power in [W] at reference conditions (T_in = [-7, 0, 10] , 
     T_out=52, T_amb=-7) for a given set point for a generic heat pump, using a least-square method.

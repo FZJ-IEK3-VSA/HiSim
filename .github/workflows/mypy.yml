@@ -17,6 +17,6 @@ jobs:
         pip install mypy
     - name: mypy
       run: |
-        mypy hisim/
+        mypy -p hisim
         mypy examples/
         mypy tests/

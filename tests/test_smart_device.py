@@ -62,4 +62,3 @@ def test_smart_device():
     assert 1.0 == stsv.values[1]
     # Electricity Load for flexibility
     assert 0.20805582786885163 == stsv.values[2]
-

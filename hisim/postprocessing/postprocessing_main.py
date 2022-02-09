@@ -13,6 +13,7 @@ from enum import Enum
 
 # Owned
 from hisim import utils
+from hisim.utils import PostProcessingOptions
 from hisim import loadtypes as lt
 import pickle
 #from . import charts

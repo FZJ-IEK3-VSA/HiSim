@@ -36,7 +36,7 @@ class ComponentName(Component):
     component_name : str
         Passed to initialize :py:class:`~hisim.component.Component`.
 
-    loadtype : LoadTypes
+    loadtype : LoadType
         A :py:class:`~hisim.loadtypes.LoadTypes` object that represents
         the type of the loaded data.
 

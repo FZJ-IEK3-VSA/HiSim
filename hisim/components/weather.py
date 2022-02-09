@@ -336,7 +336,7 @@ def readTRY(location="Aachen", year=2015):
 
     Parameters
     -------
-    try_num: int (default: 4)
+    location: str
         The region number of the test reference year.
     year: int (default: 2010)
         The year. Only data for 2010 and 2030 available

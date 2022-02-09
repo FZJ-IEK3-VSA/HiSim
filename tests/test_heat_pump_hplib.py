@@ -39,7 +39,7 @@ def test_heat_pump_hplib():
                               lt.Units.Any)
 
     # Initialize component
-    heatpump = HeatPumpHplib(model=model, group_id=group_id, t_in=t_in, t_out=t_out, p_th_set=p_th_set)
+    heatpump = HeatPumpHplib(model=model, group_id=group_id, t_in=t_in, t_out_val=t_out, p_th_set=p_th_set)
 
     heatpump.on_off_switch.SourceOutput = IO_1
     heatpump.t_in_primary.SourceOutput = IO_2

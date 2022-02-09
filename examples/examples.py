@@ -11,7 +11,7 @@ from hisim.components.advanced_battery import AdvancedBattery
 from hisim import loadtypes
 from hisim import utils
 
-def first_example(my_sim: Simulator):
+def first_example(my_sim: Simulator, my_simulation_parameters):
     """
     In this first example, a series (my_rn1) of random numbers in a range between 100 and 200 is
     summed up with a series (my_rn2) of random numbers in a range between 10 and 20. The result is
@@ -20,8 +20,11 @@ def first_example(my_sim: Simulator):
     print("Starting first example: ")
 
     # Set the simulation parameters for the simulation
-    my_sim_param: SimulationParameters = SimulationParameters.full_year(year=2021,
-                                                                        seconds_per_timestep=60)     # Use a full year as timeline
+    if my_simulation_parameters is None:
+        my_sim_param: SimulationParameters = SimulationParameters.full_year(year=2021,
+                                                                                     seconds_per_timestep=60)
+    else:
+        my_sim_param = my_simulation_parameters
     my_sim.set_parameters(my_sim_param)                                                              # Set timeline to simulator
 
     # Create first RandomNumbers object and adds to simulator
@@ -51,7 +54,7 @@ def first_example(my_sim: Simulator):
                          src_field_name=my_rn2.RandomOutput)
     my_sim.add_component(my_sum)
 
-def second_example(my_sim: Simulator):
+def second_example(my_sim: Simulator,my_simulation_parameters):
     """
     In this second example, two series (my_rn1 and my_transformer) are summed up.
 
@@ -65,8 +68,11 @@ def second_example(my_sim: Simulator):
     print("Starting second example")
 
     # Set the simulation parameters for the simulation
-    my_sim_param: SimulationParameters = SimulationParameters.full_year(year=2021,
-                                                                        seconds_per_timestep=60)     # Use a full year as timeline
+    if my_simulation_parameters is None:
+        my_sim_param: SimulationParameters = SimulationParameters.full_year(year=2021,
+                                                                            seconds_per_timestep=60) # use a full year for testing
+    else:
+        my_sim_param = my_simulation_parameters
     my_sim.set_parameters(my_sim_param)                                                              # Set timeline to simulator
 
     # Create first RandomNumbers object and adds to simulator

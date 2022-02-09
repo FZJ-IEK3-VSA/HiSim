@@ -4,6 +4,7 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+
 def test_building():
     # Sets inputs
     weather_location = "Aachen"

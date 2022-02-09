@@ -6,7 +6,7 @@ import hisim.simulator as sim
 import os
 #from hisim.postprocessing import postprocessing_main as pp
 
-def main(path_to_module: str, function_in_module: str):
+def main(path_to_module: str, function_in_module: str, my_simulation_parameters = None):
 
     normalized_path = os.path.normpath(path_to_module)
     path_in_list = normalized_path.split(os.sep)
@@ -41,7 +41,7 @@ def main(path_to_module: str, function_in_module: str):
     model_init_method = getattr(targetmodule, function_in_module)
 
     # Pass setup function to simulator
-    model_init_method(my_sim)
+    model_init_method(my_sim, my_simulation_parameters)
 
     # Perform simulation throughout the defined timeline
     my_sim.run_all_timesteps()

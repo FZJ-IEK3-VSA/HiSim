@@ -25,7 +25,7 @@ def load_database() -> pd.DataFrame:
 
 
 def get_parameters(model: str, group_id: int = 0,
-                   t_in: int = 0, t_out: int = 0, p_th: int = 0) -> pd.DataFrame:
+                   t_in: float = 0, t_out: float = 0, p_th: float = 0) -> pd.DataFrame:
     """
     Loads the content of the database for a specific heat pump model
     and returns a pandas ``DataFrame`` containing the heat pump parameters.
@@ -197,7 +197,7 @@ def fit_p_th_ref(t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> A
     return p_th
 
 
-def fit_func_p_th_ref(p_th:  int, t_in: int, t_out: int, group_id: int, p_th_set_point: int) -> int:
+def fit_func_p_th_ref(p_th:  float, t_in: float, t_out: float, group_id: int, p_th_set_point: float) -> float:
     """
     Helper function to determine difference between given and calculated 
     thermal output power in [W].
@@ -227,7 +227,7 @@ def fit_func_p_th_ref(p_th:  int, t_in: int, t_out: int, group_id: int, p_th_set
     parameters = get_parameters_fit(model='Generic', group_id=group_id, p_th=p_th)
     df = simulate(t_in, t_out - 5, parameters, t_amb)
     p_th_calc=df.P_th.values[0]
-    p_th_diff = p_th_calc - p_th_set_point
+    p_th_diff:float = p_th_calc - p_th_set_point
     return p_th_diff
 
 

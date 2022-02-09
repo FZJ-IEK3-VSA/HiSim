@@ -139,7 +139,7 @@ class ElectricityGrid(Component):
 
         for index, element in enumerate(list_of_operations):
             if index % 2 == 0:
-                self.connect_input(element)
+                self.connect_electricity_input(element)
             else:
                 self.add_operation(element)
 

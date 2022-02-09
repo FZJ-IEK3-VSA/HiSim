@@ -20,7 +20,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def basic_household_boiler_explicit( my_sim ):
+def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
@@ -86,8 +86,13 @@ def basic_household_boiler_explicit( my_sim ):
     ##### Build Components #####
 
     # Build system parameters
-    my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year( year = year,
-                                                                                 seconds_per_timestep = seconds_per_timestep )
+    if my_simulation_parameters is None:
+        my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+                                                                                     seconds_per_timestep=seconds_per_timestep)
+    else:
+        my_sim_params = my_simulation_parameters
+
+
     my_sim.set_parameters(my_sim_params)
 
     # Build occupancy

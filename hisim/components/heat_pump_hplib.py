@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.loadtypes import LoadTypes, Units
 from hisim.inputs.heat_pump_hplib import hplib as hpl
-
+from typing import Optional
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = "..."
@@ -40,8 +40,8 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"                                           # s
     TimeOff = "TimeOff"                                         # s
 
-    def __init__(self, model: str, group_id: int = None, t_in: float = None, t_out: float = None,
-                 p_th_set: float = None):
+    def __init__(self, model: str, group_id: int = -1, t_in: int = -300, t_out_val: int = -300,
+                 p_th_set: int = -300):
         """
         Loads the parameters of the specified heat pump.
 
@@ -71,7 +71,7 @@ class HeatPumpHplib(Component):
 
         self.t_in = t_in
 
-        self.t_out = t_out
+        self.t_out_val = t_out_val
 
         self.p_th_set = p_th_set
 
@@ -81,7 +81,7 @@ class HeatPumpHplib(Component):
 
         # Load parameters from heat pump database
         self.parameters = hpl.get_parameters(self.model, self.group_id,
-                                             self.t_in, self.t_out, self.p_th_set)
+                                             self.t_in, self.t_out_val, self.p_th_set)
 
         # Define component inputs
         self.on_off_switch: ComponentInput = self.add_input(object_name=self.ComponentName,

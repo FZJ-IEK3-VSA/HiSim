@@ -3,7 +3,7 @@ import numpy as np
 
 # Owned
 from hisim.simulator import Simulator
-from hisim.component import SimulationParameters
+from hisim.simulationparameters import SimulationParameters
 from hisim.components.random_numbers import RandomNumbers
 from hisim.components.transformer import Transformer
 from hisim.components.sumbuilder import SumBuilderForTwoInputs

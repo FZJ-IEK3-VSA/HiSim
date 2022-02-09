@@ -1,11 +1,11 @@
 # Owned
-from component import Component, ComponentOutput, ComponentInput, SingleTimeStepValues
-import loadtypes as lt
+from hisim.component import Component, ComponentOutput, ComponentInput, SingleTimeStepValues
+from hisim import loadtypes as lt
 
-from components.configuration import LoadConfig
-from components.configuration import ElectrolyzerConfig
-from components.configuration import HouseholdWarmWaterDemandConfig
-from components.configuration import PhysicsConfig
+from hisim.components.configuration import LoadConfig
+from hisim.components.configuration import ElectrolyzerConfig
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.components.configuration import PhysicsConfig
 
 
 class HouseholdHeatDemand(Component):

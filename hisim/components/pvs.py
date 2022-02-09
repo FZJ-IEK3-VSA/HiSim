@@ -9,9 +9,9 @@ import pvlib
 from functools import lru_cache
 
 # Owned
-import component as cp
-import loadtypes as lt
-import utils
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim import utils
 
 
 __authors__ = "Vitor Hugo Bellotto Zago"

@@ -2,10 +2,10 @@
 import copy
 
 # Owned
-import component as cp
-import loadtypes as lt
-import utils
-from components.ev_charger import SimpleStorageState
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim import utils
+from hisim.components.ev_charger import SimpleStorageState
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

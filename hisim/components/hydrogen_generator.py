@@ -1,14 +1,14 @@
 # Owned
 
-from components.configuration import HydrogenStorageConfig, ElectrolyzerConfig
-from components.configuration import PhysicsConfig
-import components.chp_system as chp
+from hisim.components.configuration import HydrogenStorageConfig, ElectrolyzerConfig
+from hisim.components.configuration import PhysicsConfig
+from hisim.components import chp_system as chp
 
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from components.configuration import ElectrolyzerConfig
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.components.configuration import ElectrolyzerConfig
+from hisim import loadtypes as lt
 
-from components.configuration import PhysicsConfig
+from hisim.components.configuration import PhysicsConfig
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -17,48 +17,49 @@ __version__ = ""
 __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
-class HydrogenStorageConfig:
-    # combination of
-    min_capacity = 0                    # [kg_H2]
-    max_capacity = 500                  # [kg_H2]
+#
+# class HydrogenStorageConfig:
+#     # combination of
+#     min_capacity = 0                    # [kg_H2]
+#     max_capacity = 500                  # [kg_H2]
+#
+#     starting_fill = 0              # [kg_H2]
+#
+#     max_charging_rate_hour = 2          # [kg/h]
+#     max_discharging_rate_hour = 2       # [kg/h]
+#     max_charging_rate = max_charging_rate_hour / 3600
+#     max_discharging_rate = max_discharging_rate_hour / 3600
+#
+#     # ToDo: How does the necessary Heat/Energy come to the Storage?
+#     energy_for_charge = 0               # [kWh/kg]
+#     energy_for_discharge = 0            # [kWh/kg]
+#
+#     loss_factor_per_day = 0             # [lost_%/day]
 
-    starting_fill = 0              # [kg_H2]
-
-    max_charging_rate_hour = 2          # [kg/h]
-    max_discharging_rate_hour = 2       # [kg/h]
-    max_charging_rate = max_charging_rate_hour / 3600
-    max_discharging_rate = max_discharging_rate_hour / 3600
-
-    # ToDo: How does the necessary Heat/Energy come to the Storage?
-    energy_for_charge = 0               # [kWh/kg]
-    energy_for_discharge = 0            # [kWh/kg]
-
-    loss_factor_per_day = 0             # [lost_%/day]
-
-class ElectrolyzerConfig:
-    waste_energy = 400                    # [W]   # 400
-    min_power = 1_200                     # [W]   # 1400
-    max_power = 2_400                  # [W]   # 2400
-    min_power_percent = 60            # [%]
-    max_power_percent = 100             # [%]
-    min_hydrogen_production_rate_hour = 300  # [Nl/h]
-    max_hydrogen_production_rate_hour = 5000   # [Nl/h]   #500
-    min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    pressure_hydrogen_output = 30       # [bar]     --> max pressure mode at 35 bar
+# class ElectrolyzerConfig:
+#     waste_energy = 400                    # [W]   # 400
+#     min_power = 1_200                     # [W]   # 1400
+#     max_power = 2_400                  # [W]   # 2400
+#     min_power_percent = 60            # [%]
+#     max_power_percent = 100             # [%]
+#     min_hydrogen_production_rate_hour = 300  # [Nl/h]
+#     max_hydrogen_production_rate_hour = 5000   # [Nl/h]   #500
+#     min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
+#     max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
+#     pressure_hydrogen_output = 30       # [bar]     --> max pressure mode at 35 bar
 
 class ElectrolyzerSimulation:
     def __init__(self,
-                 waste_energy : int,
-                 min_power: int,
-                 max_power: int,
-                 min_power_percent: int,
-                 max_power_percent: int,
-                 min_hydrogen_production_rate_hour: int,
-                 max_hydrogen_production_rate_hour: int,
-                 min_hydrogen_production_rate: int,
-                 max_hydrogen_production_rate: int,
-                 pressure_hydrogen_output: int):
+                 waste_energy : float,
+                 min_power: float,
+                 max_power: float,
+                 min_power_percent: float,
+                 max_power_percent: float,
+                 min_hydrogen_production_rate_hour: float,
+                 max_hydrogen_production_rate_hour: float,
+                 min_hydrogen_production_rate: float,
+                 max_hydrogen_production_rate: float,
+                 pressure_hydrogen_output: float):
         """
         The electrolyzer converts electrical energy [kWh] into hydrogen [kg]
         It can work in a certain range from x to 100% or be switched off = 0%
@@ -213,7 +214,7 @@ class Electrolyzer(Component):
         self.max_power_percent = 100  # [%]
         self.min_hydrogen_production_rate_hour = 300  # [Nl/h]
         self.max_hydrogen_production_rate_hour = 5000  # [Nl/h]   #500
-        self.min_hydrogen_production_rate = (self.min_hydrogen_production_rate_hour * (self.max_power/max_power_usally) / 3600)  # [Nl/s]
+        self.min_hydrogen_production_rate:float = (self.min_hydrogen_production_rate_hour * (self.max_power/max_power_usally) / 3600)  # [Nl/s]
         self.max_hydrogen_production_rate = (self.max_hydrogen_production_rate_hour * (self.max_power/max_power_usally) / 3600 ) # [Nl/s]
         if self.min_hydrogen_production_rate > self.max_hydrogen_production_rate:
             self.max_hydrogen_production_rate= self.min_hydrogen_production_rate +100
@@ -249,7 +250,7 @@ class Electrolyzer(Component):
         # maybe advance this to electricity_input >= ElectrolyzerConfig.min_power
         hydrogen_output = 0
         oxygen_output = 0
-        losses_this_timestep = 0
+        losses_this_timestep:float = 0
         unused_power = 0
         power_level = 0
         # the following is already regulated in the electricity distributor
@@ -306,14 +307,14 @@ class HydrogenStorageSimulation:
     Losses are related to the fill level and are given in lost%/24h.
     """
     def __init__(self,
-                 fill:int,
-                 max_capacity: int,
-                 min_capacity: int,
-                 max_charging_rate: int,
-                 max_discharging_rate: int,
-                 energy_to_charge: int,
-                 energy_to_discharge: int,
-                 loss_factor: int
+                 fill:float,
+                 max_capacity: float,
+                 min_capacity: float,
+                 max_charging_rate: float,
+                 max_discharging_rate: float,
+                 energy_to_charge: float,
+                 energy_to_discharge: float,
+                 loss_factor: float
                  ):
         """
         The storage has a minimum and maximum storage level and a current fill status
@@ -353,7 +354,7 @@ class HydrogenStorageSimulation:
         """
         max_charging = self.max_charging_rate * seconds_per_timestep
 
-        delta_not_stored = 0
+        delta_not_stored:float = 0
         if hydrogen_input > max_charging:
             delta_not_stored = hydrogen_input - max_charging
             hydrogen_input = max_charging
@@ -391,7 +392,7 @@ class HydrogenStorageSimulation:
                     delta_not_released [kg] Amount of hydrogen which couldn't be released in this timestep
         """
         max_discharging = self.max_discharging_rate * seconds_per_timestep
-        delta_not_released = 0
+        delta_not_released:float = 0
         if hydrogen_output > max_discharging:
             delta_not_released = hydrogen_output - max_discharging
             hydrogen_output = max_discharging

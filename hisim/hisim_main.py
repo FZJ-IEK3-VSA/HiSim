@@ -2,9 +2,9 @@ import logging
 import importlib
 import sys
 
-import simulator as sim
+import hisim.simulator as sim
 import os
-import postprocessing.postprocessing as pp
+#from hisim.postprocessing import postprocessing_main as pp
 
 def main(path_to_module: str, function_in_module: str):
 
@@ -46,10 +46,7 @@ def main(path_to_module: str, function_in_module: str):
     # Perform simulation throughout the defined timeline
     my_sim.run_all_timesteps()
 
-    # Perform postprocessing
-    my_post_processor = pp.PostProcessor(resultsdir=my_sim.resultsdir)
-    my_post_processor.run()
-    my_post_processor.export_results_to_csv( )
+
 
 if __name__ == "__main__":
     #logging.basicConfig(level=logging.DEBUG)

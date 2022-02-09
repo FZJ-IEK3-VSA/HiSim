@@ -7,7 +7,7 @@ from reportlab.platypus import Table
 import copy
 import time
 import os
-import utils
+from hisim import utils
 
 
 class Report:

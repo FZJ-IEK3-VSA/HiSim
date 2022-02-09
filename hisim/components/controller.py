@@ -188,9 +188,9 @@ class Controller(cp.Component):
 
     def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
 
-        electricity_to_or_from_battery_target = 0
-        electricity_from_chp_target = 0
-        electricity_to_or_from_grid = 0
+        electricity_to_or_from_battery_target:float = 0
+        electricity_from_chp_target:float = 0
+        electricity_to_or_from_grid:float = 0
 
         # Check if Battery is Component of Simulation
         if self.electricity_to_or_from_battery_real.SourceOutput is not None:
@@ -223,10 +223,10 @@ class Controller(cp.Component):
     #follows strategy to first charge battery than produce H2
     def seasonal_storage(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
 
-        electricity_to_or_from_battery_target = 0
-        electricity_from_chp_target = 0
-        electricity_to_or_from_grid = 0
-        electricity_to_electrolyzer_target = 0
+        electricity_to_or_from_battery_target:float = 0
+        electricity_from_chp_target:float = 0
+        electricity_to_or_from_grid:float = 0
+        electricity_to_electrolyzer_target:float = 0
 
         # Check if Battery is Component of Simulation
         if self.electricity_to_or_from_battery_real.SourceOutput is not None:
@@ -266,8 +266,8 @@ class Controller(cp.Component):
         stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
 
     def peak_shaving_from_grid(self,delta_demand:float,limit_to_shave: float,stsv: cp.SingleTimeStepValues):
-        electricity_to_or_from_battery_target=0
-        check_peak_shaving=0
+        electricity_to_or_from_battery_target:float=0
+        check_peak_shaving:float=0
         if delta_demand > 0:
             electricity_to_or_from_battery_target = delta_demand
         elif -delta_demand >  limit_to_shave:
@@ -286,8 +286,8 @@ class Controller(cp.Component):
 
     def peak_shaving_into_grid(self,delta_demand:float,limit_to_shave: float,stsv: cp.SingleTimeStepValues):
         #Hier delta Demand noch die Leistung aus CHP hinzufügen
-        electricity_to_or_from_battery_target=0
-        check_peak_shaving=0
+        electricity_to_or_from_battery_target:float=0
+        check_peak_shaving:float=0
 
         if delta_demand > limit_to_shave:
             electricity_to_or_from_battery_target=delta_demand-limit_to_shave
@@ -309,9 +309,9 @@ class Controller(cp.Component):
 
     def simulate_storage(self,delta_temperature:float,stsv: cp.SingleTimeStepValues, timestep:int, temperature_storage:float, temperature_storage_target:float,temperature_storage_target_hysteresis:float,temperature_storage_target_C:float,timestep_of_hysteresis:int):
         # Idea of 2-Punkt-Regelung mit Hysterese
-        control_signal_chp = 0
-        control_signal_gas_heater = 0
-        control_signal_heat_pump= 0
+        control_signal_chp:float = 0
+        control_signal_gas_heater:float = 0
+        control_signal_heat_pump:float= 0
         temperature_storage_target_C=temperature_storage_target_C
         timestep_of_hysteresis=timestep_of_hysteresis
 

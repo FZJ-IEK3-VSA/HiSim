@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 
 # Import modules from HiSim
-import component as cp
-import loadtypes as lt
+from hisim import component as cp
+from hisim import loadtypes as lt
 import copy as copy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
@@ -98,7 +98,7 @@ class DistrictHeating( cp.Component ):
                                                                                 lt.LoadTypes.Heating,
                                                                                 lt.Units.Watt )
         
-        self.PowerDistrictHeating: cp.ComponentOutput = self.add_output(    self.ComponentName,
+        self.PowerDistrictHeatingOutput: cp.ComponentOutput = self.add_output(    self.ComponentName,
                                                                             self.PowerDistrictHeating,
                                                                             lt.LoadTypes.Heating,
                                                                             lt.Units.Watt )
@@ -150,7 +150,7 @@ class DistrictHeating( cp.Component ):
         
         # write values for output time series
         stsv.set_output_value( self.thermal_energy_delivered, signalC * self.efficiency )
-        stsv.set_output_value( self.PowerDistrictHeating, signalC )
+        stsv.set_output_value( self.PowerDistrictHeatingOutput, signalC )
         
 class DistrictHeatingController( cp.Component ):
     """
@@ -191,7 +191,7 @@ class DistrictHeatingController( cp.Component ):
                     tol = tol )
 
         #inputs
-        self.t_mC: cp.ComponentOutput = self.add_input( self.ComponentName,
+        self.t_mC: cp.ComponentInput = self.add_input( self.ComponentName,
                                                         self.TemperatureMean,
                                                         lt.LoadTypes.Temperature,
                                                         lt.Units.Celsius,

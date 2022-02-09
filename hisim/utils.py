@@ -6,7 +6,7 @@ import pandas as pd
 import pickle
 import sys
 import inspect
-
+from enum import Enum
 import pdb
 
 
@@ -20,7 +20,7 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 # Retrieves hisim directory absolute path
-hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))) # type: ignore
 hisim_inputs = os.path.join(hisim_abs_path, "inputs")
 hisim_postprocessing_img = os.path.join(hisim_abs_path, "postprocessing", "report")
 
@@ -96,6 +96,16 @@ HISIMPATH       = {"results": os.path.join(hisim_abs_path, "results"),
                    "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
                    "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy")}
 
+
+
+class PostProcessingOptions(Enum):
+    Plot_Line = 1
+    Plot_Carpet = 2
+    Plot_Sankey = 3
+    Plot_Day = 4
+    Plot_Bar = 5
+    Open_Directory = 6
+    Export_To_CSV = 7
 
 class Outputs:
 
@@ -335,7 +345,5 @@ def open_pickle(dirname):
         extracted_pickle = pickle.load(input)
     return extracted_pickle, dir_path
 
-if __name__ == "__main__":
-    save_cache()
 
 

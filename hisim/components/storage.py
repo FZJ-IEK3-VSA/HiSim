@@ -4,8 +4,8 @@ import numpy as np
 
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import component as cp
-import loadtypes as lt
+from hisim import component as cp
+from hisim import loadtypes as lt
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

@@ -1,10 +1,11 @@
 # Generic/Built-in
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from components.heat_pump import HeatPumpController
-from components.ev_charger import EVChargerController
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.components.heat_pump import HeatPumpController
+from hisim.components.ev_charger import EVChargerController
+from typing import List
+from hisim import loadtypes as lt
 from abc import ABC, abstractmethod
 
 # NOT BEING ANYWHERE
@@ -13,7 +14,7 @@ class SmartController(Component):
 
     def __init__(self, controllers: dict = {"HeatPump":["mode"], "EVCharger":["mode"]}):
         super().__init__("SmartController")
-        self.WrappedControllers = []
+        self.WrappedControllers:List  = []
         self.build(controllers)
 
     def build(self, controllers):

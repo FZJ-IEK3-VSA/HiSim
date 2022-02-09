@@ -231,8 +231,8 @@ def fit_func_p_th_ref(p_th:  int, t_in: int, t_out: int, group_id: int, p_th_set
     return p_th_diff
 
 
-def simulate(t_in_primary: any, t_in_secondary: any, parameters: pd.DataFrame,
-             t_amb: any) -> pd.DataFrame:
+def simulate(t_in_primary: Any, t_in_secondary: Any, parameters: pd.DataFrame,
+             t_amb: Any) -> pd.DataFrame:
     """
     Performs the simulation of the heat pump model.
 

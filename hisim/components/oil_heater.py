@@ -4,8 +4,8 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 # Import modules from HiSim
-import component as cp
-import loadtypes as lt
+from hisim import component as cp
+from hisim import loadtypes as lt
 import copy as copy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
@@ -203,7 +203,7 @@ class OilHeaterController( cp.Component ):
                     offset = offset )
 
         #inputs
-        self.t_mC: cp.ComponentOutput = self.add_input( self.ComponentName,
+        self.t_mC: cp.ComponentInput = self.add_input( self.ComponentName,
                                                     self.TemperatureMean,
                                                     lt.LoadTypes.Temperature,
                                                     lt.Units.Celsius,
@@ -214,7 +214,7 @@ class OilHeaterController( cp.Component ):
                                                      lt.Units.Celsius,
                                                      True) 
         #outputs
-        self.stateC = self.add_output( self.ComponentName,
+        self.stateC:cp.ComponentOutput = self.add_output( self.ComponentName,
                                       self.StateC,
                                       lt.LoadTypes.Any,
                                       lt.Units.Any)

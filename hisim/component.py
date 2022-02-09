@@ -5,33 +5,33 @@ import datetime
 
 # Package
 from hisim import loadtypes as lt
-
-
-class SimulationParameters:
-    def __init__(self, start_date, end_date, seconds_per_timestep):
-        self.start_date = start_date
-        self.end_date = end_date
-        self.seconds_per_timestep = seconds_per_timestep
-        self.duration = end_date - start_date
-        total_seconds = self.duration.total_seconds()
-        self.timesteps: int = int(total_seconds / seconds_per_timestep)
-
-    @classmethod
-    def full_year(cls, year: int = 2019, seconds_per_timestep: int = 60):
-        return cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
-
-    @classmethod
-    def january_only(cls, year: int, seconds_per_timestep: int):
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep)
-
-    @classmethod
-    def one_day_only(cls, year: int, seconds_per_timestep: int):
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
+#
+#
+# class SimulationParameters:
+#     def __init__(self, start_date, end_date, seconds_per_timestep):
+#         self.start_date = start_date
+#         self.end_date = end_date
+#         self.seconds_per_timestep = seconds_per_timestep
+#         self.duration = end_date - start_date
+#         total_seconds = self.duration.total_seconds()
+#         self.timesteps: int = int(total_seconds / seconds_per_timestep)
+#
+#     @classmethod
+#     def full_year(cls, year: int = 2019, seconds_per_timestep: int = 60):
+#         return cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
+#
+#     @classmethod
+#     def january_only(cls, year: int, seconds_per_timestep: int):
+#         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep)
+#
+#     @classmethod
+#     def one_day_only(cls, year: int, seconds_per_timestep: int):
+#         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
 
 
 class ComponentOutput:
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
-                 sankey_flow_direction: bool = None):
+                 sankey_flow_direction: Optional[bool] = None):
         self.FullName: str = object_name + " # " + field_name
         self.ObjectName: str = object_name  # ComponentName
         self.FieldName: str = field_name
@@ -39,7 +39,7 @@ class ComponentOutput:
         self.LoadType: lt.LoadTypes = load_type
         self.Unit: lt.Units = unit
         self.GlobalIndex: int = -1
-        self.SankeyFlowDirection: bool = sankey_flow_direction
+        self.SankeyFlowDirection: Optional[bool] = sankey_flow_direction
 
     def get_pretty_name(self):
         return self.ObjectName + " - " + self.DisplayName + " [" + self.LoadType + " - " + self.Unit + "]"
@@ -61,7 +61,7 @@ class ComponentInput:
 class SingleTimeStepValues:
     def __init__(self, number_of_values: int):
         self.values = [0.0] * number_of_values  # np.ndarray([number_of_values], dtype=float)
-        self.dict = {}
+        #self.dict = {}
 
     def copy_values_from_other(self, other):
         self.values = other.values[:]  # [x for x in other.values]
@@ -180,6 +180,9 @@ class Component:
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
         # performs the actual calculation
         raise NotImplementedError()
+
+    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues):
+        pass
 
 ## This doesn't do anything
 if __name__ == "__main__":

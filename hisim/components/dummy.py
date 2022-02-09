@@ -3,12 +3,12 @@ import copy
 import numpy as np
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from components.ev_charger import SimpleStorageState
-from utils import HISIMPATH
-import loadtypes as lt
-from utils import load_smart_appliance
-import utils
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.components.ev_charger import SimpleStorageState
+from hisim.utils import HISIMPATH
+from hisim import loadtypes as lt
+from hisim.utils import load_smart_appliance
+from hisim import utils
 import pdb
 
 __authors__ = "Vitor Hugo Bellotto Zago"

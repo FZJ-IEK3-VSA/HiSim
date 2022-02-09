@@ -8,7 +8,7 @@ import numpy as np
 
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.simulator import SimulationParameters
+from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.utils import HISIMPATH
 from hisim import utils

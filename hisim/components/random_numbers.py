@@ -3,8 +3,8 @@ import random
 from typing import List
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import loadtypes as lt
 
 class RandomNumbers(Component):
     RandomOutput: str = "Random Numbers"

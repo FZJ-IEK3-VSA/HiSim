@@ -2,8 +2,8 @@ from hisim import component
 from hisim.components import occupancy
 from hisim.components import weather
 from hisim.components import building
-import hisim.loadtypes as lt
-
+from hisim.loadtypes import LoadTypes, Units
+from hisim.simulationparameters import SimulationParameters
 def test_building():
     # Sets inputs
     weather_location = "Aachen"
@@ -17,7 +17,7 @@ def test_building():
     # Set Occupancy
     my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile)
 
-    my_simulation_parameters = component.SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
     # Set Weather
     my_weather = weather.Weather(weather_location, my_simulation_parameters)
 
@@ -27,8 +27,8 @@ def test_building():
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",
                                                                 "ThermalDelivery",
-                                                                lt.LoadTypes.Heating,
-                                                                lt.Units.Watt)
+                                                                LoadTypes.Heating,
+                                                                Units.Watt)
 
 
     assert 1 == 1

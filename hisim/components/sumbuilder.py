@@ -1,10 +1,11 @@
 # Generic/Built-in
 import copy
-
+from typing import List
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import component as cp
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import component as cp
+from hisim import loadtypes as lt
+
 
 
 class CalculateOperation(cp.Component):
@@ -21,16 +22,16 @@ class CalculateOperation(cp.Component):
                                                         loadtype,
                                                         unit)
 
-    def add_input(self) -> cp.ComponentInput:
+    def add_numbered_input(self) -> cp.ComponentInput:
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)
-        vars(self)[label]: cp.ComponentInput = label
+        vars(self)[label] = label
         myinput = cp.ComponentInput(self.ComponentName, label, self.loadtype, self.unit, True)
         self.inputs.append(myinput)
         return myinput
 
-    def connect_input(self, src_object_name: str, src_field_name: str):
-        next_input = self.add_input()
+    def connect_arbitrary_input(self, src_object_name: str, src_field_name: str):
+        next_input = self.add_numbered_input()
         next_input.src_object_name = src_object_name
         next_input.src_field_name = src_field_name
 
@@ -93,10 +94,10 @@ class ElectricityGrid(Component):
                                                                    self.ElectricityOutput,
                                                                    lt.LoadTypes.Electricity,
                                                                    lt.Units.Watt)
-    def add_input(self) -> cp.ComponentInput:
+    def add_numbered_input(self) -> cp.ComponentInput:
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)
-        vars(self)[label]: cp.ComponentInput = label
+        vars(self)[label] = label
         myinput = cp.ComponentInput(self.ComponentName, label, self.loadtype, self.unit, True)
         self.inputs.append(myinput)
         return myinput
@@ -109,12 +110,12 @@ class ElectricityGrid(Component):
         return ElectricityGrid(name="{}Subtract{}".format(self.ComponentName, other_electricity_grid.ComponentName),
                                grid=[self, "Subtract", other_electricity_grid])
 
-    def connect_input(self, component: Component):
+    def connect_electricity_input(self, component: Component):
         if hasattr(component, 'ElectricityOutput') is False:
             raise Exception("Component does not contain electricity output.")
-        next_input = self.add_input()
+        next_input = self.add_numbered_input()
         next_input.src_object_name = component.ComponentName
-        next_input.src_field_name = component.ElectricityOutput
+        next_input.src_field_name = component.ElectricityOutput # type: ignore
 
     def add_operation(self, operation: str):
         num_operations = len(self.operations)
@@ -200,9 +201,6 @@ class SumBuilderForTwoInputs(Component):
         pass
 
     def i_restore_state(self):
-        pass
-
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):

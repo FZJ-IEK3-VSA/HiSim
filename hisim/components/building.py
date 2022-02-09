@@ -6,12 +6,12 @@ import numpy as np
 import os
 
 # Owned
-import utils
-import component as cp
-import loadtypes as lt
+from hisim import utils
+from hisim import component as cp
+from hisim import loadtypes as lt
 
-from components.configuration import PhysicsConfig
-from components.configuration import LoadConfig
+from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import LoadConfig
 from functools import lru_cache
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -295,10 +295,10 @@ class Building(cp.Component):
             if force_convergence:
                 return
             heat_demand = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
-            mass_input_sec = stsv.get_input_value(self.mass_input)  # kg/s
+            mass_input_sec = stsv.get_input_value(self.mass_inputC)  # kg/s
             #mass_input = mass_input_sec * self.seconds_per_timestep  # kg
             mass_input = mass_input_sec
-            temperature_input = stsv.get_input_value(self.temperature_input)  # °C
+            temperature_input = stsv.get_input_value(self.temperature_inputC)  # °C
 
             if heat_demand > 0 and (mass_input == 0 and temperature_input == 0):
                 """first iteration --> random numbers"""

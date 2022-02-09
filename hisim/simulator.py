@@ -9,6 +9,7 @@ import copy
 
 # Other Libraries
 from typing import List
+from typing import Tuple
 import pandas as pd
 import pickle
 import warnings
@@ -17,17 +18,20 @@ import warnings
 import time
 
 # Owned
-from hisim.postprocessing import postprocessing as pp
-import component as cp
-import loadtypes as lt
-import utils
+from hisim.postprocessing import postprocessing_main as pp
+import hisim.component as cp
+from hisim.simulationparameters import SimulationParameters
+from hisim import loadtypes as lt
+#import utils
+
+
 
 class ComponentWrapper:
     def __init__(self, component: cp.Component, is_cachable: bool):
         self.MyComponent = component
         self.component_inputs: List[cp.ComponentInput] = []
         self.component_outputs: List[cp.ComponentOutput] = []
-        self.cachedict = {}
+        #self.cachedict: = {}
         self.is_cachable = is_cachable
 
     def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]):
@@ -151,28 +155,6 @@ class ComponentWrapper:
                         cinput.ObjectName,
                         cinput.Unit))  #
 
-class SimulationParameters:
-    def __init__(self, start_date, end_date, seconds_per_timestep, year=None):
-        self.start_date = start_date
-        self.end_date = end_date
-        self.seconds_per_timestep = seconds_per_timestep
-        self.duration = end_date - start_date
-        total_seconds = self.duration.total_seconds()
-        self.timesteps: int = int(total_seconds/seconds_per_timestep)
-        self.year = year
-
-    @classmethod
-    def full_year(cls, year: int, seconds_per_timestep: int):
-        return cls(datetime.date(year, 1, 1), datetime.date(year+1, 1, 1), seconds_per_timestep, year)
-
-    @classmethod
-    def january_only(cls, year: int, seconds_per_timestep: int):
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep)
-
-    @classmethod
-    def one_day_only(cls, year: int, seconds_per_timestep: int):
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
-
 class Simulator:
     def __init__(self, module_directory, setup_function):
         self.setup_function = setup_function
@@ -187,7 +169,7 @@ class Simulator:
         self.resultsdir = os.path.join(module_directory, "results")
         os.mkdir(self.dirpath)
 
-        # Creates and write first report
+        # Creates and write result report
         self.report = pp.report.Report(dirpath=self.dirpath)
 
 
@@ -216,7 +198,7 @@ class Simulator:
         for wc in self.WrappedComponents:
             wc.connect_inputs(self.all_outputs)
 
-    def process_one_timestep(self, timestep: int) -> (cp.SingleTimeStepValues, int):
+    def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
         """
         Executes one simulation timestep. Some components are circurly connected.
         To solve the circular dependency, all components have their states restored
@@ -377,26 +359,34 @@ class Simulator:
         self.get_std_results()
 
         time_correction_factor = 1/self.SimulationParameters.seconds_per_timestep
-        to_be_pickle = {"time_correction_factor" : time_correction_factor,
-                        "directory_path": self.dirpath,
-                        "results": self.results,
-                        "all_outputs" : self.all_outputs,
-                        "simulation_parameters" : self.SimulationParameters,
-                        "wrapped_components" : self.WrappedComponents,
-                        "story": self.report.story,
-                        "mode": 1,
-                        "setup_function": self.setup_function,
-                        "execution_time": self.execution_time,
-                        "results_m": self.results_m}
+        ppdt = pp.PostProcessingDataTransfer(
+            time_correction_factor = time_correction_factor,
+            directory_path = self.dirpath,
+            results = self.results,
+            all_outputs = self.all_outputs,
+            simulation_parameters = self.SimulationParameters,
+            wrapped_components = self.WrappedComponents,
+            story = self.report.story,
+            mode = 1,
+            setup_function = self.setup_function,
+            execution_time = self.execution_time,
+            results_monthly = self.results_m,
+        )
 
         #to_be_pickle = {"report": self.report,
         #                "directory_path": self.dirpath,
         #                "all_outputs": self.all_outputs,
         #                "results": self.results}
 
+        # Perform postprocessing
 
-        with open(os.path.join(self.dirpath, "data.pkl"), "wb") as output:
-            pickle.dump(to_be_pickle, output, pickle.HIGHEST_PROTOCOL)
+
+        #with open(os.path.join(self.dirpath, "data.pkl"), "wb") as output:
+         #   pickle.dump(ppdt, output, pickle.HIGHEST_PROTOCOL)
+
+
+        my_post_processor = pp.PostProcessor(ppdt=ppdt)
+        my_post_processor.run()
 
     def get_std_results(self):
         pd_timeline = pd.date_range(start=self.SimulationParameters.start_date,

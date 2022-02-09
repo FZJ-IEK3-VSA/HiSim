@@ -1,9 +1,9 @@
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import loadtypes as lt
 
-from components.configuration import CHPControllerConfig, GasControllerConfig, ElectrolyzerConfig
-import components.chp_system as chp
-from components.configuration import ExtendedControllerConfig
+from hisim.components.configuration import CHPControllerConfig, GasControllerConfig, ElectrolyzerConfig
+from hisim.components import chp_system as chp
+from hisim.components.configuration import ExtendedControllerConfig
 from math import ceil
 from copy import deepcopy
 

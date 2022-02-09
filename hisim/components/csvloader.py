@@ -2,10 +2,10 @@ from typing import List
 import pandas as pd
 import os
 
-import loadtypes as lt
-import utils
-import component as cp
-
+from hisim import loadtypes as lt
+from hisim import utils
+from hisim import component as cp
+from hisim.simulationparameters import SimulationParameters
 class CSVLoader(cp.Component):
     """
     Class component loads CSV file containing some
@@ -21,7 +21,7 @@ class CSVLoader(cp.Component):
     column: int
         Column number where the load profile data is stored
         inside of the CSV file
-    loadtype: lt.LoadTypes,
+    loadtype: LoadTypes,
         Load type corresponded to the data loaded
     unit: lt.Units
         Units of data loaded
@@ -47,7 +47,7 @@ class CSVLoader(cp.Component):
                  loadtype: lt.LoadTypes,
                  unit: lt.Units,
                  column_name: str,
-                 simulation_parameters: cp.SimulationParameters,
+                 simulation_parameters: SimulationParameters,
                  sep: str = ";",
                  decimal: str = ".",
                  multiplier: float = 1):
@@ -61,11 +61,11 @@ class CSVLoader(cp.Component):
         self.multiplier = multiplier
 
         # ? self.column = column
-        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal)
+        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal) # type: ignore
         dfcolumn = df.iloc[:, [column]]
-
+        self.column_name = column_name
         if len(dfcolumn) < simulation_parameters.timesteps:
-            raise Exception("Timesteps: " + str(simulation_parameters.timesteps) + " vs. Lines in CSV " + csv_filename + ": " + str(len(self.column)))
+            raise Exception("Timesteps: " + str(simulation_parameters.timesteps) + " vs. Lines in CSV " + csv_filename + ": " + str(len(self.column_name)))
 
         self.column = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []

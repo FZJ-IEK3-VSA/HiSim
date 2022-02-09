@@ -1,6 +1,6 @@
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import loadtypes as lt
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

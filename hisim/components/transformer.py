@@ -1,6 +1,6 @@
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import loadtypes as lt
 
 class Transformer(Component):
     TransformerInput = "Input1"

@@ -8,7 +8,7 @@ from math import pi
 # Owned
 import hisim.utils as utils
 from hisim import component as cp
-import hisim.loadtypes as lt
+from hisim.loadtypes import LoadTypes, Units
 
 from hisim.components.extended_storage import WaterSlice
 from hisim.components.configuration import WarmWaterStorageConfig
@@ -120,29 +120,29 @@ class HeatPump(cp.Component):
         # Inputs - Mandatories
         self.stateC: cp.ComponentInput = self.add_input(self.ComponentName,
                                                      self.State,
-                                                     lt.LoadTypes.Any,
-                                                     lt.Units.Any,
+                                                     LoadTypes.Any,
+                                                     Units.Any,
                                                      True)
         self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
                                                      self.TemperatureOutside,
-                                                     lt.LoadTypes.Any,
-                                                     lt.Units.Celsius,
+                                                     LoadTypes.Any,
+                                                     Units.Celsius,
                                                      True)
         # Inputs - Not Mandatories
         self.water_loadC: cp.ComponentInput = self.add_input(self.ComponentName,
                                                           self.WaterConsumption,
-                                                          lt.LoadTypes.Volume,
-                                                          lt.Units.Liter,
+                                                          LoadTypes.Volume,
+                                                          Units.Liter,
                                                           False)
         self.water_input_mass: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                self.WaterInput_mass,
-                                                               lt.LoadTypes.WarmWater,
-                                                               lt.Units.kg_per_sec,
+                                                               LoadTypes.WarmWater,
+                                                               Units.kg_per_sec,
                                                                False)
         self.water_input_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                       self.WaterInput_temperature,
-                                                                      lt.LoadTypes.WarmWater,
-                                                                      lt.Units.Celsius,
+                                                                      LoadTypes.WarmWater,
+                                                                      Units.Celsius,
                                                                       False)
 
 
@@ -150,41 +150,41 @@ class HeatPump(cp.Component):
         # Outputs
         #self.water_output_mass: cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                          self.WaterOutput_mass,
-        #                                                          lt.LoadTypes.WarmWater,
-        #                                                          lt.Units.kg_per_sec)
+        #                                                          LoadTypes.WarmWater,
+        #                                                          Units.kg_per_sec)
         #self.water_output_temperature: cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                                 self.WaterOutput_temperature,
-        #                                                                 lt.LoadTypes.WarmWater,
-        #                                                                 lt.Units.Celsius)
+        #ä                                                                      LoadTypes.WarmWater,
+        #                                                                 Units.Celsius)
         #self.wasted_energy_max_temperature: cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                                      self.WastedEnergyMaxTemperature,
-        #                                                                      lt.LoadTypes.WarmWater,
-        #                                                                      lt.Units.Watt)
+        #                                                                      LoadTypes.WarmWater,
+        #                                                                      Units.Watt)
 
         self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                          self.ThermalEnergyDelivered,
-                                                         lt.LoadTypes.Heating,
-                                                         lt.Units.Watt)
+                                                         LoadTypes.Heating,
+                                                         Units.Watt)
 
         self.heatingC: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                          self.Heating,
-                                                         lt.LoadTypes.Heating,
-                                                         lt.Units.Watt)
+                                                         LoadTypes.Heating,
+                                                         Units.Watt)
 
         self.coolingC: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                          self.Cooling,
-                                                         lt.LoadTypes.Cooling,
-                                                         lt.Units.Watt)
+                                                         LoadTypes.Cooling,
+                                                         Units.Watt)
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                         self.ElectricityOutput,
-                                                        lt.LoadTypes.Electricity,
-                                                        lt.Units.Watt)
+                                                        LoadTypes.Electricity,
+                                                        Units.Watt)
 
         self.number_of_cyclesC : cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                    self.NumberOfCycles,
-                                                                   lt.LoadTypes.Any,
-                                                                   lt.Units.Any)
+                                                                   LoadTypes.Any,
+                                                                   Units.Any)
 
     def build(self, manufacturer, name, min_operation_time, min_idle_time):
         # Simulation parameters
@@ -420,20 +420,20 @@ class HeatPumpController(cp.Component):
                    offset=offset,
                    mode=mode)
 
-        self.t_mC: cp.ComponentOutput = self.add_input(self.ComponentName,
+        self.t_mC: cp.ComponentInput = self.add_input(self.ComponentName,
                                                     self.TemperatureMean,
-                                                    lt.LoadTypes.Temperature,
-                                                    lt.Units.Celsius,
+                                                    LoadTypes.Temperature,
+                                                    Units.Celsius,
                                                     True)
-        self.electricity_inputC = self.add_input(self.ComponentName,
+        self.electricity_inputC : cp.ComponentInput= self.add_input(self.ComponentName,
                                                  self.ElectricityInput,
-                                                 lt.LoadTypes.Electricity,
-                                             lt.Units.Watt,
+                                                 LoadTypes.Electricity,
+                                             Units.Watt,
                                                  False)
-        self.stateC = self.add_output(self.ComponentName,
+        self.stateC: cp.ComponentOutput = self.add_output(self.ComponentName,
                                       self.State,
-                                      lt.LoadTypes.Any,
-                                      lt.Units.Any)
+                                      LoadTypes.Any,
+                                      Units.Any)
 
     def build(self, t_air_heating, t_air_cooling, offset, mode):
         # Sth

@@ -10,9 +10,9 @@ from copy import deepcopy
 from dataclasses import dataclass
 
 # Import modules from HiSim
-from component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
-from loadtypes import LoadTypes, Units
-
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.loadtypes import LoadTypes, Units
+from hisim.simulationparameters import SimulationParameters
 __authors__ = "Tjarko Tjaden, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -53,12 +53,12 @@ class ComponentName(Component):
     OutputWithState = "OutputWithState"
     OutputWithoutState = "OutputWithoutState"
 
-    def __init__(self, component_name: str):
+    def __init__(self, component_name: str, my_simulation_parameters: SimulationParameters):
         super().__init__(name=component_name)
 
         # If a component requires states, this can be implemented here.
         self.state = ComponentNameState()
-
+        self.my_simulation_parameters = my_simulation_parameters
         self.previous_state = deepcopy(self.state)
 
         self.input_from_other_component: ComponentInput = self.add_input(object_name=self.ComponentName,
@@ -76,6 +76,7 @@ class ComponentName(Component):
                                                                      field_name=self.OutputWithoutState,
                                                                      load_type=LoadTypes.Electricity,
                                                                      unit=Units.Watt)
+        self.factor = 1.0
 
     def i_save_state(self):
         self.previous_state = deepcopy(self.state)
@@ -86,7 +87,7 @@ class ComponentName(Component):
     def i_doublecheck(self):
         pass
 
-    def i_simulate(self, stsv: SingleTimeStepValues, seconds_per_timestep : int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
         # define local variables
         input_1 = stsv.get_input_value(self.input_from_other_component)
         input_2 = self.state.output_with_state

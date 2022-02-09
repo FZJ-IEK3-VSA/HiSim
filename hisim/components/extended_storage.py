@@ -1,5 +1,6 @@
 from copy import deepcopy
 from math import pi
+from typing import List
 import math
 
 # Owned
@@ -123,7 +124,7 @@ class WaterSlice:
         self.temperature = self.enthalpy / (self.mass * self.specific_heat_capacity)
         return energy_losses    # one slice is loosing this amount
 
-    def heat_losses_vertical_top_or_bottom(self, u_value_tank, seconds_per_timestep: float = 1, ambient_temperature: float = 20):
+    def heat_losses_vertical_top_or_bottom(self, u_value_tank: float, seconds_per_timestep: float = 1, ambient_temperature: float = 20):
         """
         Heat losses through top OR bottom of the tank. Function has to be called twice (one each)
         Temperature and enthalpy of the corresponding slice will be changed
@@ -322,7 +323,7 @@ class WarmWaterStorageSimulation:
 
         pushed_out_slice = WaterSlice(self.diameter, 0, 0)
         if ws_height > 0:
-            collected_height_so_far = 0
+            collected_height_so_far:float = 0
             while collected_height_so_far < ws_height:
                 height_still_needed = ws_height - collected_height_so_far
                 if is_from_top:
@@ -619,7 +620,7 @@ class WarmWaterStorageSimulation:
             dT_waterslice_dt = (-1) * self.my_slices[i].temperature * coefficient_T_slice + coefficient_constant_T_slice
 
             return dT_waterslice_dt
-        new_temperatures = []
+        new_temperatures:List[float] = []
         for i in range(len(self.my_slices)):
             # y = odeint(ode_sd, y0, ts)
             # new_temperatures.append(y)

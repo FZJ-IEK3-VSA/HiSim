@@ -2,14 +2,14 @@
 import copy
 
 # Owned
-from component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-import loadtypes as lt
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim import loadtypes as lt
 
 class SimpleStorageState:
     def __init__(self, min_val: float, max_val: float):
-        self.fill = 0
-        self.max_val = max_val
-        self.min_val = min_val
+        self.fill:float = 0
+        self.max_val:float = max_val
+        self.min_val:float = min_val
 
     def store(self, val: float) -> float:
         if self.fill + val < self.max_val:

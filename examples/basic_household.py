@@ -5,7 +5,7 @@ from hisim.components import pvs
 from hisim.components import building
 from hisim.components import heat_pump
 from hisim.components import sumbuilder
-
+from hisim import utils
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -71,8 +71,9 @@ def basic_household_explicit(my_sim):
     ##### Build Components #####
 
     # Build system parameters
-    my_sim_params: SimulationParameters = SimulationParameters.full_year(year=year,
+    my_sim_params: SimulationParameters = SimulationParameters.one_day_only(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
+
     my_sim.set_parameters(my_sim_params)
 
     # Build occupancy

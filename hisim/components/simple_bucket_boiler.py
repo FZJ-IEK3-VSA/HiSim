@@ -7,7 +7,7 @@ from math import pi
 
 # Owned
 import hisim.component as cp
-import hisim.loadtypes as lt
+from hisim import loadtypes as lt
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -99,13 +99,13 @@ class Boiler( cp.Component ):
         self.previous_state = self.state.clone()
         
         #inputs
-        self.use_WW : cp.ComponentOutput = self.add_input( self.ComponentName,
+        self.use_WW : cp.ComponentInput = self.add_input( self.ComponentName,
                                                            self.WaterConsumption,
                                                            lt.LoadTypes.WarmWater,
                                                            lt.Units.Liter, 
                                                            mandatory = True )
         
-        self.stateC : cp.ComponentOutput = self.add_input( self.ComponentName,
+        self.stateC : cp.ComponentInput = self.add_input( self.ComponentName,
                                                            self.State,
                                                            lt.LoadTypes.Any,
                                                            lt.Units.Any,
@@ -241,14 +241,14 @@ class BoilerController(cp.Component):
                     smart = smart )
 
         #input
-        self.T_water: cp.ComponentOutput = self.add_input( self.ComponentName,
+        self.T_water: cp.ComponentInput = self.add_input( self.ComponentName,
                                                            self.StorageTemperature,
                                                            lt.LoadTypes.Temperature,
                                                            lt.Units.Kelvin,
                                                            mandatory = True )
         
         if smart == 1:
-            self.electricity_inputC: cp.ComponentOutput = self.add_input( self.ComponentName,
+            self.electricity_inputC: cp.ComponentInput = self.add_input( self.ComponentName,
                                                                         self.ElectricityInput,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt,

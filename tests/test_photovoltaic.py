@@ -1,25 +1,28 @@
-from hisim import component
-from hisim.components import weather
-from hisim.components import pvs
-from hisim import simulator as sim
+import component
+from components import weather
+from components import pvs
+import simulator as sim
 
 def test_photovoltaic():
     # Sets inputs
     weather_location = "Aachen"
     seconds_per_timestep = 60
     power = 10
-
-    mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
-                                                                           seconds_per_timestep=seconds_per_timestep)
+    year = 2019
 
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(10)
     # Weather: 6 outputs
     # PVS:  1 output
 
-    # Sets Occupancy
-    my_weather = weather.Weather(location=weather_location, my_simulation_parameters =mysim )
 
-    my_pvs = pvs.PVSystem(power=power,)
+    my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+                                                                                 seconds_per_timestep=seconds_per_timestep)
+
+    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=my_sim_params)
+
+
+
+    my_pvs = pvs.PVSystem(power=power,location="Aachen")
 
     my_pvs.t_outC.SourceOutput = my_weather.t_outC
     my_pvs.azimuthC.SourceOutput = my_weather.azimuthC
@@ -44,4 +47,4 @@ def test_photovoltaic():
 
     my_weather.i_simulate(655, stsv, seconds_per_timestep, False)
     my_pvs.i_simulate(655, stsv, seconds_per_timestep, False)
-    assert abs(0.4532226665022684- stsv.values[9]) <0.05
+    assert 0.4235107699732713 == stsv.values[9]

@@ -75,16 +75,17 @@ def calc_solar_gains(sun_azimuth,
 class BuildingState:
 
     def __init__(self,
-                 t_m,
-                 c_m):
-        self.t_m = t_m
-        self.c_m = c_m
+                 t_m:float,
+                 c_m:float):
+        self.t_m:float = t_m
+        self.c_m:float = c_m
 
-    def cal_stored_energy(self):
+    def cal_stored_energy(self) -> float:
         return (self.t_m * self.c_m) / 3600
 
     def self_copy(self):
         return BuildingState(self.t_m, self.c_m)
+
 
 class Building(cp.Component):
     """
@@ -153,10 +154,27 @@ class Building(cp.Component):
                  seconds_per_timestep=60,
                  sim_params=None):
         super().__init__(name="Building")
+        # variable typing init for mypy
+
+        self.c_m:float = 0
+        self.c_m_ref: float = 0
+        self.h_tr_em: float = 0
+        self.h_tr_is: float = 0
+        self.h_tr_ms: float = 0
+        self.h_ve_adj: float = 0
+        self.h_ve_adj_ref: float = 0
+        self.A_f: float = 0
+        self.A_m: float = 0
+        self.A_t: float = 0
+        self.room_vol: float = 0
+        self.q_ht_ref: float = 0
+        self.q_int_ref: float = 0
+        self.q_sol_ref: float = 0
+        self.q_h_nd_ref: float = 0
 
         self.build(bClass, building_code, seconds_per_timestep, sim_params)
 
-        self.state = BuildingState(t_m=initial_temperature, c_m=self.c_m)
+        self.state:BuildingState = BuildingState(t_m=initial_temperature, c_m=self.c_m)
         self.previous_state = self.state.self_copy()
 
     #===================================================================================================================
@@ -538,15 +556,15 @@ class Building(cp.Component):
         """
         return 1.0 / (1.0 / self.h_tr_2 + 1.0 / self.h_tr_ms)
 
-    @property
-    def t_opperative(self):
-        """
-        The opperative temperature is a weighted average of the air and mean radiant temperatures.
-        It is not used in any further calculation at this stage
-        # (C.12) in [C.3 ISO 13790]
-        Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
-        """
-        return 0.3 * self.t_air + 0.7 * self.t_s
+    # @property
+    # def t_opperative(self):
+    #     """
+    #     The opperative temperature is a weighted average of the air and mean radiant temperatures.
+    #     It is not used in any further calculation at this stage
+    #     # (C.12) in [C.3 ISO 13790]
+    #     Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
+    #     """
+    #     return 0.3 * self.t_air + 0.7 * self.t_s
 
     def get_h_tr_w(self):
         """
@@ -619,7 +637,7 @@ class Building(cp.Component):
             self.h_ve_adj = cp * float(self.buildingdata["n_air_use"] + self.buildingdata["n_air_infiltration"]) * \
                             self.A_f * float(self.buildingdata["h_room"])
 
-    def get_physical_param(self):
+    def get_physical_param(self) :
         # Windows area
         self.get_windows()
 

@@ -27,12 +27,14 @@ from hisim import loadtypes as lt
 
 
 class ComponentWrapper:
-    def __init__(self, component: cp.Component, is_cachable: bool):
+    def __init__(self, component: cp.Component, is_cachable: bool, my_simulation_parameters: SimulationParameters):
         self.MyComponent = component
         self.component_inputs: List[cp.ComponentInput] = []
         self.component_outputs: List[cp.ComponentOutput] = []
         #self.cachedict: = {}
         self.is_cachable = is_cachable
+        self.my_simulation_parameters = my_simulation_parameters
+        component.set_simulation_parameters(my_simulation_parameters)
 
     def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]):
         logging.info("Registering component outputs on " + self.MyComponent.ComponentName)
@@ -156,9 +158,9 @@ class ComponentWrapper:
                         cinput.Unit))  #
 
 class Simulator:
-    def __init__(self, module_directory, setup_function):
+    def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters):
         self.setup_function = setup_function
-        self.SimulationParameters = None
+        self.SimulationParameters = my_simulation_parameters
         self.WrappedComponents: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
 
@@ -187,7 +189,7 @@ class Simulator:
         """
         if self.SimulationParameters is None:
             raise Exception("Simulation Parameters were not initialized")
-        wrap = ComponentWrapper(component, is_cachable)
+        wrap = ComponentWrapper(component, is_cachable, self.SimulationParameters)
         wrap.register_component_outputs(self.all_outputs)
         self.WrappedComponents.append(wrap)
 

@@ -2,7 +2,7 @@
 import logging
 from typing import List, Optional
 import datetime
-
+from hisim.simulationparameters import SimulationParameters
 # Package
 from hisim import loadtypes as lt
 #
@@ -102,6 +102,10 @@ class Component:
         self.outputs: List[ComponentOutput] = []
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
+        self.my_simulation_parameters: Optional[SimulationParameters] = None
+
+    def set_simulation_parameters(self, simpars: SimulationParameters):
+        self.my_simulation_parameters = simpars
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:
@@ -136,7 +140,7 @@ class Component:
             raise Exception("Input Component does not have Electricity Output!")
         elif hasattr(self, "ElectricityInput") is False:
             raise Exception("This self Component does not have Electricity Input!")
-        self.connect_input(self.ElectricityInput, component.ComponentName, component.ElectricityOutput)
+        self.connect_input(self.ElectricityInput, component.ComponentName, component.ElectricityOutput) # type: ignore
 
     def connect_similar_inputs(self, components):
         if len(self.inputs) == 0:

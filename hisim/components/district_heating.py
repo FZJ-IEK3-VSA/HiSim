@@ -238,7 +238,7 @@ class DistrictHeatingController( cp.Component ):
             if self.state.Iteration == 0:
                 #turn off heating when above set point
                 if t_m_old > self.t_air_heating:
-                    DistrictHeatingPower = 0
+                    DistrictHeatingPower:float = 0
                 #turn on heating with maximum if below set point
                 else:
                     DistrictHeatingPower = self.max_power

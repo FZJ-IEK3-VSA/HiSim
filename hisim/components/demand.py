@@ -6,7 +6,7 @@ from hisim.components.configuration import LoadConfig
 from hisim.components.configuration import ElectrolyzerConfig
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
-
+from typing import List
 
 class HouseholdHeatDemand(Component):
     """
@@ -42,7 +42,7 @@ class HouseholdHeatDemand(Component):
         self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdHeatDemand.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
         self.seconds_per_timestep = seconds_per_timestep
-        self.state = []
+        self.state:List = []
         self.previous_state = self.state
         self.check_temperature = 50
 
@@ -239,8 +239,7 @@ class HouseholdWarmWaterDemandWatt(Component):
         self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
         self.seconds_per_timestep = seconds_per_timestep
-        self.state = []
-        self.previous_state = self.state
+
 
     def i_save_state(self):
         pass
@@ -356,8 +355,7 @@ class HouseholdWarmWaterDemand(Component):
         self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
         self.seconds_per_timestep = seconds_per_timestep
-        self.state = []
-        self.previous_state = self.state
+
 
     def i_save_state(self):
         pass

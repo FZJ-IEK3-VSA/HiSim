@@ -2,8 +2,8 @@
 import json
 import numpy as np
 import copy
-import matplotlib.pyplot as plt
-from typing import List
+#import matplotlib.pyplot as plt
+from typing import List, Any
 
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
@@ -54,6 +54,7 @@ class Flexibility:
         self.ProfilesLen : List[int] = []
         self.HasExec : List[int] = []
         self.NumExecutions : int = 0
+        self.sum_local:float = 0.0
 
 class Controllable(Component):
     """
@@ -92,7 +93,7 @@ class Controllable(Component):
                 self.add_new_flexibility(arg)
 
         # Create entire timeline for
-        self.itask = []
+        self.itask: List[Any] = []
         for i_flex in range(len(self.flexibilities)):
             self.itask.append(np.zeros((self.flexibilities[i_flex].LastestStep[-1]), dtype=int))
 
@@ -168,10 +169,10 @@ class Controllable(Component):
             raise Exception("No such flexibility was found.")
 
     def calc_total_load(self):
-        sum_total_load = 0
-        sum_num_flex = 0
+        sum_total_load:float = 0
+        sum_num_flex:float = 0
         for index, flex in enumerate(self.flexibilities):
-            sum_local = 0
+            sum_local:float = 0
             for elec_profile in flex.ElecProfiles:
                 sum_local = sum_local + sum(elec_profile)
             self.flexibilities[index].sum_local = sum_local

@@ -14,13 +14,13 @@ from hisim import loadtypes as lt
 #    def __init__(self):
 class ControllerState:
     def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: int,temperature_storage_target_ww_C: float,temperature_storage_target_hw_C: float,timestep_of_hysteresis_ww:int,timestep_of_hysteresis_hw:int):
-        self.control_signal_gas_heater = control_signal_gas_heater
-        self.control_signal_chp = control_signal_chp
-        self.control_signal_heat_pump = control_signal_heat_pump
-        self.temperature_storage_target_ww_C=temperature_storage_target_ww_C
-        self.temperature_storage_target_hw_C=temperature_storage_target_hw_C
-        self.timestep_of_hysteresis_ww = timestep_of_hysteresis_ww
-        self.timestep_of_hysteresis_hw = timestep_of_hysteresis_hw
+        self.control_signal_gas_heater:float = control_signal_gas_heater
+        self.control_signal_chp:float = control_signal_chp
+        self.control_signal_heat_pump:float = control_signal_heat_pump
+        self.temperature_storage_target_ww_C:float=temperature_storage_target_ww_C
+        self.temperature_storage_target_hw_C:float=temperature_storage_target_hw_C
+        self.timestep_of_hysteresis_ww:int = timestep_of_hysteresis_ww
+        self.timestep_of_hysteresis_hw:int = timestep_of_hysteresis_hw
 
 
 class Controller(cp.Component):
@@ -307,7 +307,10 @@ class Controller(cp.Component):
         stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
         stsv.set_output_value(self.check_peak_shaving, check_peak_shaving)
 
-    def simulate_storage(self,delta_temperature:float,stsv: cp.SingleTimeStepValues, timestep:int, temperature_storage:float, temperature_storage_target:float,temperature_storage_target_hysteresis:float,temperature_storage_target_C:float,timestep_of_hysteresis:int):
+    def simulate_storage(self,delta_temperature:float,
+                         stsv: cp.SingleTimeStepValues,
+                         timestep:int, temperature_storage:float,
+                         temperature_storage_target:float,temperature_storage_target_hysteresis:float,temperature_storage_target_C:float,timestep_of_hysteresis:int):
         # Idea of 2-Punkt-Regelung mit Hysterese
         control_signal_chp:float = 0
         control_signal_gas_heater:float = 0

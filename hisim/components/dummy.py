@@ -1,7 +1,7 @@
 # Generic/Built-in
 import copy
 import numpy as np
-
+from typing import List
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.components.ev_charger import SimpleStorageState
@@ -81,6 +81,7 @@ class Dummy(Component):
                                                                self.StoredEnergy,
                                                                lt.LoadTypes.Heating,
                                                                lt.Units.Watt)
+        self.temperature:float = -300
 
 
     def build(self, electricity, heat, capacity, initial_temperature, sim_params):
@@ -88,7 +89,7 @@ class Dummy(Component):
         self.seconds_per_timestep = sim_params.seconds_per_timestep
 
         if electricity is None:
-            self.electricity_output = - 1E3
+            self.electricity_output:float = - 1E3
         else:
             self.electricity_output = - 1E3 * electricity
 
@@ -108,7 +109,7 @@ class Dummy(Component):
 
 
     def write_to_report(self):
-        lines =[]
+        lines:List =[]
         return lines
 
     def i_save_state(self):
@@ -122,7 +123,7 @@ class Dummy(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
-        electricity_output = 0
+        electricity_output:float = 0
         if timestep >= 60*6 and timestep < 60*9:
             electricity_output = self.electricity_output
         elif timestep >= 60*15 and timestep < 60*18:
@@ -132,7 +133,7 @@ class Dummy(Component):
 
         if timestep <= 60*12:
             thermal_delivered_energy = 0
-            temperature = self.initial_temperature
+            temperature:float = self.initial_temperature
             current_stored_energy = ( self.initial_temperature + 273.15) * self.capacity
         else:
             thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_deliveredC)

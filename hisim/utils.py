@@ -8,7 +8,7 @@ import sys
 import inspect
 from enum import Enum
 import pdb
-
+from typing import Any, Dict
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -24,7 +24,7 @@ hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.current
 hisim_inputs = os.path.join(hisim_abs_path, "inputs")
 hisim_postprocessing_img = os.path.join(hisim_abs_path, "postprocessing", "report")
 
-HISIMPATH       = {"results": os.path.join(hisim_abs_path, "results"),
+HISIMPATH : Dict[str,Any]      = {"results": os.path.join(hisim_abs_path, "results"),
                    "inputs" : os.path.join(hisim_abs_path, "inputs"),
                    "cache_dir": os.path.join(hisim_abs_path, "inputs", "cache"),
                    "cache_indices": os.path.join(hisim_abs_path, "inputs", "cache", "cache_indices.json"),

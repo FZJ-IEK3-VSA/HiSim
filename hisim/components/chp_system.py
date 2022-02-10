@@ -3,8 +3,8 @@ from hisim import loadtypes as lt
 import copy
 from hisim.components.configuration import PhysicsConfig
 from hisim import utils
-from math import pi
-from math import floor
+#from math import pi
+#from math import floor
 
 import pandas as pd
 import os
@@ -134,9 +134,9 @@ class CHP(Component):
         self.mass_flow_max = CHPConfigSimple.mass_flow_max * (self.P_el_max/usually_P_el_max)
         if self.mass_flow_max < CHPConfigSimple.mass_flow_max:
             self.mass_flow_max=CHPConfigSimple.mass_flow_max
-        self.eff_th_min = CHPConfigSimple.eff_th_min
+        self.eff_th_min:float = CHPConfigSimple.eff_th_min
         self.eff_th_max = CHPConfigSimple.eff_th_max
-        self.eff_el_min = CHPConfigSimple.eff_el_min
+        self.eff_el_min:float = CHPConfigSimple.eff_el_min
         self.eff_el_max = CHPConfigSimple.eff_el_max
         self.temperature_max = CHPConfigSimple.temperature_max
 
@@ -191,12 +191,12 @@ class CHP(Component):
             if timestep >= self.state.start_timestep + self.min_operation_time and control_signal == 0:
 
                 # all Outputs zero
-                mass_out_temp = 0
-                mass_out = 0
-                el_power = 0
-                th_power = 0
-                eff_el_real = 0
-                eff_th_real = 0
+                mass_out_temp:float = 0
+                mass_out:float = 0
+                el_power:float = 0
+                th_power:float = 0
+                eff_el_real:float = 0
+                eff_th_real:float = 0
 
                 self.state = CHPState(start_timestep=timestep,
                                       cycle_number=self.number_of_cycles,
@@ -217,10 +217,10 @@ class CHP(Component):
             elif timestep < self.state.start_timestep + self.min_operation_time and control_signal == 0:
                 # CHP doesn't want to run but has to, therefore is going to run in minimum power
 
-                maximum_power_th = self.P_th_min
+                maximum_power_th:float = self.P_th_min
                 eff_th_real = self.eff_th_min
                 eff_el_real = self.eff_el_min
-                maximum_power_el = self.P_el_min
+                maximum_power_el:float = self.P_el_min
 
                 th_power = maximum_power_th * eff_th_real
                 el_power = maximum_power_el * eff_el_real
@@ -363,6 +363,7 @@ class CHP(Component):
                 return x2
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+        control_signal = -1
         if self.operating_mode=="heat":
             control_signal = stsv.get_input_value(self.control_signal)
         elif self.operating_mode=="electricity":
@@ -386,6 +387,7 @@ class CHP(Component):
 
         el_power, th_power, eff_el_real, eff_th_real=self.simulate_chp(control_signal=control_signal, stsv=stsv, timestep=timestep)
         #Check if enough hydrogen is in the tank
+        gas_demand_real_used = 0
         if el_power==0 and th_power==0:
             gas_demand_target=0
             gas_demand_real_used=0

@@ -5,7 +5,7 @@ import sqlite3
 import datetime
 import os
 import pandas as pd
-
+from typing import List
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -170,7 +170,7 @@ class Vehicle_Pure(cp.Component):
             #data.append(car_state)
             #data_parameters = ["CarLocation", "Discharging","CarInChargingStation","RealDischarge","CarState"]
 
-            data = []
+            data:List = []
             data.append(car_in_charging_station)
             data.append(discharge_stats)
             data = list(map(list, zip(*data)))

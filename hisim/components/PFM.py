@@ -94,7 +94,7 @@ class WarmWaterStorage:
         """
         massflow_remaining = massflow_chp
         a = -1
-        enthalpy_collected = 0
+        enthalpy_collected:float = 0
         while massflow_remaining > 0:
             lowest_slice = self.my_slices[a]
             a -= 1
@@ -118,8 +118,8 @@ class WarmWaterStorage:
         It can be determined by using the enthalpy provided by the chp and calculate how much water from the bottom
         of the tank can be heated to the desired temperature. This amount of water is the massflow_chp
         """
-        power_input_remaining = power_chp_kw * 1000 * timestep
-        massflow_chp = 0
+        power_input_remaining:float = power_chp_kw * 1000 * timestep
+        massflow_chp:float = 0
         # a: vaiable to go through the slices backwards
         a = -1
         while power_input_remaining > 0:
@@ -140,8 +140,8 @@ class WarmWaterStorage:
 
     def calculate_load_massflow(self, temperature_load_cold, power_load_kw, timestep):
 
-        power_consumption_remaining = power_load_kw * 1000 * timestep
-        massflow_load = 0
+        power_consumption_remaining:float = power_load_kw * 1000 * timestep
+        massflow_load:float = 0
         r = 0
         while power_consumption_remaining > 0:
             highest_slice = self.my_slices[r]
@@ -227,7 +227,7 @@ class WarmWaterStorage:
     def calculate_tanks_enthalpy(self):
         """ To get the enthalpy of all slices combined
             No changes of values"""
-        enthalpy_tank = 0
+        enthalpy_tank:float = 0
         for i in range(len(self.my_slices)):
             enthalpy_tank += self.my_slices[i].enthalpy
         return enthalpy_tank
@@ -236,8 +236,8 @@ class WarmWaterStorage:
         """ Get the average temperature of tank
             For each slice:
             temperature(i) * mass(i)  / total_mass """
-        total_energy = 0
-        average_density = 1000  # kg/m^3
+        total_energy:float = 0
+        average_density:float = 1000  # kg/m^3
         for i in range(len(self.my_slices)):
             total_energy += self.my_slices[i].mass * self.my_slices[i].temperature
         average_temperature = total_energy / (self.volume * average_density)
@@ -302,15 +302,15 @@ class WaterSlice:
             raise ValueError    # -> Boiling Water
 
     def __init__(self, tank_diameter: float, height: float, temperature: float):
-        self.diameter = tank_diameter
+        self.diameter:float = tank_diameter
         self.height:float = height
-        self.temperature = temperature
-        self.density = 1000     # kg/(m^3)
-        self.specific_heat_capacity = 4180  # J/kg*K
-        self.mass = self.height * (math.pi / 4) * (self.diameter ** 2) * self.density
+        self.temperature:float = temperature
+        self.density:float = 1000     # kg/(m^3)
+        self.specific_heat_capacity:float = 4180  # J/kg*K
+        self.mass:float = self.height * (math.pi / 4) * (self.diameter ** 2) * self.density
         # Enthalpy referencing to the temperature of 0 °C.
         # kg * J/kg*K * K = J = Ws
-        self.enthalpy = self.mass * self.specific_heat_capacity * self.temperature
+        self.enthalpy:float = self.mass * self.specific_heat_capacity * self.temperature
         self.check_units()
 
     def calculate_mass(self):

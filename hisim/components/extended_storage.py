@@ -67,11 +67,9 @@ class WaterSlice:
         self.enthalpy = self.mass * self.specific_heat_capacity * self.temperature
         self.check_units()
 
-    def init_from_another_slice(other_slice):
-        ws = WaterSlice()
-
-        ws.diameter = other_slice.diameter
-        ...
+    @staticmethod
+    def init_from_another_slice( other_slice):
+        ws = WaterSlice(other_slice.diameter, other_slice.height, other_slice.temperature )
         return ws
     """
     This is not used
@@ -463,8 +461,8 @@ class WarmWaterStorageSimulation:
         :param height_of_interest:          The height of the slice whose temperature is to be returned
         :return: temperature_of_interest    Temperature of interest [°C]
         """
-        collected_height = 0
-        slice_counter = 0
+        collected_height:float = 0
+        slice_counter:int = 0
         slices_in_tank = len(self.my_slices)
         while slice_counter < slices_in_tank and height_of_interest > collected_height:
             collected_height += self.my_slices[slice_counter].height
@@ -484,7 +482,7 @@ class WarmWaterStorageSimulation:
         :param minimum_temperature: Only slices with this temperature or above this temperature-level can be used properly
         :return: usable_percentage_of_tank: % which are above minimum temperature
         """
-        usable_height = 0
+        usable_height:float = 0
         slice_counter = 0
         slices_in_tank = len(self.my_slices)
         while slice_counter < slices_in_tank and self.my_slices[slice_counter].temperature >= minimum_temperature:
@@ -501,7 +499,7 @@ class WarmWaterStorageSimulation:
         Calculation from Ws to kWh; 3600s = 1h, 1000W = 1kW
         :return enthalpy_tank   Enthalpy of the tank [kWh]
         """
-        enthalpy_tank = 0
+        enthalpy_tank:float = 0
         for i in range(len(self.my_slices)):
             enthalpy_tank += self.my_slices[i].enthalpy
 
@@ -516,15 +514,15 @@ class WarmWaterStorageSimulation:
         temperature(i) * mass(i) / total_mass
         :return average_temperature     Average tank temperature [°C]
         """
-        total_energy = 0
+        total_energy:float = 0
         average_density = PhysicsConfig.water_density
         for i in range(len(self.my_slices)):
             total_energy += self.my_slices[i].mass * self.my_slices[i].temperature
-        average_temperature = total_energy / (self.volume * average_density)
+        average_temperature:float = total_energy / (self.volume * average_density)
         return average_temperature
 
     def calculate_tanks_mass(self):
-        total_mass = 0
+        total_mass:float = 0
         for i in range(len(self.my_slices)):
             total_mass += self.my_slices[i].mass
         return total_mass

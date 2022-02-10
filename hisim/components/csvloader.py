@@ -47,11 +47,11 @@ class CSVLoader(cp.Component):
                  loadtype: lt.LoadTypes,
                  unit: lt.Units,
                  column_name: str,
-                 simulation_parameters: SimulationParameters,
+                 my_simulation_parameters: SimulationParameters,
                  sep: str = ";",
                  decimal: str = ".",
                  multiplier: float = 1):
-        super().__init__(name=component_name)
+        super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
         self.output1 : cp.ComponentOutput = self.add_output(self.ComponentName,
                                             self.Output1,
@@ -64,8 +64,8 @@ class CSVLoader(cp.Component):
         df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal) # type: ignore
         dfcolumn = df.iloc[:, [column]]
         self.column_name = column_name
-        if len(dfcolumn) < simulation_parameters.timesteps:
-            raise Exception("Timesteps: " + str(simulation_parameters.timesteps) + " vs. Lines in CSV " + csv_filename + ": " + str(len(self.column_name)))
+        if len(dfcolumn) < self.my_simulation_parameters.timesteps:
+            raise Exception("Timesteps: " + str(self.my_simulation_parameters.timesteps) + " vs. Lines in CSV " + csv_filename + ": " + str(len(self.column_name)))
 
         self.column = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []

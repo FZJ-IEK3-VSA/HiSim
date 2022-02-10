@@ -1,5 +1,5 @@
 # Owned
-
+from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HydrogenStorageConfig, ElectrolyzerConfig
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import chp_system as chp
@@ -129,7 +129,8 @@ class ElectrolyzerSimulation:
 
             return hydrogen_output, oxygen_output, power_level_real,electricity_input_real
         elif hydrogen_not_stored<0:
-            assert print("Error")
+            print("Error")
+            raise ValueError("hydrogen was leftover")
         elif hydrogen_not_stored == 0:
             electricity_input_real=electricity_input
             return hydrogen_output, oxygen_output, power_level,electricity_input_real
@@ -180,8 +181,8 @@ class Electrolyzer(Component):
     PowerLevel = "Power Level"                          # %
     ElectricityRealNeeded = "ElectricityRealNeeded"
 
-    def __init__(self, component_name:str, power_electrolyzer:int,my_simulation_parameters):
-        super().__init__(component_name)
+    def __init__(self, component_name:str, power_electrolyzer:int,my_simulation_parameters: SimulationParameters):
+        super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
         # input
         self.hydrogen_not_stored: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.HydrogenNotStored, lt.LoadTypes.Hydrogen, lt.Units.kg, True)
 
@@ -455,8 +456,8 @@ class HydrogenStorage(Component):
 
 
 
-    def __init__(self, component_name: str, my_simulation_parameters,max_capacity:int):
-        super().__init__(component_name)
+    def __init__(self, component_name: str, my_simulation_parameters:SimulationParameters,max_capacity:int):
+        super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
         self.charging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, True)
         self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountTarget, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
 
@@ -472,7 +473,7 @@ class HydrogenStorage(Component):
 
         self.max_capacity = max_capacity
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
-        self.previous_state = 0
+        self.previous_state:float = 0
 
 
 

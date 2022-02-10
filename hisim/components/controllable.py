@@ -9,6 +9,7 @@ from typing import List, Any
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.utils import HISIMPATH
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -67,8 +68,8 @@ class Controllable(Component):
     ElectricityOutput = "ElectricityOutput"
     Task="Task"
 
-    def __init__(self, name):
-        super().__init__(name)
+    def __init__(self, name, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name, my_simulation_parameters=my_simulation_parameters)
         self.values: List[float] = []
 
         # Imports flexibilities from LPG

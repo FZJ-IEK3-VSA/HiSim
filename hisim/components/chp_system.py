@@ -5,6 +5,7 @@ from hisim.components.configuration import PhysicsConfig
 from hisim import utils
 #from math import pi
 #from math import floor
+from hisim.simulationparameters import SimulationParameters
 
 import pandas as pd
 import os
@@ -108,8 +109,8 @@ class CHP(Component):
     NumberofCycles = "NumberofCycles"
     ThermalOutputPower = "ThermalOutputPower"
     GasDemandReal="GasDemandReal"
-    def __init__(self, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen",operating_mode="both",p_el_max=3600):
-        super().__init__(name)
+    def __init__(self, my_simulation_parameters: SimulationParameters, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen",operating_mode="both",p_el_max=3600):
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
         self. gas_type = gas_type #Gas Type can be "Hydrogen" or "Methan"

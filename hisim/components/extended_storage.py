@@ -6,6 +6,7 @@ import math
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import WarmWaterStorageConfig
 #from components.extended_storage import WaterSlice
@@ -673,8 +674,8 @@ class WarmWaterStorage(Component):
     HeatLosses = "Heat Losses"                                              # W
     TankMass = "Tank Mass"                                                  # kg
 
-    def __init__(self, component_name, config: WarmWaterStorageConfig, seconds_per_timestep):
-        super().__init__(component_name)
+    def __init__(self, component_name: str,my_simulation_parameters: SimulationParameters,  config: WarmWaterStorageConfig):
+        super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
         # Input
         self.chp_charging_side_input_mass: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.CHP_ChargingSideInput_mass, lt.LoadTypes.WarmWater, lt.Units.kg_per_sec, True)
@@ -716,7 +717,7 @@ class WarmWaterStorage(Component):
         self.tank_mass: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.TankMass, lt.LoadTypes.WarmWater, lt.Units.kg)
 
         self.wws = WarmWaterStorageSimulation(config)
-        self.seconds_per_timestep = seconds_per_timestep
+        self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
 
         self.previous_state = 0
 

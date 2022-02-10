@@ -1,12 +1,13 @@
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 class GenericSurplusController(cp.Component):
     ElectricityInput = "ElectricityInput"
     State = "State"
 
-    def __init__(self, mode=1):
-        super().__init__("FlexibleController")
+    def __init__(self,my_simulation_parameters: SimulationParameters , mode=1):
+        super().__init__("FlexibleController", my_simulation_parameters=my_simulation_parameters)
 
         self.build(mode)
 

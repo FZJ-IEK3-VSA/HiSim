@@ -8,6 +8,7 @@ from math import pi
 # Owned
 import hisim.component as cp
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -88,10 +89,10 @@ class Boiler( cp.Component ):
     ElectricityOutput = "ElectricityOutput"
     HydrogenOutput = "HydrogenOutput"
     
-    def __init__( self, definition = '0815-boiler', fuel = 'electricity' ):
+    def __init__( self,my_simulation_parameters: SimulationParameters,  definition = '0815-boiler', fuel = 'electricity' ):
 
-        super().__init__( "Boiler" )
-        
+        super().__init__( "Boiler", my_simulation_parameters=my_simulation_parameters )
+        self.efficiency: float = 0
         self.build( definition, fuel )
         
         #initialize Boiler State
@@ -128,6 +129,7 @@ class Boiler( cp.Component ):
                                                       lt.Units.kg_per_sec )
         else:
             raise Exception(" The fuel ", str( self.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
+
     
     def build( self, definition, fuel ):
         if type( definition ) == str:
@@ -228,12 +230,13 @@ class BoilerController(cp.Component):
     # 1. Building
 
     def __init__(self,
-                  t_water_min : float = 273.0 + 40.0,
+                 my_simulation_parameters: SimulationParameters,
+        t_water_min : float = 273.0 + 40.0,
                   t_water_max : float = 273.0 + 80.0,
                   P_on :        int =   2400,
                   smart :       int = 0 ):
         
-        super().__init__( "BoilerController" )
+        super().__init__( name="BoilerController", my_simulation_parameters=my_simulation_parameters )
         
         self.build( t_water_min = t_water_min,
                     t_water_max = t_water_max,

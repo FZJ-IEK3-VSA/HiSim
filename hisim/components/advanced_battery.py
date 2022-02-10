@@ -4,7 +4,7 @@ import copy
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
-
+from hisim.simulationparameters import SimulationParameters
 class AdvancedBatteryState:
 
     def __init__(self, soc: float, P_bs: float, _th):
@@ -21,10 +21,10 @@ class AdvancedBattery(Component):
     ACBatteryPower = "AC Battery Power"
     StateOfCharge = "State Of Charge"
 
-    def __init__(self, parameter, sim_params):
-        super().__init__("AdvancedBattery")
+    def __init__(self,  parameter, my_simulation_parameters: SimulationParameters ):
+        super().__init__("AdvancedBattery", my_simulation_parameters)
 
-        self.build(parameter, sim_params=sim_params)
+        self.build(parameter)
 
         self.state = AdvancedBatteryState(soc=0.0, P_bs=0.0, _th=False)
         self.previous_state = copy.copy(self.state)
@@ -46,8 +46,8 @@ class AdvancedBattery(Component):
                                                        lt.LoadTypes.Any,
                                                        lt.Units.Any)
 
-    def build(self, parameter, sim_params):
-        self.BatMod_AC(d=parameter, _dt=sim_params.seconds_per_timestep)
+    def build(self, parameter):
+        self.BatMod_AC(d=parameter, _dt=self.my_simulation_parameters.seconds_per_timestep)
 
     def BatMod_AC(self, d, _dt):
         """Performance Simulation function for AC-coupled battery systems
@@ -99,7 +99,7 @@ class AdvancedBattery(Component):
         self._eta_BAT /= 100
 
         # Check if the dead or settling time can be ignored and set flags accordingly
-        if _dt >= (3 * self._t_CONSTANT) or self._tend == 1:
+        if _dt >= (3 * self._t_CONSTANT):  #or self._tend == 1: # commented because _tend is not defined
             _tstart = 1
             self.T_DEAD = False
         else:
@@ -237,8 +237,8 @@ class AdvancedBatteryController(Component):
     ElectricityInput = "ElectricityInput"
     State = "State"
 
-    def __init__(self):
-        super().__init__(name="BatteryController")
+    def __init__(self, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name="BatteryController",my_simulation_parameters=my_simulation_parameters)
 
         self.inputC : ComponentInput = self.add_input(self.ComponentName,
                                                       self.ElectricityInput,

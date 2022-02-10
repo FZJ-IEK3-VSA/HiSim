@@ -5,29 +5,6 @@ import datetime
 from hisim.simulationparameters import SimulationParameters
 # Package
 from hisim import loadtypes as lt
-#
-#
-# class SimulationParameters:
-#     def __init__(self, start_date, end_date, seconds_per_timestep):
-#         self.start_date = start_date
-#         self.end_date = end_date
-#         self.seconds_per_timestep = seconds_per_timestep
-#         self.duration = end_date - start_date
-#         total_seconds = self.duration.total_seconds()
-#         self.timesteps: int = int(total_seconds / seconds_per_timestep)
-#
-#     @classmethod
-#     def full_year(cls, year: int = 2019, seconds_per_timestep: int = 60):
-#         return cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
-#
-#     @classmethod
-#     def january_only(cls, year: int, seconds_per_timestep: int):
-#         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep)
-#
-#     @classmethod
-#     def one_day_only(cls, year: int, seconds_per_timestep: int):
-#         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
-
 
 class ComponentOutput:
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
@@ -96,16 +73,13 @@ class SingleTimeStepValues:
 
 class Component:
     
-    def __init__(self, name: str):
+    def __init__(self, name: str,my_simulation_parameters: SimulationParameters ):
         self.ComponentName: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
-        self.my_simulation_parameters: Optional[SimulationParameters] = None
-
-    def set_simulation_parameters(self, simpars: SimulationParameters):
-        self.my_simulation_parameters = simpars
+        self.my_simulation_parameters = my_simulation_parameters
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:
@@ -123,11 +97,11 @@ class Component:
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str):
         if len(self.inputs) == 0:
             raise Exception("The component " + self.ComponentName + " has no inputs.")
-        componenet_input: ComponentInput
+        component_input: ComponentInput
         input_to_set = None
-        for componenet_input in self.inputs:
-            if componenet_input.FieldName == input_fieldname:
-                input_to_set = componenet_input
+        for component_input in self.inputs:
+            if component_input.FieldName == input_fieldname:
+                input_to_set = component_input
         if input_to_set is None:
             raise Exception("The component " + self.ComponentName + " has no input with the name " + input_fieldname)
         input_to_set.src_object_name = src_object_name

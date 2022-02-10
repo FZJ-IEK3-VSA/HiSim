@@ -1,4 +1,3 @@
-from typing import List
 import os
 import time
 import logging
@@ -8,7 +7,7 @@ import datetime
 import copy
 
 # Other Libraries
-from typing import List
+from typing import List, Dict, Any
 from typing import Tuple
 import pandas as pd
 import pickle
@@ -27,14 +26,12 @@ from hisim import loadtypes as lt
 
 
 class ComponentWrapper:
-    def __init__(self, component: cp.Component, is_cachable: bool, my_simulation_parameters: SimulationParameters):
+    def __init__(self, component: cp.Component, is_cachable: bool):
         self.MyComponent = component
         self.component_inputs: List[cp.ComponentInput] = []
         self.component_outputs: List[cp.ComponentOutput] = []
         #self.cachedict: = {}
         self.is_cachable = is_cachable
-        self.my_simulation_parameters = my_simulation_parameters
-        component.set_simulation_parameters(my_simulation_parameters)
 
     def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]):
         logging.info("Registering component outputs on " + self.MyComponent.ComponentName)
@@ -175,13 +172,6 @@ class Simulator:
         self.report = pp.report.Report(dirpath=self.dirpath)
 
 
-    def set_parameters(self, simulation_parameters: SimulationParameters) -> SimulationParameters:
-        """
-        Store the simulation parameters as an attribute of Simulator class.
-        """
-        self.SimulationParameters = simulation_parameters
-        return simulation_parameters
-
     def add_component(self, component: cp.Component, is_cachable: bool = False):
         """
         Adds component to simulator and wraps it up
@@ -189,7 +179,7 @@ class Simulator:
         """
         if self.SimulationParameters is None:
             raise Exception("Simulation Parameters were not initialized")
-        wrap = ComponentWrapper(component, is_cachable, self.SimulationParameters)
+        wrap = ComponentWrapper(component, is_cachable)
         wrap.register_component_outputs(self.all_outputs)
         self.WrappedComponents.append(wrap)
 
@@ -317,7 +307,7 @@ class Simulator:
                 # Calculates time execution
                 lastmessage = datetime.datetime.now()
                 elapsed = datetime.datetime.now() - starttime
-                e = {}
+                e: Dict[str, Any] = {}
                 e["minutes"], e["seconds"] = divmod(elapsed.seconds, 60)
                 e["seconds"] = str(e["seconds"]).zfill(2)
 
@@ -325,11 +315,11 @@ class Simulator:
                 # Calculates steps achieved per time duration
                 steps_per_second = step / elapsed.total_seconds()
                 if step == 0:
-                    average_iteration_tries = 1
+                    average_iteration_tries:float = 1
                 else:
                     average_iteration_tries = total_iteration_tries / step
                 time_elapsed = datetime.timedelta( seconds=( (self.SimulationParameters.timesteps - step) / steps_per_second) )
-                d = {}
+                d: Dict[str,Any] = {}
                 d["minutes"], d["seconds"] = divmod(time_elapsed.seconds, 60)
                 d["seconds"] = str(d["seconds"]).zfill(2)
 
@@ -350,7 +340,7 @@ class Simulator:
             column_name = entry.get_pretty_name()
             columNames.append(column_name)
             logging.debug("Output column: " + column_name)
-            self.all_outputs[index].Results = np_results[:, index]
+            #self.all_outputs[index].Results = np_results[:, index]
         self.results = pd.DataFrame(data=all_result_lines, columns=columNames)
         index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results), freq="T")
         self.results.index = index

@@ -5,15 +5,15 @@ from typing import List
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import component as cp
 from hisim import loadtypes as lt
-
+from hisim.simulationparameters import SimulationParameters
 
 
 class CalculateOperation(cp.Component):
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
     Output = "Output"
 
-    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units):
-        super().__init__(name)
+    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
         self.operations: List[str] = []
         self.loadtype = loadtype
         self.unit = unit
@@ -80,8 +80,8 @@ class ElectricityGrid(Component):
     operations_available = ["Sum", "Subtract"]
     ElectricityOutput = "ElectricityOutput"
 
-    def __init__(self, name: str, grid=None, signal=None):
-        super().__init__(name="{}_{}".format("ElectricityGrid", name))
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters , grid=None, signal=None):
+        super().__init__(name="{}_{}".format("ElectricityGrid", name), my_simulation_parameters=my_simulation_parameters)
         self.signal=signal
         self.operations: List[str] = []
         self.loadtype = lt.LoadTypes.Electricity
@@ -103,12 +103,12 @@ class ElectricityGrid(Component):
         return myinput
 
     def __add__(self, other_electricity_grid):
-        return ElectricityGrid(name="{}Sum{}".format(self.ComponentName, other_electricity_grid.ComponentName),
+        return ElectricityGrid(name="{}Sum{}".format(self.ComponentName, other_electricity_grid.ComponentName), my_simulation_parameters=self.my_simulation_parameters,
                                grid=[self, "Sum", other_electricity_grid])
 
     def __sub__(self, other_electricity_grid):
         return ElectricityGrid(name="{}Subtract{}".format(self.ComponentName, other_electricity_grid.ComponentName),
-                               grid=[self, "Subtract", other_electricity_grid])
+                               grid=[self, "Subtract", other_electricity_grid], my_simulation_parameters=self.my_simulation_parameters)
 
     def connect_electricity_input(self, component: Component):
         if hasattr(component, 'ElectricityOutput') is False:
@@ -177,8 +177,8 @@ class SumBuilderForTwoInputs(Component):
     SumInput2 = "Input 2"
     SumOutput = "Sum"
 
-    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units):
-        super().__init__(name)
+    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
         self.input1: cp.ComponentInput = self.add_input(self.ComponentName,
                                                      SumBuilderForTwoInputs.SumInput1,
                                                      loadtype,
@@ -214,8 +214,8 @@ class SumBuilderForThreeInputs(Component):
     SumInput3 = "Input 3"
     SumOutput = "Sum"
 
-    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units):
-        super().__init__(name)
+    def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units,my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
         self.input1: cp.ComponentInput = self.add_input(self.ComponentName, SumBuilderForThreeInputs.SumInput1,
                                                      loadtype, unit, True)
         self.input2: cp.ComponentInput = self.add_input(self.ComponentName, SumBuilderForThreeInputs.SumInput2,

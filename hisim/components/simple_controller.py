@@ -4,7 +4,7 @@ import copy
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
-
+from hisim.simulationparameters import SimulationParameters
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -18,8 +18,8 @@ class SimpleController(Component):
     StorageFillLevel = "Fill Level Percent"
     GasHeaterPowerPercent = "Gas Heater Power Level"
 
-    def __init__(self, name: str):
-        super().__init__(name)
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name, my_simulation_parameters=my_simulation_parameters)
         self.input1: ComponentInput = self.add_input(self.ComponentName, SimpleController.StorageFillLevel, lt.LoadTypes.Electricity, lt.Units.kWh, True)
         self.output1: ComponentOutput = self.add_output(self.ComponentName, SimpleController.GasHeaterPowerPercent, lt.LoadTypes.Gas, lt.Units.Percent)
         self.state = 0

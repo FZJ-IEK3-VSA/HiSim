@@ -5,7 +5,7 @@ import copy
 import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
-
+from hisim.simulationparameters import SimulationParameters
 
 # idead of the class. Save ControlSignal of Componentes in lasttimestep
 # on basis of ControlSignals of last timestept, rule ControlSignals of futre timesteps
@@ -50,6 +50,7 @@ class Controller(cp.Component):
     CheckPeakShaving="CheckPeakShaving"
 
     def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
                  temperature_storage_target_warm_water = 50,
                  temperature_storage_target_heating_water =35,
                  temperature_storage_target_hysteresis_ww=45,
@@ -57,7 +58,7 @@ class Controller(cp.Component):
                  strategy = "optimize_own_consumption",
                  limit_to_shave=0,
                  percentage_to_shave=0):
-        super().__init__("Controller")
+        super().__init__(name="Controller", my_simulation_parameters=my_simulation_parameters)
 
         self.temperature_storage_target_warm_water=temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water=temperature_storage_target_heating_water

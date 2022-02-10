@@ -9,7 +9,7 @@ from math import pi
 import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
-
+from hisim.simulationparameters import SimulationParameters
 from hisim.components.extended_storage import WaterSlice
 from hisim.components.configuration import WarmWaterStorageConfig
 from hisim.components.configuration import PhysicsConfig
@@ -102,11 +102,12 @@ class HeatPump(cp.Component):
     # 2. HeatPumpController
 
     def __init__(self,
-                 manufacturer="Viessmann Werke GmbH & Co KG",
+                 my_simulation_parameters: SimulationParameters,
+        manufacturer="Viessmann Werke GmbH & Co KG",
                  name="Vitocal 300-A AWO-AC 301.B07",
                  min_operation_time=60,
                  min_idle_time=15):
-        super().__init__("HeatPump")
+        super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
 
         self.build(manufacturer, name, min_operation_time, min_idle_time)
 
@@ -410,11 +411,12 @@ class HeatPumpController(cp.Component):
     # 1. Building
 
     def __init__(self,
-                 t_air_heating: float = 18.0,
+                 my_simulation_parameters: SimulationParameters,
+        t_air_heating: float = 18.0,
                  t_air_cooling: float = 26.0,
                  offset: float = 0.0,
                  mode=1):
-        super().__init__("HeatPumpController")
+        super().__init__("HeatPumpController", my_simulation_parameters=my_simulation_parameters)
         self.build(t_air_cooling=t_air_cooling,
                    t_air_heating=t_air_heating,
                    offset=offset,

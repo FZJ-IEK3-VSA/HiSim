@@ -12,6 +12,7 @@ from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
+from hisim.simulationparameters import SimulationParameters
 from functools import lru_cache
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -148,12 +149,11 @@ class Building(cp.Component):
     # 3. HeaterComponent (HeatPump,...)
 
     def __init__(self,
-                 building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+                 my_simulation_parameters: SimulationParameters,
+                building_code="DE.N.SFH.05.Gen.ReEx.001.002",
                  bClass="medium",
-                 initial_temperature=23,
-                 seconds_per_timestep=60,
-                 sim_params=None):
-        super().__init__(name="Building")
+                 initial_temperature=23):
+        super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
 
         self.c_m:float = 0
@@ -172,7 +172,7 @@ class Building(cp.Component):
         self.q_sol_ref: float = 0
         self.q_h_nd_ref: float = 0
 
-        self.build(bClass, building_code, seconds_per_timestep, sim_params)
+        self.build(bClass, building_code)
 
         self.state:BuildingState = BuildingState(t_m=initial_temperature, c_m=self.c_m)
         self.previous_state = self.state.self_copy()
@@ -426,18 +426,11 @@ class Building(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build(self, bClass, buildingcode, seconds_per_timestep, sim_params):
-        if sim_params is not None:
-            #self.time_correction_factor = 1 / sim_params.seconds_per_timestep
-            self.time_correction_factor = sim_params.seconds_per_timestep / 3600
-            self.seconds_per_timestep = sim_params.seconds_per_timestep
-            self.timesteps = sim_params.timesteps
-        else:
-            self.seconds_per_timestep = seconds_per_timestep
-            #self.time_correction_factor = 1/seconds_per_timestep
-            #I guess you wanted to transfer W to Wh
-            self.time_correction_factor = seconds_per_timestep / 3600
-            self.timesteps = int(1E3)
+    def build(self, bClass, buildingcode):
+        #self.time_correction_factor = 1 / sim_params.seconds_per_timestep
+        self.time_correction_factor = self.my_simulation_parameters.seconds_per_timestep / 3600
+        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.timesteps = self.my_simulation_parameters.timesteps
 
         self.parameters = [ bClass, buildingcode ]
 

@@ -54,11 +54,10 @@ class ComponentName(Component):
     OutputWithoutState = "OutputWithoutState"
 
     def __init__(self, component_name: str, my_simulation_parameters: SimulationParameters):
-        super().__init__(name=component_name)
+        super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
         # If a component requires states, this can be implemented here.
         self.state = ComponentNameState()
-        self.my_simulation_parameters = my_simulation_parameters
         self.previous_state = deepcopy(self.state)
 
         self.input_from_other_component: ComponentInput = self.add_input(object_name=self.ComponentName,

@@ -12,18 +12,18 @@ def test_building():
     building_code="DE.N.SFH.05.Gen.ReEx.001.001"
     bClass="medium"
     seconds_per_timestep = 60
-
+    my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(13)
 
     # Set Occupancy
-    my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile)
+    my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
 
-    my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+
     # Set Weather
-    my_weather = weather.Weather(weather_location, my_simulation_parameters)
+    my_weather = weather.Weather(location=weather_location,my_simulation_parameters=my_simulation_parameters)
 
     # Set Residence
-    my_residence = building.Building(building_code=building_code, bClass=bClass, seconds_per_timestep=60)
+    my_residence = building.Building(building_code=building_code, bClass=bClass, my_simulation_parameters=my_simulation_parameters)
 
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",

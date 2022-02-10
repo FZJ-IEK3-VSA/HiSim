@@ -87,20 +87,15 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+        my_simulation_parameters: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
                                                                                      seconds_per_timestep=seconds_per_timestep)
-    else:
-        my_sim_params = my_simulation_parameters
-
-
-    my_sim.set_parameters(my_sim_params)
 
     # Build occupancy
-    my_occupancy = occupancy.Occupancy(profile=occupancy_profile)
+    my_occupancy = occupancy.Occupancy(profile=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather = weather.Weather(location=location, my_simulation_parameters=my_sim_params)
+    my_weather = weather.Weather(location=location, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 
     my_photovoltaic_system = pvs.PVSystem(time=time,
@@ -110,7 +105,7 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
                                               module_name=module_name,
                                               integrateInverter=integrateInverter,
                                               inverter_name=inverter_name,
-                                              sim_params=my_sim_params)
+                                              my_simulation_parameters=my_simulation_parameters)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
                                          my_weather.ComponentName,
                                          my_weather.TemperatureOutside)
@@ -138,13 +133,13 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
     my_sim.add_component(my_photovoltaic_system)
     
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid( name = "BaseLoad",
-                                                                      grid = [ my_occupancy, "Subtract", my_photovoltaic_system ] )
+                                                                      grid = [ my_occupancy, "Subtract", my_photovoltaic_system ], my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_base_electricity_load_profile )
 
     my_building = building.Building(building_code=building_code,
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
-                                        sim_params=my_sim_params)
+                                        my_simulation_parameters=my_simulation_parameters)
                                         #seconds_per_timestep=seconds_per_timestep)
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
@@ -175,12 +170,12 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
     
-    my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = fuel )
+    my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = fuel, my_simulation_parameters=my_simulation_parameters )
     my_boiler.connect_input( my_boiler.WaterConsumption,
                              my_occupancy.ComponentName, 
                              my_occupancy.WaterConsumption )
     my_sim.add_component( my_boiler )
-    my_boiler_controller = simple_bucket_boiler.BoilerController( smart = smart )
+    my_boiler_controller = simple_bucket_boiler.BoilerController( smart = smart, my_simulation_parameters=my_simulation_parameters )
     my_boiler_controller.connect_input( my_boiler_controller.StorageTemperature,
                                         my_boiler.ComponentName,
                                         my_boiler.StorageTemperature )
@@ -194,13 +189,13 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
                                         my_base_electricity_load_profile.ComponentName,
                                         my_base_electricity_load_profile.ElectricityOutput )
         my_boiler_substracted_electricity_load_profile = sumbuilder.ElectricityGrid( name = "BoilerSubstracted",
-                                                                      grid = [ my_base_electricity_load_profile, "Sum", my_boiler ] ) 
+                                                                      grid = [ my_base_electricity_load_profile, "Sum", my_boiler ] , my_simulation_parameters=my_simulation_parameters)
         my_sim.add_component( my_boiler_substracted_electricity_load_profile )
 
     my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
                                                            t_air_cooling=t_air_cooling,
                                                            offset=offset,
-                                                           mode=hp_mode)
+                                                           mode=hp_mode, my_simulation_parameters=my_simulation_parameters)
     my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
                                           my_building.ComponentName,
                                           my_building.TemperatureMean)
@@ -217,7 +212,7 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
     my_heat_pump = heat_pump.HeatPump(manufacturer=hp_manufacturer,
                                           name=hp_name,
                                           min_operation_time=hp_min_operation_time,
-                                          min_idle_time=hp_min_idle_time)
+                                          min_idle_time=hp_min_idle_time, my_simulation_parameters=my_simulation_parameters)
     my_heat_pump.connect_input(my_heat_pump.State,
                                my_heat_pump_controller.ComponentName,
                                my_heat_pump_controller.State)
@@ -232,10 +227,10 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
                               my_heat_pump.ThermalEnergyDelivered)
     if fuel == 'electricity':
         my_heat_pump_substracted_electricity_load_profile = sumbuilder.ElectricityGrid( name = "HeatPumpSubstracted",
-                                                                      grid = [ my_boiler_substracted_electricity_load_profile, "Sum", my_heat_pump ] )
+                                                                      grid = [ my_boiler_substracted_electricity_load_profile, "Sum", my_heat_pump ], my_simulation_parameters=my_simulation_parameters )
     else:
         my_heat_pump_substracted_electricity_load_profile = sumbuilder.ElectricityGrid( name = "HeatPumpSubstracted",
-                                                                      grid = [ my_base_electricity_load_profile, "Sum", my_heat_pump ] )
+                                                                      grid = [ my_base_electricity_load_profile, "Sum", my_heat_pump ], my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_heat_pump_substracted_electricity_load_profile )
     
 def basic_household_implicit(my_sim):

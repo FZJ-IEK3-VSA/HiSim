@@ -7,22 +7,23 @@ from hisim.components.ev_charger import EVChargerController
 from typing import List
 from hisim import loadtypes as lt
 from abc import ABC, abstractmethod
-
+from hisim.simulationparameters import SimulationParameters
 # NOT BEING ANYWHERE
 
 class SmartController(Component):
 
-    def __init__(self, controllers: dict = {"HeatPump":["mode"], "EVCharger":["mode"]}):
-        super().__init__("SmartController")
+    def __init__(self,my_simulation_parameters: SimulationParameters
+,controllers: dict = {"HeatPump":["mode"], "EVCharger":["mode"]}):
+        super().__init__(name="SmartController", my_simulation_parameters=my_simulation_parameters)
         self.WrappedControllers:List  = []
         self.build(controllers)
 
     def build(self, controllers):
         for controller_name in controllers:
             if "HeatPump" in controller_name:
-                self.WrappedControllers.append(HeatPumpController())
+                self.WrappedControllers.append(HeatPumpController(my_simulation_parameters=self.my_simulation_parameters))
             elif "EVCharger" in controller_name:
-                self.WrappedControllers.append(EVChargerController())
+                self.WrappedControllers.append(EVChargerController(my_simulation_parameters=self.my_simulation_parameters))
         self.add_io()
 
     def connect_similar_inputs(self, components):

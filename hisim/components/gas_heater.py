@@ -1,5 +1,6 @@
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -38,8 +39,8 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"
 
-    def __init__(self,temperaturedelta=10,power_max=12_000):
-        super().__init__("GasHeater")
+    def __init__(self,my_simulation_parameters: SimulationParameters ,temperaturedelta=10,power_max=12_000):
+        super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
         self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
 

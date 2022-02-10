@@ -4,6 +4,7 @@ from hisim import loadtypes as lt
 from hisim.components.configuration import CHPControllerConfig, GasControllerConfig, ElectrolyzerConfig
 from hisim.components import chp_system as chp
 from hisim.components.configuration import ExtendedControllerConfig
+from hisim.simulationparameters import SimulationParameters
 from math import ceil
 from copy import deepcopy
 
@@ -225,8 +226,8 @@ class ExtendedController(Component):
     RuntimeCounterCHP = "RuntimeCounterCHP"
     RuntimeCounterGasHeater = "RuntimeCounterGasHeater"
 
-    def __init__(self, component_name, config: ExtendedControllerConfig, seconds_per_timestep):
-        super().__init__(component_name)
+    def __init__(self, component_name:str, config: ExtendedControllerConfig, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=component_name,  my_simulation_parameters=my_simulation_parameters)
         # Input
         self.electricity_demand_household: ComponentInput = self.add_input(self.ComponentName, ExtendedController.ElectricityDemand, lt.LoadTypes.Electricity, lt.Units.Watt, True)
         self.pv_production: ComponentInput = self.add_input(self.ComponentName, ExtendedController.PV_Production, lt.LoadTypes.Electricity, lt.Units.Watt, True)
@@ -248,7 +249,7 @@ class ExtendedController(Component):
         self.runtime_counter_gas_heater: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.RuntimeCounterGasHeater, lt.LoadTypes.Any, lt.Units.Any)
 
         self.extended_controller = ExtendedControllerSimulation(config)
-        self.seconds_per_timestep = seconds_per_timestep
+        self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
 
         # CHP state/runtime & Gas state/runtime
         self.state_chp1 = 0

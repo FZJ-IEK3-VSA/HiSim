@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.loadtypes import LoadTypes, Units
 from hisim.inputs.heat_pump_hplib import hplib as hpl
+from hisim.simulationparameters import SimulationParameters
 from typing import Optional
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -40,7 +41,7 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"                                           # s
     TimeOff = "TimeOff"                                         # s
 
-    def __init__(self, model: str, group_id: int = -1, t_in: int = -300, t_out_val: int = -300,
+    def __init__(self, model: str,my_simulation_parameters: SimulationParameters , group_id: int = -1, t_in: int = -300, t_out_val: int = -300,
                  p_th_set: int = -300):
         """
         Loads the parameters of the specified heat pump.
@@ -63,7 +64,7 @@ class HeatPumpHplib(Component):
         parameters : pd.DataFrame
             Data frame containing the model parameters.
         """
-        super().__init__(name="HeatPump")
+        super().__init__(name="HeatPump", my_simulation_parameters=my_simulation_parameters)
 
         self.model = model
 

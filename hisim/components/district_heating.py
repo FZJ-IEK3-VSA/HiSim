@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hisim import component as cp
 from hisim import loadtypes as lt
 import copy as copy
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -62,7 +63,7 @@ class DistrictHeating( cp.Component ):
     ThermalEnergyDelivered =    "ThermalEnergyDelivered"
     PowerDistrictHeating =      "PowerDistrictHeating"
 
-    def __init__( self, max_power: int, min_power : int, efficiency : float ):
+    def __init__( self,my_simulation_parameters: SimulationParameters , max_power: int, min_power : int, efficiency : float ):
         """
         Parameters
         ----------
@@ -74,7 +75,7 @@ class DistrictHeating( cp.Component ):
             Efficiency of heat transfer
         """
         
-        super( ).__init__( name = 'DistrictHeating' )
+        super( ).__init__( name = 'DistrictHeating', my_simulation_parameters=my_simulation_parameters )
         
         #introduce parameters of district heating
         self.build( max_power = max_power,
@@ -178,12 +179,13 @@ class DistrictHeatingController( cp.Component ):
     # 1. Building
 
     def __init__( self,
-                 max_power : float = 6000,
+                  my_simulation_parameters: SimulationParameters,
+                  max_power : float = 6000,
                  min_power : float = 1000,
                  t_air_heating: float = 20.0,
                  tol : float = 1e-3 ):
         
-        super().__init__( "DistrictHeatingController" )
+        super().__init__( name="DistrictHeatingController", my_simulation_parameters=my_simulation_parameters )
         
         self.build( max_power = max_power,
                     min_power = min_power,

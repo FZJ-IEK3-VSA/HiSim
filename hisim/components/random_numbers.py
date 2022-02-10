@@ -5,12 +5,12 @@ from typing import List
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
-
+from hisim.simulationparameters import SimulationParameters
 class RandomNumbers(Component):
     RandomOutput: str = "Random Numbers"
 
-    def __init__(self, name: str, timesteps: int, minimum: float, maximum: float):
-        super().__init__(name)
+    def __init__(self, name: str, timesteps: int, minimum: float, maximum: float, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name, my_simulation_parameters=my_simulation_parameters)
         self.values: List[float] = []
         number_range = maximum - minimum
         for x in range(timesteps):

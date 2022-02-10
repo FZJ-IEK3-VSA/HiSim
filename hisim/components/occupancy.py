@@ -7,7 +7,7 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-
+from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
 
@@ -62,9 +62,10 @@ class Occupancy(cp.Component):
     # None
 
     def __init__( self,
+                  my_simulation_parameters: SimulationParameters,
                   profile="CH01",
                   seconds_per_timestep = 60 ):
-        super().__init__(name="Occupancy")
+        super().__init__(name="Occupancy", my_simulation_parameters=my_simulation_parameters)
 
         self.build( profile = profile, seconds_per_timestep = seconds_per_timestep )
 

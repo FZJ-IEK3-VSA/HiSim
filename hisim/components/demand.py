@@ -6,6 +6,7 @@ from hisim.components.configuration import LoadConfig
 from hisim.components.configuration import ElectrolyzerConfig
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
+from hisim.simulationparameters import SimulationParameters
 from typing import List
 
 class HouseholdHeatDemand(Component):
@@ -30,8 +31,8 @@ class HouseholdHeatDemand(Component):
 
     DemandSatisfied = "Demand Satisfied"        # 0 or 1
 
-    def __init__(self, component_name, seconds_per_timestep):
-        super().__init__(component_name)
+    def __init__(self, component_name, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
         self.heat_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdHeatDemand.HeatDemand, lt.LoadTypes.WarmWater, lt.Units.Watt, True)
         self.mass_input: ComponentInput = self.add_input(self.ComponentName, HouseholdHeatDemand.MassInput, lt.LoadTypes.WarmWater, lt.Units.kg_per_sec, True)
         self.temperature_input: ComponentInput = self.add_input(self.ComponentName, HouseholdHeatDemand.TemperatureInput, lt.LoadTypes.WarmWater, lt.Units.Celsius, True)
@@ -41,7 +42,6 @@ class HouseholdHeatDemand(Component):
 
         self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdHeatDemand.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
-        self.seconds_per_timestep = seconds_per_timestep
         self.state:List = []
         self.previous_state = self.state
         self.check_temperature = 50
@@ -61,7 +61,7 @@ class HouseholdHeatDemand(Component):
         """
         heat_demand = stsv.get_input_value(self.heat_demand)        # W
         mass_input_sec = stsv.get_input_value(self.mass_input)      # kg/s
-        mass_input = mass_input_sec * self.seconds_per_timestep     # kg
+        mass_input = mass_input_sec * self.my_simulation_parameters.seconds_per_timestep     # kg
         # massflow is generated in this component. Actually no conversion for the inflow needed.
 
         temperature_input = stsv.get_input_value(self.temperature_input)    # °C
@@ -69,7 +69,7 @@ class HouseholdHeatDemand(Component):
         if heat_demand > 0 and (mass_input == 0 and temperature_input == 0):
             """first iteration --> random numbers"""
             temperature_input = 40.456
-            mass_input = 0.0123 * self.seconds_per_timestep
+            mass_input = 0.0123 * self.my_simulation_parameters.seconds_per_timestep
 
         if heat_demand > 0:
             # massflow by configuration class is given in kg/s
@@ -84,10 +84,10 @@ class HouseholdHeatDemand(Component):
                 temperature_delta_heat = heat_demand / (PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
 
             # kg/timestep = kg/s * seconds_per_timestep
-            mass_input_load = massflows_possible[mass_flow_level] * self.seconds_per_timestep
+            mass_input_load = massflows_possible[mass_flow_level] * self.my_simulation_parameters.seconds_per_timestep
 
             # mass_input_load = LoadConfig.massflow_load * self.seconds_per_timestep
-            energy_demand = heat_demand * self.seconds_per_timestep
+            energy_demand = heat_demand * self.my_simulation_parameters.seconds_per_timestep
             enthalpy_slice = mass_input_load * temperature_input * PhysicsConfig.water_specific_heat_capacity
             enthalpy_new = enthalpy_slice - energy_demand
             temperature_new = enthalpy_new / (mass_input_load * PhysicsConfig.water_specific_heat_capacity)
@@ -107,7 +107,7 @@ class HouseholdHeatDemand(Component):
         else:
             demand_satisfied = 1
 
-        mass_output_load = mass_input_load / self.seconds_per_timestep  # kg/timestep --> kg/s
+        mass_output_load = mass_input_load / self.my_simulation_parameters.seconds_per_timestep  # kg/timestep --> kg/s
         self.test_new_temperature = temperature_new
 
         stsv.set_output_value(self.mass_output, mass_output_load)
@@ -142,8 +142,8 @@ class ElectricityDistributor(Component):
     PowerToElectrolyzer = "PowerToElectrolyzer"
     PowerToFromGrid = "PowerToFromGrid"
 
-    def __init__(self, component_name):
-        super().__init__(component_name)
+    def __init__(self, component_name:str, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
         # input
         self.power_PV: ComponentInput = self.add_input(self.ComponentName, ElectricityDistributor.PowerPV, lt.LoadTypes.Electricity, lt.Units.Watt, True)
         self.power_CHP: ComponentInput = self.add_input(self.ComponentName, ElectricityDistributor.PowerCHP, lt.LoadTypes.Electricity, lt.Units.Watt, True)
@@ -224,8 +224,8 @@ class HouseholdWarmWaterDemandWatt(Component):
     EnergyDischarged = "Energy Discharged"                          # W
     DemandSatisfied = "Demand Satisfied"                    # 0 or 1
 
-    def __init__(self, component_name, seconds_per_timestep):
-        super().__init__(component_name)
+    def __init__(self, component_name:str, my_simulation_parameters: SimulationParameters):
+        super().__init__(component_name, my_simulation_parameters)
         # input
         self.ww_energy_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_EnergyDemand, lt.LoadTypes.WarmWater, lt.Units.Watt, True)
         self.ww_mass_input: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_MassInput, lt.LoadTypes.WarmWater, lt.Units.kg_per_sec, True)
@@ -237,8 +237,6 @@ class HouseholdWarmWaterDemandWatt(Component):
 
         self.energy_discharged: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.EnergyDischarged, lt.LoadTypes.WarmWater, lt.Units.Watt)
         self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
-
-        self.seconds_per_timestep = seconds_per_timestep
 
 
     def i_save_state(self):
@@ -257,18 +255,18 @@ class HouseholdWarmWaterDemandWatt(Component):
         """
         # ww demand
         ww_energy_demand_watt = stsv.get_input_value(self.ww_energy_demand)         # W
-        ww_energy_demand = ww_energy_demand_watt * self.seconds_per_timestep        # J
+        ww_energy_demand = ww_energy_demand_watt * self.my_simulation_parameters.seconds_per_timestep        # J
         ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
         # from wws
         ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)            # kg/s
-        ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
+        ww_mass_input = ww_mass_input_per_sec * self.my_simulation_parameters.seconds_per_timestep           # kg
         ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)      # °C
 
         freshwater_temperature = HouseholdWarmWaterDemandConfig.freshwater_temperature
         temperature_difference_hot = HouseholdWarmWaterDemandConfig.temperature_difference_hot      # Grädigkeit
         temperature_difference_cold = HouseholdWarmWaterDemandConfig.temperature_difference_cold
         energy_losses_watt = HouseholdWarmWaterDemandConfig.heat_exchanger_losses
-        energy_losses = energy_losses_watt * self.seconds_per_timestep
+        energy_losses = energy_losses_watt * self.my_simulation_parameters.seconds_per_timestep
 
         if ww_temperature_input > (ww_temperature_demand + temperature_difference_hot) or ww_energy_demand == 0:
             demand_satisfied = 1
@@ -296,7 +294,7 @@ class HouseholdWarmWaterDemandWatt(Component):
             ww_mass_input = 0
             energy_discharged = 0
 
-        ww_mass_output = ww_mass_input / self.seconds_per_timestep  # kg/timestep --> kg/s
+        ww_mass_output = ww_mass_input / self.my_simulation_parameters.seconds_per_timestep  # kg/timestep --> kg/s
 
         stsv.set_output_value(self.ww_mass_output, ww_mass_output)
         stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)
@@ -335,8 +333,8 @@ class HouseholdWarmWaterDemand(Component):
     EnergyDemand = "Energy Demand"                          # kW
     DemandSatisfied = "Demand Satisfied"                    # 0 or 1
 
-    def __init__(self, component_name, seconds_per_timestep):
-        super().__init__(component_name)
+    def __init__(self, component_name:str,my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=component_name,my_simulation_parameters=my_simulation_parameters )
         # input
         self.ww_volume_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemand.WW_VolumeDemand, lt.LoadTypes.WarmWater, lt.Units.l_per_timestep, True)
         # self.ww_temperature_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemand.WW_TemperatureDemand, LoadTypes.WarmWater, lt.Units.Celsius, True)
@@ -353,9 +351,6 @@ class HouseholdWarmWaterDemand(Component):
 
         self.energy_demand: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.EnergyDemand, lt.LoadTypes.WarmWater, lt.Units.Watt)
         self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
-
-        self.seconds_per_timestep = seconds_per_timestep
-
 
     def i_save_state(self):
         pass
@@ -377,7 +372,7 @@ class HouseholdWarmWaterDemand(Component):
         # ww_temperature_demand = stsv.get_input_value(self.ww_temperature_demand)    # °C            # could also be config value?!
         # from wws
         ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)            # kg/s
-        ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
+        ww_mass_input = ww_mass_input_per_sec * self.my_simulation_parameters.seconds_per_timestep           # kg
         ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)      # °C
 
         freshwater_temperature = HouseholdWarmWaterDemandConfig.freshwater_temperature
@@ -385,7 +380,7 @@ class HouseholdWarmWaterDemand(Component):
         temperature_difference_cold = HouseholdWarmWaterDemandConfig.temperature_difference_cold
         ww_mass_demand = ww_volume_demand / 1000 * PhysicsConfig.water_density            # kg/timestep
         energy_losses_watt = 0                                          # [W]
-        energy_losses = energy_losses_watt * self.seconds_per_timestep  # [J]
+        energy_losses = energy_losses_watt * self.my_simulation_parameters.seconds_per_timestep  # [J]
 
         if ww_temperature_input > ww_temperature_demand + temperature_difference_hot or ww_volume_demand == 0:
             demand_satisfied = 1
@@ -420,7 +415,7 @@ class HouseholdWarmWaterDemand(Component):
             ww_temperature_output = ww_temperature_input
             ww_mass_input = 0
 
-        ww_mass_output = ww_mass_input / self.seconds_per_timestep  # kg/timestep --> kg/s
+        ww_mass_output = ww_mass_input / self.my_simulation_parameters.seconds_per_timestep  # kg/timestep --> kg/s
 
         stsv.set_output_value(self.ww_mass_output, ww_mass_output)
         stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)

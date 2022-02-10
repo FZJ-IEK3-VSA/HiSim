@@ -19,6 +19,7 @@ import pickle
 #from . import charts
 #from . import report
 import hisim.postprocessing.charts as charts
+from hisim.postprocessing.chart_singleday import ChartSingleDay
 import hisim.postprocessing.report as report
 from hisim import component
 from hisim.simulationparameters import SimulationParameters
@@ -67,7 +68,6 @@ class PostProcessor:
         self.ppdt = ppdt
         #self.resultsdir = resultsdir
         #self.all_outputs = all_outputs
-        #self.results = results
         #self.time_correction_factor = time_correction_factor
         #self.dirname = None
         # self.flags = {"plot_line": plot_line,
@@ -78,7 +78,7 @@ class PostProcessor:
         #               "open_dir": open_dir,
         #               "export_results_to_CSV": export_results_to_CSV}
         self.report = report.Report(setup_function=ppdt.setup_function, dirpath=ppdt.directory_path)
-        self.cal_pos_sim()
+        #self.cal_pos_sim()
 
 #    def open_latest_pickle(self):
  #       sim_pickle, dirpath, dirname = self.get_lastest_pickle()
@@ -124,7 +124,6 @@ class PostProcessor:
     #     self.report.executation_time = ppdt.execution_time #  sim_pickle["execution_time"]
     #     self.time_correction_factor = ppdt.time_correction_factor # sim_pickle["time_correction_factor"]
     #     self.all_outputs = ppdt.all_outputs#  sim_pickle["all_outputs"]
-    #     self.results =  ppdt.results # sim_pickle["results"]
     #     self.results_m = ppdt.results_m # sim_pickle["results_m"]
     #     self.WrappedComponents = ppdt.wrapped_components # sim_pickle["wrapped_components"]
 
@@ -132,24 +131,24 @@ class PostProcessor:
     def plot_sankeys(self):
         for i_display_name in [name for name, display_name in lt.DisplayNames.__members__.items()]:
             my_sankey = charts.SankeyHISIM(name=i_display_name,
-                                    data=self.all_outputs,
+                                    data=self.ppdt.all_outputs,
                                     units=lt.Units.Any,
-                                    directorypath=self.dirpath,
-                                    time_correction_factor=self.time_correction_factor)
+                                    directorypath=self.ppdt.directory_path,
+                                    time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot()
-        if any(component_output.ObjectName == "HeatPump" for component_output in self.all_outputs):
+        if any(component_output.ObjectName == "HeatPump" for component_output in self.ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="HeatPump",
-                                    data=self.all_outputs,
+                                    data=self.ppdt.all_outputs,
                                     units=lt.Units.Any,
-                                    directorypath=self.dirpath,
-                                    time_correction_factor=self.time_correction_factor)
+                                    directorypath=self.ppdt.directory_path,
+                                    time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot_heat_pump()
-        if any(component_output.ObjectName == "Building" for component_output in self.all_outputs):
+        if any(component_output.ObjectName == "Building" for component_output in self.ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="Building",
-                                    data=self.all_outputs,
+                                    data=self.ppdt.all_outputs,
                                     units=lt.Units.Any,
-                                    directorypath=self.dirpath,
-                                    time_correction_factor=self.time_correction_factor)
+                                    directorypath=self.ppdt.directory_path,
+                                    time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot_building()
 
     def run(self):
@@ -167,9 +166,9 @@ class PostProcessor:
         for index, output in enumerate(self.ppdt.all_outputs):
             if PostProcessingOptions.Plot_Line in  self.ppdt.postProcessingOptions:
                 my_line = charts.Line(output=output.FullName,
-                               data=self.results.iloc[:, index],
+                               data=self.ppdt.results.iloc[:, index],
                                units=output.Unit,
-                               directorypath=self.ppdt.dirpath,
+                               directorypath=self.ppdt.directory_path,
                                time_correction_factor=self.ppdt .time_correction_factor)
                 my_line.plot()
             if PostProcessingOptions.Plot_Carpet in self.ppdt.postProcessingOptions:
@@ -180,7 +179,7 @@ class PostProcessor:
                                    time_correction_factor=self.ppdt.time_correction_factor)
                 my_carpet.plot()
             if PostProcessingOptions.Plot_Day in self.ppdt.postProcessingOptions:
-                    my_days = charts.Day(output=output.FullName,
+                    my_days = ChartSingleDay(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
@@ -192,7 +191,7 @@ class PostProcessor:
                 my_bar = charts.Bar(output=output.FullName,
                              data=self.ppdt.results_monthly.iloc[:, index],
                              units=output.Unit,
-                             dirpath=self.ppdt.dirpath,
+                             dirpath=self.ppdt.directory_path,
                              time_correction_factor=self.ppdt.time_correction_factor)
                 my_bar.plot()
 
@@ -209,7 +208,7 @@ class PostProcessor:
         if len(self.ppdt.results) == 1440:
             for index, output in enumerate(self.ppdt.all_outputs):
                 if output.FullName == "Dummy # Residence Temperature":
-                    my_days = charts.Day(output=output.FullName,
+                    my_days = ChartSingleDay(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
@@ -218,7 +217,7 @@ class PostProcessor:
                                    month=0,
                                    output2=self.ppdt.results.iloc[:, 11])
                 else:
-                    my_days = charts.Day(output=output.FullName,
+                    my_days = ChartSingleDay(output=output.FullName,
                                    data=self.ppdt   .results.iloc[:, index],
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
@@ -249,72 +248,72 @@ class PostProcessor:
         self.report.open()
         self.report.write(text)
         self.report.close()
-
-    def cal_pos_sim(self):
-        self.write_components_to_report()
-
-        total_electricity_consumed = None
-        total_electricity_not_covered = None
-        heat_pump_heating = None
-        heat_pump_cooling = None
-        building_area = None
-        solar_gain_through_windows = None
-        internal_gains = None
-
-        for index, entry in enumerate(self.ppdt.wrapped_components):
-            if entry.MyComponent.ComponentName == "Building":
-                building_area = entry.MyComponent.A_f
-
-        for index, entry in enumerate(self.ppdt.all_outputs):
-            if entry.ObjectName == "ElectricityGrid_Consumed":
-                total_electricity_consumed = sum(entry.Results)* self.ppdt.time_correction_factor
-            if entry.ObjectName == "ElectricityGrid_NotConveredConsumed":
-                total_electricity_not_covered = sum(entry.Results)* self.ppdt.time_correction_factor
-            if entry.ObjectName == "HeatPump" and entry.FieldName == "Heating":
-                heat_pump_heating = sum(entry.Results)* self.ppdt.time_correction_factor
-            if entry.ObjectName == "HeatPump" and entry.FieldName == "Cooling":
-                heat_pump_cooling = abs(sum(entry.Results))* self.ppdt.time_correction_factor
-            if entry.ObjectName == "HeatPump" and entry.FieldName == "ElectricityOutput":
-                heat_pump_electricity_output = abs(sum(entry.Results)) * self.ppdt.time_correction_factor
-            if entry.ObjectName == "HeatPump" and entry.FieldName == "NumberOfCycles":
-                heat_pump_number_of_cycles = abs(entry.Results[-1])
-            if entry.ObjectName == "Building" and entry.FieldName == "SolarGainThroughWindows":
-                solar_gain_through_windows = abs(sum(entry.Results))* self.ppdt.time_correction_factor
-            if entry.ObjectName == "Occupancy" and entry.FieldName == "HeatingByResidents":
-                internal_gains = abs(sum(entry.Results)*self.ppdt.time_correction_factor)
-
-        # Writes self-consumption and autarky
-        if total_electricity_consumed is not None:
-            if total_electricity_not_covered is not None:
-                autarky = ( ( total_electricity_consumed - total_electricity_not_covered ) / total_electricity_consumed ) * 100
-                text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
-                self.write_to_report(text)
-                text = ["Not Covered: {:.0f} kWh".format(total_electricity_not_covered * 1E-3)]
-                self.write_to_report(text)
-                text = ["Autarky: {:.3}%".format(autarky)]
-                self.write_to_report(text)
-
-        # Writes performance of heat pump
-        if heat_pump_heating is not None:
-            self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
-            self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
-            self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
-            self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
-            self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
-            if building_area is not None:
-                self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
-
-        # Writes building solar gains
-        if solar_gain_through_windows is not None:
-            self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
-            if building_area is not None:
-                self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
-
-        # Writes building internal gains
-        if internal_gains is not None:
-            self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
-            if building_area is not None:
-                self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
+    #
+    # def cal_pos_sim(self):
+    #     self.write_components_to_report()
+    #
+    #     total_electricity_consumed = None
+    #     total_electricity_not_covered = None
+    #     heat_pump_heating = None
+    #     heat_pump_cooling = 0.0
+    #     building_area = None
+    #     solar_gain_through_windows = None
+    #     internal_gains = None
+    #
+    #     for index, entry in enumerate(self.ppdt.wrapped_components):
+    #         if entry.MyComponent.ComponentName == "Building":
+    #             building_area = entry.MyComponent.A_f
+    #
+    #     for index, entry in enumerate(self.ppdt.all_outputs):
+    #         if entry.ObjectName == "ElectricityGrid_Consumed":
+    #             total_electricity_consumed = sum(entry.Results)* self.ppdt.time_correction_factor
+    #         if entry.ObjectName == "ElectricityGrid_NotConveredConsumed":
+    #             total_electricity_not_covered = sum(entry.Results)* self.ppdt.time_correction_factor
+    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "Heating":
+    #             heat_pump_heating = sum(entry.Results)* self.ppdt.time_correction_factor
+    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "Cooling":
+    #             heat_pump_cooling = abs(sum(entry.Results))* self.ppdt.time_correction_factor
+    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "ElectricityOutput":
+    #             heat_pump_electricity_output = abs(sum(entry.Results)) * self.ppdt.time_correction_factor
+    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "NumberOfCycles":
+    #             heat_pump_number_of_cycles = abs(entry.Results[-1])
+    #         if entry.ObjectName == "Building" and entry.FieldName == "SolarGainThroughWindows":
+    #             solar_gain_through_windows = abs(sum(entry.Results))* self.ppdt.time_correction_factor
+    #         if entry.ObjectName == "Occupancy" and entry.FieldName == "HeatingByResidents":
+    #             internal_gains = abs(sum(entry.Results)*self.ppdt.time_correction_factor)
+    #
+    #     # Writes self-consumption and autarky
+    #     if total_electricity_consumed is not None:
+    #         if total_electricity_not_covered is not None:
+    #             autarky = ( ( total_electricity_consumed - total_electricity_not_covered ) / total_electricity_consumed ) * 100
+    #             text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
+    #             self.write_to_report(text)
+    #             text = ["Not Covered: {:.0f} kWh".format(total_electricity_not_covered * 1E-3)]
+    #             self.write_to_report(text)
+    #             text = ["Autarky: {:.3}%".format(autarky)]
+    #             self.write_to_report(text)
+    #
+    #     # Writes performance of heat pump
+    #     if heat_pump_heating is not None:
+    #         self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
+    #         self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
+    #         self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
+    #         self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
+    #         self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
+    #         if building_area is not None:
+    #             self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
+    #
+    #     # Writes building solar gains
+    #     if solar_gain_through_windows is not None:
+    #         self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
+    #         if building_area is not None:
+    #             self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
+    #
+    #     # Writes building internal gains
+    #     if internal_gains is not None:
+    #         self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
+    #         if building_area is not None:
+    #             self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
 
     def write_components_to_report(self):
         """
@@ -356,27 +355,27 @@ class PostProcessor:
 
 
         """
-        pd_timeline = pd.date_range(start=self.SimulationParameters.start_date,
-                                    end=self.SimulationParameters.end_date,
-                                    freq='{}S'.format(self.SimulationParameters.seconds_per_timestep))[:-1]
-        n_columns = self.results.shape[1]
+        pd_timeline = pd.date_range(start=self.ppdt.simulation_parameters.start_date,
+                                    end=self.ppdt.simulation_parameters.end_date,
+                                    freq='{}S'.format(self.ppdt.simulation_parameters.seconds_per_timestep))[:-1]
+        n_columns = self.ppdt.results.shape[1]
         df = pd.DataFrame()
         for i_column in range(n_columns):
-            temp_df = pd.DataFrame(self.results.values[:, i_column], index=pd_timeline, columns=[self.results.columns[i_column]])
-            if 'Temperature' in self.results.columns[i_column] or 'Percent' in self.results.columns[i_column]:
+            temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline, columns=[self.ppdt.results.columns[i_column]])
+            if 'Temperature' in self.ppdt.results.columns[i_column] or 'Percent' in self.ppdt.results.columns[i_column]:
                 temp_df = temp_df.resample('H').interpolate(method='linear')
             else:
                 temp_df = temp_df.resample('H').sum()
             df[temp_df.columns[0]] = temp_df.values[:, 0]
             df.index = temp_df.index
 
-        self.results.index = pd_timeline
-        self.results_std = df
+        self.ppdt.results.index = pd_timeline
+        #self.ppdt.results_std = df
 
         dfm = pd.DataFrame()
         for i_column in range(n_columns):
-            temp_df = pd.DataFrame(self.results.values[:, i_column], index=pd_timeline, columns=[self.results.columns[i_column]])
-            if 'Temperature' in self.results.columns[i_column] or 'Percent' in self.results.columns[i_column]:
+            temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline, columns=[self.ppdt.results.columns[i_column]])
+            if 'Temperature' in self.ppdt.results.columns[i_column] or 'Percent' in self.ppdt.results.columns[i_column]:
                 temp_df = temp_df.resample('M').interpolate(method='linear')
             else:
                 temp_df = temp_df.resample('M').sum()

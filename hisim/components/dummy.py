@@ -10,6 +10,8 @@ from hisim import loadtypes as lt
 from hisim.utils import load_smart_appliance
 from hisim import utils
 import pdb
+from hisim.simulationparameters import SimulationParameters
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -49,18 +51,19 @@ class Dummy(Component):
     StoredEnergy="StoredEnergy"
 
     def __init__(self,
-                 electricity=None,
+                 my_simulation_parameters: SimulationParameters,
+                electricity=None,
                  heat=None,
                  capacity=None,
                  initial_temperature=None,
-                 sim_params=None):
-        super().__init__("Dummy")
-
+                 ):
+        super().__init__(name="Dummy", my_simulation_parameters=my_simulation_parameters)
+        self.capacity:float
+        self.initial_temperature:float
         self.build(electricity=electricity,
                    heat=heat,
                    capacity=capacity,
-                   initial_temperature=initial_temperature,
-                   sim_params=sim_params)
+                   initial_temperature=initial_temperature)
 
         self.thermal_energy_deliveredC : ComponentInput = self.add_input(self.ComponentName,
                                                                          self.ThermalEnergyDelivered,
@@ -84,9 +87,9 @@ class Dummy(Component):
         self.temperature:float = -300
 
 
-    def build(self, electricity, heat, capacity, initial_temperature, sim_params):
-        self.time_correction_factor = 1 / sim_params.seconds_per_timestep
-        self.seconds_per_timestep = sim_params.seconds_per_timestep
+    def build(self, electricity:float, heat:float, capacity:float, initial_temperature:float):
+        self.time_correction_factor:float = 1 / self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep:float = self.my_simulation_parameters.seconds_per_timestep
 
         if electricity is None:
             self.electricity_output:float = - 1E3

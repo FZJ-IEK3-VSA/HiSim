@@ -1,5 +1,5 @@
 import logging
-import os
+
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 #from matplotlib.sankey import Sankey
@@ -9,63 +9,13 @@ import matplotlib
 import seaborn
 import numpy as np
 import pandas as pd
-import re
+
 import warnings
+
+from hisim.postprocessing.chartbase import Chart
+
 warnings.filterwarnings("ignore")
 mpl.rcParams['agg.path.chunksize'] = 10000
-
-class Chart:
-    """
-    Parent class for plots to be exported.
-    """
-    months_abbrev_uppercase = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEZ']
-    label_months_lowercase = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
-
-    def __init__(self, output, data, type, units, directorypath, time_correction_factor, output2=None):
-        self.output = output
-        self.data = data
-        self.type = type
-        if hasattr(units, "value"):
-            self.units = units.value
-            self.ylabel = units.value
-        else:
-            self.units = units
-            self.ylabel = units
-        self.time_correction_factor = time_correction_factor
-
-        self.title = ""
-        matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)', self.output)
-        matches = [m.group(0) for m in matches]
-        pass_sign = False
-        property = ""
-        object = ""
-        for m in matches:
-            if pass_sign:
-                property = "{} {}".format(property,m)
-            else:
-                object = "{}{}".format(object,m)
-
-            if m.find("#"):
-                pass_sign = True
-
-            if len(self.title) == 0:
-                self.title = m
-            else:
-                self.title = "{} {}".format(self.title, m)
-        self.directorypath = directorypath
-
-        self.object_name = " "
-        self.property = property
-        if output2 is not None:
-            self.output2 = output2
-            self.filename = "{}_{}_{}double.png".format(self.type.lower(),
-                                                        self.output.split(' # ', 2)[1],
-                                                        self.output.split(' # ', 2)[0])
-        else:
-            self.filename = "{}_{}_{}.png".format(self.type.lower(),
-                                                  self.output.split(' # ', 2)[1],
-                                                  self.output.split(' # ', 2)[0])
-        self.filepath = os.path.join(self.directorypath, self.filename)
 
 class Carpet(Chart):
     def __init__(self, output, data, units, directorypath, time_correction_factor):
@@ -158,109 +108,6 @@ class Line(Chart):
         plt.savefig(self.filepath)
         plt.close()
 
-class Day(Chart):
-    def __init__(self, output, data, units, directorypath, time_correction_factor, day=None, month=None, output2=None):
-        if output2 is not None:
-            super().__init__(output, data, "days", units, directorypath, time_correction_factor, output2)
-        else:
-            super().__init__(output, data, "days", units, directorypath, time_correction_factor)
-        self.month = month
-        self.day = day
-        self.filename = "{}_{}_{}_m{}_d{}.png".format(self.type.lower(),
-                                                      self.output.split(' # ', 2)[1],
-                                                      self.output.split(' # ', 2)[0],
-                                                      self.month,
-                                                      self.day)
-        self.filepath = os.path.join(self.directorypath, self.filename)
-        self.get_day_data()
-
-    def get_day_data(self):
-        firstindex = (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
-        lastindex = firstindex + 24 * int(1 / self.time_correction_factor)
-        day_number = self.day + 1
-        if day_number == 1:
-            ordinal = "st"
-        elif day_number == 2:
-            ordinal = "nd"
-        elif day_number == 3:
-            ordinal = "rd"
-        else:
-            ordinal = "th"
-        date = "{} {}{}".format(self.label_months_lowercase[self.month], day_number, ordinal)
-        self.plot_title = "{} {}".format(self.title, date)
-
-        if abs(lastindex - firstindex) < len(self.data):
-            data = self.data[firstindex:lastindex]
-            data_index = self.data.index[firstindex:lastindex]
-            self.data = data
-            self.data.index = data_index
-
-
-
-    def __add__(self, other):
-        my_double = Day(self.output,
-                        self.data,
-                        self.ylabel,
-                        self.directorypath,
-                        self.time_correction_factor,
-                        self.day,
-                        self.month)
-        my_double.filename = "{}_{}_{}_AND_{}_{}_m{}_d{}.png".format(self.type.lower(),
-                                                                     self.output.split(' # ', 2)[1],
-                                                                     self.output.split(' # ', 2)[0],
-                                                                     other.output.split(' # ', 2)[1],
-                                                                     other.output.split(' # ', 2)[0],
-                                                                     self.month,
-                                                                     self.day)
-        my_double.filepath = os.path.join(self.directorypath, my_double.filename)
-        my_double.plot(close=False)
-
-        # twin object for two different y-axis on the sample plot
-        my_double.ax2 = my_double.ax.twinx()
-        # make a plot with different y-axis using second axis object
-        my_double.line2 = my_double.ax2.plot(my_double.data.index, other.data, label=other.property, linewidth=5)
-        my_double.ax2.set_ylabel("{} [{}]".format(other.property,other.ylabel),fontsize=18)
-        #seaborn.despine(ax=my_double.ax2, offset=0)  # the important part here
-        my_double.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        return my_double
-
-    def close(self):
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-        #if hasattr(self,"line2"):
-        #    lines = self.line1 + self.line2
-        #    labs = [l.get_label() for l in lines]
-        #    self.ax.legend(lines, labs, loc=0)
-        self.ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        self.ax.set_ylabel("{} [{}]".format(self.property,self.ylabel),fontsize=18)
-        if hasattr(self,"line2"):
-            self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        #plt.savefig(self.filepath, bbox_inches='tight')
-        plt.savefig(self.filepath)
-        plt.close()
-
-    def plot(self, close=True):
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-        plt.rcParams['font.size'] = '18'
-        plt.rcParams['agg.path.chunksize'] = 10000
-        self.fig, self.ax = plt.subplots(figsize=(13, 9))
-        plt.xticks(fontsize=18)
-        plt.yticks(fontsize=18)
-        #plt.plot(self.data.index[firstindex:lastindex], self.data[firstindex:lastindex], color="green", linewidth=5.0)
-        if abs(max(self.data)) > 1.5E3:
-            self.data = self.data * 1E-3
-            self.ylabel = "k{}".format(self.ylabel)
-        self.line1 = plt.plot(self.data.index, self.data, color="green", linewidth=5.0, label=self.property)
-        plt.grid(True)
-        #plt.xticks(fontsize=18)
-        #plt.yticks(fontsize=18)
-        self.ax.set_ylabel(self.ylabel)
-        plt.xlabel("Time [hours]", fontsize=18)  # fontsize=18)
-        #plt.title("{}".format(self.plot_title), fontsize=20)
-        self.ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        if close:
-            self.close()
 
 class Bar(Chart):
     original = [385.66, 484.01, 981.05, 1096.7, 1157, 1299.9, 1415.3, 1266.1, 1075.8, 714.44, 422.51, 366.83]
@@ -285,7 +132,7 @@ class Bar(Chart):
         plt.bar(ind, self.data * 1E-3, width, label="HiSim")
         plt.bar(ind+width, self.original, width, label="PVSOL")
 
-        plt.xticks(ind + width / 2, self.months_short)
+        plt.xticks(ind + width / 2)
 
         plt.title("{} Monthly".format(self.title))
         plt.grid()

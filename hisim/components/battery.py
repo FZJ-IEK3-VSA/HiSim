@@ -6,7 +6,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components.ev_charger import SimpleStorageState
-
+from hisim.simulationparameters import SimulationParameters
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -63,14 +63,14 @@ class Battery(cp.Component):
     ElectricityOutput = "ElectricityOutput"
 
     def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
                  manufacturer="sonnen",
                  model="sonnenBatterie 10 - 11,5 kWh",
                  soc=10/15,
-                 base=False,
-                 sim_params=None):
-        super().__init__("Battery")
+                 base=False):
+        super().__init__("Battery", my_simulation_parameters)
 
-        self.build(manufacturer=manufacturer, model=model, base=base, sim_params=sim_params)
+        self.build(manufacturer=manufacturer, model=model, base=base)
 
         self.state = SimpleStorageState(max_var_val=self.max_var_stored_energy,
                                         min_var_val=self.min_var_stored_energy,
@@ -103,10 +103,10 @@ class Battery(cp.Component):
                                                                lt.LoadTypes.Electricity,
                                                                lt.Units.Watt)
 
-    def build(self, manufacturer, model, base, sim_params):
+    def build(self, manufacturer, model, base):
         self.base = base
-        self.time_correction_factor = 1 / sim_params.seconds_per_timestep
-        self.seconds_per_timestep = sim_params.seconds_per_timestep
+        self.time_correction_factor = 1 / self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
         # Gets flexibilities, including heat pump
         battery_database = utils.load_smart_appliance("Battery")
@@ -181,8 +181,8 @@ class BatteryController(cp.Component):
     ElectricityInput = "ElectricityInput"
     State = "State"
 
-    def __init__(self):
-        super().__init__(name="BatteryController")
+    def __init__(self, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name="BatteryController", my_simulation_parameters=my_simulation_parameters)
 
         self.inputC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                       self.ElectricityInput,

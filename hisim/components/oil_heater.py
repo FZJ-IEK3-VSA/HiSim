@@ -6,6 +6,7 @@ from dataclasses import dataclass
 # Import modules from HiSim
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 import copy as copy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
@@ -69,7 +70,7 @@ class OilHeater( cp.Component ):
     ElectricityOutput =         "ElectricityOutput" #this definition is useful in sumbuilder, but of corse it is electricity input needed
     NumberOfCycles =            "NumberOfCycles"
 
-    def __init__( self, max_power: int, min_off_time : int, min_on_time : int ):
+    def __init__( self, my_simulation_parameters: SimulationParameters , max_power: int, min_off_time : int, min_on_time : int,  ):
         """
         Parameters
         ----------
@@ -81,7 +82,7 @@ class OilHeater( cp.Component ):
             Minimal time oil heater is switched on
         """
         
-        super( ).__init__( name = 'OilHeater' )
+        super( ).__init__( name = 'OilHeater', my_simulation_parameters=my_simulation_parameters )
         
         #introduce parameters of oil heater
         self.build( max_power = max_power,
@@ -194,10 +195,11 @@ class OilHeaterController( cp.Component ):
     # 1. Building
 
     def __init__( self,
-                 t_air_heating: float = 20.0,
-                 offset: float = 2.0 ):
+                  my_simulation_parameters: SimulationParameters,
+                  t_air_heating: float = 20.0,
+                  offset: float = 2.0 ):
         
-        super().__init__( "OilheaterController" )
+        super().__init__( "OilheaterController", my_simulation_parameters=my_simulation_parameters )
         
         self.build( t_air_heating = t_air_heating,
                     offset = offset )

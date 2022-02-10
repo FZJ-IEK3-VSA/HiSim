@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pvlib
 from functools import lru_cache
-
+from hisim.simulationparameters import SimulationParameters
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -198,7 +198,8 @@ class PVSystem(cp.Component):
     # 1. Weather
 
     def __init__(self,
-                 time=2019,
+                 my_simulation_parameters: SimulationParameters,
+        time=2019,
                  location="Aachen",
                  power=10E3,
                  load_module_data=False,
@@ -206,7 +207,7 @@ class PVSystem(cp.Component):
                  integrateInverter=True,
                  inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
                  sim_params=None):
-        super().__init__("PVSystem")
+        super().__init__("PVSystem", my_simulation_parameters=my_simulation_parameters)
 
         self.build(time, location, power, load_module_data, module_name, integrateInverter, inverter_name, sim_params)
 

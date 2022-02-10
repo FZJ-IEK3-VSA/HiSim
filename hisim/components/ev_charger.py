@@ -6,6 +6,7 @@ import datetime
 import os
 import pandas as pd
 from typing import List
+from hisim.simulationparameters import SimulationParameters
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -20,7 +21,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-class Vehicle_Pure(cp.Component):
+class VehiclePure(cp.Component):
     """
     Vehicle component class
 
@@ -39,10 +40,12 @@ class Vehicle_Pure(cp.Component):
         throughout the simulation duration
     """
     def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
                  manufacturer="Tesla",
                  model="Model 3 v3",
                  soc=1.0,
                  profile="CH01"):
+        super().__init__(name="EV_charger", my_simulation_parameters=my_simulation_parameters)
         self.build(manufacturer=manufacturer, model=model, soc=soc, target=profile)
 
     def build(self, manufacturer, model, soc, target):
@@ -218,10 +221,11 @@ class Vehicle(cp.Component):
     Discharge = "Discharge"
 
     def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
                  manufacturer="Renault",
                  model="Zoe v3",
                  soc=0.8):
-        super().__init__(name="ElectricVehicle")
+        super().__init__(name="ElectricVehicle", my_simulation_parameters=my_simulation_parameters)
 
         self.build(manufacturer=manufacturer, model=model, soc=soc)
 
@@ -410,11 +414,12 @@ class EVCharger(cp.Component):
     # 2. Some ChargingInput
 
     def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
                  manufacturer="myenergi",
                  name="Wallbox ZAPPI 222TW",
                  electric_vehicle=None,
                  sim_params=None):
-        super().__init__(name="EVCharger")
+        super().__init__(name="EVCharger", my_simulation_parameters=my_simulation_parameters)
 
         self.build(manufacturer=manufacturer, name=name, electric_vehicle=electric_vehicle, sim_params=sim_params)
 
@@ -613,8 +618,9 @@ class EVChargerController(cp.Component):
     # 1. Some ChargingInput
 
     def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
                  mode=1):
-        super().__init__(name="EVChargerController")
+        super().__init__(name="EVChargerController", my_simulation_parameters=my_simulation_parameters)
         self.mode = mode
 
         if mode == 1:

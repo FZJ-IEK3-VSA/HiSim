@@ -1,6 +1,7 @@
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 class Transformer(Component):
     TransformerInput = "Input1"
@@ -8,8 +9,8 @@ class Transformer(Component):
     TransformerOutput = "MyTransformerOutput"
     TransformerOutput2 = "MyTransformerOutput2"
 
-    def __init__(self, name: str):
-        super().__init__(name)
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters ):
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
         self.input1: ComponentInput = self.add_input(self.ComponentName, Transformer.TransformerInput, lt.LoadTypes.Any, lt.Units.Any, True)
         self.input2: ComponentInput = self.add_input(self.ComponentName, Transformer.TransformerInput2, lt.LoadTypes.Any, lt.Units.Any, False)
         self.output1: ComponentOutput = self.add_output(self.ComponentName, Transformer.TransformerOutput, lt.LoadTypes.Any, lt.Units.Any)

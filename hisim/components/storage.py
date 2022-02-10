@@ -6,6 +6,7 @@ import numpy as np
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -47,12 +48,13 @@ class HeatStorage(Component):
     StorageEnergyLoss="StorageEnergyLoss"
 
     def __init__(self,
-                 V_SP_heating_water= 1000,
+                 my_simulation_parameters: SimulationParameters,
+        V_SP_heating_water= 1000,
                  V_SP_warm_water=200,
                  temperature_of_warm_water_extratcion=32,
                  ambient_temperature = 15,
                  sim_params=None):
-        super().__init__("HeatStorage")
+        super().__init__(name="HeatStorage", my_simulation_parameters=my_simulation_parameters)
         self.V_SP_heating_water = V_SP_heating_water
         self.V_SP_warm_water = V_SP_warm_water
         self.sim_params = sim_params

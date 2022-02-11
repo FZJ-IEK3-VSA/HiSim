@@ -298,9 +298,9 @@ class PVSystem(cp.Component):
     def write_to_report(self):
         lines = []
         lines.append("Name: {}".format(self.ComponentName))
-        lines.append("Power: {:3.0f} kWp".format(self.power*1E-3))
-        lines.append("Module: {}".format(self.module_name))
-        lines.append("Inverter: {}".format(self.inverter_name))
+        lines.append("Power: {:3.0f} kWp".format(self.pvconfig.power*1E-3))
+        lines.append("Module: {}".format(self.pvconfig.module_name))
+        lines.append("Inverter: {}".format(self.pvconfig.inverter_name))
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):

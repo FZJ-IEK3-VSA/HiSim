@@ -8,3 +8,4 @@ openpyxl
 pytest
 sphinx
 sphinx-rtd-theme
+dataclasses_json

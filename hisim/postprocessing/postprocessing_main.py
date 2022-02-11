@@ -340,7 +340,7 @@ class PostProcessor:
             os.startfile(os.path.realpath(self.ppdt.directory_path))
         else:
             opener = "open" if sys.platform == "darwin" else "xdg-open"
-            subprocess.call([opener, os.path.realpath(self.dirpath)])
+            subprocess.call([opener, os.path.realpath(self.ppdt.directory_path)])
 
     def export_sankeys(self):
         """

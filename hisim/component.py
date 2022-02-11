@@ -1,7 +1,6 @@
 # Generic
 import logging
 from typing import List, Optional
-import datetime
 from hisim.simulationparameters import SimulationParameters
 # Package
 from hisim import loadtypes as lt
@@ -127,11 +126,11 @@ class Component:
             if isinstance(component, Component) is False:
                 raise Exception("Input variable is not a component")
             has_not_been_connected = True
-            for input in self.inputs:
+            for cinput in self.inputs:
                 for output in component.outputs:
-                    if input.FieldName == output.FieldName:
+                    if cinput.FieldName == output.FieldName:
                         has_not_been_connected = False
-                        self.connect_input(input.FieldName, component.ComponentName, output.FieldName)
+                        self.connect_input(cinput.FieldName, component.ComponentName, output.FieldName)
             if has_not_been_connected:
                 raise Exception(
                     "No similar inputs from {} are compatible with the outputs of {}!".format(self.ComponentName,

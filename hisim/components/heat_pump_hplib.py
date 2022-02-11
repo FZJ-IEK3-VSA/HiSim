@@ -41,8 +41,8 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"                                           # s
     TimeOff = "TimeOff"                                         # s
 
-    def __init__(self, model: str,my_simulation_parameters: SimulationParameters , group_id: int = -1, t_in: int = -300, t_out_val: int = -300,
-                 p_th_set: int = -300):
+    def __init__(self, model: str,my_simulation_parameters: SimulationParameters , group_id: int = -1, t_in: float = -300, t_out_val: float = -300,
+                 p_th_set: float = -300):
         """
         Loads the parameters of the specified heat pump.
 
@@ -54,7 +54,7 @@ class HeatPumpHplib(Component):
             only for model "Generic": Group ID for subtype of heat pump. [1-6].
         t_in : numeric, default 0
             only for model "Generic": Input temperature :math:`T` at primary side of the heat pump. [°C]
-        t_out : numeric, default 0
+        t_out_val : numeric, default 0
             only for model "Generic": Output temperature :math:`T` at secondary side of the heat pump. [°C]
         p_th_set : numeric, default 0
             only for model "Generic": Thermal output power at setpoint t_in, t_out. [W]
@@ -151,42 +151,10 @@ class HeatPumpHplib(Component):
     def i_restore_state(self):
         self.state = deepcopy(self.previous_state)
 
-    def i_doublecheck(self):
+    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
-        """
-        Performs the simulation of the heat pump model.
-
-        Parameters
-        ----------
-        t_in_primary : numeric
-            Input temperature on primary side :math:`T` (air, brine, water). [°C]
-        t_in_secondary : numeric
-            Input temperature on secondary side :math:`T` from heating storage or system. [°C]
-        parameters : pd.DataFrame
-            Data frame containing the heat pump parameters from hplib.getParameters().
-        t_amb : numeric, default 0
-            Ambient / Outdoor temperature :math:'T' of the air, which can have impact on the electrical power consumption [°C]
-
-        Returns
-        -------
-        p_th :  numeric
-            Thermal output power. [W]
-        p_el : numeric
-            Electrical input Power. [W]
-        cop : numeric
-            Coefficient of performance.
-        t_out : numeric
-            Output temperature :math:`T` at secondary side of the heat pump. [°C]
-        m_dot : numeric
-            Mass flow at secondary side of the heat pump. [kg/s]
-        time_on : numeric
-            Time how long the heat pump is currently running. [s]
-        time_off : numeric
-            Time how long the heat pump has not run. [s]
-        """ 
-        
         # Parameter
         time_on_min = 600 # [s]
         time_off_min = time_on_min

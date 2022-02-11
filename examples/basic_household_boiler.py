@@ -87,7 +87,7 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+        my_simulation_parameters = sim.SimulationParameters.full_year(year=year,
                                                                                      seconds_per_timestep=seconds_per_timestep)
 
     # Build occupancy

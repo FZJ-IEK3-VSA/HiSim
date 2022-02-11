@@ -2,7 +2,6 @@ import os
 
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
-import shutil
 
 def test_basic_household():
     path = "../examples/basic_household.py"

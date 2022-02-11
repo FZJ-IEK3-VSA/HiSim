@@ -1,3 +1,4 @@
+from typing import Optional
 from hisim.simulator import SimulationParameters
 from hisim.components import occupancy
 from hisim.components import weather
@@ -15,7 +16,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def basic_household_explicit(my_sim, my_simulation_parameters: SimulationParameters):
+def basic_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their

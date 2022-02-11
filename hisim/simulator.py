@@ -1,16 +1,12 @@
 import os
-import time
 import logging
-import datetime
 import numpy as np
 import datetime
-import copy
 
 # Other Libraries
 from typing import List, Dict, Any
 from typing import Tuple
 import pandas as pd
-import pickle
 import warnings
 
 
@@ -48,7 +44,7 @@ class ComponentWrapper:
 
     def register_component_inputs(self, global_column_dict):
         logging.info("Registering component outputs " + self.MyComponent.ComponentName)
-        # look up input columns and cache so we only have the correct columns saved
+        # look up input columns and cache, so we only have the correct columns saved
         inputColumns: List[cp.ComponentInput] = self.MyComponent.get_input_definitions()
         for col in inputColumns:
             globalcol = global_column_dict[col.FullName]

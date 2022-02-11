@@ -35,12 +35,17 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
         - Building
         - Oil heater
     """
+    
+    ####delete all files in cache:
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60*15
 
     # Set weather
     location = "Aachen"

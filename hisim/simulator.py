@@ -346,7 +346,8 @@ class Simulator:
 
         self.get_std_results()
 
-        time_correction_factor = 1/self.SimulationParameters.seconds_per_timestep
+        #Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
+        time_correction_factor = self.SimulationParameters.seconds_per_timestep / 3600
         ppdt = pp.PostProcessingDataTransfer(
             time_correction_factor = time_correction_factor,
             directory_path = self.dirpath,

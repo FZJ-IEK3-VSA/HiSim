@@ -9,7 +9,8 @@ import inspect
 from enum import Enum
 import pdb
 from typing import Any, Dict
-
+import hashlib
+import  json
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]
@@ -145,6 +146,16 @@ def load_smart_appliance(name):
     with open(HISIMPATH["smart_appliances"]) as f:
         data = json.load(f)
     return data[name]
+
+def get_cache_file(component_key: str,  parameter_class:Any):
+    json_str = parameter_class.to_json()
+    json_str_encoded = json_str.encode('utf-8')
+    sha_key = hashlib.sha256(json_str_encoded,usedforsecurity=False).hexdigest()
+    filename = component_key + "_" + sha_key + ".cache"
+    cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
+    if os.path.isfile(cache_absolute_filepath):
+        return True, cache_absolute_filepath
+    return False, cache_absolute_filepath
 
 def get_cache(classname, parameters):
     filename = None

@@ -2,8 +2,10 @@ import os
 
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
-
+import shutil
 def test_basic_household():
+    if os.path.isdir("../hisim/inputs/cache"):
+        shutil.rmtree("../hisim/inputs/cache")
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)

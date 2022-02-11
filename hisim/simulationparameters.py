@@ -23,3 +23,6 @@ class SimulationParameters:
     @classmethod
     def one_day_only(cls, year: int, seconds_per_timestep: int):
         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
+
+    def get_unique_key(self):
+        return str(self.start_date) + "###" + str(self.end_date) + "###"  + str(self.seconds_per_timestep) + "###" + str(self.year)

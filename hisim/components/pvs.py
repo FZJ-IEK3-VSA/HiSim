@@ -6,6 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import pvlib
+from dataclasses_json import dataclass_json
+
+from dataclasses import dataclass
 from functools import lru_cache
 from hisim.simulationparameters import SimulationParameters
 # Owned
@@ -164,6 +167,27 @@ def simPhotovoltaicSimple(
         pv_dc = 0
     return pv_dc
 
+@dataclass_json
+@dataclass()
+class PVSystemConfig:
+
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 time:int,
+                 location:str,
+                 power:float,
+                 module_name:str,
+                 integrate_inverter:bool,
+                 inverter_name:str):
+        self.parameter_string = my_simulation_parameters.get_unique_key()
+        self.time = time
+        self.location = location
+        self.module_name = module_name
+        self.integrate_inverter = integrate_inverter
+        self.inverter_name = inverter_name
+        self.power = power
+
+
 
 class PVSystem(cp.Component):
     """
@@ -205,11 +229,13 @@ class PVSystem(cp.Component):
                  load_module_data=False,
                  module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
                  integrateInverter=True,
-                 inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-                 sim_params=None):
+                 inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"                 ):
         super().__init__("PVSystem", my_simulation_parameters=my_simulation_parameters)
-
-        self.build(time, location, power, load_module_data, module_name, integrateInverter, inverter_name, sim_params)
+        self.pvconfig = PVSystemConfig(my_simulation_parameters=my_simulation_parameters,
+                                       location=location, power = power, module_name=module_name,
+                                       integrate_inverter=integrateInverter, inverter_name=inverter_name,
+                                       time=time)
+        self.build(load_module_data)
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -280,7 +306,7 @@ class PVSystem(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
 
         if hasattr(self, "output"):
-            stsv.set_output_value(self.electricity_outputC, self.output[timestep] * self.power)
+            stsv.set_output_value(self.electricity_outputC, self.output[timestep] * self.pvconfig.power)
         else:
             DNI = stsv.get_input_value(self.DNIC)
             dni_extra = stsv.get_input_value(self.DNIextraC)
@@ -318,13 +344,14 @@ class PVSystem(cp.Component):
                                             temperature=temperature,
                                             wind_speed=wind_speed)
 
-            resultingvalue = ac_power * self.power
+            resultingvalue = ac_power * self.pvconfig.power
 
             stsv.set_output_value(self.electricity_outputC, resultingvalue)
             self.data[timestep] = ac_power
             if timestep + 1 == self.data_length:
                 database = pd.DataFrame(self.data, columns=["output"])
-                database.to_csv(self.database_path, sep=",", decimal=".", index=False)
+
+                database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
     def get_coordinates(self, location="Aachen", year=2019):
         """
@@ -359,23 +386,19 @@ class PVSystem(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build(self, time, location, power, load_module_data, module_name, integrateInverter, inverter_name, sim_param):
-        parameters = [location]
+    def build(self,  load_module_data):
 
-        cache_filepath = utils.get_cache(classname="PVSystem", parameters=parameters)
-        if cache_filepath is not None:
-            self.output = pd.read_csv(cache_filepath, sep=',', decimal='.')['output'].tolist()
+        file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig)
+
+        if file_exists:
+            self.output = pd.read_csv(self.cache_filepath, sep=',', decimal='.')['output'].tolist()
         else:
-            self.get_coordinates(location = location, year = time)
+            self.get_coordinates(location = self.pvconfig.location, year =  self.pvconfig.time)
             # Factor to guarantee peak power based on module with 250 Wh
-            self.ac_power_factor = math.ceil( ( power * 1e3 ) / 250 )
-            if sim_param is None:
-                self.data = [0] * int(1E3)
-                self.data_length = 1E3
-            else:
-                self.data = [0] * sim_param.timesteps
-                self.data_length = sim_param.timesteps
-            self.database_path = utils.save_cache("PVSystem", parameters)
+            self.ac_power_factor = math.ceil( ( self.pvconfig.power * 1e3 ) / 250 )
+            self.data = [0] * self.my_simulation_parameters.timesteps
+            self.data_length = self.my_simulation_parameters.timesteps
+
 
         self.modules = pd.read_csv(
             os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
@@ -393,21 +416,21 @@ class PVSystem(cp.Component):
         if load_module_data:
             # load module data online
             modules = pvlib.pvsystem.retrieve_sam(name="SandiaMod")
-            self.module = modules[module_name]
+            self.module = modules[self.pvconfig.module_name]
             # get inverter data
             inverters = pvlib.pvsystem.retrieve_sam("cecinverter")
-            self.inverter = inverters[inverter_name]
+            self.inverter = inverters[self.pvconfig.inverter_name]
         else:
             # load module and inverter data from csv
-            module = self.modules[module_name]
+            module = self.modules[self.pvconfig.module_name]
             self.module = pd.to_numeric(module, errors="coerce")
 
-            inverter = self.inverters[inverter_name]
+            inverter = self.inverters[self.pvconfig.inverter_name]
             self.inverter = pd.to_numeric(inverter, errors="coerce")
-        self.power = power
-        self.module_name = module_name
-        self.inverter_name = inverter_name
-        self.integrateInverter = integrateInverter
+        #self.power = self.power
+        #self.module_name =  module_name
+        #self.inverter_name = inverter_name
+        #self.integrateInverter = integrateInverter
         #self.simPhotovoltaicSimpleJit = simPhotovoltaicSimple
 
     def plot(self):
@@ -520,7 +543,7 @@ class PVSystem(cp.Component):
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()
-        if self.integrateInverter:
+        if self.pvconfig.integrateInverter:
             # calculate load after inverter
             iv_load = pvlib.inverter.sandia(inverter=self.inverter, v_dc=sapm_out["v_mp"], p_dc=sapm_out["p_mp"])
             ac_power = iv_load / peak_load

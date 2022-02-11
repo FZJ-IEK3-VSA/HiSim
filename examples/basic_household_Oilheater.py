@@ -35,12 +35,17 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
         - Building
         - Oil heater
     """
+    
+    ####delete all files in cache:
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60*15
 
     # Set weather
     location = "Aachen"
@@ -76,6 +81,7 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
+
     # Build occupancy
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_occupancy )
@@ -122,7 +128,6 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
                                         my_simulation_parameters=my_simulation_parameters )
-                                        #seconds_per_timestep=seconds_per_timestep)
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
                               my_building.Altitude)

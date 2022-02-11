@@ -76,9 +76,9 @@ class Carpet(Chart):
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
     def plot(self):
-        if(len(self.data.index) != 365*24):
-            logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
-            return
+        # if( len( self.data.index ) != 365*24 ):
+        #     logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+        #     return
         xdims = 365 #number of days
         ydims = int( len( self.data ) / 365 ) #number of calculated timesteps per day
         y_steps_per_hour = int( ydims / 24 )
@@ -175,8 +175,9 @@ class Day(Chart):
         self.get_day_data()
 
     def get_day_data(self):
-        firstindex = (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
-        lastindex = firstindex + 24 * int(1 / self.time_correction_factor)
+        #time_correction_factor was adopted, transformation updated here
+        firstindex = (self.month * 30 + self.day) * 24 * int( 3600 * self.time_correction_factor)
+        lastindex = firstindex + 24 * int( 3600 * self.time_correction_factor)
         day_number = self.day + 1
         if day_number == 1:
             ordinal = "st"

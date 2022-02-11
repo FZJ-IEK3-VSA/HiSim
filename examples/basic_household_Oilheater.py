@@ -35,12 +35,17 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
         - Building
         - Oil heater
     """
+    
+    ####delete all files in cache:
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60*15
 
     # Set weather
     location = "Aachen"
@@ -75,17 +80,17 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
     # Build system parameters
     if my_simulation_parameters is None:
         my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
-                                                                                     seconds_per_timestep=seconds_per_timestep)
+                                                                                     seconds_per_timestep=seconds_per_timestep )
     else:
         my_sim_params = my_simulation_parameters
     my_sim.set_parameters(my_sim_params)
 
     # Build occupancy
-    my_occupancy = occupancy.Occupancy( profile = occupancy_profile )
+    my_occupancy = occupancy.Occupancy( profile = occupancy_profile, seconds_per_timestep = seconds_per_timestep )
     my_sim.add_component( my_occupancy )
 
     # Build Weather
-    my_weather = weather.Weather( location=location, my_simulation_parameters=my_sim_params )
+    my_weather = weather.Weather( location=location, my_simulation_parameters = my_sim_params )
     my_sim.add_component( my_weather )
 
     my_photovoltaic_system = pvs.PVSystem( time=time,
@@ -122,11 +127,10 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
                                          my_weather.WindSpeed )
     my_sim.add_component( my_photovoltaic_system )
 
-    my_building = building.Building( building_code=building_code,
-                                        bClass=building_class,
-                                        initial_temperature=initial_temperature,
-                                        sim_params=my_sim_params )
-                                        #seconds_per_timestep=seconds_per_timestep)
+    my_building = building.Building( building_code = building_code,
+                                        bClass = building_class,
+                                        initial_temperature = initial_temperature,
+                                        sim_params = my_sim_params )
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
                               my_building.Altitude)

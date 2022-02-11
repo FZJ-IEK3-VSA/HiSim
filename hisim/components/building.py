@@ -111,8 +111,6 @@ class Building(cp.Component):
         Initial internal temperature of residence in Celsius
     sim_params : Simulator
         Simulator object used to carry the simulation using this class
-    seconds_per_timestep : int
-        Number of seconds per simulation timestep
     """
 
     # Inputs
@@ -150,11 +148,10 @@ class Building(cp.Component):
                  building_code="DE.N.SFH.05.Gen.ReEx.001.002",
                  bClass="medium",
                  initial_temperature=23,
-                 seconds_per_timestep=60,
                  sim_params=None):
         super().__init__(name="Building")
 
-        self.build(bClass, building_code, seconds_per_timestep, sim_params)
+        self.build(bClass, building_code, sim_params)
 
         self.state = BuildingState(t_m=initial_temperature, c_m=self.c_m)
         self.previous_state = self.state.self_copy()
@@ -284,10 +281,8 @@ class Building(cp.Component):
             dni_extra = stsv.get_input_value(self.DNIextraC) #/ self.seconds_per_timestep
             apparent_zenith = stsv.get_input_value(self.apparent_zenithC)
 
-        #occupancy_heat_gain = stsv.get_input_value(self.occupancy_heat_gainC) / self.seconds_per_timestep
-        #I guess you wanted to transfer W to Wh
-        occupancy_heat_gain = stsv.get_input_value(self.occupancy_heat_gainC) * self.seconds_per_timestep / 3600
-        t_out = stsv.get_input_value(self.t_outC)
+        occupancy_heat_gain = stsv.get_input_value( self.occupancy_heat_gainC )
+        t_out = stsv.get_input_value( self.t_outC )
 
 
         # With TES [In Development]
@@ -344,9 +339,8 @@ class Building(cp.Component):
 
         # Only with HeatPump
         elif self.thermal_energy_deliveredC.SourceOutput is not None:
-            #thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC) / seconds_per_timestep
-            #I guess you wanted to transfer W to Wh
-            thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC) * self.seconds_per_timestep / 3600
+            #the name thermal_energy_delivered might be misleading, because it is actually power in W
+            thermal_energy_delivered = stsv.get_input_value( self.thermal_energy_deliveredC )
         else:
             thermal_energy_delivered = 10
 
@@ -362,15 +356,15 @@ class Building(cp.Component):
                                                                              DHI=DHI,
                                                                              GHI=GHI,
                                                                              dni_extra=dni_extra,
-                                                                             apparent_zenith=apparent_zenith) * self.seconds_per_timestep / 3600
+                                                                             apparent_zenith=apparent_zenith)
         else:
-            solar_gain_through_windows = self.solar_gain_through_windows[timestep] * self.seconds_per_timestep / 3600
+            solar_gain_through_windows = self.solar_gain_through_windows[ timestep ]
 
         t_m, t_air, t_s, phi_loss = self.calc_temperatures_crank_nicolson( energy_demand = thermal_energy_delivered,
                                               internal_gains = occupancy_heat_gain,
                                               solar_gains = solar_gain_through_windows,
                                               t_out = t_out,
-                                              t_m_prev = t_m_prev)
+                                              t_m_prev = t_m_prev )
 
         self.state.t_m = t_m
         #self.state.t_m = t_m
@@ -384,8 +378,8 @@ class Building(cp.Component):
         #stsv.set_output_value(self.t_mC, t_air)
         stsv.set_output_value(self.t_mC, t_m)
         #stsv.set_output_value(self.t_airC, t_air)
-        stsv.set_output_value(self.total_power_to_residenceC, phi_loss * 3600 / self.seconds_per_timestep )
-        stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows * 3600 / self.seconds_per_timestep ) #convert Wh back to W
+        stsv.set_output_value(self.total_power_to_residenceC, phi_loss ) #phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
+        stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows ) #convert Wh back to W
 
         #stsv.set_output_value(self.internal_lossC, internal_loss)
         #stsv.set_output_value(self.stored_energy_variationC, stored_energy_variation)
@@ -408,17 +402,13 @@ class Building(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build(self, bClass, buildingcode, seconds_per_timestep, sim_params):
+    def build(self, bClass, buildingcode, sim_params):
         if sim_params is not None:
-            #self.time_correction_factor = 1 / sim_params.seconds_per_timestep
-            self.time_correction_factor = sim_params.seconds_per_timestep / 3600
             self.seconds_per_timestep = sim_params.seconds_per_timestep
             self.timesteps = sim_params.timesteps
         else:
-            self.seconds_per_timestep = seconds_per_timestep
-            #self.time_correction_factor = 1/seconds_per_timestep
-            #I guess you wanted to transfer W to Wh
-            self.time_correction_factor = seconds_per_timestep / 3600
+            #define default options, this is dangerous!
+            self.seconds_per_timestep = 60
             self.timesteps = int(1E3)
 
         self.parameters = [ bClass, buildingcode ]
@@ -453,8 +443,6 @@ class Building(cp.Component):
         # Gets conductances
         self.get_conducs()
 
-        self.set_time_correction()
-        self.set_time_correction(self.time_correction_factor)
         #self.calc_solar_gains_jit = jit(nopython=True)(calc_solar_gains)
 
     def __str__(self):
@@ -649,23 +637,6 @@ class Building(cp.Component):
         # References properties
         self.h_ve_adj_ref = float(self.buildingdata["h_Ventilation"].values[0]) * self.A_f
 
-    def set_time_correction(self, factor=1):
-        if factor == 1:
-            self.HasBeenConverted = False
-        if self.HasBeenConverted is True:
-            raise Exception("It has been already converted!")
-        self.h_tr_w = self.h_tr_w * factor
-        self.h_tr_em = self.h_tr_em * factor
-        self.h_tr_is = self.h_tr_is * factor
-        self.h_tr_ms = self.h_tr_ms * factor
-        self.h_ve_adj = self.h_ve_adj * factor
-        self.c_m = self.c_m #* factor
-        # for i_gain in range(len(self.gain_by_occupancy)):
-        #    self.gain_by_occupancy[i_gain] = self.gain_by_occupancy[i_gain] * factor
-        #    self.internal_gains[i_gain] = self.internal_gains[i_gain] * factor
-        if factor != 1:
-            self.HasBeenConverted = True
-
     def get_conducs(self):
         """
         Calculates the conductances from the norm ISO 13970
@@ -830,12 +801,12 @@ class Building(cp.Component):
         """
 
         # Calculates the heat flows to various points of the building based on the breakdown in section C.2, formulas C.1-C.3
-        # Heat flow to the air node
+        # Heat flow to the air node in W
         self.phi_ia = 0.5 * internal_gains + energy_demand
-        # Heat flow to the surface node
+        # Heat flow to the surface node in W
         self.phi_st = (1 - (self.A_m / self.A_t) -
                        (self.h_tr_w / (9.1 * self.A_t))) * (0.5 * internal_gains + solar_gains)
-        # Heatflow to the thermal mass node
+        # Heatflow to the thermal mass node in W
         self.phi_m = (self.A_m / self.A_t) * \
             (0.5 * internal_gains + solar_gains)
 
@@ -848,9 +819,9 @@ class Building(cp.Component):
         # (C.4) in [C.3 ISO 13790]
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
         """
-
-        self.t_m_next = ((t_m_prev * ((self.c_m / 3600.0) - 0.5 * (self.h_tr_3 + self.h_tr_em))) +
-                         self.phi_m_tot) / ((self.c_m / 3600.0) + 0.5 * (self.h_tr_3 + self.h_tr_em))
+        #changed 3600s per hour to seconds per timestep, which solves all problems and makes time correction redundant
+        self.t_m_next = ( (t_m_prev * ( ( self.c_m / self.seconds_per_timestep ) - 0.5 * ( self.h_tr_3 + self.h_tr_em ) ) ) +
+                         self.phi_m_tot ) / ( ( self.c_m / self.seconds_per_timestep ) + 0.5 * ( self.h_tr_3 + self.h_tr_em ) )
 
 
     def calc_phi_m_tot(self, t_out):

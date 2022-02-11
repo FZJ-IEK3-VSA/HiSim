@@ -23,7 +23,7 @@ def test_building():
     my_weather = weather.Weather(weather_location, my_simulation_parameters)
 
     # Set Residence
-    my_residence = building.Building(building_code=building_code, bClass=bClass, seconds_per_timestep=60)
+    my_residence = building.Building(building_code=building_code, bClass=bClass, sim_params = my_simulation_parameters )
 
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",

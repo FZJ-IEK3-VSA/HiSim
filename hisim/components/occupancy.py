@@ -228,7 +228,7 @@ class Occupancy(cp.Component):
                                                 sep=";", decimal=",", encoding = "cp1252")
             
             #convert electricity consumption and water consumption to desired format and unit
-            self.electricity_consumption = pd.to_numeric(pre_electricity_consumption["Sum [kWh]"] * 1000).tolist()
+            self.electricity_consumption = pd.to_numeric(pre_electricity_consumption["Sum [kWh]"] * 1000 *60 ).tolist() #1 kWh/min == 60W / min
             self.water_consumption = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()  
             
             #process data when time resolution of inputs matches timeresolution of simulation
@@ -249,8 +249,8 @@ class Occupancy(cp.Component):
                         self.number_of_residents[ timestep ] += np.round( number_of_residents_av )
                         self.heating_by_residents[ timestep ] = self.heating_by_residents[timestep] + \
                                                                 gain_per_person[mode] * number_of_residents_av
-                                                                
-                self.electricity_consumption = [ sum( self.electricity_consumption[ n : n + steps_ratio ] ) for n in range( 0, steps_original, steps_ratio ) ]
+                #power needs averaging, not sum                                                
+                self.electricity_consumption = [ sum( self.electricity_consumption[ n : n + steps_ratio ] ) / steps_ratio for n in range( 0, steps_original, steps_ratio ) ]
                 self.water_consumption = [ sum( self.water_consumption[ n : n + steps_ratio ] ) for n in range( 0, steps_original, steps_ratio ) ]
 
             else:

@@ -128,8 +128,7 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters )
     my_building = building.Building( building_code=building_code,
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
-                                        sim_params=my_sim_params,
-                                        seconds_per_timestep=seconds_per_timestep )
+                                        sim_params=my_sim_params )
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
                               my_building.Altitude)

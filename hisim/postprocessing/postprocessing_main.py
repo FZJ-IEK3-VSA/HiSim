@@ -153,6 +153,8 @@ class PostProcessor:
             my_sankey.plot_building()
 
     def run(self):
+        
+        print( len(self.ppdt.results) )
         # Define the directory name
         ##
         warnings.filterwarnings("ignore")
@@ -308,7 +310,7 @@ class PostProcessor:
         if solar_gain_through_windows is not None:
             self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
             if building_area is not None:
-                self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
+                self.write_to_report(["Relative Solar Gains [kWh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
 
         # Writes building internal gains
         if internal_gains is not None:
@@ -387,12 +389,12 @@ class PostProcessor:
 
 # if __name__ == "__main__":
 #     flags = {"plot_line": True,
-#              "plot_carpet": False,
-#              "plot_sankey": False,
-#              "plot_day": False,
-#              "plot_bar": False,
-#              "open_dir": True,
-#              "export_results_to_CSV": True}
+#               "plot_carpet": False,
+#               "plot_sankey": False,
+#               "plot_day": False,
+#               "plot_bar": False,
+#               "open_dir": True,
+#               "export_results_to_CSV": True}
 #     my_post_processing = PostProcessor(**flags)
 #     #my_post_processing.set_dir_results()
 #     my_post_processing.run()

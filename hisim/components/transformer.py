@@ -25,7 +25,7 @@ class Transformer(Component):
     def i_restore_state(self):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         startval_1 = stsv.get_input_value(self.input1)
         startval_2 = stsv.get_input_value(self.input2)
         stsv.set_output_value(self.output1, startval_1 * 5)

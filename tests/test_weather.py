@@ -5,7 +5,7 @@ def test_weather():
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(8)
     mysim:  SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=60)
-    my_weather = weather.Weather("Aachen", mysim)
+    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=mysim)
     my_weather.t_outC.GlobalIndex = 0
     my_weather.DNIC.GlobalIndex = 1
     my_weather.DHIC.GlobalIndex = 2
@@ -17,7 +17,7 @@ def test_weather():
 
     DNI = []
     for i in range(60*24*365):
-        my_weather.i_simulate(i, stsv, 60, False)
+        my_weather.i_simulate(i, stsv, False)
         DNI.append(stsv.values[1])
 
     assert sum(DNI) > 950

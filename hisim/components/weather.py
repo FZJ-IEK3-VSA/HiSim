@@ -132,7 +132,7 @@ class Weather(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_conversion: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_conversion: bool):
         stsv.set_output_value(self.t_outC, self.temperature[timestep])
         stsv.set_output_value(self.DNIC, self.DNI[timestep])
         stsv.set_output_value(self.DNIextraC, self.DNIextra[timestep])
@@ -143,7 +143,7 @@ class Weather(Component):
         stsv.set_output_value(self.wind_speedC, self.Wspd[timestep])
         stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith[timestep])
 
-    def build(self, location,my_simulation_parameters):
+    def build(self, location,my_simulation_parameters:SimulationParameters):
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
         cache_filepath = utils.get_cache(classname="Weather", parameters=parameters)

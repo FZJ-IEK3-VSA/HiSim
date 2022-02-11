@@ -154,7 +154,7 @@ class HeatPumpHplib(Component):
     def i_doublecheck(self):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep : int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         """
         Performs the simulation of the heat pump model.
 
@@ -215,7 +215,7 @@ class HeatPumpHplib(Component):
             cop=results['COP'].values[0]
             t_out=results['T_out'].values[0]
             m_dot=results['m_dot'].values[0]
-            time_on = time_on + seconds_per_timestep
+            time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
             time_off = 0
         else:
             # Calulate outputs
@@ -224,7 +224,7 @@ class HeatPumpHplib(Component):
             cop = None
             t_out = None
             m_dot = 0
-            time_off = time_off + seconds_per_timestep
+            time_off = time_off +  self.my_simulation_parameters.seconds_per_timestep
             time_on = 0
         
         # write values for output time series

@@ -69,10 +69,10 @@ def test_heat_pump():
     j = 60
     # Simulate
     my_heat_pump_controller.i_restore_state()
-    my_heat_pump_controller.i_simulate(j, stsv, seconds_per_timestep, False)
+    my_heat_pump_controller.i_simulate(j, stsv,  False)
 
     my_heat_pump.i_restore_state()
-    my_heat_pump.i_simulate(j, stsv, seconds_per_timestep, False)
+    my_heat_pump.i_simulate(j, stsv, False)
 
     # Check if there is a signal to heat up the house
     assert 1 == stsv.values[1]

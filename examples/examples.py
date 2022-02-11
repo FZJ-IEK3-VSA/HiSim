@@ -21,30 +21,26 @@ def first_example(my_sim: Simulator, my_simulation_parameters):
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_sim_param: SimulationParameters = SimulationParameters.full_year(year=2021,
+        my_simulation_parameters = SimulationParameters.full_year(year=2021,
                                                                                      seconds_per_timestep=60)
-    else:
-        my_sim_param = my_simulation_parameters
-    my_sim.set_parameters(my_sim_param)                                                              # Set timeline to simulator
-
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(name="Random numbers 100-200",
-                        timesteps=my_sim_param.timesteps,
+                        timesteps=my_simulation_parameters.timesteps,
                         minimum=100,
-                        maximum=200)
+                        maximum=200, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_rn1)
 
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(name="Random numbers 10-20",
-                        timesteps=my_sim_param.timesteps,
+                        timesteps=my_simulation_parameters.timesteps,
                         minimum=10,
-                        maximum=20)
+                        maximum=20, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_rn2)
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(name="Sum",
                                     loadtype=loadtypes.LoadTypes.Any,
-                                    unit=loadtypes.Units.Any)
+                                    unit=loadtypes.Units.Any, my_simulation_parameters=my_simulation_parameters)
     # Connect inputs from sum object to both previous outputs
     my_sum.connect_input(input_fieldname=my_sum.SumInput1,
                          src_object_name=my_rn1.ComponentName,
@@ -69,28 +65,25 @@ def second_example(my_sim: Simulator,my_simulation_parameters):
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_sim_param: SimulationParameters = SimulationParameters.full_year(year=2021,
+        my_simulation_parameters = SimulationParameters.full_year(year=2021,
                                                                             seconds_per_timestep=60) # use a full year for testing
-    else:
-        my_sim_param = my_simulation_parameters
-    my_sim.set_parameters(my_sim_param)                                                              # Set timeline to simulator
 
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(name="Random numbers 100-200",
-                           timesteps=my_sim_param.timesteps,
+                           timesteps=my_simulation_parameters.timesteps,
                            minimum=100,
-                           maximum=200)
+                           maximum=200, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_rn1)
 
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(name="Random numbers 10-20",
-                           timesteps=my_sim_param.timesteps,
+                           timesteps=my_simulation_parameters.timesteps,
                            minimum=10,
-                           maximum=20)
+                           maximum=20, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_rn2)
 
     # Create new Transformer object
-    my_transformer = Transformer(name="MyTransformer")
+    my_transformer = Transformer(name="MyTransformer", my_simulation_parameters=my_simulation_parameters)
     my_transformer.connect_input(input_fieldname=my_transformer.TransformerInput,         # Connect input from my transformer
                                  src_object_name=my_rn2.ComponentName,                    # to output of second random number object
                                  src_field_name=my_rn2.RandomOutput)
@@ -99,7 +92,7 @@ def second_example(my_sim: Simulator,my_simulation_parameters):
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(name="Sum",
                                     loadtype=loadtypes.LoadTypes.Any,
-                                    unit=loadtypes.Units.Any)
+                                    unit=loadtypes.Units.Any, my_simulation_parameters=my_simulation_parameters)
     # Connect inputs from sum object to both previous outputs
     my_sum.connect_input(input_fieldname=my_sum.SumInput1,
                          src_object_name=my_rn1.ComponentName,

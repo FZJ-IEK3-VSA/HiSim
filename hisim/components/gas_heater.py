@@ -72,7 +72,7 @@ class GasHeater(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         control_signal = stsv.get_input_value(self.control_signal)
         if control_signal > 1:
             raise Exception("Expected a control signal between 0 and 1")

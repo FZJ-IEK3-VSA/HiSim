@@ -31,7 +31,7 @@ class SimpleController(Component):
     def i_restore_state(self):
         self.state = self.previous_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         if force_convergence:
             return
         percent = stsv.get_input_value(self.input1)

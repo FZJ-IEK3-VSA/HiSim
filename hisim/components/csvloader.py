@@ -61,7 +61,7 @@ class CSVLoader(cp.Component):
         self.multiplier = multiplier
 
         # ? self.column = column
-        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal) # type: ignore
+        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal)
         dfcolumn = df.iloc[:, [column]]
         self.column_name = column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
@@ -73,7 +73,7 @@ class CSVLoader(cp.Component):
     def i_restore_state(self):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         stsv.set_output_value(self.output1, float(self.column[timestep]) * self.multiplier)
 
     def i_save_state(self):

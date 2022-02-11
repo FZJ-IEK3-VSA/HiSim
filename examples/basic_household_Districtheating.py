@@ -10,7 +10,7 @@ from hisim.components import pvs
 from hisim.components import building
 from hisim.components import district_heating
 from hisim.components import sumbuilder
-
+from hisim.simulationparameters import SimulationParameters
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -20,7 +20,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters ):
+def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters:SimulationParameters ):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
@@ -72,19 +72,16 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters )
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
+        my_simulation_parameters = SimulationParameters.full_year(year=year,
                                                                                      seconds_per_timestep=seconds_per_timestep)
-    else:
-        my_sim_params = my_simulation_parameters
     #my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year( year=year,                                                                                  seconds_per_timestep = seconds_per_timestep )
-    my_sim.set_parameters(my_sim_params)
 
     # Build occupancy
-    my_occupancy = occupancy.Occupancy( profile = occupancy_profile, seconds_per_timestep = seconds_per_timestep )
+    my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component( my_occupancy )
 
     # Build Weather
-    my_weather = weather.Weather( location=location, my_simulation_parameters=my_sim_params )
+    my_weather = weather.Weather( location=location, my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_weather )
 
     my_photovoltaic_system = pvs.PVSystem( time=time,
@@ -94,7 +91,7 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters )
                                               module_name=module_name,
                                               integrateInverter=integrateInverter,
                                               inverter_name=inverter_name,
-                                              sim_params=my_sim_params )
+                                              my_simulation_parameters=my_simulation_parameters)
     my_photovoltaic_system.connect_input( my_photovoltaic_system.TemperatureOutside,
                                          my_weather.ComponentName,
                                          my_weather.TemperatureOutside )
@@ -122,14 +119,14 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters )
     my_sim.add_component( my_photovoltaic_system )
     
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid( name = "BaseLoad",
-                                                                      grid = [ my_occupancy, "Subtract", my_photovoltaic_system ] )
+                                                                      grid = [ my_occupancy, "Subtract", my_photovoltaic_system ],
+                                                                   my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_base_electricity_load_profile)
 
     my_building = building.Building( building_code=building_code,
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
-                                        sim_params=my_sim_params,
-                                        seconds_per_timestep=seconds_per_timestep )
+                                        my_simulation_parameters=my_simulation_parameters)
     my_building.connect_input(my_building.Altitude,
                               my_weather.ComponentName,
                               my_building.Altitude)
@@ -162,7 +159,8 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters )
     my_district_heating_controller = district_heating.DistrictHeatingController(    max_power = max_power,
                                                                                     min_power = min_power,
                                                                                     t_air_heating = t_air_heating,
-                                                                                    tol = tol )
+                                                                                    tol = tol,
+                                                                                    my_simulation_parameters=my_simulation_parameters)
     my_district_heating_controller.connect_input( my_district_heating_controller.TemperatureMean,
                                            my_building.ComponentName,
                                            my_building.TemperatureMean )
@@ -170,7 +168,8 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters )
 
     my_district_heating = district_heating.DistrictHeating(    max_power = max_power,
                                                                min_power = min_power,
-                                                               efficiency = efficiency )
+                                                               efficiency = efficiency,
+                                                               my_simulation_parameters=my_simulation_parameters)
     my_district_heating.connect_input( my_district_heating.signal,
                                        my_district_heating_controller.ComponentName,
                                        my_district_heating_controller.signal )

@@ -241,7 +241,7 @@ class Electrolyzer(Component):
     def i_restore_state(self):
         self.electrolyzer.state = self.previous_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         electricity_input = stsv.get_input_value(self.electricity_input)
 
         if electricity_input < 0:
@@ -267,7 +267,8 @@ class Electrolyzer(Component):
             raise ValueError
 
         if electricity_input >= self.min_power:
-            hydrogen_output, oxygen_output, power_level, electricity_needed = self.electrolyzer.convert_electricity(electricity_input, self.seconds_per_timestep,stsv.get_input_value(self.hydrogen_not_stored)/seconds_per_timestep)
+            hydrogen_output, oxygen_output, power_level, electricity_needed = \
+                self.electrolyzer.convert_electricity(electricity_input, self.seconds_per_timestep,stsv.get_input_value(self.hydrogen_not_stored)/self.my_simulation_parameters.seconds_per_timestep)
             # the losses ae included in the efficiency providedd by supplyer and are not calculated separately
             losses_this_timestep = self.waste_energy * self.max_power/ self.max_power
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
@@ -507,7 +508,7 @@ class HydrogenStorage(Component):
     def i_restore_state(self):
         self.hydrogenstorage.fill = self.previous_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         # Setting up the internal values
         charging_amount_sec = stsv.get_input_value(self.charging_hydrogen)
         charging_amount = charging_amount_sec * self.seconds_per_timestep

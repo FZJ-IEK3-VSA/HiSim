@@ -63,11 +63,10 @@ class Occupancy(cp.Component):
 
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
-                  profile="CH01",
-                  seconds_per_timestep = 60 ):
+                  profile="CH01"):
         super().__init__(name="Occupancy", my_simulation_parameters=my_simulation_parameters)
 
-        self.build( profile = profile, seconds_per_timestep = seconds_per_timestep )
+        self.build( profile = profile )
 
         # Inputs - Not Mandatories
         self.ww_mass_input: cp.ComponentInput = self.add_input(self.ComponentName,
@@ -121,7 +120,7 @@ class Occupancy(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_conversion: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool):
         if self.ww_mass_input.SourceOutput is not None:
             # ww demand
             ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
@@ -183,7 +182,7 @@ class Occupancy(cp.Component):
         stsv.set_output_value(self.electricity_outputC, self.electricity_consumption[timestep])
         stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
 
-    def build( self, profile, seconds_per_timestep ):
+    def build( self, profile):
         self.profile = profile
         parameters = [profile]
 
@@ -215,7 +214,7 @@ class Occupancy(cp.Component):
             
             #see how long csv files from LPG are to check if averaging has to be done and calculate desired length
             steps_original = len( occupancy_profile[ 0 ][ 'Values' ] )
-            steps_desired = int( 365 * 24 * ( 3600 / seconds_per_timestep ) )
+            steps_desired = int( 365 * 24 * ( 3600 / self.my_simulation_parameters.seconds_per_timestep ) )
             steps_ratio = int( steps_original / steps_desired )
             
             #initialize number of residence and heating by residents

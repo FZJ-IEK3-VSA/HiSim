@@ -1,7 +1,6 @@
 from hisim import component
 from hisim.components import occupancy
-#from hisim import cProfile
-
+from hisim.simulationparameters import SimulationParameters
 
 def test_occupancy():
     """
@@ -12,9 +11,9 @@ def test_occupancy():
     my_occupancy_profile = "CH01"
     seconds_per_timestep = 60
     number_of_outputs = 4
-
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     stsv = component.SingleTimeStepValues(number_of_outputs)
-    my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile)
+    my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
 
     # Needed to number globalindex to activate return of component outputs
     my_occupancy.number_of_residentsC.GlobalIndex = 0
@@ -22,13 +21,13 @@ def test_occupancy():
     my_occupancy.electricity_outputC.GlobalIndex = 2
     my_occupancy.water_consumptionC.GlobalIndex = 3
 
-    my_occupancy.i_simulate(0, stsv, seconds_per_timestep, False)
+    my_occupancy.i_simulate(0, stsv, False)
     number_of_residents = []
     heating_by_residents = []
     electricity_consumption = []
     water_consumption = []
     for i in range(24 * 60 * 365):
-        my_occupancy.i_simulate(i, stsv, seconds_per_timestep, False)
+        my_occupancy.i_simulate(i, stsv,  False)
         number_of_residents.append(stsv.values[0])
         heating_by_residents.append(stsv.values[1])
         electricity_consumption.append(stsv.values[2])

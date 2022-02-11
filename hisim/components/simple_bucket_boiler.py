@@ -174,7 +174,7 @@ class Boiler( cp.Component ):
     def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
         
         # Retrieves inputs
         WW_consumption = stsv.get_input_value( self.use_WW )
@@ -187,9 +187,9 @@ class Boiler( cp.Component ):
         #4.182 specific heat of water in kJ K^(-1) kg^(-1)
         #1e-3 conversion J to kJ
         energy = self.state.energy_from_temperature()
-        new_energy = energy - ( self.state.temperature_in_K - 293 ) * self.surface * self.u * seconds_per_timestep * 1e-3 \
+        new_energy = energy - ( self.state.temperature_in_K - 293 ) * self.surface * self.u * self.my_simulation_parameters.seconds_per_timestep * 1e-3 \
                                               - WW_consumption * ( self.T_warmwater - self.T_drainwater ) * 0.977 * 4.182 \
-                                              + signal * self.P_on * self.efficiency * seconds_per_timestep * 1e-3
+                                              + signal * self.P_on * self.efficiency * self.my_simulation_parameters.seconds_per_timestep * 1e-3
                                               
         #convert new energy to new temperature
         self.state.set_temperature_from_energy( new_energy)
@@ -285,7 +285,7 @@ class BoilerController(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
 
         if force_convergence: # please stop oscillating!
             return

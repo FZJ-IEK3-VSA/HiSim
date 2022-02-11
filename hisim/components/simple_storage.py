@@ -72,7 +72,7 @@ class SimpleStorage(Component):
     def i_restore_state(self):
         self.state = copy.copy(self.previous_state)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         charging = stsv.get_input_value(self.charging_input)
         discharging = stsv.get_input_value(self.discharging_input)
         if charging < 0:

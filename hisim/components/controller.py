@@ -371,7 +371,7 @@ class Controller(cp.Component):
 
 
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,seconds_per_timestep: int, force_convergence : bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,force_convergence : bool):
         if force_convergence:
             return
         ###ELECTRICITY

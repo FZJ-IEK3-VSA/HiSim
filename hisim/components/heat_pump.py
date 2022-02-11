@@ -270,7 +270,7 @@ class HeatPump(cp.Component):
         #lines.append(["Max power var:","{:4.2f}".format(self.max_heating_power_var)])
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         # Inputs
         stateC = stsv.get_input_value(self.stateC)
         t_out = stsv.get_input_value(self.t_outC)
@@ -458,7 +458,7 @@ class HeatPumpController(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass

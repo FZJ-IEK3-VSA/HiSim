@@ -60,11 +60,11 @@ def test_building():
     # Simulates
     stsv.values[11] = 23
     print(stsv.values)
-    my_weather.i_simulate(0, stsv, seconds_per_timestep, False)
+    my_weather.i_simulate(0, stsv,  False)
     print(stsv.values)
-    my_occupancy.i_simulate(0, stsv, seconds_per_timestep, False)
+    my_occupancy.i_simulate(0, stsv,  False)
     print(stsv.values)
-    my_residence.i_simulate(0, stsv, seconds_per_timestep, False)
+    my_residence.i_simulate(0, stsv,  False)
     print(stsv.values)
 
     print("Occupancy: {}\n".format(stsv.values[:4]))

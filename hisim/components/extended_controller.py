@@ -283,7 +283,7 @@ class ExtendedController(Component):
         self.state_gas_heater1 = deepcopy(self.previous_state_gas_heater1)
         self.runtime_gas_heater1 = deepcopy(self.previous_runtime_gas_heater1)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         if force_convergence:
             return
 

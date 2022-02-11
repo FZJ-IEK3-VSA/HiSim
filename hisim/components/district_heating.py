@@ -141,7 +141,7 @@ class DistrictHeating( cp.Component ):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
     
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
         """
         Performs the simulation of the district heating model.
         """ 
@@ -224,7 +224,7 @@ class DistrictHeatingController( cp.Component ):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool  ):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool  ):
         
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:

@@ -79,7 +79,7 @@ class Component:
         self.outputs: List[ComponentOutput] = []
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
-        self.my_simulation_parameters = my_simulation_parameters
+        self.my_simulation_parameters:SimulationParameters = my_simulation_parameters
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:
@@ -155,7 +155,7 @@ class Component:
         # can be called many times while iterating
         raise NotImplementedError()
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         # performs the actual calculation
         raise NotImplementedError()
 

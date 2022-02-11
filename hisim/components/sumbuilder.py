@@ -58,7 +58,7 @@ class CalculateOperation(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
         total = 0
         for index, input in enumerate(self.inputs):
             val1 = stsv.get_input_value(input)
@@ -152,7 +152,7 @@ class ElectricityGrid(Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
         total = 0
         for index, input in enumerate(self.inputs):
             val1 = stsv.get_input_value(input)
@@ -203,7 +203,7 @@ class SumBuilderForTwoInputs(Component):
     def i_restore_state(self):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)
         stsv.set_output_value(self.output1, val1+val2)
@@ -239,7 +239,7 @@ class SumBuilderForThreeInputs(Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)
         val3 = stsv.get_input_value(self.input3)

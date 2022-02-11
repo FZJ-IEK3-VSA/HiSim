@@ -277,7 +277,7 @@ class PVSystem(cp.Component):
         lines.append("Inverter: {}".format(self.inverter_name))
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
 
         if hasattr(self, "output"):
             stsv.set_output_value(self.electricity_outputC, self.output[timestep] * self.power)

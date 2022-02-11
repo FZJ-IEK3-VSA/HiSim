@@ -24,7 +24,7 @@ class RandomNumbers(Component):
     def i_restore_state(self):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         val1: float = self.values[timestep]
         stsv.set_output_value(self.output1, float(val1))
 

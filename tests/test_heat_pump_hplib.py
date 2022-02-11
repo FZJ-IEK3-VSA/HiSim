@@ -69,7 +69,7 @@ def test_heat_pump_hplib():
     heatpump.time_off.GlobalIndex = 10     
     
     # Simulation
-    heatpump.i_simulate(timestep=timestep, stsv=stsv, seconds_per_timestep=seconds_per_timestep, force_convergence=force_convergence)
+    heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     print(stsv.values)
     # Check
     assert p_th_set == stsv.values[4]

@@ -19,7 +19,7 @@ def test_photovoltaic():
     # Sets Occupancy
     my_weather = weather.Weather(location=weather_location, my_simulation_parameters =mysim )
 
-    my_pvs = pvs.PVSystem(power=power,)
+    my_pvs = pvs.PVSystem(power=power,my_simulation_parameters=mysim)
 
     my_pvs.t_outC.SourceOutput = my_weather.t_outC
     my_pvs.azimuthC.SourceOutput = my_weather.azimuthC
@@ -42,6 +42,6 @@ def test_photovoltaic():
 
     my_pvs.electricity_outputC.GlobalIndex = 9
 
-    my_weather.i_simulate(655, stsv, seconds_per_timestep, False)
-    my_pvs.i_simulate(655, stsv, seconds_per_timestep, False)
+    my_weather.i_simulate(655, stsv,  False)
+    my_pvs.i_simulate(655, stsv,  False)
     assert abs(0.4532226665022684- stsv.values[9]) <0.05

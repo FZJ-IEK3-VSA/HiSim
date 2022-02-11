@@ -48,7 +48,7 @@ class CHPConfig:
     # system_name = "HOMER"
     system_name = "BlueGen BG15"
 
-    df = pd.read_excel(os.path.join(utils.HISIMPATH["chp_system"], 'mock_up_efficiencies.xlsx'), index_col=0) # type: ignore
+    df = pd.read_excel(os.path.join(utils.HISIMPATH["chp_system"], 'mock_up_efficiencies.xlsx'), index_col=0)
 
     df_specific = df.loc[str(system_name)]
 
@@ -363,7 +363,7 @@ class CHP(Component):
             else:
                 return x2
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         control_signal = -1
         if self.operating_mode=="heat":
             control_signal = stsv.get_input_value(self.control_signal)

@@ -122,7 +122,7 @@ class AdvancedBattery(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,force_convergence: bool):
         # Inputs
         Pr = stsv.get_input_value(self.Pr_C)
         t = timestep
@@ -259,7 +259,7 @@ class AdvancedBatteryController(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         load = stsv.get_input_value(self.inputC)
 
         if load < 0.0:

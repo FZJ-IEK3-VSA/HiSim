@@ -1,7 +1,7 @@
 # Generic/Built-in
 import copy
 import numpy as np
-from typing import List
+from typing import List, Optional
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.components.ev_charger import SimpleStorageState
@@ -87,7 +87,7 @@ class Dummy(Component):
         self.temperature:float = -300
 
 
-    def build(self, electricity:float, heat:float, capacity:float, initial_temperature:float):
+    def build(self, electricity:Optional[float], heat:float, capacity:Optional[float], initial_temperature:Optional[float]):
         self.time_correction_factor:float = 1 / self.my_simulation_parameters.seconds_per_timestep
         self.seconds_per_timestep:float = self.my_simulation_parameters.seconds_per_timestep
 
@@ -125,7 +125,7 @@ class Dummy(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
         electricity_output:float = 0
         if timestep >= 60*6 and timestep < 60*9:
             electricity_output = self.electricity_output

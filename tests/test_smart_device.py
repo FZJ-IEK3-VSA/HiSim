@@ -3,7 +3,7 @@ from hisim.components import heat_pump
 from hisim.components import genericsurpluscontroller
 from hisim.components import controllable
 from hisim import loadtypes as lt
-
+from hisim.simulationparameters import SimulationParameters
 def test_smart_device_library():
     """
     Test if it can load the smart device library
@@ -13,12 +13,13 @@ def test_smart_device_library():
     name = "Vitocal 300-A AWO-AC 301.B07"
     minimum_idle_time = 30
     minimum_operation_time = 15
-
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
+                                                                 seconds_per_timestep=60)
     # Set Heat Pump
     heat_pump.HeatPump(manufacturer=manufacturer,
                            name=name,
                            min_operation_time=minimum_idle_time,
-                           min_idle_time=minimum_operation_time)
+                           min_idle_time=minimum_operation_time, my_simulation_parameters=mysim)
 
 def test_smart_device():
     """
@@ -34,11 +35,12 @@ def test_smart_device():
                                                        "ElectricityOutput",
                                                        lt.LoadTypes.Electricity,
                                                        lt.Units.Watt)
-
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
+                                                                 seconds_per_timestep=60)
     # Create Controller
-    my_flexible_controller = genericsurpluscontroller.GenericSurplusController(mode=1)
+    my_flexible_controller = genericsurpluscontroller.GenericSurplusController(my_simulation_parameters=mysim, mode=1)
     # Create Controllable
-    my_controllable = controllable.Controllable("Washing")
+    my_controllable = controllable.Controllable("Washing", my_simulation_parameters=mysim)
 
     # Connect inputs and outputs
     my_flexible_controller.electricity_inputC.SourceOutput = available_electricity_outputC
@@ -54,8 +56,8 @@ def test_smart_device():
     timestep = 2149
     my_controllable.i_save_state()
     my_controllable.i_restore_state()
-    my_flexible_controller.i_simulate(timestep, stsv, seconds_per_timestep, False)
-    my_controllable.i_simulate(timestep, stsv, seconds_per_timestep, False)
+    my_flexible_controller.i_simulate(timestep, stsv,  False)
+    my_controllable.i_simulate(timestep, stsv, False)
     print("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[1],stsv.values[2],stsv.values[3]))
 
     # Signal

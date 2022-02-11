@@ -69,7 +69,7 @@ class ComponentWrapper:
     def restore_state(self):
         self.MyComponent.i_restore_state()
 
-    def calculate_component(self, timestep: int,  stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def calculate_component(self, timestep: int,  stsv: cp.SingleTimeStepValues, force_convergence: bool):
         #if(self.is_cachable)
         #cachekey building
         # key = ""
@@ -82,7 +82,7 @@ class ComponentWrapper:
         #         #set outputs
         # # send to component
         # else
-        self.MyComponent.i_simulate(timestep, stsv, seconds_per_timestep, force_convergence)
+        self.MyComponent.i_simulate(timestep, stsv,  force_convergence)
         # #save outputs to dict
         # myresults = []
         # for output in self.component_outputs:
@@ -233,7 +233,7 @@ class Simulator:
                 # Executes restore state for each component
                 wr.restore_state()
                 # Executes simulate for component
-                wr.calculate_component(timestep, stsv, self.SimulationParameters.seconds_per_timestep, force_convergence)
+                wr.calculate_component(timestep, stsv, force_convergence)
 
             # Stops simulation for too small difference between
             # actual values and previous values

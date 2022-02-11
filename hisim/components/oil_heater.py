@@ -146,7 +146,7 @@ class OilHeater( cp.Component ):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
     
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,force_convergence: bool ):
         """
         Performs the simulation of the oil heater.
         """ 
@@ -163,7 +163,7 @@ class OilHeater( cp.Component ):
             stateC = 0
             
         #update state class accordingly
-        self.state.update_state( stateC = stateC , seconds_per_timestep = seconds_per_timestep )
+        self.state.update_state( stateC = stateC , seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep )
         
         # write values for output time series
         stsv.set_output_value( self.thermal_energy_delivered, self.max_power * self.state.full_medium_off / 2 )
@@ -240,7 +240,7 @@ class OilHeaterController( cp.Component ):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool  ):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool  ):
         
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:

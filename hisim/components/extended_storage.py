@@ -727,7 +727,7 @@ class WarmWaterStorage(Component):
     def i_restore_state(self):
         self.wws.reset_to_last_timestep(self.previous_state)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, seconds_per_timestep: int, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
 
         # temperature of the tank at different heights
         # 0 = top, 100 = bottom

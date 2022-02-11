@@ -228,7 +228,6 @@ def load_export_load_profile_generator(target):
         return EXPORTPATH
     else:
         raise Warning("Target export from Load Profile Generator does not exist")
-        return None
 
 def get_ev_data(target):
     """

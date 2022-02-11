@@ -543,7 +543,7 @@ class PVSystem(cp.Component):
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()
-        if self.pvconfig.integrateInverter:
+        if self.pvconfig.integrate_inverter:
             # calculate load after inverter
             iv_load = pvlib.inverter.sandia(inverter=self.inverter, v_dc=sapm_out["v_mp"], p_dc=sapm_out["p_mp"])
             ac_power = iv_load / peak_load

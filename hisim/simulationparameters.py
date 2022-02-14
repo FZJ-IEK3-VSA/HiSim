@@ -1,6 +1,6 @@
 from typing import List
 import datetime
-from utils import PostProcessingOptions
+from hisim.utils import PostProcessingOptions
 class SimulationParameters:
     def __init__(self, start_date, end_date, seconds_per_timestep, year=None, post_processing_options:List = []):
         self.start_date = start_date

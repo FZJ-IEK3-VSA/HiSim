@@ -15,7 +15,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components import weather
+from hisim.components.weather import Weather
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -292,20 +292,20 @@ class PVSystem(cp.Component):
                                                              lt.Units.Watt,
                                                              False)
 
-        self.add_default_connections(weather.Weather, self.get_weather_default_connections())
+        self.add_default_connections(Weather, self.get_weather_default_connections())
 
     def get_weather_default_connections(self):
         print("setting weather default connections")
         connections = []
-        weather_classname = weather.Weather.get_classname()
-        connections.append(cp.ComponentConnection(PVSystem.TemperatureOutside,weather_classname, weather.Weather.TemperatureOutside))
-        connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradiance,weather_classname, weather.Weather.DirectNormalIrradiance))
-        connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradianceExtra,weather_classname, weather.Weather.DirectNormalIrradianceExtra))
-        connections.append(cp.ComponentConnection(PVSystem.DiffuseHorizontalIrradiance,weather_classname, weather.Weather.DiffuseHorizontalIrradiance))
-        connections.append(cp.ComponentConnection(PVSystem.GlobalHorizontalIrradiance,weather_classname, weather.Weather.GlobalHorizontalIrradiance))
-        connections.append(cp.ComponentConnection(PVSystem.Azimuth,weather_classname, weather.Weather.Azimuth))
-        connections.append(cp.ComponentConnection(PVSystem.ApparentZenith,weather_classname, weather.Weather.ApparentZenith))
-        connections.append(cp.ComponentConnection(PVSystem.WindSpeed,weather_classname, weather.Weather.WindSpeed))
+        weather_classname = Weather.get_classname()
+        connections.append(cp.ComponentConnection(PVSystem.TemperatureOutside,weather_classname, Weather.TemperatureOutside))
+        connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradiance,weather_classname, Weather.DirectNormalIrradiance))
+        connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradianceExtra,weather_classname, Weather.DirectNormalIrradianceExtra))
+        connections.append(cp.ComponentConnection(PVSystem.DiffuseHorizontalIrradiance,weather_classname, Weather.DiffuseHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(PVSystem.GlobalHorizontalIrradiance,weather_classname, Weather.GlobalHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(PVSystem.Azimuth,weather_classname, Weather.Azimuth))
+        connections.append(cp.ComponentConnection(PVSystem.ApparentZenith,weather_classname, Weather.ApparentZenith))
+        connections.append(cp.ComponentConnection(PVSystem.WindSpeed,weather_classname, Weather.WindSpeed))
         return connections
 
     def i_restore_state(self):
@@ -361,7 +361,8 @@ class PVSystem(cp.Component):
                                             wind_speed=wind_speed)
 
             resultingvalue = ac_power * self.pvconfig.power
-
+            # if you wanted to access the temperature forecast from the weather component:
+            # val = self.simulation_repository.get_entry(Weather.Weather_Temperature_Forecast_24h)
             stsv.set_output_value(self.electricity_outputC, resultingvalue)
             self.data[timestep] = ac_power
             if timestep + 1 == self.data_length:

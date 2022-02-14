@@ -1,6 +1,6 @@
 # Generic
 import logging
-from typing import List, Optional
+from typing import List, Optional, Any
 from hisim.simulationparameters import SimulationParameters
 # Package
 from hisim import loadtypes as lt
@@ -70,6 +70,16 @@ class SingleTimeStepValues:
         print(*self.values, sep=", ")
 
 
+class SimRepository:
+    def __init__(self):
+        self.my_dict = {}
+
+    def set_entry(self, key: str, entry: Any):
+        self.my_dict[key] = entry
+
+    def get_entry(self, key: str) -> Any:
+        return self.my_dict[key]
+
 class Component:
     
     def __init__(self, name: str,my_simulation_parameters: SimulationParameters ):
@@ -79,6 +89,15 @@ class Component:
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
         self.my_simulation_parameters:SimulationParameters = my_simulation_parameters
+        self.simulation_repository = my_simulation_parameters
+        self.simulation_repository: SimRepository
+
+    def set_sim_repo(self, simulation_repository: SimRepository):
+        if simulation_repository is None:
+            raise ValueError("simulation repository was none")
+        self.simulation_repository = simulation_repository
+
+
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:

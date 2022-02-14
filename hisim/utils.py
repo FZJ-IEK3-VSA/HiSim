@@ -6,7 +6,7 @@ import pandas as pd
 import pickle
 import sys
 import inspect
-from enum import Enum
+from enum import Enum, IntEnum
 import pdb
 from typing import Any, Dict
 import hashlib
@@ -99,7 +99,7 @@ HISIMPATH : Dict[str,Any]      = {"results": os.path.join(hisim_abs_path, "resul
 
 
 
-class PostProcessingOptions(Enum):
+class PostProcessingOptions(IntEnum):
     Plot_Line = 1
     Plot_Carpet = 2
     Plot_Sankey = 3

@@ -53,6 +53,9 @@ class PostProcessingDataTransfer:
         self.execution_time = execution_time
         self.results_monthly = results_monthly
         self.postProcessingOptions = simulation_parameters.post_processing_options
+        print("selected " + str(len(self.postProcessingOptions)) + " options")
+        for option in self.postProcessingOptions:
+            print("selected: " + str(option))
 
 
 
@@ -172,12 +175,14 @@ class PostProcessor:
                                time_correction_factor=self.ppdt .time_correction_factor)
                 my_line.plot()
             if PostProcessingOptions.Plot_Carpet in self.ppdt.postProcessingOptions:
+                #print("Making carpet plots")
                 my_carpet = charts.Carpet(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
                                    time_correction_factor=self.ppdt.time_correction_factor)
                 my_carpet.plot()
+
             if PostProcessingOptions.Plot_Day in self.ppdt.postProcessingOptions:
                     my_days = ChartSingleDay(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
@@ -197,12 +202,20 @@ class PostProcessor:
 
 
         # Plot sankey
-        if PostProcessingOptions.Plot_Bar in self.ppdt.postProcessingOptions:
-            self.plot_sankeys()
+        if PostProcessingOptions.Plot_Sankey in self.ppdt.postProcessingOptions:
+            print("plotting sankeys")
+        #    self.plot_sankeys()
+        else:
+            for option in self.ppdt.postProcessingOptions:
+                print("in sankey: selected: " + str(option))
+            print("not plotting sankeys")
 
         # Export all results to CSV
         if PostProcessingOptions.Export_To_CSV in self.ppdt.postProcessingOptions:
+            print("exporting to csv")
             self.export_results_to_csv()
+        else:
+            print("not exporting to CSV")
 
 
         if len(self.ppdt.results) == 1440:

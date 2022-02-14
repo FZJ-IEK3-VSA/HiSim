@@ -26,9 +26,10 @@ class Carpet(Chart):
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
     def plot(self):
-        if(len(self.data.index) != 365*24):
-            logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
-            return
+        #if(len(self.data.index) != 365*24):
+         #   logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+          #  return
+        #print("starting carpet plots")
         xdims = 365 #number of days
         ydims = int( len( self.data ) / 365 ) #number of calculated timesteps per day
         y_steps_per_hour = int( ydims / 24 )
@@ -70,9 +71,10 @@ class Carpet(Chart):
         # ax.set_xlabel('Month of the year', fontsize=14)
 
         # plt.show()
-
+#        print("finished carpet plot: " + self.filepath)
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
+
 
 class Line(Chart):
     def __init__(self, output, data , units, directorypath, time_correction_factor):

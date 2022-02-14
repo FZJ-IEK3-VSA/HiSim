@@ -8,6 +8,7 @@ def test_photovoltaic():
     weather_location = "Aachen"
     seconds_per_timestep = 60
     power = 10
+    repo = component.SimRepository()
 
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=seconds_per_timestep)
@@ -18,9 +19,9 @@ def test_photovoltaic():
 
     # Sets Occupancy
     my_weather = weather.Weather(location=weather_location, my_simulation_parameters =mysim )
-
+    my_weather.set_sim_repo(repo)
     my_pvs = pvs.PVSystem(power=power,my_simulation_parameters=mysim)
-
+    my_pvs.set_sim_repo(repo)
     my_pvs.t_outC.SourceOutput = my_weather.t_outC
     my_pvs.azimuthC.SourceOutput = my_weather.azimuthC
     my_pvs.DNIC.SourceOutput = my_weather.DNIC

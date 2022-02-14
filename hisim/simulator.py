@@ -162,6 +162,7 @@ class Simulator:
         directoryname = "{}_{}".format(setup_function.lower(), datetime.datetime.now().strftime("%Y%m%d_%H%M%S"))
         self.dirpath = os.path.join(module_directory, "results", directoryname)
         self.resultsdir = os.path.join(module_directory, "results")
+        self.simulation_repository = cp.SimRepository()
         os.mkdir(self.dirpath)
 
         # Creates and write result report
@@ -175,6 +176,10 @@ class Simulator:
         """
         if self.SimulationParameters is None:
             raise Exception("Simulation Parameters were not initialized")
+        # set the repository
+        component.set_sim_repo(self.simulation_repository)
+
+        # set the wrapper
         wrap = ComponentWrapper(component, is_cachable)
         wrap.register_component_outputs(self.all_outputs)
         self.WrappedComponents.append(wrap)

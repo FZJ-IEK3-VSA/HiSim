@@ -5,8 +5,8 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 import shutil
 
-from utils import PostProcessingOptions
-
+from hisim.utils import PostProcessingOptions
+import matplotlib.pyplot as plt
 
 def test_basic_household():
     if os.path.isdir("../hisim/inputs/cache"):
@@ -16,6 +16,8 @@ def test_basic_household():
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func,mysimpar )
     print(os.getcwd())
+
+
 
 def test_basic_household_with_all_resultfiles():
     if os.path.isdir("../hisim/inputs/cache"):

@@ -1,9 +1,21 @@
 # Generic
 import logging
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
+import typing
 from hisim.simulationparameters import SimulationParameters
 # Package
 from hisim import loadtypes as lt
+import dataclasses as dc
+#from dataclasses import  dataclass
+from dataclasses import dataclass
+
+@dataclass
+class ComponentConnection:
+    TargetInputName: str
+    SourceClassName: str
+    SourceOutputName: str
+    SourceInstanceName: Optional[str] = None
+    
 
 class ComponentOutput:
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
@@ -89,15 +101,17 @@ class Component:
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
         self.my_simulation_parameters:SimulationParameters = my_simulation_parameters
-        self.simulation_repository = my_simulation_parameters
         self.simulation_repository: SimRepository
+        self.default_connections: Dict[str, List[ComponentConnection]] = {}
+
+    def add_default_connections(self, component, connections: List[ComponentConnection]):
+        classname: str = component.__class__.__name__
+        self.default_connections[classname] = connections
 
     def set_sim_repo(self, simulation_repository: SimRepository):
         if simulation_repository is None:
             raise ValueError("simulation repository was none")
         self.simulation_repository = simulation_repository
-
-
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:
@@ -114,16 +128,38 @@ class Component:
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str):
         if len(self.inputs) == 0:
-            raise Exception("The component " + self.ComponentName + " has no inputs.")
+            raise ValueError("The component " + self.ComponentName + " has no inputs.")
         component_input: ComponentInput
         input_to_set = None
         for component_input in self.inputs:
             if component_input.FieldName == input_fieldname:
+                if input_to_set is not None:
+                    raise ValueError("The input " + input_fieldname +" of the component " + self.ComponentName + " was already set." )
                 input_to_set = component_input
         if input_to_set is None:
-            raise Exception("The component " + self.ComponentName + " has no input with the name " + input_fieldname)
+            raise ValueError("The component " + self.ComponentName + " has no input with the name " + input_fieldname)
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
+
+    def connect_only_predefined_connections(self,source_component ):
+        connections = self.get_default_connections(source_component)
+        self.connect_with_connections_list(connections)
+
+    def connect_with_connections_list(self, connections: List[ComponentConnection]):
+         for connection in connections:
+             src_name:str = typing.cast(str, connection.SourceInstanceName)
+             self.connect_input(connection.TargetInputName,src_name , connection.SourceOutputName)
+
+    def get_default_connections(self, source_component) -> List[ComponentConnection]:
+        classname:str = source_component.__class__.__name__
+        if not classname in self.default_connections:
+            raise ValueError("No default connections for " + classname)
+        connections = self.default_connections[classname]
+        new_connections: List[ComponentConnection] = []
+        for connection in connections:
+            connection_copy = dc.replace(connection, SourceInstanceName=source_component.name )
+            new_connections.append(connection_copy)
+        return new_connections
 
     def connect_electricity(self, component):
         if isinstance(component, Component) is False:

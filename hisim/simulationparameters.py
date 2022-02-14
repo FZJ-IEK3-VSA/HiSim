@@ -1,8 +1,6 @@
 from typing import List
 import datetime
 
-
-
 class SimulationParameters:
     def __init__(self, start_date, end_date, seconds_per_timestep, year=None, post_processing_options:List = []):
         self.start_date = start_date
@@ -28,3 +26,6 @@ class SimulationParameters:
 
     def get_unique_key(self):
         return str(self.start_date) + "###" + str(self.end_date) + "###"  + str(self.seconds_per_timestep) + "###" + str(self.year)
+
+
+

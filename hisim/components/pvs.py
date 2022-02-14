@@ -15,7 +15,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-
+from hisim.components import weather
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -291,6 +291,20 @@ class PVSystem(cp.Component):
                                                              lt.LoadTypes.Electricity,
                                                              lt.Units.Watt,
                                                              False)
+        weather_classname = weather.Weather.__class__.__name__
+        self.add_default_connections(weather_classname, self.get_weather_default_connections(weather_classname))                                                        
+
+    def get_weather_default_connections(self, weather_classname):
+        connections = []
+        
+        connections.append(cp.ComponentConnection(PVSystem.TemperatureOutside,weather_classname, weather.Weather.TemperatureOutside))
+        connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradiance,weather_classname, weather.Weather.DirectNormalIrradiance))
+        connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradianceExtra,weather_classname, weather.Weather.DirectNormalIrradianceExtra))
+        connections.append(cp.ComponentConnection(PVSystem.DiffuseHorizontalIrradiance,weather_classname, weather.Weather.DiffuseHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(PVSystem.GlobalHorizontalIrradiance,weather_classname, weather.Weather.GlobalHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(PVSystem.Azimuth,weather_classname, weather.Weather.Azimuth))
+        connections.append(cp.ComponentConnection(PVSystem.ApparentZenith,weather_classname, weather.Weather.ApparentZenith))
+        connections.append(cp.ComponentConnection(PVSystem.WindSpeed,weather_classname, weather.Weather.WindSpeed))
 
     def i_restore_state(self):
         pass

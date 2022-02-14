@@ -178,7 +178,7 @@ class Weather(Component):
              tmy_data, location = readTRY(location=location)
              self.DNI = self.interpolate(tmy_data['DNI'])
              # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
-             dni_extra = pd.Series(                 pvlib.irradiance.get_extra_radiation(self.DNI.index), index=self.DNI.index             )
+             dni_extra = pd.Series(                 pvlib.irradiance.get_extra_radiation(self.DNI.index), index=self.DNI.index             ) # type: ignore
 
              #DNI_data = self.interpolate(tmy_data['DNI'], 2015)
              self.temperature = self.interpolate(tmy_data['T'])
@@ -188,7 +188,7 @@ class Weather(Component):
              self.GHI = self.interpolate(tmy_data['GHI'])
 
 
-             solpos = pvlib.solarposition.get_solarposition(self.DNI.index, location['latitude'], location['longitude'])
+             solpos = pvlib.solarposition.get_solarposition(self.DNI.index, location['latitude'], location['longitude'])  # type: ignore
              self.altitude = solpos['elevation']
              self.azimuth = solpos['azimuth']
              self.apparent_zenith = solpos['apparent_zenith']
@@ -221,7 +221,7 @@ class Weather(Component):
                  self.temperature = self.temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
                  self.DryBulb = self.temperature
                  self.DHI = self.DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.DNI = np.float64( self.DNI.resample(str(seconds_per_timestep) + "S").mean().tolist())
+                 self.DNI = np.float64( self.DNI.resample(str(seconds_per_timestep) + "S").mean().tolist())  # type: ignore
                  self.DNIextra = self.DNIextra.resample(str(seconds_per_timestep) + "S").mean().tolist()
                  self.GHI = self.GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
                  self.altitude = self.altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()

@@ -6,7 +6,6 @@ from hisim.simulationparameters import SimulationParameters
 # Package
 from hisim import loadtypes as lt
 import dataclasses as dc
-#from dataclasses import  dataclass
 from dataclasses import dataclass
 
 @dataclass
@@ -15,7 +14,6 @@ class ComponentConnection:
     SourceClassName: str
     SourceOutputName: str
     SourceInstanceName: Optional[str] = None
-    
 
 class ComponentOutput:
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
@@ -110,7 +108,7 @@ class Component:
     def add_default_connections(self, component, connections: List[ComponentConnection]):
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
-        print("added connections: " + str(self.default_connections))
+        logging.info("added connections: " + str(self.default_connections))
 
     def set_sim_repo(self, simulation_repository: SimRepository):
         if simulation_repository is None:

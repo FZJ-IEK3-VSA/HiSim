@@ -69,6 +69,7 @@ class Weather(Component):
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
     WindSpeed = "WindSpeed"
+    Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters, location="Aachen"):
@@ -142,6 +143,15 @@ class Weather(Component):
         stsv.set_output_value(self.azimuthC, self.azimuth[timestep])
         stsv.set_output_value(self.wind_speedC, self.Wspd[timestep])
         stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith[timestep])
+        timesteps_24h = 24*3600 / self.my_simulation_parameters.seconds_per_timestep
+        lasttimestep = int(timestep+ timesteps_24h)
+        if(lasttimestep > len(self.temperature)):
+            lasttimestep = len(self.temperature)
+        #print( type(self.temperature))
+        temperatureforecast = self.temperature[timestep:lasttimestep]
+        self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h,temperatureforecast)
+
+
 
     def build(self, location,my_simulation_parameters:SimulationParameters):
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
@@ -197,7 +207,7 @@ class Weather(Component):
              solardata = [self.DNI.tolist(),
                           self.DHI.tolist(),
                           self.GHI.tolist(),
-                          self.temperature,
+                          self.temperature.tolist(),
                           self.altitude.tolist(),
                           self.azimuth.tolist(),
                           self.apparent_zenith.tolist(),
@@ -229,7 +239,8 @@ class Weather(Component):
                  self.apparent_zenith = self.apparent_zenith.resample(
                      str(seconds_per_timestep) + "S").mean().tolist()
                  self.Wspd = self.Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
-
+             else:
+                 self.temperature = self.temperature.tolist()
 
 
     def interpolate(self, pd_database, year=2015):

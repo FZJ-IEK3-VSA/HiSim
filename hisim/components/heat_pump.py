@@ -7,6 +7,7 @@ from math import pi
 
 # Owned
 import hisim.utils as utils
+from hisim.components.weather import Weather
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -478,8 +479,6 @@ class HeatPumpController(cp.Component):
             state = -1
         if self.controller_heatpumpmode == 'off':
             state = 0
-
-        #print(state)
         stsv.set_output_value(self.stateC, state)
 
     def conditions(self, set_temp):

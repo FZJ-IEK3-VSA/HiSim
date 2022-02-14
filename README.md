@@ -33,7 +33,7 @@ source hisimvenv/bin/activate
 ```
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 ```python
-conda create -n hisimvenv python=3.8
+conda create -n hisimvenv python=3.9
 conda activate hisimvenv
 ```
 With the successful activation, `hisim` is ready to be locally installed.
@@ -43,7 +43,7 @@ Install package
 After setting up the virtual environment, install the package to your local libraries:
 
 ```python
-python setup.py install
+pip install -e .
 ```
 Run Simple Examples
 -----------------------
@@ -60,7 +60,7 @@ Run Basic Household Example
 The directory `hisim\examples` also contains a basic household configuration in the script `basic_household.py`. The first setup function (`basic_household_explicit`) can be executed with the following command:
 
 ```python
-python ../hisim/hisim.py basic_household basic_household_explicit
+python ../hisim/hisim.py basic_household.py basic_household_explicit
 ```
 
 The system is set up with the following elements:

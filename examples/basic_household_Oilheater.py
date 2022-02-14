@@ -74,7 +74,8 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_occupancy )
@@ -182,6 +183,3 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
                                                                               "Sum", my_oilheater ], my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_base_electricity_load_profile )
     
-
-def basic_household_Oilheater_implicit( my_sim ):
-    pass

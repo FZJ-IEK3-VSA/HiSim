@@ -1,7 +1,7 @@
 import inspect
 import os
 import sys
-from hisim import simulator as sim
+from hisim.simulator import Simulator
 from hisim import components as cps
 from hisim.components import occupancy
 from hisim.components import weather
@@ -10,7 +10,7 @@ from hisim.components import building
 from hisim.components import heat_pump
 from hisim.components import simple_bucket_boiler
 from hisim.components import sumbuilder
-
+from hisim.simulationparameters import SimulationParameters
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -20,7 +20,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
+def basic_household_boiler_explicit( my_sim: Simulator, my_simulation_parameters: SimulationParameters = None):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
@@ -87,9 +87,8 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = sim.SimulationParameters.full_year(year=year,
-                                                                                     seconds_per_timestep=seconds_per_timestep)
-
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
@@ -232,7 +231,4 @@ def basic_household_boiler_explicit( my_sim, my_simulation_parameters ):
         my_heat_pump_substracted_electricity_load_profile = sumbuilder.ElectricityGrid( name = "HeatPumpSubstracted",
                                                                       grid = [ my_base_electricity_load_profile, "Sum", my_heat_pump ], my_simulation_parameters=my_simulation_parameters )
     my_sim.add_component( my_heat_pump_substracted_electricity_load_profile )
-    
-def basic_household_implicit(my_sim):
-    pass
 

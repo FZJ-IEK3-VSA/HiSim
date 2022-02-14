@@ -72,9 +72,9 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters:S
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year,
-                                                                                     seconds_per_timestep=seconds_per_timestep)
-    #my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year( year=year,                                                                                  seconds_per_timestep = seconds_per_timestep )
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,seconds_per_timestep=seconds_per_timestep)
+    my_sim.SimulationParameters = my_simulation_parameters
+        #my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year( year=year,                                                                                  seconds_per_timestep = seconds_per_timestep )
 
     # Build occupancy
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters=my_simulation_parameters)
@@ -178,6 +178,3 @@ def basic_household_Districtheating_explicit( my_sim, my_simulation_parameters:S
     my_building.connect_input( my_building.ThermalEnergyDelivered,
                                my_district_heating.ComponentName,
                                my_district_heating.ThermalEnergyDelivered )
-
-def basic_household_DistrictHeating_implicit( my_sim ):
-    pass

@@ -73,8 +73,9 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year,
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
+    my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
@@ -245,8 +246,9 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year,
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
+    my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
@@ -335,6 +337,4 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                               my_heat_pump.ComponentName,
                               my_heat_pump.ThermalEnergyDelivered)
 
-def basic_household_implicit(my_sim):
-    pass
 

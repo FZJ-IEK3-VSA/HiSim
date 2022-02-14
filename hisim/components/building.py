@@ -170,7 +170,7 @@ class Building(cp.Component):
         self.q_sol_ref: float = 0
         self.q_h_nd_ref: float = 0
 
-        self.build(bClass, building_code)
+        self.build( bClass, building_code, my_simulation_parameters )
 
         self.state:BuildingState = BuildingState(t_m=initial_temperature, c_m=self.c_m)
         self.previous_state = self.state.self_copy()
@@ -421,10 +421,10 @@ class Building(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build(self, bClass, buildingcode, sim_params):
-        if sim_params is not None:
-            self.seconds_per_timestep = sim_params.seconds_per_timestep
-            self.timesteps = sim_params.timesteps
+    def build(self, bClass, buildingcode, my_simulation_parameters ):
+        if my_simulation_parameters is not None:
+            self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
+            self.timesteps = my_simulation_parameters.timesteps
         else:
             #define default options, this is dangerous!
             self.seconds_per_timestep = 60

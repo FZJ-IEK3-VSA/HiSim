@@ -26,6 +26,7 @@ class Carpet(Chart):
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
     def plot(self):
+
         #if(len(self.data.index) != 365*24):
          #   logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
           #  return
@@ -33,7 +34,11 @@ class Carpet(Chart):
         xdims = 365 #number of days
         ydims = int( len( self.data ) / 365 ) #number of calculated timesteps per day
         y_steps_per_hour = int( ydims / 24 )
-        database = self.data.values.reshape( xdims, ydims )
+        try:
+            database = self.data.values.reshape( xdims, ydims )
+        except ValueError:
+           logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           return
         if np.max(np.abs(self.data.values)) > 1.5E3:
             database = database * 1E-3
             self.units = "k{}".format(self.units)

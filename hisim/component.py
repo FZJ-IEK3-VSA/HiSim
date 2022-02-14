@@ -93,7 +93,10 @@ class SimRepository:
         return self.my_dict[key]
 
 class Component:
-    
+    @classmethod
+    def get_classname(cls):
+        return cls.__name__
+
     def __init__(self, name: str,my_simulation_parameters: SimulationParameters ):
         self.ComponentName: str = name
         self.inputs: List[ComponentInput] = []
@@ -105,8 +108,9 @@ class Component:
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
     def add_default_connections(self, component, connections: List[ComponentConnection]):
-        classname: str = component.__class__.__name__
+        classname: str = component.get_classname()
         self.default_connections[classname] = connections
+        print("added connections: " + str(self.default_connections))
 
     def set_sim_repo(self, simulation_repository: SimRepository):
         if simulation_repository is None:
@@ -151,13 +155,16 @@ class Component:
              self.connect_input(connection.TargetInputName,src_name , connection.SourceOutputName)
 
     def get_default_connections(self, source_component) -> List[ComponentConnection]:
-        classname:str = source_component.__class__.__name__
-        if not classname in self.default_connections:
-            raise ValueError("No default connections for " + classname)
-        connections = self.default_connections[classname]
+
+        source_classname:str = source_component.get_classname()
+        target_classname: str = self.get_classname()
+        if not source_classname in self.default_connections:
+            raise ValueError("No default connections for " + source_classname + " in the connections for " + target_classname + ". content:\n" + str(self.default_connections))
+        connections = self.default_connections[source_classname]
         new_connections: List[ComponentConnection] = []
         for connection in connections:
-            connection_copy = dc.replace(connection, SourceInstanceName=source_component.name )
+            connection_copy = dc.replace(connection )
+            connection_copy.SourceInstanceName = source_component.ComponentName
             new_connections.append(connection_copy)
         return new_connections
 

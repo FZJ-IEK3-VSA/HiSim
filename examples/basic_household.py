@@ -91,8 +91,32 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                           integrateInverter=integrateInverter,
                                           inverter_name=inverter_name,
                                           my_simulation_parameters=my_simulation_parameters)
-    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
+                                         my_weather.ComponentName,
+                                         my_weather.TemperatureOutside)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance,
+                                         my_weather.ComponentName,
+                                         my_weather.DirectNormalIrradiance)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradianceExtra,
+                                         my_weather.ComponentName,
+                                         my_weather.DirectNormalIrradianceExtra)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.DiffuseHorizontalIrradiance,
+                                         my_weather.ComponentName,
+                                         my_weather.DiffuseHorizontalIrradiance)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.GlobalHorizontalIrradiance,
+                                         my_weather.ComponentName,
+                                         my_weather.GlobalHorizontalIrradiance)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.Azimuth,
+                                         my_weather.ComponentName,
+                                         my_weather.Azimuth)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.ApparentZenith,
+                                         my_weather.ComponentName,
+                                         my_weather.ApparentZenith)
+    my_photovoltaic_system.connect_input(my_photovoltaic_system.WindSpeed,
+                                         my_weather.ComponentName,
+                                         my_weather.WindSpeed)
     my_sim.add_component(my_photovoltaic_system)
+
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(name="BaseLoad",
                                                                       grid=[my_occupancy, "Subtract", my_photovoltaic_system ], my_simulation_parameters=my_simulation_parameters)
@@ -231,6 +255,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     my_weather = weather.Weather(location=location, my_simulation_parameters= my_simulation_parameters)
     my_sim.add_component(my_weather)
 
+
     my_photovoltaic_system = pvs.PVSystem(time=time,
                                           location=location,
                                           power=power,
@@ -239,30 +264,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                           integrateInverter=integrateInverter,
                                           inverter_name=inverter_name,
                                           my_simulation_parameters=my_simulation_parameters)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
-                                         my_weather.ComponentName,
-                                         my_weather.TemperatureOutside)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance,
-                                         my_weather.ComponentName,
-                                         my_weather.DirectNormalIrradiance)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradianceExtra,
-                                         my_weather.ComponentName,
-                                         my_weather.DirectNormalIrradianceExtra)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.DiffuseHorizontalIrradiance,
-                                         my_weather.ComponentName,
-                                         my_weather.DiffuseHorizontalIrradiance)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.GlobalHorizontalIrradiance,
-                                         my_weather.ComponentName,
-                                         my_weather.GlobalHorizontalIrradiance)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.Azimuth,
-                                         my_weather.ComponentName,
-                                         my_weather.Azimuth)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.ApparentZenith,
-                                         my_weather.ComponentName,
-                                         my_weather.ApparentZenith)
-    my_photovoltaic_system.connect_input(my_photovoltaic_system.WindSpeed,
-                                         my_weather.ComponentName,
-                                         my_weather.WindSpeed)
+    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_photovoltaic_system)
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(name="BaseLoad",

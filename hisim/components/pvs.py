@@ -291,12 +291,13 @@ class PVSystem(cp.Component):
                                                              lt.LoadTypes.Electricity,
                                                              lt.Units.Watt,
                                                              False)
-        weather_classname = weather.Weather.__class__.__name__
-        self.add_default_connections(weather_classname, self.get_weather_default_connections(weather_classname))                                                        
 
-    def get_weather_default_connections(self, weather_classname):
+        self.add_default_connections(weather.Weather, self.get_weather_default_connections())
+
+    def get_weather_default_connections(self):
+        print("setting weather default connections")
         connections = []
-        
+        weather_classname = weather.Weather.get_classname()
         connections.append(cp.ComponentConnection(PVSystem.TemperatureOutside,weather_classname, weather.Weather.TemperatureOutside))
         connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradiance,weather_classname, weather.Weather.DirectNormalIrradiance))
         connections.append(cp.ComponentConnection(PVSystem.DirectNormalIrradianceExtra,weather_classname, weather.Weather.DirectNormalIrradianceExtra))
@@ -305,6 +306,7 @@ class PVSystem(cp.Component):
         connections.append(cp.ComponentConnection(PVSystem.Azimuth,weather_classname, weather.Weather.Azimuth))
         connections.append(cp.ComponentConnection(PVSystem.ApparentZenith,weather_classname, weather.Weather.ApparentZenith))
         connections.append(cp.ComponentConnection(PVSystem.WindSpeed,weather_classname, weather.Weather.WindSpeed))
+        return connections
 
     def i_restore_state(self):
         pass

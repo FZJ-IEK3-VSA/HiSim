@@ -13,6 +13,8 @@ from hisim import loadtypes as lt
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.weather import Weather
+from hisim.components.occupancy import Occupancy
 from functools import lru_cache
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -115,11 +117,15 @@ class Building(cp.Component):
         Simulator object used to carry the simulation using this class
     """
 
-    # Inputs
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
-    MassInput = "MassInput"
+    # Inputs -> heating device
+    ThermalEnergyDelivered = "ThermalEnergyDelivered" #either thermal energy delivered
+    MassInput = "MassInput"                           #or mass input and temperature input
     TemperatureInput = "TemperatureInput"
-
+    
+    #Inputs -> occupancy 
+    HeatingByResidents = "HeatingByResidents"
+    
+    #Inputs -> weather
     Altitude = "Altitude"
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
@@ -128,13 +134,12 @@ class Building(cp.Component):
     DiffuseHorizontalIrradiance = "DiffuseHorizontalIrradiance"
     GlobalHorizontalIrradiance = "GlobalHorizontalIrradiance"
     TemperatureOutside = "TemperatureOutside"
-    HeatingByResidents = "HeatingByResidents"
-    SolarGainThroughWindows = "SolarGainThroughWindows"
 
     # Outputs
     TemperatureMean = "Residence Temperature"
     TemperatureAir = "TemperatureAir"
     TotalEnergyToResidence = "TotalEnergyToResidence"
+    SolarGainThroughWindows = "SolarGainThroughWindows"
     StoredEnergyVariation = "StoredEnergyVariation"
     InternalLoss = "InternalLoss"
     OldStoredEnergy = "OldStoredEnergy"
@@ -148,7 +153,7 @@ class Building(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+                 building_code="DE.N.SFH.05.Gen.ReEx.001.002",
                  bClass="medium",
                  initial_temperature=23):
         super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
@@ -203,11 +208,21 @@ class Building(cp.Component):
                                                          lt.LoadTypes.Any,
                                                          lt.Units.Degrees,
                                                          True)
+        self.apparent_zenithC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                self.ApparentZenith,
+                                                                lt.LoadTypes.Any,
+                                                                lt.Units.Degrees,
+                                                                True)
         self.DNIC : cp.ComponentInput      = self.add_input(self.ComponentName,
                                                             self.DirectNormalIrradiance,
                                                             lt.LoadTypes.Irradiance,
                                                             lt.Units.Wm2,
                                                             True)
+        self.DNIextraC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                         self.DirectNormalIrradianceExtra,
+                                                         lt.LoadTypes.Irradiance,
+                                                         lt.Units.Wm2,
+                                                         True)
         self.DHIC : cp.ComponentInput      = self.add_input(self.ComponentName,
                                                         self.DiffuseHorizontalIrradiance,
                                                         lt.LoadTypes.Irradiance,
@@ -218,16 +233,8 @@ class Building(cp.Component):
                                                    lt.LoadTypes.Irradiance,
                                                    lt.Units.Wm2,
                                                    True)
-        self.DNIextraC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                         self.DirectNormalIrradianceExtra,
-                                                         lt.LoadTypes.Irradiance,
-                                                         lt.Units.Wm2,
-                                                         True)
-        self.apparent_zenithC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                self.ApparentZenith,
-                                                                lt.LoadTypes.Any,
-                                                                lt.Units.Degrees,
-                                                                True)
+        
+
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                       self.TemperatureOutside,
                                                       lt.LoadTypes.Temperature,
@@ -244,11 +251,6 @@ class Building(cp.Component):
                                                       self.TemperatureMean,
                                                       lt.LoadTypes.Temperature,
                                                       lt.Units.Celsius)
-
-        #self.t_airC : cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                self.TemperatureAir,
-        #                                                lt.LoadTypes.Temperature,
-        #                                                lt.Units.Celsius)
         self.total_power_to_residenceC : cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                            self.TotalEnergyToResidence,
                                                                            lt.LoadTypes.Heating,
@@ -257,7 +259,14 @@ class Building(cp.Component):
                                                                              self.SolarGainThroughWindows,
                                                                              lt.LoadTypes.Heating,
                                                                              lt.Units.Watt)
-
+        
+        self.add_default_connections( Weather, self.get_weather_default_connections( ) )
+        self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
+        
+        #self.t_airC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        #                                                self.TemperatureAir,
+        #                                                lt.LoadTypes.Temperature,
+        #                                                lt.Units.Celsius)
         #self.internal_lossC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                        self.InternalLoss,
         #                                                        lt.LoadTypes.Heating,
@@ -283,6 +292,27 @@ class Building(cp.Component):
         #                                                           self.TemperatureOutput,
         #                                                           lt.LoadTypes.WarmWater,
         #                                                           lt.Units.Celsius)
+        
+    def get_weather_default_connections(self):
+        print("setting weather default connections")
+        connections = []
+        weather_classname = Weather.get_classname()
+        connections.append(cp.ComponentConnection(Building.Altitude,weather_classname, Weather.Azimuth))
+        connections.append(cp.ComponentConnection(Building.Azimuth,weather_classname, Weather.Azimuth))
+        connections.append(cp.ComponentConnection(Building.ApparentZenith,weather_classname, Weather.ApparentZenith))
+        connections.append(cp.ComponentConnection(Building.DirectNormalIrradiance,weather_classname, Weather.DirectNormalIrradiance))
+        connections.append(cp.ComponentConnection(Building.DirectNormalIrradianceExtra,weather_classname, Weather.DirectNormalIrradianceExtra))
+        connections.append(cp.ComponentConnection(Building.DiffuseHorizontalIrradiance,weather_classname, Weather.DiffuseHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(Building.GlobalHorizontalIrradiance,weather_classname, Weather.GlobalHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(Building.TemperatureOutside,weather_classname, Weather.TemperatureOutside))
+        return connections
+    
+    def get_occupancy_default_connections(self):
+        print("setting occupancy default connections")
+        connections = []
+        occupancy_classname = Occupancy.get_classname()
+        connections.append( cp.ComponentConnection( Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents ) )
+        return connections
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
         #if timestep >=10392 and force_convergence:

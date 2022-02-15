@@ -285,45 +285,18 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
                                         my_simulation_parameters=my_simulation_parameters)
-    my_building.connect_only_predefined_connections( my_weather )   
-    my_building.connect_only_predefined_connections( my_occupancy )
+    my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
     my_sim.add_component(my_building)
-    # my_building.connect_input(my_building.Altitude,
-    #                           my_weather.ComponentName,
-    #                           my_building.Altitude)
-    # my_building.connect_input(my_building.Azimuth,
-    #                           my_weather.ComponentName,
-    #                           my_building.Azimuth)
-    # my_building.connect_input(my_building.DirectNormalIrradiance,
-    #                           my_weather.ComponentName,
-    #                           my_building.DirectNormalIrradiance)
-    # my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
-    #                           my_weather.ComponentName,
-    #                           my_building.DiffuseHorizontalIrradiance)
-    # my_building.connect_input(my_building.GlobalHorizontalIrradiance,
-    #                           my_weather.ComponentName,
-    #                           my_building.GlobalHorizontalIrradiance)
-    # my_building.connect_input(my_building.DirectNormalIrradianceExtra,
-    #                           my_weather.ComponentName,
-    #                           my_building.DirectNormalIrradianceExtra)
-    # my_building.connect_input(my_building.ApparentZenith,
-    #                          my_weather.ComponentName,
-    #                          my_building.ApparentZenith)
-    # my_building.connect_input(my_building.TemperatureOutside,
-    #                           my_weather.ComponentName,
-    #                           my_weather.TemperatureOutside)
-    # my_building.connect_input(my_building.HeatingByResidents,
-    #                           my_occupancy.ComponentName,
-    #                           my_occupancy.HeatingByResidents)
 
     my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
                                                            t_air_cooling=t_air_cooling,
                                                            offset=offset,
                                                            mode=hp_mode,
                                                            my_simulation_parameters=my_simulation_parameters)
-    my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
-                                          my_building.ComponentName,
-                                          my_building.TemperatureMean)
+    my_heat_pump_controller.connect_only_predefined_connections( my_building )
+    # my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
+    #                                       my_building.ComponentName,
+    #                                       my_building.TemperatureMean)
     my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
                                           my_base_electricity_load_profile.ComponentName,
                                           my_base_electricity_load_profile.ElectricityOutput)
@@ -334,12 +307,13 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                           min_operation_time=hp_min_operation_time,
                                           min_idle_time=hp_min_idle_time,
                                       my_simulation_parameters=my_simulation_parameters)
-    my_heat_pump.connect_input(my_heat_pump.State,
-                               my_heat_pump_controller.ComponentName,
-                               my_heat_pump_controller.State)
-    my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
-                               my_weather.ComponentName,
-                               my_weather.TemperatureOutside)
+    # my_heat_pump.connect_input(my_heat_pump.State,
+    #                            my_heat_pump_controller.ComponentName,
+    #                            my_heat_pump_controller.State)
+    # my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
+    #                            my_weather.ComponentName,
+    #                            my_weather.TemperatureOutside)
+    my_heat_pump.connect_only_predefined_connections( my_weather, my_heat_pump_controller )
 
     my_sim.add_component(my_heat_pump)
 

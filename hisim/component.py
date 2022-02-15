@@ -142,10 +142,12 @@ class Component:
             raise ValueError("The component " + self.ComponentName + " has no input with the name " + input_fieldname)
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
-
-    def connect_only_predefined_connections(self,source_component ):
-        connections = self.get_default_connections(source_component)
-        self.connect_with_connections_list(connections)
+        
+    #added variable input length and loop to be able to set default connections in one line in examples    
+    def connect_only_predefined_connections(self, *source_components ):
+        for source_component in source_components:
+            connections = self.get_default_connections(source_component)
+            self.connect_with_connections_list(connections)
 
     def connect_with_connections_list(self, connections: List[ComponentConnection]):
          for connection in connections:

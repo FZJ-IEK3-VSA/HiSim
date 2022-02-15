@@ -197,7 +197,7 @@ class HeatPump(cp.Component):
         print("setting weather default connections")
         connections = [ ]
         weather_classname = Weather.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Building.TemperatureOutside ) )
+        connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
         return connections
     
     def get_controller_default_connections( self ):

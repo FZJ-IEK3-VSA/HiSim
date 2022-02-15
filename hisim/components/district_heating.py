@@ -5,8 +5,8 @@ from dataclasses import dataclass
 # Import modules from HiSim
 from hisim import component as cp
 from hisim import loadtypes as lt
-import copy as copy
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.building import Building
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -23,9 +23,24 @@ class DistrictHeatingState:
     """
     This data class saves the state of the simulation results.
     """
-    PowerDistrictHeating:   float = 0
-    Iteration:              int = 0
-    Timestep :              int = 0
+    def __init__( self, PowerDistrictHeating: float = 0, Iteration: int = 0, Timestep: int = 0 ):
+        """
+        Parameters
+        ----------
+        PowerDistrictHeating : float, optional
+            Actual power of district heating system. The default is 0.
+        Iteration : int, optional
+            Number of iterations in control step. The default is 0.
+        Timestep : int, optional
+            Timestep of simulation. The default is 0.
+        """
+        
+        self.PowerDistrictHeating = PowerDistrictHeating
+        self.Iteration = Iteration
+        self.Timestep = Timestep
+
+    def clone( self ):
+        return DistrictHeatingState( self.PowerDistrictHeating, self.Iteration, self.Timestep )
             
     def update_state( self, power : float ):
         """
@@ -103,6 +118,15 @@ class DistrictHeating( cp.Component ):
                                                                             self.PowerDistrictHeating,
                                                                             lt.LoadTypes.Heating,
                                                                             lt.Units.Watt )
+        
+        self.add_default_connections( DistrictHeatingController, self.get_controller_default_connections( ) )
+        
+    def get_controller_default_connections( self ):
+        print("setting weather default connections")
+        connections = [ ]
+        controller_classname = DistrictHeatingController.get_classname( )
+        connections.append( cp.ComponentConnection( DistrictHeating.signal, controller_classname, DistrictHeatingController.signal ) )
+        return connections
 
     def build( self, max_power: int, min_power: int, efficiency : float ):
         """
@@ -132,11 +156,11 @@ class DistrictHeating( cp.Component ):
         lines.append( 'Efficiency : {:4.0f} %'.format( ( self.efficiency ) * 100 ) )
         return lines
     
-    def i_save_state( self ):
-        self.previous_state = copy.deepcopy( self.state )
+    def i_save_state(self):
+        self.previous_state = self.state.clone( )
 
     def i_restore_state(self):
-        self.state = copy.deepcopy( self.previous_state )
+        self.state = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
@@ -204,6 +228,15 @@ class DistrictHeatingController( cp.Component ):
                                         self.signal,
                                         lt.LoadTypes.Heating,
                                         lt.Units.Watt )
+        
+        self.add_default_connections( Building, self.get_building_default_connections( ) )
+    
+    def get_building_default_connections( self ):
+        print("setting controller default connections")
+        connections = [ ]
+        building_classname = Building.get_classname( )
+        connections.append( cp.ComponentConnection( DistrictHeatingController.TemperatureMean, building_classname, Building.TemperatureMean ) )
+        return connections
 
     def build( self, max_power, min_power, t_air_heating, tol ):
         self.max_power = max_power

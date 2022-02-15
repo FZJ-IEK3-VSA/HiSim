@@ -9,6 +9,7 @@ from math import pi
 import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.occupancy import Occupancy
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -100,7 +101,7 @@ class Boiler( cp.Component ):
         self.previous_state = self.state.clone()
         
         #inputs
-        self.use_WW : cp.ComponentInput = self.add_input( self.ComponentName,
+        self.WaterConsumptionC : cp.ComponentInput = self.add_input( self.ComponentName,
                                                            self.WaterConsumption,
                                                            lt.LoadTypes.WarmWater,
                                                            lt.Units.Liter, 
@@ -113,7 +114,7 @@ class Boiler( cp.Component ):
                                                            mandatory = True )
         
         #Outputs
-        self.storageT : cp.ComponentOutput = self.add_output( self.ComponentName,
+        self.StorageTemperatureC : cp.ComponentOutput = self.add_output( self.ComponentName,
                                                               self.StorageTemperature,
                                                               lt.LoadTypes.Temperature,
                                                               lt.Units.Kelvin )
@@ -129,7 +130,23 @@ class Boiler( cp.Component ):
                                                       lt.Units.kg_per_sec )
         else:
             raise Exception(" The fuel ", str( self.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
-
+            
+        self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
+        self.add_default_connections( BoilerController, self.get_controller_default_connections( ) )
+        
+    def get_occupancy_default_connections( self ):
+        print("setting occupancy default connections")
+        connections = [ ]
+        occupancy_classname = Occupancy.get_classname( )
+        connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, Occupancy.WaterConsumption ) )
+        return connections
+    
+    def get_controller_default_connections( self ):
+        print("setting controller default connections")
+        connections = [ ]
+        controller_classname = BoilerController.get_classname( )
+        connections.append( cp.ComponentConnection( Boiler.State, controller_classname, BoilerController.State ) )
+        return connections
     
     def build( self, definition, fuel ):
         if type( definition ) == str:
@@ -177,7 +194,7 @@ class Boiler( cp.Component ):
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
         
         # Retrieves inputs
-        WW_consumption = stsv.get_input_value( self.use_WW )
+        WW_consumption = stsv.get_input_value( self.WaterConsumptionC )
         signal = stsv.get_input_value( self.stateC )
 
         #constant heat loss of heat storage with the assumption that environment has 20°C = 293 K -> based on energy balance in kJ
@@ -195,7 +212,7 @@ class Boiler( cp.Component ):
         self.state.set_temperature_from_energy( new_energy)
         
         #save outputs
-        stsv.set_output_value( self.storageT, self.state.temperature_in_K )
+        stsv.set_output_value( self.StorageTemperatureC, self.state.temperature_in_K )
         
         if self.fuel == 'electricity':
              stsv.set_output_value( self.electricity_output_c, self.P_on * signal )
@@ -244,7 +261,7 @@ class BoilerController(cp.Component):
                     smart = smart )
 
         #input
-        self.T_water: cp.ComponentInput = self.add_input( self.ComponentName,
+        self.StorageTemperatureC: cp.ComponentInput = self.add_input( self.ComponentName,
                                                            self.StorageTemperature,
                                                            lt.LoadTypes.Temperature,
                                                            lt.Units.Kelvin,
@@ -262,6 +279,15 @@ class BoilerController(cp.Component):
                                        self.State,
                                        lt.LoadTypes.Any,
                                        lt.Units.Any )
+        
+        self.add_default_connections( Boiler, self.get_boiler_default_connections( ) )
+    
+    def get_boiler_default_connections( self ):
+        print("setting boiler default connections")
+        connections = [ ]
+        boiler_classname = Boiler.get_classname( )
+        connections.append( cp.ComponentConnection( BoilerController.StorageTemperature, boiler_classname, Boiler.StorageTemperature ) )
+        return connections
 
     def build( self, t_water_min, t_water_max, P_on, smart ):
         
@@ -292,7 +318,7 @@ class BoilerController(cp.Component):
 
 
         # Retrieves inputs
-        T_control = stsv.get_input_value( self.T_water )
+        T_control = stsv.get_input_value( self.StorageTemperatureC )
         
         if self.smart == 1:
             E_control = stsv.get_input_value( self.electricity_inputC )

@@ -1,13 +1,13 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from copy import deepcopy
 from dataclasses import dataclass
 
 # Import modules from HiSim
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-import copy as copy
+from hisim.components.building import Building
+from hisim.components.weather import Weather
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -24,9 +24,22 @@ class OilheaterState:
     """
     This data class saves the state of the simulation results.
     """
-    time_on:            int = 0
-    time_off :          int = 0
-    full_medium_off :   int = 0
+    
+    def __init__( self, time_on : int = 0, time_off : int = 0, full_medium_off :   int = 0 ):
+        """
+        Parameters
+        ----------
+        time_on : int, optional
+            Timesteps the Oilheater has been switched on. The default is 0.
+        time_off : int, optional
+            Timesteps the Oilheater has been switched off. The default is 0.
+        full_medium_off : int, optional
+            Control State: 2 is switched on, 1 is switched on medium level and 0 is turned off. The default is 0.
+        """
+        
+        self.time_on = time_on
+        self.time_off = time_off
+        self.full_medium_off = full_medium_off
 
     def update_state( self, stateC, seconds_per_timestep ):
         """
@@ -55,6 +68,9 @@ class OilheaterState:
             self.time_off = self.time_off + seconds_per_timestep
             self.time_on = 0
             self.full_medium_off = 0
+            
+    def clone( self ):
+        return OilheaterState( self.time_on, self.time_off, self.full_medium_off )
 
 class OilHeater( cp.Component ):
     """
@@ -110,6 +126,14 @@ class OilHeater( cp.Component ):
                                                                             self.ElectricityOutput,
                                                                             lt.LoadTypes.Electricity,
                                                                             lt.Units.Watt )
+        self.add_default_connections( OilHeaterController, self.get_controller_default_connections( ) )
+        
+    def get_controller_default_connections( self ):
+        print("setting weather default connections")
+        connections = [ ]
+        controller_classname = OilHeaterController.get_classname( )
+        connections.append( cp.ComponentConnection( OilHeater.StateC, controller_classname, OilHeaterController.StateC ) )
+        return connections
 
     def build( self, max_power: int, min_on_time : int, min_off_time : int ):
         """
@@ -138,10 +162,10 @@ class OilHeater( cp.Component ):
         return lines
     
     def i_save_state( self ):
-        self.previous_state = copy.deepcopy( self.state )
+        self.previous_state = self.state.clone( )
 
     def i_restore_state(self):
-        self.state = copy.deepcopy( self.previous_state )
+        self.state = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
@@ -220,6 +244,23 @@ class OilHeaterController( cp.Component ):
                                       self.StateC,
                                       lt.LoadTypes.Any,
                                       lt.Units.Any)
+        
+        self.add_default_connections( Weather, self.get_weather_default_connections( ) )
+        self.add_default_connections( Building, self.get_building_default_connections( ) )
+        
+    def get_weather_default_connections( self ):
+        print("setting weather default connections")
+        connections = [ ]
+        weather_classname = Weather.get_classname( )
+        connections.append( cp.ComponentConnection( OilHeaterController.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
+        return connections
+    
+    def get_building_default_connections( self ):
+        print("setting controller default connections")
+        connections = [ ]
+        building_classname = Building.get_classname( )
+        connections.append( cp.ComponentConnection( OilHeaterController.TemperatureMean, building_classname, Building.TemperatureMean ) )
+        return connections
 
     def build( self, t_air_heating, offset ):
         

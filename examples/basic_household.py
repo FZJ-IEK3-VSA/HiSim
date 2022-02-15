@@ -294,9 +294,8 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                                            mode=hp_mode,
                                                            my_simulation_parameters=my_simulation_parameters)
     my_heat_pump_controller.connect_only_predefined_connections( my_building )
-    # my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
-    #                                       my_building.ComponentName,
-    #                                       my_building.TemperatureMean)
+    
+    #depending on previous loads, hard to define default connections
     my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
                                           my_base_electricity_load_profile.ComponentName,
                                           my_base_electricity_load_profile.ElectricityOutput)
@@ -307,16 +306,11 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                           min_operation_time=hp_min_operation_time,
                                           min_idle_time=hp_min_idle_time,
                                       my_simulation_parameters=my_simulation_parameters)
-    # my_heat_pump.connect_input(my_heat_pump.State,
-    #                            my_heat_pump_controller.ComponentName,
-    #                            my_heat_pump_controller.State)
-    # my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
-    #                            my_weather.ComponentName,
-    #                            my_weather.TemperatureOutside)
     my_heat_pump.connect_only_predefined_connections( my_weather, my_heat_pump_controller )
 
     my_sim.add_component(my_heat_pump)
 
+    #depending on type of heating device, hard to define default connections
     my_building.connect_input(my_building.ThermalEnergyDelivered,
                               my_heat_pump.ComponentName,
                               my_heat_pump.ThermalEnergyDelivered)

@@ -5,6 +5,8 @@ from hisim.components import building
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
+import os
+
 def test_building():
     # Sets inputs
     weather_location = "Aachen"
@@ -56,20 +58,27 @@ def test_building():
 
     my_residence.t_mC.GlobalIndex = 11
     thermal_energy_delivered_output.GlobalIndex = 12
+    
+    #test building models for various time resolutions
+    for seconds_per_timestep in [ 60, 60 * 15, 60 * 60 ]:
+        
+        print( seconds_per_timestep )
+        my_residence.seconds_per_timestep = seconds_per_timestep
+        
+        # Simulates
+        stsv.values[11] = 23
+        print(stsv.values)
+        my_weather.i_simulate(0, stsv, False)
+        print(stsv.values)
+        my_occupancy.i_simulate(0, stsv, False)
+        print(stsv.values)
+        my_residence.i_simulate(0, stsv, False)
+        print(stsv.values)
+    
+        print("Occupancy: {}\n".format(stsv.values[:4]))
+        print("Weather: {}\n".format(stsv.values[4:10]))
+        print("Residence: {}\n".format(stsv.values[10:]))
 
-    # Simulates
-    stsv.values[11] = 23
-    print(stsv.values)
-    my_weather.i_simulate(0, stsv,  False)
-    print(stsv.values)
-    my_occupancy.i_simulate(0, stsv,  False)
-    print(stsv.values)
-    my_residence.i_simulate(0, stsv,  False)
-    print(stsv.values)
-
-    print("Occupancy: {}\n".format(stsv.values[:4]))
-    print("Weather: {}\n".format(stsv.values[4:10]))
-    print("Residence: {}\n".format(stsv.values[10:]))
-    # #assert False
-    print(stsv.values[11])
-    assert (stsv.values[11] - 22.98) <0.01
+        print(stsv.values[11])
+        assert (stsv.values[11] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
+    

@@ -150,7 +150,9 @@ def load_smart_appliance(name):
 def get_cache_file(component_key: str,  parameter_class:Any):
     json_str = parameter_class.to_json()
     json_str_encoded = json_str.encode('utf-8')
-    sha_key = hashlib.sha256(json_str_encoded,usedforsecurity=False).hexdigest()
+    #Johanna Ganglbauer: python told me "TypeError: openssl_sha256() takes at most 1 argument (2 given)", 
+    #I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package? 
+    sha_key = hashlib.sha256( json_str_encoded ).hexdigest()
     filename = component_key + "_" + sha_key + ".cache"
     cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
     if os.path.isfile(cache_absolute_filepath):

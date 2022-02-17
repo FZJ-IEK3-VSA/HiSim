@@ -75,7 +75,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         definition = '0815-boiler'
         smart = 1
     elif boiler_included == 'hydrogen':
-        definition = 'hydrogen'
+        definition = 'hydrogen-boiler'
         smart = 0
     elif boiler_included:
         raise NameError( 'Boiler definition', boiler_included, 'not known. Choose electricity, hydrogen, or False.' )

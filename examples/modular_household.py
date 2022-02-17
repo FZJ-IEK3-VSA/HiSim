@@ -22,7 +22,8 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def modular_household_explicit( my_sim, my_simulation_parameters: Optional[SimulationParameters] = None ):
+def modular_household_explicit( my_sim, my_simulation_parameters: Optional[SimulationParameters] = None, pv_included : bool = True,
+                                boiler_included : str = 'hydrogen', heating_device_included : str = 'heat_pump' ):
     """
     This setup function emulates an household including
     the basic components "building", "occupancy" and "weather". Here it can be freely chosen if a PV system or a boiler are included or not.
@@ -68,21 +69,17 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     integrateInverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     
-    # Set boiler
-    boiler_included = 'electricity' #Electricity, Hydrogen or False
-    
+    # Set boiler / boiler included is either "electricity", "hydrogen" or False    
     if boiler_included == 'electricity':
         definition = '0815-boiler'
         smart = 1
     elif boiler_included == 'hydrogen':
-        definition = 'hydrogen'
+        definition = 'hydrogen-boiler'
         smart = 0
     elif boiler_included:
         raise NameError( 'Boiler definition', boiler_included, 'not known. Choose electricity, hydrogen, or False.' )
 
-    #Set heating system
-    heating_device_included = 'district_heating'    
-
+    #Set heating system / heating_device_included is either "heat_pump", "oil_heater" or "district_heating"
     if heating_device_included == 'heat_pump':
         # Set heat pump controller
         t_air_heating = 16.0

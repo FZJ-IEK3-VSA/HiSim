@@ -6,7 +6,7 @@ import hisim.simulator as sim
 import os
 #from hisim.postprocessing import postprocessing_main as pp
 
-def main(path_to_module: str, function_in_module: str, my_simulation_parameters = None):
+def main(path_to_module: str, function_in_module: str, my_simulation_parameters = None, *args ):
 
     normalized_path = os.path.normpath(path_to_module)
     path_in_list = normalized_path.split(os.sep)
@@ -42,7 +42,7 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
     model_init_method = getattr(targetmodule, function_in_module)
 
     # Pass setup function to simulator
-    model_init_method(my_sim, my_simulation_parameters)
+    model_init_method(my_sim, my_simulation_parameters, *args )
 
     # Perform simulation throughout the defined timeline
     my_sim.run_all_timesteps()
@@ -56,6 +56,17 @@ if __name__ == "__main__":
         quit()
     filename = sys.argv[1]
     functionname = sys.argv[2]
-    print("calling " + functionname + " from " + filename)
-    main(filename, functionname)
+    args = [ ]
+    for elem in sys.argv[ 3: ]:
+        if elem.strip( ) == 'None':
+            args.append( None )
+        elif elem.strip( ) == 'True':
+            args.append( True)
+        elif elem.strip( ) == 'False':
+            args.append( False)
+        else:
+            args.append( elem )
+    print( args )
+    print("calling " + functionname + " from " + filename )
+    main(filename, functionname, *args )
 

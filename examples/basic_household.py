@@ -9,6 +9,8 @@ from components import pvs
 from components import building
 from components import heat_pump
 from components import sumbuilder
+from components import csvloader
+import loadtypes
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -74,10 +76,21 @@ def basic_household_explicit(my_sim):
 
     ##### Build Components #####
 
+
     # Build system parameters
     my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_parameters(my_sim_params)
+
+
+    csvloader.CSVLoader(component_name="csv_load_power",
+                        csv_filename=os.path.join("SumProfiles.Electricity.csv"),
+                        column= 2,
+                        loadtype= loadtypes.LoadTypes.Electricity,
+                        unit= loadtypes.Units.Watt,
+                        column_name= "Sum [kWh]",
+                        multiplier= 1E3,
+                        simulation_parameters=my_sim_params)
 
     # Build occupancy
     my_occupancy = occupancy.Occupancy(profile=occupancy_profile)

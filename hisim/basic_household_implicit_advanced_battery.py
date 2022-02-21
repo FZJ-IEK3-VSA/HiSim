@@ -1,23 +1,8 @@
-import inspect
-import numpy as np
 import os
-import globals
-
-import sys
-import simulator as sim
-import components as cps
-from components import occupancy
-from components import weather
-from components import pvs
-from components import advanced_battery
-from components import controller
-
-from components import building
-#from components import heat_pump
-from components import sumbuilder
 import simulator as sim
 from cfg_automator import ConfigurationGenerator, SetupFunction, ComponentsConnection, ComponentsGrouping
 import loadtypes
+import globals
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -34,8 +19,10 @@ def basic_household_implicit(my_sim: sim.Simulator):
 
 if __name__ == '__main__':
 
-    pvs_powers = [5E3, 10E3, 15E3, 20E3]
-    capacity = [5, 10]
+    pvs_powers = [5E3]
+    capacity = [5]
+    #pvs_powers = [5E3, 10E3, 15E3, 20E3]
+    #capacity = [5, 10]
     for pvs_power in pvs_powers:
         for capacity_i in capacity:
             # Create configuration object
@@ -46,12 +33,12 @@ if __name__ == '__main__':
             ####################################################################################################################
             # Set components
             my_csv_loader = {"CSVLoader": {"component_name": "csv_load_power",
-                                                 "csv_filename": os.path.join("loadprofiles", "EFH_Bestand_TRY_5_Profile_1min.csv"),
-                                                 "column": 0,
-                                                 "loadtype": loadtypes.LoadTypes.Electricity,
-                                                 "unit": loadtypes.Units.Watt,
-                                                 "column_name": "power_demand",
-                                                 "multiplier": 3}}
+                                           "csv_filename": os.path.join("SumProfiles.Electricity.csv"),
+                                           "column": 2,
+                                           "loadtype": loadtypes.LoadTypes.Electricity,
+                                           "unit": loadtypes.Units.Watt,
+                                           "column_name":"Sum [kWh]",
+                                           "multiplier": 1E3}}
             my_cfg.add_component("Weather")
             my_cfg.add_component(my_csv_loader)
             # Weather
@@ -61,7 +48,7 @@ if __name__ == '__main__':
             my_cfg.add_component(my_pvs)
 
             # Battery
-            my_battery = {"AdvancedBattery": {"capacity": capacity_i}}
+            my_battery = {"AdvancedBattery": {"parameter": globals.HISIMPATH["bat_parameter"]}}
             my_cfg.add_component(my_battery)
 
             # Controller
@@ -95,10 +82,10 @@ if __name__ == '__main__':
             my_cfg.add_connection(my_battery_to_controller)
 
             my_controller_to_battery = ComponentsConnection(first_component="AdvancedBattery",
-                                                     second_component="Controller",
-                                                     method="Manual",
-                                                     first_component_output="ACBatteryPower",
-                                                     second_component_input="ElectricityToOrFromBatteryReal")
+                                                            second_component="Controller",
+                                                            method="Manual",
+                                                            first_component_output="ACBatteryPower",
+                                                            second_component_input="ElectricityToOrFromBatteryReal")
             my_cfg.add_connection(my_controller_to_battery)
 
             # Export configuration file

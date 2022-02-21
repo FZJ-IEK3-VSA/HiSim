@@ -44,31 +44,31 @@ class CHPConfig:
     # system_name = "HOMER"
     system_name = "BlueGen BG15"
 
-    df = pd.read_excel(os.path.join(globals.HISIMPATH["inputs"], 'mock_up_efficiencies.xlsx'), index_col=0)
+    #df = pd.read_excel(os.path.join(globals.HISIMPATH["inputs"], 'mock_up_efficiencies.xlsx'), index_col=0)
 
-    df_specific = df.loc[str(system_name)]
+    #df_specific = df.loc[str(system_name)]
 
-    if str(df_specific['is_modulating']) == 'Yes':
-        is_modulating = True
-        P_el_min = df_specific['P_el_min']
-        P_th_min = df_specific['P_th_min']
-        P_total_min = df_specific['P_total_min']
-        eff_el_min = df_specific['eff_el_min']
-        eff_th_min = df_specific['eff_th_min']
+    #if str(df_specific['is_modulating']) == 'Yes':
+    #    is_modulating = True
+    #    P_el_min = df_specific['P_el_min']
+    #    P_th_min = df_specific['P_th_min']
+    #    P_total_min = df_specific['P_total_min']
+    #    eff_el_min = df_specific['eff_el_min']
+    #    eff_th_min = df_specific['eff_th_min']
 
-    elif str(df_specific['is_modulating']) == 'No':
-        is_modulating = False
-    else:
-        print("Modulation is not defined. Modulation must be 'Yes' or 'No'")
-        raise ValueError
+    #elif str(df_specific['is_modulating']) == 'No':
+    #    is_modulating = False
+    #else:
+    #    print("Modulation is not defined. Modulation must be 'Yes' or 'No'")
+    #    raise ValueError
 
-    P_el_max = df_specific['P_el_max']
-    P_th_max = df_specific['P_th_max']
-    P_total_max = df_specific['P_total_max']        # maximum fuel consumption
-    eff_el_max = df_specific['eff_el_max']
-    eff_th_max = df_specific['eff_th_max']
-    mass_flow_max = df_specific['mass_flow (dT=20°C)']
-    temperature_max = df_specific['temperature_max']
+    #P_el_max = df_specific['P_el_max']
+    #P_th_max = df_specific['P_th_max']
+    #P_total_max = df_specific['P_total_max']        # maximum fuel consumption
+    #eff_el_max = df_specific['eff_el_max']
+    #eff_th_max = df_specific['eff_th_max']
+    #mass_flow_max = df_specific['mass_flow (dT=20°C)']
+    #temperature_max = df_specific['temperature_max']
 
 
 """

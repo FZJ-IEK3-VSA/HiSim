@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List, Union
 from hisim.simulator import SimulationParameters
 from hisim.components import occupancy
 from hisim.components import weather
@@ -21,6 +21,12 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
+
+def append_to_electricity_load_profiles( my_sim, operation_counter : int, electricity_load_profiles : List[ Union[ sumbuilder.ElectricityGrid, occupancy.Occupancy ] ], elem_to_append : sumbuilder.ElectricityGrid ):
+    electricity_load_profiles = electricity_load_profiles + [ elem_to_append ]
+    my_sim.add_component( electricity_load_profiles[ operation_counter ] )
+    operation_counter += 1
+    return my_sim, operation_counter, electricity_load_profiles
 
 def modular_household_explicit( my_sim, my_simulation_parameters: Optional[SimulationParameters] = None ):
     """
@@ -60,7 +66,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     occupancy_profile = "CH01"
 
     # Set photovoltaic system
-    pv_included = False #True or False
+    pv_included = True #True or False
     time = 2019
     power = 10E3
     load_module_data = False
@@ -124,9 +130,11 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters = my_simulation_parameters )
     my_sim.add_component( my_occupancy )
     
-    #initialize list of electricity profiles and operation counter
-    electricity_load_profiles = [ my_occupancy ]
+    #initialize list of components representing the actual load profile and operation counter
+    operation_counter = 0
+    electricity_load_profiles : List[ Union[ sumbuilder.ElectricityGrid, occupancy.Occupancy ] ] = [ my_occupancy ]
     operation_counter = 1
+
 
     # Build Weather
     my_weather = weather.Weather( location=location, my_simulation_parameters = my_simulation_parameters )
@@ -151,12 +159,14 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                my_simulation_parameters = my_simulation_parameters )
         my_photovoltaic_system.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system )
-    
-        electricity_load_profiles.append( sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                                      grid=[ electricity_load_profiles[ operation_counter - 1 ], "Subtract", my_photovoltaic_system ], 
-                                                                      my_simulation_parameters = my_simulation_parameters ) )
-        my_sim.add_component( electricity_load_profiles[ operation_counter ] )
-        operation_counter += 1
+        my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+                my_sim = my_sim,
+                operation_counter = operation_counter,
+                electricity_load_profiles = electricity_load_profiles, 
+                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                              grid = [ electricity_load_profiles[ - 1 ], "Subtract", my_photovoltaic_system ], 
+                                                              my_simulation_parameters = my_simulation_parameters )
+                )
     
     if boiler_included:  
         my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = boiler_included, my_simulation_parameters = my_simulation_parameters )
@@ -180,16 +190,21 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
         if boiler_included == 'electricity':
             my_boiler_controller.connect_input( my_boiler_controller.ElectricityInput,
-                                        electricity_load_profiles[ operation_counter - 1 ].ComponentName,
-                                        electricity_load_profiles[ operation_counter - 1 ].ElectricityOutput )
+                                        electricity_load_profiles[ - 1 ].ComponentName,
+                                        electricity_load_profiles[ - 1 ].ElectricityOutput )
             
-            electricity_load_profiles.append( sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                                      grid=[ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_boiler ], 
-                                                                      my_simulation_parameters = my_simulation_parameters ) )
-            my_sim.add_component( electricity_load_profiles[ operation_counter ] )
-            operation_counter += 1
+            my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+                my_sim = my_sim,
+                operation_counter = operation_counter,
+                electricity_load_profiles = electricity_load_profiles, 
+                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                             grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_boiler ], 
+                                                             my_simulation_parameters = my_simulation_parameters ) 
+                )
             
     if heating_device_included:
+        my_heating : Union[ heat_pump.HeatPump, oil_heater.OilHeater, district_heating.DistrictHeating ]
+        my_heating_controller : Union[ heat_pump.HeatPumpController, oil_heater.OilHeaterController, district_heating.DistrictHeatingController ]
         #initialize and connect controller
         if heating_device_included == 'heat_pump':
             my_heating_controller = heat_pump.HeatPumpController( t_air_heating = t_air_heating,

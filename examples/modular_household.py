@@ -64,9 +64,15 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     # Set occupancy
     occupancy_profile = "CH01"
+    
+    # Build system parameters
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.full_year_all_options( year= year,
+                                                                               seconds_per_timestep=seconds_per_timestep )
+    my_sim.SimulationParameters = my_simulation_parameters
 
     # Set photovoltaic system
-    pv_included = True #True or False
+    pv_included = my_simulation_parameters.system_config.pv_included #True or False
     time = 2019
     power = 10E3
     load_module_data = False
@@ -75,7 +81,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     
     # Set boiler
-    boiler_included = 'electricity' #Electricity, Hydrogen or False
+    boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
     
     if boiler_included == 'electricity':
         definition = '0815-boiler'
@@ -87,7 +93,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         raise NameError( 'Boiler definition', boiler_included, 'not known. Choose electricity, hydrogen, or False.' )
 
     #Set heating system
-    heating_device_included = 'district_heating'    
+    heating_device_included = my_simulation_parameters.system_config.heating_device_included   
 
     if heating_device_included == 'heat_pump':
         # Set heat pump controller
@@ -119,12 +125,6 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         raise NameError( 'Heating Device definition', heating_device_included, 'not known. Choose heat_pump, oil_heater, district_heating, or False.' )
 
     ##### Build Components #####
-
-    # Build system parameters
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options( year= year,
-                                                                               seconds_per_timestep=seconds_per_timestep )
-    my_sim.SimulationParameters = my_simulation_parameters
     
     # Build occupancy
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters = my_simulation_parameters )

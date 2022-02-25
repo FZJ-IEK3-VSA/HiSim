@@ -7,6 +7,9 @@ from hisim.components import building
 from hisim.components import heat_pump
 from hisim.components import sumbuilder
 from hisim import utils
+
+import os
+
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -205,6 +208,11 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
         - Heat Pump
     """
 
+    ##### delete all files in cache:
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
+
     ##### System Parameters #####
 
     # Set simulation parameters
@@ -277,33 +285,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                         bClass=building_class,
                                         initial_temperature=initial_temperature,
                                         my_simulation_parameters=my_simulation_parameters)
-    my_building.connect_input(my_building.Altitude,
-                              my_weather.ComponentName,
-                              my_building.Altitude)
-    my_building.connect_input(my_building.Azimuth,
-                              my_weather.ComponentName,
-                              my_building.Azimuth)
-    my_building.connect_input(my_building.DirectNormalIrradiance,
-                              my_weather.ComponentName,
-                              my_building.DirectNormalIrradiance)
-    my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
-                              my_weather.ComponentName,
-                              my_building.DiffuseHorizontalIrradiance)
-    my_building.connect_input(my_building.GlobalHorizontalIrradiance,
-                              my_weather.ComponentName,
-                              my_building.GlobalHorizontalIrradiance)
-    my_building.connect_input(my_building.DirectNormalIrradianceExtra,
-                              my_weather.ComponentName,
-                              my_building.DirectNormalIrradianceExtra)
-    my_building.connect_input(my_building.ApparentZenith,
-                             my_weather.ComponentName,
-                             my_building.ApparentZenith)
-    my_building.connect_input(my_building.TemperatureOutside,
-                              my_weather.ComponentName,
-                              my_weather.TemperatureOutside)
-    my_building.connect_input(my_building.HeatingByResidents,
-                              my_occupancy.ComponentName,
-                              my_occupancy.HeatingByResidents)
+    my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
     my_sim.add_component(my_building)
 
     my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
@@ -311,9 +293,9 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                                            offset=offset,
                                                            mode=hp_mode,
                                                            my_simulation_parameters=my_simulation_parameters)
-    my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
-                                          my_building.ComponentName,
-                                          my_building.TemperatureMean)
+    my_heat_pump_controller.connect_only_predefined_connections( my_building )
+    
+    #depending on previous loads, hard to define default connections
     my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
                                           my_base_electricity_load_profile.ComponentName,
                                           my_base_electricity_load_profile.ElectricityOutput)
@@ -324,15 +306,11 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                           min_operation_time=hp_min_operation_time,
                                           min_idle_time=hp_min_idle_time,
                                       my_simulation_parameters=my_simulation_parameters)
-    my_heat_pump.connect_input(my_heat_pump.State,
-                               my_heat_pump_controller.ComponentName,
-                               my_heat_pump_controller.State)
-    my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
-                               my_weather.ComponentName,
-                               my_weather.TemperatureOutside)
+    my_heat_pump.connect_only_predefined_connections( my_weather, my_heat_pump_controller )
 
     my_sim.add_component(my_heat_pump)
 
+    #depending on type of heating device, hard to define default connections
     my_building.connect_input(my_building.ThermalEnergyDelivered,
                               my_heat_pump.ComponentName,
                               my_heat_pump.ThermalEnergyDelivered)

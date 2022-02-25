@@ -1,6 +1,20 @@
-from typing import List
+from typing import List, Union
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
 import datetime
 from hisim.utils import PostProcessingOptions
+
+@dataclass_json
+@dataclass()
+class SystemConfig:
+    def __init__( self,
+                 pv_included : bool = True,
+                 boiler_included : Union[ bool, str ] = 'electricity',
+                 heating_device_included : Union[ bool, str ] = 'heat_pump' ):
+        self.pv_included = pv_included
+        self.boiler_included = boiler_included
+        self.heating_device_included = heating_device_included
+
 class SimulationParameters:
     def __init__(self, start_date, end_date, seconds_per_timestep, year=None, post_processing_options:List = []):
         self.start_date = start_date
@@ -11,6 +25,7 @@ class SimulationParameters:
         self.timesteps: int = int(total_seconds/seconds_per_timestep)
         self.year = year
         self.post_processing_options = post_processing_options
+        self.system_config = SystemConfig( )
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int):
@@ -36,6 +51,13 @@ class SimulationParameters:
 
     def get_unique_key(self):
         return str(self.start_date) + "###" + str(self.end_date) + "###"  + str(self.seconds_per_timestep) + "###" + str(self.year)
+    
+    def reset_system_config( self, pv_included : bool, boiler_included : Union[ bool, str ], heating_device_included : Union[ bool, str ] ):
+        self.system_config = SystemConfig( pv_included = pv_included, 
+                                           boiler_included = boiler_included,
+                                           heating_device_included = heating_device_included )
+    
+    
 
 
 

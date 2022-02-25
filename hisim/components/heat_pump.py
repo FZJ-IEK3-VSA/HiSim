@@ -14,6 +14,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.extended_storage import WaterSlice
 from hisim.components.configuration import WarmWaterStorageConfig
 from hisim.components.configuration import PhysicsConfig
+from hisim.components.building import Building
+from hisim.components.weather import Weather
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -187,6 +189,23 @@ class HeatPump(cp.Component):
                                                                    self.NumberOfCycles,
                                                                    LoadTypes.Any,
                                                                    Units.Any)
+        
+        self.add_default_connections( Weather, self.get_weather_default_connections( ) )
+        self.add_default_connections( HeatPumpController, self.get_controller_default_connections( ) )
+        
+    def get_weather_default_connections( self ):
+        print("setting weather default connections")
+        connections = [ ]
+        weather_classname = Weather.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
+        return connections
+    
+    def get_controller_default_connections( self ):
+        print("setting controller default connections")
+        connections = [ ]
+        controller_classname = HeatPumpController.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPump.State, controller_classname, HeatPumpController.State ) )
+        return connections
 
     def build(self, manufacturer, name, min_operation_time, min_idle_time):
         # Simulation parameters
@@ -437,6 +456,15 @@ class HeatPumpController(cp.Component):
                                       self.State,
                                       LoadTypes.Any,
                                       Units.Any)
+        
+        self.add_default_connections( Building, self.get_building_default_connections( ) )
+        
+    def get_building_default_connections( self ):
+        print("setting building default connections")
+        connections = [ ]
+        building_classname = Building.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPumpController.TemperatureMean, building_classname, Building.TemperatureMean ) )
+        return connections
 
     def build(self, t_air_heating, t_air_cooling, offset, mode):
         # Sth

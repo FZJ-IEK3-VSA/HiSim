@@ -3,6 +3,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import occupancy
 from hisim.components import weather
 from hisim.components import pvs
+from hisim.components import smart_device
 from hisim.components import building
 from hisim.components import heat_pump
 from hisim.components import simple_bucket_boiler
@@ -79,6 +80,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
     integrateInverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
+    
+    #set smart devices
+    smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
     
     # Set boiler
     boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
@@ -164,9 +168,21 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                 operation_counter = operation_counter,
                 electricity_load_profiles = electricity_load_profiles, 
                 elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                              grid = [ electricity_load_profiles[ - 1 ], "Subtract", my_photovoltaic_system ], 
+                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Subtract", my_photovoltaic_system ], 
                                                               my_simulation_parameters = my_simulation_parameters )
                 )
+        
+    if smart_devices_included:
+        my_smart_device = smart_device.SmartDevice( my_simulation_parameters = my_simulation_parameters )
+        my_sim.add_component( my_smart_device )
+        # my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+        #         my_sim = my_sim,
+        #         operation_counter = operation_counter,
+        #         electricity_load_profiles = electricity_load_profiles, 
+        #         elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+        #                                                       grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_smart_device ], 
+        #                                                       my_simulation_parameters = my_simulation_parameters )
+        #         )
     
     if boiler_included:  
         my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = boiler_included, my_simulation_parameters = my_simulation_parameters )

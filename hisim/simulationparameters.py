@@ -9,9 +9,11 @@ from hisim.utils import PostProcessingOptions
 class SystemConfig:
     def __init__( self,
                  pv_included : bool = True,
+                 smart_devices_included : bool = True,
                  boiler_included : Union[ bool, str ] = 'electricity',
                  heating_device_included : Union[ bool, str ] = 'heat_pump' ):
         self.pv_included = pv_included
+        self.smart_devices_included = smart_devices_included
         self.boiler_included = boiler_included
         self.heating_device_included = heating_device_included
 

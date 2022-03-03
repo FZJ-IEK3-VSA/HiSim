@@ -23,17 +23,19 @@ __status__ = "development"
 
 class SmartDeviceState:
     
-    def __init__( self, actual_power : float = 0, time_to_go : int = -1, state : int = -1 ):
+    def __init__( self, actual_power : float = 0, time_to_go : int = -1, state : int = -1, position : int = 0 ):
         self.actual_power = actual_power
         self.time_to_go = time_to_go
         self.state = state
+        self.position = position
         
     def clone( self ):
-        return SmartDeviceState( self.actual_power, self.state ) 
+        return SmartDeviceState( self.actual_power, self.time_to_go, self.state, self.position ) 
     
     def activate( self, time_to_go : int ):
         self.time_to_go = time_to_go
         self.state = 1
+        self.position = self.position + 1
         
     def run( self, electricity_profile : list ):
         if self.state == 1:
@@ -87,10 +89,10 @@ class SmartDevice( cp.Component ):
                                                                         lt.Units.Watt )
 
     def i_save_state(self):
-        pass
+        self.previous_state = self.state.clone( )
 
     def i_restore_state(self):
-        pass
+        self.state = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
@@ -98,17 +100,18 @@ class SmartDevice( cp.Component ):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
         
         if self.state.state == - 1:
-            if self.earliest_start[ 0 ] <= timestep and self.latest_start[ 0 ] > timestep:
+            if self.earliest_start[ self.state.position ] <= timestep and self.latest_start[ self.state.position ] > timestep:
                 pass
                 #case for smart controller
-            elif self.latest_start[ 0 ] == timestep:
+            elif self.latest_start[ self.state.position ] == timestep:
                 print( timestep, self.state.state, self.state.time_to_go, self.state.actual_power , 'actually happened - 0' )
-                self.activate( )
+                self.state.activate( self.duration[ self.state.position ] )
                 print( timestep, self.state.state, self.state.time_to_go, self.state.actual_power, self.electricity_profile[ 0 ] , 'actually happened - 1' )
 
-        self.run( )
+        self.state.run( self.electricity_profile[ self.state.position - 1 ] )
+        if self.state.time_to_go == 0:
+            self.state.deactivate( )
         stsv.set_output_value( self.electricity_outputC, self.state.actual_power )
-            
         
     def build( self, seconds_per_timestep : int = 60 ):
 
@@ -175,24 +178,6 @@ class SmartDevice( cp.Component ):
         self.electricity_profile = electricity_profile
         self.device_names = device_names
         self.state = SmartDeviceState( )
-        
-    def activate( self ):
-        self.state.activate( self.duration[ 0 ] )
-        if len( self.duration ) > 1:
-            #print( len( self.duration ) )
-            self.duration.pop( 0 )
-            #print( len( self.duration ) )
-            self.earliest_start.pop( 0 )
-            self.latest_start.pop( 0 )
-        
-    def run( self ):
-        self.state.run( self.electricity_profile[ 0 ] )
-        if self.state.time_to_go == 0:
-            if len( self.electricity_profile ) > 1:
-                #print( len( self.electricity_profile ) )
-                self.electricity_profile.pop( 0 )
-                #print( len( self.electricity_profile ) )
-            self.state.deactivate( )
 
     def write_to_report(self):
         lines = []

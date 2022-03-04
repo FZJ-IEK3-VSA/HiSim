@@ -8,6 +8,8 @@ import math as ma
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim.components import occupancy
+from hisim.components import price_signal
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
@@ -22,6 +24,21 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 class SmartDeviceState:
+    """Component representing smart appliance
+    
+    Parameters:
+    -----------
+    actual power : float, optional
+        Power of smart appliance at given timestep
+    time_to_go : integer, optional
+        Duration of the power profile, which follows for the nex time steps
+    state : integer, optional
+        State of the smart appliance:
+            2... to be activated
+            1... active
+            0... may be activated or not
+            -1.. needs to be switched off
+    """
     
     def __init__( self, actual_power : float = 0, time_to_go : int = -1, state : int = -1, position : int = 0 ):
         self.actual_power = actual_power
@@ -67,12 +84,16 @@ class SmartDevice( cp.Component ):
        Load Profile of Smart Device : kWh
        State of Smart Device : Any
     """
-
-    # Outputs
-    ElectricityOutput = "ElectricityOutput"
     
     #input
-    State = "State"
+    ControllerState = "ControllerState"
+       
+    # Outputs
+    ElectricityOutput = "ElectricityOutput"
+    DeviceState = "DeviceState"
+    
+    #Forecasts
+    ShiftableLoadForecast = "ShiftableLoadForecast"
 
     # Similar components to connect to:
     # None
@@ -82,31 +103,57 @@ class SmartDevice( cp.Component ):
         super().__init__ ( name = "SmartDevice", my_simulation_parameters = my_simulation_parameters )
 
         self.build( seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
-
+        
+        #Input
+        self.ControllerStateC: cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                   self.ControllerState,
+                                                                   lt.LoadTypes.Any,
+                                                                   lt.Units.Any,
+                                                                   mandatory = True )
+        #Outputs
         self.electricity_outputC: cp.ComponentOutput = self.add_output( self.ComponentName,
                                                                         self.ElectricityOutput,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt )
+        self.DeviceStateC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                 self.DeviceState,
+                                                                 lt.LoadTypes.Any,
+                                                                 lt.Units.Any )
 
-    def i_save_state(self):
-        self.previous_state = self.state.clone( )
+    def i_save_state( self ):
+        self.previous_state : SmartDeviceState = self.state.clone( )
 
     def i_restore_state(self):
-        self.state = self.previous_state.clone( )
+        self.state : SmartDeviceState = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
         
-        if self.state.state == - 1:
-            if self.earliest_start[ self.state.position ] <= timestep and self.latest_start[ self.state.position ] > timestep:
-                pass
-                #case for smart controller
-            elif self.latest_start[ self.state.position ] == timestep:
-                print( timestep, self.state.state, self.state.time_to_go, self.state.actual_power , 'actually happened - 0' )
-                self.state.activate( self.duration[ self.state.position ] )
-                print( timestep, self.state.state, self.state.time_to_go, self.state.actual_power, self.electricity_profile[ 0 ] , 'actually happened - 1' )
+        #check out hard conditions
+        if self.state.state != 1:
+            if timestep < self.earliest_start[ self.state.position ]: #needs to be switched off
+                self.state.state = - 1
+            elif timestep == self.latest_start[ self.state.position ]: #needs to be activated
+                self.state.state = 2
+            else: #free for activation
+                self.state.state = 0
+                self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )
+        if self.state.state == 2:
+                print( timestep, self.state.state, self.earliest_start[ self.state.position ], self.latest_start[ self.state.position ] )
+                
+        if timestep >= 750 and timestep < 900:
+            print( timestep, self.state.state, self.earliest_start[ self.state.position ], self.latest_start[ self.state.position ] )
+                
+            
+        #pass conditions to smart controller
+        stsv.set_output_value( self.DeviceStateC, self.state.state )
+        self.state.state = stsv.get_input_value( self.ControllerStateC )
+        
+        #device actions based on controller signal
+        if self.state.state == 2:
+            self.state.activate( self.duration[ self.state.position ] )
 
         self.state.run( self.electricity_profile[ self.state.position - 1 ] )
         if self.state.time_to_go == 0:
@@ -178,6 +225,7 @@ class SmartDevice( cp.Component ):
         self.electricity_profile = electricity_profile
         self.device_names = device_names
         self.state = SmartDeviceState( )
+        self.previous_state = SmartDeviceState( )
 
     def write_to_report(self):
         lines = []
@@ -185,72 +233,93 @@ class SmartDevice( cp.Component ):
             lines.append("DeviceName: {}".format( self.ComponentName ) )
         return lines
     
-# class SmartDeviceController(cp.Component):
-#     """
-#     Smart Controller. It takes data from other
-#     components and sends signal to the smart device for
-#     activation or deactivation.
+class SmartDeviceController(cp.Component):
+    """
+    Smart Controller. It takes data from other
+    components and sends signal to the smart device for
+    activation or deactivation.
 
-#     Parameters
-#     --------------
-#     threshold_peak: float
-#         Maximal peak allowed for switch on.
-#     threshold_price: float
-#         Maximum price allowed for switch on
-#     prefered time: integer
-#         Prefered time for on switch
-#     """
+    Parameters
+    --------------
+    threshold_peak: float
+        Maximal peak allowed for switch on.
+    threshold_price: float
+        Maximum price allowed for switch on
+    prefered time: integer
+        Prefered time for on switch
+    """
 
-#     # Outputs
-#     State = "State"
+    # Outputs
+    DeviceState = "DeviceState"
+    ControllerState = "ControllerState"
 
-#     # Similar components to connect to:
-#     # 1. Building
+    # Similar components to connect to:
+    # 1. Building
 
-#     def __init__(self, my_simulation_parameters: SimulationParameters,
-#                  threshold_peak : float = 600,
-#                  threshold_price : float = 100,
-#                  prefered_time : int = 8 ):
-#         super( ).__init__( "SmartDeviceController", my_simulation_parameters = my_simulation_parameters )
-#         self.build( threshold_peak, threshold_price, prefered_time )
+    def __init__(self, my_simulation_parameters: SimulationParameters,
+                  threshold_peak : float = 5000,
+                  threshold_price : float = 25 ):
+        super( ).__init__( "SmartDeviceController", my_simulation_parameters = my_simulation_parameters )
+        self.build( threshold_peak, threshold_price )
+        
+        #Input
+        self.DeviceStateC: cp.ComponentInput = self.add_input( self.ComponentName,
+                                                               self.DeviceState,
+                                                               lt.LoadTypes.Any,
+                                                               lt.Units.Any,
+                                                               mandatory = True )
+        #Output
+        self.ControllerStateC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                     self.ControllerState,
+                                                                     lt.LoadTypes.Any,
+                                                                     lt.Units.Any )
 
-#         self.stateC: cp.ComponentOutput = self.add_output( self.ComponentName,
-#                                                            self.State,
-#                                                            LoadTypes.Any,
-#                                                            Units.Any )
+    def build(self, threshold_peak : float, threshold_price : float, state : int = 0 ):
+        self.threshold_peak = threshold_peak
+        self.threshold_price = threshold_price
+        self.state = state
 
-#     def build(self, threshold_peak : float, threshold_price : float, prefered_time : int ):
-#         self.threshold_peak = threshold_peak
-#         self.threshold_price = threshold_price
-#         self.prefered_time = prefered_time
+    def i_save_state(self):
+        self.previous_state = self.state
 
-#     def i_save_state(self):
-#         self.previous_heatpump_mode = self.controller_heatpumpmode
+    def i_restore_state(self):
+        self.state = self.previous_state
 
-#     def i_restore_state(self):
-#         self.controller_heatpumpmode = self.previous_heatpump_mode
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+        pass
 
-#     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
-#         pass
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+        #get state
+        self.state = stsv.get_input_value( self.DeviceStateC )
+        
+        #see if device is controllable
+        if self.state == 0:
+            #get forecasts
+            shiftableload = self.simulation_repository.get_entry( SmartDevice.ShiftableLoadForecast )
+            steps = len( shiftableload )
+            
+            demandforecast = self.simulation_repository.get_entry( occupancy.Occupancy.Electricity_Demand_Forecast_24h )[ : steps ]
+            priceinjectionforecast = self.simulation_repository.get_entry( price_signal.PriceSignal.Price_Injection_Forecast_24h )[ : steps ]
+            pricepurchaseforecast = self.simulation_repository.get_entry( price_signal.PriceSignal.Price_Purchase_Forecast_24h )[ : steps ]
+            
+            #build total load
+            potentialload = [ a + b for ( a, b ) in zip( demandforecast, shiftableload ) ]
+            
+            #calculate price
+            price_with = [ a * b for ( a, b ) in zip( potentialload, pricepurchaseforecast ) if a > 0 ] \
+                + [ a * b for ( a, b ) in zip( potentialload, priceinjectionforecast ) if a < 0 ]
+            price_without = [ a * b for ( a, b ) in zip( demandforecast, pricepurchaseforecast ) if a > 0 ] \
+                + [ a * b for ( a, b ) in zip( demandforecast, priceinjectionforecast ) if a < 0 ]
+            price = sum( price_with ) - sum( price_without )
+            
+            #calculate peak
+            peak = max( potentialload )
+            
+            #make decision based on thresholds
+            if peak < self.threshold_peak and price < self.threshold_price:
+                self.state = 2
+            else:
+                self.state = -1 
 
-#     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
-#         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-#         if force_convergence:
-#             pass
-#         else:
-#             # Retrieves inputs
-#             t_m_old = stsv.get_input_value(self.t_mC)
-#             electricity_input = stsv.get_input_value(self.electricity_inputC)
-
-#             if self.mode == 1:
-#                 self.conditions(t_m_old)
-#             elif self.mode == 2:
-#                 self.smart_conditions(t_m_old, electricity_input)
-
-#         if self.controller_heatpumpmode == 'heating':
-#             state = 1
-#         if self.controller_heatpumpmode == 'cooling':
-#             state = -1
-#         if self.controller_heatpumpmode == 'off':
-#             state = 0
-#         stsv.set_output_value(self.stateC, state)
+        stsv.set_output_value( self.ControllerStateC, self.state )
+        

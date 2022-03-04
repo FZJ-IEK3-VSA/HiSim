@@ -1,6 +1,7 @@
 from typing import Optional, List, Union
 from hisim.simulator import SimulationParameters
 from hisim.components import occupancy
+from hisim.components import price_signal
 from hisim.components import weather
 from hisim.components import pvs
 from hisim.components import smart_device
@@ -134,6 +135,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters = my_simulation_parameters )
     my_sim.add_component( my_occupancy )
     
+    # Add price signal
+    my_price_signal = price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
+    my_sim.add_component( my_price_signal )
+    
     #initialize list of components representing the actual load profile and operation counter
     operation_counter = 0
     electricity_load_profiles : List[ Union[ sumbuilder.ElectricityGrid, occupancy.Occupancy ] ] = [ my_occupancy ]
@@ -175,6 +180,15 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if smart_devices_included:
         my_smart_device = smart_device.SmartDevice( my_simulation_parameters = my_simulation_parameters )
         my_sim.add_component( my_smart_device )
+        my_smart_device_controller = smart_device.SmartDeviceController( my_simulation_parameters = my_simulation_parameters )
+        my_sim.add_component( my_smart_device_controller )
+        my_smart_device_controller.connect_input( my_smart_device_controller.DeviceState,
+                                                  my_smart_device.ComponentName,
+                                                  my_smart_device.DeviceState )
+        my_smart_device.connect_input( my_smart_device.ControllerState,
+                                       my_smart_device_controller.ComponentName,
+                                       my_smart_device_controller.ControllerState )
+
         # my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
         #         my_sim = my_sim,
         #         operation_counter = operation_counter,

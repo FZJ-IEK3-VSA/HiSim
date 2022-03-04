@@ -65,12 +65,16 @@ def test_basic_household_with_all_resultfiles():
 def test_modular_household_configurations( ):
     path = "../examples/modular_household.py"
     func = "modular_household_explicit"
-    mysimpar = mysimpar = SimulationParameters.one_day_only( year = 2019, seconds_per_timestep = 60 ) 
+    mysimpar = mysimpar = SimulationParameters.one_day_only( year = 2019, seconds_per_timestep = 60 * 15 ) 
     for pv_included in [ True, False ]:
-        for boiler_included in [ 'electricity', 'hydrogen', None ]:
-            for heating_device_included in [ 'heat_pump', 'oil_heater', 'district_heating' ]:
-                mysimpar.reset_system_config( pv_included = pv_included, boiler_included = boiler_included, heating_device_included = heating_device_included )
-                hisim_main.main( path, func, mysimpar )
+        for smart_devices_included in [ True, False ]:
+            for boiler_included in [ 'electricity', 'hydrogen', None ]:
+                for heating_device_included in [ 'heat_pump', 'oil_heater', 'district_heating' ]:
+                    mysimpar.reset_system_config( pv_included = pv_included, 
+                                                  smart_devices_included = smart_devices_included, 
+                                                  boiler_included = boiler_included, 
+                                                  heating_device_included = heating_device_included )
+                    hisim_main.main( path, func, mysimpar )
 
 def test_first_example():
     path = "../examples/examples.py"

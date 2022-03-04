@@ -36,6 +36,8 @@ class LoadTypes(str, enum.Enum):
     Oxygen = "Oxygen"
     Water = "Water"
     WarmWater = "WarmWater"
+    
+    Price = "Price"
 
 @enum.unique
 class Units(str, enum.Enum):
@@ -80,6 +82,9 @@ class Units(str, enum.Enum):
 
     # Time
     Seconds = "s"
+    
+    # Cost
+    c_per_kWh = "Cents per kWh"
 
 
 

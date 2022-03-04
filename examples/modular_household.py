@@ -182,21 +182,16 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_sim.add_component( my_smart_device )
         my_smart_device_controller = smart_device.SmartDeviceController( my_simulation_parameters = my_simulation_parameters )
         my_sim.add_component( my_smart_device_controller )
-        my_smart_device_controller.connect_input( my_smart_device_controller.DeviceState,
-                                                  my_smart_device.ComponentName,
-                                                  my_smart_device.DeviceState )
-        my_smart_device.connect_input( my_smart_device.ControllerState,
-                                       my_smart_device_controller.ComponentName,
-                                       my_smart_device_controller.ControllerState )
-
-        # my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
-        #         my_sim = my_sim,
-        #         operation_counter = operation_counter,
-        #         electricity_load_profiles = electricity_load_profiles, 
-        #         elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-        #                                                       grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_smart_device ], 
-        #                                                       my_simulation_parameters = my_simulation_parameters )
-        #         )
+        my_smart_device.connect_only_predefined_connections( my_smart_device_controller )
+        my_smart_device_controller.connect_only_predefined_connections( my_smart_device )
+        my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+                my_sim = my_sim,
+                operation_counter = operation_counter,
+                electricity_load_profiles = electricity_load_profiles, 
+                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_smart_device ], 
+                                                              my_simulation_parameters = my_simulation_parameters )
+                )
     
     if boiler_included:  
         my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = boiler_included, my_simulation_parameters = my_simulation_parameters )

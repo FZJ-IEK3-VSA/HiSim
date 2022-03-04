@@ -119,6 +119,14 @@ class SmartDevice( cp.Component ):
                                                                  self.DeviceState,
                                                                  lt.LoadTypes.Any,
                                                                  lt.Units.Any )
+        self.add_default_connections( SmartDeviceController, self.get_smart_device_default_connections( ) )
+        
+    def get_smart_device_default_connections( self ):
+        print("setting smart device default connections")
+        connections = [ ]
+        smart_device_controller_classname = SmartDeviceController.get_classname( )
+        connections.append( cp.ComponentConnection( SmartDevice.ControllerState, smart_device_controller_classname, SmartDeviceController.ControllerState ) )
+        return connections
 
     def i_save_state( self ):
         self.previous_state : SmartDeviceState = self.state.clone( )
@@ -139,13 +147,7 @@ class SmartDevice( cp.Component ):
                 self.state.state = 2
             else: #free for activation
                 self.state.state = 0
-                self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )
-        if self.state.state == 2:
-                print( timestep, self.state.state, self.earliest_start[ self.state.position ], self.latest_start[ self.state.position ] )
-                
-        if timestep >= 750 and timestep < 900:
-            print( timestep, self.state.state, self.earliest_start[ self.state.position ], self.latest_start[ self.state.position ] )
-                
+                self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )           
             
         #pass conditions to smart controller
         stsv.set_output_value( self.DeviceStateC, self.state.state )
@@ -273,6 +275,14 @@ class SmartDeviceController(cp.Component):
                                                                      self.ControllerState,
                                                                      lt.LoadTypes.Any,
                                                                      lt.Units.Any )
+        self.add_default_connections( SmartDevice, self.get_smart_device_controller_default_connections( ) )
+        
+    def get_smart_device_controller_default_connections( self ):
+        print("setting smart device controller default connections")
+        connections = [ ]
+        smart_device_classname = SmartDevice.get_classname( )
+        connections.append( cp.ComponentConnection( SmartDeviceController.DeviceState, smart_device_classname, SmartDevice.DeviceState ) )
+        return connections
 
     def build(self, threshold_peak : float, threshold_price : float, state : int = 0 ):
         self.threshold_peak = threshold_peak

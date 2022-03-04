@@ -19,6 +19,7 @@ def test_building():
     repo = component.SimRepository()
     # Set Occupancy
     my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy.set_sim_repo( repo )
 
 
     # Set Weather

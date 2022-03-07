@@ -57,6 +57,8 @@ class Occupancy(cp.Component):
     HeatingByResidents = "HeatingByResidents"
     ElectricityOutput = "ElectricityOutput"
     WaterConsumption = "WaterConsumption"
+    
+    Electricity_Demand_Forecast_24h = "Electricity_Demand_Forecast_24h"
 
     # Similar components to connect to:
     # None
@@ -181,8 +183,11 @@ class Occupancy(cp.Component):
         stsv.set_output_value(self.heating_by_residentsC, self.heating_by_residents[timestep])
         stsv.set_output_value(self.electricity_outputC, self.electricity_consumption[timestep])
         stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
+        
+        demandforecast = self.electricity_consumption[ timestep : int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep ) ]
+        self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
 
-    def build( self, profile):
+    def build( self, profile ):
         self.profile = profile
         parameters = [profile]
 

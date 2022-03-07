@@ -1,8 +1,10 @@
 from typing import Optional, List, Union
 from hisim.simulator import SimulationParameters
 from hisim.components import occupancy
+from hisim.components import price_signal
 from hisim.components import weather
 from hisim.components import pvs
+from hisim.components import smart_device
 from hisim.components import building
 from hisim.components import heat_pump
 from hisim.components import simple_bucket_boiler
@@ -80,6 +82,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     integrateInverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     
+    #set smart devices
+    smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
+    
     # Set boiler
     boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
     
@@ -130,6 +135,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters = my_simulation_parameters )
     my_sim.add_component( my_occupancy )
     
+    # Add price signal
+    my_price_signal = price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
+    my_sim.add_component( my_price_signal )
+    
     #initialize list of components representing the actual load profile and operation counter
     operation_counter = 0
     electricity_load_profiles : List[ Union[ sumbuilder.ElectricityGrid, occupancy.Occupancy ] ] = [ my_occupancy ]
@@ -164,7 +173,23 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                 operation_counter = operation_counter,
                 electricity_load_profiles = electricity_load_profiles, 
                 elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                              grid = [ electricity_load_profiles[ - 1 ], "Subtract", my_photovoltaic_system ], 
+                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Subtract", my_photovoltaic_system ], 
+                                                              my_simulation_parameters = my_simulation_parameters )
+                )
+        
+    if smart_devices_included:
+        my_smart_device = smart_device.SmartDevice( my_simulation_parameters = my_simulation_parameters )
+        my_sim.add_component( my_smart_device )
+        my_smart_device_controller = smart_device.SmartDeviceController( my_simulation_parameters = my_simulation_parameters )
+        my_sim.add_component( my_smart_device_controller )
+        my_smart_device.connect_only_predefined_connections( my_smart_device_controller )
+        my_smart_device_controller.connect_only_predefined_connections( my_smart_device )
+        my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+                my_sim = my_sim,
+                operation_counter = operation_counter,
+                electricity_load_profiles = electricity_load_profiles, 
+                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_smart_device ], 
                                                               my_simulation_parameters = my_simulation_parameters )
                 )
     

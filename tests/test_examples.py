@@ -4,6 +4,7 @@ import os
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 import shutil
+import random
 
 from hisim.utils import PostProcessingOptions
 import matplotlib.pyplot as plt
@@ -66,11 +67,19 @@ def test_modular_household_configurations( ):
     path = "../examples/modular_household.py"
     func = "modular_household_explicit"
     mysimpar = mysimpar = SimulationParameters.one_day_only( year = 2019, seconds_per_timestep = 60 ) 
-    for pv_included in [ True, False ]:
-        for boiler_included in [ 'electricity', 'hydrogen', None ]:
-            for heating_device_included in [ 'heat_pump', 'oil_heater', 'district_heating' ]:
-                mysimpar.reset_system_config( pv_included = pv_included, boiler_included = boiler_included, heating_device_included = heating_device_included )
-                hisim_main.main( path, func, mysimpar )
+    # for pv_included in [ True, False ]:
+    #     for smart_devices_included in [ True, False ]:
+    #         for boiler_included in [ 'electricity', 'hydrogen', None ]:
+    #             for heating_device_included in [ 'heat_pump', 'oil_heater', 'district_heating' ]:
+    pv_included = random.choice( [ True, False ] )
+    smart_devices_included = random.choice( [ True, False ] )
+    boiler_included = random.choice( [ 'electricity', 'hydrogen', None ] )
+    heating_device_included = random.choice( [ 'heat_pump', 'oil_heater', 'district_heating' ] )
+    mysimpar.reset_system_config( pv_included = pv_included, 
+                                  smart_devices_included = smart_devices_included, 
+                                  boiler_included = boiler_included, 
+                                  heating_device_included = heating_device_included )
+    hisim_main.main( path, func, mysimpar )
 
 def test_first_example():
     path = "../examples/examples.py"

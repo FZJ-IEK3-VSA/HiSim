@@ -9,9 +9,11 @@ from hisim.utils import PostProcessingOptions
 class SystemConfig:
     def __init__( self,
                  pv_included : bool = True,
+                 smart_devices_included : bool = True,
                  boiler_included : Union[ bool, str ] = 'electricity',
                  heating_device_included : Union[ bool, str ] = 'heat_pump' ):
         self.pv_included = pv_included
+        self.smart_devices_included = smart_devices_included
         self.boiler_included = boiler_included
         self.heating_device_included = heating_device_included
 
@@ -52,8 +54,9 @@ class SimulationParameters:
     def get_unique_key(self):
         return str(self.start_date) + "###" + str(self.end_date) + "###"  + str(self.seconds_per_timestep) + "###" + str(self.year)
     
-    def reset_system_config( self, pv_included : bool, boiler_included : Union[ bool, str ], heating_device_included : Union[ bool, str ] ):
+    def reset_system_config( self, pv_included : bool, smart_devices_included : bool, boiler_included : Union[ bool, str ], heating_device_included : Union[ bool, str ] ):
         self.system_config = SystemConfig( pv_included = pv_included, 
+                                           smart_devices_included = smart_devices_included,
                                            boiler_included = boiler_included,
                                            heating_device_included = heating_device_included )
     

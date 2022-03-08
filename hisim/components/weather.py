@@ -90,12 +90,11 @@ class Weather(Component):
 
     @utils.measure_execution_time
     def __init__(self,
-                 my_simulation_parameters: SimulationParameters, location="Aachen", generate_forecast: bool = False):
+                 my_simulation_parameters: SimulationParameters, location="Aachen" ):
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)
         if(my_simulation_parameters is None):
             raise Exception("Simparameters was none")
         self.weatherConfig = WeatherConfig(my_simulation_parameters,location)
-        self.generate_forecasts: bool = generate_forecast
         self.build(location,my_simulation_parameters)
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
@@ -162,6 +161,7 @@ class Weather(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_conversion: bool):
+
         stsv.set_output_value(self.t_outC, self.temperature_list[timestep])
         stsv.set_output_value(self.DNIC, self.DNI_list[timestep])
         stsv.set_output_value(self.DNIextraC, self.DNIextra_list[timestep])
@@ -173,7 +173,7 @@ class Weather(Component):
         stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith_list[timestep])
 
         # set the temperature forecast
-        if(self.generate_forecasts):
+        if self.my_simulation_parameters.system_config.predictive:
             timesteps_24h = 24*3600 / self.my_simulation_parameters.seconds_per_timestep
             last_forecast_timestep = int(timestep+ timesteps_24h)
             if(last_forecast_timestep > len(self.temperature_list)):

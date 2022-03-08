@@ -72,9 +72,15 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_simulation_parameters = SimulationParameters.full_year_all_options( year= year,
                                                                                seconds_per_timestep=seconds_per_timestep )
     my_sim.SimulationParameters = my_simulation_parameters
-
-    # Set photovoltaic system
+    
+    #get system configuration
+    predictive = my_simulation_parameters.system_config.predictive #True or False
     pv_included = my_simulation_parameters.system_config.pv_included #True or False
+    smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
+    boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
+    heating_device_included = my_simulation_parameters.system_config.heating_device_included 
+    
+    # Set photovoltaic system
     time = 2019
     power = 10E3
     load_module_data = False
@@ -82,12 +88,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     integrateInverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     
-    #set smart devices
-    smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
-    
-    # Set boiler
-    boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
-    
+    #set boiler
     if boiler_included == 'electricity':
         definition = '0815-boiler'
         smart = 1
@@ -98,8 +99,6 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         raise NameError( 'Boiler definition', boiler_included, 'not known. Choose electricity, hydrogen, or False.' )
 
     #Set heating system
-    heating_device_included = my_simulation_parameters.system_config.heating_device_included   
-
     if heating_device_included == 'heat_pump':
         # Set heat pump controller
         t_air_heating = 16.0
@@ -136,8 +135,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_sim.add_component( my_occupancy )
     
     # Add price signal
-    my_price_signal = price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
-    my_sim.add_component( my_price_signal )
+    if predictive == True:
+        my_price_signal = price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
+        my_sim.add_component( my_price_signal )
     
     #initialize list of components representing the actual load profile and operation counter
     operation_counter = 0
@@ -180,10 +180,11 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if smart_devices_included:
         my_smart_device = smart_device.SmartDevice( my_simulation_parameters = my_simulation_parameters )
         my_sim.add_component( my_smart_device )
-        my_smart_device_controller = smart_device.SmartDeviceController( my_simulation_parameters = my_simulation_parameters )
-        my_sim.add_component( my_smart_device_controller )
-        my_smart_device.connect_only_predefined_connections( my_smart_device_controller )
-        my_smart_device_controller.connect_only_predefined_connections( my_smart_device )
+        if predictive == True:
+            my_smart_device_controller = smart_device.SmartDeviceController( my_simulation_parameters = my_simulation_parameters )
+            my_sim.add_component( my_smart_device_controller )
+            my_smart_device.connect_only_predefined_connections( my_smart_device_controller )
+            my_smart_device_controller.connect_only_predefined_connections( my_smart_device )
         my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
                 my_sim = my_sim,
                 operation_counter = operation_counter,

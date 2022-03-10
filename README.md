@@ -53,14 +53,14 @@ Run the python interpreter in the `hisim/examples` directory with the following 
 python ../hisim/hisim_main.py examples first_example
 ```
 
-This command executes `hisim.py` on the setup function `first_example` implemented in the file `examples.py` that is stored in `hisim/examples`. The same file contains another setup function that can be used: `second_example`. The results can be visualized under directory `results` created under the same directory where the script with the setup function is located.
+This command executes `hisim_main.py` on the setup function `first_example` implemented in the file `examples.py` that is stored in `hisim/examples`. The same file contains another setup function that can be used: `second_example`. The results can be visualized under directory `results` created under the same directory where the script with the setup function is located.
 
 Run Basic Household Example
 -----------------------
 The directory `hisim\examples` also contains a basic household configuration in the script `basic_household.py`. The first setup function (`basic_household_explicit`) can be executed with the following command:
 
 ```python
-python ../hisim/hisim.py basic_household.py basic_household_explicit
+python ../hisim/hisim_main.py basic_household.py basic_household_explicit
 ```
 
 The system is set up with the following elements:
@@ -88,7 +88,7 @@ Once you are done, you can run the setup function according to the description i
 
 Package Structure
 -----------
-The main program is executed from `hisim/hisim/hisim.py`. The `Simulator`(`simulator.py`) object groups `Component`s declared and added from the setups functions. The `ComponentWrapper`(`simulator.py`) gathers together the `Component`s inside an `Simulator` Object. The `Simulator` object performs the entire simulation under the function `run_all_timesteps` and stores the results in a Python pickle `data.pkl` in a subdirectory of `hisim/hisim/results` named after the executed setup function. Plots and the report are automatically generated from the pickle by the class `PostProcessor` (`hisim/hisim/postprocessing/postprocessing.py`).
+The main program is executed from `hisim/hisim/hisim_main.py`. The `Simulator`(`simulator.py`) object groups `Component`s declared and added from the setups functions. The `ComponentWrapper`(`simulator.py`) gathers together the `Component`s inside an `Simulator` Object. The `Simulator` object performs the entire simulation under the function `run_all_timesteps` and stores the results in a Python pickle `data.pkl` in a subdirectory of `hisim/hisim/results` named after the executed setup function. Plots and the report are automatically generated from the pickle by the class `PostProcessor` (`hisim/hisim/postprocessing/postprocessing.py`).
 
 Component Class
 -----------

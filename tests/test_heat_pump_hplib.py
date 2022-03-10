@@ -1,6 +1,7 @@
-import component as cp
-from components.heat_pump_hplib import HeatPumpHplib
-import loadtypes as lt
+from hisim import component as cp
+from hisim.components.heat_pump_hplib import HeatPumpHplib
+from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 def test_heat_pump_hplib():
 
@@ -10,7 +11,7 @@ def test_heat_pump_hplib():
     t_in: float = -7
     t_out: float = 52
     p_th_set: float = 10000
-
+    simpars = SimulationParameters.one_day_only(2017,60)
     # Definitions for i_simulate
     timestep = 1
     seconds_per_timestep = 60
@@ -39,7 +40,7 @@ def test_heat_pump_hplib():
                               lt.Units.Any)
 
     # Initialize component
-    heatpump = HeatPumpHplib(model=model, group_id=group_id, t_in=t_in, t_out=t_out, p_th_set=p_th_set)
+    heatpump = HeatPumpHplib(model=model, group_id=group_id, t_in=t_in, t_out_val=t_out, p_th_set=p_th_set, my_simulation_parameters=simpars)
 
     heatpump.on_off_switch.SourceOutput = IO_1
     heatpump.t_in_primary.SourceOutput = IO_2
@@ -68,7 +69,7 @@ def test_heat_pump_hplib():
     heatpump.time_off.GlobalIndex = 10     
     
     # Simulation
-    heatpump.i_simulate(timestep=timestep, stsv=stsv, seconds_per_timestep=seconds_per_timestep, force_convergence=force_convergence)
+    heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
     print(stsv.values)
     # Check
     assert p_th_set == stsv.values[4]

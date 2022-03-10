@@ -1,15 +1,13 @@
-import component
-from components import weather
-import simulator as sim
+from hisim import component
+from hisim.components import weather
+from hisim.simulationparameters import SimulationParameters
 def test_weather():
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(8)
-    year=2019
-    seconds_per_timestep=60
-    my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
-                                                                                 seconds_per_timestep=seconds_per_timestep)
-
-    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=my_sim_params)
-
+    mysim:  SimulationParameters = SimulationParameters.full_year(year=2021,
+                                                                           seconds_per_timestep=60)
+    repo = component.SimRepository()
+    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=mysim)
+    my_weather.set_sim_repo(repo)
     my_weather.t_outC.GlobalIndex = 0
     my_weather.DNIC.GlobalIndex = 1
     my_weather.DHIC.GlobalIndex = 2
@@ -21,7 +19,7 @@ def test_weather():
 
     DNI = []
     for i in range(60*24*365):
-        my_weather.i_simulate(i, stsv, 60, False)
+        my_weather.i_simulate(i, stsv, False)
         DNI.append(stsv.values[1])
 
     assert sum(DNI) > 950

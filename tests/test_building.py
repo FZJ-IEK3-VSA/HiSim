@@ -1,9 +1,12 @@
-import component
-from components import occupancy
-from components import weather
-from components import building
-import loadtypes as lt
-import simulator as sim
+from hisim import component
+from hisim.components import occupancy
+from hisim.components import weather
+from hisim.components import building
+from hisim.loadtypes import LoadTypes, Units
+from hisim.simulationparameters import SimulationParameters
+
+import os
+
 def test_building():
     # Sets inputs
     weather_location = "Aachen"
@@ -11,28 +14,25 @@ def test_building():
     building_code="DE.N.SFH.05.Gen.ReEx.001.001"
     bClass="medium"
     seconds_per_timestep = 60
-    year=2019
+    my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(13)
-
-
-    my_sim_params: sim.SimulationParameters = sim.SimulationParameters.full_year(year=year,
-                                                                                 seconds_per_timestep=seconds_per_timestep)
-
-    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=my_sim_params)
+    repo = component.SimRepository()
     # Set Occupancy
-    my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile)
+    my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy.set_sim_repo( repo )
+
 
     # Set Weather
-
-
+    my_weather = weather.Weather(location=weather_location,my_simulation_parameters=my_simulation_parameters)
+    my_weather.set_sim_repo(repo)
     # Set Residence
-    my_residence = building.Building(building_code=building_code, bClass=bClass, seconds_per_timestep=60)
+    my_residence = building.Building(building_code=building_code, bClass=bClass, my_simulation_parameters=my_simulation_parameters)
 
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",
                                                                 "ThermalDelivery",
-                                                                lt.LoadTypes.Heating,
-                                                                lt.Units.Watt)
+                                                                LoadTypes.Heating,
+                                                                Units.Watt)
 
 
     assert 1 == 1
@@ -60,19 +60,26 @@ def test_building():
     my_residence.t_mC.GlobalIndex = 11
     thermal_energy_delivered_output.GlobalIndex = 12
 
-    # Simulates
-    stsv.values[11] = 23
-    print(stsv.values)
-    my_weather.i_simulate(0, stsv, seconds_per_timestep, False)
-    print(stsv.values)
-    my_occupancy.i_simulate(0, stsv, seconds_per_timestep, False)
-    print(stsv.values)
-    my_residence.i_simulate(0, stsv, seconds_per_timestep, False)
-    print(stsv.values)
+    #test building models for various time resolutions
+    for seconds_per_timestep in [ 60, 60 * 15, 60 * 60 ]:
 
-    print("Occupancy: {}\n".format(stsv.values[:4]))
-    print("Weather: {}\n".format(stsv.values[4:10]))
-    print("Residence: {}\n".format(stsv.values[10:]))
-    # #assert False
-    print(stsv.values[11])
-    assert stsv.values[11] == 22.981377611647737
+        print( seconds_per_timestep )
+        my_residence.seconds_per_timestep = seconds_per_timestep
+
+        # Simulates
+        stsv.values[11] = 23
+        print(stsv.values)
+        my_weather.i_simulate(0, stsv, False)
+        print(stsv.values)
+        my_occupancy.i_simulate(0, stsv, False)
+        print(stsv.values)
+        my_residence.i_simulate(0, stsv, False)
+        print(stsv.values)
+
+        print("Occupancy: {}\n".format(stsv.values[:4]))
+        print("Weather: {}\n".format(stsv.values[4:10]))
+        print("Residence: {}\n".format(stsv.values[10:]))
+
+        print(stsv.values[11])
+        assert (stsv.values[11] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
+

@@ -97,7 +97,8 @@ def basic_household_explicit(my_sim):
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather = weather.Weather(location=location)
+    my_weather = weather.Weather(location=location,
+                                 my_simulation_parameters=my_sim_params)
     my_sim.add_component(my_weather)
 
     my_photovoltaic_system = pvs.PVSystem(time=time,
@@ -138,68 +139,68 @@ def basic_household_explicit(my_sim):
                                                                       grid=[my_occupancy, "Subtract", my_photovoltaic_system ])
     my_sim.add_component(my_base_electricity_load_profile)
 
-    my_building = building.Building(building_code=building_code,
-                                        bClass=building_class,
-                                        initial_temperature=initial_temperature,
-                                        sim_params=my_sim_params)
-                                        #seconds_per_timestep=seconds_per_timestep)
-    my_building.connect_input(my_building.Altitude,
-                              my_weather.ComponentName,
-                              my_building.Altitude)
-    my_building.connect_input(my_building.Azimuth,
-                              my_weather.ComponentName,
-                              my_building.Azimuth)
-    my_building.connect_input(my_building.DirectNormalIrradiance,
-                              my_weather.ComponentName,
-                              my_building.DirectNormalIrradiance)
-    my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
-                              my_weather.ComponentName,
-                              my_building.DiffuseHorizontalIrradiance)
-    my_building.connect_input(my_building.GlobalHorizontalIrradiance,
-                              my_weather.ComponentName,
-                              my_building.GlobalHorizontalIrradiance)
-    my_building.connect_input(my_building.DirectNormalIrradianceExtra,
-                              my_weather.ComponentName,
-                              my_building.DirectNormalIrradianceExtra)
-    my_building.connect_input(my_building.ApparentZenith,
-                             my_weather.ComponentName,
-                             my_building.ApparentZenith)
-    my_building.connect_input(my_building.TemperatureOutside,
-                              my_weather.ComponentName,
-                              my_weather.TemperatureOutside)
-    my_building.connect_input(my_building.HeatingByResidents,
-                              my_occupancy.ComponentName,
-                              my_occupancy.HeatingByResidents)
-    my_sim.add_component(my_building)
+    #my_building = building.Building(building_code=building_code,
+    #                                    bClass=building_class,
+    #                                    initial_temperature=initial_temperature,
+    #                                    sim_params=my_sim_params)
+    #                                    #seconds_per_timestep=seconds_per_timestep)
+    #my_building.connect_input(my_building.Altitude,
+    #                          my_weather.ComponentName,
+    #                          my_building.Altitude)
+    #my_building.connect_input(my_building.Azimuth,
+    #                          my_weather.ComponentName,
+    #                          my_building.Azimuth)
+    #my_building.connect_input(my_building.DirectNormalIrradiance,
+    #                          my_weather.ComponentName,
+    #                          my_building.DirectNormalIrradiance)
+    #my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
+    #                          my_weather.ComponentName,
+    #                          my_building.DiffuseHorizontalIrradiance)
+    #my_building.connect_input(my_building.GlobalHorizontalIrradiance,
+    #                          my_weather.ComponentName,
+    #                          my_building.GlobalHorizontalIrradiance)
+    #my_building.connect_input(my_building.DirectNormalIrradianceExtra,
+    #                          my_weather.ComponentName,
+    #                          my_building.DirectNormalIrradianceExtra)
+    #my_building.connect_input(my_building.ApparentZenith,
+    #                         my_weather.ComponentName,
+    #                         my_building.ApparentZenith)
+    #my_building.connect_input(my_building.TemperatureOutside,
+    #                          my_weather.ComponentName,
+    #                          my_weather.TemperatureOutside)
+    #my_building.connect_input(my_building.HeatingByResidents,
+    #                          my_occupancy.ComponentName,
+    #                          my_occupancy.HeatingByResidents)
+    #my_sim.add_component(my_building)
 
-    my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
-                                                           t_air_cooling=t_air_cooling,
-                                                           offset=offset,
-                                                           mode=hp_mode)
-    my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
-                                          my_building.ComponentName,
-                                          my_building.TemperatureMean)
-    my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
-                                          my_base_electricity_load_profile.ComponentName,
-                                          my_base_electricity_load_profile.ElectricityOutput)
-    my_sim.add_component(my_heat_pump_controller)
+    #my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
+    #                                                       t_air_cooling=t_air_cooling,
+    #                                                       offset=offset,
+    #                                                       mode=hp_mode)
+    #my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
+    #                                      my_building.ComponentName,
+    #                                      my_building.TemperatureMean)
+    #my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
+    #                                      my_base_electricity_load_profile.ComponentName,
+    #                                      my_base_electricity_load_profile.ElectricityOutput)
+    #my_sim.add_component(my_heat_pump_controller)
 
-    my_heat_pump = heat_pump.HeatPump(manufacturer=hp_manufacturer,
-                                          name=hp_name,
-                                          min_operation_time=hp_min_operation_time,
-                                          min_idle_time=hp_min_idle_time)
-    my_heat_pump.connect_input(my_heat_pump.State,
-                               my_heat_pump_controller.ComponentName,
-                               my_heat_pump_controller.State)
-    my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
-                               my_weather.ComponentName,
-                               my_weather.TemperatureOutside)
+    #my_heat_pump = heat_pump.HeatPump(manufacturer=hp_manufacturer,
+    #                                      name=hp_name,
+    #                                      min_operation_time=hp_min_operation_time,
+    #                                      min_idle_time=hp_min_idle_time)
+    #my_heat_pump.connect_input(my_heat_pump.State,
+    #                           my_heat_pump_controller.ComponentName,
+    #                           my_heat_pump_controller.State)
+    #my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
+    #                           my_weather.ComponentName,
+    #                           my_weather.TemperatureOutside)
 
-    my_sim.add_component(my_heat_pump)
+    #my_sim.add_component(my_heat_pump)
 
-    my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_heat_pump.ComponentName,
-                              my_heat_pump.ThermalEnergyDelivered)
+    #my_building.connect_input(my_building.ThermalEnergyDelivered,
+    #                          my_heat_pump.ComponentName,
+    #                          my_heat_pump.ThermalEnergyDelivered)
 
 def basic_household_implicit(my_sim):
     pass

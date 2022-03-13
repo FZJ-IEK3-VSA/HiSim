@@ -415,7 +415,7 @@ class PVSystem(cp.Component):
 
     def build(self,  load_module_data):
 
-        log.information(self.pvconfig.to_json())
+        log.information(self.pvconfig.to_json())  # type: ignore
         file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig)
 
         if file_exists:

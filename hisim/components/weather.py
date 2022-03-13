@@ -186,7 +186,7 @@ class Weather(Component):
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
         log.information(self.weatherConfig.location)
-        log.information(self.weatherConfig.to_json())
+        log.information(self.weatherConfig.to_json()) # type: ignore
         #log.information("2:" + json.dumps(self.weatherConfig))
 
         cachefound, cache_filepath = utils.get_cache_file("Weather", self.weatherConfig)

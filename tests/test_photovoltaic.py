@@ -13,7 +13,7 @@ def test_photovoltaic():
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=seconds_per_timestep)
 
-    stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(10)
+    stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(11)
     # Weather: 6 outputs
     # PVS:  1 output
 
@@ -42,7 +42,7 @@ def test_photovoltaic():
     my_weather.wind_speedC.GlobalIndex = 8
 
     my_pvs.electricity_outputC.GlobalIndex = 9
-
+    my_weather.DNIextraC.GlobalIndex = 10
     my_weather.i_simulate(655, stsv,  False)
     my_pvs.i_simulate(655, stsv,  False)
     assert abs(0.4532226665022684- stsv.values[9]) <0.05

@@ -62,7 +62,7 @@ class Occupancy(cp.Component):
 
     # Similar components to connect to:
     # None
-
+    @utils.measure_execution_time
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
                   profile="CH01"):

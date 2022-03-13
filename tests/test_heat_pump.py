@@ -22,7 +22,7 @@ def test_heat_pump():
     offset = 1
     hp_mode = 1
 
-    number_of_outputs = 7
+    number_of_outputs = 8
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     #===================================================================================================================
@@ -65,7 +65,7 @@ def test_heat_pump():
     my_heat_pump.coolingC.GlobalIndex = 4
     my_heat_pump.electricity_outputC.GlobalIndex = 5
     my_heat_pump.number_of_cyclesC.GlobalIndex = 6
-
+    t_air_outdoorC.GlobalIndex = 7
     j = 60
     # Simulate
     my_heat_pump_controller.i_restore_state()

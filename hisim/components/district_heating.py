@@ -7,7 +7,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
-
+from hisim import log
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -122,7 +122,7 @@ class DistrictHeating( cp.Component ):
         self.add_default_connections( DistrictHeatingController, self.get_controller_default_connections( ) )
         
     def get_controller_default_connections( self ):
-        print("setting weather default connections")
+        log.information("setting weather default connections")
         connections = [ ]
         controller_classname = DistrictHeatingController.get_classname( )
         connections.append( cp.ComponentConnection( DistrictHeating.signal, controller_classname, DistrictHeatingController.signal ) )
@@ -232,7 +232,7 @@ class DistrictHeatingController( cp.Component ):
         self.add_default_connections( Building, self.get_building_default_connections( ) )
     
     def get_building_default_connections( self ):
-        print("setting controller default connections")
+        log.information("setting controller default connections")
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( DistrictHeatingController.TemperatureMean, building_classname, Building.TemperatureMean ) )
@@ -315,10 +315,10 @@ class DistrictHeatingController( cp.Component ):
 
         self.state.update_state( power = DistrictHeatingPower )
 
-        #print(state)
+        #log.information(state)
         stsv.set_output_value(self.signalC, DistrictHeatingPower )
 
-    def print_output(self, t_m, state):
-        print("==========================================")
-        print("T m: {}".format(t_m))
-        print("State: {}".format(state))
+    #def prin1t_output(self, t_m, state):
+    #    log.information("==========================================")
+    #    log.information("T m: {}".format(t_m))
+    #    log.information("State: {}".format(state))

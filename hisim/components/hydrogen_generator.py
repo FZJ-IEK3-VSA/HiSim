@@ -9,6 +9,7 @@ from hisim.components.configuration import ElectrolyzerConfig
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
+from hisim import log
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -129,7 +130,7 @@ class ElectrolyzerSimulation:
 
             return hydrogen_output, oxygen_output, power_level_real,electricity_input_real
         elif hydrogen_not_stored<0:
-            print("Error")
+            log.error("Error")
             raise ValueError("hydrogen was leftover")
         elif hydrogen_not_stored == 0:
             electricity_input_real=electricity_input
@@ -263,7 +264,7 @@ class Electrolyzer(Component):
             unused_power = electricity_input
             electricity_input = 0
         elif electricity_input < 0:
-            print("Electricity to electrolyzer is negative")
+            log.error("Electricity to electrolyzer is negative")
             raise ValueError
 
         if electricity_input >= self.min_power:

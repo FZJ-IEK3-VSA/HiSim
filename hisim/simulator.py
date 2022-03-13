@@ -15,8 +15,10 @@ import time
 # Owned
 from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
+from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from hisim import utils
 #import utils
 
 
@@ -30,7 +32,7 @@ class ComponentWrapper:
         self.is_cachable = is_cachable
 
     def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]):
-        logging.info("Registering component outputs on " + self.MyComponent.ComponentName)
+        log.information("Registering component outputs on " + self.MyComponent.ComponentName)
         # register the output column
         output_columns = self.MyComponent.get_outputs()
         for col in output_columns:
@@ -40,10 +42,11 @@ class ComponentWrapper:
                 if output.FullName == col.FullName:
                     raise Exception("trying to register the same key twice: " + col.FullName)
             all_outputs.append(col)
+            log.information("Registered output " + col.FullName)
             self.component_outputs.append(col)
 
     def register_component_inputs(self, global_column_dict):
-        logging.info("Registering component outputs " + self.MyComponent.ComponentName)
+        log.information("Registering component outputs " + self.MyComponent.ComponentName)
         # look up input columns and cache, so we only have the correct columns saved
         inputColumns: List[cp.ComponentInput] = self.MyComponent.get_input_definitions()
         for col in inputColumns:
@@ -127,7 +130,7 @@ class ComponentWrapper:
                             # ToDo: Dirty code! Look the second else with the same code. Too lazy to figure out sth better
                             # Connect, i.e, save ComponentOutput in ComponentInput
                             cinput.SourceOutput = global_output
-                            logging.debug(
+                            log.debug(
                                 "connected input '" + cinput.FullName + "' to '" + global_output.FullName + "'")
                         else:
                             raise SystemError("The input %s (cp: %s, unit: %s) and output %s(cp: %s, unit: %s) do not have the same unit!" % ( cinput.FieldName,
@@ -140,7 +143,7 @@ class ComponentWrapper:
                         # ToDo: Dirty code! Too lazy to figure out sth better
                         # Connect, i.e, save ComponentOutput in ComponentInput
                         cinput.SourceOutput = global_output
-                        logging.debug("connected input '" + cinput.FullName + "' to '" + global_output.FullName + "'")
+                        log.debug("connected input '" + cinput.FullName + "' to '" + global_output.FullName + "'")
 
             # Check if there are inputs that have been not connected
             if cinput.Mandatory and cinput.SourceOutput is None:
@@ -151,7 +154,10 @@ class ComponentWrapper:
                         cinput.Unit))  #
 
 class Simulator:
+    @utils.measure_execution_time
     def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters):
+        if(setup_function is None):
+            raise Exception("No setup function was set")
         self.setup_function = setup_function
         self.SimulationParameters = my_simulation_parameters
         self.WrappedComponents: List[ComponentWrapper] = []
@@ -184,6 +190,7 @@ class Simulator:
         wrap.register_component_outputs(self.all_outputs)
         self.WrappedComponents.append(wrap)
 
+    @utils.measure_execution_time
     def connect_all_components(self):
         """
         Connects the inputs from every component to the corresponding outputs
@@ -229,7 +236,7 @@ class Simulator:
            # Loops through components
             for wr in self.WrappedComponents:
                 #if timestep >= 10392:
-                #    print("Stop here!")
+                #    log.information("Stop here!")
 
                 # Executes restore state for each component
                 wr.restore_state()
@@ -260,6 +267,7 @@ class Simulator:
 
         return (stsv, iterative_tries)
 
+    @utils.measure_execution_time
     def run_all_timesteps(self):
         """
         Performs all the timesteps of the simulation
@@ -279,10 +287,10 @@ class Simulator:
 
         # Connects all components
         self.connect_all_components()
-        logging.info("finished connecting all components. A total of " + str(len(self.WrappedComponents)) + " components were defined. They have a total of "
+        log.information("finished connecting all components. A total of " + str(len(self.WrappedComponents)) + " components were defined. They have a total of "
                      + str(len(self.all_outputs)) + " outputs.")
         all_result_lines = []
-        logging.info("Starting simulation for " + str(self.SimulationParameters.timesteps) + " timesteps")
+        log.information("Starting simulation for " + str(self.SimulationParameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
         starttime = datetime.datetime.now()
         total_iteration_tries = 0
@@ -290,7 +298,7 @@ class Simulator:
 
         for step in range(self.SimulationParameters.timesteps):
             if self.SimulationParameters.timesteps % 500 == 0:
-                print("Starting step " + str(step))
+                log.information("Starting step " + str(step))
 
             (result, iteration_tries) = self.process_one_timestep(step)
 
@@ -305,82 +313,78 @@ class Simulator:
 
             # For simulation longer than 5 seconds
             if (elapsed.total_seconds() > 5):
-                # Calculates time execution
-                lastmessage = datetime.datetime.now()
-                elapsed = datetime.datetime.now() - starttime
-                e: Dict[str, Any] = {}
-                e["minutes"], e["seconds"] = divmod(elapsed.seconds, 60)
-                e["seconds"] = str(e["seconds"]).zfill(2)
+                lastmessage = self.show_progress(lastmessage, starttime, step, total_iteration_tries)
 
+        postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
+        if postprocessing_datatransfer is None:
+            raise Exception("PPDT was none")
 
-                # Calculates steps achieved per time duration
-                steps_per_second = step / elapsed.total_seconds()
-                if step == 0:
-                    average_iteration_tries:float = 1
-                else:
-                    average_iteration_tries = total_iteration_tries / step
-                time_elapsed = datetime.timedelta( seconds=( (self.SimulationParameters.timesteps - step) / steps_per_second) )
-                d: Dict[str,Any] = {}
-                d["minutes"], d["seconds"] = divmod(time_elapsed.seconds, 60)
-                d["seconds"] = str(d["seconds"]).zfill(2)
+        my_post_processor = pp.PostProcessor(ppdt=postprocessing_datatransfer)
+        my_post_processor.run()
 
-                simulation_status = "Simulating... {:.1f}% ".format((step/self.SimulationParameters.timesteps)*100)
-                simulation_status += "| Total Time: {minutes}:{seconds} min ".format(**e)
-                simulation_status += "| Speed: {:.0f} step/s ".format(steps_per_second)
-                simulation_status += "| Time Left: {minutes}:{seconds} min".format(**d)
-                simulation_status += "| Avg. iterations {:.1f}".format(average_iteration_tries)
-                print(simulation_status)
-
+    @utils.measure_execution_time
+    def prepare_post_processing(self, all_result_lines, start_counter):
         if len(all_result_lines) != self.SimulationParameters.timesteps:
             raise Exception("not all lines were generated")
         # npr = np.concatenate(all_result_lines, axis=0)
         columNames = []
+        if (self.setup_function is None):
+            raise Exception("No setup function was set")
         entry: cp.ComponentOutput
         np_results = np.array(all_result_lines)
         for index, entry in enumerate(self.all_outputs):
             column_name = entry.get_pretty_name()
             columNames.append(column_name)
-            logging.debug("Output column: " + column_name)
-            #self.all_outputs[index].Results = np_results[:, index]
+            log.debug("Output column: " + column_name)
+            # self.all_outputs[index].Results = np_results[:, index]
         self.results = pd.DataFrame(data=all_result_lines, columns=columNames)
         index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results), freq="T")
         self.results.index = index
         end_counter = time.perf_counter()
         self.execution_time = end_counter - start_counter
         simulation_time = "Simulation took {:4.0f}s".format(self.execution_time)
-
         self.get_std_results()
-
-        #Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
+        # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
         time_correction_factor = self.SimulationParameters.seconds_per_timestep / 3600
         ppdt = pp.PostProcessingDataTransfer(
-            time_correction_factor = time_correction_factor,
-            directory_path = self.dirpath,
-            results = self.results,
-            all_outputs = self.all_outputs,
-            simulation_parameters = self.SimulationParameters,
-            wrapped_components = self.WrappedComponents,
-            story = self.report.story,
-            mode = 1,
-            setup_function = self.setup_function,
-            execution_time = self.execution_time,
-            results_monthly = self.results_m,
+            time_correction_factor=time_correction_factor,
+            directory_path=self.dirpath,
+            results=self.results,
+            all_outputs=self.all_outputs,
+            simulation_parameters=self.SimulationParameters,
+            wrapped_components=self.WrappedComponents,
+            story=self.report.story,
+            mode=1,
+            setup_function=self.setup_function,
+            execution_time=self.execution_time,
+            results_monthly=self.results_m,
         )
+        return ppdt
 
-        #to_be_pickle = {"report": self.report,
-        #                "directory_path": self.dirpath,
-        #                "all_outputs": self.all_outputs,
-        #                "results": self.results}
-
-        # Perform postprocessing
-
-
-        #with open(os.path.join(self.dirpath, "data.pkl"), "wb") as output:
-         #   pickle.dump(ppdt, output, pickle.HIGHEST_PROTOCOL)
-
-
-        my_post_processor = pp.PostProcessor(ppdt=ppdt)
-        my_post_processor.run()
+    def show_progress(self, lastmessage, starttime, step, total_iteration_tries):
+        # Calculates time execution
+        lastmessage = datetime.datetime.now()
+        elapsed = datetime.datetime.now() - starttime
+        e: Dict[str, Any] = {}
+        e["minutes"], e["seconds"] = divmod(elapsed.seconds, 60)
+        e["seconds"] = str(e["seconds"]).zfill(2)
+        # Calculates steps achieved per time duration
+        steps_per_second = step / elapsed.total_seconds()
+        if step == 0:
+            average_iteration_tries: float = 1
+        else:
+            average_iteration_tries = total_iteration_tries / step
+        time_elapsed = datetime.timedelta(seconds=((self.SimulationParameters.timesteps - step) / steps_per_second))
+        d: Dict[str, Any] = {}
+        d["minutes"], d["seconds"] = divmod(time_elapsed.seconds, 60)
+        d["seconds"] = str(d["seconds"]).zfill(2)
+        simulation_status = "Simulating... {:.1f}% ".format((step / self.SimulationParameters.timesteps) * 100)
+        simulation_status += "| Total Time: {minutes}:{seconds} min ".format(**e)
+        simulation_status += "| Speed: {:.0f} step/s ".format(steps_per_second)
+        simulation_status += "| Time Left: {minutes}:{seconds} min".format(**d)
+        simulation_status += "| Avg. iterations {:.1f}".format(average_iteration_tries)
+        log.information(simulation_status)
+        return lastmessage
 
     def get_std_results(self):
         pd_timeline = pd.date_range(start=self.SimulationParameters.start_date,

@@ -209,9 +209,9 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     """
 
     ##### delete all files in cache:
-    dir = '..//hisim//inputs//cache'
-    for file in os.listdir( dir ):
-        os.remove( os.path.join( dir, file ) )
+    #dir = '..//hisim//inputs//cache'
+    #for file in os.listdir( dir ):
+     #   os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 

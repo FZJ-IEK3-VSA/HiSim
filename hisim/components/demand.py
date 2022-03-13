@@ -8,6 +8,7 @@ from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from typing import List
+import hisim.log as log
 
 class HouseholdHeatDemand(Component):
     """
@@ -100,8 +101,8 @@ class HouseholdHeatDemand(Component):
 
         if temperature_new < LoadConfig.temperature_returnflow_minimum and heat_demand > 0:
             demand_satisfied = 0
-            # print("The backfolwing temperature from the load is too small. The chosen system can't provide the requirements.")
-            # print(temperature_new)
+            # log.information("The backfolwing temperature from the load is too small. The chosen system can't provide the requirements.")
+            # log.information(temperature_new)
             # ToDo: Switch to level 2 of the pump ?
 
         else:
@@ -120,8 +121,8 @@ class HouseholdHeatDemand(Component):
         # ToDo: Get the output temperature and check if high enough --> is there another way to get it??
         if stsv.get_input_value(self.heat_demand) > 0:
             if self.test_new_temperature < LoadConfig.temperature_returnflow_minimum:
-                print("The backfolwing temperature from the load is too small. The chosen system can't provide the requirements.")
-                print("T_back = " + str(self.test_new_temperature))
+                log.error("The backfolwing temperature from the load is too small. The chosen system can't provide the requirements.")
+                log.error("T_back = " + str(self.test_new_temperature))
                 raise ValueError
 
 class ElectricityDistributor(Component):
@@ -384,12 +385,12 @@ class HouseholdWarmWaterDemand(Component):
 
         if ww_temperature_input > ww_temperature_demand + temperature_difference_hot or ww_volume_demand == 0:
             demand_satisfied = 1
-            # print("Can satisfy warmwater demand")
-            # print(ww_temperature_input)
+            # log.error("Can satisfy warmwater demand")
+            # log.error(ww_temperature_input)
         else:
             demand_satisfied = 0
-            # print("Can't satisfy warmwater demand")
-            # print(ww_temperature_input)
+            # log.error("Can't satisfy warmwater demand")
+            # log.error(ww_temperature_input)
 
 
         if ww_volume_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):

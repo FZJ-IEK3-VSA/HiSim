@@ -4,6 +4,7 @@ from hisim.components import genericsurpluscontroller
 from hisim.components import controllable
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim import log
 def test_smart_device_library():
     """
     Test if it can load the smart device library
@@ -58,7 +59,7 @@ def test_smart_device():
     my_controllable.i_restore_state()
     my_flexible_controller.i_simulate(timestep, stsv,  False)
     my_controllable.i_simulate(timestep, stsv, False)
-    print("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[1],stsv.values[2],stsv.values[3]))
+    log.information("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[1],stsv.values[2],stsv.values[3]))
 
     # Signal
     assert 1.0 == stsv.values[1]

@@ -67,7 +67,7 @@ def test_occupancy():
 #        heating_by_residents.append(stsv.values[1])
 #        electricity_consumption.append(stsv.values[2])
 #        water_consumption.append(stsv.values[3])
-#        print("Electricity: {}".format(stsv.values[2]))
+#        log.information("Electricity: {}".format(stsv.values[2]))
 #
 #    #assert False
 #    # year_heating_by_occupancy = sum(heating_by_residents)/(60*1E3)

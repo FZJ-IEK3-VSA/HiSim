@@ -5,6 +5,7 @@ from hisim.components.configuration import CHPControllerConfig, GasControllerCon
 from hisim.components import chp_system as chp
 from hisim.components.configuration import ExtendedControllerConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim import log
 from math import ceil
 from copy import deepcopy
 
@@ -68,7 +69,7 @@ class ExtendedControllerSimulation:
                 generated_electricity = chp.CHPConfig.P_el_min + power_per_step_size * (state_chp * power_states_possible - 1)
                 power_from_or_to_grid = demand - generated_electricity
             else:
-                print("Wrong controller state")
+                log.error("Wrong controller state")
                 raise ValueError
 
         else:
@@ -102,7 +103,7 @@ class ExtendedControllerSimulation:
         heights_in_tank = CHPControllerConfig.heights_in_tank
 
         if (CHPControllerConfig.height_upper_sensor or CHPControllerConfig.height_lower_sensor) not in heights_in_tank:
-            print("Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
+            log.error("Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
                   "You tried " + str(CHPControllerConfig.height_upper_sensor) + " and " + str(CHPControllerConfig.height_lower_sensor))
             raise ValueError
 
@@ -132,7 +133,7 @@ class ExtendedControllerSimulation:
         elif state_chp == 0:
             runtime_chp = 0
         else:
-            print("Wrong state_chp")
+            log.error("Wrong state_chp")
             raise ValueError
         # 'easy equation' --> no modulation
         power_from_or_to_grid = electricity_demand_household - pv_production - chp.CHPConfig.P_el_max * state_chp
@@ -145,7 +146,7 @@ class ExtendedControllerSimulation:
 
         heights_in_tank = CHPControllerConfig.heights_in_tank
         if (GasControllerConfig.height_upper_sensor or GasControllerConfig.height_lower_sensor) not in heights_in_tank:
-            print("Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
+            log.error("Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
                   "You tried " + str(GasControllerConfig.height_upper_sensor) + " and " + str(GasControllerConfig.height_lower_sensor))
             raise ValueError
 
@@ -176,7 +177,7 @@ class ExtendedControllerSimulation:
         elif state_gas_heater == 0:
             runtime_counter = 0
         else:
-            print("Wrong state_chp")
+            log.error("Wrong state_chp")
             raise ValueError
 
         return state_gas_heater, runtime_counter
@@ -315,7 +316,7 @@ class ExtendedController(Component):
             elif ExtendedControllerConfig.chp_mode == "heat":
                 self.state_chp1, self.runtime_chp1, power_from_or_to_grid = self.extended_controller.regulate_chp_mode_heat(temperatures_in_tank, self.state_chp1, self.runtime_chp1, pv_production, electricity_demand_household, self.seconds_per_timestep)
             else:
-                print("Wrong chp controller settings! Choose between heat and power")
+                log.error("Wrong chp controller settings! Choose between heat and power")
                 raise ValueError
         else:
             power_from_or_to_grid = pv_production - electricity_demand_household
@@ -325,7 +326,7 @@ class ExtendedController(Component):
             self.state_gas_heater1, self.runtime_gas_heater1 = self.extended_controller.regulate_gas_heater(temperatures_in_tank, self.state_gas_heater1, self.runtime_gas_heater1, self.seconds_per_timestep)
 
         if not ExtendedControllerConfig.chp or not ExtendedControllerConfig.gas_heater:
-            print("Choose a energy source")
+            log.error("Choose a energy source")
             raise ValueError
 
         # Electrolyzer
@@ -368,24 +369,24 @@ class ExtendedController(Component):
             if 0.00001 > (self.test_pv + power_chp_test + self.test_grid - self.test_demand - self.test_electrolyzer):
                 pass
             else:
-                print("Wrong energy balance:")
-                print("State CHP: " + str(self.test_state))
-                print("test_pv: " + str(self.test_pv))
-                print("power_chp_test: " + str(power_chp_test))
-                print("test_grid: " + str(self.test_grid))
-                print("test_demand: " + str(self.test_demand))
-                print("test_electrolyzer: " + str(self.test_electrolyzer))
+                log.error("Wrong energy balance:")
+                log.error("State CHP: " + str(self.test_state))
+                log.error("test_pv: " + str(self.test_pv))
+                log.error("power_chp_test: " + str(power_chp_test))
+                log.error("test_grid: " + str(self.test_grid))
+                log.error("test_demand: " + str(self.test_demand))
+                log.error("test_electrolyzer: " + str(self.test_electrolyzer))
                 raise ValueError
 
         else:
             if 0.00001 > (self.test_pv + chp.CHPConfig.P_el_max * self.test_state + self.test_grid - self.test_electrolyzer - self.test_demand):
                 pass
             else:
-                print("Wrong energy balance:")
-                print("State CHP: " + str(self.test_state))
-                print("test_pv: " + str(self.test_pv))
-                print("power_chp_test: " + str(chp.CHPConfig.P_el_max))
-                print("test_grid: " + str(self.test_grid))
-                print("test_demand: " + str(self.test_demand))
-                print("test_electrolyzer: " + str(self.test_electrolyzer))
+                log.error("Wrong energy balance:")
+                log.error("State CHP: " + str(self.test_state))
+                log.error("test_pv: " + str(self.test_pv))
+                log.error("power_chp_test: " + str(chp.CHPConfig.P_el_max))
+                log.error("test_grid: " + str(self.test_grid))
+                log.error("test_demand: " + str(self.test_demand))
+                log.error("test_electrolyzer: " + str(self.test_electrolyzer))
                 raise ValueError

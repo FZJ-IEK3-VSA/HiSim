@@ -8,7 +8,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim.components.weather import Weather
-
+from hisim import log
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -129,7 +129,7 @@ class OilHeater( cp.Component ):
         self.add_default_connections( OilHeaterController, self.get_controller_default_connections( ) )
         
     def get_controller_default_connections( self ):
-        print("setting weather default connections")
+        log.information("setting oil heater default connections")
         connections = [ ]
         controller_classname = OilHeaterController.get_classname( )
         connections.append( cp.ComponentConnection( OilHeater.StateC, controller_classname, OilHeaterController.StateC ) )
@@ -249,14 +249,14 @@ class OilHeaterController( cp.Component ):
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
     def get_weather_default_connections( self ):
-        print("setting weather default connections")
+        log.information("setting weather default connections in OilHeaterController")
         connections = [ ]
         weather_classname = Weather.get_classname( )
         connections.append( cp.ComponentConnection( OilHeaterController.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
         return connections
     
     def get_building_default_connections( self ):
-        print("setting controller default connections")
+        log.information("setting building default connections in OilHeaterController")
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( OilHeaterController.TemperatureMean, building_classname, Building.TemperatureMean ) )
@@ -324,10 +324,10 @@ class OilHeaterController( cp.Component ):
             else:
                 stateC = 0
 
-        #print(state)
+        #log.information(state)
         stsv.set_output_value(self.stateC, stateC )
 
-    def print_output(self, t_m, state):
-        print("==========================================")
-        print("T m: {}".format(t_m))
-        print("State: {}".format(state))
+    def prin1t_output(self, t_m, state):
+        log.information("==========================================")
+        log.information("T m: {}".format(t_m))
+        log.information("State: {}".format(state))

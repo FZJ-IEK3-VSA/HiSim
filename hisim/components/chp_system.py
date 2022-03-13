@@ -6,7 +6,7 @@ from hisim import utils
 #from math import pi
 #from math import floor
 from hisim.simulationparameters import SimulationParameters
-
+import hisim.log as log
 import pandas as pd
 import os
 
@@ -63,7 +63,7 @@ class CHPConfig:
     elif str(df_specific['is_modulating']) == 'No':
         is_modulating = False
     else:
-        print("Modulation is not defined. Modulation must be 'Yes' or 'No'")
+        log.error("Modulation is not defined. Modulation must be 'Yes' or 'No'")
         raise ValueError
 
     P_el_max = df_specific['P_el_max']
@@ -400,8 +400,7 @@ class CHP(Component):
                     gas_demand_real_used=gas_demand_target
 
                 elif stsv.get_input_value(self.hydrogen_not_released)<0:
-                    print("Fault, bc. GasDemandpossible>gasdemandtarget")
-                    print(timestep)
+                    log.warning("Fault, bc. GasDemandpossible>gasdemandtarget @ " + str(timestep))
 
                 elif stsv.get_input_value(self.hydrogen_not_released)>0:
                     #not enough Gas for running CHP on power demanded/calculated before

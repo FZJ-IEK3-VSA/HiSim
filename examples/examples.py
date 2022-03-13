@@ -2,6 +2,7 @@
 import numpy as np
 
 # Owned
+from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.random_numbers import RandomNumbers
@@ -17,7 +18,7 @@ def first_example(my_sim: Simulator, my_simulation_parameters):
     summed up with a series (my_rn2) of random numbers in a range between 10 and 20. The result is
     a series (my_sum) with values between 110 and 220.
     """
-    print("Starting first example: ")
+    log.information("Starting first example: ")
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
@@ -63,7 +64,7 @@ def second_example(my_sim: Simulator,my_simulation_parameters):
 
     The result is a series (my_sum) with random values between 150 and 300.
     """
-    print("Starting second example")
+    log.information("Starting second example")
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:

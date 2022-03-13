@@ -6,7 +6,8 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-
+from hisim import log
+from hisim import utils
 # idead of the class. Save ControlSignal of Componentes in lasttimestep
 # on basis of ControlSignals of last timestept, rule ControlSignals of futre timesteps
 
@@ -49,6 +50,7 @@ class Controller(cp.Component):
 
     CheckPeakShaving="CheckPeakShaving"
 
+    @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  temperature_storage_target_warm_water = 50,
@@ -380,7 +382,7 @@ class Controller(cp.Component):
         # Consumption of Electricity negative sign
         delta_demand = stsv.get_input_value(self.electricity_output_pvs) - stsv.get_input_value(self.electricity_consumption_building) -stsv.get_input_value(self.electricity_demand_heat_pump)
         if timestep==60*24*120+12*60:
-            print(stsv.get_input_value(self.electricity_output_pvs))
+            log.information(stsv.get_input_value(self.electricity_output_pvs))
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption(delta_demand=delta_demand,stsv=stsv)
         elif self.strategy == "seasonal_storage":

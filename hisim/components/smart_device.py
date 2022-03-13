@@ -301,7 +301,8 @@ class SmartDeviceController(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         #get state
         self.state = stsv.get_input_value( self.DeviceStateC )
-        
+        if timestep % 60 != 0:
+            return
         #see if device is controllable
         if self.state == 0:
             #get forecasts

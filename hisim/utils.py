@@ -11,6 +11,9 @@ import pdb
 from typing import Any, Dict
 import hashlib
 import  json
+from functools import wraps
+from timeit import default_timer as timer
+from hisim import log
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]
@@ -230,6 +233,8 @@ def load_smart_appliance(name):
 
 def get_cache_file(component_key: str,  parameter_class:Any):
     json_str = parameter_class.to_json()
+    if(len(json_str) < 5):
+        raise Exception("Empty json detected for caching. This is a bug.")
     json_str_encoded = json_str.encode('utf-8')
     #Johanna Ganglbauer: python told me "TypeError: openssl_sha256() takes at most 1 argument (2 given)", 
     #I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package? 
@@ -438,5 +443,15 @@ def open_pickle(dirname):
         extracted_pickle = pickle.load(input)
     return extracted_pickle, dir_path
 
+def measure_execution_time( my_function ):
+    @wraps(my_function)
+    def wrapTheFunction(*args, **kwargs):
+        start = timer()
+        result = my_function(*args, **kwargs)
+        end = timer()
+        diff = end - start
+        log.profile("Executing " + my_function.__module__  + "." + my_function.__name__ + " took " + "%1.2f" % diff + " seconds")
+        return result
+    return wrapTheFunction
 
 

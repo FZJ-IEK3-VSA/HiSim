@@ -1,13 +1,19 @@
-import logging
 import importlib
 import sys
-
+from datetime import datetime
+from hisim import log
 import hisim.simulator as sim
 import os
 #from hisim.postprocessing import postprocessing_main as pp
 
 def main(path_to_module: str, function_in_module: str, my_simulation_parameters = None):
-
+    log.information("#################################")
+    log.information("starting simulation of " + path_to_module  + " " + function_in_module)
+    starttime = datetime.now()
+    d4 = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.information("Start @ " + d4 + " "  )
+    log.profile(path_to_module  + " " + function_in_module + "Start @ " + d4 )
+    log.information("#################################")
     normalized_path = os.path.normpath(path_to_module)
     path_in_list = normalized_path.split(os.sep)
     module_filename = path_in_list[-1]
@@ -46,16 +52,22 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
 
     # Perform simulation throughout the defined timeline
     my_sim.run_all_timesteps()
-
-
+    log.information("#################################")
+    endtime = datetime.now()
+    d4 = endtime.strftime("%d-%b-%Y %H:%M:%S")
+    log.information("finished @ " + d4)
+    log.profile("finished @ " + d4)
+    log.profile("duration: " + str((endtime-starttime).total_seconds()))
+    log.information("#################################")
+    log.information("")
 
 if __name__ == "__main__":
     #logging.basicConfig(level=logging.DEBUG)
     if len(sys.argv) < 3:
-        print("need two arguments")
+        log.information("need two arguments")
         quit()
     filename = sys.argv[1]
     functionname = sys.argv[2]
-    print("calling " + functionname + " from " + filename)
+    log.information("calling " + functionname + " from " + filename)
     main(filename, functionname)
 

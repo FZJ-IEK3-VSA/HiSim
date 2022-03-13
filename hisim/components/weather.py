@@ -5,13 +5,18 @@ import os
 import pandas as pd
 import pvlib
 import numpy as np
-
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
+from typing import  List
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.utils import HISIMPATH
 from hisim import utils
+from hisim import log
+import json
+from timeit import default_timer as timer
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -33,6 +38,18 @@ ID: http://hdl.handle.net/2128/21115
 The implementation of the tsib project can be found under the following repository:
 https://github.com/FZJ-IEK3-VSA/tsib
 """
+
+@dataclass_json
+@dataclass()
+class WeatherConfig:
+    parameter_string: str
+    location: str
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 location:str):
+        self.parameter_string = my_simulation_parameters.get_unique_key()
+        self.location = location
+
 
 class Weather(Component):
     """
@@ -71,12 +88,14 @@ class Weather(Component):
     WindSpeed = "WindSpeed"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
 
+    @utils.measure_execution_time
     def __init__(self,
-                 my_simulation_parameters: SimulationParameters, location="Aachen"):
+                 my_simulation_parameters: SimulationParameters, location="Aachen", generate_forecast: bool = False):
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)
         if(my_simulation_parameters is None):
             raise Exception("Simparameters was none")
-        
+        self.weatherConfig = WeatherConfig(my_simulation_parameters,location)
+        self.generate_forecasts: bool = generate_forecast
         self.build(location,my_simulation_parameters)
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
@@ -123,6 +142,15 @@ class Weather(Component):
                                                             self.WindSpeed,
                                                             lt.LoadTypes.Speed,
                                                             lt.Units.MeterPerSecond)
+        self.temperature_list : List[float]
+        self.DNI_list: List[float]
+        self.DNIextra_list: List[float]
+        self.altitude_list: List[float]
+        self.azimuth_list: List[float]
+        self.Wspd_list: List[float]
+        self.GHI_list: List[float]
+        self.apparent_zenith_list: List[float]
+        self.DHI_list: List[float]
 
     def i_save_state(self):
         pass
@@ -134,116 +162,114 @@ class Weather(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_conversion: bool):
-        stsv.set_output_value(self.t_outC, self.temperature[timestep])
-        stsv.set_output_value(self.DNIC, self.DNI[timestep])
-        stsv.set_output_value(self.DNIextraC, self.DNIextra[timestep])
-        stsv.set_output_value(self.DHIC, self.DHI[timestep] )
-        stsv.set_output_value(self.GHIC, self.GHI[timestep] )
-        stsv.set_output_value(self.altitudeC, self.altitude[timestep])
-        stsv.set_output_value(self.azimuthC, self.azimuth[timestep])
-        stsv.set_output_value(self.wind_speedC, self.Wspd[timestep])
-        stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith[timestep])
-        timesteps_24h = 24*3600 / self.my_simulation_parameters.seconds_per_timestep
-        lasttimestep = int(timestep+ timesteps_24h)
-        if(lasttimestep > len(self.temperature)):
-            lasttimestep = len(self.temperature)
-        #print( type(self.temperature))
-        temperatureforecast = self.temperature[timestep:lasttimestep]
-        self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h,temperatureforecast)
+        stsv.set_output_value(self.t_outC, self.temperature_list[timestep])
+        stsv.set_output_value(self.DNIC, self.DNI_list[timestep])
+        stsv.set_output_value(self.DNIextraC, self.DNIextra_list[timestep])
+        stsv.set_output_value(self.DHIC, self.DHI_list[timestep] )
+        stsv.set_output_value(self.GHIC, self.GHI_list[timestep] )
+        stsv.set_output_value(self.altitudeC, self.altitude_list[timestep])
+        stsv.set_output_value(self.azimuthC, self.azimuth_list[timestep])
+        stsv.set_output_value(self.wind_speedC, self.Wspd_list[timestep])
+        stsv.set_output_value(self.apparent_zenithC, self.apparent_zenith_list[timestep])
 
-
+        # set the temperature forecast
+        if(self.generate_forecasts):
+            timesteps_24h = 24*3600 / self.my_simulation_parameters.seconds_per_timestep
+            last_forecast_timestep = int(timestep+ timesteps_24h)
+            if(last_forecast_timestep > len(self.temperature_list)):
+                last_forecast_timestep = len(self.temperature_list)
+            #log.information( type(self.temperature))
+            temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
+            self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h,temperatureforecast)
 
     def build(self, location,my_simulation_parameters:SimulationParameters):
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
-        cache_filepath = utils.get_cache(classname="Weather", parameters=parameters)
-        if cache_filepath is not None:
-                my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding = "cp1252")
-                my_weather.index=pd.date_range("2015-01-01 00:00","2015-12-31 23:59",freq="1min",tz="Europe/Berlin")
-                if seconds_per_timestep!=60:
-                    self.temperature = my_weather['t_out'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.DryBulb = self.temperature
-                    self.DHI = my_weather['DHI'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.DNI = np.float64(my_weather['DNI'].resample(str(seconds_per_timestep)+"S").mean().tolist())
-                    self.DNIextra = my_weather['DNIextra'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.GHI = my_weather['GHI'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.altitude = my_weather['altitude'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.azimuth = my_weather['azimuth'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.apparent_zenith = my_weather['apparent_zenith'].resample(str(seconds_per_timestep)+"S").mean().tolist()
-                    self.Wspd = my_weather['Wspd'].resample(str(seconds_per_timestep)+"S").mean().tolist()
+        log.information(self.weatherConfig.location)
+        log.information(self.weatherConfig.to_json())
+        #log.information("2:" + json.dumps(self.weatherConfig))
 
-                else:
-                    self.temperature = my_weather['t_out'].tolist()
-                    self.DryBulb = self.temperature
-                    self.DHI = my_weather['DHI'].tolist()
-                    self.DNI = np.float64(my_weather['DNI'].tolist())
-                    self.DNIextra = my_weather['DNIextra'].tolist()
-                    self.GHI = my_weather['GHI'].tolist()
-                    self.altitude = my_weather['altitude'].tolist()
-                    self.azimuth = my_weather['azimuth'].tolist()
-                    self.apparent_zenith = my_weather['apparent_zenith'].tolist()
-                    self.Wspd = my_weather['Wspd'].tolist()
-
+        cachefound, cache_filepath = utils.get_cache_file("Weather", self.weatherConfig)
+        if cachefound:
+            # read cached files
+            my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding = "cp1252")
+            self.temperature_list = my_weather['t_out'].tolist()
+            self.DryBulb_list = self.temperature_list
+            self.DHI_list = my_weather['DHI'].tolist()
+            self.DNI_list = my_weather['DNI'].tolist() #self np.float64( maybe not needed? - Noah
+            self.DNIextra_list = my_weather['DNIextra'].tolist()
+            self.GHI_list = my_weather['GHI'].tolist()
+            self.altitude_list = my_weather['altitude'].tolist()
+            self.azimuth_list = my_weather['azimuth'].tolist()
+            self.apparent_zenith_list = my_weather['apparent_zenith'].tolist()
+            self.Wspd_list = my_weather['Wspd'].tolist()
         else:
              tmy_data, location = readTRY(location=location)
-             self.DNI = self.interpolate(tmy_data['DNI'])
+             DNI = self.interpolate(tmy_data['DNI'], self.my_simulation_parameters.year)
              # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
-             dni_extra = pd.Series(                 pvlib.irradiance.get_extra_radiation(self.DNI.index), index=self.DNI.index             ) # type: ignore
-
+             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index) # type: ignore
              #DNI_data = self.interpolate(tmy_data['DNI'], 2015)
-             self.temperature = self.interpolate(tmy_data['T'])
-             self.DryBulb = self.temperature
-             self.DNIextra = dni_extra
-             self.DHI = self.interpolate(tmy_data['DHI'])
-             self.GHI = self.interpolate(tmy_data['GHI'])
+             temperature = self.interpolate(tmy_data['T'], self.my_simulation_parameters.year)
+             DNIextra = dni_extra
+             DHI = self.interpolate(tmy_data['DHI'], self.my_simulation_parameters.year)
+             GHI = self.interpolate(tmy_data['GHI'], self.my_simulation_parameters.year)
+             solpos = pvlib.solarposition.get_solarposition(DNI.index, location['latitude'], location['longitude'])  # type: ignore
+             altitude = solpos['elevation']
+             azimuth = solpos['azimuth']
+             apparent_zenith = solpos['apparent_zenith']
+             Wspd = self.interpolate(tmy_data['Wspd'], self.my_simulation_parameters.year)
 
-
-             solpos = pvlib.solarposition.get_solarposition(self.DNI.index, location['latitude'], location['longitude'])  # type: ignore
-             self.altitude = solpos['elevation']
-             self.azimuth = solpos['azimuth']
-             self.apparent_zenith = solpos['apparent_zenith']
-             self.Wspd = self.interpolate(tmy_data['Wspd'])
-
-             solardata = [self.DNI.tolist(),
-                          self.DHI.tolist(),
-                          self.GHI.tolist(),
-                          self.temperature.tolist(),
-                          self.altitude.tolist(),
-                          self.azimuth.tolist(),
-                          self.apparent_zenith.tolist(),
-                          self.DryBulb,
-                          self.Wspd.tolist(),
-                          self.DNIextra.tolist()]
-             database = pd.DataFrame(np.transpose(solardata),
-                                 columns=['DNI',
-                                          'DHI',
-                                          'GHI',
-                                          't_out',
-                                          'altitude',
-                                          'azimuth',
-                                          'apparent_zenith',
-                                          'DryBulb',
-                                          'Wspd',
-                                          'DNIextra'])
-             utils.save_cache("Weather", parameters, database)
 
              if seconds_per_timestep != 60:
-                 self.temperature = self.temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.DryBulb = self.temperature
-                 self.DHI = self.DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.DNI = np.float64( self.DNI.resample(str(seconds_per_timestep) + "S").mean().tolist())  # type: ignore
-                 self.DNIextra = self.DNIextra.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.GHI = self.GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.altitude = self.altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.azimuth = self.azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.apparent_zenith = self.apparent_zenith.resample(
+                 self.temperature = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.DryBulb_list = temperature
+                 self.DHI = DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                  #np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
+                 self.DNI: List[float] = DNI.resample(str(seconds_per_timestep) + "S").mean().tolist()#)  # type: ignore
+                 self.DNIextra = DNIextra.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.GHI = GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.altitude = altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.azimuth = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.apparent_zenith = apparent_zenith.resample(
                      str(seconds_per_timestep) + "S").mean().tolist()
-                 self.Wspd = self.Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.Wspd = Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
              else:
-                 self.temperature = self.temperature.tolist()
+                 self.temperature_list = temperature.tolist()
+                 self.DryBulb_list = temperature
+                 self.DHI_list = DHI.tolist()
+                 self.DNI_list = DNI.tolist()
+                 self.DNIextra_list = DNIextra.tolist()
+                 self.GHI_list = GHI.tolist()
+                 self.altitude_list = altitude.tolist()
+                 self.azimuth_list = azimuth.tolist()
+                 self.apparent_zenith_list = apparent_zenith.tolist()
+                 self.Wspd_list = Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
+
+             solardata = [self.DNI_list,
+                          self.DHI_list,
+                          self.GHI_list,
+                          self.temperature_list,
+                          self.altitude_list,
+                          self.azimuth_list,
+                          self.apparent_zenith_list,
+                          self.DryBulb_list,
+                          self.Wspd_list,
+                          self.DNIextra_list]
+             database = pd.DataFrame(np.transpose(solardata),
+                                     columns=['DNI',
+                                              'DHI',
+                                              'GHI',
+                                              't_out',
+                                              'altitude',
+                                              'azimuth',
+                                              'apparent_zenith',
+                                              'DryBulb',
+                                              'Wspd',
+                                              'DNIextra'])
+             database.to_csv(cache_filepath)
 
 
-    def interpolate(self, pd_database, year=2015):
+    def interpolate(self, pd_database, year):
         firstday = pd.Series([0.0], index=[
             pd.to_datetime(datetime.datetime(year-1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
         lastday = pd.Series(pd_database[-1], index=[
@@ -253,22 +279,22 @@ class Weather(Component):
         pd_database = pd_database.sort_index()
         return pd_database.resample('1T').asfreq().interpolate(method='linear')
 
-    def test_altitude_azimuth(self, latitude_deg, longitude_deg):
-        year = 2015
-
-        index = pd.date_range(
-            "{}-01-01 00:00:00".format(year), periods=8760, freq="H", tz="Europe/Berlin"
-        )
-
-        altitude = [0] * 8760
-        azimuth = [0] * 8760
-        for h in range(8760):
-            altitude[h], azimuth[h] = self.calc_sun_position(latitude_deg,longitude_deg,year,h)
-
-        altitude_pd = pd.DataFrame(altitude, index=index)
-        azimuth_pd = pd.DataFrame(azimuth, index=index)
-
-        return altitude_pd, azimuth_pd
+    # def test_altitude_azimuth(self, latitude_deg, longitude_deg):
+    #     year = 2015
+    #
+    #     index = pd.date_range(
+    #         "{}-01-01 00:00:00".format(year), periods=8760, freq="H", tz="Europe/Berlin"
+    #     )
+    #
+    #     altitude = [0] * 8760
+    #     azimuth = [0] * 8760
+    #     for h in range(8760):
+    #         altitude[h], azimuth[h] = self.calc_sun_position(latitude_deg,longitude_deg,year,h)
+    #
+    #     altitude_pd = pd.DataFrame(altitude, index=index)
+    #     azimuth_pd = pd.DataFrame(azimuth, index=index)
+    #
+    #     return altitude_pd, azimuth_pd
 
     def calc_sun_position(self, latitude_deg, longitude_deg, year, hoy):
         """

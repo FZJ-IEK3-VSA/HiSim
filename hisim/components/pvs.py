@@ -15,6 +15,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim import log
 from hisim.components.weather import Weather
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -168,8 +169,15 @@ def simPhotovoltaicSimple(
     return pv_dc
 
 @dataclass_json
-@dataclass()
+@dataclass
 class PVSystemConfig:
+    parameter_string: str
+    time: int
+    location: str
+    module_name:str
+    integrate_inverter: bool
+    inverter_name:str
+    power: float
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -220,7 +228,7 @@ class PVSystem(cp.Component):
 
     # Similar components to connect to:
     # 1. Weather
-
+    @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
         time=2019,
@@ -295,7 +303,7 @@ class PVSystem(cp.Component):
         self.add_default_connections(Weather, self.get_weather_default_connections())
 
     def get_weather_default_connections(self):
-        print("setting weather default connections")
+        log.information("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(cp.ComponentConnection(PVSystem.TemperatureOutside,weather_classname, Weather.TemperatureOutside))
@@ -322,6 +330,8 @@ class PVSystem(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
 
         if hasattr(self, "output"):
+            #if(len(self.output) < timestep)
+             #   raise Exception("Somehow the precalculated list of values for the PV system seems to be incorrect. Please delete the cache.")
             stsv.set_output_value(self.electricity_outputC, self.output[timestep] * self.pvconfig.power)
         else:
             DNI = stsv.get_input_value(self.DNIC)
@@ -405,10 +415,15 @@ class PVSystem(cp.Component):
 
     def build(self,  load_module_data):
 
+        log.information(self.pvconfig.to_json())
         file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig)
 
         if file_exists:
+
             self.output = pd.read_csv(self.cache_filepath, sep=',', decimal='.')['output'].tolist()
+            if len(self.output) !=        self.my_simulation_parameters.timesteps:
+                raise Exception("Reading the cached PV values seems to have failed. Expected "
+                                + str(self.my_simulation_parameters.timesteps) + " values, but got " + str(len(self.output )))
         else:
             self.get_coordinates(location = self.pvconfig.location, year =  self.pvconfig.time)
             # Factor to guarantee peak power based on module with 250 Wh
@@ -584,8 +599,8 @@ class PVSystem(cp.Component):
         #        airmass,
         #        wind_speed]
         #if timestep % 60 == 0 and timestep < 1442:
-        #    print(data)
-        #    print("Timestep:{} , AcPower: {}".format(timestep, ac_power))
+        #    log.information(data)
+        #    log.information("Timestep:{} , AcPower: {}".format(timestep, ac_power))
 
         return ac_power
 

@@ -1,5 +1,5 @@
 # Generic
-import logging
+
 from typing import List, Optional, Any, Dict
 import typing
 from hisim.simulationparameters import SimulationParameters
@@ -7,7 +7,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 import dataclasses as dc
 from dataclasses import dataclass
-
+from hisim import log
 @dataclass
 class ComponentConnection:
     TargetInputName: str
@@ -55,9 +55,15 @@ class SingleTimeStepValues:
     def get_input_value(self, component_input: ComponentInput):
         if component_input.SourceOutput is None:
             return 0
+        if(component_input.SourceOutput.GlobalIndex < 0):
+            raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
         return self.values[component_input.SourceOutput.GlobalIndex]
 
     def set_output_value(self, output: ComponentOutput, value: float):
+        if(output.GlobalIndex < 0):
+             raise Exception("Output Index was not set correctly for " + output.FullName + ". GlobalIndex was " +str(output.GlobalIndex))
+        if(output.GlobalIndex > len(self.values)-1):
+            raise Exception("Output Index was not set correctly for " + output.FullName)
         self.values[output.GlobalIndex] = value
 
     def is_close_enough_to_previous(self, previous_values):
@@ -75,9 +81,9 @@ class SingleTimeStepValues:
                 error_msg += outputs[i].get_pretty_name() + " previously: " + str(previous_values.values[i]) + " currently: " + str(self.values[i])
         return error_msg
 
-    def print(self):
-        print()
-        print(*self.values, sep=", ")
+    #def prin1t(self):
+     #   prin1t()
+      #  prin1t(*self.values, sep=", ")
 
 
 class SimRepository:
@@ -108,7 +114,7 @@ class Component:
     def add_default_connections(self, component, connections: List[ComponentConnection]):
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
-        logging.info("added connections: " + str(self.default_connections))
+        log.trace("added connections: " + str(self.default_connections))
 
     def set_sim_repo(self, simulation_repository: SimRepository):
         if simulation_repository is None:
@@ -123,7 +129,7 @@ class Component:
 
     def add_output(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                    sankey_flow_direction: bool = None) -> ComponentOutput:
-        logging.debug("adding output: " + field_name + " to component " + object_name)
+        log.debug("adding output: " + field_name + " to component " + object_name)
         outp = ComponentOutput(object_name, field_name, load_type, unit, sankey_flow_direction)
         self.outputs.append(outp)
         return outp

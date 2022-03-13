@@ -5,7 +5,7 @@ import pandas as pd
 import scipy
 from scipy.optimize import curve_fit
 from typing import Any, Tuple
-
+from hisim import log
 import os
 import inspect
 
@@ -19,7 +19,7 @@ def load_database() -> pd.DataFrame:
         Content of the database
     """
     path =  os.path.dirname(__file__)
-    print(path)
+    log.information(path)
     df = pd.read_csv(path + '/hplib_database.csv', delimiter=',')
     return df
 
@@ -48,7 +48,7 @@ def get_parameters(model: str, group_id: int = 0,
     parameters : pd.DataFrame
         Data frame containing the model parameters.
     """
-    #print(os.getcwd())
+    #log.information(os.getcwd())
     #df = pd.read_csv('inputs/heat_pump_hplib/hplib_database.csv', delimiter=',')
     df = load_database()
     df = df.loc[df['Model'] == model]

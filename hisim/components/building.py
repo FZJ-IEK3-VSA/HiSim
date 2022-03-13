@@ -9,6 +9,7 @@ import os
 from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim import log
 
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
@@ -151,6 +152,7 @@ class Building(cp.Component):
     # 2. Occupancy
     # 3. HeaterComponent (HeatPump,...)
 
+    @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  building_code="DE.N.SFH.05.Gen.ReEx.001.002",
@@ -294,7 +296,7 @@ class Building(cp.Component):
         #                                                           lt.Units.Celsius)
         
     def get_weather_default_connections(self):
-        print("setting weather default connections")
+        log.information("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(cp.ComponentConnection(Building.Altitude,weather_classname, Weather.Azimuth))
@@ -308,7 +310,7 @@ class Building(cp.Component):
         return connections
     
     def get_occupancy_default_connections(self):
-        print("setting occupancy default connections")
+        log.information("setting occupancy default connections")
         connections = []
         occupancy_classname = Occupancy.get_classname()
         connections.append( cp.ComponentConnection( Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents ) )
@@ -316,7 +318,7 @@ class Building(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
         #if timestep >=10392 and force_convergence:
-        #    print("Stop herj!")
+        #    log.information("Stop herj!")
         #if force_convergence:
         #    return
 

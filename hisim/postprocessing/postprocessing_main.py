@@ -12,6 +12,7 @@ from enum import Enum
 #sys.path.insert(0, parentdir)
 
 # Owned
+import hisim.log as log
 from hisim import utils
 from hisim.utils import PostProcessingOptions
 from hisim import loadtypes as lt
@@ -53,22 +54,18 @@ class PostProcessingDataTransfer:
         self.execution_time = execution_time
         self.results_monthly = results_monthly
         self.postProcessingOptions = simulation_parameters.post_processing_options
-        print("selected " + str(len(self.postProcessingOptions)) + " options")
+        log.information("selected " + str(len(self.postProcessingOptions)) + " options")
         for option in self.postProcessingOptions:
-            print("selected: " + str(option))
+            log.information("selected: " + str(option))
 
 
 
 class PostProcessor:
-
-    def __init__(self,
-                 ppdt: PostProcessingDataTransfer,
-                 #resultsdir,
-                 #                 all_outputs=None,
-                 #results=None,
-                 #time_correction_factor=None,
-                      ):
+    @utils.measure_execution_time
+    def __init__(self, ppdt: PostProcessingDataTransfer):
         self.ppdt = ppdt
+        if ppdt is None:
+            raise Exception("PPDT was none")
         #self.resultsdir = resultsdir
         #self.all_outputs = all_outputs
         #self.time_correction_factor = time_correction_factor
@@ -80,7 +77,7 @@ class PostProcessor:
         #               "plot_bar": plot_bar,
         #               "open_dir": open_dir,
         #               "export_results_to_CSV": export_results_to_CSV}
-        self.report = report.Report(setup_function=ppdt.setup_function, dirpath=ppdt.directory_path)
+        self.report = report.Report(setup_function=self.ppdt.setup_function, dirpath=self.ppdt.directory_path)
         #self.cal_pos_sim()
 
 #    def open_latest_pickle(self):
@@ -130,7 +127,7 @@ class PostProcessor:
     #     self.results_m = ppdt.results_m # sim_pickle["results_m"]
     #     self.WrappedComponents = ppdt.wrapped_components # sim_pickle["wrapped_components"]
 
-
+    @utils.measure_execution_time
     def plot_sankeys(self):
         for i_display_name in [name for name, display_name in lt.DisplayNames.__members__.items()]:
             my_sankey = charts.SankeyHISIM(name=i_display_name,
@@ -154,6 +151,7 @@ class PostProcessor:
                                     time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot_building()
 
+    @utils.measure_execution_time
     def run(self):
         # Define the directory name
         ##
@@ -175,7 +173,7 @@ class PostProcessor:
                                time_correction_factor=self.ppdt .time_correction_factor)
                 my_line.plot()
             if PostProcessingOptions.Plot_Carpet in self.ppdt.postProcessingOptions:
-                #print("Making carpet plots")
+                #log.information("Making carpet plots")
                 my_carpet = charts.Carpet(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
                                    units=output.Unit,
@@ -203,19 +201,19 @@ class PostProcessor:
 
         # Plot sankey
         if PostProcessingOptions.Plot_Sankey in self.ppdt.postProcessingOptions:
-            print("plotting sankeys")
+            log.information("plotting sankeys")
         #    self.plot_sankeys()
         else:
             for option in self.ppdt.postProcessingOptions:
-                print("in sankey: selected: " + str(option))
-            print("not plotting sankeys")
+                log.information("in sankey: selected: " + str(option))
+            log.information("not plotting sankeys")
 
         # Export all results to CSV
         if PostProcessingOptions.Export_To_CSV in self.ppdt.postProcessingOptions:
-            print("exporting to csv")
+            log.information("exporting to csv")
             self.export_results_to_csv()
         else:
-            print("not exporting to CSV")
+            log.information("not exporting to CSV")
 
 
         if len(self.ppdt.results) == 1440:
@@ -244,7 +242,7 @@ class PostProcessor:
         if PostProcessingOptions.Open_Directory in self.ppdt.postProcessingOptions:
             self.open_dir_in_file_explorer()
 
-
+    @utils.measure_execution_time
     def export_results_to_csv(self):
         for column in self.ppdt.results:
             self.ppdt.results[column].to_csv(os.path.join(self.ppdt.directory_path,

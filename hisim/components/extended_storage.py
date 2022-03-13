@@ -9,6 +9,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import WarmWaterStorageConfig
+import hisim.log as log
 #from components.extended_storage import WaterSlice
 
 class WaterSlice:
@@ -30,18 +31,18 @@ class WaterSlice:
             if isinstance(value, bool):   # Otherwise bool results into 0 or 1
                 raise TypeError
         if self.diameter <= 0 or self.temperature < 0 or self.height < 0:  # or self.temperature == 0 and self.height > 0:
-            print("Incorrect tank diameter: " + str(self.diameter))
-            print("Incorrect water temperature: " + str(self.temperature))
-            print("Incorrect slice height: " + str(self.height))
+            log.error("Incorrect tank diameter: " + str(self.diameter))
+            log.error("Incorrect water temperature: " + str(self.temperature))
+            log.error("Incorrect slice height: " + str(self.height))
             raise ValueError
         if self.temperature >= 100:
-            print("Incorrect water temperature: " + str(self.temperature))
-            print("Temperature should be below 100°C -> boiling point of water")
+            log.error("Incorrect water temperature: " + str(self.temperature))
+            log.error("Temperature should be below 100°C -> boiling point of water")
             raise ValueError
 
         if self.enthalpy < 0:
-            print("Incorrect water enthalpy: " + str(self.enthalpy))
-            print("The Enthalpy can't be negative")
+            log.error("Incorrect water enthalpy: " + str(self.enthalpy))
+            log.error("The Enthalpy can't be negative")
             raise ValueError
 
     def __init__(self, tank_diameter: float, height: float, temperature: float):
@@ -411,15 +412,15 @@ class WarmWaterStorageSimulation:
         ws_bottom_height = deepcopy(ws_bottom.height)
 
         if ws_upper.height != slice_mass_input_upper * 4 / (pi * (self.diameter ** 2) * PhysicsConfig.water_density):
-            print("huhuu")
-            print(ws_upper.height)
-            print(slice_mass_input_upper * 4 / (pi * (self.diameter ** 2) * PhysicsConfig.water_density))
+            log.information("huhuu")
+            log.information(str(ws_upper.height))
+            log.information(str(slice_mass_input_upper * 4 / (pi * (self.diameter ** 2) * PhysicsConfig.water_density)))
             raise ValueError
 
         if ws_bottom.height != slice_mass_input_bottom * 4 / (pi * (self.diameter ** 2) * PhysicsConfig.water_density):
-            print("huhuu")
-            print(ws_bottom.height)
-            print(slice_mass_input_bottom * 4 / (pi * (self.diameter ** 2) * PhysicsConfig.water_density))
+            log.information("huhuu")
+            log.information(str(ws_bottom.height))
+            log.information(str(slice_mass_input_bottom * 4 / (pi * (self.diameter ** 2) * PhysicsConfig.water_density)))
             raise ValueError
 
         previous_mass = self.calculate_tanks_mass()
@@ -566,7 +567,7 @@ class WarmWaterStorageSimulation:
         energy_transfer = []
         slice_height = []
         # for i in range(len(self.my_slices)):
-            # print("Schicht: " + str(i) + " Höhe: " + str(self.my_slices[i].height) + " Temperatur: " + str(self.my_slices[i].temperature))
+            # log.information("Schicht: " + str(i) + " Höhe: " + str(self.my_slices[i].height) + " Temperatur: " + str(self.my_slices[i].temperature))
 
         for i in range(len(self.my_slices) - 1):
             slice_height.append((self.my_slices[i].height + self.my_slices[i+1].height) / 2)
@@ -581,11 +582,11 @@ class WarmWaterStorageSimulation:
             self.my_slices[i+1].enthalpy += energy_transfer[i]
 
         for i in range(len(self.my_slices)):
-            # print("slice number " + str(i))
+            # log.information("slice number " + str(i))
             previous = deepcopy(self.my_slices[i].temperature)
             self.my_slices[i].calculate_new_temperature()
-            # print(previous)
-            # print(self.my_slices[i].temperature)
+            # log.information(previous)
+            # log.information(self.my_slices[i].temperature)
             assert abs(previous - self.my_slices[i].temperature) > 0
 
     def energy_exchange_between_slices_differential_equation(self, lambda_water_water: float = 0.06, seconds_per_timestep: int = 1):
@@ -603,7 +604,7 @@ class WarmWaterStorageSimulation:
         """
         slice_height = []
         for i in range(len(self.my_slices)):
-            print("Schicht: " + str(i) + " Höhe: " + str(self.my_slices[i].height) + " Temperatur: " + str(self.my_slices[i].temperature))
+            log.information("Schicht: " + str(i) + " Höhe: " + str(self.my_slices[i].height) + " Temperatur: " + str(self.my_slices[i].temperature))
 
         for i in range(len(self.my_slices) - 1):
             slice_height.append((self.my_slices[i].height + self.my_slices[i+1].height) / 2)

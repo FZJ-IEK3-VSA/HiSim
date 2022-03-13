@@ -6,6 +6,7 @@ import copy
 from typing import List, Any
 
 # Owned
+import hisim.log as log
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.utils import HISIMPATH
 from hisim import loadtypes as lt
@@ -39,7 +40,7 @@ class ControllableState:
             try:
                 return self.profile[timestep-self.starttimestep]
             except:
-                print('why')
+                log.error('unclear error')
 
 class Flexibility:
     """
@@ -111,9 +112,9 @@ class Controllable(Component):
         self.LastestStep = self.flexibilities[self.i_xtask].LastestStep
         self.ElecProfiles = self.flexibilities[self.i_xtask].ElecProfiles
 
-        #print("ComponentName: {}".format(self.ComponentName.split()[0]))
-        #print("InitialStep: {}".format(self.InitialStep))
-        #print("Lastest Step: {}".format(self.LastestStep))
+        #log.information("ComponentName: {}".format(self.ComponentName.split()[0]))
+        #log.information("InitialStep: {}".format(self.InitialStep))
+        #log.information("Lastest Step: {}".format(self.LastestStep))
 
         self.ProfilesLen = self.flexibilities[self.i_xtask].ProfilesLen
         self.HasExec = self.flexibilities[self.i_xtask].HasExec
@@ -195,9 +196,9 @@ class Controllable(Component):
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
         stsv.set_output_value(self.taskC, self.itask[timestep])
-        #print(self.itask[timestep])
-        #print(self.flexibilities[0].InitialStep)
-        #print(self.flexibilities[0].LastestStep)
+        #log.information(self.itask[timestep])
+        #log.information(self.flexibilities[0].InitialStep)
+        #log.information(self.flexibilities[0].LastestStep)
         #plt.plot(self.itask[2155:6490])
         #plt.show()
 

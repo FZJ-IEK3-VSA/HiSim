@@ -16,6 +16,7 @@ from hisim.components.configuration import WarmWaterStorageConfig
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
+from hisim import log
 
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -103,7 +104,7 @@ class HeatPump(cp.Component):
     # Similar components to connect to:
     # 1. Weather
     # 2. HeatPumpController
-
+    @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
         manufacturer="Viessmann Werke GmbH & Co KG",
@@ -194,14 +195,14 @@ class HeatPump(cp.Component):
         self.add_default_connections( HeatPumpController, self.get_controller_default_connections( ) )
         
     def get_weather_default_connections( self ):
-        print("setting weather default connections")
+        log.information("setting weather default connections in HeatPump")
         connections = [ ]
         weather_classname = Weather.get_classname( )
         connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
         return connections
     
     def get_controller_default_connections( self ):
-        print("setting controller default connections")
+        log.information("setting controller default connections in HeatPump")
         connections = [ ]
         controller_classname = HeatPumpController.get_classname( )
         connections.append( cp.ComponentConnection( HeatPump.State, controller_classname, HeatPumpController.State ) )
@@ -294,9 +295,9 @@ class HeatPump(cp.Component):
         # Inputs
         stateC = stsv.get_input_value(self.stateC)
         t_out = stsv.get_input_value(self.t_outC)
-        #print("State: {}, Temperature: {}".format(stateC, t_out))
-        #print("State of Activation: {}".format(self.state.activation))
-        #print("Timestep special: {}".format(self.state.start_timestep + self.min_idle_time))
+        #log.information("State: {}, Temperature: {}".format(stateC, t_out))
+        #log.information("State of Activation: {}".format(self.state.activation))
+        #log.information("Timestep special: {}".format(self.state.start_timestep + self.min_idle_time))
         # Calculation
 
         ## Calculation.ThermalEnergyStorage
@@ -371,7 +372,7 @@ class HeatPump(cp.Component):
                                            cop=self.cal_cop(t_out),
                                            cycle_number = number_of_cycles)
 
-        #print(self.state.thermal_energy_delivered)
+        #log.information(self.state.thermal_energy_delivered)
         # Outputs
         stsv.set_output_value(self.thermal_energy_deliveredC, self.state.thermal_energy_delivered)
         stsv.set_output_value(self.heatingC, self.state.heating)
@@ -388,9 +389,9 @@ class HeatPump(cp.Component):
         #try:
         #    ws_out_temperature = ws_in.temperature + thermal_energy_to_add / (heat_capacity * ws_out_mass)
         #except ZeroDivisionError:
-        #    print(heat_capacity)
-        #    print(ws_out_mass)
-        #    print(ws_in.mass)
+        #    log.information(heat_capacity)
+        #    log.information(ws_out_mass)
+        #    log.information(ws_in.mass)
         #    raise ValueError
         #wasted_energy = 0
         #if ws_out_temperature > temperature_max:
@@ -429,7 +430,7 @@ class HeatPumpController(cp.Component):
 
     # Similar components to connect to:
     # 1. Building
-
+    @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
         t_air_heating: float = 18.0,
@@ -460,7 +461,7 @@ class HeatPumpController(cp.Component):
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
     def get_building_default_connections( self ):
-        print("setting building default connections")
+        log.information("setting building default connections in Heatpumpcontroller")
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( HeatPumpController.TemperatureMean, building_classname, Building.TemperatureMean ) )
@@ -566,10 +567,10 @@ class HeatPumpController(cp.Component):
         #if timestep >= 60*24*30*3 and timestep <= 60*24*30*9:
         #    state = 0
 
-        #print("Final state: {}\n".format(state))
+        #log.information("Final state: {}\n".format(state))
 
-    def print_output(self, t_m, state):
-        print("==========================================")
-        print("T m: {}".format(t_m))
-        print("State: {}".format(state))
+    def prin1t_outpu1t(self, t_m, state):
+        log.information("==========================================")
+        log.information("T m: {}".format(t_m))
+        log.information("State: {}".format(state))
 

@@ -2,6 +2,8 @@ from hisim import component as cp
 from hisim.components.heat_pump_hplib import HeatPumpHplib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim import log
+
 
 def test_heat_pump_hplib():
 
@@ -70,7 +72,7 @@ def test_heat_pump_hplib():
     
     # Simulation
     heatpump.i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
-    print(stsv.values)
+    log.information(str(stsv.values))
     # Check
     assert p_th_set == stsv.values[4]
     assert 7074.0 == stsv.values[5]

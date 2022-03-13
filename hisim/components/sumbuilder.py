@@ -6,7 +6,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-
+from hisim import utils
 
 class CalculateOperation(cp.Component):
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
@@ -80,6 +80,7 @@ class ElectricityGrid(Component):
     operations_available = ["Sum", "Subtract"]
     ElectricityOutput = "ElectricityOutput"
 
+    @utils.measure_execution_time
     def __init__(self, name: str, my_simulation_parameters: SimulationParameters , grid=None, signal=None):
         super().__init__(name="{}_{}".format("ElectricityGrid", name), my_simulation_parameters=my_simulation_parameters)
         self.signal=signal

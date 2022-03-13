@@ -10,7 +10,7 @@ import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.occupancy import Occupancy
-
+import hisim.log as log
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
         'size'   : 24}
@@ -135,14 +135,14 @@ class Boiler( cp.Component ):
         self.add_default_connections( BoilerController, self.get_controller_default_connections( ) )
         
     def get_occupancy_default_connections( self ):
-        print("setting occupancy default connections")
+        log.information("setting occupancy default connections")
         connections = [ ]
         occupancy_classname = Occupancy.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, Occupancy.WaterConsumption ) )
         return connections
     
     def get_controller_default_connections( self ):
-        print("setting controller default connections")
+        log.information("setting controller default connections")
         connections = [ ]
         controller_classname = BoilerController.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.State, controller_classname, BoilerController.State ) )
@@ -283,7 +283,7 @@ class BoilerController(cp.Component):
         self.add_default_connections( Boiler, self.get_boiler_default_connections( ) )
     
     def get_boiler_default_connections( self ):
-        print("setting boiler default connections")
+        log.information("setting boiler default connections")
         connections = [ ]
         boiler_classname = Boiler.get_classname( )
         connections.append( cp.ComponentConnection( BoilerController.StorageTemperature, boiler_classname, Boiler.StorageTemperature ) )
@@ -342,8 +342,8 @@ class BoilerController(cp.Component):
             
         stsv.set_output_value( self.stateC, self.signal )
 
-    # def print_output(self, t_m, state):
-    #     print("==========================================")
-    #     print("T m: {}".format(t_m))
-    #     print("State: {}".format(state))
+    # def log_output(self, t_m, state):
+    #     log.information("==========================================")
+    #     log.information("T m: {}".format(t_m))
+    #     log.information("State: {}".format(state))
 

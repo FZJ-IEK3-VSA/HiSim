@@ -237,9 +237,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                   offset = offset,
                                                                   mode = hp_mode,
                                                                   my_simulation_parameters = my_simulation_parameters )
-            my_heating_controller.connect_input( my_heating_controller.ElectricityInput,
+            hc : heat_pump.HeatPumpController = my_heating_controller # type: ignore
+            hc.connect_input( hc.ElectricityInput,
                                                  electricity_load_profiles[ operation_counter - 1 ].ComponentName,
-                                                 electricity_load_profiles[ operation_counter - 1 ].ElectricityOutput )    
+                                                 electricity_load_profiles[ operation_counter - 1 ].ElectricityOutput )
         elif heating_device_included == 'oil_heater':
             my_heating_controller = oil_heater.OilHeaterController( t_air_heating = t_air_heating,
                                                                     offset = offset, 

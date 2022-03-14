@@ -78,7 +78,10 @@ def test_building():
     thermal_energy_delivered_output.GlobalIndex = 14
     my_residence.total_power_to_residenceC.GlobalIndex = 15
     my_residence.solar_gain_through_windowsC.GlobalIndex = 16
-    #test building models for various time resolutions
+    #test building models for various time resolutions 
+    #   -> assume weather and occupancy data from t=0 (time resolution 1 min )
+    #   -> calculate temperature of building ( with no heating considered ) for varios time steps
+    #   -> check if temperature difference is proportional to time step size ( > 0.1 °C per minute )
     t6 = time.perf_counter()
     log.profile("T2: " + str(t6 - t5))
     for seconds_per_timestep in [ 60, 60 * 15, 60 * 60 ]:
@@ -102,7 +105,7 @@ def test_building():
 
         log.information(str(stsv.values[11]))
         # todo: this needs to be corrected
-        # assert (stsv.values[14] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
+        assert (stsv.values[13] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
     t7 = time.perf_counter()
     log.profile("T2: " + str(t7 - t6))
     log.profile("T2: " + str(t7 - t6))

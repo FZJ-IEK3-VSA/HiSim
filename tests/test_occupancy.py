@@ -8,14 +8,12 @@ def test_occupancy():
     Year heating generated: 1719 kWh
     """
     
-    repo = component.SimRepository()
     my_occupancy_profile = "CH01"
     seconds_per_timestep = 60
     number_of_outputs = 4
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     stsv = component.SingleTimeStepValues(number_of_outputs)
     my_occupancy = occupancy.Occupancy(profile=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
-    my_occupancy.set_sim_repo( repo )
 
     # Needed to number globalindex to activate return of component outputs
     my_occupancy.number_of_residentsC.GlobalIndex = 0

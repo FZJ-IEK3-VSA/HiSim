@@ -80,7 +80,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
-    my_occupancy = occupancy.Occupancy(profile=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = occupancy.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather
@@ -258,7 +258,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
-    my_occupancy = occupancy.Occupancy(profile=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = occupancy.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather

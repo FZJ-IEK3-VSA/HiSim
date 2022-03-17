@@ -131,7 +131,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     ##### Build Components #####
     
     # Build occupancy
-    my_occupancy = occupancy.Occupancy( profile = occupancy_profile, my_simulation_parameters = my_simulation_parameters )
+    my_occupancy = occupancy.Occupancy( profile_name=occupancy_profile, my_simulation_parameters = my_simulation_parameters )
     my_sim.add_component( my_occupancy )
     
     # Add price signal

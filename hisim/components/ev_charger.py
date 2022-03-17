@@ -11,6 +11,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
+from dataclasses import dataclass
+from  dataclasses_json import dataclass_json
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -20,6 +22,28 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
+
+@dataclass_json
+@dataclass
+class EVConfig:
+    parameter_string: str
+    manufacturer: str
+    model: str
+    soc: float
+    profile: str
+
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 manufacturer: str,
+                 model: str,
+                 soc: float,
+                 profile_name: str):
+        self.parameter_string = my_simulation_parameters.get_unique_key()
+        self.profile_name = profile_name
+        manufacturer = manufacturer
+        model = model
+        soc= soc
+
 
 class VehiclePure(cp.Component):
     """
@@ -46,9 +70,14 @@ class VehiclePure(cp.Component):
                  soc=1.0,
                  profile="CH01"):
         super().__init__(name="EV_charger", my_simulation_parameters=my_simulation_parameters)
-        self.build(manufacturer=manufacturer, model=model, soc=soc, target=profile)
+        self.evconfig = EVConfig(my_simulation_parameters=my_simulation_parameters,
+                                 manufacturer= manufacturer,
+                                 model=model,
+                                 soc= soc,
+                                 profile_name=profile)
+        self.build()
 
-    def build(self, manufacturer, model, soc, target):
+    def build(self):
         """:key
 
         Defines ...
@@ -58,7 +87,7 @@ class VehiclePure(cp.Component):
         discharing
         car_location
         """
-        if soc > 1 or soc < 0:
+        if self.evconfig.soc > 1 or self.evconfig.soc < 0:
             raise Exception("Invalid State Of Charge.")
 
         # Gets flexibilities, including heat pump
@@ -66,7 +95,7 @@ class VehiclePure(cp.Component):
 
         electric_vehicle_found = False
         for electric_vehicle in electric_vehicle_database:
-            if electric_vehicle["Manufacturer"] == manufacturer and electric_vehicle["Model"] == model:
+            if electric_vehicle["Manufacturer"] == self.evconfig.manufacturer and electric_vehicle["Model"] == self.evconfig.model:
                 electric_vehicle_found = True
                 break
 
@@ -79,14 +108,14 @@ class VehiclePure(cp.Component):
         else:
             self.min_capacity = self.max_capacity * 0.1
 
-        capacity = self.max_capacity * soc
+        capacity = self.max_capacity * self.evconfig.soc
         if capacity < self.min_capacity:
             capacity = self.min_capacity
 
-        self.model = model
+
         self.capacity = capacity
 
-        cache_filepath = utils.get_cache("Vehicle", [target])
+        cache_file_exists, cache_filepath = utils.get_cache_file(self.ComponentName,  self.evconfig)
         if cache_filepath is not None:
             self.car_in_charging_station = pd.read_csv(cache_filepath, sep=',', decimal='.')[
                 'CarInChargingStation'].tolist()
@@ -101,7 +130,7 @@ class VehiclePure(cp.Component):
                     data = json.load(f)
                 return data["Values"]
 
-            FILEPATH = utils.load_export_load_profile_generator(target=target)
+            FILEPATH = utils.load_export_load_profile_generator(target=self.evconfig.profile_name)
             if FILEPATH is None:
                 FILEPATH = utils.HISIMPATH
 
@@ -183,8 +212,8 @@ class VehiclePure(cp.Component):
 
             self.car_in_charging_station = car_in_charging_station
             self.discharge = discharge_stats
-
-            utils.save_cache("Vehicle", [target], database)
+            database.to_csv(cache_filepath)
+            #utils.save_cache("Vehicle", [self.evconfig.profile_name], database)
 
     def i_save_state(self):
         pass

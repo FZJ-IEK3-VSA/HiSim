@@ -4,7 +4,8 @@ import pvlib
 import pandas as pd
 import numpy as np
 import os
-
+from dataclasses import dataclass
+from  dataclasses_json import dataclass_json
 # Owned
 from hisim import utils
 from hisim import component as cp
@@ -91,6 +92,28 @@ class BuildingState:
         return BuildingState(self.t_m, self.c_m)
 
 
+
+@dataclass_json
+@dataclass
+class BuildingConfig:
+    parameter_string: str
+    building_code: str
+    bClass: str
+    initial_temperature: float
+
+
+
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 building_code: str,
+                 bClass: str,
+                 initial_temperature: float):
+        self.parameter_string = my_simulation_parameters.get_unique_key()
+        self.building_code = building_code
+        self.bClass = bClass
+        self.initial_temperature = initial_temperature
+
+
 class Building(cp.Component):
     """
     Building class provides multiple typologies of residences based on the
@@ -160,6 +183,8 @@ class Building(cp.Component):
                  initial_temperature=23):
         super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
+        self.buildingConfig = BuildingConfig(my_simulation_parameters, building_code=building_code, bClass=bClass,initial_temperature = initial_temperature)
+        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig)
 
         self.c_m:float = 0
         self.c_m_ref: float = 0
@@ -176,6 +201,8 @@ class Building(cp.Component):
         self.q_int_ref: float = 0
         self.q_sol_ref: float = 0
         self.q_h_nd_ref: float = 0
+
+
 
         self.build(bClass, building_code)
 
@@ -438,11 +465,11 @@ class Building(cp.Component):
         #stsv.set_output_value(self.old_stored_energyC, old_stored_energy)
 
         # Saves solar gains cache
-        if hasattr(self, "solar_gain_through_windows") is False:
+        if not self.is_in_cache:
             self.cache[timestep] = solar_gain_through_windows
-            if timestep + 1 == self.cache_length:
+            if timestep + 1 == self.my_simulation_parameters.timesteps:
                 database = pd.DataFrame(self.cache, columns=["solar_gain_through_windows"])
-                database.to_csv(self.cache_path, sep=",", decimal=".", index=False)
+                database.to_csv(self.cache_file_path, sep=",", decimal=".", index=False)
 
     def i_save_state(self):
         self.previous_state = self.state.self_copy()
@@ -751,13 +778,12 @@ class Building(cp.Component):
                 self.windows_area += area
 
 
-        cache_filepath = utils.get_cache(classname=self.ComponentName, parameters=self.parameters)
-        if cache_filepath is None or  (not os.path.isfile(cache_filepath)):
-            self.cache = [0] * self.timesteps
-            self.cache_path = utils.save_cache(self.ComponentName, self.parameters)
-            self.cache_length = self.timesteps
+
+        # if nothing exists, initialize the empty arrays for caching, else read stuff
+        if not self.is_in_cache: # cache_filepath is None or  (not os.path.isfile(cache_filepath)):
+            self.cache = [0] * self.my_simulation_parameters.timesteps
         else:
-            self.solar_gain_through_windows = pd.read_csv(cache_filepath, sep=',', decimal='.')['solar_gain_through_windows'].tolist()
+            self.solar_gain_through_windows = pd.read_csv(self.cache_file_path, sep=',', decimal='.')['solar_gain_through_windows'].tolist()
 
     #@cached(cache=LRUCache(maxsize=16))
     def get_solar_gain_through_windows(self, altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith):

@@ -244,76 +244,76 @@ def get_cache_file(component_key: str,  parameter_class:Any):
     if os.path.isfile(cache_absolute_filepath):
         return True, cache_absolute_filepath
     return False, cache_absolute_filepath
+#
+# def get_cache(classname, parameters):
+#     filename = None
+#     cache_absolute_filepath = None
+#
+#     all_caches = open_cache()
+#
+#     if classname in all_caches:
+#         for in_cache in all_caches[classname]:
+#             if all(elem in in_cache["parameters"] for elem in parameters):
+#                 filename = in_cache["filepath"]
+#                 break
+#
+#     if filename is not None:
+#         cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
+#
+#     return cache_absolute_filepath
 
-def get_cache(classname, parameters):
-    filename = None
-    cache_absolute_filepath = None
-
-    all_caches = open_cache()
-
-    if classname in all_caches:
-        for in_cache in all_caches[classname]:
-            if all(elem in in_cache["parameters"] for elem in parameters):
-                filename = in_cache["filepath"]
-                break
-
-    if filename is not None:
-        cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
-
-    return cache_absolute_filepath
-
-def save_cache(classname, parameters, database=None):
-    """
-    Saves calculated data from component class to cache directory
-    and registers the library indices in cache_indices.json
-
-    :param classname: Name of Component Class
-    :param parameters: Parameters that defined the Component Class
-    :param database: Data from the Component Class
-    :return:
-    """
-
-
-    def get_next_file():
-        list_cache_files = [x.name for x in os.scandir(HISIMPATH["cache_dir"])]
-        counter = 0
-
-        for cache_file in list_cache_files:
-           if name_profile in cache_file:
-               cache_file_number = int(cache_file[3:6])
-               if counter < cache_file_number:
-                    counter = cache_file_number
-
-        return str(counter + 1)
-
-    name_profile = str.lower(classname)
-
-    #with open(os.path.join(HISIMPATH["cache_dir"], "cache_indices.json")) as f:
-    #    cache_index = json.load(f)
-    cache_index = open_cache()
-
-    if classname in cache_index:
-        n_files = len(cache_index[classname])
-        i_next_file = str(n_files + 1)
-    else:
-        cache_index[classname] = {}
-        i_next_file = str(1)
-
-    csv_file = "{}_{}.csv".format(name_profile, i_next_file.zfill(3))
-    next_dict = {"parameters": parameters, "filepath": csv_file }
-
-    if cache_index[classname]:
-        cache_index[classname].append(next_dict)
-    else:
-        cache_index[classname] = [next_dict]
-
-    with open(os.path.join(HISIMPATH["cache_dir"], "cache_indices.json"), "w") as f:
-         json.dump(cache_index, f, indent=4)
-
-    if database is None:
-        return os.path.join(HISIMPATH["cache_dir"], csv_file)
-    else:
-        database.to_csv(os.path.join(HISIMPATH["cache_dir"], csv_file), sep=",", decimal=".", index=False, encoding = "cp1252")
+# def save_cache(classname, parameters, database=None):
+#     """
+#     Saves calculated data from component class to cache directory
+#     and registers the library indices in cache_indices.json
+#
+#     :param classname: Name of Component Class
+#     :param parameters: Parameters that defined the Component Class
+#     :param database: Data from the Component Class
+#     :return:
+#     """
+#
+#
+#     def get_next_file():
+#         list_cache_files = [x.name for x in os.scandir(HISIMPATH["cache_dir"])]
+#         counter = 0
+#
+#         for cache_file in list_cache_files:
+#            if name_profile in cache_file:
+#                cache_file_number = int(cache_file[3:6])
+#                if counter < cache_file_number:
+#                     counter = cache_file_number
+#
+#         return str(counter + 1)
+#
+#     name_profile = str.lower(classname)
+#
+#     #with open(os.path.join(HISIMPATH["cache_dir"], "cache_indices.json")) as f:
+#     #    cache_index = json.load(f)
+#     cache_index = open_cache()
+#
+#     if classname in cache_index:
+#         n_files = len(cache_index[classname])
+#         i_next_file = str(n_files + 1)
+#     else:
+#         cache_index[classname] = {}
+#         i_next_file = str(1)
+#
+#     csv_file = "{}_{}.csv".format(name_profile, i_next_file.zfill(3))
+#     next_dict = {"parameters": parameters, "filepath": csv_file }
+#
+#     if cache_index[classname]:
+#         cache_index[classname].append(next_dict)
+#     else:
+#         cache_index[classname] = [next_dict]
+#
+#     with open(os.path.join(HISIMPATH["cache_dir"], "cache_indices.json"), "w") as f:
+#          json.dump(cache_index, f, indent=4)
+#
+#     if database is None:
+#         return os.path.join(HISIMPATH["cache_dir"], csv_file)
+#     else:
+#         database.to_csv(os.path.join(HISIMPATH["cache_dir"], csv_file), sep=",", decimal=".", index=False, encoding = "cp1252")
 
 def load_export_load_profile_generator(target):
     """
@@ -327,83 +327,83 @@ def load_export_load_profile_generator(target):
         return EXPORTPATH
     else:
         raise Warning("Target export from Load Profile Generator does not exist")
-
-def get_ev_data(target):
-    """
-    Testing function to import EV Data
-    To be soon obsolete
-    """
-    cache_filepath = get_cache("Vehicle", ["CH01"])
-    def open_sql(path, table_name):
-        sql_file = sqlite3.connect(path)
-        return pd.read_sql("SELECT * FROM {};".format(table_name), sql_file)
-    def open_ev_json(filepath):
-        with open(filepath) as f:
-            data = json.load(f)
-        return data["Values"]
-
-    FILEPATH = load_export_load_profile_generator(target=target)
-    if FILEPATH is None:
-        FILEPATH = HISIMPATH
-
-    ev_files = dict()
-    filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
-    list_columns = []
-    list_values = []
-    for index, row in filepaths.iterrows():
-        json_info = json.loads(row["Json"])
-        if "Charging" in json_info["FileName"] and "png" not in json_info["FileName"]:
-            filepath = os.path.normpath(json_info["FullFileName"])
-            filepath_list = filepath.split(os.sep)
-            ev_files[filepath_list[-1].split(".")[0]] = json_info["FullFileName"]
-            list_columns.append(filepath_list[-1].split(".")[0])
-            list_values.append(open_ev_json(json_info["FullFileName"]))
-    list_values = list(map(list, zip(*list_values)))
-    ev_pd = pd.DataFrame(list_values, columns=list_columns)
-
-    # Trying to pass to pandas
-    activations = open_sql(FILEPATH["electric_vehicle"][0], "DeviceActivationEntries")
-    number_of_car_activations = 0
-    device_activation_entries = []
-    for index, column in activations.iterrows():
-        if "Car" in column['AffordanceName']:
-            active = json.loads(column['Json'])
-            device_activation_entries.append(active)
-            number_of_car_activations += 1
-
-
-    transportation_devices = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDevices")
-    for index, vehicle in transportation_devices.iterrows():
-        if "Charging" in vehicle["Name"]:
-            vehicle_info = json.loads(vehicle['Json'])
-            battery_stored_energy_meters = vehicle_info["FullRangeInMeters"]
-            convert_factor = vehicle_info["EnergyToDistanceFactor"]
-            battery_stored_energy_wh = battery_stored_energy_meters * convert_factor
-
-    discharge = []
-    load = []
-    for index, row in ev_pd.iterrows():
-        load.append(row["Soc"] * battery_stored_energy_wh)
-        if index == 0:
-            discharge.append(0)
-        else:
-            diff = load[-1] - load[-2]
-            if diff < 0:
-                discharge.append(diff)
-            else:
-                discharge.append(0)
-
-    ev_pd["Load"] = load
-    ev_pd["Discharge"] = discharge
-    data = [ev_pd["CarLocation"].tolist()]
-    data.append(discharge)
-    data = list(map(list, zip(*data)))
-    data_parameters = ["CarLocation", "Discharging"]
-    database = pd.DataFrame(data, columns=data_parameters)
-
-    save_cache("Vehicle", ["CH01"], database)
-
-    return ev_pd, device_activation_entries
+#
+# def get_ev_data(target):
+#     """
+#     Testing function to import EV Data
+#     To be soon obsolete
+#     """
+#     cache_filepath = get_cache("Vehicle", ["CH01"])
+#     def open_sql(path, table_name):
+#         sql_file = sqlite3.connect(path)
+#         return pd.read_sql("SELECT * FROM {};".format(table_name), sql_file)
+#     def open_ev_json(filepath):
+#         with open(filepath) as f:
+#             data = json.load(f)
+#         return data["Values"]
+#
+#     FILEPATH = load_export_load_profile_generator(target=target)
+#     if FILEPATH is None:
+#         FILEPATH = HISIMPATH
+#
+#     ev_files = dict()
+#     filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
+#     list_columns = []
+#     list_values = []
+#     for index, row in filepaths.iterrows():
+#         json_info = json.loads(row["Json"])
+#         if "Charging" in json_info["FileName"] and "png" not in json_info["FileName"]:
+#             filepath = os.path.normpath(json_info["FullFileName"])
+#             filepath_list = filepath.split(os.sep)
+#             ev_files[filepath_list[-1].split(".")[0]] = json_info["FullFileName"]
+#             list_columns.append(filepath_list[-1].split(".")[0])
+#             list_values.append(open_ev_json(json_info["FullFileName"]))
+#     list_values = list(map(list, zip(*list_values)))
+#     ev_pd = pd.DataFrame(list_values, columns=list_columns)
+#
+#     # Trying to pass to pandas
+#     activations = open_sql(FILEPATH["electric_vehicle"][0], "DeviceActivationEntries")
+#     number_of_car_activations = 0
+#     device_activation_entries = []
+#     for index, column in activations.iterrows():
+#         if "Car" in column['AffordanceName']:
+#             active = json.loads(column['Json'])
+#             device_activation_entries.append(active)
+#             number_of_car_activations += 1
+#
+#
+#     transportation_devices = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDevices")
+#     for index, vehicle in transportation_devices.iterrows():
+#         if "Charging" in vehicle["Name"]:
+#             vehicle_info = json.loads(vehicle['Json'])
+#             battery_stored_energy_meters = vehicle_info["FullRangeInMeters"]
+#             convert_factor = vehicle_info["EnergyToDistanceFactor"]
+#             battery_stored_energy_wh = battery_stored_energy_meters * convert_factor
+#
+#     discharge = []
+#     load = []
+#     for index, row in ev_pd.iterrows():
+#         load.append(row["Soc"] * battery_stored_energy_wh)
+#         if index == 0:
+#             discharge.append(0)
+#         else:
+#             diff = load[-1] - load[-2]
+#             if diff < 0:
+#                 discharge.append(diff)
+#             else:
+#                 discharge.append(0)
+#
+#     ev_pd["Load"] = load
+#     ev_pd["Discharge"] = discharge
+#     data = [ev_pd["CarLocation"].tolist()]
+#     data.append(discharge)
+#     data = list(map(list, zip(*data)))
+#     data_parameters = ["CarLocation", "Discharging"]
+#     database = pd.DataFrame(data, columns=data_parameters)
+#
+#     save_cache("Vehicle", ["CH01"], database)
+#
+#     return ev_pd, device_activation_entries
 
 def get_last_pickle():
     stored_results_list = os.listdir(HISIMPATH["results"])

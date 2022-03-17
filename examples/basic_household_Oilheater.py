@@ -38,8 +38,8 @@ def basic_household_Oilheater_explicit(my_sim, my_simulation_parameters):
     
     ####delete all files in cache:
     dir = '..//hisim//inputs//cache'
-    for file in os.listdir( dir ):
-        os.remove( os.path.join( dir, file ) )
+    #for file in os.listdir( dir ):
+     #   os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 

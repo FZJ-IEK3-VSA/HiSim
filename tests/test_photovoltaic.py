@@ -12,6 +12,7 @@ def test_photovoltaic():
 
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=seconds_per_timestep)
+    mysim.reset_system_config( predictive = True )
 
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(11)
     # Weather: 6 outputs

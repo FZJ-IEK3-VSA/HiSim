@@ -104,22 +104,27 @@ class SmartDevice( cp.Component ):
 
         self.build( seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
-        #Input
+        #Input if smart controller
         self.ControllerStateC: cp.ComponentInput = self.add_input( self.ComponentName,
                                                                    self.ControllerState,
                                                                    lt.LoadTypes.Any,
                                                                    lt.Units.Any,
-                                                                   mandatory = True )
-        #Outputs
+                                                                   mandatory = False )
+        
+        #mandatory Output
         self.electricity_outputC: cp.ComponentOutput = self.add_output( self.ComponentName,
                                                                         self.ElectricityOutput,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt )
-        self.DeviceStateC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                 self.DeviceState,
-                                                                 lt.LoadTypes.Any,
-                                                                 lt.Units.Any )
-        self.add_default_connections( SmartDeviceController, self.get_smart_device_default_connections( ) )
+        
+        #Output if Smart Controller
+        if self.predictive == True:
+            self.DeviceStateC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                     self.DeviceState,
+                                                                     lt.LoadTypes.Any,
+                                                                     lt.Units.Any )
+            self.add_default_connections( SmartDeviceController, self.get_smart_device_default_connections( ) )
+        
         
     def get_smart_device_default_connections( self ):
         print("setting smart device default connections")
@@ -147,11 +152,13 @@ class SmartDevice( cp.Component ):
                 self.state.state = 2
             else: #free for activation
                 self.state.state = 0
-                self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )           
-            
-        #pass conditions to smart controller
-        stsv.set_output_value( self.DeviceStateC, self.state.state )
-        self.state.state = stsv.get_input_value( self.ControllerStateC )
+                if self.predictive == True:
+                    self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )           
+        
+        if self.predictive == True:
+            #pass conditions to smart controller
+            stsv.set_output_value( self.DeviceStateC, self.state.state )
+            self.state.state = stsv.get_input_value( self.ControllerStateC )
         
         #device actions based on controller signal
         if self.state.state == 2:
@@ -228,6 +235,7 @@ class SmartDevice( cp.Component ):
         self.device_names = device_names
         self.state = SmartDeviceState( )
         self.previous_state = SmartDeviceState( )
+        self.predictive = self.my_simulation_parameters.system_config.predictive
 
     def write_to_report(self):
         lines = []

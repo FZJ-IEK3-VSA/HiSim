@@ -199,8 +199,9 @@ class Occupancy(cp.Component):
         stsv.set_output_value(self.electricity_outputC, self.electricity_consumption[timestep])
         stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
         
-        demandforecast = self.electricity_consumption[ timestep : int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep ) ]
-        self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
+        if self.my_simulation_parameters.system_config.predictive == True:
+            demandforecast = self.electricity_consumption[ timestep : int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep ) ]
+            self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
 
     def build( self):
         file_exists, cache_filepath = utils.get_cache_file(component_key=self.ComponentName, parameter_class=self.occupancyConfig)

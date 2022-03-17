@@ -240,7 +240,10 @@ def get_cache_file(component_key: str,  parameter_class:Any):
     #I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package? 
     sha_key = hashlib.sha256( json_str_encoded ).hexdigest()
     filename = component_key + "_" + sha_key + ".cache"
+    cache_dir_path =  os.path.join(hisim_abs_path, "inputs", "cache")
     cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
+    if not os.path.isdir(cache_dir_path):
+        os.mkdir(cache_dir_path)
     if os.path.isfile(cache_absolute_filepath):
         return True, cache_absolute_filepath
     return False, cache_absolute_filepath

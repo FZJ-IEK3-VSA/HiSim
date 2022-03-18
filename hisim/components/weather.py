@@ -7,9 +7,9 @@ import pvlib
 import numpy as np
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass
-from typing import  List
+from typing import  List, Optional
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.utils import HISIMPATH
@@ -87,15 +87,26 @@ class Weather(Component):
     ApparentZenith = "ApparentZenith"
     WindSpeed = "WindSpeed"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
+    
+    Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
+    Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
+    Weather_DiffuseHorizontalIrradiance_yearly_forecast = "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
+    Weather_DirectNormalIrradianceExtra_yearly_forecast = "Weather_DirectNormalIrradianceExtra_yearly_forecast"
+    Weather_GlobalHorizontalIrradiance_yearly_forecast = "Weather_GlobalHorizontalIrradiance_yearly_forecast"
+    Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
+    Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
+    Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
     def __init__(self,
-                 my_simulation_parameters: SimulationParameters, location="Aachen" ):
+                 my_simulation_parameters: SimulationParameters, 
+                 location : str = "Aachen",
+                 my_simulation_repository : Optional[ SimRepository ] = None ):
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)
         if(my_simulation_parameters is None):
             raise Exception("Simparameters was none")
         self.weatherConfig = WeatherConfig(my_simulation_parameters,location)
-        self.build(location,my_simulation_parameters)
+        self.build( location, my_simulation_parameters, my_simulation_repository )
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -175,14 +186,17 @@ class Weather(Component):
         # set the temperature forecast
         if self.my_simulation_parameters.system_config.predictive:
             timesteps_24h = 24*3600 / self.my_simulation_parameters.seconds_per_timestep
-            last_forecast_timestep = int(timestep+ timesteps_24h)
+            last_forecast_timestep = int( timestep + timesteps_24h )
             if(last_forecast_timestep > len(self.temperature_list)):
                 last_forecast_timestep = len(self.temperature_list)
             #log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h,temperatureforecast)
 
-    def build(self, location,my_simulation_parameters:SimulationParameters):
+    def build( self, 
+               location : str, 
+               my_simulation_parameters : SimulationParameters, 
+               my_simulation_repository : Optional[ SimRepository ] ):
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
         log.information(self.weatherConfig.location)
@@ -221,18 +235,18 @@ class Weather(Component):
 
 
              if seconds_per_timestep != 60:
-                 self.temperature = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.DryBulb_list = temperature
-                 self.DHI = DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.DryBulb_list = temperature.resample( str( seconds_per_timestep ) + "S" ).mean( )
+                 self.DHI_list = DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
                   #np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
-                 self.DNI: List[float] = DNI.resample(str(seconds_per_timestep) + "S").mean().tolist()#)  # type: ignore
-                 self.DNIextra = DNIextra.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.GHI = GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.altitude = altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.azimuth = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.apparent_zenith = apparent_zenith.resample(
+                 self.DNI_list = DNI.resample(str(seconds_per_timestep) + "S").mean().tolist()#)  # type: ignore
+                 self.DNIextra_list = DNIextra.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.GHI_list = GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.altitude_list = altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.apparent_zenith_list = apparent_zenith.resample(
                      str(seconds_per_timestep) + "S").mean().tolist()
-                 self.Wspd = Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                 self.Wspd_list = Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
              else:
                  self.temperature_list = temperature.tolist()
                  self.DryBulb_list = temperature
@@ -255,6 +269,7 @@ class Weather(Component):
                           self.DryBulb_list,
                           self.Wspd_list,
                           self.DNIextra_list]
+    
              database = pd.DataFrame(np.transpose(solardata),
                                      columns=['DNI',
                                               'DHI',
@@ -265,9 +280,19 @@ class Weather(Component):
                                               'apparent_zenith',
                                               'DryBulb',
                                               'Wspd',
-                                              'DNIextra'])
+                                              'DNIextra' ] )
              database.to_csv(cache_filepath)
-
+             
+        #write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
+        if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
+            my_simulation_repository.set_entry( self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list )
+            my_simulation_repository.set_entry( self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list )
+            my_simulation_repository.set_entry( self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list )
+            my_simulation_repository.set_entry( self.Weather_DirectNormalIrradianceExtra_yearly_forecast, self.DNIextra_list ) 
+            my_simulation_repository.set_entry( self.Weather_GlobalHorizontalIrradiance_yearly_forecast, self.GHI_list )
+            my_simulation_repository.set_entry( self.Weather_Azimuth_yearly_forecast, self.azimuth_list )
+            my_simulation_repository.set_entry( self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list ) 
+            my_simulation_repository.set_entry( self.Weather_WindSpeed_yearly_forecast, self.Wspd_list )
 
     def interpolate(self, pd_database, year):
         firstday = pd.Series([0.0], index=[
@@ -360,7 +385,7 @@ class Weather(Component):
             return math.degrees(altitude_rad), (180 - math.degrees(azimuth_rad))
 
     def calc_sun_position2(self, hoy):
-        return self.altitude.iloc[hoy], self.azimuth.iloc[hoy]
+        return self.altitude_list[hoy], self.azimuth_list[hoy]
 
 def readTRY(location="Aachen", year=2015):
     """

@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pvlib
 from dataclasses_json import dataclass_json
+from typing import Optional
 
 from dataclasses import dataclass
 from functools import lru_cache
@@ -51,8 +52,9 @@ def simPhotovoltaicFast(
     apparent_zenith=None,
     temperature=None,
     wind_speed=None,
-    surface_azimuth=180,
-    surface_tilt=30):
+    surface_azimuth : float = 180,
+    surface_tilt : float = 30 ):
+    
     """
     Simulates a defined PV array with the Sandia PV Array Performance Model.
     The implementation is done in accordance with following tutorial:
@@ -70,22 +72,23 @@ def simPhotovoltaicFast(
     Returns
     --------
     """
-    poa_irrad = pvlib.irradiance.get_total_irradiance(surface_tilt,
-                                                      surface_azimuth,
-                                                      apparent_zenith,
-                                                      azimuth,
-                                                      DNI,
-                                                      GHI,
-                                                      DHI,
-                                                      dni_extra)
+
+    poa_irrad = pvlib.irradiance.get_total_irradiance( surface_tilt,
+                                                        surface_azimuth,
+                                                        apparent_zenith,
+                                                        azimuth,
+                                                        DNI,
+                                                        GHI,
+                                                        DHI,
+                                                        dni_extra )
 
     pvtemps = pvlib.temperature.sapm_cell(poa_irrad["poa_global"], temperature, wind_speed, **temp_model)
 
-    pv_dc = pvlib.pvsystem.pvwatts_dc(poa_irrad["poa_global"],
-                                      temp_cell=pvtemps,
-                                      pdc0=1,
-                                      gamma_pdc=-0.002,
-                                      temp_ref=25.0)
+    pv_dc = pvlib.pvsystem.pvwatts_dc( poa_irrad[ "poa_global" ],
+                                      temp_cell = pvtemps,
+                                      pdc0 = 1,
+                                      gamma_pdc = -0.002,
+                                      temp_ref = 25.0 )
     if math.isnan(pv_dc):
         pv_dc = 0
     return pv_dc
@@ -186,7 +189,7 @@ class PVSystemConfig:
                  power:float,
                  module_name:str,
                  integrate_inverter:bool,
-                 inverter_name:str):
+                 inverter_name:str ):
         self.parameter_string = my_simulation_parameters.get_unique_key()
         self.time = time
         self.location = location
@@ -225,25 +228,30 @@ class PVSystem(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
+    
+    #Forecasts
+    PV_Forecast_24h = "PV_Forecast_24h"
 
     # Similar components to connect to:
     # 1. Weather
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-        time=2019,
-                 location="Aachen",
-                 power=10E3,
-                 load_module_data=False,
-                 module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
-                 integrateInverter=True,
-                 inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"                 ):
-        super().__init__("PVSystem", my_simulation_parameters=my_simulation_parameters)
+                 my_simulation_repository : Optional[ cp.SimRepository ] = None, 
+                 time : int = 2019,
+                 location : str = "Aachen",
+                 power : float = 10E3,
+                 load_module_data : bool = False,
+                 module_name : str = "Hanwha_HSL60P6_PA_4_250T__2013_",
+                 integrateInverter : bool = True,
+                 inverter_name : str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_" ):
+        
+        super().__init__( "PVSystem", my_simulation_parameters = my_simulation_parameters )
         self.pvconfig = PVSystemConfig(my_simulation_parameters=my_simulation_parameters,
                                        location=location, power = power, module_name=module_name,
                                        integrate_inverter=integrateInverter, inverter_name=inverter_name,
                                        time=time)
-        self.build(load_module_data)
+        self.build( load_module_data, my_simulation_repository )
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -360,6 +368,7 @@ class PVSystem(cp.Component):
             #                                 apparent_zenith=apparent_zenith,
             #                                 temperature=temperature,
             #                                 wind_speed=wind_speed)
+            
             ac_power = simPhotovoltaicFast(
                                             dni_extra=dni_extra,
                                             DNI=DNI,
@@ -379,6 +388,10 @@ class PVSystem(cp.Component):
                 database = pd.DataFrame(self.data, columns=["output"])
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
+                
+        if self.my_simulation_parameters.system_config.predictive == True:
+            pvforecast = [ self.output[ t ] * self.pvconfig.power for t in range( timestep, int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep ) ) ]
+            self.simulation_repository.set_entry( self.PV_Forecast_24h, pvforecast )
 
     def get_coordinates(self, location="Aachen", year=2019):
         """
@@ -413,13 +426,11 @@ class PVSystem(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build(self,  load_module_data):
-
+    def build( self, load_module_data : bool, my_simulation_repository : Optional[ cp.SimRepository ] ):
         log.information(self.pvconfig.to_json())  # type: ignore
         file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig)
 
         if file_exists:
-
             self.output = pd.read_csv(self.cache_filepath, sep=',', decimal='.')['output'].tolist()
             if len(self.output) !=        self.my_simulation_parameters.timesteps:
                 raise Exception("Reading the cached PV values seems to have failed. Expected "
@@ -428,9 +439,42 @@ class PVSystem(cp.Component):
             self.get_coordinates(location = self.pvconfig.location, year =  self.pvconfig.time)
             # Factor to guarantee peak power based on module with 250 Wh
             self.ac_power_factor = math.ceil( ( self.pvconfig.power * 1e3 ) / 250 )
-            self.data = [0] * self.my_simulation_parameters.timesteps
-            self.data_length = self.my_simulation_parameters.timesteps
+            
+            #when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
+            if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
+                #get yearly weather data from dictionary
+                dni_extra = my_simulation_repository.get_entry( Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast )
+                DNI = my_simulation_repository.get_entry( Weather.Weather_DirectNormalIrradiance_yearly_forecast )
+                DHI = my_simulation_repository.get_entry( Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast )
+                GHI = my_simulation_repository.get_entry( Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast )
+                azimuth = my_simulation_repository.get_entry( Weather.Weather_Azimuth_yearly_forecast )
+                apparent_zenith = my_simulation_repository.get_entry( Weather.Weather_ApparentZenith_yearly_forecast )
+                temperature = my_simulation_repository.get_entry( Weather.Weather_TemperatureOutside_yearly_forecast )
+                wind_speed = my_simulation_repository.get_entry( Weather.Weather_WindSpeed_yearly_forecast )
+                
+                x= [ ]
+                for i in range( len( dni_extra ) ):
+                    x.append( simPhotovoltaicFast( dni_extra[ i ], DNI[ i ], DHI[ i ], GHI[ i ], azimuth[ i ], apparent_zenith[ i ], temperature[ i ], wind_speed[ i ] ) )
 
+                self.output = x
+                
+                database = pd.DataFrame( self.output, columns = [ "output" ] )
+
+                database.to_csv( self.cache_filepath, sep=",", decimal=".", index=False )
+                
+            else:
+                 self.data = [0] * self.my_simulation_parameters.timesteps
+                 self.data_length = self.my_simulation_parameters.timesteps
+                
+        if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
+            my_simulation_repository.delete_entry( Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_DirectNormalIrradiance_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_Azimuth_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_ApparentZenith_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_TemperatureOutside_yearly_forecast )
+            my_simulation_repository.delete_entry( Weather.Weather_WindSpeed_yearly_forecast )
 
         self.modules = pd.read_csv(
             os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),

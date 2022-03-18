@@ -54,7 +54,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    #seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
     
     # Set building
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
@@ -146,7 +147,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
 
     # Build Weather
-    my_weather = weather.Weather( location=location, my_simulation_parameters = my_simulation_parameters )
+    my_weather = weather.Weather( location=location, my_simulation_parameters = my_simulation_parameters, 
+                                  my_simulation_repository = my_sim.simulation_repository )
     my_sim.add_component( my_weather )
     
     # Build building
@@ -158,14 +160,15 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_sim.add_component( my_building )
 
     if pv_included:
-        my_photovoltaic_system = pvs.PVSystem( time = time,
+        my_photovoltaic_system = pvs.PVSystem( my_simulation_parameters = my_simulation_parameters,
+                                               my_simulation_repository = my_sim.simulation_repository,
+                                               time = time,
                                                location = location,
                                                power = power,
                                                load_module_data = load_module_data,
                                                module_name = module_name,
                                                integrateInverter = integrateInverter,
-                                               inverter_name = inverter_name,
-                                               my_simulation_parameters = my_simulation_parameters )
+                                               inverter_name = inverter_name )
         my_photovoltaic_system.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system )
         my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 

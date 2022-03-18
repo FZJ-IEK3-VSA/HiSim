@@ -19,9 +19,9 @@ def test_photovoltaic():
     # PVS:  1 output
 
     # Sets Occupancy
-    my_weather = weather.Weather(location=weather_location, my_simulation_parameters =mysim )
+    my_weather = weather.Weather( location = weather_location, my_simulation_parameters = mysim, my_simulation_repository = repo )
     my_weather.set_sim_repo(repo)
-    my_pvs = pvs.PVSystem(power=power,my_simulation_parameters=mysim)
+    my_pvs = pvs.PVSystem(power=power,my_simulation_parameters=mysim, my_simulation_repository = repo )
     my_pvs.set_sim_repo(repo)
     my_pvs.t_outC.SourceOutput = my_weather.t_outC
     my_pvs.azimuthC.SourceOutput = my_weather.azimuthC

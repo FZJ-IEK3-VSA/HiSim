@@ -34,36 +34,40 @@ class SmartDeviceState:
         Duration of the power profile, which follows for the nex time steps
     state : integer, optional
         State of the smart appliance:
-            2... to be activated
-            1... active
-            0... may be activated or not
-            -1.. needs to be switched off
+            -2... needs to be switched off
+            -1... is switched off but can be turned on
+             1... is running but can be switched off
+             2... needs to be turned on
+    position : integer, optional
+        Index of demand profile relevent for the given timestep
     """
     
-    def __init__( self, actual_power : float = 0, time_to_go : int = -1, state : int = -1, position : int = 0 ):
+    def __init__( self, actual_power : float = 0, time_to_go : int = -1, state : int = -1, position : int = 0, dictionary_set : bool = False ):
         self.actual_power = actual_power
         self.time_to_go = time_to_go
         self.state = state
         self.position = position
+        self.dictionary_set = dictionary_set
         
     def clone( self ):
         return SmartDeviceState( self.actual_power, self.time_to_go, self.state, self.position ) 
-    
-    def activate( self, time_to_go : int ):
-        self.time_to_go = time_to_go
-        self.state = 1
-        self.position = self.position + 1
         
     def run( self, electricity_profile : list ):
-        if self.state == 1:
-            self.actual_power = electricity_profile[ - self.time_to_go ]
-            self.time_to_go = self.time_to_go - 1
-        else:
-            self.actual_power = 0
         
-    def deactivate( self ):
-        self.time_to_go = -1
-        self.state = -1
+        #device activation
+        if self.time_to_go == -1:
+            self.time_to_go = len( electricity_profile )
+            self.state = 2
+         
+        #device is running    
+        self.actual_power = electricity_profile[ - self.time_to_go ]
+        self.time_to_go = self.time_to_go - 1
+        
+        #device deactivation
+        if self.time_to_go == -1:
+            self.state = -1
+            self.position = self.position + 1
+            self.dictionary_set = False
     
 class SmartDevice( cp.Component ):
     """
@@ -144,29 +148,33 @@ class SmartDevice( cp.Component ):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
         
+        #initialize power
+        self.state.actual_power = 0
+        
         #check out hard conditions
-        if self.state.state != 1:
+        if self.state.time_to_go < 0:
             if timestep < self.earliest_start[ self.state.position ]: #needs to be switched off
-                self.state.state = - 1
+                self.state.state = - 2
             elif timestep == self.latest_start[ self.state.position ]: #needs to be activated
                 self.state.state = 2
             else: #free for activation
-                self.state.state = 0
-                if self.predictive == True:
-                    self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )           
+                self.state.state = -1
+                if self.predictive == True and self.state.dictionary_set == False:
+                    self.simulation_repository.set_entry( self.ShiftableLoadForecast, self.electricity_profile[ self.state.position ] )    
+                    self.state.dictionary_set = True
         
         if self.predictive == True:
             #pass conditions to smart controller
             stsv.set_output_value( self.DeviceStateC, self.state.state )
-            self.state.state = stsv.get_input_value( self.ControllerStateC )
+            devicesignal = stsv.get_input_value( self.ControllerStateC )
+            
+            if self.state.state == -1 and devicesignal == 1:
+                self.state.run( self.electricity_profile[ self.state.position ] )
         
         #device actions based on controller signal
         if self.state.state == 2:
-            self.state.activate( self.duration[ self.state.position ] )
+            self.state.run( self.electricity_profile[ self.state.position ] )
 
-        self.state.run( self.electricity_profile[ self.state.position - 1 ] )
-        if self.state.time_to_go == 0:
-            self.state.deactivate( )
         stsv.set_output_value( self.electricity_outputC, self.state.actual_power )
         
     def build( self, seconds_per_timestep : int = 60 ):
@@ -292,27 +300,31 @@ class SmartDeviceController(cp.Component):
         connections.append( cp.ComponentConnection( SmartDeviceController.DeviceState, smart_device_classname, SmartDevice.DeviceState ) )
         return connections
 
-    def build(self, threshold_peak : float, threshold_price : float, state : int = 0 ):
+    def build(self, threshold_peak : float, threshold_price : float, signal : int = 0 ):
         self.threshold_peak = threshold_peak
         self.threshold_price = threshold_price
-        self.state = state
+        self.signal = signal
+        self.previous_signal = signal
 
     def i_save_state(self):
-        self.previous_state = self.state
+        self.previous_signal = self.signal
 
     def i_restore_state(self):
-        self.state = self.previous_state
+        self.signal = self.previous_signal
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
-        #get state
-        self.state = stsv.get_input_value( self.DeviceStateC )
-        if timestep % 60 != 0:
-            return
+        
+        #initialize signal
+        self.signal = 0
+        
+        #get device state
+        devicestate = stsv.get_input_value( self.DeviceStateC )
+        
         #see if device is controllable
-        if self.state == 0:
+        if abs( devicestate ) < 2:
             #get forecasts
             shiftableload = self.simulation_repository.get_entry( SmartDevice.ShiftableLoadForecast )
             steps = len( shiftableload )
@@ -336,9 +348,9 @@ class SmartDeviceController(cp.Component):
             
             #make decision based on thresholds
             if peak < self.threshold_peak and price < self.threshold_price:
-                self.state = 2
+                self.signal = 1
             else:
-                self.state = -1 
+                self.signal = -1 
 
-        stsv.set_output_value( self.ControllerStateC, self.state )
+        stsv.set_output_value( self.ControllerStateC, self.signal )
         

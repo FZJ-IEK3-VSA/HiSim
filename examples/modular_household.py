@@ -54,8 +54,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
     # Set simulation parameters
     year = 2021
-    #seconds_per_timestep = 60 * 15
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 15
+    #seconds_per_timestep = 60
     
     # Set building
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
@@ -70,8 +70,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options( year= year,
-                                                                               seconds_per_timestep=seconds_per_timestep )
+        my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
+                                                                               seconds_per_timestep = seconds_per_timestep )
+    my_simulation_parameters.reset_system_config( predictive = True, smart_devices_included = True )    
+    
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration

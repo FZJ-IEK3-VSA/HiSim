@@ -95,6 +95,9 @@ class SimRepository:
 
     def get_entry(self, key: str) -> Any:
         return self.my_dict[key]
+    
+    def delete_entry( self, key : str ):
+        self.my_dict.pop( key )
 
 class Component:
     @classmethod

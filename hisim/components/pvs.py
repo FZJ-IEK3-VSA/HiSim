@@ -390,7 +390,10 @@ class PVSystem(cp.Component):
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
                 
         if self.my_simulation_parameters.system_config.predictive == True:
-            pvforecast = [ self.output[ t ] * self.pvconfig.power for t in range( timestep, int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep ) ) ]
+            last_forecast_timestep = int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep )
+            if ( last_forecast_timestep > len( self.output ) ):
+                last_forecast_timestep = len( self.output )
+            pvforecast = [ self.output[ t ] * self.pvconfig.power for t in range( timestep, last_forecast_timestep ) ]
             self.simulation_repository.set_entry( self.PV_Forecast_24h, pvforecast )
 
     def get_coordinates(self, location="Aachen", year=2019):

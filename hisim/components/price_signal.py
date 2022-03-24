@@ -63,13 +63,14 @@ class PriceSignal(cp.Component):
 
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
         priceinjectionforecast = [ 10 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 ] * self.day
-        pricepurchaseforecast = [ ]
-        for step in range( self.day ):
-            x = timestep % self.day
-            if x > self.start and x < self.end:
-                pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
-            else:
-                pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+        pricepurchaseforecast = [ 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 ] * self.day
+        # pricepurchaseforecast = [ ]
+        # for step in range( self.day ):
+        #     x = timestep % self.day
+        #     if x > self.start and x < self.end:
+        #         pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+        #     else:
+        #         pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
         
         self.simulation_repository.set_entry( self.Price_Injection_Forecast_24h, priceinjectionforecast )
         self.simulation_repository.set_entry( self.Price_Purchase_Forecast_24h, pricepurchaseforecast )

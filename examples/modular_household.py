@@ -74,7 +74,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
-    my_simulation_parameters.reset_system_config( predictive = True, smart_devices_included = True )    
+    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = True, boiler_included = 'electricity' )    
     
     my_sim.SimulationParameters = my_simulation_parameters
     
@@ -187,11 +187,6 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if smart_devices_included:
         my_smart_device = smart_device.SmartDevice( my_simulation_parameters = my_simulation_parameters )
         my_sim.add_component( my_smart_device )
-        if predictive == True:
-            my_predictive_controller = predictive_controller.PredictiveController( my_simulation_parameters = my_simulation_parameters )
-            my_sim.add_component( my_predictive_controller )  
-            my_smart_device.connect_only_predefined_connections( my_predictive_controller )
-            my_predictive_controller.connect_only_predefined_connections( my_smart_device )
         my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
                 my_sim = my_sim,
                 operation_counter = operation_counter,
@@ -203,36 +198,22 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     if boiler_included:  
         my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = boiler_included, my_simulation_parameters = my_simulation_parameters )
-        # my_boiler.connect_input( my_boiler.WaterConsumption,
-        #                          my_occupancy.ComponentName, 
-        #                          my_occupancy.WaterConsumption )
         my_boiler.connect_only_predefined_connections( my_occupancy )
         my_sim.add_component( my_boiler )
         
-        my_boiler_controller = simple_bucket_boiler.BoilerController( smart = smart, my_simulation_parameters = my_simulation_parameters )
-        # my_boiler_controller.connect_input( my_boiler_controller.StorageTemperature,
-        #                                     my_boiler.ComponentName,
-        #                                     my_boiler.StorageTemperature )
+        my_boiler_controller = simple_bucket_boiler.BoilerController( my_simulation_parameters = my_simulation_parameters )
         my_boiler_controller.connect_only_predefined_connections( my_boiler )
         my_sim.add_component( my_boiler_controller )
-        
-        # my_boiler.connect_input( my_boiler.State,
-        #                          my_boiler_controller.ComponentName,
-        #                          my_boiler_controller.State )
-        my_boiler.connect_only_predefined_connections( my_boiler_controller )
 
-        if boiler_included == 'electricity':
-            my_boiler_controller.connect_input( my_boiler_controller.ElectricityInput,
-                                        electricity_load_profiles[ - 1 ].ComponentName,
-                                        electricity_load_profiles[ - 1 ].ElectricityOutput )
-            
-            my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+        my_boiler.connect_only_predefined_connections( my_boiler_controller )
+        
+        my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
                 my_sim = my_sim,
                 operation_counter = operation_counter,
                 electricity_load_profiles = electricity_load_profiles, 
                 elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                             grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_boiler ], 
-                                                             my_simulation_parameters = my_simulation_parameters ) 
+                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_boiler ], 
+                                                              my_simulation_parameters = my_simulation_parameters )
                 )
             
     if heating_device_included:
@@ -287,3 +268,14 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                    my_heating.ComponentName,
                                    my_heating.ThermalEnergyDelivered )
+        
+        if predictive == True:
+            my_predictive_controller = predictive_controller.PredictiveController( my_simulation_parameters = my_simulation_parameters )
+            my_sim.add_component( my_predictive_controller )
+            if smart_devices_included:
+                my_smart_device.connect_only_predefined_connections( my_predictive_controller )
+                my_predictive_controller.connect_only_predefined_connections( my_smart_device )
+            if boiler_included == 'electricity':
+                my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
+                my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
+                

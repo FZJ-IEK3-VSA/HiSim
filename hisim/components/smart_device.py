@@ -194,7 +194,7 @@ class SmartDevice( cp.Component ):
             raise NameError( 'LPG data for smart appliances is missing or located missleadingly' )
         
         #initializing relevant data
-        earliest_start, latest_start, duration, electricity_profile, device_names = [ ], [ ], [ ], [ ], [ ]
+        earliest_start, latest_start, electricity_profile, device_names = [ ], [ ], [ ], [ ]
         
         minutes_per_timestep = seconds_per_timestep / 60
         
@@ -235,14 +235,10 @@ class SmartDevice( cp.Component ):
             last = el[ offset + ( i + 1 ) * minutes_per_timestep : ]
             if offset != minutes_per_timestep:
                 elem_el.append( sum( last ) / ( minutes_per_timestep - offset ) )
-            # else:
-            #     z = z - 1
-            #duration.append( z ) 
             electricity_profile.append( elem_el )
             
         self.earliest_start = earliest_start
         self.latest_start = latest_start
-        #self.duration = duration
         self.electricity_profile = electricity_profile
         self.device_names = device_names
         self.state = SmartDeviceState( )

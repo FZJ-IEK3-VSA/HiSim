@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Optional
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass
 import datetime
@@ -11,8 +11,8 @@ class SystemConfig:
                  predictive : bool = False,
                  pv_included : bool = True,
                  smart_devices_included : bool = True,
-                 boiler_included : Union[ bool, str ] = 'electricity',
-                 heating_device_included : Union[ bool, str ] = 'heat_pump' ):
+                 boiler_included : Optional[ str ] = 'electricity',
+                 heating_device_included : Optional[ str ] = 'heat_pump' ):
         self.predictive = predictive
         self.pv_included = pv_included
         self.smart_devices_included = smart_devices_included
@@ -57,7 +57,7 @@ class SimulationParameters:
         return str(self.start_date) + "###" + str(self.end_date) + "###"  + str(self.seconds_per_timestep) + "###" + str(self.year) + "###" + str(self.timesteps)
     
     def reset_system_config( self, predictive : bool = False, pv_included : bool = True, smart_devices_included : bool = True, 
-                                   boiler_included : Union[ bool, str ] = 'electricity', heating_device_included : Union[ bool, str ] = 'heat_pump' ):
+                                   boiler_included : Optional[ str ] = 'electricity', heating_device_included : Optional[ str ] = 'heat_pump' ):
         self.system_config = SystemConfig( predictive = predictive,
                                            pv_included = pv_included, 
                                            smart_devices_included = smart_devices_included,

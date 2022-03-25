@@ -62,8 +62,8 @@ class PriceSignal(cp.Component):
         pass
 
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
-        priceinjectionforecast = [ 10 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 ] * self.day
-        pricepurchaseforecast = [ 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 ] * self.day
+        priceinjectionforecast = [ 10  ] * self.day
+        pricepurchaseforecast = [ 50  ] * self.day
         # pricepurchaseforecast = [ ]
         # for step in range( self.day ):
         #     x = timestep % self.day

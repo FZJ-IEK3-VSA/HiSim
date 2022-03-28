@@ -41,7 +41,7 @@ class BoilerState:
             Volume of boiler in liters.
         """
         self.temperature_in_K: float = temperature_in_K
-        self.volume_in_l = volume_in_l
+        self.volume_in_l : float = volume_in_l
 
     def clone(self):
         return BoilerState(self.volume_in_l, self.temperature_in_K)
@@ -55,7 +55,7 @@ class BoilerState:
 
 
     def set_temperature_from_energy( self, energy_in_kJ):
-     #   "converts energy contained in storage (kJ) into temperature (K)"
+        "converts energy contained in storage (kJ) into temperature (K)"
         #0.977 is the density of water in kg/l
         #4.182 is the specific heat of water in kJ / ( K * kg )
         self.temperature_in_K = energy_in_kJ / ( self.volume_in_l * 0.977 * 4.182 ) #temperature given in K
@@ -233,12 +233,12 @@ class ControllerState:
     This data class saves the state of the controller.
     """
 
-    def __init__( self, state : int = 0, time_to_go : int = -1 ):
+    def __init__( self, state : int = 0, timestep_of_last_action : int = -999 ):
         self.state = state
-        self.time_to_go = time_to_go
+        self.timestep_of_last_action = timestep_of_last_action
         
     def clone( self ):
-        return ControllerState( state = self.state, time_to_go = self.time_to_go )
+        return ControllerState( state = self.state, timestep_of_last_action = self.timestep_of_last_action )
 
 class BoilerController(cp.Component):
     """
@@ -335,15 +335,15 @@ class BoilerController(cp.Component):
         self.on_time = int( on_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( off_time / self.my_simulation_parameters.seconds_per_timestep )
         
-    def activation( self ):
+    def activation( self, timestep ):
         self.state.state = 2
-        self.state.time_to_go = self.on_time
+        self.state.timestep_of_last_action = timestep
         #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
         self.previous_state = self.state.clone( )
 
-    def deactivation( self ):
+    def deactivation( self, timestep ):
         self.state.state = -2
-        self.state.time_to_go = self.off_time
+        self.state.timestep_of_last_action = timestep 
         #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
         self.previous_state = self.state.clone( )
 
@@ -360,8 +360,11 @@ class BoilerController(cp.Component):
 
         if force_convergence: # please stop oscillating!
             return
-            
-        if self.state.time_to_go < 0:
+        
+        if ( self.state.state == 2 and timestep < self.state.timestep_of_last_action + self.on_time ) or \
+             ( self.state.state == -2 and timestep < self.state.timestep_of_last_action + self.off_time ):
+            pass
+        else:
             # Retrieves inputs
             T_control = stsv.get_input_value( self.StorageTemperatureC )
     
@@ -369,12 +372,12 @@ class BoilerController(cp.Component):
             if T_control > self.t_water_max:
                 #stop heating if temperature exceeds upper limit
                 if self.state.state >= 0:
-                    self.deactivation( )
+                    self.deactivation( timestep )
 
             elif T_control < self.t_water_min:
                 #start heating if temperature goes below lower limit
                 if self.state.state <= 0:
-                    self.activation( )
+                    self.activation( timestep )
              
             #continue working if other is not defined    
             else:
@@ -386,26 +389,19 @@ class BoilerController(cp.Component):
             if self.my_simulation_parameters.system_config.predictive:
                 #put forecast into dictionary
                 if self.state.state > 0:
-                    self.simulation_repository.set_entry( self.BoilerLoadForecast, [ self.P_on ] * max( 1, self.state.time_to_go + 1 ) )
+                    self.simulation_repository.set_entry( self.BoilerLoadForecast, [ self.P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )
                 else:
                     self.simulation_repository.set_entry( self.BoilerLoadForecast, [ self.P_on ] * self.on_time )
                     
                 #read in signal and modify state if recommended
                 devicesignal = stsv.get_input_value( self.BoilerSignalC )
                 if self.state.state == 1 and devicesignal == -1:
-                    self.deactivation( )
+                    self.deactivation( timestep )
                     
                 elif self.state.state == -1 and devicesignal == 1:
-                    self.activation( )
-                    
-            print( T_control ) 
-            
-        print( timestep, self.state.state, self.state.time_to_go )       
-        self.state.time_to_go = self.state.time_to_go - 1
-          
-        
-        stsv.set_output_value( self.BoilerControllerStateC, self.state.state )
-            
+                    self.activation( timestep )
+                 
+        stsv.set_output_value( self.BoilerControllerStateC, self.state.state )     
 
     # def log_output(self, t_m, state):
     #     log.information("==========================================")

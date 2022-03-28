@@ -55,9 +55,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     ##### System Parameters #####
 
     # Set simulation parameters
-    year = 2021
+    year = 2018
     seconds_per_timestep = 60 * 15
-    #seconds_per_timestep = 60
     
     # Set building
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
@@ -74,7 +73,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
-    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = True, boiler_included = 'electricity' )    
+    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', heating_device_included = 'oil_heater' )    
     
     my_sim.SimulationParameters = my_simulation_parameters
     
@@ -115,20 +114,15 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         hp_name = "Vitocal 300-A AWO-AC 301.B07"
         hp_min_operation_time = 60
         hp_min_idle_time = 15      
-    elif heating_device_included == 'oil_heater':
-        # Set Oil heater controller
-        t_air_heating = 21.0
-        offset = 3.0
-        # Set Oil Heater
-        max_power = 5000
-        min_on_time = 60
-        min_off_time = 15
-    elif heating_device_included == 'district_heating':
-        t_air_heating = 21.0
-        tol = 1e-2 #tolerance of set point -> considered in control
-        max_power = 15000
-        min_power = 1000
+    elif heating_device_included in [ 'district_heating', 'oil_heater' ]:
         efficiency = 0.85
+        T_min = 20.0
+        T_max = 21.0
+        P_on = 5000
+        on_time = 2700
+        off_time = 1800
+        heating_season_begin = 270
+        heating_season_end = 120
     
     elif heating_device_included:
         raise NameError( 'Heating Device definition', heating_device_included, 'not known. Choose heat_pump, oil_heater, district_heating, or False.' )
@@ -231,18 +225,25 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                  electricity_load_profiles[ operation_counter - 1 ].ComponentName,
                                                  electricity_load_profiles[ operation_counter - 1 ].ElectricityOutput )
         elif heating_device_included == 'oil_heater':
-            my_heating_controller = oil_heater.OilHeaterController( t_air_heating = t_air_heating,
-                                                                    offset = offset, 
+            my_heating_controller = oil_heater.OilHeaterController( T_min = T_min,
+                                                                    T_max = T_max,
+                                                                    P_on = P_on,
+                                                                    on_time = on_time,
+                                                                    off_time = off_time,
+                                                                    heating_season_begin = heating_season_begin,
+                                                                    heating_season_end = heating_season_end,
                                                                     my_simulation_parameters = my_simulation_parameters ) 
-            my_heating_controller.connect_only_predefined_connections( my_weather )
         elif heating_device_included == 'district_heating':
-            my_heating_controller = district_heating.DistrictHeatingController( max_power = max_power,
-                                                                                min_power = min_power,
-                                                                                t_air_heating = t_air_heating,
-                                                                                tol = tol,
+            my_heating_controller = district_heating.DistrictHeatingController( T_min = T_min,
+                                                                                T_max = T_max,
+                                                                                P_on = P_on,
+                                                                                on_time = on_time,
+                                                                                off_time = off_time,
+                                                                                heating_season_begin = heating_season_begin,
+                                                                                heating_season_end = heating_season_end,
                                                                                 my_simulation_parameters = my_simulation_parameters )
         my_heating_controller.connect_only_predefined_connections( my_building )
-        my_sim.add_component( my_heating_controller)
+        my_sim.add_component( my_heating_controller )
         
         #initialize and connect heating device
         if heating_device_included == 'heat_pump':
@@ -252,14 +253,13 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                              min_idle_time = hp_min_idle_time,
                                              my_simulation_parameters = my_simulation_parameters )
             my_heating.connect_only_predefined_connections( my_weather )    
+            
         elif heating_device_included == 'oil_heater':
-            my_heating = oil_heater.OilHeater( max_power = max_power,
-                                               min_off_time = min_off_time,
-                                               min_on_time = min_on_time, 
-                                               my_simulation_parameters = my_simulation_parameters )      
+            my_heating = oil_heater.OilHeater( P_on = P_on,
+                                               efficiency = efficiency,
+                                               my_simulation_parameters = my_simulation_parameters )    
         elif heating_device_included == 'district_heating':
-            my_heating = district_heating.DistrictHeating( max_power = max_power,
-                                                           min_power = min_power,
+            my_heating = district_heating.DistrictHeating( P_on = P_on,
                                                            efficiency = efficiency,
                                                            my_simulation_parameters = my_simulation_parameters )
         my_heating.connect_only_predefined_connections( my_heating_controller ) 
@@ -268,6 +268,17 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                    my_heating.ComponentName,
                                    my_heating.ThermalEnergyDelivered )
+        
+        if heating_device_included in [ 'heat_pump', 'oil_heater' ]:
+            #construct new baseload
+            my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+                    my_sim = my_sim,
+                    operation_counter = operation_counter,
+                    electricity_load_profiles = electricity_load_profiles, 
+                    elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                                  grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_heating ], 
+                                                                  my_simulation_parameters = my_simulation_parameters )
+                    )
         
         if predictive == True:
             my_predictive_controller = predictive_controller.PredictiveController( my_simulation_parameters = my_simulation_parameters )
@@ -278,4 +289,12 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             if boiler_included == 'electricity':
                 my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
                 my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
+            if heating_device_included in [ 'heat_pump', 'oil_heater' ]:
+                my_heating_controller.connect_only_predefined_connections( my_predictive_controller )
+                my_predictive_controller.connect_only_predefined_connections( my_heating_controller )
+                
+    ##### delete all files in cache:
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
                 

@@ -45,31 +45,35 @@ class SmartDeviceState:
         Index of demand profile relevent for the given timestep
     """
     
-    def __init__( self, actual_power : float = 0, time_to_go : int = -1, state : int = -1, position : int = 0, dictionary_set : bool = False ):
+    def __init__( self, actual_power : float = 0, timestep_of_activation : int = -999, time_to_go : int = 0, position : int = 0, state : int = -1, dictionary_set : bool = False ):
         self.actual_power = actual_power
+        self.timestep_of_activation = timestep_of_activation
         self.time_to_go = time_to_go
-        self.state = state
         self.position = position
+        self.state = state
         self.dictionary_set = dictionary_set
         
     def clone( self ):
-        return SmartDeviceState( self.actual_power, self.time_to_go, self.state, self.position ) 
+        return SmartDeviceState( self.actual_power, self.timestep_of_activation, self.time_to_go, self.position, self.state, self.dictionary_set ) 
         
-    def run( self, electricity_profile : list ):
+    def run( self, timestep : int, electricity_profile : list ):
         
         #device activation
-        if self.time_to_go == -1:
+        if timestep > self.timestep_of_activation + self.time_to_go:
+            self.timestep_of_activation = timestep
             self.time_to_go = len( electricity_profile )
             self.state = 2
-         
-        #device is running    
-        self.actual_power = electricity_profile[ - self.time_to_go ]
-        self.time_to_go = self.time_to_go - 1
+            
+        if timestep < self.timestep_of_activation + self.time_to_go:
+            #device is running    
+            self.actual_power = electricity_profile[ timestep - self.timestep_of_activation ]
         
         #device deactivation
-        if self.time_to_go == -1:
+        if timestep == self.timestep_of_activation + self.time_to_go:
             self.state = -1
             self.position = self.position + 1
+            self.time_to_go = 0
+            self.actual_power = 0
             self.dictionary_set = False
     
 class SmartDevice( cp.Component ):
@@ -155,8 +159,10 @@ class SmartDevice( cp.Component ):
         #initialize power
         self.state.actual_power = 0
         
+        print( timestep, self.state.timestep_of_activation + self.state.time_to_go, self.state.state )
+        
         #check out hard conditions
-        if self.state.time_to_go < 0:
+        if timestep > self.state.timestep_of_activation + self.state.time_to_go:
             if timestep < self.earliest_start[ self.state.position ]: #needs to be switched off
                 self.state.state = - 2
             elif timestep == self.latest_start[ self.state.position ]: #needs to be activated
@@ -173,11 +179,13 @@ class SmartDevice( cp.Component ):
             devicesignal = stsv.get_input_value( self.SmartApplianceSignalC )
             
             if self.state.state == -1 and devicesignal == 1:
-                self.state.run( self.electricity_profile[ self.state.position ] )
+                self.state.run( timestep, self.electricity_profile[ self.state.position ] )
         
         #device actions based on controller signal
         if self.state.state == 2:
-            self.state.run( self.electricity_profile[ self.state.position ] )
+            self.state.run( timestep, self.electricity_profile[ self.state.position ] )
+
+        print( timestep, self.state.timestep_of_activation + self.state.time_to_go, self.state.state )
 
         stsv.set_output_value( self.electricity_outputC, self.state.actual_power )
         

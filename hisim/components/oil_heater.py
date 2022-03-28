@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.building import Building
-from hisim.components.weather import Weather
+from hisim.components import building
+from hisim.components import predictive_controller
 from hisim import log
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -18,103 +18,40 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-
-@dataclass
-class OilheaterState:
-    """
-    This data class saves the state of the simulation results.
-    """
-    
-    def __init__( self, time_on : int = 0, time_off : int = 0, full_medium_off :   int = 0 ):
-        """
-        Parameters
-        ----------
-        time_on : int, optional
-            Timesteps the Oilheater has been switched on. The default is 0.
-        time_off : int, optional
-            Timesteps the Oilheater has been switched off. The default is 0.
-        full_medium_off : int, optional
-            Control State: 2 is switched on, 1 is switched on medium level and 0 is turned off. The default is 0.
-        """
-        
-        self.time_on = time_on
-        self.time_off = time_off
-        self.full_medium_off = full_medium_off
-
-    def update_state( self, stateC, seconds_per_timestep ):
-        """
-        Updates state.
-        
-        Parameters
-        ----------
-        stateC : int
-            Is 0 if Oilheater is switched off and 1 if Oilheater is switched on.
-        seconds_per_timestep : int
-            Seconds per iteration.
-        """
-        
-        # on switch
-        if stateC == 2:
-            self.time_on = self.time_on + seconds_per_timestep
-            self.time_off = 0
-            self.full_medium_off = 2
-            
-        elif stateC == 1:
-            self.time_on = self.time_on + seconds_per_timestep
-            self.time_off = 0
-            self.full_medium_off = 1
-            
-        else:
-            self.time_off = self.time_off + seconds_per_timestep
-            self.time_on = 0
-            self.full_medium_off = 0
-            
-    def clone( self ):
-        return OilheaterState( self.time_on, self.time_off, self.full_medium_off )
-
 class OilHeater( cp.Component ):
     """
-    Oil heater implementation. Oil heater heats up oil transmittant with electricity ( efficiency = 1 ).
-    The oil heater can be switched on with maximum power, with medium power, or switched off - there are three power levels.
+    District heating implementation. District Heating transmitts heat with given efficiency.
+    District heating is controlled with an on/off control oscillating within the comfort temperature band.
     """
     
     # Inputs
-    StateC =                     "StateC" #0 if switched off, 1 if switched on with medium power, 2 if switched on with maximum power
+    OilHeaterControllerState = "OilHeaterControllerState"
     
     # Outputs
-    ThermalEnergyDelivered =    "ThermalEnergyDelivered"
-    ElectricityOutput =         "ElectricityOutput" #this definition is useful in sumbuilder, but of corse it is electricity input needed
-    NumberOfCycles =            "NumberOfCycles"
+    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ElectricityOutput =      "ElectricityOutput"
 
-    def __init__( self, my_simulation_parameters: SimulationParameters , max_power: int, min_off_time : int, min_on_time : int,  ):
+    def __init__( self, my_simulation_parameters: SimulationParameters , P_on : float, efficiency : float ):
         """
         Parameters
         ----------
-        max_power: int
-            Power of oil heater when turned on.
-        min_off_time : int
-            Minimal time oil heater is switched off
-        min_on_time : int
-            Minimal time oil heater is switched on
+        P_on : float
+            Power of oil heater.
+        efficiency : float
+            Efficiency of oil heater
         """
         
-        super( ).__init__( name = 'OilHeater', my_simulation_parameters=my_simulation_parameters )
+        super( ).__init__( name = 'OilHeater', my_simulation_parameters = my_simulation_parameters )
         
-        #introduce parameters of oil heater
-        self.build( max_power = max_power,
-                    min_off_time = min_off_time,
-                    min_on_time = min_on_time )
-        
-        #initialize state and previous state
-        self.state = OilheaterState( )
-        self.state_previous = OilheaterState( )
+        #introduce parameters of district heating
+        self.build( P_on = P_on, efficiency = efficiency )
         
         # Inputs - Mandatories
-        self.stateC: cp.ComponentInput = self.add_input(    self.ComponentName,
-                                                            self.StateC,
-                                                            lt.LoadTypes.Any,
-                                                            lt.Units.Any,
-                                                            mandatory = True )
+        self.OilHeaterControllerStateC : cp.ComponentInput = self.add_input(  self.ComponentName,
+                                                                              self.OilHeaterControllerState,
+                                                                              lt.LoadTypes.Any,
+                                                                              lt.Units.Any,
+                                                                              mandatory = True )
         
         # Outputs 
         self.thermal_energy_delivered : cp.ComponentOutput = self.add_output(   self.ComponentName,
@@ -122,28 +59,28 @@ class OilHeater( cp.Component ):
                                                                                 lt.LoadTypes.Heating,
                                                                                 lt.Units.Watt )
         
-        self.electricity_output: cp.ComponentOutput = self.add_output(      self.ComponentName,
-                                                                            self.ElectricityOutput,
-                                                                            lt.LoadTypes.Electricity,
-                                                                            lt.Units.Watt )
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                       self.ElectricityOutput,
+                                                                       lt.LoadTypes.Electricity,
+                                                                       lt.Units.Watt )
+        
         self.add_default_connections( OilHeaterController, self.get_controller_default_connections( ) )
         
     def get_controller_default_connections( self ):
-        log.information("setting oil heater default connections")
+        log.information("setting weather default connections")
         connections = [ ]
         controller_classname = OilHeaterController.get_classname( )
-        connections.append( cp.ComponentConnection( OilHeater.StateC, controller_classname, OilHeaterController.StateC ) )
+        connections.append( cp.ComponentConnection( OilHeater.OilHeaterControllerState, controller_classname, OilHeaterController.OilHeaterControllerState ) )
         return connections
 
-    def build( self, max_power: int, min_on_time : int, min_off_time : int ):
+    def build( self, P_on: float, efficiency : float ):
         """
         Assigns parameters of oil heater to class, and writes them to the report
         """
         
         #Parameters:
-        self.max_power =    max_power
-        self.min_on_time =  min_on_time
-        self.min_off_time = min_off_time
+        self.P_on  =        P_on
+        self.efficiency =   efficiency
         
         # Writes info to report
         self.write_to_report()
@@ -157,175 +94,225 @@ class OilHeater( cp.Component ):
         """
         
         lines = []
-        lines.append( "Name: {}".format( "Oil heater" ) )
-        lines.append( "Power: {:4.0f} kW".format( ( self.max_power ) * 1E-3 ) )
+        lines.append( "Name: {}".format( "OilHeater" ) )
+        lines.append( "Power: {:4.0f} kW".format( ( self.P_on ) * 1E-3 ) )
+        lines.append( 'Efficiency : {:4.0f} %'.format( ( self.efficiency ) * 100 ) )
         return lines
     
-    def i_save_state( self ):
-        self.previous_state = self.state.clone( )
+    def i_save_state(self):
+        pass
 
     def i_restore_state(self):
-        self.state = self.previous_state.clone( )
+        pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
     
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
         """
-        Performs the simulation of the oil heater.
+        Performs the simulation of the district heating model.
         """ 
         
-        # Load control signal stateC value ( 1 means on 0 means off )
-        stateC = stsv.get_input_value( self.stateC )
+        # Load control signal signalC value
+        signal = stsv.get_input_value( self.OilHeaterControllerStateC )
         
-        # Overwrite control signal stateC to realize minimum time on or time off
-        if self.state.full_medium_off == 2 and self.state.time_on < self.min_on_time * 60 :
-            stateC = 2
-        if self.state.full_medium_off == 1 and self.state.time_on < self.min_on_time * 60 :
-            stateC = 1
-        if self.state.full_medium_off == 0 and self.state.time_off < self.min_off_time * 60:
-            stateC = 0
-            
-        #update state class accordingly
-        self.state.update_state( stateC = stateC , seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep )
+        if signal > 0:
+            signal = 1
+        else:
+            signal = 0
         
         # write values for output time series
-        stsv.set_output_value( self.thermal_energy_delivered, self.max_power * self.state.full_medium_off / 2 )
-        stsv.set_output_value( self.electricity_output, self.max_power * self.state.full_medium_off / 2 )
+        stsv.set_output_value( self.thermal_energy_delivered, signal * self.P_on * self.efficiency )
+        stsv.set_output_value( self.ElectricityOutputC, signal * self.P_on )
+
+class ControllerState:
+    """
+    This data class saves the state of the controller.
+    """
+
+    def __init__( self, state : int = 0, timestep_of_last_action : int = -999 ):
+        self.state = state
+        self.timestep_of_last_action = timestep_of_last_action
         
+    def clone( self ):
+        return ControllerState( state = self.state, timestep_of_last_action = self.timestep_of_last_action )
+    
 class OilHeaterController( cp.Component ):
     """
-    Oilheater Controller. It takes data from other
-    components and sends signal to the Oilheater for
-    activation or deactivation.
-
+    District Heating Controller. It takes power from the previous time step and adopts power to meet the heating needs.
+    
     Parameters
     --------------
-    t_air_heating: float
-        Minimum comfortable temperature for residents
-    offset: float
-        Temperature offset to compensate the hysteresis
-        correction for the building temperature change
+    T_min : float
+        Lower comfort temperature of building, in °C. The default is 19 °C.
+    T_max : float
+        Upper comfort temperature of building, in °C. The default is 23 °C.    
+    P_on : float, optional
+        Power of heating when turned on, in W. The default is 600 W.
+    on_time : int, optional
+        Minimal running time of district heating system, in seconds. The default is 2700 s.
+    off_time : int, optional
+        Minimal off time of district heating, in seconds. The default is 120 s.
+    heating_season_begin : int, optional
+        Day( julian day, number of day in year ), when heating season starts. The default is 270.
+    heating_season_end : int, optional
+        Day( julian day, number of day in year ), when heating season ends. The default is 120
     """
-    
     # Inputs
     TemperatureMean = "Residence Temperature"
-    TemperatureOutside = "Temperature Outside"
+    OilHeaterSignal = "OilHeaterSignal"
 
     # Outputs
-    StateC = "StateC"
+    OilHeaterControllerState = "OilHeaterControllerState"
+
+    #Forecasts
+    OilHeaterLoadForecast = "OilHeaterLoadForecast"
 
     # Similar components to connect to:
     # 1. Building
 
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
-                  t_air_heating: float = 20.0,
-                  offset: float = 2.0 ):
+                  T_min: float = 19.0,
+                  T_max : float = 23.0,
+                  P_on : float = 6000,
+                  on_time : int = 2700,
+                  off_time : int = 1800,
+                  heating_season_begin : int = 270,
+                  heating_season_end : int = 120 ):
         
-        super().__init__( "OilheaterController", my_simulation_parameters=my_simulation_parameters )
+        super().__init__( name = "OilHeaterController", my_simulation_parameters = my_simulation_parameters )
         
-        self.build( t_air_heating = t_air_heating,
-                    offset = offset )
+        self.build( T_min = T_min,
+                    T_max = T_max,
+                    P_on = P_on,
+                    on_time = on_time,
+                    off_time = off_time,
+                    heating_season_begin = heating_season_begin,
+                    heating_season_end = heating_season_end )
 
         #inputs
         self.t_mC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                    self.TemperatureMean,
-                                                    lt.LoadTypes.Temperature,
-                                                    lt.Units.Celsius,
-                                                    True )
-        self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                     self.TemperatureOutside,
-                                                     lt.LoadTypes.Any,
-                                                     lt.Units.Celsius,
-                                                     True) 
+                                                       self.TemperatureMean,
+                                                       lt.LoadTypes.Temperature,
+                                                       lt.Units.Celsius,
+                                                       mandatory = True )
+        
+        if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
+            self.OilHeaterSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                       self.OilHeaterSignal,
+                                                                       lt.LoadTypes.Any,
+                                                                       lt.Units.Any,
+                                                                       mandatory = False )
+            self.add_default_connections( predictive_controller.PredictiveController, self.get_predictive_controller_default_connections( ) )
+        
         #outputs
-        self.stateC:cp.ComponentOutput = self.add_output( self.ComponentName,
-                                      self.StateC,
-                                      lt.LoadTypes.Any,
-                                      lt.Units.Any)
+        self.OilHeaterControllerStateC = self.add_output( self.ComponentName,
+                                                          self.OilHeaterControllerState,
+                                                          lt.LoadTypes.Any,
+                                                          lt.Units.Any )
         
-        self.add_default_connections( Weather, self.get_weather_default_connections( ) )
-        self.add_default_connections( Building, self.get_building_default_connections( ) )
-        
-    def get_weather_default_connections( self ):
-        log.information("setting weather default connections in OilHeaterController")
-        connections = [ ]
-        weather_classname = Weather.get_classname( )
-        connections.append( cp.ComponentConnection( OilHeaterController.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
-        return connections
+        self.add_default_connections( building.Building, self.get_building_default_connections( ) )
     
     def get_building_default_connections( self ):
         log.information("setting building default connections in OilHeaterController")
         connections = [ ]
-        building_classname = Building.get_classname( )
-        connections.append( cp.ComponentConnection( OilHeaterController.TemperatureMean, building_classname, Building.TemperatureMean ) )
+        building_classname = building.Building.get_classname( )
+        connections.append( cp.ComponentConnection( OilHeaterController.TemperatureMean, building_classname, building.Building.TemperatureMean ) )
+        return connections
+    
+    def get_predictive_controller_default_connections( self ):
+        log.information( "setting predictive controller default connections") 
+        connections = [ ]
+        predictive_controller_classname = predictive_controller.PredictiveController.get_classname( )
+        connections.append( cp.ComponentConnection( OilHeaterController.OilHeaterSignal, predictive_controller_classname, 
+                                                    predictive_controller.PredictiveController.HeatingDeviceSignal ) )
         return connections
 
-    def build( self, t_air_heating, offset ):
+    def build( self, T_min, T_max, P_on, on_time, off_time, heating_season_begin, heating_season_end ):
+        self.T_min = T_min
+        self.T_max = T_max
+        self.P_on = P_on
+        self.on_time = int( on_time / self.my_simulation_parameters.seconds_per_timestep )
+        self.off_time = int( off_time / self.my_simulation_parameters.seconds_per_timestep )
+        self.heating_season_begin = heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         
         #initialize control mode
-        self.full_medium_off = 0
-        self.previous_full_medium_off = 0
+        self.state = ControllerState()
+        self.state_previous = ControllerState( )
+        
+    def activation( self, timestep ):
+        self.state.state = 2
+        self.state.timestep_of_last_action = timestep
+        #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
+        self.previous_state = self.state.clone( )
 
-        # Configuration
-        self.t_set_heating = t_air_heating
-        self.offset = offset
+    def deactivation( self, timestep ):
+        self.state.state = -2
+        self.state.timestep_of_last_action = timestep 
+        #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
+        self.previous_state = self.state.clone( )
 
-    def i_save_state(self):
-        self.previous_full_medium_off = self.full_medium_off
+    def i_save_state( self ):
+        self.state = self.state_previous.clone( )
 
-    def i_restore_state(self):
-        self.full_medium_off = self.previous_full_medium_off
+    def i_restore_state( self ):
+        self.state_previous = self.state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool  ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool ):
         
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
-            stateC = 0
+            pass
+        
+        if timestep < self.heating_season_begin and timestep > self.heating_season_end:
+            self.state.state = -2
+            
+        elif ( self.state.state == 2 and timestep < self.state.timestep_of_last_action + self.on_time ) or \
+             ( self.state.state == -2 and timestep < self.state.timestep_of_last_action + self.off_time ):
             pass
         else:
             # Retrieves inputs
-            t_m_old = stsv.get_input_value( self.t_mC )
-            T_out =   stsv.get_input_value( self.t_outC )
-            T_diff = t_m_old - T_out
+            T_control = stsv.get_input_value( self.t_mC )
     
-            minimum_heating_set_temp = self.t_set_heating - self.offset
-            heating_set_temp = self.t_set_heating
-            maximum_heating_set_temp = self.t_set_heating + self.offset
-            
-            #below comfortband heating goes to maximum
-            if t_m_old < minimum_heating_set_temp:
-                stateC = 2
-                
-            #in lower half of comfort band 
-            elif t_m_old >= minimum_heating_set_temp and t_m_old < heating_set_temp:
-                #heating goes to maximum on cold days
-                if T_diff >= 20:
-                    stateC = 2
-                #heating is turned on medium on medium days
-                elif T_diff < 20 and T_diff >= 10:
-                    stateC = 1
-                #heating is not touched on warm days
-                else:
-                    stateC = 0
-                    
-            #in upper half of comfort band
-            elif t_m_old >= heating_set_temp and t_m_old < maximum_heating_set_temp:
-                if T_diff >= 20:
-                    stateC = 1
-                else:
-                    stateC = 0
-            
-            #room temperature exceeds comfort band
-            else:
-                stateC = 0
+            #on off control based on temperature limits
+            if T_control > self.T_max:
+                #stop heating if temperature exceeds upper limit
+                if self.state.state >= 0:
+                    self.deactivation( timestep )
 
-        #log.information(state)
-        stsv.set_output_value(self.stateC, stateC )
+            elif T_control < self.T_min:
+                #start heating if temperature goes below lower limit
+                if self.state.state <= 0:
+                    self.activation( timestep )
+             
+            #continue working if other is not defined    
+            else:
+                if self.state.state > 0:
+                    self.state.state = 1
+                if self.state.state < 0:
+                    self.state.state = -1
+        
+            if self.my_simulation_parameters.system_config.predictive:
+                #put forecast into dictionary
+                if self.state.state > 0:
+                    self.simulation_repository.set_entry( self.OilHeaterLoadForecast, [ self.P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )
+                else:
+                    self.simulation_repository.set_entry( self.OilHeaterLoadForecast, [ self.P_on ] * self.on_time )
+                    
+                #read in signal and modify state if recommended
+                devicesignal = stsv.get_input_value( self.OilHeaterSignalC )
+                if self.state.state == 1 and devicesignal == -1:
+                    self.deactivation( timestep )
+                    
+                elif self.state.state == -1 and devicesignal == 1:
+                    self.activation( timestep )
+        
+        stsv.set_output_value( self.OilHeaterControllerStateC, self.state.state )
 
     def prin1t_output(self, t_m, state):
         log.information("==========================================")

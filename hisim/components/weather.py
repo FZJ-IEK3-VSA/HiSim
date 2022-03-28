@@ -235,8 +235,10 @@ class Weather(Component):
 
 
              if seconds_per_timestep != 60:
+                 print( 'oye,oye', len( temperature.to_list() ) )
                  self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 self.DryBulb_list = temperature.resample( str( seconds_per_timestep ) + "S" ).mean( )
+                 print( 'oye,oye', len( self.temperature_list ) )
+                 self.DryBulb_list = temperature.resample( str( seconds_per_timestep ) + "S" ).mean( ).to_list()
                  self.DHI_list = DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
                   #np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
                  self.DNI_list = DNI.resample(str(seconds_per_timestep) + "S").mean().tolist()#)  # type: ignore
@@ -249,7 +251,7 @@ class Weather(Component):
                  self.Wspd_list = Wspd.resample(str(seconds_per_timestep) + "S").mean().tolist()
              else:
                  self.temperature_list = temperature.tolist()
-                 self.DryBulb_list = temperature
+                 self.DryBulb_list = temperature.to_list()
                  self.DHI_list = DHI.tolist()
                  self.DNI_list = DNI.tolist()
                  self.DNIextra_list = DNIextra.tolist()
@@ -285,6 +287,7 @@ class Weather(Component):
              
         #write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
+            print( 'attention, attention:', len( self.temperature_list ))
             my_simulation_repository.set_entry( self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list )
             my_simulation_repository.set_entry( self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list )
             my_simulation_repository.set_entry( self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list )

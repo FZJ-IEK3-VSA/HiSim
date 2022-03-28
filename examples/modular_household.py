@@ -73,7 +73,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
-    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', heating_device_included = 'oil_heater' )    
+    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', heating_device_included = 'heat_pump' )    
     
     my_sim.SimulationParameters = my_simulation_parameters
     
@@ -289,9 +289,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             if boiler_included == 'electricity':
                 my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
                 my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
-            if heating_device_included in [ 'heat_pump', 'oil_heater' ]:
-                my_heating_controller.connect_only_predefined_connections( my_predictive_controller )
-                my_predictive_controller.connect_only_predefined_connections( my_heating_controller )
+            # if heating_device_included in [ 'heat_pump', 'oil_heater' ]:
+            #     my_heating_controller.connect_only_predefined_connections( my_predictive_controller )
+            #     my_predictive_controller.connect_only_predefined_connections( my_heating_controller )
                 
     ##### delete all files in cache:
     dir = '..//hisim//inputs//cache'

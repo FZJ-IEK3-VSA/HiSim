@@ -159,8 +159,6 @@ class SmartDevice( cp.Component ):
         #initialize power
         self.state.actual_power = 0
         
-        print( timestep, self.state.timestep_of_activation + self.state.time_to_go, self.state.state )
-        
         #check out hard conditions
         if timestep > self.state.timestep_of_activation + self.state.time_to_go:
             if timestep < self.earliest_start[ self.state.position ]: #needs to be switched off

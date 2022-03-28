@@ -12,6 +12,7 @@ from hisim.components import smart_device
 from hisim.components import simple_bucket_boiler
 from hisim.components import district_heating
 from hisim.components import oil_heater
+from hisim.components import heat_pump
 from hisim.simulationparameters import SimulationParameters, SystemConfig
 
 
@@ -144,10 +145,10 @@ class PredictiveController( cp.Component ):
                                                                              self.HeatingDeviceSignal,
                                                                              lt.LoadTypes.Any,
                                                                              lt.Units.Any )
-            if heatingchoice == 'heat_pump':
-                self.add_default_connections( heat_pump.HeatPumpController, self.get_heat_pump_controller_default_connections( ) )  
-            elif heatingchoice == 'oil_heater':
-                self.add_default_connections( oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
+            # if heatingchoice == 'heat_pump':
+            #     self.add_default_connections( heat_pump.HeatPumpController, self.get_heat_pump_controller_default_connections( ) )  
+            # elif heatingchoice == 'oil_heater':
+            #     self.add_default_connections( oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
         
     def get_smart_appliance_default_connections( self ):
         log.information( "setting smart appliance default connections" )
@@ -270,32 +271,32 @@ class PredictiveController( cp.Component ):
     
             stsv.set_output_value( self.BoilerSignalC, self.signal.boiler_signal )
             
-        #check if heating device is available
-        if self.my_simulation_parameters.system_config.heating_device_included in [ 'oil_heater', 'heat_pump' ]:
+        # #check if heating device is available
+        # if self.my_simulation_parameters.system_config.heating_device_included in [ 'oil_heater', 'heat_pump' ]:
             
-            #get device state
-            devicestate = stsv.get_input_value( self.HeatingDeviceControllerStateC )
+        #     #get device state
+        #     devicestate = stsv.get_input_value( self.HeatingDeviceControllerStateC )
             
-            #get forecast of device
-            if devicestate != -2:
-                if self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
-                    shiftableload = self.simulation_repository.get_entry( oil_heater.OilHeaterController.OilHeaterLoadForecast )
-                elif self.my_simulation_parameters.system_config.heating_device_included == 'heat_pump':
-                    shiftableload = self.simulation_repository.get_entry( heat_pump.HeatPumpController.HeatPumpLoadForecast )
-                steps = len( shiftableload )
+        #     #get forecast of device
+        #     if devicestate != -2:
+        #         if self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
+        #             shiftableload = self.simulation_repository.get_entry( oil_heater.OilHeaterController.OilHeaterLoadForecast )
+        #         elif self.my_simulation_parameters.system_config.heating_device_included == 'heat_pump':
+        #             shiftableload = self.simulation_repository.get_entry( heat_pump.HeatPumpController.HeatPumpLoadForecast )
+        #         steps = len( shiftableload )
             
-            #see if device is controllable
-            if abs( devicestate ) < 2:
-                #calculate price and peak and get controller signal
-                price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
-                self.signal.heating_device_signal = self.decision_maker( price_per_kWh, peak )
+        #     #see if device is controllable
+        #     if abs( devicestate ) < 2:
+        #         #calculate price and peak and get controller signal
+        #         price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
+        #         self.signal.heating_device_signal = self.decision_maker( price_per_kWh, peak )
             
-            else:
-                #return untouched
-                self.signal.heating_device_signal = 0
+        #     else:
+        #         #return untouched
+        #         self.signal.heating_device_signal = 0
                 
-            #update totalload for next device
-            if devicestate == 2 or ( abs( devicestate ) == 1 and self.signal.heating_device_signal == 1 ) :
-                totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
+        #     #update totalload for next device
+        #     if devicestate == 2 or ( abs( devicestate ) == 1 and self.signal.heating_device_signal == 1 ) :
+        #         totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
     
-            stsv.set_output_value( self.HeatingDeviceSignalC, self.signal.heating_device_signal )
+        #     stsv.set_output_value( self.HeatingDeviceSignalC, self.signal.heating_device_signal )

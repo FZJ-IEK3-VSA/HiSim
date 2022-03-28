@@ -35,8 +35,6 @@ __status__ = "development"
 
 class HeatPumpState:
 
-    def clone(self):
-        return HeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
     def __init__(self,
                  start_timestep=None,
                  thermal_energy_delivered = 0.0,
@@ -65,6 +63,9 @@ class HeatPumpState:
             self.electricity_in = abs(self.thermal_energy_delivered / self.cop)
         else:
             raise Exception("Impossible Heat Pump State.")
+            
+    def clone(self):
+        return HeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
 
 class HeatPump(cp.Component):
     """
@@ -78,10 +79,10 @@ class HeatPump(cp.Component):
         Heat pump manufacturer
     name : str
         Heat pump model
-    min_operation_time : int
-        Minimum time duration that the heat pump operates under one cycle
-    min_idle_time : int
-        Minimum time duration that the heat pump has to stay idle
+    min_operation_time : int, optional
+        Minimum time duration that the heat pump operates under one cycle, in seconds. The default is 3600.
+    min_idle_time : int, optional
+        Minimum time duration that the heat pump has to stay idle, in seconds. The default is 900.
     """
     # Inputs
     State = "State"
@@ -107,10 +108,10 @@ class HeatPump(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-        manufacturer="Viessmann Werke GmbH & Co KG",
-                 name="Vitocal 300-A AWO-AC 301.B07",
-                 min_operation_time=60,
-                 min_idle_time=15):
+                 manufacturer : str = "Viessmann Werke GmbH & Co KG",
+                 name : str ="Vitocal 300-A AWO-AC 301.B07",
+                 min_operation_time : int = 60 * 60,
+                 min_idle_time : int = 15 * 60):
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
 
         self.build(manufacturer, name, min_operation_time, min_idle_time)
@@ -118,7 +119,7 @@ class HeatPump(cp.Component):
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
         self.state = HeatPumpState(start_timestep=int(0),cycle_number=0)
-        self.previous_state = copy.deepcopy(self.state)
+        self.previous_state = self.state.clone( )
 
 
 
@@ -208,7 +209,7 @@ class HeatPump(cp.Component):
         connections.append( cp.ComponentConnection( HeatPump.State, controller_classname, HeatPumpController.State ) )
         return connections
 
-    def build(self, manufacturer, name, min_operation_time, min_idle_time):
+    def build( self, manufacturer, name, min_operation_time, min_idle_time ):
         # Simulation parameters
 
         # Retrieves heat pump from database - BEGIN
@@ -239,12 +240,12 @@ class HeatPump(cp.Component):
         # Sets the power variation restrictions
         # Default values: 15 minutes to full power
         # Used only for non-clocked heat pump
-        self.max_heating_power_var = self.max_heating_power / 15
-        self.max_cooling_power_var = - self.max_heating_power / 15
+        self.max_heating_power_var = self.max_heating_power * self.my_simulation_parameters.seconds_per_timestep / 900
+        self.max_cooling_power_var = - self.max_heating_power * self.my_simulation_parameters.seconds_per_timestep / 900
 
         # Sets the time operation restricitions
-        self.min_operation_time = min_operation_time
-        self.min_idle_time = min_idle_time
+        self.min_operation_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+        self.min_idle_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
 
         # Writes info to report
         self.write_to_report()
@@ -433,7 +434,7 @@ class HeatPumpController(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-        t_air_heating: float = 18.0,
+                 t_air_heating: float = 18.0,
                  t_air_cooling: float = 26.0,
                  offset: float = 0.0,
                  mode=1):

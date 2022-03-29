@@ -386,7 +386,7 @@ class BoilerController(cp.Component):
                 if self.state.state < 0:
                     self.state.state = -1
         
-            if self.my_simulation_parameters.system_config.predictive:
+            if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.boiler_included == 'electricity':
                 #put forecast into dictionary
                 if self.state.state > 0:
                     self.simulation_repository.set_entry( self.BoilerLoadForecast, [ self.P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )

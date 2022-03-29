@@ -286,7 +286,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                   my_simulation_parameters = my_simulation_parameters )
                     )
         
-        if predictive == True:
+        if predictive == True and ( smart_device_included == True or boiler_included == 'electricity' or heating_device_included in [ 'heat_pump', 'oil_heater' ] ):
             my_predictive_controller = predictive_controller.PredictiveController( my_simulation_parameters = my_simulation_parameters )
             my_sim.add_component( my_predictive_controller )
             if smart_devices_included:

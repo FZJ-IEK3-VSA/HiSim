@@ -205,13 +205,13 @@ class PredictiveController( cp.Component ):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         
-        pvforecast = self.simulation_repository.get_entry( pvs.PVSystem.PV_Forecast_24h )
         demandforecast = self.simulation_repository.get_entry( occupancy.Occupancy.Electricity_Demand_Forecast_24h )
         priceinjectionforecast = self.simulation_repository.get_entry( price_signal.PriceSignal.Price_Injection_Forecast_24h )
         pricepurchaseforecast = self.simulation_repository.get_entry( price_signal.PriceSignal.Price_Purchase_Forecast_24h )
         
         #build total load
         if self.my_simulation_parameters.system_config.pv_included == True:
+            pvforecast = self.simulation_repository.get_entry( pvs.PVSystem.PV_Forecast_24h )
             totalload = [ a - b for ( a, b ) in zip( demandforecast, pvforecast ) ]
         else:
             totalload = demandforecast

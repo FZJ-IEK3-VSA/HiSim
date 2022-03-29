@@ -146,9 +146,6 @@ class HeatPump(cp.Component):
 
         # Writes info to report
         self.write_to_report()
-        
-    def get_standard_power_el( self ):
-        return self.max_heating_power / self.cal_cop[ 10 ]
 
     def cal_cop( self, t_out ):
         return self.cop_coef[0] * t_out + self.cop_coef[1]
@@ -193,7 +190,8 @@ class HeatPump(cp.Component):
         
         stsv.set_output_value( self.electricity_outputC, signal * self.max_heating_power / cop )
         
-        stsv.set_output_value( self.heat_pump_power_potentialC, self.max_heating_power / cop )
+        if self.my_simulation_parameters.system_config.predictive == True:
+            stsv.set_output_value( self.heat_pump_power_potentialC, self.max_heating_power / cop )
         
         
 class ControllerState:

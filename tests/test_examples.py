@@ -80,7 +80,7 @@ def test_modular_household_configurations( ):
     #     for smart_devices_included in [ True, False ]:
     #         for boiler_included in [ 'electricity', 'hydrogen', None ]:
     #             for heating_device_included in [ 'heat_pump', 'oil_heater', 'district_heating' ]:
-    predictive = True
+    predictive = random.choice( [ True, False ] )
     pv_included = random.choice( [ True, False ] )
     smart_devices_included = random.choice( [ True, False ] )
     boiler_included = random.choice( [ 'electricity', 'hydrogen', None ] )

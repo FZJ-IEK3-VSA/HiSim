@@ -158,7 +158,7 @@ class DistrictHeatingController( cp.Component ):
     heating_season_begin : int, optional
         Day( julian day, number of day in year ), when heating season starts. The default is 270.
     heating_season_end : int, optional
-        Day( julian day, number of day in year ), when heating season ends. The default is 120
+        Day( julian day, number of day in year ), when heating season ends. The default is 150
     """
     # Inputs
     TemperatureMean = "Residence Temperature"
@@ -177,7 +177,7 @@ class DistrictHeatingController( cp.Component ):
                   on_time : int = 2700,
                   off_time : int = 1800,
                   heating_season_begin : int = 270,
-                  heating_season_end : int = 120 ):
+                  heating_season_end : int = 150 ):
         
         super().__init__( name = "DistrictHeatingController", my_simulation_parameters = my_simulation_parameters )
         

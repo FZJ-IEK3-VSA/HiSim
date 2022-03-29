@@ -183,8 +183,6 @@ class SmartDevice( cp.Component ):
         if self.state.state == 2:
             self.state.run( timestep, self.electricity_profile[ self.state.position ] )
 
-        print( timestep, self.state.timestep_of_activation + self.state.time_to_go, self.state.state )
-
         stsv.set_output_value( self.electricity_outputC, self.state.actual_power )
         
     def build( self, seconds_per_timestep : int = 60 ):

@@ -30,7 +30,7 @@ def test_building():
     log.profile("T2: " + str(t2-t1))
     # Set Occupancy
     my_occupancy = occupancy.Occupancy(profile_name=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
-    my_occupancy.set_sim_repo( repo )
+    #my_occupancy.set_sim_repo( repo )
 
     t3 = time.perf_counter()
     log.profile("T2: " + str(t3 - t2))

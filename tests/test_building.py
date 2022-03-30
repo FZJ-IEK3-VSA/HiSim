@@ -25,12 +25,13 @@ def test_building():
     my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
 
     stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(20)
-    repo = component.SimRepository()
+    #repo = component.SimRepository()
     t2 = time.perf_counter()
     log.profile("T2: " + str(t2-t1))
     # Set Occupancy
     my_occupancy = occupancy.Occupancy(profile_name=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
-    my_occupancy.set_sim_repo( repo )
+    #my_occupancy.set_sim_repo( repo )
+
     t3 = time.perf_counter()
     log.profile("T2: " + str(t3 - t2))
 

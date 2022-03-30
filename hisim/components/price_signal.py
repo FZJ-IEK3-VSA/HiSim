@@ -38,6 +38,7 @@ class PriceSignal(cp.Component):
     
     #Outputs
     PricePurchase = 'PricePurchase'
+    PriceInjection = 'PriceInjection'
 
     def __init__( self,
                   my_simulation_parameters: SimulationParameters ):
@@ -48,9 +49,13 @@ class PriceSignal(cp.Component):
         
         # Outputs
         self.PricePurchaseC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                   self.PricePurchase,
-                                                                   lt.LoadTypes.Price,
-                                                                   lt.Units.c_per_kWh )
+                                                                    self.PricePurchase,
+                                                                    lt.LoadTypes.Price,
+                                                                    lt.Units.c_per_kWh )
+        self.PriceInjectionC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                    self.PriceInjection,
+                                                                    lt.LoadTypes.Price,
+                                                                    lt.Units.c_per_kWh )
 
     def i_save_state(self):
         pass
@@ -62,18 +67,20 @@ class PriceSignal(cp.Component):
         pass
 
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
-        priceinjectionforecast = [ 10 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 ] * self.day
-        pricepurchaseforecast = [ ]
-        for step in range( self.day ):
-            x = timestep % self.day
-            if x > self.start and x < self.end:
-                pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
-            else:
-                pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+        priceinjectionforecast = [ 10  ] * self.day
+        pricepurchaseforecast = [ 50  ] * self.day
+        # pricepurchaseforecast = [ ]
+        # for step in range( self.day ):
+        #     x = timestep % self.day
+        #     if x > self.start and x < self.end:
+        #         pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+        #     else:
+        #         pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
         
         self.simulation_repository.set_entry( self.Price_Injection_Forecast_24h, priceinjectionforecast )
         self.simulation_repository.set_entry( self.Price_Purchase_Forecast_24h, pricepurchaseforecast )
         stsv.set_output_value( self.PricePurchaseC, pricepurchaseforecast[ 0 ] )
+        stsv.set_output_value( self.PriceInjectionC, priceinjectionforecast[ 0 ] )
 
     def build_dummy( self, start : int, end: int ):
         self.start = start

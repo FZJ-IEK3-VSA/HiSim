@@ -1,12 +1,14 @@
 from typing import Optional, List, Union
+
 from hisim.simulator import SimulationParameters
 from hisim.components import occupancy
 from hisim.components import price_signal
 from hisim.components import weather
 from hisim.components import pvs
+from hisim.components import predictive_controller
 from hisim.components import smart_device
 from hisim.components import building
-from hisim.components import heat_pump
+from hisim.components import heat_pump_modular
 from hisim.components import simple_bucket_boiler
 from hisim.components import oil_heater
 from hisim.components import district_heating
@@ -53,9 +55,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     ##### System Parameters #####
 
     # Set simulation parameters
-    year = 2021
-    #seconds_per_timestep = 60 * 15
-    seconds_per_timestep = 60
+    year = 2018
+    seconds_per_timestep = 60 * 15
     
     # Set building
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
@@ -70,8 +71,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options( year= year,
-                                                                               seconds_per_timestep=seconds_per_timestep )
+        my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
+                                                                               seconds_per_timestep = seconds_per_timestep )
+    #my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', heating_device_included = 'heat_pump' )    
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration
@@ -102,29 +104,26 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     #Set heating system
     if heating_device_included == 'heat_pump':
         # Set heat pump controller
-        t_air_heating = 16.0
-        t_air_cooling = 24.0
-        offset = 0.5
-        hp_mode = 2
+        T_min_heating = 19.0
+        T_max_heating = 23.0
+        T_min_cooling = 23.0
+        T_max_cooling = 26.0
+        min_operation_time = 3600
+        min_idle_time = 900
+        heating_season_begin = 240
+        heating_season_end = 150
         # Set heat pump
         hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-        hp_name = "Vitocal 300-A AWO-AC 301.B07"
-        hp_min_operation_time = 60
-        hp_min_idle_time = 15      
-    elif heating_device_included == 'oil_heater':
-        # Set Oil heater controller
-        t_air_heating = 21.0
-        offset = 3.0
-        # Set Oil Heater
-        max_power = 5000
-        min_on_time = 60
-        min_off_time = 15
-    elif heating_device_included == 'district_heating':
-        t_air_heating = 21.0
-        tol = 1e-2 #tolerance of set point -> considered in control
-        max_power = 15000
-        min_power = 1000
+        hp_name = "Vitocal 300-A AWO-AC 301.B07"    
+    elif heating_device_included in [ 'district_heating', 'oil_heater' ]:
         efficiency = 0.85
+        T_min = 20.0
+        T_max = 21.0
+        P_on = 5000
+        on_time = 2700
+        off_time = 1800
+        heating_season_begin = 240
+        heating_season_end = 150
     
     elif heating_device_included:
         raise NameError( 'Heating Device definition', heating_device_included, 'not known. Choose heat_pump, oil_heater, district_heating, or False.' )
@@ -179,15 +178,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                               grid = [ electricity_load_profiles[ operation_counter - 1 ], "Subtract", my_photovoltaic_system ], 
                                                               my_simulation_parameters = my_simulation_parameters )
                 )
-        
+
     if smart_devices_included:
         my_smart_device = smart_device.SmartDevice( my_simulation_parameters = my_simulation_parameters )
         my_sim.add_component( my_smart_device )
-        if predictive == True:
-            my_smart_device_controller = smart_device.SmartDeviceController( my_simulation_parameters = my_simulation_parameters )
-            my_sim.add_component( my_smart_device_controller )
-            my_smart_device.connect_only_predefined_connections( my_smart_device_controller )
-            my_smart_device_controller.connect_only_predefined_connections( my_smart_device )
         my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
                 my_sim = my_sim,
                 operation_counter = operation_counter,
@@ -199,87 +193,114 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     if boiler_included:  
         my_boiler = simple_bucket_boiler.Boiler( definition = definition, fuel = boiler_included, my_simulation_parameters = my_simulation_parameters )
-        # my_boiler.connect_input( my_boiler.WaterConsumption,
-        #                          my_occupancy.ComponentName, 
-        #                          my_occupancy.WaterConsumption )
         my_boiler.connect_only_predefined_connections( my_occupancy )
         my_sim.add_component( my_boiler )
         
-        my_boiler_controller = simple_bucket_boiler.BoilerController( smart = smart, my_simulation_parameters = my_simulation_parameters )
-        # my_boiler_controller.connect_input( my_boiler_controller.StorageTemperature,
-        #                                     my_boiler.ComponentName,
-        #                                     my_boiler.StorageTemperature )
+        my_boiler_controller = simple_bucket_boiler.BoilerController( my_simulation_parameters = my_simulation_parameters )
         my_boiler_controller.connect_only_predefined_connections( my_boiler )
         my_sim.add_component( my_boiler_controller )
-        
-        # my_boiler.connect_input( my_boiler.State,
-        #                          my_boiler_controller.ComponentName,
-        #                          my_boiler_controller.State )
-        my_boiler.connect_only_predefined_connections( my_boiler_controller )
 
+        my_boiler.connect_only_predefined_connections( my_boiler_controller )
+        
         if boiler_included == 'electricity':
-            my_boiler_controller.connect_input( my_boiler_controller.ElectricityInput,
-                                        electricity_load_profiles[ - 1 ].ComponentName,
-                                        electricity_load_profiles[ - 1 ].ElectricityOutput )
-            
             my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
-                my_sim = my_sim,
-                operation_counter = operation_counter,
-                electricity_load_profiles = electricity_load_profiles, 
-                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                             grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_boiler ], 
-                                                             my_simulation_parameters = my_simulation_parameters ) 
-                )
+                    my_sim = my_sim,
+                    operation_counter = operation_counter,
+                    electricity_load_profiles = electricity_load_profiles, 
+                    elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                                  grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_boiler ], 
+                                                                  my_simulation_parameters = my_simulation_parameters )
+                    )
             
     if heating_device_included:
-        my_heating : Union[ heat_pump.HeatPump, oil_heater.OilHeater, district_heating.DistrictHeating ]
-        my_heating_controller : Union[ heat_pump.HeatPumpController, oil_heater.OilHeaterController, district_heating.DistrictHeatingController ]
-        #initialize and connect controller
-        if heating_device_included == 'heat_pump':
-            my_heating_controller = heat_pump.HeatPumpController( t_air_heating = t_air_heating,
-                                                                  t_air_cooling = t_air_cooling,
-                                                                  offset = offset,
-                                                                  mode = hp_mode,
-                                                                  my_simulation_parameters = my_simulation_parameters )
-            hc : heat_pump.HeatPumpController = my_heating_controller # type: ignore
-            hc.connect_input( hc.ElectricityInput,
-                                                 electricity_load_profiles[ operation_counter - 1 ].ComponentName,
-                                                 electricity_load_profiles[ operation_counter - 1 ].ElectricityOutput )
-        elif heating_device_included == 'oil_heater':
-            my_heating_controller = oil_heater.OilHeaterController( t_air_heating = t_air_heating,
-                                                                    offset = offset, 
-                                                                    my_simulation_parameters = my_simulation_parameters ) 
-            my_heating_controller.connect_only_predefined_connections( my_weather )
-        elif heating_device_included == 'district_heating':
-            my_heating_controller = district_heating.DistrictHeatingController( max_power = max_power,
-                                                                                min_power = min_power,
-                                                                                t_air_heating = t_air_heating,
-                                                                                tol = tol,
-                                                                                my_simulation_parameters = my_simulation_parameters )
-        my_heating_controller.connect_only_predefined_connections( my_building )
-        my_sim.add_component( my_heating_controller)
+        my_heating : Union[ heat_pump_modular.HeatPump, oil_heater.OilHeater, district_heating.DistrictHeating ]
+        my_heating_controller : Union[ heat_pump_modular.HeatPumpController, oil_heater.OilHeaterController, district_heating.DistrictHeatingController ]
         
         #initialize and connect heating device
         if heating_device_included == 'heat_pump':
-            my_heating = heat_pump.HeatPump( manufacturer = hp_manufacturer,
-                                             name = hp_name,
-                                             min_operation_time = hp_min_operation_time,
-                                             min_idle_time = hp_min_idle_time,
-                                             my_simulation_parameters = my_simulation_parameters )
-            my_heating.connect_only_predefined_connections( my_weather )    
+            my_heating = heat_pump_modular.HeatPump( manufacturer = hp_manufacturer,
+                                                     name = hp_name,
+                                                     heating_season_begin = heating_season_begin,
+                                                     heating_season_end = heating_season_end,
+                                                     my_simulation_parameters = my_simulation_parameters )
+            my_heating.connect_only_predefined_connections( my_weather )   
+            
         elif heating_device_included == 'oil_heater':
-            my_heating = oil_heater.OilHeater( max_power = max_power,
-                                               min_off_time = min_off_time,
-                                               min_on_time = min_on_time, 
-                                               my_simulation_parameters = my_simulation_parameters )      
+            my_heating = oil_heater.OilHeater( P_on = P_on,
+                                               efficiency = efficiency,
+                                               my_simulation_parameters = my_simulation_parameters )    
         elif heating_device_included == 'district_heating':
-            my_heating = district_heating.DistrictHeating( max_power = max_power,
-                                                           min_power = min_power,
+            my_heating = district_heating.DistrictHeating( P_on = P_on,
                                                            efficiency = efficiency,
                                                            my_simulation_parameters = my_simulation_parameters )
-        my_heating.connect_only_predefined_connections( my_heating_controller ) 
         my_sim.add_component( my_heating )
-
+        
+        #initialize and connect controller
+        if heating_device_included == 'heat_pump':
+            my_heating_controller = heat_pump_modular.HeatPumpController( my_simulation_parameters = my_simulation_parameters,
+                                                                          T_min_heating = T_min_heating,
+                                                                          T_max_heating = T_max_heating,
+                                                                          T_min_cooling = T_min_cooling,
+                                                                          T_max_cooling = T_max_cooling,
+                                                                          min_operation_time = min_operation_time,
+                                                                          min_idle_time = min_idle_time,
+                                                                          heating_season_begin = heating_season_begin,
+                                                                          heating_season_end = heating_season_end )
+            if predictive == True:
+                my_heating_controller.connect_only_predefined_connections( my_heating )
+        elif heating_device_included == 'oil_heater':
+            my_heating_controller = oil_heater.OilHeaterController( T_min = T_min,
+                                                                    T_max = T_max,
+                                                                    P_on = P_on,
+                                                                    on_time = on_time,
+                                                                    off_time = off_time,
+                                                                    heating_season_begin = heating_season_begin,
+                                                                    heating_season_end = heating_season_end,
+                                                                    my_simulation_parameters = my_simulation_parameters ) 
+        elif heating_device_included == 'district_heating':
+            my_heating_controller = district_heating.DistrictHeatingController( T_min = T_min,
+                                                                                T_max = T_max,
+                                                                                P_on = P_on,
+                                                                                on_time = on_time,
+                                                                                off_time = off_time,
+                                                                                heating_season_begin = heating_season_begin,
+                                                                                heating_season_end = heating_season_end,
+                                                                                my_simulation_parameters = my_simulation_parameters )
+        my_heating_controller.connect_only_predefined_connections( my_building )
+        my_sim.add_component( my_heating_controller )
+        
+        #connect controller and building to heating device
+        my_heating.connect_only_predefined_connections( my_heating_controller ) 
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                    my_heating.ComponentName,
                                    my_heating.ThermalEnergyDelivered )
+        
+        if heating_device_included in [ 'heat_pump', 'oil_heater' ]:
+            #construct new baseload
+            my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
+                    my_sim = my_sim,
+                    operation_counter = operation_counter,
+                    electricity_load_profiles = electricity_load_profiles, 
+                    elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
+                                                                  grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_heating ], 
+                                                                  my_simulation_parameters = my_simulation_parameters )
+                    )
+        
+        if predictive == True and ( smart_devices_included == True or boiler_included == 'electricity' or heating_device_included in [ 'heat_pump', 'oil_heater' ] ):
+            my_predictive_controller = predictive_controller.PredictiveController( my_simulation_parameters = my_simulation_parameters )
+            my_sim.add_component( my_predictive_controller )
+            if smart_devices_included:
+                my_smart_device.connect_only_predefined_connections( my_predictive_controller )
+                my_predictive_controller.connect_only_predefined_connections( my_smart_device )
+            if boiler_included == 'electricity':
+                my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
+                my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
+            if heating_device_included in [ 'heat_pump', 'oil_heater' ]:
+                my_heating_controller.connect_only_predefined_connections( my_predictive_controller )
+                my_predictive_controller.connect_only_predefined_connections( my_heating_controller )
+                
+    ##### delete all files in cache:
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
+                

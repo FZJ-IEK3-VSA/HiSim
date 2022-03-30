@@ -7,6 +7,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
+from hisim.components import predictive_controller
 from hisim import log
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -17,68 +18,20 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-
-@dataclass
-class DistrictHeatingState:
-    """
-    This data class saves the state of the simulation results.
-    """
-    def __init__( self, PowerDistrictHeating: float = 0, Iteration: int = 0, Timestep: int = 0 ):
-        """
-        Parameters
-        ----------
-        PowerDistrictHeating : float, optional
-            Actual power of district heating system. The default is 0.
-        Iteration : int, optional
-            Number of iterations in control step. The default is 0.
-        Timestep : int, optional
-            Timestep of simulation. The default is 0.
-        """
-        
-        self.PowerDistrictHeating = PowerDistrictHeating
-        self.Iteration = Iteration
-        self.Timestep = Timestep
-
-    def clone( self ):
-        return DistrictHeatingState( self.PowerDistrictHeating, self.Iteration, self.Timestep )
-            
-    def update_state( self, power : float ):
-        """
-        Updates state of controller for district heating
-        
-        Parameters
-        ----------
-        power : float
-            Power transfered from radiator to house.
-        """
-        
-        self.PowerDistrictHeating = power
-        self.Iteration += 1 
-        
-    def check_iteration( self, timestep ):
-        #track number of iteration in each time step
-        if self.Timestep == timestep:
-            pass
-        else:
-            self.Timestep = timestep
-            self.Iteration = 0
-        
-
 class DistrictHeating( cp.Component ):
     """
     District heating implementation. District Heating transmitts heat with given efficiency.
-    District heating is controlled to reach the set point temperature in every time step up to a tolerance.
-    This is realized by an iterative control adopting the power step with decreasing values.
+    District heating is controlled with an on/off control oscillating within the comfort temperature band.
     """
     
     # Inputs
-    signal =                     "signal" #0 if switched off, 1 if switched on
+    DistrictHeatingControllerState = "DistrictHeatingControllerState"
     
     # Outputs
     ThermalEnergyDelivered =    "ThermalEnergyDelivered"
     PowerDistrictHeating =      "PowerDistrictHeating"
 
-    def __init__( self,my_simulation_parameters: SimulationParameters , max_power: int, min_power : int, efficiency : float ):
+    def __init__( self, my_simulation_parameters: SimulationParameters , P_on : float, efficiency : float ):
         """
         Parameters
         ----------
@@ -90,23 +43,17 @@ class DistrictHeating( cp.Component ):
             Efficiency of heat transfer
         """
         
-        super( ).__init__( name = 'DistrictHeating', my_simulation_parameters=my_simulation_parameters )
+        super( ).__init__( name = 'DistrictHeating', my_simulation_parameters = my_simulation_parameters )
         
         #introduce parameters of district heating
-        self.build( max_power = max_power,
-                    min_power = min_power,
-                    efficiency = efficiency )
-        
-        #initialize state and previous state
-        self.state =            DistrictHeatingState( )
-        self.state_previous =   DistrictHeatingState( )
+        self.build( P_on = P_on, efficiency = efficiency )
         
         # Inputs - Mandatories
-        self.signalC : cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                            self.signal,
-                                                            lt.LoadTypes.Heating,
-                                                            lt.Units.Watt,
-                                                            mandatory = True )
+        self.DistrictHeatingControllerStateC : cp.ComponentInput = self.add_input(  self.ComponentName,
+                                                                                    self.DistrictHeatingControllerState,
+                                                                                    lt.LoadTypes.Any,
+                                                                                    lt.Units.Any,
+                                                                                    mandatory = True )
         
         # Outputs 
         self.thermal_energy_delivered : cp.ComponentOutput = self.add_output(   self.ComponentName,
@@ -114,10 +61,10 @@ class DistrictHeating( cp.Component ):
                                                                                 lt.LoadTypes.Heating,
                                                                                 lt.Units.Watt )
         
-        self.PowerDistrictHeatingOutput: cp.ComponentOutput = self.add_output(    self.ComponentName,
-                                                                            self.PowerDistrictHeating,
-                                                                            lt.LoadTypes.Heating,
-                                                                            lt.Units.Watt )
+        self.PowerDistrictHeatingOutput: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                               self.PowerDistrictHeating,
+                                                                               lt.LoadTypes.Heating,
+                                                                               lt.Units.Watt )
         
         self.add_default_connections( DistrictHeatingController, self.get_controller_default_connections( ) )
         
@@ -125,17 +72,16 @@ class DistrictHeating( cp.Component ):
         log.information("setting weather default connections")
         connections = [ ]
         controller_classname = DistrictHeatingController.get_classname( )
-        connections.append( cp.ComponentConnection( DistrictHeating.signal, controller_classname, DistrictHeatingController.signal ) )
+        connections.append( cp.ComponentConnection( DistrictHeating.DistrictHeatingControllerState, controller_classname, DistrictHeatingController.DistrictHeatingControllerState ) )
         return connections
 
-    def build( self, max_power: int, min_power: int, efficiency : float ):
+    def build( self, P_on: float, efficiency : float ):
         """
         Assigns parameters of oil heater to class, and writes them to the report
         """
         
         #Parameters:
-        self.max_power =    max_power
-        self.min_power =    min_power
+        self.P_on  =        P_on
         self.efficiency =   efficiency
         
         # Writes info to report
@@ -151,16 +97,15 @@ class DistrictHeating( cp.Component ):
         
         lines = []
         lines.append( "Name: {}".format( "District Heating" ) )
-        lines.append( "MaxPower: {:4.0f} kW".format( ( self.max_power ) * 1E-3 ) )
-        lines.append( "MinPower: {:4.0f} kW".format( ( self.min_power ) * 1E-3 ) )
+        lines.append( "Power: {:4.0f} kW".format( ( self.P_on ) * 1E-3 ) )
         lines.append( 'Efficiency : {:4.0f} %'.format( ( self.efficiency ) * 100 ) )
         return lines
     
     def i_save_state(self):
-        self.previous_state = self.state.clone( )
+        pass
 
     def i_restore_state(self):
-        self.state = self.previous_state.clone( )
+        pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
@@ -171,11 +116,28 @@ class DistrictHeating( cp.Component ):
         """ 
         
         # Load control signal signalC value
-        signalC = stsv.get_input_value( self.signalC )
+        signal = stsv.get_input_value( self.DistrictHeatingControllerStateC )
+        
+        if signal > 0:
+            signal = 1
+        else:
+            signal = 0
         
         # write values for output time series
-        stsv.set_output_value( self.thermal_energy_delivered, signalC * self.efficiency )
-        stsv.set_output_value( self.PowerDistrictHeatingOutput, signalC )
+        stsv.set_output_value( self.thermal_energy_delivered, signal * self.P_on * self.efficiency )
+        stsv.set_output_value( self.PowerDistrictHeatingOutput, signal * self.P_on )
+        
+class ControllerState:
+    """
+    This data class saves the state of the controller.
+    """
+
+    def __init__( self, state : int = 0, timestep_of_last_action : int = -999 ):
+        self.state = state
+        self.timestep_of_last_action = timestep_of_last_action
+        
+    def clone( self ):
+        return ControllerState( state = self.state, timestep_of_last_action = self.timestep_of_last_action )
         
 class DistrictHeatingController( cp.Component ):
     """
@@ -183,38 +145,49 @@ class DistrictHeatingController( cp.Component ):
     
     Parameters
     --------------
-    max_power : float
-        maximal heating temperature
-    min_power : float
-        minimal heating temperature
-    t_air_heating : float
-        set temperature for heating
-    tol : float, optional
-        tolerance of set_temperature in °C. The default is 1e-3°C
-        
+    T_min : float
+        Lower comfort temperature of building, in °C. The default is 19 °C.
+    T_max : float
+        Upper comfort temperature of building, in °C. The default is 23 °C.    
+    P_on : float, optional
+        Power of heating when turned on, in W. The default is 600 W.
+    on_time : int, optional
+        Minimal running time of district heating system, in seconds. The default is 2700 s.
+    off_time : int, optional
+        Minimal off time of district heating, in seconds. The default is 120 s.
+    heating_season_begin : int, optional
+        Day( julian day, number of day in year ), when heating season starts. The default is 270.
+    heating_season_end : int, optional
+        Day( julian day, number of day in year ), when heating season ends. The default is 150
     """
     # Inputs
     TemperatureMean = "Residence Temperature"
 
     # Outputs
-    signal = "signal"
+    DistrictHeatingControllerState = "DistrictHeatingControllerState"
 
     # Similar components to connect to:
     # 1. Building
 
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
-                  max_power : float = 6000,
-                 min_power : float = 1000,
-                 t_air_heating: float = 20.0,
-                 tol : float = 1e-3 ):
+                  T_min: float = 19.0,
+                  T_max : float = 23.0,
+                  P_on : float = 6000,
+                  on_time : int = 2700,
+                  off_time : int = 1800,
+                  heating_season_begin : int = 270,
+                  heating_season_end : int = 150 ):
         
-        super().__init__( name="DistrictHeatingController", my_simulation_parameters=my_simulation_parameters )
+        super().__init__( name = "DistrictHeatingController", my_simulation_parameters = my_simulation_parameters )
         
-        self.build( max_power = max_power,
-                    min_power = min_power,
-                    t_air_heating = t_air_heating,
-                    tol = tol )
+        self.build( T_min = T_min,
+                    T_max = T_max,
+                    P_on = P_on,
+                    on_time = on_time,
+                    off_time = off_time,
+                    heating_season_begin = heating_season_begin,
+                    heating_season_end = heating_season_end )
 
         #inputs
         self.t_mC: cp.ComponentInput = self.add_input( self.ComponentName,
@@ -224,10 +197,10 @@ class DistrictHeatingController( cp.Component ):
                                                         True )
         
         #outputs
-        self.signalC = self.add_output( self.ComponentName,
-                                        self.signal,
-                                        lt.LoadTypes.Heating,
-                                        lt.Units.Watt )
+        self.DistrictHeatingControllerStateC = self.add_output( self.ComponentName,
+                                                                self.DistrictHeatingControllerState,
+                                                                lt.LoadTypes.Any,
+                                                                lt.Units.Any )
         
         self.add_default_connections( Building, self.get_building_default_connections( ) )
     
@@ -238,85 +211,75 @@ class DistrictHeatingController( cp.Component ):
         connections.append( cp.ComponentConnection( DistrictHeatingController.TemperatureMean, building_classname, Building.TemperatureMean ) )
         return connections
 
-    def build( self, max_power, min_power, t_air_heating, tol ):
-        self.max_power = max_power
-        self.min_power = min_power
-        self.t_air_heating = t_air_heating
-        self.tol = tol
+    def build( self, T_min, T_max, P_on, on_time, off_time, heating_season_begin, heating_season_end ):
+        self.T_min = T_min
+        self.T_max = T_max
+        self.P_on = P_on
+        self.on_time = int( on_time / self.my_simulation_parameters.seconds_per_timestep )
+        self.off_time = int( off_time / self.my_simulation_parameters.seconds_per_timestep )
+        self.heating_season_begin = heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         
         #initialize control mode
-        self.state = DistrictHeatingState()
-        self.state_previous = DistrictHeatingState( )
+        self.state = ControllerState()
+        self.state_previous = ControllerState( )
+        
+    def activation( self, timestep ):
+        self.state.state = 2
+        self.state.timestep_of_last_action = timestep
+        #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
+        self.previous_state = self.state.clone( )
 
-    def i_save_state(self):
+    def deactivation( self, timestep ):
+        self.state.state = -2
+        self.state.timestep_of_last_action = timestep 
+        #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
+        self.previous_state = self.state.clone( )
+
+    def i_save_state( self ):
         self.state = self.state_previous
 
-    def i_restore_state(self):
+    def i_restore_state( self ):
         self.state_previous = self.state
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool  ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool  ):
         
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
+        
+        if timestep < self.heating_season_begin and timestep > self.heating_season_end:
+            self.state.state = -2
+            
+        elif ( self.state.state == 2 and timestep < self.state.timestep_of_last_action + self.on_time ) or \
+             ( self.state.state == -2 and timestep < self.state.timestep_of_last_action + self.off_time ):
+            pass
         else:
             # Retrieves inputs
-            t_m_old = stsv.get_input_value( self.t_mC )
-            
-            # set Iteration to zero if timestep is new
-            self.state.check_iteration( timestep = timestep )
-            
-            #in first iteration heating is either max or off
-            if self.state.Iteration == 0:
-                #turn off heating when above set point
-                if t_m_old > self.t_air_heating:
-                    DistrictHeatingPower:float = 0
-                #turn on heating with maximum if below set point
-                else:
-                    DistrictHeatingPower = self.max_power
-                    
-            #in second iteration heating is turned to min if max was to much
-            elif self.state.Iteration == 1:
-                #go to minimum of heating, if temperature is above set temperature and heating was maximal before
-                if t_m_old > self.t_air_heating:
-                    if self.state.PowerDistrictHeating == self.max_power:
-                        DistrictHeatingPower = self.min_power
-                    else:
-                        DistrictHeatingPower = self.state.PowerDistrictHeating
-                else:
-                    DistrictHeatingPower = self.state.PowerDistrictHeating
-            
-            #in third iteration stay at 0 or max and balance in other cases
-            elif self.state.Iteration == 2:
-                #stay at 0, max or min if it is already in tolerance
-                if self.state.PowerDistrictHeating in [ 0, self.max_power ] or ( t_m_old > ( self.t_air_heating - self.tol ) and t_m_old < ( self.t_air_heating + self.tol ) ):
-                    DistrictHeatingPower = self.state.PowerDistrictHeating
-                else:
-                    #turn off if temperatue is above set value with minimal heating power
-                    if t_m_old > self.t_air_heating:
-                        DistrictHeatingPower = 0
-                    #increase if temperatue is below set value with minimal heating power
-                    else:
-                        DistrictHeatingPower = self.state.PowerDistrictHeating + ( self.max_power - self.min_power ) / ( 2 * ( self.state.Iteration - 1 ) )
+            T_control = stsv.get_input_value( self.t_mC )
+    
+            #on off control based on temperature limits
+            if T_control > self.T_max:
+                #stop heating if temperature exceeds upper limit
+                if self.state.state >= 0:
+                    self.deactivation( timestep )
+
+            elif T_control < self.T_min:
+                #start heating if temperature goes below lower limit
+                if self.state.state <= 0:
+                    self.activation( timestep )
+             
+            #continue working if other is not defined    
             else:
-                #stay at 0, max if it was set before and stay at value if it is already in tolerance
-                if self.state.PowerDistrictHeating in [ 0, self.max_power ] or ( t_m_old > ( self.t_air_heating - self.tol ) and t_m_old < ( self.t_air_heating + self.tol ) ):
-                    DistrictHeatingPower = self.state.PowerDistrictHeating
-                else:
-                    #decrease if temperature is above set value with previous heating power
-                    if t_m_old > self.t_air_heating:
-                        DistrictHeatingPower = self.state.PowerDistrictHeating - ( self.max_power - self.min_power ) / ( 2 * ( self.state.Iteration - 1 ) )
-                    #increase if temperature is below set value with previous heating power
-                    else:
-                        DistrictHeatingPower = self.state.PowerDistrictHeating + ( self.max_power - self.min_power ) / ( 2 * ( self.state.Iteration - 1 ) )
-
-        self.state.update_state( power = DistrictHeatingPower )
-
-        #log.information(state)
-        stsv.set_output_value(self.signalC, DistrictHeatingPower )
+                if self.state.state > 0:
+                    self.state.state = 1
+                if self.state.state < 0:
+                    self.state.state = -1
+        
+        stsv.set_output_value( self.DistrictHeatingControllerStateC, self.state.state )
 
     #def prin1t_output(self, t_m, state):
     #    log.information("==========================================")

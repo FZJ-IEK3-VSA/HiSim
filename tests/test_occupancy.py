@@ -13,6 +13,7 @@ def test_occupancy():
     number_of_outputs = 4
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     stsv = component.SingleTimeStepValues(number_of_outputs)
+
     my_occupancy = occupancy.Occupancy(profile_name=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
 
     # Needed to number globalindex to activate return of component outputs

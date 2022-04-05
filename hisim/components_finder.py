@@ -125,19 +125,12 @@ with open('components_information.xlxs', 'a', encoding='UTF8') as f:
             added_row.append(added_string)
             temp_f.close()
         '''
-        # add class names of components
 
-        for m in inspect.getmembers(module, inspect.isclass):
-            if module_name in m[1].__module__:
-                added_row_classes.append(m[0])
-
-        #Putting Data in to excel-sheet
-
-
-
+        #Writing Data in to excel-sheet
         ws1['A'+str(counter_of_components)]=module_name
         ws1['B' + str(counter_of_components)] = stamp_to_add
         row_to_add_class=3
+        #Writing Class Names and Class Length in to excel Sheet
         for m in inspect.getmembers(module, inspect.isclass):
 
             if module_name in m[1].__module__:

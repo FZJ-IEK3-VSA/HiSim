@@ -25,6 +25,7 @@ __status__ = "development"
 """
 
 #Set value to True when it should be shown in excel-sheet
+#Can be added later, so that just wanted informations are in excel-sheet
 class Information:
     information = {'component_name':True,
                     'stamp':True,
@@ -85,18 +86,19 @@ with open('components_information.xlxs', 'a', encoding='UTF8') as f:
         row_to_add_class = row_to_add_class + 1
         _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value=str(i)+".ClassLength")
         row_to_add_class =row_to_add_class+1
-    _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value=str(i) + ".Class")
+
 
     #Start to iteratre to get Informations to fill in excel-sheet
     for (_, module_name, _) in iter_modules([package_dir]):
         counter_of_components = counter_of_components+1
         added_row_classes=[]
         added_row_classes_columns=[]
+
         # import the module and iterate through its attributes
         module = import_module(f"components.{module_name}")
-
         module_dict=module.__dict__
 
+        #check if coding-stamp exist and write down
         stamp_to_add=""
         for stamp in Stamp.stamp:
             if stamp in module_dict:
@@ -126,13 +128,13 @@ with open('components_information.xlxs', 'a', encoding='UTF8') as f:
             temp_f.close()
         '''
 
-        #Writing Data in to excel-sheet
+        #Writing Component Name and Coding-Stamp in to excel-sheet
         ws1['A'+str(counter_of_components)]=module_name
         ws1['B' + str(counter_of_components)] = stamp_to_add
         row_to_add_class=3
+
         #Writing Class Names and Class Length in to excel Sheet
         for m in inspect.getmembers(module, inspect.isclass):
-
             if module_name in m[1].__module__:
                 _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value=m[0])
                 row_to_add_class=row_to_add_class+1

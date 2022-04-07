@@ -86,7 +86,7 @@ with open('components_information.xlxs', 'a', encoding='UTF8') as f:
         row_to_add_class = row_to_add_class + 1
         _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value=str(i)+".ClassLength")
         row_to_add_class =row_to_add_class+1
-
+    _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value="Unit-Test-Status")
 
     #Start to iteratre to get Informations to fill in excel-sheet
     for (_, module_name, _) in iter_modules([package_dir]):
@@ -140,9 +140,22 @@ with open('components_information.xlxs', 'a', encoding='UTF8') as f:
                 row_to_add_class=row_to_add_class+1
                 _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value=len(inspect.getsourcelines(m[1])[0]))
                 row_to_add_class=row_to_add_class+1
+
+        #Checks if unit-test is written for the component in tests-folder
+
+        row_to_add_class=3+classes_max*2
+        package_dir_tests = os.path.join(gg(__file__).resolve().parent.parent, "tests")
+        for (_, module_name_test, _) in iter_modules([package_dir_tests]):
+            if module_name in module_name_test:
+                check_var=True
+                break
             else:
-                _ = ws1.cell(column=row_to_add_class, row=counter_of_components, value='')
-
-
+                check_var=False
+        if check_var:
+            ws1.cell(column=row_to_add_class, row=counter_of_components, value='avaible')
+            row_to_add_class = row_to_add_class + 1
+        else:
+            ws1.cell(column=row_to_add_class, row=counter_of_components, value='miss')
+            row_to_add_class = row_to_add_class + 1
 
     wb.save("components_information.xlsx")

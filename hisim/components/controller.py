@@ -43,6 +43,7 @@ class ControllerState:
         self.timestep_of_hysteresis_ww:int = timestep_of_hysteresis_ww
         self.timestep_of_hysteresis_hw:int = timestep_of_hysteresis_hw
 
+
 class Controller(cp.Component):
     """
     Controlls energy flows for electricity and heat demand.
@@ -55,6 +56,7 @@ class Controller(cp.Component):
 
     StorageTemperatureHeatingWater = "StorageTemperatureHeatingWater"
     StorageTemperatureWarmWater = "StorageTemperatureWarmWater"
+    ResidenceTemperature = "ResidenceTemperature"
 
     ElectricityConsumptionBuilding="ElectricityConsumptionBuilding"
     ElectricityOutputPvs = "ElectricityOutputPvs"
@@ -79,18 +81,22 @@ class Controller(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 temperature_storage_target_warm_water = 50,
-                 temperature_storage_target_heating_water =35,
-                 temperature_storage_target_hysteresis_ww=45,
-                 temperature_storage_target_hysteresis_hw=30,
-                 strategy = "optimize_own_consumption",#strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
-                 limit_to_shave=0):
+                 temperature_storage_target_warm_water: float  = 50,
+                 temperature_storage_target_heating_water: float  =35,
+                 temperature_storage_target_hysteresis_ww: float =45,
+                 temperature_storage_target_hysteresis_hw: float =30,
+                 max_comfortable_temperature_residence: float =23,
+                 min_comfortable_temperature_residence: float =19,
+                 strategy : str = "optimize_own_consumption",#strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
+                 limit_to_shave: float =0):
         super().__init__(name="Controller", my_simulation_parameters=my_simulation_parameters)
 
         self.temperature_storage_target_warm_water=temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water=temperature_storage_target_heating_water
         self.temperature_storage_target_hysteresis_hw=temperature_storage_target_hysteresis_hw
         self.temperature_storage_target_hysteresis_ww=temperature_storage_target_hysteresis_ww
+        self.max_comfortable_temperature_residence = max_comfortable_temperature_residence
+        self.min_comfortable_temperature_residence = min_comfortable_temperature_residence
         self.strategy=strategy
         self.limit_to_shave= limit_to_shave
         self.state = ControllerState(control_signal_heat_pump=0,
@@ -111,6 +117,11 @@ class Controller(cp.Component):
         self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                      self.StorageTemperatureHeatingWater,
                                                                      lt.LoadTypes.Water,
+                                                                     lt.Units.Celsius,
+                                                                     False)
+        self.temperature_residence: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                     self.ResidenceTemperature,
+                                                                     lt.LoadTypes.Temperature,
                                                                      lt.Units.Celsius,
                                                                      False)
         self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,
@@ -423,7 +434,23 @@ class Controller(cp.Component):
 
 
         #######HEAT########
-        #Logic of regulating HeatDemand:
+        #If comftortable temperature of building is to low heat with WarmWaterStorage the building
+        # Solution with Control Signal Residence
+        #not perfect solution!
+
+        if self.temperature_residence<self.min_comfortable_temperature_residence:
+
+
+            #heat
+            #here has to be added how "strong" HeatingWater Storage can be discharged
+            #Working with upper boarder?
+
+        elif self.temperature_residence > self.max_comfortable_temperature_residence:
+            #cool
+        elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
+
+
+            #Logic of regulating HeatDemand:
         #First heat up WarmWaterStorage->more important, than heat up HeatingWater
         #But only one Storage can be heated up in a TimeStep!
         #Simulate WarmWater

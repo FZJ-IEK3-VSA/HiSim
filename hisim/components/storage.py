@@ -23,6 +23,7 @@ class HeatStorageState:
         self.T_sp_hw = T_sp_hw
 
 
+
 class HeatStorage(Component):
     """
     In this class is WarmWater and HeatingWater Storage,
@@ -49,7 +50,7 @@ class HeatStorage(Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-        V_SP_heating_water= 1000,
+                 V_SP_heating_water= 1000,
                  V_SP_warm_water=200,
                  temperature_of_warm_water_extratcion=32,
                  ambient_temperature = 15,

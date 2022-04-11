@@ -6,19 +6,23 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
+import pandas as pd
+import os
+from hisim import utils
+
 def test_advanced_battery():
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
 
     # Advanced-Battery
-
     number_of_outputs = 3
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     #===================================================================================================================
-    # Set Gas Heater
-    my_advanced_battery = advanced_battery.AdvancedBattery(
+    # Set Advanced Battery
+    parameter= pd.read_excel(os.path.join(utils.HISIMPATH["advanced_battery"], 'inputs'), index_col=0)
+    my_advanced_battery = advanced_battery.AdvancedBattery(parameter=parameter,
                                    my_simulation_parameters=my_simulation_parameters)
 
     # Set Fake Outputs for Gas Heater

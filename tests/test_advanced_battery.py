@@ -6,7 +6,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
-def test_chp_system():
+def test_advanced_battery():
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
@@ -29,18 +29,12 @@ def test_chp_system():
 
     my_advanced_battery.control_signal.SourceOutput = I_0
 
-
-
     # Link inputs and outputs
     I_0.GlobalIndex = 0
-
     stsv.values[0] = 100
-
 
     my_advanced_battery.P_bs_C.GlobalIndex = 1
     my_advanced_battery.soc_C.GlobalIndex = 2
-
-
 
     j = 100
 

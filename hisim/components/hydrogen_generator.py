@@ -19,35 +19,35 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
 #
-# class HydrogenStorageConfig:
-#     # combination of
-#     min_capacity = 0                    # [kg_H2]
-#     max_capacity = 500                  # [kg_H2]
-#
-#     starting_fill = 0              # [kg_H2]
-#
-#     max_charging_rate_hour = 2          # [kg/h]
-#     max_discharging_rate_hour = 2       # [kg/h]
-#     max_charging_rate = max_charging_rate_hour / 3600
-#     max_discharging_rate = max_discharging_rate_hour / 3600
-#
-#     # ToDo: How does the necessary Heat/Energy come to the Storage?
-#     energy_for_charge = 0               # [kWh/kg]
-#     energy_for_discharge = 0            # [kWh/kg]
-#
-#     loss_factor_per_day = 0             # [lost_%/day]
+class HydrogenStorageConfig:
+    # combination of
+    min_capacity = 0                    # [kg_H2]
+    max_capacity = 500                  # [kg_H2]
 
-# class ElectrolyzerConfig:
-#     waste_energy = 400                    # [W]   # 400
-#     min_power = 1_200                     # [W]   # 1400
-#     max_power = 2_400                  # [W]   # 2400
-#     min_power_percent = 60            # [%]
-#     max_power_percent = 100             # [%]
-#     min_hydrogen_production_rate_hour = 300  # [Nl/h]
-#     max_hydrogen_production_rate_hour = 5000   # [Nl/h]   #500
-#     min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-#     max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
-#     pressure_hydrogen_output = 30       # [bar]     --> max pressure mode at 35 bar
+    starting_fill = 0              # [kg_H2]
+
+    max_charging_rate_hour = 2          # [kg/h]
+    max_discharging_rate_hour = 2       # [kg/h]
+    max_charging_rate = max_charging_rate_hour / 3600
+    max_discharging_rate = max_discharging_rate_hour / 3600
+
+    # ToDo: How does the necessary Heat/Energy come to the Storage?
+    energy_for_charge = 0               # [kWh/kg]
+    energy_for_discharge = 0            # [kWh/kg]
+
+    loss_factor_per_day = 0             # [lost_%/day]
+
+class ElectrolyzerConfig:
+    waste_energy = 400                    # [W]   # 400
+    min_power = 1_200                     # [W]   # 1400
+    max_power = 2_400                  # [W]   # 2400
+    min_power_percent = 60            # [%]
+    max_power_percent = 100             # [%]
+    min_hydrogen_production_rate_hour = 300  # [Nl/h]
+    max_hydrogen_production_rate_hour = 5000   # [Nl/h]   #500
+    min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
+    max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
+    pressure_hydrogen_output = 30       # [bar]     --> max pressure mode at 35 bar
 
 class ElectrolyzerSimulation:
     def __init__(self,
@@ -198,30 +198,6 @@ class Electrolyzer(Component):
 
         self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.Any, lt.Units.Any)
         self.power_level: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.PowerLevel, lt.LoadTypes.Any, lt.Units.Percent)
-
-
-        # self
-        self.max_power=int(power_electrolyzer)
-        #old way was to read it out of config data, which doesn't work in parameterstudy setup implemented from vitor
-        max_power_usally = 2_400 # [W]   # 2400
-        self.waste_energy = 400*int(self.max_power/max_power_usally)  # [W]   # 400
-        self.min_power = 1_200
-        if self.max_power<self.min_power:
-            self.min_power=100
-            if self.max_power<self.min_power:
-                self.max_power=150
-         # [W]   # 1400
-
-        self.min_power_percent = 60  # [%]
-        self.max_power_percent = 100  # [%]
-        self.min_hydrogen_production_rate_hour = 300  # [Nl/h]
-        self.max_hydrogen_production_rate_hour = 5000  # [Nl/h]   #500
-        self.min_hydrogen_production_rate:float = (self.min_hydrogen_production_rate_hour * (self.max_power/max_power_usally) / 3600)  # [Nl/s]
-        self.max_hydrogen_production_rate = (self.max_hydrogen_production_rate_hour * (self.max_power/max_power_usally) / 3600 ) # [Nl/s]
-        if self.min_hydrogen_production_rate > self.max_hydrogen_production_rate:
-            self.max_hydrogen_production_rate= self.min_hydrogen_production_rate +100
-        self.pressure_hydrogen_output = 30
-
 
 
         self.electrolyzer = ElectrolyzerSimulation(waste_energy = self.waste_energy,

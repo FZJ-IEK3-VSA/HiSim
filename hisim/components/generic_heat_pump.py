@@ -11,9 +11,9 @@ from hisim.components.weather import Weather
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.extended_storage import WaterSlice
-from hisim.components.configuration import WarmWaterStorageConfig
-from hisim.components.configuration import PhysicsConfig
+#from hisim.components.extended_storage import WaterSlice
+#from hisim.components.configuration import WarmWaterStorageConfig
+#from hisim.components.configuration import PhysicsConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim import log

@@ -5,7 +5,7 @@ import copy
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components.ev_charger import SimpleStorageState
+from hisim.components.generic_ev_charger  import SimpleStorageState
 from hisim.simulationparameters import SimulationParameters
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

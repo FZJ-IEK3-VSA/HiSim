@@ -1,7 +1,7 @@
 from hisim import component as cp
 #import components as cps
 #import components
-from hisim.components import heat_pump
+from hisim.components import generic_heat_pump
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -27,13 +27,13 @@ def test_heat_pump():
 
     #===================================================================================================================
     # Set Heat Pump
-    my_heat_pump = heat_pump.HeatPump(manufacturer=manufacturer,
+    my_heat_pump = generic_heat_pump.HeatPump(manufacturer=manufacturer,
                                           name=name,
                                           min_operation_time=minimum_idle_time,
                                           min_idle_time=minimum_operation_time, my_simulation_parameters=my_simulation_parameters)
 
     # Set Heat Pump Controller
-    my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
+    my_heat_pump_controller = generic_heat_pump.HeatPumpController(t_air_heating=t_air_heating,
                                                                t_air_cooling=t_air_cooling,
                                                                offset=offset,
                                                                mode=hp_mode,

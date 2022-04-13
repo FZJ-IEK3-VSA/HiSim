@@ -10,8 +10,8 @@ from typing import Union, List
 import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.occupancy import Occupancy
-from hisim.components import predictive_controller
+from hisim.components.loadprofilegenerator_connector import Occupancy
+from hisim.components import controller_l3_predictive
 import hisim.log as log
 seaborn.set(style='ticks')
 font = {'family' : 'normal',
@@ -296,7 +296,7 @@ class BoilerController(cp.Component):
                                                                     lt.LoadTypes.Any,
                                                                     lt.Units.Any,
                                                                     mandatory = False )
-            self.add_default_connections( predictive_controller.PredictiveController, self.get_predictive_controller_default_connections( ) )
+            self.add_default_connections( controller_l3_predictive.PredictiveController, self.get_predictive_controller_default_connections( ) )
         
         
         #output
@@ -317,9 +317,9 @@ class BoilerController(cp.Component):
     def get_predictive_controller_default_connections( self ):
         log.information( "setting predictive controller default connections") 
         connections = [ ]
-        predictive_controller_classname = predictive_controller.PredictiveController.get_classname( )
+        predictive_controller_classname = controller_l3_predictive.PredictiveController.get_classname( )
         connections.append( cp.ComponentConnection( BoilerController.BoilerSignal, predictive_controller_classname, 
-                                                    predictive_controller.PredictiveController.BoilerSignal ) )
+                                                    controller_l3_predictive.PredictiveController.BoilerSignal ) )
         return connections
 
     def build( self, t_water_min, t_water_max, P_on, on_time, off_time ):

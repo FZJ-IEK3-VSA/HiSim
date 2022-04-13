@@ -1,7 +1,7 @@
 from hisim import component as cp
-from hisim.components import heat_pump
-from hisim.components import genericsurpluscontroller
-from hisim.components import controllable
+from hisim.components import generic_heat_pump
+from hisim.components import generic_smart_device_controller
+from hisim.components import generic_smart_device
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -17,7 +17,7 @@ def test_smart_device_library():
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                  seconds_per_timestep=60)
     # Set Heat Pump
-    heat_pump.HeatPump(manufacturer=manufacturer,
+    generic_heat_pump.HeatPump(manufacturer=manufacturer,
                            name=name,
                            min_operation_time=minimum_idle_time,
                            min_idle_time=minimum_operation_time, my_simulation_parameters=mysim)
@@ -39,9 +39,9 @@ def test_smart_device():
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                  seconds_per_timestep=60)
     # Create Controller
-    my_flexible_controller = genericsurpluscontroller.GenericSurplusController(my_simulation_parameters=mysim, mode=1)
+    my_flexible_controller = generic_smart_device_controller.GenericSurplusController(my_simulation_parameters=mysim, mode=1)
     # Create Controllable
-    my_controllable = controllable.Controllable("Washing", my_simulation_parameters=mysim)
+    my_controllable = generic_smart_device.Controllable("Washing", my_simulation_parameters=mysim)
 
     # Connect inputs and outputs
     my_flexible_controller.electricity_inputC.SourceOutput = available_electricity_outputC

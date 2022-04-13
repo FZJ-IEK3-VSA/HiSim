@@ -1,4 +1,4 @@
-from hisim.components import simple_bucket_boiler as sbb
+from hisim.components import generic_dhw_boiler as sbb
 
 def test_simple_bucket_boiler_state():
     state = sbb.BoilerState(100,300)

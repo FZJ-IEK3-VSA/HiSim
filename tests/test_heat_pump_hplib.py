@@ -1,5 +1,5 @@
 from hisim import component as cp
-from hisim.components.heat_pump_hplib import HeatPumpHplib
+from hisim.components.advanced_heat_pump_hplib import  HeatPumpHplib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log

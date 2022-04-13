@@ -90,7 +90,7 @@ with open('components_information.xlxs', 'a', encoding='UTF8') as f:
     for i in range(1,classes_max+1):
         _, column=add_to_cell(column=column, row=row, value=str(i)+".Class")
         _, column = add_to_cell(column=column, row=row, value=str(i) + ".ClassLength")
-    _, column = add_to_cell(column=column, row=row, value=str(i) + "Unit-Test-Status")
+    _, column = add_to_cell(column=column, row=row, value="Unit-Test-Status")
 
     #Start to iteratre to get Informations to fill in excel-sheet
     for (_, module_name, _) in iter_modules([package_dir]):

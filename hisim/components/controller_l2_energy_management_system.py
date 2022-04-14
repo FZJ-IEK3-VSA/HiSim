@@ -437,7 +437,7 @@ class Controller(cp.Component):
         #If comftortable temperature of building is to low heat with WarmWaterStorage the building
         # Solution with Control Signal Residence
         #not perfect solution!
-
+        '''
         if self.temperature_residence<self.min_comfortable_temperature_residence:
 
 
@@ -448,7 +448,7 @@ class Controller(cp.Component):
         elif self.temperature_residence > self.max_comfortable_temperature_residence:
             #cool
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
-
+        '''
 
             #Logic of regulating HeatDemand:
         #First heat up WarmWaterStorage->more important, than heat up HeatingWater

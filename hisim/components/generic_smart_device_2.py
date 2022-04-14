@@ -9,10 +9,10 @@ from typing import Optional
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components import occupancy
-from hisim.components import pvs
-from hisim.components import price_signal
-from hisim.components import predictive_controller
+from hisim.components import controller_l3_predictive
+from hisim.components import generic_pv_system
+from hisim.components import generic_price_signal
+from hisim.components import controller_l3_predictive
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
@@ -134,15 +134,15 @@ class SmartDevice( cp.Component ):
                                                                              self.SmartApplianceState,
                                                                              lt.LoadTypes.Any,
                                                                              lt.Units.Any )
-            self.add_default_connections( predictive_controller.PredictiveController, self.get_predictive_controller_default_connections( ) )
+            self.add_default_connections( controller_l3_predictive.PredictiveController, self.get_predictive_controller_default_connections( ) )
         
         
     def get_predictive_controller_default_connections( self ):
         print("setting smart device default connections")
         connections = [ ]
-        predictive_controller_classname = predictive_controller.PredictiveController.get_classname( )
+        predictive_controller_classname = controller_l3_predictive.PredictiveController.get_classname( )
         connections.append( cp.ComponentConnection( SmartDevice.SmartApplianceSignal, predictive_controller_classname, 
-                                                    predictive_controller.PredictiveController.SmartApplianceSignal ) )
+                                                    controller_l3_predictive.PredictiveController.SmartApplianceSignal ) )
         return connections
 
     def i_save_state( self ):

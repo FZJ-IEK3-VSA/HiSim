@@ -4,7 +4,6 @@ import numpy as np
 from typing import List, Optional
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.components.ev_charger import SimpleStorageState
 from hisim.utils import HISIMPATH
 from hisim import loadtypes as lt
 from hisim.utils import load_smart_appliance

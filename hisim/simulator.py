@@ -240,7 +240,7 @@ class Simulator:
 
                 # Executes restore state for each component
                 wr.restore_state()
-                # Executes simulate for component
+                # Executes i_simulate for component
                 wr.calculate_component(timestep, stsv, force_convergence)
 
             # Stops simulation for too small difference between

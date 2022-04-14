@@ -72,7 +72,7 @@ ws1 = wb.active
 ws1.title = "components_information"
 
 #open csv file in write mode and add header
-with open('components_information.xlxs', 'a', encoding='UTF8') as f:
+with open('components_information.xlsx', 'a', encoding='UTF8') as f:
 
     # iterate through the modules in the current package
     package_dir = os.path.join(gg(__file__).resolve().parent, "components")

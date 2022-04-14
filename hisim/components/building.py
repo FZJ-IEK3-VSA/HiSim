@@ -16,7 +16,7 @@ from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
-from hisim.components.occupancy import Occupancy
+from hisim.components.loadprofilegenerator_connector import Occupancy
 from functools import lru_cache
 
 __authors__ = "Vitor Hugo Bellotto Zago"

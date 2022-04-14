@@ -5,14 +5,14 @@ from typing import Optional, List
 from hisim import log
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import occupancy
-from hisim.components import pvs
-from hisim.components import price_signal
-from hisim.components import smart_device
-from hisim.components import simple_bucket_boiler
-from hisim.components import district_heating
-from hisim.components import oil_heater
-from hisim.components import heat_pump_modular
+from hisim.components import loadprofilegenerator_connector
+from hisim.components import generic_pv_system
+from hisim.components import generic_price_signal
+from hisim.components import generic_smart_device_2
+from hisim.components import generic_dhw_boiler
+from hisim.components import generic_district_heating
+from hisim.components import generic_oil_heater
+from hisim.components import generic_heat_pump_modular
 from hisim.simulationparameters import SimulationParameters, SystemConfig
 
 
@@ -118,7 +118,7 @@ class PredictiveController( cp.Component ):
                                                                               self.SmartApplianceSignal,
                                                                               lt.LoadTypes.Any,
                                                                               lt.Units.Any )
-            self.add_default_connections( smart_device.SmartDevice, self.get_smart_appliance_default_connections( ) )
+            self.add_default_connections( generic_smart_device_2.SmartDevice, self.get_smart_appliance_default_connections( ) )
             
         if my_simulation_parameters.system_config.boiler_included:
             #Input
@@ -132,7 +132,7 @@ class PredictiveController( cp.Component ):
                                                                       self.BoilerSignal,
                                                                       lt.LoadTypes.Any,
                                                                       lt.Units.Any )
-            self.add_default_connections( simple_bucket_boiler.BoilerController, self.get_boiler_controller_default_connections( ) )
+            self.add_default_connections( generic_dhw_boiler.BoilerController, self.get_boiler_controller_default_connections( ) )
             
         heatingchoice = my_simulation_parameters.system_config.heating_device_included
         if heatingchoice in [ 'heat_pump', 'oil_heater' ]:
@@ -146,40 +146,40 @@ class PredictiveController( cp.Component ):
                                                                              lt.LoadTypes.Any,
                                                                              lt.Units.Any )
             if heatingchoice == 'heat_pump':
-                self.add_default_connections( heat_pump_modular.HeatPumpController, self.get_heat_pump_controller_default_connections( ) )  
+                self.add_default_connections( generic_heat_pump_modular.HeatPumpController, self.get_heat_pump_controller_default_connections( ) )
             elif heatingchoice == 'oil_heater':
-                self.add_default_connections( oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
+                self.add_default_connections( generic_oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
         
     def get_smart_appliance_default_connections( self ):
         log.information( "setting smart appliance default connections" )
         connections = [ ]
-        smart_device_classname = smart_device.SmartDevice.get_classname( )
+        smart_device_classname = generic_smart_device_2.SmartDevice.get_classname( )
         connections.append( cp.ComponentConnection( PredictiveController.SmartApplianceState, smart_device_classname, 
-                                                    smart_device.SmartDevice.SmartApplianceState ) )
+                                                    generic_smart_device_2.SmartDevice.SmartApplianceState ) )
         return connections
     
     def get_boiler_controller_default_connections( self ):
         log.information( "setting boiler controller default connections" )
         connections = [ ]
-        boiler_controller_classname = simple_bucket_boiler.BoilerController.get_classname( )
+        boiler_controller_classname = generic_dhw_boiler.BoilerController.get_classname( )
         connections.append( cp.ComponentConnection( PredictiveController.BoilerControllerState, boiler_controller_classname, 
-                                                    simple_bucket_boiler.BoilerController.BoilerControllerState ) )
+                                                    generic_dhw_boiler.BoilerController.BoilerControllerState ) )
         return connections
     
     def get_oil_heater_controller_default_connections( self ):
         log.information( "setting oil heater controller default connections" )
         connections = [ ]
-        oil_heater_controller_classname = oil_heater.OilHeaterController.get_classname( )
+        oil_heater_controller_classname = generic_oil_heater.OilHeaterController.get_classname( )
         connections.append( cp.ComponentConnection( PredictiveController.HeatingDeviceControllerState, oil_heater_controller_classname, 
-                                                    oil_heater.OilHeaterController.OilHeaterControllerState ) )
+                                                    generic_oil_heater.OilHeaterController.OilHeaterControllerState ) )
         return connections
     
     def get_heat_pump_controller_default_connections( self ):
         log.information( "setting heat pump controller default connections" ) 
         connections = [ ]
-        heat_pump_controller_classname = heat_pump_modular.HeatPumpController.get_classname( )
+        heat_pump_controller_classname = generic_heat_pump_modular.HeatPumpController.get_classname( )
         connections.append( cp.ComponentConnection( PredictiveController.HeatingDeviceControllerState, heat_pump_controller_classname, 
-                                                    heat_pump_modular.HeatPumpController.HeatPumpControllerState ) )
+                                                    generic_heat_pump_modular.HeatPumpController.HeatPumpControllerState ) )
         return connections
 
     def build( self, threshold_price : float, threshold_peak : Optional[ float ] ):
@@ -205,13 +205,13 @@ class PredictiveController( cp.Component ):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         
-        demandforecast = self.simulation_repository.get_entry( occupancy.Occupancy.Electricity_Demand_Forecast_24h )
-        priceinjectionforecast = self.simulation_repository.get_entry( price_signal.PriceSignal.Price_Injection_Forecast_24h )
-        pricepurchaseforecast = self.simulation_repository.get_entry( price_signal.PriceSignal.Price_Purchase_Forecast_24h )
+        demandforecast = self.simulation_repository.get_entry( loadprofilegenerator_connector.Occupancy.Electricity_Demand_Forecast_24h )
+        priceinjectionforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Injection_Forecast_24h )
+        pricepurchaseforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Purchase_Forecast_24h )
         
         #build total load
         if self.my_simulation_parameters.system_config.pv_included == True:
-            pvforecast = self.simulation_repository.get_entry( pvs.PVSystem.PV_Forecast_24h )
+            pvforecast = self.simulation_repository.get_entry( generic_pv_system.PVSystem.PV_Forecast_24h )
             totalload = [ a - b for ( a, b ) in zip( demandforecast, pvforecast ) ]
         else:
             totalload = demandforecast
@@ -225,7 +225,7 @@ class PredictiveController( cp.Component ):
             #see if device is controllable
             if abs( devicestate ) < 2:
                 #get forecast of device
-                shiftableload = self.simulation_repository.get_entry( smart_device.SmartDevice.ShiftableLoadForecast )
+                shiftableload = self.simulation_repository.get_entry( generic_smart_device_2.SmartDevice.ShiftableLoadForecast )
                 steps = len( shiftableload )
                 
                 #calculate price and peak and get controller signal
@@ -250,7 +250,7 @@ class PredictiveController( cp.Component ):
             
             #get forecast of device
             if devicestate != -2:
-                shiftableload = self.simulation_repository.get_entry( simple_bucket_boiler.BoilerController.BoilerLoadForecast )
+                shiftableload = self.simulation_repository.get_entry( generic_dhw_boiler.BoilerController.BoilerLoadForecast )
                 steps = len( shiftableload )
                 
             
@@ -280,9 +280,9 @@ class PredictiveController( cp.Component ):
             #get forecast of device
             if devicestate != -2:
                 if self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
-                    shiftableload = self.simulation_repository.get_entry( oil_heater.OilHeaterController.OilHeaterLoadForecast )
+                    shiftableload = self.simulation_repository.get_entry( generic_oil_heater.OilHeaterController.OilHeaterLoadForecast )
                 elif self.my_simulation_parameters.system_config.heating_device_included == 'heat_pump':
-                    shiftableload = self.simulation_repository.get_entry( heat_pump_modular.HeatPumpController.HeatPumpLoadForecast )
+                    shiftableload = self.simulation_repository.get_entry( generic_heat_pump_modular.HeatPumpController.HeatPumpLoadForecast )
                 steps = len( shiftableload )
             
             #see if device is controllable

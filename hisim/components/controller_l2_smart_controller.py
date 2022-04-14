@@ -2,8 +2,8 @@
 
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.components.heat_pump import HeatPumpController
-from hisim.components.ev_charger import EVChargerController
+from hisim.components.generic_heat_pump  import HeatPumpController
+from hisim.components.generic_ev_charger  import EVChargerController
 from typing import List
 from hisim import loadtypes as lt
 from abc import ABC, abstractmethod

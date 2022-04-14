@@ -3,7 +3,7 @@ from pkgutil import iter_modules
 from importlib import import_module
 import inspect
 import os
-from openpyxl import Workbook
+from openpyxl import Workbook # type: ignore
 
 __authors__ = "Maximilian Hillen,"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -90,14 +90,12 @@ with open('components_information.xlsx', 'a', encoding='UTF8') as f:
     for i in range(1,classes_max+1):
         _, column=add_to_cell(column=column, row=row, value=str(i)+".Class")
         _, column = add_to_cell(column=column, row=row, value=str(i) + ".ClassLength")
-    _, column = add_to_cell(column=column, row=row, value=str(i) + "Unit-Test-Status")
+    _, column = add_to_cell(column=column, row=row, value="Unit-Test-Status")
 
     #Start to iteratre to get Informations to fill in excel-sheet
     for (_, module_name, _) in iter_modules([package_dir]):
         column = 1
         row = row+1
-        added_row_classes=[]
-        added_row_classes_columns=[]
 
         # import the module and iterate through its attributes
         module = import_module(f"components.{module_name}")
@@ -123,7 +121,7 @@ with open('components_information.xlsx', 'a', encoding='UTF8') as f:
         for m in inspect.getmembers(module, inspect.isclass):
             if module_name in m[1].__module__:
                 _, column = add_to_cell(column=column, row=row, value=m[0])
-                _, column = add_to_cell(column=column, row=row, value=len(inspect.getsourcelines(m[1])[0]))
+                _, column = add_to_cell(column=column, row=row, value=str(len(inspect.getsourcelines(m[1])[0])))
                 added_classes_total=added_classes_total+1
         if added_classes_total<classes_max:
             for i in range(0,classes_max-added_classes_total):

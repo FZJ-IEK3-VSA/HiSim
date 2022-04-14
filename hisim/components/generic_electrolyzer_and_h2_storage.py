@@ -182,7 +182,7 @@ class Electrolyzer(Component):
     PowerLevel = "Power Level"                          # %
     ElectricityRealNeeded = "ElectricityRealNeeded"
 
-    def __init__(self, component_name:str, power_electrolyzer:int,my_simulation_parameters: SimulationParameters):
+    def __init__(self,my_simulation_parameters: SimulationParameters, component_name:str ="Electrolyzer"):
         super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
         # input
         self.hydrogen_not_stored: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.HydrogenNotStored, lt.LoadTypes.Hydrogen, lt.Units.kg, True)
@@ -199,7 +199,9 @@ class Electrolyzer(Component):
         self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.Any, lt.Units.Any)
         self.power_level: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.PowerLevel, lt.LoadTypes.Any, lt.Units.Percent)
 
-
+        self.max_power = ElectrolyzerConfig.max_power
+        self.min_power = ElectrolyzerConfig.min_power
+        self.waste_energy = ElectrolyzerConfig.waste_energy
         self.electrolyzer = ElectrolyzerSimulation(waste_energy = ElectrolyzerConfig.waste_energy,
                                                    min_power =ElectrolyzerConfig.min_power,
                                                    max_power =ElectrolyzerConfig.max_power,
@@ -312,7 +314,7 @@ class HydrogenStorageSimulation:
         #assert self.max_charging_rate > (ElectrolyzerConfig.max_hydrogen_production_rate / 1000 * PhysicsConfig.hydrogen_density)
         #assert self.max_discharging_rate > chp.CHPConfig.P_total_max / PhysicsConfig.hydrogen_specific_fuel_value_per_kg
 
-    def store(self, hydrogen_input: float, seconds_per_timestep,max_capacity:float):
+    def store(self, hydrogen_input: float, seconds_per_timestep):
         """
         Notice: Write return statement and the function goes back to to the caller method immediately
         Storage function:
@@ -434,7 +436,7 @@ class HydrogenStorage(Component):
 
 
 
-    def __init__(self, component_name: str, my_simulation_parameters:SimulationParameters,max_capacity:int):
+    def __init__(self, my_simulation_parameters:SimulationParameters, component_name: str ="HydrogenStorage"):
         super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
         self.charging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, True)
         self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountTarget, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
@@ -448,8 +450,7 @@ class HydrogenStorage(Component):
         self.hydrogen_losses: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenLosses, lt.LoadTypes.Hydrogen, lt.Units.kg)
         self.discharging_hydrogen_real: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountReal, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
 
-
-        self.max_capacity = max_capacity
+        self.max_capacity=HydrogenStorageConfig.max_capacity
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.previous_state:float = 0
 
@@ -459,9 +460,9 @@ class HydrogenStorage(Component):
                                                          min_capacity=HydrogenStorageConfig.min_capacity,
                                                          max_charging_rate=HydrogenStorageConfig.max_charging_rate,
                                                          max_discharging_rate=HydrogenStorageConfig.max_discharging_rate,
-                                                         energy_to_charge=HydrogenStorageConfig.energy_to_charge,
-                                                         energy_to_discharge=HydrogenStorageConfig.energy_to_discharge,
-                                                         loss_factor=HydrogenStorageConfig.loss_factor
+                                                         energy_to_charge=HydrogenStorageConfig.energy_for_charge,
+                                                         energy_to_discharge=HydrogenStorageConfig.energy_for_discharge,
+                                                         loss_factor=HydrogenStorageConfig.loss_factor_per_day
                                                          )
 
 
@@ -508,7 +509,7 @@ class HydrogenStorage(Component):
             raise Exception("Tank cant be charged and discharged in the same timestep. Use existing Hydrogen! Delta:" + str(delta))
 
         if charging_amount > 0:
-            hydrogen_input, charging_energy_demand, hydrogen_not_stored = self.hydrogenstorage.store(charging_amount, self.seconds_per_timestep,self.max_capacity)
+            hydrogen_input, charging_energy_demand, hydrogen_not_stored = self.hydrogenstorage.store(charging_amount, self.seconds_per_timestep)
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
         if discharging_amount > 0:
             hydrogen_output, discharging_energy_demand, hydrogen_not_released = self.hydrogenstorage.withdraw(discharging_amount, self.seconds_per_timestep)

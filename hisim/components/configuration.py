@@ -42,7 +42,7 @@ class GasControllerConfig:
     """
     This controller works like the CHP controller, but switches on later so the CHP is used more often.
     Gas heater is used as a backup if the CHP power is not high enough.
-    If the minimum_runtime is smaller than the timestep, the minimum_runtime is 1 timestep --> gas_heater.py
+    If the minimum_runtime is smaller than the timestep, the minimum_runtime is 1 timestep --> generic_gas_heater.py
     """
     temperature_switch_on = 55          # [°C]
     temperature_switch_off = 70         # [°C]

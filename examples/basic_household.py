@@ -1,10 +1,10 @@
 from typing import Optional
 from hisim.simulator import SimulationParameters
-from hisim.components import occupancy
+from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
-from hisim.components import pvs
+from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import heat_pump
+from hisim.components import generic_heat_pump
 from hisim.components import sumbuilder
 from hisim import utils
 
@@ -80,14 +80,15 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
-    my_occupancy = occupancy.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather
     my_weather = weather.Weather(location=location, my_simulation_parameters= my_simulation_parameters)
     my_sim.add_component(my_weather)
 
-    my_photovoltaic_system = pvs.PVSystem(time=time,
+    # alte idee
+    my_photovoltaic_system = generic_pv_system.PVSystem(time=time,
                                           location=location,
                                           power=power,
                                           load_module_data=load_module_data,
@@ -159,7 +160,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
 
-    my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
+    my_heat_pump_controller = generic_heat_pump.HeatPumpController(t_air_heating=t_air_heating,
                                                            t_air_cooling=t_air_cooling,
                                                            offset=offset,
                                                            mode=hp_mode,
@@ -172,7 +173,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                           my_base_electricity_load_profile.ElectricityOutput)
     my_sim.add_component(my_heat_pump_controller)
 
-    my_heat_pump = heat_pump.HeatPump(manufacturer=hp_manufacturer,
+    my_heat_pump = generic_heat_pump.HeatPump(manufacturer=hp_manufacturer,
                                           name=hp_name,
                                           min_operation_time=hp_min_operation_time,
                                           min_idle_time=hp_min_idle_time,
@@ -258,7 +259,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
     # Build occupancy
-    my_occupancy = occupancy.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather
@@ -266,7 +267,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     my_sim.add_component(my_weather)
 
 
-    my_photovoltaic_system = pvs.PVSystem(time=time,
+    my_photovoltaic_system = generic_pv_system.PVSystem(time=time,
                                           location=location,
                                           power=power,
                                           load_module_data=load_module_data,
@@ -288,7 +289,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
     my_sim.add_component(my_building)
 
-    my_heat_pump_controller = heat_pump.HeatPumpController(t_air_heating=t_air_heating,
+    my_heat_pump_controller = generic_heat_pump.HeatPumpController(t_air_heating=t_air_heating,
                                                            t_air_cooling=t_air_cooling,
                                                            offset=offset,
                                                            mode=hp_mode,
@@ -301,7 +302,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                           my_base_electricity_load_profile.ElectricityOutput)
     my_sim.add_component(my_heat_pump_controller)
 
-    my_heat_pump = heat_pump.HeatPump(manufacturer=hp_manufacturer,
+    my_heat_pump = generic_heat_pump.HeatPump(manufacturer=hp_manufacturer,
                                           name=hp_name,
                                           min_operation_time=hp_min_operation_time,
                                           min_idle_time=hp_min_idle_time,

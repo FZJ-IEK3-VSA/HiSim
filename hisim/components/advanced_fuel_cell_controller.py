@@ -2,7 +2,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import CHPControllerConfig, GasControllerConfig, ElectrolyzerConfig
-from hisim.components import chp_system as chp
+from hisim.components import advanced_fuel_cell as chp
 from hisim.components.configuration import ExtendedControllerConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import log

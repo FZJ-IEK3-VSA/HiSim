@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import building
-from hisim.components import predictive_controller
+from hisim.components.building import Building
+from hisim.components import controller_l3_predictive
 from hisim import log
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -18,40 +18,42 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-class OilHeater( cp.Component ):
+class DistrictHeating( cp.Component ):
     """
     District heating implementation. District Heating transmitts heat with given efficiency.
     District heating is controlled with an on/off control oscillating within the comfort temperature band.
     """
     
     # Inputs
-    OilHeaterControllerState = "OilHeaterControllerState"
+    DistrictHeatingControllerState = "DistrictHeatingControllerState"
     
     # Outputs
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
-    ElectricityOutput =      "ElectricityOutput"
+    ThermalEnergyDelivered =    "ThermalEnergyDelivered"
+    PowerDistrictHeating =      "PowerDistrictHeating"
 
     def __init__( self, my_simulation_parameters: SimulationParameters , P_on : float, efficiency : float ):
         """
         Parameters
         ----------
-        P_on : float
-            Power of oil heater.
+        max_power : int
+            Maximum power of district heating.
+        min_power : int
+            Minimal power of district heating
         efficiency : float
-            Efficiency of oil heater
+            Efficiency of heat transfer
         """
         
-        super( ).__init__( name = 'OilHeater', my_simulation_parameters = my_simulation_parameters )
+        super( ).__init__( name = 'DistrictHeating', my_simulation_parameters = my_simulation_parameters )
         
         #introduce parameters of district heating
         self.build( P_on = P_on, efficiency = efficiency )
         
         # Inputs - Mandatories
-        self.OilHeaterControllerStateC : cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                                              self.OilHeaterControllerState,
-                                                                              lt.LoadTypes.Any,
-                                                                              lt.Units.Any,
-                                                                              mandatory = True )
+        self.DistrictHeatingControllerStateC : cp.ComponentInput = self.add_input(  self.ComponentName,
+                                                                                    self.DistrictHeatingControllerState,
+                                                                                    lt.LoadTypes.Any,
+                                                                                    lt.Units.Any,
+                                                                                    mandatory = True )
         
         # Outputs 
         self.thermal_energy_delivered : cp.ComponentOutput = self.add_output(   self.ComponentName,
@@ -59,18 +61,18 @@ class OilHeater( cp.Component ):
                                                                                 lt.LoadTypes.Heating,
                                                                                 lt.Units.Watt )
         
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                       self.ElectricityOutput,
-                                                                       lt.LoadTypes.Electricity,
-                                                                       lt.Units.Watt )
+        self.PowerDistrictHeatingOutput: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                               self.PowerDistrictHeating,
+                                                                               lt.LoadTypes.Heating,
+                                                                               lt.Units.Watt )
         
-        self.add_default_connections( OilHeaterController, self.get_controller_default_connections( ) )
+        self.add_default_connections( DistrictHeatingController, self.get_controller_default_connections( ) )
         
     def get_controller_default_connections( self ):
         log.information("setting weather default connections")
         connections = [ ]
-        controller_classname = OilHeaterController.get_classname( )
-        connections.append( cp.ComponentConnection( OilHeater.OilHeaterControllerState, controller_classname, OilHeaterController.OilHeaterControllerState ) )
+        controller_classname = DistrictHeatingController.get_classname( )
+        connections.append( cp.ComponentConnection( DistrictHeating.DistrictHeatingControllerState, controller_classname, DistrictHeatingController.DistrictHeatingControllerState ) )
         return connections
 
     def build( self, P_on: float, efficiency : float ):
@@ -94,7 +96,7 @@ class OilHeater( cp.Component ):
         """
         
         lines = []
-        lines.append( "Name: {}".format( "OilHeater" ) )
+        lines.append( "Name: {}".format( "District Heating" ) )
         lines.append( "Power: {:4.0f} kW".format( ( self.P_on ) * 1E-3 ) )
         lines.append( 'Efficiency : {:4.0f} %'.format( ( self.efficiency ) * 100 ) )
         return lines
@@ -114,7 +116,7 @@ class OilHeater( cp.Component ):
         """ 
         
         # Load control signal signalC value
-        signal = stsv.get_input_value( self.OilHeaterControllerStateC )
+        signal = stsv.get_input_value( self.DistrictHeatingControllerStateC )
         
         if signal > 0:
             signal = 1
@@ -123,8 +125,8 @@ class OilHeater( cp.Component ):
         
         # write values for output time series
         stsv.set_output_value( self.thermal_energy_delivered, signal * self.P_on * self.efficiency )
-        stsv.set_output_value( self.ElectricityOutputC, signal * self.P_on )
-
+        stsv.set_output_value( self.PowerDistrictHeatingOutput, signal * self.P_on )
+        
 class ControllerState:
     """
     This data class saves the state of the controller.
@@ -136,8 +138,8 @@ class ControllerState:
         
     def clone( self ):
         return ControllerState( state = self.state, timestep_of_last_action = self.timestep_of_last_action )
-    
-class OilHeaterController( cp.Component ):
+        
+class DistrictHeatingController( cp.Component ):
     """
     District Heating Controller. It takes power from the previous time step and adopts power to meet the heating needs.
     
@@ -160,13 +162,9 @@ class OilHeaterController( cp.Component ):
     """
     # Inputs
     TemperatureMean = "Residence Temperature"
-    OilHeaterSignal = "OilHeaterSignal"
 
     # Outputs
-    OilHeaterControllerState = "OilHeaterControllerState"
-
-    #Forecasts
-    OilHeaterLoadForecast = "OilHeaterLoadForecast"
+    DistrictHeatingControllerState = "DistrictHeatingControllerState"
 
     # Similar components to connect to:
     # 1. Building
@@ -181,7 +179,7 @@ class OilHeaterController( cp.Component ):
                   heating_season_begin : int = 270,
                   heating_season_end : int = 150 ):
         
-        super().__init__( name = "OilHeaterController", my_simulation_parameters = my_simulation_parameters )
+        super().__init__( name = "DistrictHeatingController", my_simulation_parameters = my_simulation_parameters )
         
         self.build( T_min = T_min,
                     T_max = T_max,
@@ -193,40 +191,24 @@ class OilHeaterController( cp.Component ):
 
         #inputs
         self.t_mC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                       self.TemperatureMean,
-                                                       lt.LoadTypes.Temperature,
-                                                       lt.Units.Celsius,
-                                                       mandatory = True )
-        
-        if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
-            self.OilHeaterSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                       self.OilHeaterSignal,
-                                                                       lt.LoadTypes.Any,
-                                                                       lt.Units.Any,
-                                                                       mandatory = False )
-            self.add_default_connections( predictive_controller.PredictiveController, self.get_predictive_controller_default_connections( ) )
+                                                        self.TemperatureMean,
+                                                        lt.LoadTypes.Temperature,
+                                                        lt.Units.Celsius,
+                                                        True )
         
         #outputs
-        self.OilHeaterControllerStateC = self.add_output( self.ComponentName,
-                                                          self.OilHeaterControllerState,
-                                                          lt.LoadTypes.Any,
-                                                          lt.Units.Any )
+        self.DistrictHeatingControllerStateC = self.add_output( self.ComponentName,
+                                                                self.DistrictHeatingControllerState,
+                                                                lt.LoadTypes.Any,
+                                                                lt.Units.Any )
         
-        self.add_default_connections( building.Building, self.get_building_default_connections( ) )
+        self.add_default_connections( Building, self.get_building_default_connections( ) )
     
     def get_building_default_connections( self ):
-        log.information("setting building default connections in OilHeaterController")
+        log.information("setting controller default connections")
         connections = [ ]
-        building_classname = building.Building.get_classname( )
-        connections.append( cp.ComponentConnection( OilHeaterController.TemperatureMean, building_classname, building.Building.TemperatureMean ) )
-        return connections
-    
-    def get_predictive_controller_default_connections( self ):
-        log.information( "setting predictive controller default connections") 
-        connections = [ ]
-        predictive_controller_classname = predictive_controller.PredictiveController.get_classname( )
-        connections.append( cp.ComponentConnection( OilHeaterController.OilHeaterSignal, predictive_controller_classname, 
-                                                    predictive_controller.PredictiveController.HeatingDeviceSignal ) )
+        building_classname = Building.get_classname( )
+        connections.append( cp.ComponentConnection( DistrictHeatingController.TemperatureMean, building_classname, Building.TemperatureMean ) )
         return connections
 
     def build( self, T_min, T_max, P_on, on_time, off_time, heating_season_begin, heating_season_end ):
@@ -255,15 +237,15 @@ class OilHeaterController( cp.Component ):
         self.previous_state = self.state.clone( )
 
     def i_save_state( self ):
-        self.state = self.state_previous.clone( )
+        self.state = self.state_previous
 
     def i_restore_state( self ):
-        self.state_previous = self.state.clone( )
+        self.state_previous = self.state
 
     def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool  ):
         
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
@@ -297,24 +279,9 @@ class OilHeaterController( cp.Component ):
                 if self.state.state < 0:
                     self.state.state = -1
         
-            if self.my_simulation_parameters.system_config.predictive:
-                #put forecast into dictionary
-                if self.state.state > 0:
-                    self.simulation_repository.set_entry( self.OilHeaterLoadForecast, [ self.P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )
-                else:
-                    self.simulation_repository.set_entry( self.OilHeaterLoadForecast, [ self.P_on ] * self.on_time )
-                    
-                #read in signal and modify state if recommended
-                devicesignal = stsv.get_input_value( self.OilHeaterSignalC )
-                if self.state.state == 1 and devicesignal == -1:
-                    self.deactivation( timestep )
-                    
-                elif self.state.state == -1 and devicesignal == 1:
-                    self.activation( timestep )
-        
-        stsv.set_output_value( self.OilHeaterControllerStateC, self.state.state )
+        stsv.set_output_value( self.DistrictHeatingControllerStateC, self.state.state )
 
-    def prin1t_output(self, t_m, state):
-        log.information("==========================================")
-        log.information("T m: {}".format(t_m))
-        log.information("State: {}".format(state))
+    #def prin1t_output(self, t_m, state):
+    #    log.information("==========================================")
+    #    log.information("T m: {}".format(t_m))
+    #    log.information("State: {}".format(state))

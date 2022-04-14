@@ -1,5 +1,5 @@
 from hisim import component
-from hisim.components import occupancy
+from hisim.components import loadprofilegenerator_connector
 from hisim.simulationparameters import SimulationParameters
 
 def test_occupancy():
@@ -14,7 +14,7 @@ def test_occupancy():
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     stsv = component.SingleTimeStepValues(number_of_outputs)
 
-    my_occupancy = occupancy.Occupancy(profile_name=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(profile_name=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
 
     # Needed to number globalindex to activate return of component outputs
     my_occupancy.number_of_residentsC.GlobalIndex = 0

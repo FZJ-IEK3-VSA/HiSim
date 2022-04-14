@@ -1,6 +1,6 @@
 from hisim import component
 from hisim.components import weather
-from hisim.components import pvs
+from hisim.components import generic_pv_system
 from hisim import simulator as sim
 
 def test_photovoltaic():
@@ -21,7 +21,7 @@ def test_photovoltaic():
     # Sets Occupancy
     my_weather = weather.Weather( location = weather_location, my_simulation_parameters = mysim, my_simulation_repository = repo )
     my_weather.set_sim_repo(repo)
-    my_pvs = pvs.PVSystem(power=power,my_simulation_parameters=mysim, my_simulation_repository = repo )
+    my_pvs = generic_pv_system.PVSystem(power=power,my_simulation_parameters=mysim, my_simulation_repository = repo )
     my_pvs.set_sim_repo(repo)
     my_pvs.t_outC.SourceOutput = my_weather.t_outC
     my_pvs.azimuthC.SourceOutput = my_weather.azimuthC

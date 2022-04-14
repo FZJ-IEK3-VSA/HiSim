@@ -48,7 +48,7 @@ class CHPConfig:
     # system_name = "HOMER"
     system_name = "BlueGen BG15"
 
-    df = pd.read_excel(os.path.join(utils.HISIMPATH["chp_system"], 'mock_up_efficiencies.xlsx'), index_col=0)
+    df = pd.read_excel(os.path.join(utils.HISIMPATH["inputs"], 'mock_up_efficiencies.xlsx'), index_col=0)
 
     df_specific = df.loc[str(system_name)]
 

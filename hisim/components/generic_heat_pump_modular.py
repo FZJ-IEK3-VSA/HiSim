@@ -10,12 +10,11 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.extended_storage import WaterSlice
 from hisim.components.configuration import WarmWaterStorageConfig
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
-from hisim.components import predictive_controller
+from hisim.components import controller_l3_predictive
 from hisim import log
 
 seaborn.set(style='ticks')
@@ -278,7 +277,7 @@ class HeatPumpController( cp.Component ):
                                                                        Units.Any,
                                                                        mandatory = False )
             self.add_default_connections( HeatPump, self.get_heat_pump_default_connections( ) )
-            self.add_default_connections( predictive_controller.PredictiveController, self.get_predictive_controller_default_connections( ))
+            self.add_default_connections( controller_l3_predictive.PredictiveController, self.get_predictive_controller_default_connections( ))
         self.HeatPumpControllerStateC: cp.ComponentOutput = self.add_output( self.ComponentName,
                                                                               self.HeatPumpControllerState,
                                                                               LoadTypes.Any,
@@ -303,8 +302,8 @@ class HeatPumpController( cp.Component ):
     def get_predictive_controller_default_connections( self ):
         log.information("setting predictive controller default connections in Heatpumpcontroller")
         connections = [ ]
-        predictive_controller_classname = predictive_controller.PredictiveController.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPumpController.HeatPumpSignal, predictive_controller_classname, predictive_controller.PredictiveController.HeatingDeviceSignal ) )
+        predictive_controller_classname = controller_l3_predictive.PredictiveController.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPumpController.HeatPumpSignal, predictive_controller_classname, controller_l3_predictive.PredictiveController.HeatingDeviceSignal ) )
         return connections
 
     def build( self, T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, min_operation_time, min_idle_time, heating_season_begin, heating_season_end ):

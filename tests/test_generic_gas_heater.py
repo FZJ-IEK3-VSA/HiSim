@@ -1,7 +1,7 @@
 from hisim import component as cp
 #import components as cps
 #import components
-from hisim.components import gas_heater
+from hisim.components import generic_gas_heater
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -19,7 +19,7 @@ def test_gas_heater():
 
     #===================================================================================================================
     # Set Gas Heater
-    my_gas_heater = gas_heater.GasHeater(temperaturedelta=temperaturedelta,
+    my_gas_heater = generic_gas_heater.GasHeater(temperaturedelta=temperaturedelta,
                                        power_max=power_max,
                                        my_simulation_parameters=my_simulation_parameters)
 

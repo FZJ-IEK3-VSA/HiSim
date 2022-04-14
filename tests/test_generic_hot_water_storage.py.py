@@ -1,7 +1,7 @@
 from hisim import component as cp
 #import components as cps
 #import components
-from hisim.components import storage
+from hisim.components import generic_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -23,7 +23,7 @@ def test_storage():
 
     #===================================================================================================================
     # Set Heat Pump
-    my_storage = storage.HeatStorage(V_SP_heating_water=V_SP_heating_water,
+    my_storage = generic_hot_water_storage.HeatStorage(V_SP_heating_water=V_SP_heating_water,
                                      V_SP_warm_water=V_SP_warm_water,
                                      temperature_of_warm_water_extratcion=temperature_of_warm_water_extratcion,
                                      ambient_temperature=ambient_temperature,

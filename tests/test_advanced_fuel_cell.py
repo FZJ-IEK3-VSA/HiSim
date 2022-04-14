@@ -1,7 +1,7 @@
 from hisim import component as cp
 #import components as cps
 #import components
-from hisim.components import chp_system
+from hisim.components import advanced_fuel_cell
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -22,7 +22,7 @@ def test_chp_system():
 
     #===================================================================================================================
     # Set Gas Heater
-    my_chp_system = chp_system.CHP(min_operation_time=min_operation_time,
+    my_chp_system = advanced_fuel_cell.CHP(min_operation_time=min_operation_time,
                                    min_idle_time=min_idle_time,
                                    gas_type=gas_type,
                                    operating_mode=operating_mode,

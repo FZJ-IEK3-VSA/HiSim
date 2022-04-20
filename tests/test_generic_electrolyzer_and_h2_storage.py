@@ -5,10 +5,7 @@ from hisim.components import generic_electrolyzer_and_h2_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-
-import os
-from hisim import utils
-import numpy as np
+from tests import functions_for_testing as fft
 
 def test_hydrogen_generator():
 
@@ -39,15 +36,30 @@ def test_hydrogen_generator():
     max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600   # [Nl/s]
     pressure_hydrogen_output = 30       # [bar]     --> max pressure mode at 35 bar
 
-    number_of_outputs = 18
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     #===================================================================================================================
     # Set Hydrogen Generator
     my_electrolyzer = generic_electrolyzer_and_h2_storage.Electrolyzer(
-                                   my_simulation_parameters=my_simulation_parameters)
+                                    my_simulation_parameters=my_simulation_parameters,
+                                    waste_energy=waste_energy,
+                                    min_power=min_power,
+                                    max_power=max_power,
+                                    min_power_percent=min_power_percent,
+                                    max_power_percent=max_power_percent,
+                                    min_hydrogen_production_rate_hour=min_hydrogen_production_rate_hour,
+                                    max_hydrogen_production_rate_hour=max_hydrogen_production_rate_hour,
+                                    pressure_hydrogen_output=pressure_hydrogen_output)
+
     my_hydrogen_storage = generic_electrolyzer_and_h2_storage.HydrogenStorage(
-                                   my_simulation_parameters=my_simulation_parameters)
+                                    my_simulation_parameters=my_simulation_parameters,
+                                    min_capacity=min_capacity,
+                                    max_capacity=max_capacity,
+                                    starting_fill=starting_fill,
+                                    max_charging_rate_hour=max_charging_rate_hour,
+                                    max_discharging_rate_hour=max_discharging_rate_hour,
+                                    energy_for_charge=energy_for_charge,
+                                    energy_for_discharge=energy_for_discharge,
+                                    loss_factor_per_day=loss_factor_per_day)
 
     # Set Fake Outputs for Gas Heater
     I_0 = cp.ComponentOutput("FakeElectricityInput",
@@ -63,37 +75,20 @@ def test_hydrogen_generator():
                              lt.LoadTypes.Hydrogen,
                              lt.Units.kg_per_sec)
 
-
-    my_electrolyzer.electricity_input.SourceOutput = I_0
-    my_electrolyzer.hydrogen_not_stored.SourceOutput = I_1
-    my_hydrogen_storage.charging_hydrogen.SourceOutput = my_electrolyzer.hydrogen_output
-    my_hydrogen_storage.discharging_hydrogen.SourceOutput = I_2
+    number_of_outputs = fft.get_number_of_outputs([I_0,I_1,I_2,my_electrolyzer,my_hydrogen_storage])
+    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Link inputs and outputs
-    I_0.GlobalIndex = 0
-    I_1.GlobalIndex = 1
-    I_2.GlobalIndex = 2
-    stsv.values[0] = 4000
-    stsv.values[1] = 0
-    stsv.values[2] = 0
+    my_electrolyzer.electricity_input.SourceOutput = I_0
+    my_electrolyzer.hydrogen_not_stored.SourceOutput = I_1
+    my_hydrogen_storage.discharging_hydrogen.SourceOutput = I_2
+    my_hydrogen_storage.charging_hydrogen.SourceOutput = my_electrolyzer.hydrogen_output
 
-    my_electrolyzer.water_demand.GlobalIndex = 3
-    my_electrolyzer.hydrogen_output.GlobalIndex = 4
-    my_electrolyzer.oxygen_output.GlobalIndex = 5
-    my_electrolyzer.energy_losses.GlobalIndex = 6
-    my_electrolyzer.unused_power.GlobalIndex = 7
-    my_electrolyzer.electricity_real_needed.GlobalIndex = 8
-    my_electrolyzer.electrolyzer_efficiency.GlobalIndex = 9
-    my_electrolyzer.power_level.GlobalIndex = 10
-
-    my_hydrogen_storage.current_fill.GlobalIndex = 11
-    my_hydrogen_storage.current_fill_percent.GlobalIndex = 12
-    my_hydrogen_storage.storage_delta.GlobalIndex = 13
-    my_hydrogen_storage.hydrogen_not_stored.GlobalIndex = 14
-    my_hydrogen_storage.hydrogen_not_released.GlobalIndex = 15
-    my_hydrogen_storage.hydrogen_storage_energy_demand.GlobalIndex = 16
-    my_hydrogen_storage.hydrogen_losses.GlobalIndex = 17
-    my_hydrogen_storage.discharging_hydrogen_real.GlobalIndex = 18
+    # Add Global Index and set values for fake Inputs
+    fft.add_global_index_of_components([I_0,I_1,I_2,my_electrolyzer,my_hydrogen_storage])
+    stsv.values[I_0.GlobalIndex] = 4000
+    stsv.values[I_1.GlobalIndex] = 0
+    stsv.values[I_2.GlobalIndex] = 0
 
     j = 1000
 
@@ -104,6 +99,6 @@ def test_hydrogen_generator():
     my_hydrogen_storage.i_simulate(j, stsv,  False)
     log.information(str(stsv.values))
     # Check if the delivered electricity indeed that corresponded to the battery model
-    assert stsv.values[3] ==  0.001114707341269841
-    assert stsv.values[7] ==  1600
-    assert stsv.values[13] == 0.0001248472222222222
+    assert stsv.values[my_electrolyzer.water_demand.GlobalIndex] ==  0.001114707341269841
+    assert stsv.values[my_electrolyzer.unused_power.GlobalIndex] ==  1600
+    assert stsv.values[my_hydrogen_storage.storage_delta.GlobalIndex] == 0.0001248472222222222

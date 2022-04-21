@@ -152,6 +152,9 @@ HISIMPATH : Dict[str,Any]      = {"results": os.path.join(hisim_abs_path, "resul
                                                              "photovoltaic",
                                                              "data_processed",
                                                              "sandia_inverters.csv")},
+                   "chp_system": os.path.join(hisim_inputs,
+                                              "chp_system"),
+
                    "smart_appliances": os.path.join(hisim_inputs,
                                                     "smart_devices",
                                                     "data_processed",
@@ -177,7 +180,8 @@ HISIMPATH : Dict[str,Any]      = {"results": os.path.join(hisim_abs_path, "resul
 
                    "report": os.path.join(hisim_abs_path,"results","report.pdf"),
                    "advanced_battery": {"parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"),
-                                        "reference_case": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "reference_case", "ref_case_data.npz")},
+                                        "reference_case": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "reference_case", "ref_case_data.npz"),
+                                        "siemens_junelight": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy")},
                    "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
                    "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy")}
 

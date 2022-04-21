@@ -9,6 +9,8 @@ import os
 from hisim import utils
 import datetime
 import time
+from tests import functions_for_testing as fft
+
 @utils.measure_execution_time
 def test_building():
     # Sets inputs
@@ -24,7 +26,7 @@ def test_building():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
 
-    stsv : component.SingleTimeStepValues = component.SingleTimeStepValues(20)
+
     #repo = component.SimRepository()
     t2 = time.perf_counter()
     log.profile("T2: " + str(t2-t1))
@@ -52,6 +54,10 @@ def test_building():
     t5 = time.perf_counter()
     log.profile("T2: " + str(t4 - t5))
 
+    number_of_outputs = fft.get_number_of_outputs([my_occupancy,my_weather,my_residence,thermal_energy_delivered_output])
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
+
+
     assert 1 == 1
     my_residence.t_outC.SourceOutput = my_weather.t_outC
     my_residence.altitudeC.SourceOutput = my_weather.altitudeC
@@ -61,26 +67,8 @@ def test_building():
     my_residence.occupancy_heat_gainC.SourceOutput = my_occupancy.heating_by_residentsC
     my_residence.thermal_energy_deliveredC.SourceOutput = thermal_energy_delivered_output
 
-    my_occupancy.number_of_residentsC.GlobalIndex = 0
-    my_occupancy.heating_by_residentsC.GlobalIndex = 1
-    my_occupancy.electricity_outputC.GlobalIndex = 2
-    my_occupancy.water_consumptionC.GlobalIndex = 3
+    fft.add_global_index_of_components([my_occupancy,my_weather,my_residence,thermal_energy_delivered_output])
 
-    my_weather.t_outC.GlobalIndex = 4
-    my_weather.DNIC.GlobalIndex = 5
-    my_weather.DHIC.GlobalIndex = 6
-    my_weather.GHIC.GlobalIndex = 7
-    my_weather.altitudeC.GlobalIndex = 8
-    my_weather.azimuthC.GlobalIndex = 9
-    my_weather.wind_speedC.GlobalIndex = 10
-    my_weather.DNIextraC.GlobalIndex = 11
-    my_weather.apparent_zenithC.GlobalIndex = 12
-
-    my_residence.t_mC.GlobalIndex = 13
-
-    thermal_energy_delivered_output.GlobalIndex = 14
-    my_residence.total_power_to_residenceC.GlobalIndex = 15
-    my_residence.solar_gain_through_windowsC.GlobalIndex = 16
     #test building models for various time resolutions 
     #   -> assume weather and occupancy data from t=0 (time resolution 1 min )
     #   -> calculate temperature of building ( with no heating considered ) for varios time steps
@@ -93,7 +81,7 @@ def test_building():
         my_residence.seconds_per_timestep = seconds_per_timestep
         
         # Simulates
-        stsv.values[13] = 23
+        stsv.values[my_residence.t_mC.GlobalIndex] = 23
         #log.information(str(stsv.values))
         my_weather.i_simulate(0, stsv, False)
         log.information(str(stsv.values))
@@ -101,14 +89,14 @@ def test_building():
         log.information(str(stsv.values))
         my_residence.i_simulate(0, stsv, False)
         log.information(str(stsv.values))
-    
+
         log.information("Occupancy: {}\n".format(stsv.values[:4]))
         log.information("Weather: {}\n".format(stsv.values[4:10]))
         log.information("Residence: {}\n".format(stsv.values[10:]))
 
         log.information(str(stsv.values[11]))
         # todo: this needs to be corrected
-        assert (stsv.values[13] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
+        assert (stsv.values[my_residence.t_mC.GlobalIndex] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
     t7 = time.perf_counter()
     log.profile("T2: " + str(t7 - t6))
     log.profile("T2: " + str(t7 - t6))

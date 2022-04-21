@@ -5,6 +5,7 @@ from hisim.components import generic_smart_device
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from tests import functions_for_testing as fft
 def test_smart_device_library():
     """
     Test if it can load the smart device library
@@ -27,10 +28,8 @@ def test_smart_device():
     Test time shifting for smart devices
     """
     seconds_per_timestep = 60
-    number_of_outputs = 4
-    available_electricity = 0
 
-    stsv : cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+    available_electricity = 0
 
     available_electricity_outputC = cp.ComponentOutput("ElectricityHomeGrid",
                                                        "ElectricityOutput",
@@ -43,25 +42,28 @@ def test_smart_device():
     # Create Controllable
     my_controllable = generic_smart_device.Controllable("Washing", my_simulation_parameters=mysim)
 
+    number_of_outputs = fft.get_number_of_outputs([available_electricity_outputC,my_flexible_controller,my_controllable])
+    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+
     # Connect inputs and outputs
     my_flexible_controller.electricity_inputC.SourceOutput = available_electricity_outputC
     my_controllable.ApplianceRun.SourceOutput = my_flexible_controller.stateC
 
-    available_electricity_outputC.GlobalIndex = 0
-    stsv.values[0] = available_electricity
+    # Add Global Index and set values for fake Inputs
+    fft.add_global_index_of_components([available_electricity_outputC,my_flexible_controller,my_controllable])
+    stsv.values[available_electricity_outputC.GlobalIndex] = available_electricity
 
-    my_flexible_controller.stateC.GlobalIndex = 1
-    my_controllable.electricity_outputC.GlobalIndex = 2
-    my_controllable.taskC.GlobalIndex = 3
-
+    #Simulate
     timestep = 2149
     my_controllable.i_save_state()
     my_controllable.i_restore_state()
     my_flexible_controller.i_simulate(timestep, stsv,  False)
     my_controllable.i_simulate(timestep, stsv, False)
-    log.information("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[1],stsv.values[2],stsv.values[3]))
+    log.information("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[my_flexible_controller.stateC.GlobalIndex],
+                                                                   stsv.values[my_controllable.electricity_outputC.GlobalIndex],
+                                                                   stsv.values[my_controllable.taskC.GlobalIndex]))
 
     # Signal
-    assert 1.0 == stsv.values[1]
+    assert 1.0 == stsv.values[my_flexible_controller.stateC.GlobalIndex]
     # Electricity Load for flexibility
-    assert 0.20805582786885163 == stsv.values[2]
+    assert 0.20805582786885163 == stsv.values[my_controllable.electricity_outputC.GlobalIndex]

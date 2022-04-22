@@ -20,10 +20,6 @@ def test_heat_pump_hplib():
     seconds_per_timestep = 60
     force_convergence = False 
 
-    # Set stsv values for i_simulate   
-    number_of_IOs = 11
-    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_IOs)
-
     # Create fake component outputs as inputs for simulation
     on_off_switch = cp.ComponentOutput("Fake_on_off_switch",
                               "Fake_on_off_switch",

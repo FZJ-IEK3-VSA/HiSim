@@ -1,9 +1,12 @@
 # Generic/Built-in
-from hisim.simulationparameters import SimulationParameters
 from dataclasses import dataclass
 import hisim.component as cp
 from hisim.components.controller_l2_energy_management_system import Controller as Controller_l2
-from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
+from typing import List
+from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
+
+
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -21,15 +24,20 @@ __status__ = "development"
 class DynamicConnectionEntry:
     SourceComponent: str
     SourceTags: list[str]
-
-
+    SourceWeight: int
 
 class DynamicComponent(cp.Component):
-    cp.ComponentInput: list[DynamicConnectionEntry]
-    cp.ComponentOutput: list[DynamicConnectionEntry]
+    MyComponentInputs :List[DynamicConnectionEntry] = []
+    MyComponentOutputs :List[DynamicConnectionEntry] = []
 
+    def __init__(self, name: str,my_simulation_parameters: SimulationParameters):
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
+        self.MyComponentInputs = self.add_output(self.ComponentName,
+                                       DynamicComponent.MyComponentOutputs,
+                                       lt.LoadTypes.Any,
+                                       lt.Units.Any)
     def add_component_input(self, source_component, tags):
-        self.ComponentInput.append(DynamicConnectionEntry(source_component.Name, tags))
+        self.MyComponentInputs.append(DynamicConnectionEntry(source_component, tags))
         # init normally ...
 
 

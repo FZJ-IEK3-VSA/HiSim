@@ -98,20 +98,6 @@ class L2_Controller( cp.Component ):
                                                                             mandatory = True )
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
-        # if self.my_simulation_parameters.system_config.predictive == True:  
-        #     self.HeatPumpPowerPotentialC : cp.ComponentInput = self.add_input( self.ComponentName,
-        #                                                               self.HeatPumpPowerPotential,
-        #                                                               LoadTypes.Electricity,
-        #                                                               Units.Watt,
-        #                                                               mandatory = False )
-        #     self.HeatPumpSignalC : cp.ComponentInput = self.add_input( self.ComponentName,
-        #                                                                self.HeatPumpSignal,
-        #                                                                LoadTypes.Any,
-        #                                                                Units.Any,
-        #                                                                mandatory = False )
-        #     self.add_default_connections( HeatPump, self.get_heat_pump_default_connections( ) )
-        #     self.add_default_connections( controller_l3_predictive.PredictiveController, self.get_predictive_controller_default_connections( ))
-        
         #Component outputs
         self.l2_HeatPumpSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
                                                                        self.l2_HeatPumpSignal,
@@ -123,7 +109,7 @@ class L2_Controller( cp.Component ):
                                                                            Units.binary )
         
     def get_building_default_connections( self ):
-        log.information("setting building default connections in Heatpumpcontroller")
+        log.information("setting building default connections in L2 Controller")
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ResidenceTemperature, building_classname, Building.TemperatureMean ) )
@@ -187,22 +173,6 @@ class L2_Controller( cp.Component ):
                 self.previous_state.activate( )
                 if self.previous_state.mandatory == 1:
                     self.state = self.previous_state.clone( )
-        
-            # if self.my_simulation_parameters.system_config.predictive:
-            #     P_on = stsv.get_input_value( self.HeatPumpPowerPotentialC )
-            #     #put forecast into dictionary
-            #     if self.state.state > 0:
-            #         self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )
-            #     else:
-            #         self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * self.on_time )
-                    
-            #     #read in signal and modify state if recommended
-            #     devicesignal = stsv.get_input_value( self.HeatPumpSignalC )
-            #     if self.state.state == 1 and devicesignal == -1:
-            #         self.deactivation( timestep )
-                    
-            #     elif self.state.state == -1 and devicesignal == 1:
-            #         self.activation( timestep )
         
         stsv.set_output_value( self.l2_HeatPumpSignalC, self.state.state )
         stsv.set_output_value( self.l2_HeatPumpCompulsoryC, self.state.mandatory )

@@ -13,6 +13,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 import hisim.components.controller_l1_generic_heatpump_modular as l1_HP
 import hisim.components.controller_l2_generic_heatpump_modular as l2_HP
+import hisim.components.controller_l3_generic_heatpump_modular as l3_HP
 from hisim import log
 
 seaborn.set(style='ticks')
@@ -63,12 +64,13 @@ class HeatPump(cp.Component):
     l1_HeatPumpCompulsory = "l1_HeatPumpCompulsory"
     l2_HeatPumpSignal = "l2_HeatPumpSignal"
     l2_HeatPumpCompulsory = "l2_HeatPumpCompulsory"
+    l3_HeatPumpSignal = "l3_HeatPumpSignal"
 
     # Outputs
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
     HeatPumpSignal = "HeatPumpSignal"
-    #HeatPumpPowerPotential = "HeatPumpPowerPotential"
+    HeatPumpPowerPotential = "HeatPumpPowerPotential"
 
     # Similar components to connect to:
     # 1. HeatPump l1 controller
@@ -118,11 +120,11 @@ class HeatPump(cp.Component):
                                                                             mandatory = True )
         
         #Outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output( self.ComponentName,
+        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(   self.ComponentName,
                                                                               self.ThermalEnergyDelivered,
                                                                               LoadTypes.Heating,
                                                                               Units.Watt )
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(  self.ComponentName,
                                                                         self.ElectricityOutput,
                                                                         LoadTypes.Electricity,
                                                                         Units.Watt )
@@ -130,11 +132,17 @@ class HeatPump(cp.Component):
                                                                         self.HeatPumpSignal,
                                                                         LoadTypes.OnOff,
                                                                         Units.binary )
-        # if self.my_simulation_parameters.system_config.predictive == True:
-        #     self.heat_pump_power_potentialC: cp.ComponentOutput = self.add_output( self.ComponentName,
-        #                                                                   self.HeatPumpPowerPotential,
-        #                                                                   LoadTypes.Electricity,
-        #                                                                   Units.Watt )
+        if self.my_simulation_parameters.system_config.predictive == True:
+            self.l3_HeatPumpSignalC: cp.ComponentInput = self.add_input(    self.ComponentName,
+                                                                            self.l3_HeatPumpSignal,
+                                                                            LoadTypes.OnOff,
+                                                                            Units.binary,
+                                                                            mandatory = False )
+            self.HeatPumpPowerPotentialC: cp.ComponentOutput = self.add_output(     self.ComponentName,
+                                                                                    self.HeatPumpPowerPotential,
+                                                                                    LoadTypes.Electricity,
+                                                                                    Units.Watt )
+            self.add_default_connections( l3_HP.L3_Controller, self.get_l3_controller_default_connections( ) )
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( l1_HP.L1_Controller, self.get_l1_controller_default_connections( ) )
@@ -161,6 +169,13 @@ class HeatPump(cp.Component):
         controller_classname = l2_HP.L2_Controller.get_classname( )
         connections.append( cp.ComponentConnection( HeatPump.l2_HeatPumpSignal, controller_classname, l2_HP.L2_Controller.l2_HeatPumpSignal ) )
         connections.append( cp.ComponentConnection( HeatPump.l2_HeatPumpCompulsory, controller_classname, l2_HP.L2_Controller.l2_HeatPumpCompulsory ) )
+        return connections
+    
+    def get_l3_controller_default_connections( self ):
+        log.information("setting l2 default connections in HeatPump")
+        connections = [ ]
+        controller_classname = l3_HP.L3_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPump.l3_HeatPumpSignal, controller_classname, l3_HP.L3_Controller.l3_HeatPumpSignal ) )
         return connections
 
     def build( self, manufacturer, name, heating_season_begin, heating_season_end ):
@@ -223,15 +238,20 @@ class HeatPump(cp.Component):
         l2_compulsory = stsv.get_input_value( self.l2_HeatPumpCompulsoryC )
         T_out = stsv.get_input_value( self.TemperatureOutsideC )
         
+        print( timestep, l1_signal, l1_compulsory, l2_signal, l2_compulsory )
+        
         #1 check l1_controller (find out if running time or idle time demands compulsory action)
         if l1_compulsory == 1:
             self.state.state = l1_signal
         #2 check l2_controller (find out if temperature limit demand compulsory action)
         elif l2_compulsory == 1:
             self.state.state = l2_signal
-        #3 if nothing is compulsory take signal from previous step  
-        
-        print( l1_compulsory, l2_compulsory, self.state.state )
+        #3 if nothing is compulsory take signal from previous step 
+        #or if predictive controller is available conolidate him
+        elif self.my_simulation_parameters.system_config.predictive == True:
+            l3_signal = stsv.get_input_value( self.l3_HeatPumpSignalC )
+            self.state.state = l3_signal
+            print( l3_signal, self.state.state )
           
         #cop
         cop = self.cal_cop( T_out )
@@ -247,8 +267,8 @@ class HeatPump(cp.Component):
         stsv.set_output_value( self.ElectricityOutputC, self.state.state * self.max_heating_power / cop )
         stsv.set_output_value( self.HeatPumpSignalC, self.state.state )
         
-        # if self.my_simulation_parameters.system_config.predictive == True:
-        #     stsv.set_output_value( self.heat_pump_power_potentialC, self.max_heating_power / cop )
+        if self.my_simulation_parameters.system_config.predictive == True:
+            stsv.set_output_value( self.HeatPumpPowerPotentialC, self.max_heating_power / cop )
         
         
 # class ControllerState:

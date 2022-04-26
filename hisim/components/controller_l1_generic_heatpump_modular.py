@@ -63,10 +63,14 @@ class L1_Controller( cp.Component ):
     """
     # Inputs
     HeatPumpSignal = "HeatPumpSignal"
+    HeatPumpPowerPotential = "HeatPumpPowerPotential"
 
     # Outputs
     l1_HeatPumpSignal = "l1_HeatPumpSignal"
     l1_HeatPumpCompulsory = "l1_HeatPumpCompulsory"
+    
+    # Forecasts
+    HeatPumpLoadForecast = "HeatPumpLoadForecast"
 
     # Similar components to connect to:
     # 1. Building
@@ -85,7 +89,13 @@ class L1_Controller( cp.Component ):
                                                                    LoadTypes.OnOff,
                                                                    Units.binary,
                                                                    mandatory = True )
-        self.add_default_connections( generic_hp.HeatPump, self.get_heat_pump_default_connections( ) )
+        self.HeatPumpPowerPotentialC: cp.ComponentInput = self.add_input(  self.ComponentName,
+                                                                           self.HeatPumpPowerPotential,
+                                                                           LoadTypes.Electricity,
+                                                                           Units.Watt,
+                                                                           mandatory = False )
+        self.add_default_connections( generic_hp.HeatPump, self.get_heatpump_default_connections( ) )
+        
         
         #add outputs
         self.l1_HeatPumpSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
@@ -98,11 +108,12 @@ class L1_Controller( cp.Component ):
                                                                            LoadTypes.Compulsory,
                                                                            Units.binary )
         
-    def get_heat_pump_default_connections( self ):
+    def get_heatpump_default_connections( self ):
         log.information("setting heat pump default connections in L1 controller")
         connections = [ ]
         heat_pump_classname = generic_hp.HeatPump.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.HeatPumpSignal, heat_pump_classname, generic_hp.HeatPump.HeatPumpSignal ) )
+        connections.append( cp.ComponentConnection( L1_Controller.HeatPumpPowerPotential, heat_pump_classname, generic_hp.HeatPump.HeatPumpPowerPotential ) )
         return connections
 
     def build( self, min_operation_time, min_idle_time ):
@@ -132,6 +143,15 @@ class L1_Controller( cp.Component ):
         
         if self.state.is_first_iteration( timestep ):
             self.state0 = self.state.clone( )
+            
+            #put forecast into dictionary
+            if self.my_simulation_parameters.system_config.predictive:
+                P_on = stsv.get_input_value( self.HeatPumpPowerPotentialC )
+
+                if self.state0.state > 0:
+                    self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * max( 1, self.on_time + self.state0.timestep_of_last_action - timestep ) )
+                else:
+                    self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * self.on_time )
             
         if ( self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep ) or \
             ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):

@@ -38,7 +38,12 @@ class LoadTypes(str, enum.Enum):
     WarmWater = "WarmWater"
     
     Price = "Price"
-
+    
+    #Controllers:
+    OnOff = "OnOff" #encoding: 0 means off and 1 means on
+    Compulsory = "Compulsory" #encoding: 0 means optional and 1 means mandatory
+    Limits = "Limits" #encoding: -1 means lower limits, +1 means increase limits 
+    
 @enum.unique
 class Units(str, enum.Enum):
     # Unphysical
@@ -85,6 +90,10 @@ class Units(str, enum.Enum):
     
     # Cost
     c_per_kWh = "Cents per kWh"
+    
+    #binary for controllers
+    binary = 'binary'
+    smartgridready = 'smartgridready'
 
 
 

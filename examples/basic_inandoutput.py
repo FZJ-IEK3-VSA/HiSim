@@ -60,7 +60,4 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                source_component_output=my_rn2.RandomOutput,
                                                source_load_type= lt.LoadTypes.Any,
                                                source_unit= lt.LoadTypes.Any)
-
-
     my_sim.add_component(in_and_output_testing)
-

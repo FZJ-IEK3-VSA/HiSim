@@ -24,7 +24,7 @@ class DynamicConnectionEntry:
 
 class Test_InandOutputs(Component):
     """
-    Gets Control Signal and calculates on base of it Massflow and Temperature of Massflow
+
     """
     #Input
     MyComponentInputs :List[DynamicConnectionEntry] = []
@@ -44,15 +44,17 @@ class Test_InandOutputs(Component):
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)
         vars(self)[label] = label
-        myinput = cp.ComponentInput(source_component_class.ComponentName, label, source_load_type, source_unit, True)
+        myinput = cp.ComponentInput(self.ComponentName, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
-        myinput.src_object_name = label
-        myinput.src_field_name = label
+        myinput.src_object_name = source_component_class.ComponentName
+        myinput.src_field_name = source_component_output
+        self.__setattr__(label,myinput)
+
         for output_var in source_component_class.outputs:
             if output_var.ObjectName == source_component_class.ComponentName:
-                source_component_class.connect_input(myinput.FieldName,
-                                                    source_component_class.ComponentName,
-                                                    output_var)
+                self.connect_input( label,
+                                    source_component_class.ComponentName,
+                                    output_var.FieldName)
 
     def write_to_report(self):
         pass
@@ -68,5 +70,4 @@ class Test_InandOutputs(Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
 
-        print(2)
-        stateC = stsv.get_input_value(self.stateC)
+        print(stsv.get_input_value(self.Input2)+stsv.get_input_value(self.Input3))

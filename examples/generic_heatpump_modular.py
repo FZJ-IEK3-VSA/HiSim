@@ -78,7 +78,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
-    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = False, boiler_included = None, heating_device_included = 'heat_pump' )    
+    my_simulation_parameters.reset_system_config( predictive = False, pv_included = True, smart_devices_included = False, boiler_included = None, heating_device_included = 'heat_pump' )    
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration
@@ -221,21 +221,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         #             )
             
     if heating_device_included == 'heat_pump':
-        my_heating = generic_heat_pump_modular.HeatPump( manufacturer = hp_manufacturer,
-                                                         name = hp_name,
-                                                         heating_season_begin = heating_season_begin,
-                                                         heating_season_end = heating_season_end,
-                                                         my_simulation_parameters = my_simulation_parameters )
-        my_heating.connect_only_predefined_connections( my_weather ) 
-        my_sim.add_component( my_heating )
-
-        my_heating_controller_l1 = controller_l1_generic_heatpump_modular.L1_Controller(   my_simulation_parameters = my_simulation_parameters,
-                                                                                           min_operation_time = min_operation_time,
-                                                                                           min_idle_time = min_idle_time )
-        my_heating_controller_l1.connect_only_predefined_connections( my_heating )
-        my_sim.add_component( my_heating_controller_l1 )
-        my_heating.connect_only_predefined_connections( my_heating_controller_l1 )
-        
         my_heating_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller(    my_simulation_parameters = my_simulation_parameters,
                                                                                             T_min_heating = T_min_heating,
                                                                                             T_max_heating = T_max_heating,
@@ -243,10 +228,22 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                                                                                             T_max_cooling = T_max_cooling,
                                                                                             heating_season_begin = heating_season_begin,
                                                                                             heating_season_end = heating_season_end )
-
         my_heating_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_heating_controller_l2 )
-        my_heating.connect_only_predefined_connections( my_heating_controller_l2 )
+        
+        my_heating_controller_l1 = controller_l1_generic_heatpump_modular.L1_Controller(   my_simulation_parameters = my_simulation_parameters,
+                                                                                           min_operation_time = min_operation_time,
+                                                                                           min_idle_time = min_idle_time )
+        my_heating_controller_l1.connect_only_predefined_connections( my_heating_controller_l2 )
+        my_sim.add_component( my_heating_controller_l1 )
+        my_heating = generic_heat_pump_modular.HeatPump( manufacturer = hp_manufacturer,
+                                                         name = hp_name,
+                                                         heating_season_begin = heating_season_begin,
+                                                         heating_season_end = heating_season_end,
+                                                         my_simulation_parameters = my_simulation_parameters )
+        my_heating.connect_only_predefined_connections( my_weather ) 
+        my_heating.connect_only_predefined_connections( my_heating_controller_l1 )
+        my_sim.add_component( my_heating )
         
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                     my_heating.ComponentName,

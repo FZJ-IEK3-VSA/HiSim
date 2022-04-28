@@ -41,8 +41,6 @@ class LoadTypes(str, enum.Enum):
     
     #Controllers:
     OnOff = "OnOff" #encoding: 0 means off and 1 means on
-    Compulsory = "Compulsory" #encoding: 0 means optional and 1 means mandatory
-    Limits = "Limits" #encoding: -1 means lower limits, +1 means increase limits 
     
 @enum.unique
 class Units(str, enum.Enum):
@@ -93,7 +91,6 @@ class Units(str, enum.Enum):
     
     #binary for controllers
     binary = 'binary'
-    smartgridready = 'smartgridready'
 
 
 

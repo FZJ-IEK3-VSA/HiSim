@@ -26,7 +26,7 @@ def test_heat_pump_modular():
     T_max_heating = 19
 
     #definition of outputs
-    number_of_outputs = 9
+    number_of_outputs = 7
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues( number_of_outputs )
 
     #===================================================================================================================
@@ -60,22 +60,16 @@ def test_heat_pump_modular():
     #connection of in- and outputs
     my_heat_pump_controller_l2.ResidenceTemperatureC.SourceOutput = t_mC
     my_heat_pump.TemperatureOutsideC.SourceOutput = t_air_outdoorC
-    my_heat_pump.l1_HeatPumpSignalC.SourceOutput = my_heat_pump_controller_l1.l1_HeatPumpSignalC
-    my_heat_pump.l1_HeatPumpCompulsoryC.SourceOutput = my_heat_pump_controller_l1.l1_HeatPumpCompulsoryC
-    my_heat_pump.l2_HeatPumpSignalC.SourceOutput = my_heat_pump_controller_l2.l2_HeatPumpSignalC
-    my_heat_pump.l2_HeatPumpCompulsoryC.SourceOutput = my_heat_pump_controller_l2.l2_HeatPumpCompulsoryC
-    my_heat_pump_controller_l1.HeatPumpSignalC.SourceOutput = my_heat_pump.HeatPumpSignalC
+    my_heat_pump.l1_DeviceSignalC.SourceOutput = my_heat_pump_controller_l1.l1_DeviceSignalC
+    my_heat_pump_controller_l1.l2_DeviceSignalC.SourceOutput = my_heat_pump_controller_l2.l2_DeviceSignalC
 
     # indexing of in- and outputs
     t_mC.GlobalIndex = 0
     t_air_outdoorC.GlobalIndex = 1
-    my_heat_pump_controller_l1.l1_HeatPumpSignalC.GlobalIndex = 2  
-    my_heat_pump_controller_l1.l1_HeatPumpCompulsoryC.GlobalIndex = 3
-    my_heat_pump_controller_l2.l2_HeatPumpSignalC.GlobalIndex = 4
-    my_heat_pump_controller_l2.l2_HeatPumpCompulsoryC.GlobalIndex = 5
-    my_heat_pump.HeatPumpSignalC.GlobalIndex = 6
-    my_heat_pump.ThermalEnergyDeliveredC.GlobalIndex = 7
-    my_heat_pump.ElectricityOutputC.GlobalIndex = 8
+    my_heat_pump_controller_l1.l1_DeviceSignalC.GlobalIndex = 3  
+    my_heat_pump_controller_l2.l2_DeviceSignalC.GlobalIndex = 4
+    my_heat_pump.ThermalEnergyDeliveredC.GlobalIndex = 5
+    my_heat_pump.ElectricityOutputC.GlobalIndex = 6
     
     #test: after one hour temperature in building is 10 °C 
     stsv.values[ 0 ] = 10
@@ -93,6 +87,6 @@ def test_heat_pump_modular():
 
     #-> Did heat pump turn on?
     # Check if there is a signal to heat up the house
-    assert 1 == stsv.values[ 6 ]
+    assert 1 == stsv.values[ 3 ]
     # Check if the delivered heat is indeed that corresponded to the heat pump model
-    assert heat_pump_power == stsv.values[ 7 ]
+    assert heat_pump_power == stsv.values[ 5 ]

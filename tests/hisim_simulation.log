@@ -3468,3 +3468,63 @@ adding output: Azimuth to component Weather
 adding output: ApparentZenith to component Weather
 adding output: WindSpeed to component Weather
 Executing hisim.components.weather.__init__ took 5.68 seconds
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting l1 default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'L1_Controller': [ComponentConnection(TargetInputName='l1_DeviceSignal', SourceClassName='L1_Controller', SourceOutputName='l1_DeviceSignal', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump_modular.__init__ took 0.00 seconds
+setting l2 default connections in l1
+added connections: {'L2_Controller': [ComponentConnection(TargetInputName='l2_DeviceSignal', SourceClassName='L2_Controller', SourceOutputName='l2_DeviceSignal', SourceInstanceName=None)]}
+adding output: l1_DeviceSignal to component L1_Controller
+Executing hisim.components.controller_l1_generic_heatpump_modular.__init__ took 0.00 seconds
+setting building default connections in L2 Controller
+added connections: {'Building': [ComponentConnection(TargetInputName='ResidenceTemperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+adding output: l2_DeviceSignal to component L2_Controller
+Executing hisim.components.controller_l2_generic_heatpump_modular.__init__ took 0.00 seconds
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting l1 default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'L1_Controller': [ComponentConnection(TargetInputName='l1_DeviceSignal', SourceClassName='L1_Controller', SourceOutputName='l1_DeviceSignal', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump_modular.__init__ took 0.00 seconds
+setting l2 default connections in l1
+added connections: {'L2_Controller': [ComponentConnection(TargetInputName='l2_DeviceSignal', SourceClassName='L2_Controller', SourceOutputName='l2_DeviceSignal', SourceInstanceName=None)]}
+adding output: l1_DeviceSignal to component L1_Controller
+Executing hisim.components.controller_l1_generic_heatpump_modular.__init__ took 0.00 seconds
+setting building default connections in L2 Controller
+added connections: {'Building': [ComponentConnection(TargetInputName='ResidenceTemperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+adding output: l2_DeviceSignal to component L2_Controller
+Executing hisim.components.controller_l2_generic_heatpump_modular.__init__ took 0.00 seconds
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting l1 default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'L1_Controller': [ComponentConnection(TargetInputName='l1_DeviceSignal', SourceClassName='L1_Controller', SourceOutputName='l1_DeviceSignal', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump_modular.__init__ took 0.00 seconds
+setting l2 default connections in l1
+added connections: {'L2_Controller': [ComponentConnection(TargetInputName='l2_DeviceSignal', SourceClassName='L2_Controller', SourceOutputName='l2_DeviceSignal', SourceInstanceName=None)]}
+adding output: l1_DeviceSignal to component L1_Controller
+Executing hisim.components.controller_l1_generic_heatpump_modular.__init__ took 0.00 seconds
+setting building default connections in L2 Controller
+added connections: {'Building': [ComponentConnection(TargetInputName='ResidenceTemperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+adding output: l2_DeviceSignal to component L2_Controller
+Executing hisim.components.controller_l2_generic_heatpump_modular.__init__ took 0.00 seconds
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting l1 default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'L1_Controller': [ComponentConnection(TargetInputName='l1_DeviceSignal', SourceClassName='L1_Controller', SourceOutputName='l1_DeviceSignal', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump_modular.__init__ took 0.00 seconds
+setting l2 default connections in l1
+added connections: {'L2_Controller': [ComponentConnection(TargetInputName='l2_DeviceSignal', SourceClassName='L2_Controller', SourceOutputName='l2_DeviceSignal', SourceInstanceName=None)]}
+adding output: l1_DeviceSignal to component L1_Controller
+Executing hisim.components.controller_l1_generic_heatpump_modular.__init__ took 0.00 seconds
+setting building default connections in L2 Controller
+added connections: {'Building': [ComponentConnection(TargetInputName='ResidenceTemperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+adding output: l2_DeviceSignal to component L2_Controller
+Executing hisim.components.controller_l2_generic_heatpump_modular.__init__ took 0.00 seconds

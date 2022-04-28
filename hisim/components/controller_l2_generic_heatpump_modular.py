@@ -31,20 +31,17 @@ class L2_ControllerState:
         self.mandatory = mandatory
         
     def clone( self ):
-        return L2_ControllerState( timestep_actual = self.timestep_actual, state = self.state, mandatory = self.mandatory )
+        return L2_ControllerState( timestep_actual = self.timestep_actual, state = self.state )
     
     def is_first_iteration( self, timestep ):
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
-            self.mandatory = 0
     
     def activate( self ):
         self.state = 1
-        self.mandatory = 1
         
     def deactivate( self ):
         self.state = 0
-        self.mandatory = 1
 
 class L2_Controller( cp.Component ):
     
@@ -69,8 +66,7 @@ class L2_Controller( cp.Component ):
     ResidenceTemperature = "ResidenceTemperature"
 
     # Outputs
-    l2_HeatPumpSignal = "l2_HeatPumpSignal"
-    l2_HeatPumpCompulsory = "l2_HeatPumpCompulsory"
+    l2_DeviceSignal = "l2_DeviceSignal"
     
     # #Forecasts
     # HeatPumpLoadForecast = "HeatPumpLoadForecast"
@@ -99,14 +95,10 @@ class L2_Controller( cp.Component ):
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
         #Component outputs
-        self.l2_HeatPumpSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                       self.l2_HeatPumpSignal,
-                                                                       LoadTypes.OnOff,
-                                                                       Units.binary )
-        self.l2_HeatPumpCompulsoryC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                           self.l2_HeatPumpCompulsory,
-                                                                           LoadTypes.Compulsory,
-                                                                           Units.binary )
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                     self.l2_DeviceSignal,
+                                                                     LoadTypes.OnOff,
+                                                                     Units.binary )
         
     def get_building_default_connections( self ):
         log.information("setting building default connections in L2 Controller")
@@ -142,9 +134,6 @@ class L2_Controller( cp.Component ):
         
         T_control = stsv.get_input_value( self.ResidenceTemperatureC )
         
-        self.state.is_first_iteration( timestep )
-        self.previous_state.is_first_iteration( timestep )
-        
         #check out during cooling season
         if timestep < self.heating_season_begin and timestep > self.heating_season_end:
             if T_control > self.T_max_cooling:
@@ -157,8 +146,7 @@ class L2_Controller( cp.Component ):
                 self.state.deactivate( )
                 self.previous_state.deactivate( )
             else:
-                if self.previous_state.mandatory == 1:
-                    self.state = self.previous_state.clone( )
+                self.state = self.previous_state.clone( )
                     
         #check out during heating season
         else:
@@ -171,11 +159,10 @@ class L2_Controller( cp.Component ):
                 #start heating if temperature goes below lower limit
                 self.state.activate( )
                 self.previous_state.activate( )
-                if self.previous_state.mandatory == 1:
-                    self.state = self.previous_state.clone( )
+            else:
+                self.state = self.previous_state.clone( )
         
-        stsv.set_output_value( self.l2_HeatPumpSignalC, self.state.state )
-        stsv.set_output_value( self.l2_HeatPumpCompulsoryC, self.state.mandatory )
+        stsv.set_output_value( self.l2_DeviceSignalC, self.state.state )
 
     def prin1t_outpu1t(self, t_m, state):
         log.information("==========================================")

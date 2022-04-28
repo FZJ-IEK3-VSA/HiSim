@@ -5,7 +5,7 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-import hisim.components.generic_heat_pump_modular as generic_hp
+from hisim.components.controller_l2_generic_heatpump_modular import L2_Controller
 from hisim import log
 
 __authors__ = "edited Johanna Ganglbauer"
@@ -62,15 +62,10 @@ class L1_Controller( cp.Component ):
         Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
     """
     # Inputs
-    HeatPumpSignal = "HeatPumpSignal"
-    HeatPumpPowerPotential = "HeatPumpPowerPotential"
+    l2_DeviceSignal = "l2_DeviceSignal"
 
     # Outputs
-    l1_HeatPumpSignal = "l1_HeatPumpSignal"
-    l1_HeatPumpCompulsory = "l1_HeatPumpCompulsory"
-    
-    # Forecasts
-    HeatPumpLoadForecast = "HeatPumpLoadForecast"
+    l1_DeviceSignal = "l1_DeviceSignal"
 
     # Similar components to connect to:
     # 1. Building
@@ -84,36 +79,25 @@ class L1_Controller( cp.Component ):
         self.build( min_operation_time, min_idle_time )
         
         #add inputs
-        self.HeatPumpSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                   self.HeatPumpSignal,
+        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                   self.l2_DeviceSignal,
                                                                    LoadTypes.OnOff,
                                                                    Units.binary,
                                                                    mandatory = True )
-        self.HeatPumpPowerPotentialC: cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                                           self.HeatPumpPowerPotential,
-                                                                           LoadTypes.Electricity,
-                                                                           Units.Watt,
-                                                                           mandatory = False )
-        self.add_default_connections( generic_hp.HeatPump, self.get_heatpump_default_connections( ) )
+        self.add_default_connections( L2_Controller, self.get_l2_controller_default_connections( ) )
         
         
         #add outputs
-        self.l1_HeatPumpSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                       self.l1_HeatPumpSignal,
-                                                                       LoadTypes.OnOff,
-                                                                       Units.binary )
+        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(    self.ComponentName,
+                                                                        self.l1_DeviceSignal,
+                                                                        LoadTypes.OnOff,
+                                                                        Units.binary )
         
-        self.l1_HeatPumpCompulsoryC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                           self.l1_HeatPumpCompulsory,
-                                                                           LoadTypes.Compulsory,
-                                                                           Units.binary )
-        
-    def get_heatpump_default_connections( self ):
-        log.information("setting heat pump default connections in L1 controller")
+    def get_l2_controller_default_connections( self ):
+        log.information("setting l2 default connections in l1")
         connections = [ ]
-        heat_pump_classname = generic_hp.HeatPump.get_classname( )
-        connections.append( cp.ComponentConnection( L1_Controller.HeatPumpSignal, heat_pump_classname, generic_hp.HeatPump.HeatPumpSignal ) )
-        connections.append( cp.ComponentConnection( L1_Controller.HeatPumpPowerPotential, heat_pump_classname, generic_hp.HeatPump.HeatPumpPowerPotential ) )
+        controller_classname = L2_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname, L2_Controller.l2_DeviceSignal ) )
         return connections
 
     def build( self, min_operation_time, min_idle_time ):
@@ -139,32 +123,26 @@ class L1_Controller( cp.Component ):
         if force_convergence:
             pass
         
-        devicesignal = stsv.get_input_value( self.HeatPumpSignalC )
+        l2_devicesignal = stsv.get_input_value( self.l2_DeviceSignalC )
         
+        #save reference state state0 in first iteration
         if self.state.is_first_iteration( timestep ):
             self.state0 = self.state.clone( )
-            
-            #put forecast into dictionary
-            if self.my_simulation_parameters.system_config.predictive:
-                P_on = stsv.get_input_value( self.HeatPumpPowerPotentialC )
-
-                if self.state0.state > 0:
-                    self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * max( 1, self.on_time + self.state0.timestep_of_last_action - timestep ) )
-                else:
-                    self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * self.on_time )
-            
-        if ( self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep ) or \
-            ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):
-            mandatory = 1
+        
+        #return device on if minimum operation time is not fulfilled and device was on in previous state
+        if ( self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep ):
+            self.state.state = 1
+        #return device off if minimum idle time is not fulfilled and device was off in previous state
+        elif ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):
+            self.state.state = 0
+        #check signal from l2 and turn on or off if it is necesary
         else:
-            mandatory = 0
-            if devicesignal == 0 and self.state0.state == 1:
+            if l2_devicesignal == 0 and self.state0.state == 1:
                 self.state.deactivation( timestep )
-            elif devicesignal == 1 and self.state0.state == 0:
+            elif l2_devicesignal == 1 and self.state0.state == 0:
                 self.state.activation( timestep )
         
-        stsv.set_output_value( self.l1_HeatPumpSignalC, self.state.state )
-        stsv.set_output_value( self.l1_HeatPumpCompulsoryC, mandatory )
+        stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )
 
     def prin1t_outpu1t(self, t_m, state):
         log.information("==========================================")

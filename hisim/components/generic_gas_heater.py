@@ -34,7 +34,7 @@ class GasHeater(Component):
     MassflowInputTemperature = "MassflowInputTemperature"
 
     #Output
-    MassflowOutput= "Hot Water Energy Output"
+    MassflowOutput= "MassflowOutput"
     MassflowOutputTemperature= "MassflowOutputTemperature"
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"

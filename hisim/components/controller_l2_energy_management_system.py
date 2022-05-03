@@ -67,6 +67,7 @@ class Controller(cp.Component):
     StorageTemperatureHeatingWater = "StorageTemperatureHeatingWater"
     StorageTemperatureWarmWater = "StorageTemperatureWarmWater"
     ResidenceTemperature = "ResidenceTemperature"
+    ThermalDemandBuilding="ThermalDemandBuilding"
 
     ElectricityConsumptionBuilding="ElectricityConsumptionBuilding"
     ElectricityOutputPvs = "ElectricityOutputPvs"
@@ -80,6 +81,8 @@ class Controller(cp.Component):
     ElectricityToOrFromBatteryTarget="ElectricityToOrFromBatteryTarget"
     ElectricityFromCHPTarget="ElectricityFromCHPTarget"
     ElectricityToOrFromGrid="ElectricityToOrFromGrid"
+
+    ThermalDemandHeatingStorage="ThermalDemandHeatingStorage"
 
     ControlSignalGasHeater="ControlSignalGasHeater"
     ControlSignalChp="ControlSignalChp"
@@ -138,12 +141,12 @@ class Controller(cp.Component):
                                                                                   self.ElectricityConsumptionBuilding,
                                                                                   lt.LoadTypes.Electricity,
                                                                                   lt.Units.Watt,
-                                                                                  True)
+                                                                                  False)
         self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                         self.ElectricityOutputPvs,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt,
-                                                                        True)
+                                                                        False)
 
         self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityToOrFromBatteryReal,
@@ -165,8 +168,18 @@ class Controller(cp.Component):
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,
                                                                               False)
+        self.thermal_demand_building: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                              self.ThermalDemandBuilding,
+                                                                              lt.LoadTypes.Heating,
+                                                                              lt.Units.Watt,
+                                                                              False)
 
         # Outputs
+        self.thermal_demand_heating_storage: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                       self.ThermalDemandHeatingStorage,
+                                                                       lt.LoadTypes.Heating,
+                                                                       lt.Units.Watt,
+                                                                       False)
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                        self.ElectricityToOrFromGrid,
                                                                        lt.LoadTypes.Electricity,
@@ -392,10 +405,12 @@ class Controller(cp.Component):
 
             elif delta_temperature > 0 and delta_temperature <= 5:
                control_signal_heat_pump = 1
+               control_signal_gas_heater = 1
                if self.state.control_signal_chp < 1:
                    control_signal_chp = 1
+                   control_signal_gas_heater = 1
                elif self.state.control_signal_chp == 1:
-                   control_signal_gas_heater = 0.5
+                   control_signal_gas_heater = 1
                temperature_storage_target_C = temperature_storage_target
 
                # Storage warm enough. Try to turn off Heaters
@@ -464,25 +479,30 @@ class Controller(cp.Component):
         #First heat up WarmWaterStorage->more important, than heat up HeatingWater
         #But only one Storage can be heated up in a TimeStep!
         #Simulate WarmWater
-
-        delta_temperature_ww = self.state.temperature_storage_target_ww_C - stsv.get_input_value(self.temperature_storage_warm_water)
-        delta_temperature_hw = self.state.temperature_storage_target_hw_C - stsv.get_input_value(self.temperature_storage_heating_water)
-
-        # Choose which Storage should be heated up
-        if delta_temperature_ww>=0 and delta_temperature_hw>=0:
-            if delta_temperature_hw <= delta_temperature_ww:
-                control_signal_choose_storage = 1
-            else:
-                control_signal_choose_storage = 2
-        elif delta_temperature_ww<0 and delta_temperature_hw<0:
-            if delta_temperature_hw <= delta_temperature_ww:
-                control_signal_choose_storage = 1
-            else:
-                control_signal_choose_storage = 2
-        elif delta_temperature_ww<=0 and delta_temperature_hw>=0:
-            control_signal_choose_storage = 2
-        elif delta_temperature_ww >= 0 and delta_temperature_hw <= 0:
+        delta_temperature_ww = self.state.temperature_storage_target_ww_C - stsv.get_input_value(
+            self.temperature_storage_warm_water)
+        delta_temperature_hw = self.state.temperature_storage_target_hw_C - stsv.get_input_value(
+            self.temperature_storage_heating_water)
+        if stsv.get_input_value(self.temperature_storage_warm_water) ==0 and stsv.get_input_value(self.temperature_storage_heating_water) != 0:
+            control_signal_choose_storage=2
+        elif stsv.get_input_value(self.temperature_storage_warm_water) !=0 and stsv.get_input_value(self.temperature_storage_heating_water) == 0:
             control_signal_choose_storage = 1
+        else:
+            # Choose which Storage should be heated up
+            if delta_temperature_ww>=0 and delta_temperature_hw>=0:
+                if delta_temperature_hw <= delta_temperature_ww:
+                    control_signal_choose_storage = 1
+                else:
+                    control_signal_choose_storage = 2
+            elif delta_temperature_ww<0 and delta_temperature_hw<0:
+                if delta_temperature_hw <= delta_temperature_ww:
+                    control_signal_choose_storage = 1
+                else:
+                    control_signal_choose_storage = 2
+            elif delta_temperature_ww<=0 and delta_temperature_hw>=0:
+                control_signal_choose_storage = 2
+            elif delta_temperature_ww >= 0 and delta_temperature_hw <= 0:
+                control_signal_choose_storage = 1
 
         # Heats up storage
         if control_signal_choose_storage == 1:
@@ -506,6 +526,13 @@ class Controller(cp.Component):
                                                       timestep_of_hysteresis=self.state.timestep_of_hysteresis_hw)
 
         stsv.set_output_value(self.control_signal_choose_storage, control_signal_choose_storage)
+
+        if stsv.get_input_value(self.temperature_residence)<20:
+            thermal_demand_heating_storage=stsv.get_input_value(self.thermal_demand_building)
+        else:
+            thermal_demand_heating_storage=0
+        stsv.set_output_value(self.thermal_demand_heating_storage, thermal_demand_heating_storage)
+
 
 
 

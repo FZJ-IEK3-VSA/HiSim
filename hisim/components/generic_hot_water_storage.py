@@ -51,7 +51,7 @@ class HeatStorage(Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  V_SP_heating_water= 1000,
-                 V_SP_warm_water=200,
+                 V_SP_warm_water=100,
                  temperature_of_warm_water_extratcion=32,
                  ambient_temperature = 15,
                  sim_params=None):
@@ -219,7 +219,8 @@ class HeatStorage(Component):
 
 
 
-
+        if timestep==1000:
+            print(2)
         self.state.T_sp_ww=result_ww[0]
         self.state.T_sp_hw=result_hw[0]
         stsv.set_output_value(self.T_sp_C_ww, self.state.T_sp_ww)

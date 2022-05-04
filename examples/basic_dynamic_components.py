@@ -8,11 +8,9 @@ from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
 from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import generic_in_and_output_testing
 from hisim.components import advanced_fuel_cell
 from hisim.components.random_numbers import RandomNumbers
 from hisim.components.example_transformer import Transformer
-from hisim.components.set_in_and_outputs import DynamicComponent
 from hisim import loadtypes as lt
 from hisim import component as cp
 import numpy as np

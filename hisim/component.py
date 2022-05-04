@@ -316,7 +316,6 @@ class DynamicComponent(Component):
                                                                SourceWeight=source_weight))
         return myoutput
 
-
 ## This doesn't do anything
 if __name__ == "__main__":
     pass

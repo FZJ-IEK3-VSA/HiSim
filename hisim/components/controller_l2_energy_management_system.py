@@ -701,25 +701,62 @@ class ControllerGeneric(cp.DynamicComponent):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
+    def control_electricity_component(self,demand:float,
+                                   stsv:cp.SingleTimeStepValues,
+                                   MyComponentInputs: list,
+                                   MyComponentOutputs:list,
+                                   weight_counter:int,
+                                   component_type: list,
+                                   input_type: lt.InandOutputType,
+                                   output_type:lt.InandOutputType):
+        # to do: add that to much chp-electricty is charged in Battery and doesnt go in to grid
+        for index, element in enumerate(MyComponentOutputs):
+            for tags in element.SourceTags:
+                if tags.__class__ == lt.ComponentType and tags in component_type:
+                    if element.SourceWeight == weight_counter:
+                        # more electricity than needed
+                        if tags ==lt.ComponentType.Battery:
+                            stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), demand)
+                            break
+                        elif tags ==lt.ComponentType.FuelCell:
+                            if demand < 0:
+                                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), -demand)
+                            else:
+                                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), 0)
+                            break
+            else:
+                continue
+            break
+        for index, element in enumerate(MyComponentInputs):
+            for tags in element.SourceTags:
+                if tags.__class__ == lt.ComponentType and tags in component_type:
+                    if element.SourceWeight == weight_counter:
+                        if tags == lt.ComponentType.Battery:
+                            demand = demand - stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+                            break
+                        elif tags == lt.ComponentType.FuelCell:
+                            demand = demand + stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+                            break
+            else:
+                continue
+            break
+        return demand
     def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
 
-        electricity_to_or_from_battery_target:float = 0
-        electricity_from_chp_target:float = 0
-        electricity_to_or_from_grid:float = 0
-        electricity_to_or_from_battery_real:float = 0
-        weight_counter = 1
 
+        electricity_to_or_from_grid:float = 0
         MyComponentInputs=self.MyComponentInputs
         MyComponentOutputs=self.MyComponentOutputs
         #Rule Battery
         for weight_counter in range(1,len(MyComponentInputs)+1):
-            delta_demand=cp.DynamicComponent.rule_electricity_component(self,demand=delta_demand,stsv=stsv,
+            delta_demand=self.control_electricity_component(demand=delta_demand,stsv=stsv,
                                        MyComponentInputs=MyComponentInputs,
                                        MyComponentOutputs=MyComponentOutputs,
                                        weight_counter=weight_counter,
                                        component_type=[lt.ComponentType.Battery,lt.ComponentType.FuelCell],
                                        input_type=lt.InandOutputType.ElectricityReal,
                                        output_type=lt.InandOutputType.ElectricityTarget)
+
 
         # more electricity than needed
         if delta_demand > 0:

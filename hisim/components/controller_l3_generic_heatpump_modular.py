@@ -18,9 +18,8 @@ from hisim.components import generic_price_signal
 from hisim.components import generic_smart_device_2
 # from hisim.components import generic_dhw_boiler
 from hisim.components import generic_district_heating
-# from hisim.components import generic_oil_heater
-from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_generic_heatpump_modular
+from hisim.components import generic_heat_pump_modular
 from hisim.simulationparameters import SimulationParameters, SystemConfig
 
 __authors__ = "Johanna Ganglbauer"
@@ -98,14 +97,12 @@ class L3_Controller( cp.Component ):
     # Inputs
     SmartApplianceState = "SmartApplianceState"
     BoilerControllerState = "BoilerControllerState"
-    HeatPumpSignal = "HeatPumpSignal"
+    l1_HeatPumpSignal = "l1_HeatPumpSignal"
     
     #Outputs
     SmartApplianceSignal = "SmartApplianceSignal"
     BoilerSignal = "BoilerSignal"
     l3_HeatPumpSignal = "l3_HeatPumpSignal"
-    l3_HeatPumpSmartGridReady = 'l3_HeatPumpSmartGridReady'
-
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
                         threshold_price : float = 25,
@@ -147,18 +144,18 @@ class L3_Controller( cp.Component ):
         heatingchoice = my_simulation_parameters.system_config.heating_device_included
         if heatingchoice == 'heat_pump':
             #inputs
-            self.HeatPumpSignalC: cp.ComponentInput = self.add_input(   self.ComponentName,
-                                                                        self.HeatPumpSignal,
-                                                                        lt.LoadTypes.OnOff,
-                                                                        lt.Units.binary,
-                                                                        mandatory = False )
+            self.l1_HeatPumpSignalC: cp.ComponentInput = self.add_input(    self.ComponentName,
+                                                                            self.l1_HeatPumpSignal,
+                                                                            lt.LoadTypes.OnOff,
+                                                                            lt.Units.binary,
+                                                                            mandatory = True )
             #outputs
             self.l3_HeatPumpSignalC: cp.ComponentOutput = self.add_output(  self.ComponentName,
                                                                             self.l3_HeatPumpSignal,
                                                                             lt.LoadTypes.OnOff,
                                                                             lt.Units.binary )
             
-            self.add_default_connections( generic_heat_pump_modular.HeatPump, self.get_heatpump_default_connections( ) )
+            self.add_default_connections( controller_l1_generic_heatpump_modular.L1_Controller, self.get_l1_controller_default_connections( ) )
             # elif heatingchoice == 'oil_heater':
             #     self.add_default_connections( generic_oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
         
@@ -186,12 +183,12 @@ class L3_Controller( cp.Component ):
     #                                                 generic_oil_heater.OilHeaterController.OilHeaterControllerState ) )
     #     return connections
     
-    def get_heatpump_default_connections( self ):
+    def get_l1_controller_default_connections( self ):
         log.information( "setting heat pump default connections in l3" ) 
-        heat_pump_classname = generic_heat_pump_modular.HeatPump.get_classname( )
+        controller_classname = controller_l1_generic_heatpump_modular.L1_Controller.get_classname( )
         connections = [ ]
-        connections.append( cp.ComponentConnection( L3_Controller.HeatPumpSignal, heat_pump_classname, 
-                                                    generic_heat_pump_modular.HeatPump.HeatPumpSignal ) )
+        connections.append( cp.ComponentConnection( L3_Controller.l1_HeatPumpSignal, controller_classname, 
+                                                    controller_l1_generic_heatpump_modular.L1_Controller.l1_DeviceSignal ) )
         return connections
 
     def build( self, threshold_price : float, threshold_peak : Optional[ float ] ):
@@ -291,7 +288,7 @@ class L3_Controller( cp.Component ):
             #get forecast of device
             # if self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
             #     shiftableload = self.simulation_repository.get_entry( generic_oil_heater.OilHeaterController.OilHeaterLoadForecast )
-            shiftableload = self.simulation_repository.get_entry( controller_l1_generic_heatpump_modular.L1_Controller.HeatPumpLoadForecast )
+            shiftableload = self.simulation_repository.get_entry( generic_heat_pump_modular.HeatPump.HeatPumpLoadForecast )
             steps = len( shiftableload )
             
             #calculate price and peak and get controller signal
@@ -301,7 +298,7 @@ class L3_Controller( cp.Component ):
             stsv.set_output_value( self.l3_HeatPumpSignalC, self.signal.heat_pump_signal )
                             
             #get device state and update totalload for next device
-            devicestate = stsv.get_input_value( self.HeatPumpSignalC )
+            devicestate = stsv.get_input_value( self.l1_HeatPumpSignalC )
             
             if devicestate == 1:
                 totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]

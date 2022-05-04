@@ -58,7 +58,7 @@ def test_heat_pump_modular():
                               lt.Units.Watt)
     
     #connection of in- and outputs
-    my_heat_pump_controller_l2.ResidenceTemperatureC.SourceOutput = t_mC
+    my_heat_pump_controller_l2.ReferenceTemperatureC.SourceOutput = t_mC
     my_heat_pump.TemperatureOutsideC.SourceOutput = t_air_outdoorC
     my_heat_pump.l1_DeviceSignalC.SourceOutput = my_heat_pump_controller_l1.l1_DeviceSignalC
     my_heat_pump_controller_l1.l2_DeviceSignalC.SourceOutput = my_heat_pump_controller_l2.l2_DeviceSignalC

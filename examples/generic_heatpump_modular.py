@@ -78,7 +78,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
-    my_simulation_parameters.reset_system_config( predictive = False, pv_included = True, smart_devices_included = False, boiler_included = None, heating_device_included = 'heat_pump' )    
+    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = False, boiler_included = None, heating_device_included = 'heat_pump' )    
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration
@@ -114,6 +114,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         T_max_heating = 23.0
         T_min_cooling = 23.0
         T_max_cooling = 26.0
+        T_tolerance = 1.0
         min_operation_time = 3600
         min_idle_time = 2700
         heating_season_begin = 240
@@ -221,11 +222,13 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         #             )
             
     if heating_device_included == 'heat_pump':
+        
         my_heating_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller(    my_simulation_parameters = my_simulation_parameters,
                                                                                             T_min_heating = T_min_heating,
                                                                                             T_max_heating = T_max_heating,
                                                                                             T_min_cooling = T_min_cooling,
                                                                                             T_max_cooling = T_max_cooling,
+                                                                                            T_tolerance = T_tolerance,
                                                                                             heating_season_begin = heating_season_begin,
                                                                                             heating_season_end = heating_season_end )
         my_heating_controller_l2.connect_only_predefined_connections( my_building )
@@ -244,7 +247,12 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_heating.connect_only_predefined_connections( my_weather ) 
         my_heating.connect_only_predefined_connections( my_heating_controller_l1 )
         my_sim.add_component( my_heating )
-        
+        if predictive == True:
+            my_heating_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )
+            my_sim.add_component( my_heating_controller_l3 )
+            my_heating_controller_l2.connect_only_predefined_connections( my_heating_controller_l3 )
+            my_heating_controller_l3.connect_only_predefined_connections( my_heating_controller_l1 )
+            
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                     my_heating.ComponentName,
                                     my_heating.ThermalEnergyDelivered )
@@ -256,20 +264,14 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                 electricity_load_profiles = electricity_load_profiles, 
                 elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_heating ], 
-                                                             my_simulation_parameters = my_simulation_parameters ) )
+                                                             my_simulation_parameters = my_simulation_parameters ) ) 
         
-        if predictive == True and ( smart_devices_included == True or boiler_included == 'electricity' or heating_device_included in [ 'heat_pump', 'oil_heater' ] ):
-            my_heating_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )
-            my_heating_controller_l3.connect_only_predefined_connections( my_heating )
-            my_sim.add_component( my_heating_controller_l3 )
-            # if smart_devices_included:
-            #     my_smart_device.connect_only_predefined_connections( my_predictive_controller )
-            #     my_predictive_controller.connect_only_predefined_connections( my_smart_device )
-            # if boiler_included == 'electricity':
-            #     my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
-            #     my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
-            if heating_device_included == 'heat_pump':
-                my_heating.connect_only_predefined_connections( my_heating_controller_l3 )
+        # if smart_devices_included:
+        #     my_smart_device.connect_only_predefined_connections( my_predictive_controller )
+        #     my_predictive_controller.connect_only_predefined_connections( my_smart_device )
+        # if boiler_included == 'electricity':
+        #     my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
+        #     my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
                 
                 
     ##### delete all files in cache:

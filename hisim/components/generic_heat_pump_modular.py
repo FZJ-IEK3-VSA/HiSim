@@ -11,7 +11,7 @@ from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
-from hisim.components.controller_l1_generic_heatpump_modular import L1_Controller
+from hisim.components import controller_l1_generic_heatpump_modular
 from hisim import log
 
 seaborn.set(style='ticks')
@@ -34,11 +34,12 @@ class HeatPumpState:
     This data class saves the state of the heat pump.
     """
 
-    def __init__( self, state : int = 0 ):
+    def __init__( self, state : int = 0, timestep : int = -1 ):
         self.state = state
+        self.timestep = timestep
         
     def clone( self ):
-        return HeatPumpState( state = self.state )
+        return HeatPumpState( state = self.state, timestep = self.timestep )
 
 class HeatPump(cp.Component):
     """
@@ -59,6 +60,7 @@ class HeatPump(cp.Component):
     # Inputs
     TemperatureOutside = "TemperatureOutside"
     l1_DeviceSignal = "l1_DeviceSignal"
+    l1_RunTimeSignal = 'l1_RunTimeSignal'
 
     # Outputs
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
@@ -95,6 +97,11 @@ class HeatPump(cp.Component):
                                                                     LoadTypes.OnOff,
                                                                     Units.binary,
                                                                     mandatory = True )
+        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                    self.l1_RunTimeSignal,
+                                                                    LoadTypes.Any,
+                                                                    Units.Any,
+                                                                    mandatory = False )
         
         #Outputs
         self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(   self.ComponentName,
@@ -107,7 +114,7 @@ class HeatPump(cp.Component):
                                                                         Units.Watt )
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
-        self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
+        self.add_default_connections( controller_l1_generic_heatpump_modular.L1_Controller, self.get_l1_controller_default_connections( ) )
         
     def get_weather_default_connections( self ):
         log.information("setting weather default connections in HeatPump")
@@ -119,8 +126,9 @@ class HeatPump(cp.Component):
     def get_l1_controller_default_connections( self ):
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
-        controller_classname = L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, L1_Controller.l1_DeviceSignal ) )
+        controller_classname = controller_l1_generic_heatpump_modular.L1_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, controller_l1_generic_heatpump_modular.L1_Controller.l1_DeviceSignal ) )
+        connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_heatpump_modular.L1_Controller.l1_RunTimeSignal ) )
         return connections
 
     def build( self, manufacturer, name, heating_season_begin, heating_season_end ):
@@ -175,19 +183,10 @@ class HeatPump(cp.Component):
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
-            
-        # #put forecast into dictionary
-        # if self.my_simulation_parameters.system_config.predictive:
-        #     if self.state0.state > 0:
-        #         self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * max( 1, self.on_time + self.state0.timestep_of_last_action - timestep ) )
-        #     else:
-        #         self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ P_on ] * self.on_time )
         
         # Inputs
         self.state.state = stsv.get_input_value( self.l1_DeviceSignalC )
         T_out = stsv.get_input_value( self.TemperatureOutsideC )
-        
-        print( timestep, self.state.state )
           
         #cop
         cop = self.cal_cop( T_out )
@@ -201,6 +200,15 @@ class HeatPump(cp.Component):
             stsv.set_output_value( self.ThermalEnergyDeliveredC, self.state.state * self.max_heating_power )
         
         stsv.set_output_value( self.ElectricityOutputC, self.state.state * self.max_heating_power / cop )
+        
+        #put forecast into dictionary
+        if self.my_simulation_parameters.system_config.predictive:
+            #only in first timestep
+            if self.state.timestep + 1 == timestep:
+                self.state.timestep += 1
+                self.previous_state.timestep += 1
+                runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
+                self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ self.max_heating_power / cop ] * runtime )
 
     def prin1t_outpu1t(self, t_m, state):
         log.information("==========================================")

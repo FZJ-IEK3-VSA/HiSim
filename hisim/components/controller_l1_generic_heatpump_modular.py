@@ -5,7 +5,7 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.controller_l2_generic_heatpump_modular import L2_Controller
+from hisim.components import controller_l2_generic_heatpump_modular
 from hisim import log
 
 __authors__ = "edited Johanna Ganglbauer"
@@ -66,6 +66,7 @@ class L1_Controller( cp.Component ):
 
     # Outputs
     l1_DeviceSignal = "l1_DeviceSignal"
+    l1_RunTimeSignal = "l1_RunTimeSignal"
 
     # Similar components to connect to:
     # 1. Building
@@ -84,7 +85,7 @@ class L1_Controller( cp.Component ):
                                                                    LoadTypes.OnOff,
                                                                    Units.binary,
                                                                    mandatory = True )
-        self.add_default_connections( L2_Controller, self.get_l2_controller_default_connections( ) )
+        self.add_default_connections( controller_l2_generic_heatpump_modular.L2_Controller, self.get_l2_controller_default_connections( ) )
         
         
         #add outputs
@@ -92,12 +93,17 @@ class L1_Controller( cp.Component ):
                                                                         self.l1_DeviceSignal,
                                                                         LoadTypes.OnOff,
                                                                         Units.binary )
+        if self.my_simulation_parameters.system_config.predictive == True:
+            self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(   self.ComponentName,
+                                                                            self.l1_RunTimeSignal,
+                                                                            LoadTypes.Any,
+                                                                            Units.Any )
         
     def get_l2_controller_default_connections( self ):
         log.information("setting l2 default connections in l1")
         connections = [ ]
-        controller_classname = L2_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname, L2_Controller.l2_DeviceSignal ) )
+        controller_classname = controller_l2_generic_heatpump_modular.L2_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heatpump_modular.L2_Controller.l2_DeviceSignal ) )
         return connections
 
     def build( self, min_operation_time, min_idle_time ):
@@ -128,6 +134,13 @@ class L1_Controller( cp.Component ):
         #save reference state state0 in first iteration
         if self.state.is_first_iteration( timestep ):
             self.state0 = self.state.clone( )
+            
+            if self.my_simulation_parameters.system_config.predictive == True:
+                if self.state0.state == 1:
+                    runtime = max( 1, self.on_time - timestep + self.state0.timestep_of_last_action )
+                else:
+                    runtime = self.on_time
+                stsv.set_output_value( self.l1_RunTimeSignalC, runtime )
         
         #return device on if minimum operation time is not fulfilled and device was on in previous state
         if ( self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep ):

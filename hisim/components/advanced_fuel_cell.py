@@ -337,7 +337,10 @@ class CHP(Component):
         return el_power, th_power, eff_el_real, eff_th_real
 
     def calculate_control_signal(self,stsv):
-        if (stsv.get_input_value(self.electricity_target)) < self.P_el_min * self.eff_el_min:
+        if (stsv.get_input_value(self.electricity_target))<30:
+            control_signal = 0
+            return control_signal
+        elif (stsv.get_input_value(self.electricity_target)) < self.P_el_min * self.eff_el_min:
             control_signal=0.4
             return control_signal
         elif (stsv.get_input_value(self.electricity_target))> self.P_el_max * self.eff_el_max:

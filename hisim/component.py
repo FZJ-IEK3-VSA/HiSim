@@ -249,12 +249,14 @@ class DynamicConnectionInput:
     SourceWeight: int
 @dataclass
 class DynamicConnectionOutput:
+    SourceComponentClass: str
     SourceOutputName: str
     SourceTags:list
+    SourceWeight: int
     SourceLoadType: lt
     SourceUnit: lt
 
-class DynamicComponent(Component):
+class DynamicComponent(Component, DynamicConnectionOutput, DynamicConnectionInput):
     def add_component_input_and_connect(self,
                                         source_component_class: Component,
                                         source_component_output: ComponentOutput,
@@ -277,7 +279,7 @@ class DynamicComponent(Component):
 
         # Connect Input and define it as DynamicConnectionInput
         for output_var in source_component_class.outputs:
-            if output_var.ObjectName == source_component_class.ComponentName:
+            if output_var.DisplayName == source_component_output:
                 self.connect_input(label,
                                    source_component_class.ComponentName,
                                    output_var.FieldName)
@@ -288,7 +290,11 @@ class DynamicComponent(Component):
                                                                      SourceTags=source_tags,
                                                                      SourceWeight=source_weight))
 
-    def add_component_output(self, source_output_name: str, source_tags: list, source_load_type: lt, source_unit: lt):
+    def add_component_output(self, source_output_name: str,
+                             source_tags: list,
+                             source_load_type: lt,
+                             source_unit: lt,
+                             source_weight:int):
 
         # Label Output and generate variable
         num_inputs = len(self.outputs)
@@ -302,12 +308,54 @@ class DynamicComponent(Component):
         self.__setattr__(label, myoutput)
 
         # Define Output as DynamicConnectionInput
-        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceOutputName=source_output_name + label,
+        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceComponentClass=label,
+                                                               SourceOutputName=source_output_name + label,
                                                                SourceTags=source_tags,
                                                                SourceLoadType=source_load_type,
-                                                               SourceUnit=source_unit))
+                                                               SourceUnit=source_unit,
+                                                               SourceWeight=source_weight))
         return myoutput
 
+    def rule_electricity_component(self,demand:float,
+                                   stsv:SingleTimeStepValues,
+                                   MyComponentInputs: list,
+                                   MyComponentOutputs:list,
+                                   weight_counter:int,
+                                   component_type: list,
+                                   input_type: lt.InandOutputType,
+                                   output_type:lt.InandOutputType):
+
+        for index, element in enumerate(MyComponentOutputs):
+            for tags in element.SourceTags:
+                if tags.__class__ == lt.ComponentType and tags in component_type:
+                    if element.SourceWeight == weight_counter:
+                        # more electricity than needed
+                        if tags ==lt.ComponentType.Battery:
+                            stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), demand)
+                            break
+                        elif tags ==lt.ComponentType.FuelCell:
+                            if demand < 0:
+                                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), -demand)
+                            else:
+                                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), 0)
+                            break
+            else:
+                continue
+            break
+        for index, element in enumerate(MyComponentInputs):
+            for tags in element.SourceTags:
+                if tags.__class__ == lt.ComponentType and tags in component_type:
+                    if element.SourceWeight == weight_counter:
+                        if tags == lt.ComponentType.Battery:
+                            demand = demand - stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+                            break
+                        elif tags == lt.ComponentType.FuelCell:
+                            demand = demand + stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+                            break
+            else:
+                continue
+            break
+        return demand
 ## This doesn't do anything
 if __name__ == "__main__":
     pass

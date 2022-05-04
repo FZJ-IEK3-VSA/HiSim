@@ -141,7 +141,28 @@ class Test_InandOutputs(Component):
                         MyComponentInputs.remove(element)
         return weight_counter, heat_produced
 
+    def rule_electricity_component(self,demand:float,
+                                   stsv:cp.SingleTimeStepValues,
+                                   MyComponentInputs: list,
+                                   MyComponentOutputs:list,
+                                   weight_counter:int,
+                                   component_type: lt.ComponentType,
+                                   input_type: lt.InandOutputType,
+                                   output_type:lt.InandOutputType):
+        for index, element in enumerate(MyComponentInputs):
+            for tags in element.SourceTags:
+                if tags.__class__ == lt.ComponentType and tags.title() in lt.ComponentType.Battery.title():
+                    if element.SourceWeight == weight_counter:
+                        delta_demand = delta_demand + stsv.get_input_value(
+                            self.__getattribute__(element.SourceComponentClass))
 
+        for index, element in enumerate(MyComponentOutputs):
+            for tags in element.SourceTags:
+                if tags.__class__ == lt.ComponentType and tags.title() in lt.ComponentType.Battery.title():
+                    if element.SourceWeight == weight_counter:
+                        stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), delta_demand)
+
+        return delta_demand
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         heat_demand=100
         weight_counter, heat_produced =self.rule_heaters(heat_demand=heat_demand,stsv=stsv)

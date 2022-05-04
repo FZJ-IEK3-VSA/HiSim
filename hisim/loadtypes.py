@@ -93,6 +93,7 @@ class ComponentType(str, enum.Enum):
     HeatPump = "HeatPump"
     GasHeater = "GasHeater"
     Battery = "Battery"
+    FuelCell = "FuelCell"
     Heaters = [HeatPump, GasHeater]
 @enum.unique
 class InandOutputType(str, enum.Enum):

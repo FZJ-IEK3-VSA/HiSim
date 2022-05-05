@@ -143,8 +143,6 @@ class CHP(Component):
 
         self.delta_T=CHPConfigSimple.delta_T
 
-
-
         #Inputs
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, CHP.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, False)
         #self.operating_mode_signal: ComponentInput = self.add_input(self.ComponentName, CHP.OperatingModelSignal, lt.LoadTypes.Gas, lt.Units.Percent, True)
@@ -189,7 +187,7 @@ class CHP(Component):
             # Checks if the minimum running time has been reached
 
             # Minimium running time has been reached and the CHP wants to shut off -->so it shuts off
-            if timestep >= self.state.start_timestep + self.min_operation_time and control_signal == 0:
+            if timestep >= self.state.start_timestep + self.min_operation_time and control_signal == 0.0:
 
                 # all Outputs zero
                 mass_out_temp:float = 0
@@ -338,7 +336,7 @@ class CHP(Component):
 
     def calculate_control_signal(self,stsv):
         if (stsv.get_input_value(self.electricity_target))<30:
-            control_signal = 0
+            control_signal:float = 0
             return control_signal
         elif (stsv.get_input_value(self.electricity_target)) < self.P_el_min * self.eff_el_min:
             control_signal=0.4

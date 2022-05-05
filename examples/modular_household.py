@@ -156,8 +156,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_building = building.Building( building_code = building_code,
                                      bClass = building_class,
                                      initial_temperature = initial_temperature,
-                                     my_simulation_parameters = my_simulation_parameters,
-                                     floor_area=1000)
+                                     my_simulation_parameters = my_simulation_parameters)
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
     my_sim.add_component( my_building )
 

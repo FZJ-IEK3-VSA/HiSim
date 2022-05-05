@@ -243,8 +243,8 @@ class Component:
 class DynamicConnectionInput:
     SourceComponentClass: str
     SourceComponentOutput: ComponentOutput
-    SourceLoadType: lt
-    SourceUnit: lt
+    SourceLoadType: lt.LoadTypes
+    SourceUnit: lt.Units
     SourceTags: list
     SourceWeight: int
 @dataclass
@@ -253,15 +253,15 @@ class DynamicConnectionOutput:
     SourceOutputName: str
     SourceTags:list
     SourceWeight: int
-    SourceLoadType: lt
-    SourceUnit: lt
+    SourceLoadType: lt.LoadTypes
+    SourceUnit: lt.Units
 
 class DynamicComponent(Component):
     def add_component_input_and_connect(self,
                                         source_component_class: Component,
                                         source_component_output: ComponentOutput,
-                                        source_load_type: lt,
-                                        source_unit: lt,
+                                        source_load_type: lt.LoadTypes,
+                                        source_unit: lt.Units,
                                         source_tags: list,
                                         source_weight: int):
 
@@ -274,7 +274,7 @@ class DynamicComponent(Component):
         myinput = ComponentInput(self.ComponentName, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
         myinput.src_object_name = source_component_class.ComponentName
-        myinput.src_field_name = source_component_output
+        myinput.src_field_name = str(source_component_output)
         self.__setattr__(label, myinput)
 
         # Connect Input and define it as DynamicConnectionInput
@@ -283,7 +283,7 @@ class DynamicComponent(Component):
                 self.connect_input(label,
                                    source_component_class.ComponentName,
                                    output_var.FieldName)
-                self.MyComponentInputs.append(DynamicConnectionInput(SourceComponentClass=label,
+                self.MyComponentInputs.append(DynamicConnectionInput(SourceComponentClass=label, # type: ignore
                                                                      SourceComponentOutput=source_component_output,
                                                                      SourceLoadType=source_load_type,
                                                                      SourceUnit=source_unit,
@@ -292,8 +292,8 @@ class DynamicComponent(Component):
 
     def add_component_output(self, source_output_name: str,
                              source_tags: list,
-                             source_load_type: lt,
-                             source_unit: lt,
+                             source_load_type: lt.LoadTypes,
+                             source_unit: lt.Units,
                              source_weight:int):
 
         # Label Output and generate variable
@@ -308,7 +308,7 @@ class DynamicComponent(Component):
         self.__setattr__(label, myoutput)
 
         # Define Output as DynamicConnectionInput
-        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceComponentClass=label,
+        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceComponentClass=label, # type: ignore
                                                                SourceOutputName=source_output_name + label,
                                                                SourceTags=source_tags,
                                                                SourceLoadType=source_load_type,

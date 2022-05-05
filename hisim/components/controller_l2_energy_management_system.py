@@ -519,15 +519,6 @@ class ControllerGeneric(cp.DynamicComponent):
     For this storage provides heat for a load profile or for the
     building. As well Heat Demand can be simulated without storage.
 
-    Notizen:
-    - In DefaulConnection(siehe PVS von Noah) etwas hinzufügen, sodass In-Und outputs generisch erzeugt werden können.
-     Muss dafür checken ob Verbindung schon existiert und sonst Namen erzeugen und Verbindung setzen. (Max)
-
-    - EMS darauf ausgelegt, dass Wärmespeicher zwischengeschaltet ist
-
-    - Heizungsanlage: L2 Gebäudetemperaturregler (unabh. von L2EMS), zieht aus Wärmespeicher und lädt Gebäude (Tjarko+Max)
-
-    - L3 Setzt Gebäudetemperatur und Speichertemperatur um/neu
     """
     #Inputs
 
@@ -774,6 +765,7 @@ class ControllerGeneric(cp.DynamicComponent):
 
     #seasonal storaging is almost the same as own_consumption, but a electrolyzer is added
     #follows strategy to first charge battery than produce H2
+    '''
     def seasonal_storage(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
 
         electricity_to_or_from_battery_target:float = 0
@@ -867,7 +859,7 @@ class ControllerGeneric(cp.DynamicComponent):
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
         stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
         stsv.set_output_value(self.check_peak_shaving, check_peak_shaving)
-
+    '''
     # Simulates waterstorages and defines the control signals to heat up storages
     # work as a 2-point Ruler with Hysteresis
     def simulate_storage(self,delta_temperature:float,
@@ -941,13 +933,14 @@ class ControllerGeneric(cp.DynamicComponent):
 
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption(delta_demand=delta_demand,stsv=stsv)
+        '''
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)
         elif self.strategy == "peak_shaving_into_grid":
             self.peak_shaving_into_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
         elif self.strategy == "peak_shaving_from_grid":
             self.peak_shaving_from_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
-
+        '''
 
 
 

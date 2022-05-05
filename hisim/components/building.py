@@ -1102,6 +1102,90 @@ class Window(object):
         return (1 + math.cos(self.alititude_tilt_rad)) / 2
 
 
+class BuildingController(cp.Component):
+    """
+
+
+    Parameters
+    ----------
+    building_code :str
+        Code reference to a specific residence typology list in EPISCOPE/TABULA database
+    bClass: str
+        Heat capacity of residence defined using one of the following terms:
+            - very light
+            - light
+            - medium
+            - heavy
+            - very heavy
+    initial_temperature : float
+        Initial internal temperature of residence in Celsius
+    sim_params : Simulator
+        Simulator object used to carry the simulation using this class
+    """
+
+    # Inputs
+    TargetHeatPowerFromStorage = "TargetHeatPowerFromStorage"
+    ResidenceTemperature = "ResidenceTemperature"
+    # Outputs
+    RealHeatPowerToBuilding = "RealHeatPowerToBuilding"
+
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 minimal_building_temperature=20):
+        super().__init__(name="BuildingController", my_simulation_parameters=my_simulation_parameters)
+        self.minimal_building_temperature=minimal_building_temperature
+
+        # ===================================================================================================================
+        self.target_heat_power_from_storage: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.TargetHeatPowerFromStorage,
+                                                                           lt.LoadTypes.Heating,
+                                                                           lt.Units.Watt,
+                                                                           True)
+        self.residence_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.ResidenceTemperature,
+                                                                           lt.LoadTypes.Temperature,
+                                                                           lt.Units.Celsius,
+                                                                           True)
+        self.real_heat_power_to_building: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                        self.TemperatureMean,
+                                                        lt.LoadTypes.Heating,
+                                                        lt.Units.Watt)
+
+
+    def get_weather_default_connections(self):
+        log.information("setting weather default connections")
+        connections = []
+        weather_classname = Weather.get_classname()
+        connections.append(cp.ComponentConnection(Building.Altitude, weather_classname, Weather.Azimuth))
+        connections.append(cp.ComponentConnection(Building.Azimuth, weather_classname, Weather.Azimuth))
+
+
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+        residence_temperature=stsv.get_input_value(self.residence_temperature)
+        delta_temp_for_lvl_of_util=1 #delta_temperature_for_level_of_utilization
+
+        if residence_temperature>self.minimal_building_temperature:
+            level_of_utilization=0
+        elif residence_temperature<self.minimal_building_temperature-delta_temp_for_lvl_of_util:
+            level_of_utilization = 1
+        else:
+            level_of_utilization= self.minimal_building_temperature-residence_temperature
+
+        real_heat_power_to_building=level_of_utilization * stsv.get_input_value(self.target_heat_power_from_storage)
+        stsv.set_output_value(self.real_heat_power_to_building, real_heat_power_to_building)
+    def i_save_state(self):
+        self.previous_state = self.state.self_copy()
+
+    def i_restore_state(self):
+        self.state = self.previous_state.self_copy()
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+        pass
+
+    def build(self):
+        pass
+
+
 
 
 

@@ -219,8 +219,6 @@ class HeatStorage(Component):
 
 
 
-        if timestep==1000:
-            print(2)
         self.state.T_sp_ww=result_ww[0]
         self.state.T_sp_hw=result_hw[0]
         stsv.set_output_value(self.T_sp_C_ww, self.state.T_sp_ww)

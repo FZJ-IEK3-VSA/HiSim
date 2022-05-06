@@ -555,7 +555,9 @@ class ControllerGeneric(cp.DynamicComponent):
                  min_comfortable_temperature_residence: float =19,
                  strategy : str = "optimize_own_consumption",#strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
                  limit_to_shave: float =0):
-        super().__init__(name="Controller", my_simulation_parameters=my_simulation_parameters)
+        super(cp.DynamicComponent,self).__init__(name="Controller", my_simulation_parameters=my_simulation_parameters)
+        super().__init__(my_component_inputs=self.MyComponentInputs, my_component_outputs=self.MyComponentOutputs)
+
 
         self.temperature_storage_target_warm_water=temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water=temperature_storage_target_heating_water

@@ -257,6 +257,9 @@ class DynamicConnectionOutput:
     SourceUnit: lt.Units
 
 class DynamicComponent(Component):
+    def __init__(self,my_component_inputs, my_component_outputs):
+        self.MyComponentInputs=my_component_inputs
+        self.MyComponentOutputs = my_component_outputs
     def add_component_input_and_connect(self,
                                         source_component_class: Component,
                                         source_component_output: ComponentOutput,
@@ -283,7 +286,7 @@ class DynamicComponent(Component):
                 self.connect_input(label,
                                    source_component_class.ComponentName,
                                    output_var.FieldName)
-                self.MyComponentInputs.append(DynamicConnectionInput(SourceComponentClass=label, # type: ignore
+                self.MyComponentInputs.append(DynamicConnectionInput(SourceComponentClass=label,
                                                                      SourceComponentOutput=source_component_output,
                                                                      SourceLoadType=source_load_type,
                                                                      SourceUnit=source_unit,
@@ -308,7 +311,7 @@ class DynamicComponent(Component):
         self.__setattr__(label, myoutput)
 
         # Define Output as DynamicConnectionInput
-        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceComponentClass=label, # type: ignore
+        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceComponentClass=label,
                                                                SourceOutputName=source_output_name + label,
                                                                SourceTags=source_tags,
                                                                SourceLoadType=source_load_type,

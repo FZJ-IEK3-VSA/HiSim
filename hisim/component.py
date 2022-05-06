@@ -257,7 +257,9 @@ class DynamicConnectionOutput:
     SourceUnit: lt.Units
 
 class DynamicComponent(Component):
-    def __init__(self,my_component_inputs, my_component_outputs):
+    def __init__(self ,my_component_inputs,my_component_outputs,name,my_simulation_parameters):
+        super().__init__(name=name,my_simulation_parameters=my_simulation_parameters)
+
         self.MyComponentInputs=my_component_inputs
         self.MyComponentOutputs = my_component_outputs
     def add_component_input_and_connect(self,

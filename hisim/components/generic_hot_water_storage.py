@@ -185,6 +185,15 @@ class HeatStorage(Component):
 
     #def regarding_heating_water_storage (self, T_sp: int):
 
+    def calculate_max_volume_flow (self,seconds_per_timestep: int,V_SP: float ):
+        #https: // www.sbz - monteur.de / erklaer - mal / erklaer - mal - den - pufferspeicher
+        if V_SP<= 1000:
+            volume_flow=8/3600 #m^3/s
+        elif 1000<V_SP and V_SP <=2000:
+            volume_flow = 15 / 3600  # m^3/s
+        elif 2000<V_SP :
+            volume_flow = 30 / 3600  # m^3/s
+        return volume_flow
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
 

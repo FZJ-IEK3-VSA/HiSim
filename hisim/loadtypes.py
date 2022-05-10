@@ -86,9 +86,22 @@ class Units(str, enum.Enum):
     # Cost
     c_per_kWh = "Cents per kWh"
 
+@enum.unique
+class ComponentType(str, enum.Enum):
+    # Unphysical
 
+    HeatPump = "HeatPump"
+    GasHeater = "GasHeater"
+    Battery = "Battery"
+    FuelCell = "FuelCell"
+    Heaters = [HeatPump, GasHeater]
+@enum.unique
+class InandOutputType(str, enum.Enum):
 
-
+    Massflow = "Massflow"
+    ControlSignal = "ControlSignal"
+    ElectricityTarget = "ElectricityTarget"
+    ElectricityReal = "ElectricityReal"
 
 
 

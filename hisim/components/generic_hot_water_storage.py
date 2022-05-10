@@ -33,6 +33,7 @@ class HeatStorage(Component):
     ThermalDemandHeatingWater="ThermalDemandHeatingWater" # Heating Water to regulate room Temperature
     ThermalDemandWarmWater="ThermalDemandHeating" # Warmwater for showering, washing etc...
     ControlSignalChooseStorage="ControlSignalChooseStorage"
+    BuildingTemperature="BuildingTemperature"
 
     OutsideTemperature="OutsideTemperature"
     ThermalInputPower1="ThermalInputPower1"
@@ -47,6 +48,7 @@ class HeatStorage(Component):
     WaterOutputStorageforHeaters="WaterOutputStorageforHeaters"
     #StorageWarmWaterTemperature="StorageWarmWaterTemperature"
     StorageEnergyLoss="StorageEnergyLoss"
+    MaximalHeatingForBuilding="MaximalHeatingForBuilding"
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -54,7 +56,8 @@ class HeatStorage(Component):
                  V_SP_warm_water=100,
                  temperature_of_warm_water_extratcion=32,
                  ambient_temperature = 15,
-                 sim_params=None):
+                 sim_params=None,
+                 max_mass_flow_heat_storage=100):
         super().__init__(name="HeatStorage", my_simulation_parameters=my_simulation_parameters)
         self.V_SP_heating_water = V_SP_heating_water
         self.V_SP_warm_water = V_SP_warm_water
@@ -62,6 +65,7 @@ class HeatStorage(Component):
         self.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
         self.ambient_temperature = ambient_temperature
         self.cw=4812
+        self.max_mass_flow_heat_storage=max_mass_flow_heat_storage
 
 
 
@@ -86,7 +90,11 @@ class HeatStorage(Component):
                                                                          lt.LoadTypes.Any,
                                                                          lt.Units.Any,
                                                                          False)
-
+        self.building_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                         self.BuildingTemperature,
+                                                                         lt.LoadTypes.Temperature,
+                                                                         lt.Units.Celsius,
+                                                                         False)
         self.thermal_input_power1 : ComponentInput = self.add_input(self.ComponentName,
                                                            self.ThermalInputPower1,
                                                            lt.LoadTypes.Heating,
@@ -130,6 +138,10 @@ class HeatStorage(Component):
                                                       self.WaterOutputStorageforHeaters,
                                                       lt.LoadTypes.Temperature,
                                                       lt.Units.Celsius)
+        self.max_last_var_hw : ComponentOutput = self.add_output(self.ComponentName,
+                                                      self.MaximalHeatingForBuilding,
+                                                      lt.LoadTypes.Heating,
+                                                      lt.Units.Watt)
 
     def write_to_report(self):
         pass
@@ -145,6 +157,7 @@ class HeatStorage(Component):
     def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w:float):
         production=0
         #function to add all possible mass flows
+
         if self.thermal_input_power1.SourceOutput is not None:
             production=stsv.get_input_value(self.thermal_input_power1)+ production
 
@@ -185,16 +198,6 @@ class HeatStorage(Component):
 
     #def regarding_heating_water_storage (self, T_sp: int):
 
-    def calculate_max_volume_flow (self,seconds_per_timestep: int,V_SP: float ):
-        #https: // www.sbz - monteur.de / erklaer - mal / erklaer - mal - den - pufferspeicher
-        if V_SP<= 1000:
-            volume_flow=8/3600 #m^3/s
-        elif 1000<V_SP and V_SP <=2000:
-            volume_flow = 15 / 3600  # m^3/s
-        elif 2000<V_SP :
-            volume_flow = 30 / 3600  # m^3/s
-        return volume_flow
-
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
 
         T_sp_var_ww=self.state.T_sp_ww #Start-Temp-Storage
@@ -202,7 +205,7 @@ class HeatStorage(Component):
 
         last_var_ww =stsv.get_input_value(self.thermal_demand_warm_water)
         last_var_hw =stsv.get_input_value(self.thermal_demand_heating_water)
-
+        max_last_var_hw = self.max_mass_flow_heat_storage * 4.185 *1000* (T_sp_var_hw - stsv.get_input_value(self.building_temperature))
         result_ww=[T_sp_var_ww,0]
         result_hw=[T_sp_var_hw,0]
         T_sp_C=(T_sp_var_ww+T_sp_var_hw)/2
@@ -234,6 +237,8 @@ class HeatStorage(Component):
         stsv.set_output_value(self.T_sp_C_hw, self.state.T_sp_hw)
         stsv.set_output_value(self.T_sp_C, T_sp_C)
         stsv.set_output_value(self.UA_SP_C, result_ww[1]+result_hw[1])
+        stsv.set_output_value(self.max_last_var_hw, max_last_var_hw)
+
         #Output Massenstrom von Wasser entspricht dem Input Massenstrom. Nur Temperatur hat sich geändert. Wie ist das zu behandelN?
 
 

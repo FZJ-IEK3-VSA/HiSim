@@ -8,11 +8,13 @@ from hisim.components import advanced_battery
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_hot_water_storage
 from hisim.components import generic_gas_heater
+from hisim.components.building import Building
 
 from hisim import utils
 from hisim import loadtypes as lt
 import os
 import numpy as np
+import pandas as pd
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -22,6 +24,28 @@ __version__ = "0.1"
 __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
+def calculate_max_massflow_heat_storage(building_code:str,
+                                        initial_temperature:float,
+                                        t_out_min:float,
+                                        floor_area):
+
+    df = pd.read_csv(utils.HISIMPATH["housing"],
+                     decimal=",",
+                     sep=";",
+                     encoding="cp1252",
+                     low_memory=False)
+    buildingdata = df.loc[df["Code_BuildingVariant"] == building_code]
+    if floor_area is None:
+        max_thermal_building_demand = (
+                                              buildingdata["h_Transmission"].values[0] +
+                                              buildingdata["h_Ventilation"].values[
+                                                  0]) * (initial_temperature - t_out_min)*buildingdata["A_C_Ref"].values[0]
+    else:
+        max_thermal_building_demand = (buildingdata["h_Transmission"].values[0] +
+                                       buildingdata["h_Ventilation"].values[
+                                           0]) * (initial_temperature - t_out_min) * floor_area
+    max_mass_flow_heat_storage=max_thermal_building_demand/(4.1851*1000*(45-19))
+    return max_mass_flow_heat_storage
 
 def basic_household_explicit_ems(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
     """
@@ -63,6 +87,17 @@ def basic_household_explicit_ems(my_sim, my_simulation_parameters: Optional[Simu
 
     # Controller
     strategy = "optimize_own_consumption"
+    floor_area=150
+    initial_temperature=22
+    t_out_min=-14
+
+    # Building
+    minimal_building_temperature=20
+    # Heat Storage
+    max_mass_flow_heat_storage=calculate_max_massflow_heat_storage(building_code=building_code,
+                                        floor_area=floor_area,
+                                        initial_temperature=initial_temperature,
+                                        t_out_min=t_out_min)
 
     ##### Build Components #####
 
@@ -74,51 +109,55 @@ def basic_household_explicit_ems(my_sim, my_simulation_parameters: Optional[Simu
 
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
-    my_sim.add_component(my_occupancy)
 
     # Build Weather
     my_weather = weather.Weather(location=location, my_simulation_parameters= my_simulation_parameters)
-    my_sim.add_component(my_weather)
 
     # Build Gas Heater
     my_gas_heater = generic_gas_heater.GasHeater(my_simulation_parameters=my_simulation_parameters)
 
     # Build Building
     my_building = building.Building(my_simulation_parameters= my_simulation_parameters)
-    my_sim.add_component(my_building)
+    my_building_controller = building.BuildingController(my_simulation_parameters= my_simulation_parameters,
+                                                         minimal_building_temperature=minimal_building_temperature)
 
     # Build Storage
-    my_storage = generic_hot_water_storage.HeatStorage(my_simulation_parameters=my_simulation_parameters)
+    my_storage = generic_hot_water_storage.HeatStorage(my_simulation_parameters=my_simulation_parameters,
+                                                       max_mass_flow_heat_storage=max_mass_flow_heat_storage)
     # Build Controller
-    my_controller= controller_l2_energy_management_system.Controller(strategy="optimize_own_consumption", my_simulation_parameters= my_simulation_parameters)
+    my_controller_heat= controller_l2_energy_management_system.ControllerHeat( my_simulation_parameters= my_simulation_parameters)
 
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )
 
 
     my_storage.connect_input(my_storage.ThermalDemandHeatingWater,
-                              my_controller.ComponentName,
-                              my_controller.ThermalDemandHeatingStorage)
+                              my_building_controller.ComponentName,
+                              my_building_controller.RealHeatPowerToBuilding)
     my_storage.connect_input(my_storage.ControlSignalChooseStorage,
-                              my_controller.ComponentName,
-                              my_controller.ControlSignalChooseStorage)
+                              my_controller_heat.ComponentName,
+                              my_controller_heat.ControlSignalChooseStorage)
 
+    my_building_controller.connect_input(my_building_controller.MaximalHeatingForBuilding,
+                              my_storage.ComponentName,
+                              my_storage.MaximalHeatingForBuilding)
+    my_building_controller.connect_input(my_building_controller.ResidenceTemperature,
+                              my_building.ComponentName,
+                              my_building.TemperatureMean)
     my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_controller.ComponentName,
-                              my_controller.ThermalDemandHeatingStorage)
+                              my_building_controller.ComponentName,
+                              my_building_controller.RealHeatPowerToBuilding)
 
-    my_controller.connect_input(my_controller.StorageTemperatureHeatingWater,
+    my_controller_heat.connect_input(my_controller_heat.StorageTemperatureHeatingWater,
                               my_storage.ComponentName,
                               my_storage.WaterOutputTemperatureHeatingWater)
-    my_controller.connect_input(my_controller.ThermalDemandBuilding,
-                              my_building.ComponentName,
-                              my_building.ThermalBuildingDemand)
-    my_controller.connect_input(my_controller.ResidenceTemperature,
+
+    my_controller_heat.connect_input(my_controller_heat.ResidenceTemperature,
                               my_building.ComponentName,
                               my_building.TemperatureMean)
 
     my_gas_heater.connect_input(my_gas_heater.ControlSignal,
-                              my_controller.ComponentName,
-                              my_controller.ControlSignalGasHeater)
+                              my_controller_heat.ComponentName,
+                              my_controller_heat.ControlSignalGasHeater)
     my_gas_heater.connect_input(my_gas_heater.MassflowInputTemperature,
                               my_storage.ComponentName,
                               my_storage.WaterOutputStorageforHeaters)
@@ -126,9 +165,13 @@ def basic_household_explicit_ems(my_sim, my_simulation_parameters: Optional[Simu
                               my_gas_heater.ComponentName,
                               my_gas_heater.ThermalOutputPower)
 
-    my_sim.add_component(my_controller)
+    my_sim.add_component(my_building_controller)
+    my_sim.add_component(my_controller_heat)
     my_sim.add_component(my_storage)
     my_sim.add_component(my_gas_heater)
+    my_sim.add_component(my_building)
+    my_sim.add_component(my_weather)
+    my_sim.add_component(my_occupancy)
 
 def basic_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
     """

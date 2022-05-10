@@ -143,7 +143,7 @@ class Building(cp.Component):
     ThermalEnergyDelivered = "ThermalEnergyDelivered" #either thermal energy delivered
     MassInput = "MassInput"                           #or mass input and temperature input
     TemperatureInput = "TemperatureInput"
-    
+
     #Inputs -> occupancy 
     HeatingByResidents = "HeatingByResidents"
     
@@ -168,7 +168,6 @@ class Building(cp.Component):
     CurrentStoredEnergy = "CurrentStoredEnergy"
     MassOutput = "MassOutput"
     TemperatureOutput = "TemperatureOutput"
-    ThermalBuildingDemand = "ThermalBuildingDemand"
     # Similar components to connect to:
     # 1. Weather
     # 2. Occupancy
@@ -180,11 +179,13 @@ class Building(cp.Component):
                  floor_area = None,
                  building_code="DE.N.SFH.05.Gen.ReEx.001.002",
                  bClass="medium",
-                 initial_temperature=23):
+                 initial_temperature=23,
+                 t_out_min=-14):
         super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
         self.buildingConfig = BuildingConfig(my_simulation_parameters, building_code=building_code, bClass=bClass,initial_temperature = initial_temperature)
         self.floor_area=floor_area
+        self.t_out_min=t_out_min
         self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig)
 
         self.c_m:float = 0
@@ -288,10 +289,7 @@ class Building(cp.Component):
                                                                              self.SolarGainThroughWindows,
                                                                              lt.LoadTypes.Heating,
                                                                              lt.Units.Watt)
-        self.building_cooling : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                             self.ThermalBuildingDemand,
-                                                                             lt.LoadTypes.Heating,
-                                                                             lt.Units.Watt)
+
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         
@@ -413,6 +411,7 @@ class Building(cp.Component):
                 mass_input_load = 0
 
 
+
             mass_output_load = mass_input_load / self.seconds_per_timestep  # kg/timestep --> kg/s
             self.test_new_temperature = temperature_new
 
@@ -428,18 +427,8 @@ class Building(cp.Component):
                 thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC) * self.buildingdata["A_C_Ref"].values[0] /self.floor_area # W
         else:
             thermal_energy_delivered = 10
-
         t_m_prev = self.state.t_m
-        if stsv.get_input_value(self.t_outC)<t_m_prev:
-            if self.floor_area is None:
-                building_cooling = 1.2 * (
-                            self.buildingdata["h_Transmission"].values[0] + self.buildingdata["h_Ventilation"].values[
-                        0])* (t_m_prev - stsv.get_input_value(self.t_outC)) * self.buildingdata["A_C_Ref"].values[0]
-            else:
-                building_cooling = 1.2*(self.buildingdata["h_Transmission"].values[0] + self.buildingdata["h_Ventilation"].values[
-                    0]) * self.floor_area * (t_m_prev - stsv.get_input_value(self.t_outC))
-        else:
-            building_cooling=0
+
         #old_stored_energy = self.state.cal_stored_energy()
 
         # Performs calculations
@@ -472,7 +461,6 @@ class Building(cp.Component):
         # Returns outputs
         #stsv.set_output_value(self.t_mC, t_air)
         stsv.set_output_value(self.t_mC, t_m)
-        stsv.set_output_value(self.building_cooling, building_cooling)
         #stsv.set_output_value(self.t_airC, t_air)
         stsv.set_output_value(self.total_power_to_residenceC, phi_loss ) #phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
         stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows ) #convert Wh back to W
@@ -1104,8 +1092,6 @@ class Window(object):
 
 class BuildingController(cp.Component):
     """
-
-
     Parameters
     ----------
     building_code :str
@@ -1124,10 +1110,11 @@ class BuildingController(cp.Component):
     """
 
     # Inputs
-    TargetHeatPowerFromStorage = "TargetHeatPowerFromStorage"
+    MaximalHeatingForBuilding = "MaximalHeatingForBuilding"
     ResidenceTemperature = "ResidenceTemperature"
     # Outputs
     RealHeatPowerToBuilding = "RealHeatPowerToBuilding"
+    LevelOfUtilization = "LevelOfUtilization"
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -1136,8 +1123,8 @@ class BuildingController(cp.Component):
         self.minimal_building_temperature=minimal_building_temperature
 
         # ===================================================================================================================
-        self.target_heat_power_from_storage: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                           self.TargetHeatPowerFromStorage,
+        self.maximal_heat_power_from_storage: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.MaximalHeatingForBuilding,
                                                                            lt.LoadTypes.Heating,
                                                                            lt.Units.Watt,
                                                                            True)
@@ -1147,18 +1134,26 @@ class BuildingController(cp.Component):
                                                                            lt.Units.Celsius,
                                                                            True)
         self.real_heat_power_to_building: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                        self.TemperatureMean,
+                                                        self.RealHeatPowerToBuilding,
                                                         lt.LoadTypes.Heating,
                                                         lt.Units.Watt)
+        self.level_of_utilization: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                        self.LevelOfUtilization,
+                                                        lt.LoadTypes.Any,
+                                                        lt.Units.Percent)
+    def build(self):
+        pass
+    def write_to_report(self):
+        pass
 
+    def i_save_state(self):
+        pass
 
-    def get_weather_default_connections(self):
-        log.information("setting weather default connections")
-        connections = []
-        weather_classname = Weather.get_classname()
-        connections.append(cp.ComponentConnection(Building.Altitude, weather_classname, Weather.Azimuth))
-        connections.append(cp.ComponentConnection(Building.Azimuth, weather_classname, Weather.Azimuth))
+    def i_restore_state(self):
+        pass
 
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+        pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
         residence_temperature=stsv.get_input_value(self.residence_temperature)
@@ -1171,19 +1166,12 @@ class BuildingController(cp.Component):
         else:
             level_of_utilization= self.minimal_building_temperature-residence_temperature
 
-        real_heat_power_to_building=level_of_utilization * stsv.get_input_value(self.target_heat_power_from_storage)
+        real_heat_power_to_building=level_of_utilization * stsv.get_input_value(self.maximal_heat_power_from_storage)
         stsv.set_output_value(self.real_heat_power_to_building, real_heat_power_to_building)
-    def i_save_state(self):
-        self.previous_state = self.state.self_copy()
+        stsv.set_output_value(self.level_of_utilization, level_of_utilization)
 
-    def i_restore_state(self):
-        self.state = self.previous_state.self_copy()
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
-        pass
 
-    def build(self):
-        pass
 
 
 

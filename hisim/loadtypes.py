@@ -38,7 +38,10 @@ class LoadTypes(str, enum.Enum):
     WarmWater = "WarmWater"
     
     Price = "Price"
-
+    
+    #Controllers:
+    OnOff = "OnOff" #encoding: 0 means off and 1 means on
+    
 @enum.unique
 class Units(str, enum.Enum):
     # Unphysical
@@ -85,6 +88,9 @@ class Units(str, enum.Enum):
     
     # Cost
     c_per_kWh = "Cents per kWh"
+    
+    #binary for controllers
+    binary = 'binary'
 
 @enum.unique
 class ComponentType(str, enum.Enum):

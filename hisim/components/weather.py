@@ -218,7 +218,7 @@ class Weather(Component):
             self.apparent_zenith_list = my_weather['apparent_zenith'].tolist()
             self.Wspd_list = my_weather['Wspd'].tolist()
         else:
-             tmy_data, location = readTRY(location=location)
+             tmy_data, location = readTRY(location=location, year = my_simulation_parameters.year )
              DNI = self.interpolate(tmy_data['DNI'], self.my_simulation_parameters.year)
              # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
              dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index) # type: ignore
@@ -235,9 +235,7 @@ class Weather(Component):
 
 
              if seconds_per_timestep != 60:
-                 print( 'oye,oye', len( temperature.to_list() ) )
                  self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                 print( 'oye,oye', len( self.temperature_list ) )
                  self.DryBulb_list = temperature.resample( str( seconds_per_timestep ) + "S" ).mean( ).to_list()
                  self.DHI_list = DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
                   #np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
@@ -443,6 +441,7 @@ def readTRY(location="Aachen", year=2015):
 
         # save as .csv
         #data.to_csv(filepath + ".csv",sep=";",decimal=",")
+
     return data, location
 
 def calculateDNI(directHI, lon, lat, zenith_tol=87.0):

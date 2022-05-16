@@ -21,8 +21,8 @@ class AdvancedBattery(Component):
     ACBatteryPower = "AC Battery Power"
     StateOfCharge = "State Of Charge"
 
-    def __init__(self,  parameter, my_simulation_parameters: SimulationParameters ):
-        super().__init__("AdvancedBattery", my_simulation_parameters)
+    def __init__(self,  parameter, my_simulation_parameters: SimulationParameters,name:str="AdvancedBattery" ):
+        super().__init__(name, my_simulation_parameters)
 
         self.build(parameter)
 

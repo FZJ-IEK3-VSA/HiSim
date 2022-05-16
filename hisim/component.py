@@ -151,8 +151,15 @@ class Component:
             raise ValueError("The component " + self.ComponentName + " has no input with the name " + input_fieldname)
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
-        
-    #added variable input length and loop to be able to set default connections in one line in examples    
+
+    def connect_dynamic_input(self,input_fieldname: str,src_object: ComponentOutput ):
+        src_object_name= src_object.ObjectName
+        src_field_name = src_object.FieldName
+        self.connect_input(input_fieldname=input_fieldname,
+                           src_object_name=src_object_name,
+                           src_field_name=src_field_name)
+
+    #added variable input length and loop to be able to set default connections in one line in examples
     def connect_only_predefined_connections(self, *source_components ):
         for source_component in source_components:
             connections = self.get_default_connections(source_component)
@@ -231,6 +238,88 @@ class Component:
 
     def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues):
         pass
+
+@dataclass
+class DynamicConnectionInput:
+    SourceComponentClass: str
+    SourceComponentOutput: ComponentOutput
+    SourceLoadType: lt.LoadTypes
+    SourceUnit: lt.Units
+    SourceTags: list
+    SourceWeight: int
+@dataclass
+class DynamicConnectionOutput:
+    SourceComponentClass: str
+    SourceOutputName: str
+    SourceTags:list
+    SourceWeight: int
+    SourceLoadType: lt.LoadTypes
+    SourceUnit: lt.Units
+
+class DynamicComponent(Component):
+    def __init__(self ,my_component_inputs,my_component_outputs,name,my_simulation_parameters):
+        super().__init__(name=name,my_simulation_parameters=my_simulation_parameters)
+
+        self.MyComponentInputs=my_component_inputs
+        self.MyComponentOutputs = my_component_outputs
+    def add_component_input_and_connect(self,
+                                        source_component_class: Component,
+                                        source_component_output: ComponentOutput,
+                                        source_load_type: lt.LoadTypes,
+                                        source_unit: lt.Units,
+                                        source_tags: list,
+                                        source_weight: int):
+
+        # Label Input and generate variable
+        num_inputs = len(self.inputs)
+        label = "Input{}".format(num_inputs)
+        vars(self)[label] = label
+
+        # Define Input as Component Input and add it to inputs
+        myinput = ComponentInput(self.ComponentName, label, source_load_type, source_unit, True)
+        self.inputs.append(myinput)
+        myinput.src_object_name = source_component_class.ComponentName
+        myinput.src_field_name = str(source_component_output)
+        self.__setattr__(label, myinput)
+
+        # Connect Input and define it as DynamicConnectionInput
+        for output_var in source_component_class.outputs:
+            if output_var.DisplayName == source_component_output:
+                self.connect_input(label,
+                                   source_component_class.ComponentName,
+                                   output_var.FieldName)
+                self.MyComponentInputs.append(DynamicConnectionInput(SourceComponentClass=label,
+                                                                     SourceComponentOutput=source_component_output,
+                                                                     SourceLoadType=source_load_type,
+                                                                     SourceUnit=source_unit,
+                                                                     SourceTags=source_tags,
+                                                                     SourceWeight=source_weight))
+
+    def add_component_output(self, source_output_name: str,
+                             source_tags: list,
+                             source_load_type: lt.LoadTypes,
+                             source_unit: lt.Units,
+                             source_weight:int):
+
+        # Label Output and generate variable
+        num_inputs = len(self.outputs)
+        label = "Output{}".format(num_inputs + 1)
+        vars(self)[label] = label
+
+        # Define Output as Component Input and add it to inputs
+        myoutput = ComponentOutput(self.ComponentName, source_output_name + label, source_load_type, source_unit,
+                                      True)
+        self.outputs.append(myoutput)
+        self.__setattr__(label, myoutput)
+
+        # Define Output as DynamicConnectionInput
+        self.MyComponentOutputs.append(DynamicConnectionOutput(SourceComponentClass=label,
+                                                               SourceOutputName=source_output_name + label,
+                                                               SourceTags=source_tags,
+                                                               SourceLoadType=source_load_type,
+                                                               SourceUnit=source_unit,
+                                                               SourceWeight=source_weight))
+        return myoutput
 
 ## This doesn't do anything
 if __name__ == "__main__":

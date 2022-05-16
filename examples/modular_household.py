@@ -153,12 +153,12 @@
 #     my_sim.add_component( my_weather )
     
 #     # Build building
-#     my_building = building.Building( building_code = building_code,
-#                                      bClass = building_class,
-#                                      initial_temperature = initial_temperature,
-#                                      my_simulation_parameters = my_simulation_parameters )
-#     my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
-#     my_sim.add_component( my_building )
+     my_building = building.Building( building_code = building_code,
+                                      bClass = building_class,
+                                      initial_temperature = initial_temperature,
+                                      my_simulation_parameters = my_simulation_parameters )
+     my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
+     my_sim.add_component( my_building )
 
 #     if pv_included:
 #         my_photovoltaic_system = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,

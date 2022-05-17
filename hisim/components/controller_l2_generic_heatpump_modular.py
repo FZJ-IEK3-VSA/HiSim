@@ -116,13 +116,12 @@ class L2_Controller( cp.Component ):
                                                                             Units.Celsius,
                                                                             mandatory = True )
         self.add_default_connections( Building, self.get_building_default_connections( ) )
-        if my_simulation_parameters.system_config.predictive == True:
-            self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                                        self.l3_DeviceSignal,
-                                                                        LoadTypes.OnOff,
-                                                                        Units.binary,
-                                                                        mandatory = False )
-        self.add_default_connections( controller_l3_generic_heatpump_modular.L3_Controller, self.get_l3_controller_default_connections( ) )
+        
+        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
+                                                                    self.l3_DeviceSignal,
+                                                                    LoadTypes.OnOff,
+                                                                    Units.binary,
+                                                                    mandatory = False )
         
         #Component outputs
         self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
@@ -179,7 +178,7 @@ class L2_Controller( cp.Component ):
 
         #get l3 recommendation if available
         l3state = 0
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.l3_DeviceSignalC.SourceOutput is not None:
             l3state = stsv.get_input_value( self.l3_DeviceSignalC )
         
         #reset temperature limits if recommended from l3
@@ -216,7 +215,7 @@ class L2_Controller( cp.Component ):
                 if self.state.compulsory == 1:
                     #use previous state if it is compulsory
                     pass
-                elif self.my_simulation_parameters.system_config.predictive == True:
+                elif self.l3_DeviceSignalC.SourceOutput is not None:
                     #use recommendation from l3 if available and not compulsory
                     self.state.state = l3state
                 else:
@@ -238,7 +237,7 @@ class L2_Controller( cp.Component ):
                 if self.state.compulsory == 1:
                     #use previous state if it compulsory
                     pass
-                elif self.my_simulation_parameters.system_config.predictive == True:
+                elif self.l3_DeviceSignalC.SourceOutput is not None:
                     #use recommendation from l3 if available and not compulsory
                     self.state.state = l3state
                 else:

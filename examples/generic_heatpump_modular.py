@@ -1,5 +1,7 @@
 from typing import Optional, List, Union
 
+import hisim.loadtypes as lt
+
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
@@ -51,11 +53,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         - Building
         - Heat Pump
     """
-
-    ##### delete all files in cache:
-    dir = '..//hisim//inputs//cache'
-    #for file in os.listdir( dir ):
-     #   os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 
@@ -234,9 +231,9 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_heating_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_heating_controller_l2 )
         
-        my_heating_controller_l1 = controller_l1_generic_runtime.L1_Controller(   my_simulation_parameters = my_simulation_parameters,
-                                                                                           min_operation_time = min_operation_time,
-                                                                                           min_idle_time = min_idle_time )
+        my_heating_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
+                                                                                min_operation_time = min_operation_time,
+                                                                                min_idle_time = min_idle_time )
         my_heating_controller_l1.connect_only_predefined_connections( my_heating_controller_l2 )
         my_sim.add_component( my_heating_controller_l1 )
         my_heating = generic_heat_pump_modular.HeatPump( manufacturer = hp_manufacturer,
@@ -249,9 +246,24 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_sim.add_component( my_heating )
         if predictive == True:
             my_heating_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )
+            
+            l3_HeatPumpSignal = my_heating_controller_l3.add_component_output( source_output_name = lt.InandOutputType.ControlSignal,
+                                                                               source_tags = [ lt.ComponentType.HeatPump ],
+                                                                               source_weight = 1,
+                                                                               source_load_type = lt.LoadTypes.OnOff,
+                                                                               source_unit = lt.Units.binary )
+            
+            my_heating_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
+                                                            src_object = l3_HeatPumpSignal )
+            
+            my_heating_controller_l3.add_component_input_and_connect( source_component_class = my_heating_controller_l1,
+                                                                      source_component_output = my_heating_controller_l1.l1_DeviceSignal,
+                                                                      source_load_type= lt.LoadTypes.OnOff,
+                                                                      source_unit= lt.Units.binary,
+                                                                      source_tags = [ lt.ComponentType.HeatPump, lt.InandOutputType.ControlSignal ],
+                                                                      source_weight = 1 )
+            
             my_sim.add_component( my_heating_controller_l3 )
-            my_heating_controller_l2.connect_only_predefined_connections( my_heating_controller_l3 )
-            my_heating_controller_l3.connect_only_predefined_connections( my_heating_controller_l1 )
             
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                     my_heating.ComponentName,
@@ -272,10 +284,4 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         # if boiler_included == 'electricity':
         #     my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
         #     my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
-                
-                
-    ##### delete all files in cache:
-    dir = '..//hisim//inputs//cache'
-    for file in os.listdir( dir ):
-        os.remove( os.path.join( dir, file ) )
                 

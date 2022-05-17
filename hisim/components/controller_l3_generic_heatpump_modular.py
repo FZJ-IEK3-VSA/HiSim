@@ -76,7 +76,7 @@ class ControllerSignal:
     def clone( self ):
         return ControllerSignal( smart_device_signal = self.smart_device_signal, boiler_signal = self.boiler_signal, heat_pump_signal = self.heat_pump_signal ) 
         
-class L3_Controller( cp.Component ):
+class L3_Controller( cp.DynamicComponent ):
     """
     Predictive controller. It takes data from the dictionary my_simulation_repository
     and decides if device should be activated or not. The predictive controller is a central
@@ -95,20 +95,18 @@ class L3_Controller( cp.Component ):
     """
 
     # Inputs
-    SmartApplianceState = "SmartApplianceState"
-    BoilerControllerState = "BoilerControllerState"
-    l1_HeatPumpSignal = "l1_HeatPumpSignal"
-    
-    #Outputs
-    SmartApplianceSignal = "SmartApplianceSignal"
-    BoilerSignal = "BoilerSignal"
-    l3_HeatPumpSignal = "l3_HeatPumpSignal"
+    MyComponentInputs: List[ cp.DynamicConnectionInput ] = []
+    MyComponentOutputs: List[ cp.DynamicConnectionOutput ] = []
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
                         threshold_price : float = 25,
                         threshold_peak : Optional[ float ] = None ):
         
-        super( ).__init__( "SmartDeviceController", my_simulation_parameters = my_simulation_parameters )
+        super( ).__init__(  my_component_inputs = self.MyComponentInputs,
+                            my_component_outputs = self.MyComponentOutputs,
+                            name = "L3Controller", 
+                            my_simulation_parameters = my_simulation_parameters )
+        
         self.build( threshold_price, threshold_peak )
         
         if my_simulation_parameters.system_config.smart_devices_included:
@@ -141,21 +139,21 @@ class L3_Controller( cp.Component ):
             #                                                           lt.Units.Any )
             # self.add_default_connections( generic_dhw_boiler.BoilerController, self.get_boiler_controller_default_connections( ) )
             
-        heatingchoice = my_simulation_parameters.system_config.heating_device_included
-        if heatingchoice == 'heat_pump':
-            #inputs
-            self.l1_HeatPumpSignalC: cp.ComponentInput = self.add_input(    self.ComponentName,
-                                                                            self.l1_HeatPumpSignal,
-                                                                            lt.LoadTypes.OnOff,
-                                                                            lt.Units.binary,
-                                                                            mandatory = True )
-            #outputs
-            self.l3_HeatPumpSignalC: cp.ComponentOutput = self.add_output(  self.ComponentName,
-                                                                            self.l3_HeatPumpSignal,
-                                                                            lt.LoadTypes.OnOff,
-                                                                            lt.Units.binary )
+        # heatingchoice = my_simulation_parameters.system_config.heating_device_included
+        # if heatingchoice == 'heat_pump':
+        #     #inputs
+        #     self.l1_HeatPumpSignalC: cp.ComponentInput = self.add_input(    self.ComponentName,
+        #                                                                     self.l1_HeatPumpSignal,
+        #                                                                     lt.LoadTypes.OnOff,
+        #                                                                     lt.Units.binary,
+        #                                                                     mandatory = True )
+        #     #outputs
+        #     self.l3_HeatPumpSignalC: cp.ComponentOutput = self.add_output(  self.ComponentName,
+        #                                                                     self.l3_HeatPumpSignal,
+        #                                                                     lt.LoadTypes.OnOff,
+        #                                                                     lt.Units.binary )
             
-            self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
+        #     self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
             # elif heatingchoice == 'oil_heater':
             #     self.add_default_connections( generic_oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
         
@@ -281,24 +279,87 @@ class L3_Controller( cp.Component ):
             #     totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
     
             # stsv.set_output_value( self.BoilerSignalC, self.signal.boiler_signal )
+        component_type = lt.ComponentType.HeatPump
+        weight_counter = 1
+        
+        
+        flag = False
             
-        #check if heating device is available
-        if self.my_simulation_parameters.system_config.heating_device_included == 'heat_pump' :
-            
-            #get forecast of device
-            # if self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
-            #     shiftableload = self.simulation_repository.get_entry( generic_oil_heater.OilHeaterController.OilHeaterLoadForecast )
+        #try if input is available -> flag is False if not
+        devicestate, flag = self.get_dynamic_input( stsv = stsv,
+                                                    component_type = lt.ComponentType.HeatPump,
+                                                    weight_counter = 1 )
+        
+        if flag == True:
             shiftableload = self.simulation_repository.get_entry( generic_heat_pump_modular.HeatPump.HeatPumpLoadForecast )
             steps = len( shiftableload )
             
             #calculate price and peak and get controller signal
             price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
-            self.signal.heat_pump_signal = self.decision_maker( price_per_kWh, peak )
-            
-            stsv.set_output_value( self.l3_HeatPumpSignalC, self.signal.heat_pump_signal )
-                            
-            #get device state and update totalload for next device
-            devicestate = stsv.get_input_value( self.l1_HeatPumpSignalC )
-            
+            signal = self.decision_maker( price_per_kWh = price_per_kWh, peak = peak )
+                
+            #recompute base load if device was activated
             if devicestate == 1:
                 totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
+                
+            self.set_dynamic_output( stsv = stsv, 
+                                     component_type = lt.ComponentType.HeatPump,
+                                     weight_counter = 1,
+                                     output_value = signal )
+            
+        # #set output value:         
+        # for index, element in enumerate( self.MyComponentOutputs ): #loop over all outputs
+        #     for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
+        #         if tag.__class__ == lt.ComponentType: #enter if tag is component type
+        #             if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
+        #                 stsv.set_output_value( self.__getattribute__( element.SourceComponentClass ), signal ) 
+        #                 break
+        #             else:
+        #                 continue
+        #         else:
+        #             continue
+                
+
+                        
+        
+        
+        # if self.my_simulation_parameters.system_config.heating_device_included == 'heat_pump' :
+            
+        #     #get forecast of device
+        #     # if self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
+        #     #     shiftableload = self.simulation_repository.get_entry( generic_oil_heater.OilHeaterController.OilHeaterLoadForecast )
+        #     shiftableload = self.simulation_repository.get_entry( generic_heat_pump_modular.HeatPump.HeatPumpLoadForecast )
+        #     steps = len( shiftableload )
+            
+        #     #calculate price and peak and get controller signal
+        #     price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
+        #     self.signal.heat_pump_signal = self.decision_maker( price_per_kWh, peak )
+            
+        #     stsv.set_output_value( self.l3_HeatPumpSignalC, self.signal.heat_pump_signal )
+                            
+        #     #get device state and update totalload for next device
+        #     devicestate = stsv.get_input_value( self.l1_HeatPumpSignalC )
+            
+        #     # to do: add that to much chp-electricty is charged in Battery and doesnt go in to grid
+        #     for index, element in enumerate(MyComponentOutputs):
+        #         for tags in element.SourceTags:
+        #             if tags.__class__ == lt.ComponentType and tags in component_type:
+        #                 if element.SourceWeight == weight_counter:
+        #                     # more electricity than needed
+        #                     if tags ==lt.ComponentType.Battery:
+        #                         stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), demand)
+        #                         break
+        #                     elif tags ==lt.ComponentType.FuelCell:
+        #                         if demand < 0:
+        #                             stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), -demand)
+        #                         else:
+        #                             stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), 0)
+        #                         break
+        #         else:
+        #             continue
+        #         break
+            
+            
+            
+        #     if devicestate == 1:
+        #         totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]

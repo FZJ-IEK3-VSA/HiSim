@@ -294,7 +294,44 @@ class DynamicComponent(Component):
                                                                      SourceUnit=source_unit,
                                                                      SourceTags=source_tags,
                                                                      SourceWeight=source_weight))
-
+                
+    def get_dynamic_input( self, stsv : SingleTimeStepValues,
+                                 component_type : lt.ComponentType,
+                                 weight_counter : int ):
+        #initialize flag variable
+        flag : bool = False
+    
+        #check if component of component type is available
+        for index, element in enumerate( self.MyComponentInputs ): #loop over all inputs
+            for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
+                if tag.__class__ == lt.ComponentType: #enter if tag is component type
+                    if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
+                        inputvalue = stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) )
+                        flag = True
+                        break
+                    else:
+                        continue
+                else:
+                    continue
+        return inputvalue, flag
+    
+    def set_dynamic_output( self, stsv : SingleTimeStepValues,
+                                  component_type : lt.ComponentType,
+                                  weight_counter : int,
+                                  output_value : float ):
+    
+        #check if component of component type is available
+        for index, element in enumerate( self.MyComponentOutputs ): #loop over all inputs
+            for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
+                if tag.__class__ == lt.ComponentType: #enter if tag is component type
+                    if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
+                        stsv.set_output_value( self.__getattribute__( element.SourceComponentClass ), output_value )
+                        break
+                    else:
+                        continue
+                else:
+                    continue
+    
     def add_component_output(self, source_output_name: str,
                              source_tags: list,
                              source_load_type: lt.LoadTypes,

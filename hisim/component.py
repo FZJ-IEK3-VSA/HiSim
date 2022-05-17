@@ -88,7 +88,7 @@ class SingleTimeStepValues:
 
 class SimRepository:
     def __init__(self):
-        self.my_dict = {}
+        self.my_dict = { elem : { } for elem in lt.ComponentType }
 
     def set_entry(self, key: str, entry: Any):
         self.my_dict[key] = entry
@@ -96,8 +96,20 @@ class SimRepository:
     def get_entry(self, key: str) -> Any:
         return self.my_dict[key]
     
-    def delete_entry( self, key : str ):
+    def delete_entry( self, key : str ) -> Any:
         self.my_dict.pop( key )
+        
+    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry ):
+        self.my_dict[ component_type ][ source_weight ] = entry
+
+    def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int ) -> Any:
+        return self.my_dict[ component_type ][ source_weight ]
+    
+    def get_dynamic_component_weights( self, component_type : lt.ComponentType ) -> list :
+        return list( self.my_dict[ component_type ].keys( ) )
+    
+    def delete_dynamic_entry( self, component_type: lt.ComponentType, source_weight: int ) -> Any:
+        self.my_dict[ comonent_type ].pop( sourceweight )
 
 class Component:
     @classmethod

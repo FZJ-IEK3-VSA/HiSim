@@ -212,16 +212,15 @@ class L3_Controller( cp.DynamicComponent ):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         
-        demandforecast = self.simulation_repository.get_entry( loadprofilegenerator_connector.Occupancy.Electricity_Demand_Forecast_24h )
+        totalload = self.simulation_repository.get_entry( loadprofilegenerator_connector.Occupancy.Electricity_Demand_Forecast_24h )
         priceinjectionforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Injection_Forecast_24h )
         pricepurchaseforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Purchase_Forecast_24h )
         
-        #build total load
-        if self.my_simulation_parameters.system_config.pv_included == True:
-            pvforecast = self.simulation_repository.get_entry( generic_pv_system.PVSystem.PV_Forecast_24h )
-            totalload = [ a - b for ( a, b ) in zip( demandforecast, pvforecast ) ]
-        else:
-            totalload = demandforecast
+        
+        #substract PV production from laod, if available
+        for elem in self.simulation_repository.get_dynamic_component_weights( component_type = lt.ComponentType.PV ) :
+            pvforecast = self.simulation_repository.get_dynamic_entry( component_type = lt.ComponentType.PV, source_weight = elem )
+            totalload = [ a - b for ( a, b ) in zip( totalload, pvforecast ) ]      
         
         #check smart appliance if available
         if self.my_simulation_parameters.system_config.smart_devices_included:

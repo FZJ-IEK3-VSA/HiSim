@@ -228,9 +228,6 @@ class PVSystem(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
-    
-    #Forecasts
-    PV_Forecast_24h = "PV_Forecast_24h"
 
     # Similar components to connect to:
     # 1. Weather
@@ -244,14 +241,15 @@ class PVSystem(cp.Component):
                  load_module_data : bool = False,
                  module_name : str = "Hanwha_HSL60P6_PA_4_250T__2013_",
                  integrateInverter : bool = True,
-                 inverter_name : str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_" ):
+                 inverter_name : str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                 source_weight : int = 1 ):
         
         super().__init__( "PVSystem", my_simulation_parameters = my_simulation_parameters )
         self.pvconfig = PVSystemConfig(my_simulation_parameters=my_simulation_parameters,
                                        location=location, power = power, module_name=module_name,
                                        integrate_inverter=integrateInverter, inverter_name=inverter_name,
                                        time=time)
-        self.build( load_module_data, my_simulation_repository )
+        self.build( load_module_data, my_simulation_repository, source_weight )
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -394,7 +392,7 @@ class PVSystem(cp.Component):
             if ( last_forecast_timestep > len( self.output ) ):
                 last_forecast_timestep = len( self.output )
             pvforecast = [ self.output[ t ] * self.pvconfig.power for t in range( timestep, last_forecast_timestep ) ]
-            self.simulation_repository.set_entry( self.PV_Forecast_24h, pvforecast )
+            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.PV, source_weight = self.source_weight, entry = pvforecast )
 
     def get_coordinates(self, location="Aachen", year=2019):
         """
@@ -429,7 +427,10 @@ class PVSystem(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build( self, load_module_data : bool, my_simulation_repository : Optional[ cp.SimRepository ] ):
+    def build( self, load_module_data : bool, my_simulation_repository : Optional[ cp.SimRepository ], source_weight : int ):
+        
+        self.source_weight = source_weight
+        
         log.information(self.pvconfig.to_json())  # type: ignore
         file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig)
 

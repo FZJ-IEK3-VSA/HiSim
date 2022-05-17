@@ -11,7 +11,7 @@ from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
-from hisim.components import controller_l1_generic_heatpump_modular
+from hisim.components import controller_l1_generic_runtime
 from hisim import log
 
 seaborn.set(style='ticks')
@@ -114,7 +114,7 @@ class HeatPump(cp.Component):
                                                                         Units.Watt )
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
-        self.add_default_connections( controller_l1_generic_heatpump_modular.L1_Controller, self.get_l1_controller_default_connections( ) )
+        self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
         
     def get_weather_default_connections( self ):
         log.information("setting weather default connections in HeatPump")
@@ -126,9 +126,9 @@ class HeatPump(cp.Component):
     def get_l1_controller_default_connections( self ):
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
-        controller_classname = controller_l1_generic_heatpump_modular.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, controller_l1_generic_heatpump_modular.L1_Controller.l1_DeviceSignal ) )
-        connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_heatpump_modular.L1_Controller.l1_RunTimeSignal ) )
+        controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
+        connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
 
     def build( self, manufacturer, name, heating_season_begin, heating_season_end ):

@@ -9,7 +9,7 @@ from hisim.components import controller_l3_predictive
 from hisim.components import generic_smart_device_2
 from hisim.components import building
 from hisim.components import generic_heat_pump_modular
-from hisim.components import controller_l1_generic_heatpump_modular
+from hisim.components import controller_l1_generic_runtime
 from hisim.components import controller_l2_generic_heatpump_modular
 from hisim.components import controller_l3_generic_heatpump_modular
 from hisim.components import generic_dhw_boiler
@@ -234,7 +234,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_heating_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_heating_controller_l2 )
         
-        my_heating_controller_l1 = controller_l1_generic_heatpump_modular.L1_Controller(   my_simulation_parameters = my_simulation_parameters,
+        my_heating_controller_l1 = controller_l1_generic_runtime.L1_Controller(   my_simulation_parameters = my_simulation_parameters,
                                                                                            min_operation_time = min_operation_time,
                                                                                            min_idle_time = min_idle_time )
         my_heating_controller_l1.connect_only_predefined_connections( my_heating_controller_l2 )

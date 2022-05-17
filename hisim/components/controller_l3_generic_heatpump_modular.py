@@ -18,7 +18,7 @@ from hisim.components import generic_price_signal
 from hisim.components import generic_smart_device_2
 # from hisim.components import generic_dhw_boiler
 from hisim.components import generic_district_heating
-from hisim.components import controller_l1_generic_heatpump_modular
+from hisim.components import controller_l1_generic_runtime
 from hisim.components import generic_heat_pump_modular
 from hisim.simulationparameters import SimulationParameters, SystemConfig
 
@@ -155,7 +155,7 @@ class L3_Controller( cp.Component ):
                                                                             lt.LoadTypes.OnOff,
                                                                             lt.Units.binary )
             
-            self.add_default_connections( controller_l1_generic_heatpump_modular.L1_Controller, self.get_l1_controller_default_connections( ) )
+            self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
             # elif heatingchoice == 'oil_heater':
             #     self.add_default_connections( generic_oil_heater.OilHeaterController, self.get_oil_heater_controller_default_connections( ) )
         
@@ -185,10 +185,10 @@ class L3_Controller( cp.Component ):
     
     def get_l1_controller_default_connections( self ):
         log.information( "setting heat pump default connections in l3" ) 
-        controller_classname = controller_l1_generic_heatpump_modular.L1_Controller.get_classname( )
+        controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
         connections = [ ]
         connections.append( cp.ComponentConnection( L3_Controller.l1_HeatPumpSignal, controller_classname, 
-                                                    controller_l1_generic_heatpump_modular.L1_Controller.l1_DeviceSignal ) )
+                                                    controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
         return connections
 
     def build( self, threshold_price : float, threshold_peak : Optional[ float ] ):

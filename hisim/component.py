@@ -96,6 +96,13 @@ class SimRepository:
     def get_entry(self, key: str) -> Any:
         return self.my_dict[key]
     
+    def exist_entry( self, key : str ) -> Any:
+        try:
+            self.get_entry( )
+            return True
+        except:
+            return False
+    
     def delete_entry( self, key : str ) -> Any:
         self.my_dict.pop( key )
         

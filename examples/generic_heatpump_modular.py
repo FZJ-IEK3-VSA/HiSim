@@ -163,7 +163,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
     my_sim.add_component( my_building )
 
     if pv_included:
-        my_photovoltaic_system = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,
+        my_photovoltaic_system1 = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,
                                                my_simulation_repository = my_sim.simulation_repository,
                                                time = time,
                                                location = location,
@@ -171,17 +171,25 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                                                load_module_data = load_module_data,
                                                module_name = module_name,
                                                integrateInverter = integrateInverter,
-                                               inverter_name = inverter_name )
-        my_photovoltaic_system.connect_only_predefined_connections( my_weather )
-        my_sim.add_component( my_photovoltaic_system )
-        my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
-                my_sim = my_sim,
-                operation_counter = operation_counter,
-                electricity_load_profiles = electricity_load_profiles, 
-                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                              grid = [ electricity_load_profiles[ operation_counter - 1 ], "Subtract", my_photovoltaic_system ], 
-                                                              my_simulation_parameters = my_simulation_parameters )
-                )
+                                               inverter_name = inverter_name,
+                                               name = 'PVSystem1',
+                                               source_weight = 1 )
+        my_photovoltaic_system1.connect_only_predefined_connections( my_weather )
+        my_sim.add_component( my_photovoltaic_system1 )
+        
+        my_photovoltaic_system2 = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,
+                                               my_simulation_repository = my_sim.simulation_repository,
+                                               time = time,
+                                               location = location,
+                                               power = power,
+                                               load_module_data = load_module_data,
+                                               module_name = module_name,
+                                               integrateInverter = integrateInverter,
+                                               inverter_name = inverter_name,
+                                               name = 'PVSYstem2',
+                                               source_weight = 2 )
+        my_photovoltaic_system2.connect_only_predefined_connections( my_weather )
+        my_sim.add_component( my_photovoltaic_system2 )
 
     if smart_devices_included:
         pass
@@ -237,7 +245,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_heating_controller_l1.connect_only_predefined_connections( my_heating_controller_l2 )
         my_sim.add_component( my_heating_controller_l1 )
         my_heating = generic_heat_pump_modular.HeatPump( manufacturer = hp_manufacturer,
-                                                         name = hp_name,
+                                                         device_name = hp_name,
                                                          heating_season_begin = heating_season_begin,
                                                          heating_season_end = heating_season_end,
                                                          my_simulation_parameters = my_simulation_parameters )
@@ -268,15 +276,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                     my_heating.ComponentName,
                                     my_heating.ThermalEnergyDelivered )
-        
-        #construct new baseload
-        my_sim, operation_counter, electricity_load_profiles = append_to_electricity_load_profiles( 
-                my_sim = my_sim,
-                operation_counter = operation_counter,
-                electricity_load_profiles = electricity_load_profiles, 
-                elem_to_append = sumbuilder.ElectricityGrid( name = "BaseLoad" + str( operation_counter ),
-                                                             grid = [ electricity_load_profiles[ operation_counter - 1 ], "Sum", my_heating ], 
-                                                             my_simulation_parameters = my_simulation_parameters ) ) 
         
         # if smart_devices_included:
         #     my_smart_device.connect_only_predefined_connections( my_predictive_controller )

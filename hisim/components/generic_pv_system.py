@@ -242,9 +242,10 @@ class PVSystem(cp.Component):
                  module_name : str = "Hanwha_HSL60P6_PA_4_250T__2013_",
                  integrateInverter : bool = True,
                  inverter_name : str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                 name : str = 'PVSystem',
                  source_weight : int = 1 ):
         
-        super().__init__( "PVSystem", my_simulation_parameters = my_simulation_parameters )
+        super().__init__( name, my_simulation_parameters = my_simulation_parameters )
         self.pvconfig = PVSystemConfig(my_simulation_parameters=my_simulation_parameters,
                                        location=location, power = power, module_name=module_name,
                                        integrate_inverter=integrateInverter, inverter_name=inverter_name,
@@ -393,6 +394,18 @@ class PVSystem(cp.Component):
                 last_forecast_timestep = len( self.output )
             pvforecast = [ self.output[ t ] * self.pvconfig.power for t in range( timestep, last_forecast_timestep ) ]
             self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.PV, source_weight = self.source_weight, entry = pvforecast )
+            
+            if timestep == 1: 
+                #delete weather data for PV preprocessing from dictionary -> save memory
+                if self.simulation_repository.exist_entry( Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast ):
+                    self.simulation_repository.delete_entry( Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_DirectNormalIrradiance_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_Azimuth_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_ApparentZenith_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_TemperatureOutside_yearly_forecast )
+                    self.simulation_repository.delete_entry( Weather.Weather_WindSpeed_yearly_forecast )
 
     def get_coordinates(self, location="Aachen", year=2019):
         """
@@ -469,16 +482,6 @@ class PVSystem(cp.Component):
             else:
                  self.data = [0] * self.my_simulation_parameters.timesteps
                  self.data_length = self.my_simulation_parameters.timesteps
-                
-        if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
-            my_simulation_repository.delete_entry( Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_DirectNormalIrradiance_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_Azimuth_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_ApparentZenith_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_TemperatureOutside_yearly_forecast )
-            my_simulation_repository.delete_entry( Weather.Weather_WindSpeed_yearly_forecast )
 
         self.modules = pd.read_csv(
             os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),

@@ -7,8 +7,8 @@ from math import pi
 
 # Owned
 import hisim.utils as utils
+import hisim.loadtypes as lt
 from hisim import component as cp
-from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 from hisim.components import controller_l1_generic_runtime
@@ -50,12 +50,17 @@ class HeatPump(cp.Component):
     ----------
     manufacturer : str
         Heat pump manufacturer
-    name : str
+    device_name : str
         Heat pump model
     heating_season_begin : int, optional
         Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
     heating_season_end : int, optional
         Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
+    name : str, optional
+        Name of heatpump within simulation. The default is 'HeatPump'
+    source_weight : int, optional
+        Weight of component, relevant if there is more than one heat pump, defines hierachy in control. The default is 1.
+        
     """
     # Inputs
     TemperatureOutside = "TemperatureOutside"
@@ -78,40 +83,42 @@ class HeatPump(cp.Component):
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
                   manufacturer : str = "Viessmann Werke GmbH & Co KG",
-                  name : str ="Vitocal 300-A AWO-AC 301.B07",
+                  device_name : str ="Vitocal 300-A AWO-AC 301.B07",
                   heating_season_begin : int = 270,
-                  heating_season_end : int = 150 ):
-        super().__init__( "HeatPump", my_simulation_parameters = my_simulation_parameters )
+                  heating_season_end : int = 150,
+                  name : str = 'HeatPump',
+                  source_weight : int = 1 ):
+        super().__init__( name, my_simulation_parameters = my_simulation_parameters )
 
-        self.build( manufacturer, name, heating_season_begin, heating_season_end )
+        self.build( manufacturer, device_name, heating_season_begin, heating_season_end, source_weight )
 
         # Inputs - Mandatories
         self.TemperatureOutsideC: cp.ComponentInput = self.add_input(   self.ComponentName,
                                                                         self.TemperatureOutside,
-                                                                        LoadTypes.Any,
-                                                                        Units.Celsius,
+                                                                        lt.LoadTypes.Any,
+                                                                        lt.Units.Celsius,
                                                                         mandatory = True )
         
         self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
                                                                     self.l1_DeviceSignal,
-                                                                    LoadTypes.OnOff,
-                                                                    Units.binary,
+                                                                    lt.LoadTypes.OnOff,
+                                                                    lt.Units.binary,
                                                                     mandatory = True )
         self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
                                                                     self.l1_RunTimeSignal,
-                                                                    LoadTypes.Any,
-                                                                    Units.Any,
+                                                                    lt.LoadTypes.Any,
+                                                                    lt.Units.Any,
                                                                     mandatory = False )
         
         #Outputs
         self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(   self.ComponentName,
                                                                               self.ThermalEnergyDelivered,
-                                                                              LoadTypes.Heating,
-                                                                              Units.Watt )
+                                                                              lt.LoadTypes.Heating,
+                                                                              lt.Units.Watt )
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(  self.ComponentName,
                                                                         self.ElectricityOutput,
-                                                                        LoadTypes.Electricity,
-                                                                        Units.Watt )
+                                                                        lt.LoadTypes.Electricity,
+                                                                        lt.Units.Watt )
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
@@ -131,14 +138,16 @@ class HeatPump(cp.Component):
         connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
 
-    def build( self, manufacturer, name, heating_season_begin, heating_season_end ):
+    def build( self, manufacturer, device_name, heating_season_begin, heating_season_end, source_weight ):
+        
+        self.source_weight = source_weight
 
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
         heat_pump_found = False
         for heat_pump in heat_pumps_database:
-            if heat_pump["Manufacturer"] == manufacturer and heat_pump["Name"] == name:
+            if heat_pump["Manufacturer"] == manufacturer and heat_pump["Name"] == device_name:
                 heat_pump_found = True
                 break
 
@@ -208,7 +217,7 @@ class HeatPump(cp.Component):
                 self.state.timestep += 1
                 self.previous_state.timestep += 1
                 runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-                self.simulation_repository.set_entry( self.HeatPumpLoadForecast, [ self.max_heating_power / cop ] * runtime )
+                self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.HeatPump, source_weight = self.source_weight, entry = [ self.max_heating_power / cop ] * runtime )
 
     def prin1t_outpu1t(self, t_m, state):
         log.information("==========================================")

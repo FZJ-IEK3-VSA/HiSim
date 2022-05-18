@@ -62,9 +62,9 @@ def test_heat_pump_hplib():
     log.information(str(stsv.values))
     # Check
     assert p_th_set == stsv.values[heatpump.p_th.GlobalIndex]
-    assert 7074.0 == stsv.values[heatpump.p_el.GlobalIndex]
-    assert 1.41 == stsv.values[heatpump.cop.GlobalIndex]
+    assert 7074.033573088874 == stsv.values[heatpump.p_el.GlobalIndex]
+    assert 1.4136206588052005 == stsv.values[heatpump.cop.GlobalIndex]
     assert t_out == stsv.values[heatpump.t_out.GlobalIndex]
-    assert 0.476 == stsv.values[heatpump.m_dot.GlobalIndex]
+    assert 0.47619047619047616 == stsv.values[heatpump.m_dot.GlobalIndex]
     assert 60 == stsv.values[heatpump.time_on.GlobalIndex]
     assert 0 == stsv.values[heatpump.time_off.GlobalIndex]

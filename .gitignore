@@ -130,5 +130,9 @@ dmypy.json
 
 # cache folders
 inputs/cache
+
 hisim/inputs/cache
 examples/results
+
+# simulation log
+/tests/hisim_simulation.log

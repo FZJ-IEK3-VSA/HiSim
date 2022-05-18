@@ -5,7 +5,7 @@ from dataclasses import dataclass
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.loadtypes import LoadTypes, Units
-from hisim.inputs.heat_pump_hplib import hplib as hpl
+from hplib import hplib as hpl
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"

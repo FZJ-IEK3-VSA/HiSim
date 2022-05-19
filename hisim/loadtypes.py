@@ -98,6 +98,7 @@ class ComponentType(str, enum.Enum):
     PV = "PV"
     HeatPump = "HeatPump"
     GasHeater = "GasHeater"
+    Boiler = "Boiler"
     Battery = "Battery"
     FuelCell = "FuelCell"
     Heaters = [HeatPump, GasHeater]

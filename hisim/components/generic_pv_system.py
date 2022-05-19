@@ -228,10 +228,10 @@ class PVSystem( cp.Component ):
         Panel azimuth from north in °. The default is 180°.
     tilt : float, optional
         Panel tilt from horizontal. The default is 90°.
-    name : str, optional
-        Name of pv panel within simulation. The default is 'PVSystem'
     source_weight : int, optional
         Weight of component, relevant if there is more than one PV System, defines hierachy in control. The default is 1.
+    name : str, optional
+        Name of pv panel within simulation. The default is 'PVSystem'
 
     """
     # Inputs

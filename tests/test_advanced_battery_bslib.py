@@ -52,7 +52,7 @@ def test_advanced_battery_bslib():
 
     # Check if the delivered electricity indeed that corresponded to the battery model
     # Not all Elect could be charged
-    assert stsv.values[my_advanced_battery.p_bs.GlobalIndex] == 3572.0
-    assert stsv.values[my_advanced_battery.p_bat.GlobalIndex] == 3572.0
-    assert stsv.values[my_advanced_battery.soc.GlobalIndex] == 0.00619212585059115
+    assert stsv.values[my_advanced_battery.p_bs.GlobalIndex] == 3998.0
+    assert stsv.values[my_advanced_battery.p_bat.GlobalIndex] == 3959.5306911168
+    assert stsv.values[my_advanced_battery.soc.GlobalIndex] == 0.006432121891379126
 

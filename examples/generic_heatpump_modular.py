@@ -172,7 +172,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                                                module_name = module_name,
                                                integrateInverter = integrateInverter,
                                                inverter_name = inverter_name,
-                                               name = 'PVSystem1',
                                                source_weight = 1 )
         my_photovoltaic_system1.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system1 )
@@ -186,7 +185,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                                                module_name = module_name,
                                                integrateInverter = integrateInverter,
                                                inverter_name = inverter_name,
-                                               name = 'PVSYstem2',
                                                source_weight = 2 )
         my_photovoltaic_system2.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system2 )

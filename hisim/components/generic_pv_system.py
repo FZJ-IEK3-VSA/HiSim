@@ -177,19 +177,23 @@ class PVSystemConfig:
     parameter_string: str
     time: int
     location: str
-    module_name:str
+    module_name: str
     integrate_inverter: bool
-    inverter_name:str
+    inverter_name: str
     power: float
+    azimuth : float
+    tilt : float
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 time:int,
-                 location:str,
-                 power:float,
-                 module_name:str,
-                 integrate_inverter:bool,
-                 inverter_name:str ):
+                 time: int,
+                 location: str,
+                 power: float,
+                 module_name: str,
+                 integrate_inverter: bool,
+                 inverter_name: str,
+                 azimuth : float,
+                 tilt : float ):
         self.parameter_string = my_simulation_parameters.get_unique_key()
         self.time = time
         self.location = location
@@ -197,24 +201,38 @@ class PVSystemConfig:
         self.integrate_inverter = integrate_inverter
         self.inverter_name = inverter_name
         self.power = power
+        self.azimuth = azimuth
+        self.tilt = tilt
 
-
-
-class PVSystem(cp.Component):
+class PVSystem( cp.Component ):
     """
+    Simulates PV Output based on weather data and peak power.
+
     Parameters:
     -----------------------------------------------------
-    time:
-        simulation timeline
-    location: Location
-        object Location with temperature and solar data
-    power: float
-        Power in kWp to be provided by the PV System
+    time : int, optional
+        Simulation timeline. The default is 2019.
+    location : str, optional
+        Object Location with temperature and solar data. The default is "Aachen".
+    power : float, optional
+        Power in kWp to be provided by the PV System. The default is 10E3.
+    load_module_data : bool
+        Access the PV data base (True) or not (False). The default is False
+    module_name : str, optional
+        The default is "Hanwha_HSL60P6_PA_4_250T__2013_"
+    integrate_inverter, bool, optional
+        Consider inverter efficiency in the calculation (True) or not (False). The default is True.
+    inverter_name : str, optional
+        The default is "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_".
+    azimuth : float, optional
+        Panel azimuth from north in °. The default is 180°.
+    tilt : float, optional
+        Panel tilt from horizontal. The default is 90°.
+    name : str, optional
+        Name of pv panel within simulation. The default is 'PVSystem'
+    source_weight : int, optional
+        Weight of component, relevant if there is more than one PV System, defines hierachy in control. The default is 1.
 
-
-    Returns:
-    -----------------------------------------------------
-    pass
     """
     # Inputs
     TemperatureOutside = "TemperatureOutside"
@@ -242,14 +260,22 @@ class PVSystem(cp.Component):
                  module_name : str = "Hanwha_HSL60P6_PA_4_250T__2013_",
                  integrateInverter : bool = True,
                  inverter_name : str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-                 name : str = 'PVSystem',
-                 source_weight : int = 1 ):
+                 azimuth : float = 180,
+                 tilt : float = 30,
+                 source_weight : int = 1,
+                 name : str = 'PVSystem' ):
         
-        super().__init__( name, my_simulation_parameters = my_simulation_parameters )
-        self.pvconfig = PVSystemConfig(my_simulation_parameters=my_simulation_parameters,
-                                       location=location, power = power, module_name=module_name,
-                                       integrate_inverter=integrateInverter, inverter_name=inverter_name,
-                                       time=time)
+        super().__init__( name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
+        self.pvconfig = PVSystemConfig( my_simulation_parameters = my_simulation_parameters,
+                                        time = time,
+                                        location = location, 
+                                        module_name = module_name,
+                                        integrate_inverter = integrateInverter, 
+                                        inverter_name = inverter_name,
+                                        power = power, 
+                                        azimuth = azimuth,
+                                        tilt = tilt )
+        
         self.build( load_module_data, my_simulation_repository, source_weight )
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
@@ -376,7 +402,9 @@ class PVSystem(cp.Component):
                                             azimuth=azimuth,
                                             apparent_zenith=apparent_zenith,
                                             temperature=temperature,
-                                            wind_speed=wind_speed)
+                                            wind_speed=wind_speed,
+                                            surface_azimuth = self.pvconfig.azimuth,
+                                            surface_tilt = self.pvconfig.tilt )
 
             resultingvalue = ac_power * self.pvconfig.power
             # if you wanted to access the temperature forecast from the weather component:
@@ -453,7 +481,7 @@ class PVSystem(cp.Component):
                 raise Exception("Reading the cached PV values seems to have failed. Expected "
                                 + str(self.my_simulation_parameters.timesteps) + " values, but got " + str(len(self.output )))
         else:
-            self.get_coordinates(location = self.pvconfig.location, year =  self.pvconfig.time)
+            self.get_coordinates(location = self.pvconfig.location, year =  self.pvconfig.time )
             # Factor to guarantee peak power based on module with 250 Wh
             self.ac_power_factor = math.ceil( ( self.pvconfig.power * 1e3 ) / 250 )
             
@@ -471,7 +499,7 @@ class PVSystem(cp.Component):
                 
                 x= [ ]
                 for i in range( len( dni_extra ) ):
-                    x.append( simPhotovoltaicFast( dni_extra[ i ], DNI[ i ], DHI[ i ], GHI[ i ], azimuth[ i ], apparent_zenith[ i ], temperature[ i ], wind_speed[ i ] ) )
+                    x.append( simPhotovoltaicFast( dni_extra[ i ], DNI[ i ], DHI[ i ], GHI[ i ], azimuth[ i ], apparent_zenith[ i ], temperature[ i ], wind_speed[ i ], self.pvconfig.azimuth, self.pvconfig.tilt ) )
 
                 self.output = x
                 

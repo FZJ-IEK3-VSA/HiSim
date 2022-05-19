@@ -1,6 +1,6 @@
 # Generic
 
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Union
 import typing
 from hisim.simulationparameters import SimulationParameters
 # Package
@@ -87,8 +87,9 @@ class SingleTimeStepValues:
 
 
 class SimRepository:
-    def __init__(self):
-        self.my_dict = { elem : { } for elem in lt.ComponentType }
+    def __init__( self ):
+        my_dict : dict[ Union[ lt.ComponentType, str ], Union[ dict[ str, list[ float ] ], list[ float] ] ] = { elem : { } for elem in lt.ComponentType }
+        self.my_dict = my_dict
 
     def set_entry(self, key: str, entry: Any):
         self.my_dict[key] = entry
@@ -98,7 +99,7 @@ class SimRepository:
     
     def exist_entry( self, key : str ) -> Any:
         try:
-            self.get_entry( )
+            self.get_entry( key )
             return True
         except:
             return False
@@ -113,10 +114,13 @@ class SimRepository:
         return self.my_dict[ component_type ][ source_weight ]
     
     def get_dynamic_component_weights( self, component_type : lt.ComponentType ) -> list :
-        return list( self.my_dict[ component_type ].keys( ) )
+        try:
+            return self.my_dict[ component_type ].keys( )
+        except:
+            return None
     
     def delete_dynamic_entry( self, component_type: lt.ComponentType, source_weight: int ) -> Any:
-        self.my_dict[ comonent_type ].pop( sourceweight )
+        self.my_dict[ component_type ].pop( source_weight )
 
 class Component:
     @classmethod

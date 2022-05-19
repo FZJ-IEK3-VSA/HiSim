@@ -1,11 +1,11 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
 from dataclasses import dataclass
+from hplib import hplib as hpl
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
 from hisim.loadtypes import LoadTypes, Units
-from hplib import hplib as hpl
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -41,8 +41,12 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"                                           # s
     TimeOff = "TimeOff"                                         # s
 
-    def __init__(self, model: str,my_simulation_parameters: SimulationParameters , group_id: int = -1, t_in: float = -300, t_out_val: float = -300,
-                 p_th_set: float = -300):
+    def __init__(self, my_simulation_parameters: SimulationParameters,
+                model: str,
+                group_id: int = -1,
+                t_in: float = -300,
+                t_out_val: float = -300,
+                p_th_set: float = -300):
         """
         Loads the parameters of the specified heat pump.
 
@@ -211,14 +215,6 @@ class HeatPumpHplib(Component):
 
 @dataclass
 class HeatPumpState:
-    """
-    This data class saves the state of the simulation results.
-
-    Parameters
-    ----------
-    runtime : int
-        Stores the state of the runtime in seconds value from :py:class:`~hisim.component.HeatPump`.
-    """
     time_on: int = 0
     time_off: int = 0
     on_off_previous: int = 0

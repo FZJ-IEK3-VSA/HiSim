@@ -10,3 +10,4 @@ sphinx
 sphinx-rtd-theme
 dataclasses_json
 hplib
+bslib

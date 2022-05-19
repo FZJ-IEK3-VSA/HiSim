@@ -76,7 +76,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
-    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = False, boiler_included = 'electricity', heating_device_included = None ) #'heat_pump'    
+    my_simulation_parameters.reset_system_config( predictive = True, pv_included = True, smart_devices_included = False, boiler_included = 'electricity', heating_device_included = 'heat_pump' )  
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration
@@ -146,7 +146,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
 
     if pv_included:
         my_photovoltaic_system1 = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,
-                                               my_simulation_repository = my_sim.simulation_repository,
+                                               my_simulation_repository = my_sim.simulation_repository,                                        
                                                source_weight = 1 )
         my_photovoltaic_system1.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system1 )
@@ -171,10 +171,13 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         #         )
     
     if boiler_included: 
-        my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters )
+        my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters,
+                                                                                  source_weight = 1 )
         my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
                                                                                min_operation_time = min_operation_time,
-                                                                               min_idle_time = min_idle_time )
+                                                                               min_idle_time = min_idle_time,
+                                                                               source_weight = 1,
+                                                                               name = 'Boiler' )
         my_boiler_controller_l1.connect_only_predefined_connections( my_boiler_controller_l2 )
         my_sim.add_component( my_boiler_controller_l1 )
         my_boiler = generic_dhw_boiler.Boiler( my_simulation_parameters = my_simulation_parameters,
@@ -196,13 +199,16 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                                                                                             T_max_cooling = T_max_cooling,
                                                                                             T_tolerance = T_tolerance,
                                                                                             heating_season_begin = heating_season_begin,
-                                                                                            heating_season_end = heating_season_end )
+                                                                                            heating_season_end = heating_season_end,
+                                                                                            source_weight = 1 )
         my_heating_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_heating_controller_l2 )
         
         my_heating_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
                                                                                 min_operation_time = min_operation_time,
-                                                                                min_idle_time = min_idle_time )
+                                                                                min_idle_time = min_idle_time,
+                                                                                source_weight = 1,
+                                                                                name = 'HeatPump' )
         my_heating_controller_l1.connect_only_predefined_connections( my_heating_controller_l2 )
         my_sim.add_component( my_heating_controller_l1 )
         my_heating = generic_heat_pump_modular.HeatPump( my_simulation_parameters = my_simulation_parameters,

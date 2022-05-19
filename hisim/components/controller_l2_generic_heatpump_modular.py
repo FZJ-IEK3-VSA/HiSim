@@ -80,7 +80,9 @@ class L2_Controller( cp.Component ):
     heating_season_begin : int, optional
         Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
     heating_season_end : int, optional
-        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
+        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150.
+    source_weight : int, optional
+        Weight of component, relevant if there is more than one component of same type, defines hierachy in control. The default is 1.
     """
     # Inputs
     ReferenceTemperature = "ReferenceTemperature"
@@ -105,8 +107,9 @@ class L2_Controller( cp.Component ):
                   T_max_cooling : float = 25.0,
                   T_tolerance : float   = 1.0,
                   heating_season_begin : int = 270,
-                  heating_season_end : int = 150 ):
-        super().__init__( "L2_Controller", my_simulation_parameters = my_simulation_parameters )
+                  heating_season_end : int = 150,
+                  source_weight : int = 1 ):
+        super().__init__( "L2_Controller_HeatPump" + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, T_tolerance, heating_season_begin, heating_season_end )
 
         #Component Inputs

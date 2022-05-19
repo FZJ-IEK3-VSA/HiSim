@@ -72,6 +72,8 @@ class L2_Controller( cp.Component ):
         Maximum temperature of water in boiler, in °C. The default is 60 °C.
     T_tolerance : float, optional
         Temperature difference the boiler may go below or exceed the hysteresis, because of recommendations from L3. The default is 10 °C.
+    source_weight : int, optional
+        Weight of component, relevant if there is more than one component of same type, defines hierachy in control. The default is 1.
     """
     # Inputs
     ReferenceTemperature = "ReferenceTemperature"
@@ -92,8 +94,9 @@ class L2_Controller( cp.Component ):
                   my_simulation_parameters : SimulationParameters,
                   T_min : float = 45.0,
                   T_max : float = 60.0,
-                  T_tolerance : float   = 10.0 ):
-        super().__init__( "L2_Controller", my_simulation_parameters = my_simulation_parameters )
+                  T_tolerance : float = 10.0,
+                  source_weight : int = 1 ):
+        super().__init__( "L2_Controller_Boiler" + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( T_min, T_max, T_tolerance )
 
         #Component Inputs

@@ -92,7 +92,7 @@ class L3_Controller( cp.DynamicComponent ):
         Maximal peak allowed for switch on.
     """
 
-    # Inputs
+    # Inputs and Outputs
     MyComponentInputs: List[ cp.DynamicConnectionInput ] = []
     MyComponentOutputs: List[ cp.DynamicConnectionOutput ] = []
 

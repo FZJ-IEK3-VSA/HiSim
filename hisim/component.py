@@ -1,6 +1,6 @@
 # Generic
 
-from typing import List, Optional, Any, Dict, Union
+from typing import List, Optional, Any, Dict
 import typing
 from hisim.simulationparameters import SimulationParameters
 # Package
@@ -88,39 +88,36 @@ class SingleTimeStepValues:
 
 class SimRepository:
     def __init__( self ):
-        my_dict : dict[ Union[ lt.ComponentType, str ], Union[ dict[ str, list[ float ] ], list[ float] ] ] = { elem : { } for elem in lt.ComponentType }
-        self.my_dict = my_dict
+        self.my_dict : dict[ str, Any ] = { }
+        self.my_dynamic_dict : dict[ lt.ComponentType, dict[ int, Any ] ] = { elem : { } for elem in lt.ComponentType }
 
-    def set_entry(self, key: str, entry: Any):
-        self.my_dict[key] = entry
+    def set_entry(self, key: str, entry: Any ):
+        self.my_dict[ key ] = entry
 
     def get_entry(self, key: str) -> Any:
         return self.my_dict[key]
     
-    def exist_entry( self, key : str ) -> Any:
+    def exist_entry( self, key : str ) -> bool:
         try:
             self.get_entry( key )
             return True
         except:
             return False
     
-    def delete_entry( self, key : str ) -> Any:
+    def delete_entry( self, key : str ):
         self.my_dict.pop( key )
         
-    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry ):
-        self.my_dict[ component_type ][ source_weight ] = entry
+    def set_dynamic_entry( self, component_type: lt.ComponentType, source_weight: int, entry ):
+        self.my_dynamic_dict[ component_type ][ source_weight ] = entry
 
     def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int ) -> Any:
-        return self.my_dict[ component_type ][ source_weight ]
+        return self.my_dynamic_dict[ component_type ][ source_weight ]
     
     def get_dynamic_component_weights( self, component_type : lt.ComponentType ) -> list :
-        try:
-            return self.my_dict[ component_type ].keys( )
-        except:
-            return None
+        return list( self.my_dynamic_dict[ component_type ].keys( ) )
     
     def delete_dynamic_entry( self, component_type: lt.ComponentType, source_weight: int ) -> Any:
-        self.my_dict[ component_type ].pop( source_weight )
+        self.my_dynamic_dict[ component_type ].pop( source_weight )
 
 class Component:
     @classmethod

@@ -135,13 +135,6 @@ class L2_Controller( cp.Component ):
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean ) )
         return connections
-    
-    def get_l3_controller_default_connections( self ):
-        log.information("setting L3 default connections in L2 Controller")
-        connections = [ ]
-        L3_classname = controller_l3_generic_heatpump_modular.L3_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L2_Controller.l3_DeviceSignal, L3_classname, controller_l3_generic_heatpump_modular.L3_Controller.l3_HeatPumpSignal ) )
-        return connections
 
     def build( self, T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, T_tolerance, heating_season_begin, heating_season_end ):
         

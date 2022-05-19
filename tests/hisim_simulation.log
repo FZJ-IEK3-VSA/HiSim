@@ -2521,3 +2521,822 @@ adding output: Azimuth to component Weather
 adding output: ApparentZenith to component Weather
 adding output: WindSpeed to component Weather
 Executing hisim.components.weather.__init__ took 0.85 seconds
+adding output: AC Battery Power to component AdvancedBattery
+adding output: State Of Charge to component AdvancedBattery
+[4000, 3572.0, 0.00619212585059115]
+adding output: Hot Water Energy Output to component CHP
+adding output: MassflowOutputTemperature to component CHP
+adding output: GasDemandTarget to component CHP
+adding output: ElectricityOutput to component CHP
+adding output: NumberofCycles to component CHP
+adding output: ThermalOutputPower to component CHP
+adding output: GasDemandReal to component CHP
+[0, 50, 300, 0.011, 82.6072779444372, 9.99470663620661e-05, 400.0, 1, 1500.0, 9.99470663620661e-05]
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+adding output: ThermalOutputPower to component HeatPump
+adding output: ElectricalInputPower to component HeatPump
+adding output: COP to component HeatPump
+adding output: TemperatureOutput to component HeatPump
+adding output: MassFlowOutput to component HeatPump
+adding output: TimeOn to component HeatPump
+adding output: TimeOff to component HeatPump
+[1, -7, 47.0, -7, 10000.0, 7074.0, 1.41, 52.0, 0.476, 60, 0]
+Test Building start @ 19-May-2022 13:16:05
+T2: 1.3899999999900103e-05
+adding output: NumberByResidents to component Occupancy
+adding output: HeatingByResidents to component Occupancy
+adding output: ElectricityOutput to component Occupancy
+adding output: WaterConsumption to component Occupancy
+Executing hisim.components.loadprofilegenerator_connector.__init__ took 4.25 seconds
+T2: 4.255621100000001
+Aachen
+{"parameter_string": "2021-01-01###2022-01-01###60###2021###525600", "location": "Aachen"}
+adding output: TemperatureOutside to component Weather
+adding output: DirectNormalIrradiance to component Weather
+adding output: DirectNormalIrradianceExtra to component Weather
+adding output: DiffuseHorizontalIrradiance to component Weather
+adding output: GlobalHorizontalIrradiance to component Weather
+adding output: Altitude to component Weather
+adding output: Azimuth to component Weather
+adding output: ApparentZenith to component Weather
+adding output: WindSpeed to component Weather
+Executing hisim.components.weather.__init__ took 16.09 seconds
+T2: 16.0907244
+adding output: Residence Temperature to component Building
+adding output: TotalEnergyToResidence to component Building
+adding output: SolarGainThroughWindows to component Building
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting occupancy default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'Occupancy': [ComponentConnection(TargetInputName='HeatingByResidents', SourceClassName='Occupancy', SourceOutputName='HeatingByResidents', SourceInstanceName=None)]}
+Executing hisim.components.building.__init__ took 0.13 seconds
+T2: -0.13629080000000116
+T2: 0.0007701999999980558
+Seconds per Timestep: 60
+[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 23, 0.0, 0.0]
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 23, 0.0, 0.0]
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 22.981165358812124, 2.4837099094524837, 0.0]
+Occupancy: [0.0, 2.0, 300.0, 334.31161139661003]
+
+Weather: [0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0]
+
+Residence: [-61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 22.981165358812124, 2.4837099094524837, 0.0]
+
+341.1004395736235
+Seconds per Timestep: 900
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 23, 2.4837099094524837, 0.0]
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 23, 2.4837099094524837, 0.0]
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 22.702152962842753, 2.4837099094524837, 0.0]
+Occupancy: [0.0, 2.0, 300.0, 334.31161139661003]
+
+Weather: [0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0]
+
+Residence: [-61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 22.702152962842753, 2.4837099094524837, 0.0]
+
+341.1004395736235
+Seconds per Timestep: 3600
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 23, 2.4837099094524837, 0.0]
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 23, 2.4837099094524837, 0.0]
+[0.0, 2.0, 300.0, 334.31161139661003, 0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0, -61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 21.63953248547095, 2.4837099094524837, 0.0]
+Occupancy: [0.0, 2.0, 300.0, 334.31161139661003]
+
+Weather: [0.0, 0.0, 0.0, 1413.981805, 0.0, 0.0]
+
+Residence: [-61.21644869076345, 341.1004395736235, 151.21644869076346, 0.0, 21.63953248547095, 2.4837099094524837, 0.0]
+
+341.1004395736235
+T2: 0.01042759999999987
+T2: 0.01042759999999987
+Finished @ 19-May-2022 13:16:26
+Executing tests.test_building.test_building took 20.58 seconds
+#################################
+starting simulation of ../examples/basic_household.py basic_household_explicit
+Start @ 19-May-2022 13:16:26 
+../examples/basic_household.py basic_household_explicitStart @ 19-May-2022 13:16:26
+#################################
+Executing hisim.simulator.__init__ took 0.05 seconds
+adding output: NumberByResidents to component Occupancy
+adding output: HeatingByResidents to component Occupancy
+adding output: ElectricityOutput to component Occupancy
+adding output: WaterConsumption to component Occupancy
+Executing hisim.components.loadprofilegenerator_connector.__init__ took 4.03 seconds
+Registering component outputs on Occupancy
+Registered output Occupancy # NumberByResidents
+Registered output Occupancy # HeatingByResidents
+Registered output Occupancy # ElectricityOutput
+Registered output Occupancy # WaterConsumption
+Aachen
+{"parameter_string": "2019-01-01###2019-01-02###60###2019###1440", "location": "Aachen"}
+adding output: TemperatureOutside to component Weather
+adding output: DirectNormalIrradiance to component Weather
+adding output: DirectNormalIrradianceExtra to component Weather
+adding output: DiffuseHorizontalIrradiance to component Weather
+adding output: GlobalHorizontalIrradiance to component Weather
+adding output: Altitude to component Weather
+adding output: Azimuth to component Weather
+adding output: ApparentZenith to component Weather
+adding output: WindSpeed to component Weather
+Executing hisim.components.weather.__init__ took 15.93 seconds
+Registering component outputs on Weather
+Registered output Weather # TemperatureOutside
+Registered output Weather # DirectNormalIrradiance
+Registered output Weather # DirectNormalIrradianceExtra
+Registered output Weather # DiffuseHorizontalIrradiance
+Registered output Weather # GlobalHorizontalIrradiance
+Registered output Weather # Altitude
+Registered output Weather # Azimuth
+Registered output Weather # ApparentZenith
+Registered output Weather # WindSpeed
+{"parameter_string": "2019-01-01###2019-01-02###60###2019###1440", "time": 2019, "location": "Aachen", "module_name": "Hanwha_HSL60P6_PA_4_250T__2013_", "integrate_inverter": true, "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_", "power": 10000.0, "azimuth": 180, "tilt": 30}
+adding output: ElectricityOutput to component PVSystem1
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='WindSpeed', SourceClassName='Weather', SourceOutputName='WindSpeed', SourceInstanceName=None)]}
+Executing hisim.components.generic_pv_system.__init__ took 0.53 seconds
+Registering component outputs on PVSystem1
+Registered output PVSystem1 # ElectricityOutput
+adding output: ElectricityOutput to component ElectricityGrid_BaseLoad
+Executing hisim.components.sumbuilder.__init__ took 0.00 seconds
+Registering component outputs on ElectricityGrid_BaseLoad
+Registered output ElectricityGrid_BaseLoad # ElectricityOutput
+adding output: Residence Temperature to component Building
+adding output: TotalEnergyToResidence to component Building
+adding output: SolarGainThroughWindows to component Building
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting occupancy default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'Occupancy': [ComponentConnection(TargetInputName='HeatingByResidents', SourceClassName='Occupancy', SourceOutputName='HeatingByResidents', SourceInstanceName=None)]}
+Executing hisim.components.building.__init__ took 0.14 seconds
+Registering component outputs on Building
+Registered output Building # Residence Temperature
+Registered output Building # TotalEnergyToResidence
+Registered output Building # SolarGainThroughWindows
+adding output: State to component HeatPumpController
+setting building default connections in Heatpumpcontroller
+added connections: {'Building': [ComponentConnection(TargetInputName='Residence Temperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+Registering component outputs on HeatPumpController
+Registered output HeatPumpController # State
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: Heating to component HeatPump
+adding output: Cooling to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+adding output: NumberOfCycles to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting controller default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'HeatPumpController': [ComponentConnection(TargetInputName='State', SourceClassName='HeatPumpController', SourceOutputName='State', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.01 seconds
+Registering component outputs on HeatPump
+Registered output HeatPump # ThermalEnergyDelivered
+Registered output HeatPump # Heating
+Registered output HeatPump # Cooling
+Registered output HeatPump # ElectricityOutput
+Registered output HeatPump # NumberOfCycles
+connected input 'PVSystem1 # TemperatureOutside' to 'Weather # TemperatureOutside'
+connected input 'PVSystem1 # DirectNormalIrradiance' to 'Weather # DirectNormalIrradiance'
+connected input 'PVSystem1 # DirectNormalIrradianceExtra' to 'Weather # DirectNormalIrradianceExtra'
+connected input 'PVSystem1 # DiffuseHorizontalIrradiance' to 'Weather # DiffuseHorizontalIrradiance'
+connected input 'PVSystem1 # GlobalHorizontalIrradiance' to 'Weather # GlobalHorizontalIrradiance'
+connected input 'PVSystem1 # Azimuth' to 'Weather # Azimuth'
+connected input 'PVSystem1 # ApparentZenith' to 'Weather # ApparentZenith'
+connected input 'PVSystem1 # WindSpeed' to 'Weather # WindSpeed'
+connected input 'ElectricityGrid_BaseLoad # Input1' to 'Occupancy # ElectricityOutput'
+connected input 'ElectricityGrid_BaseLoad # Input2' to 'PVSystem1 # ElectricityOutput'
+connected input 'Building # ThermalEnergyDelivered' to 'HeatPump # ThermalEnergyDelivered'
+connected input 'Building # Altitude' to 'Weather # Altitude'
+connected input 'Building # Azimuth' to 'Weather # Azimuth'
+connected input 'Building # ApparentZenith' to 'Weather # ApparentZenith'
+connected input 'Building # DirectNormalIrradiance' to 'Weather # DirectNormalIrradiance'
+connected input 'Building # DirectNormalIrradianceExtra' to 'Weather # DirectNormalIrradianceExtra'
+connected input 'Building # DiffuseHorizontalIrradiance' to 'Weather # DiffuseHorizontalIrradiance'
+connected input 'Building # GlobalHorizontalIrradiance' to 'Weather # GlobalHorizontalIrradiance'
+connected input 'Building # TemperatureOutside' to 'Weather # TemperatureOutside'
+connected input 'Building # HeatingByResidents' to 'Occupancy # HeatingByResidents'
+connected input 'HeatPumpController # Residence Temperature' to 'Building # Residence Temperature'
+connected input 'HeatPumpController # ElectricityInput' to 'ElectricityGrid_BaseLoad # ElectricityOutput'
+connected input 'HeatPump # State' to 'HeatPumpController # State'
+connected input 'HeatPump # TemperatureOutside' to 'Weather # TemperatureOutside'
+Executing hisim.simulator.connect_all_components took 0.01 seconds
+finished connecting all components. A total of 7 components were defined. They have a total of 24 outputs.
+Starting simulation for 1440 timesteps
+Output column: Occupancy - NumberByResidents [Any - -]
+Output column: Occupancy - HeatingByResidents [Heating - W]
+Output column: Occupancy - ElectricityOutput [Electricity - W]
+Output column: Occupancy - WaterConsumption [WarmWater - L]
+Output column: Weather - TemperatureOutside [Temperature - °C]
+Output column: Weather - DirectNormalIrradiance [Irradiance - W per square meter]
+Output column: Weather - DirectNormalIrradianceExtra [Irradiance - W per square meter]
+Output column: Weather - DiffuseHorizontalIrradiance [Irradiance - W per square meter]
+Output column: Weather - GlobalHorizontalIrradiance [Irradiance - W per square meter]
+Output column: Weather - Altitude [Any - Degrees]
+Output column: Weather - Azimuth [Any - Degrees]
+Output column: Weather - ApparentZenith [Any - Degrees]
+Output column: Weather - WindSpeed [Speed - m/s]
+Output column: PVSystem1 - ElectricityOutput [Electricity - W]
+Output column: ElectricityGrid_BaseLoad - ElectricityOutput [Electricity - W]
+Output column: Building - Residence Temperature [Temperature - °C]
+Output column: Building - TotalEnergyToResidence [Heating - W]
+Output column: Building - SolarGainThroughWindows [Heating - W]
+Output column: HeatPumpController - State [Any - -]
+Output column: HeatPump - ThermalEnergyDelivered [Heating - W]
+Output column: HeatPump - Heating [Heating - W]
+Output column: HeatPump - Cooling [Cooling - W]
+Output column: HeatPump - ElectricityOutput [Electricity - W]
+Output column: HeatPump - NumberOfCycles [Any - -]
+selected 0 options
+Executing hisim.simulator.prepare_post_processing took 0.13 seconds
+Executing hisim.postprocessing.postprocessing_main.__init__ took 0.04 seconds
+not plotting sankeys
+not exporting to CSV
+Executing hisim.postprocessing.postprocessing_main.run took 7.14 seconds
+Executing hisim.simulator.run_all_timesteps took 7.79 seconds
+#################################
+finished @ 19-May-2022 13:16:54
+finished @ 19-May-2022 13:16:54
+duration: 28.51263
+#################################
+
+C:\Users\Johanna\Desktop\HiSIM\tests
+Executing tests.test_examples.test_basic_household took 28.60 seconds
+#################################
+starting simulation of ../examples/basic_household.py basic_household_with_default_connections
+Start @ 19-May-2022 13:16:54 
+../examples/basic_household.py basic_household_with_default_connectionsStart @ 19-May-2022 13:16:54
+#################################
+Executing hisim.simulator.__init__ took 0.05 seconds
+adding output: NumberByResidents to component Occupancy
+adding output: HeatingByResidents to component Occupancy
+adding output: ElectricityOutput to component Occupancy
+adding output: WaterConsumption to component Occupancy
+Executing hisim.components.loadprofilegenerator_connector.__init__ took 0.36 seconds
+Registering component outputs on Occupancy
+Registered output Occupancy # NumberByResidents
+Registered output Occupancy # HeatingByResidents
+Registered output Occupancy # ElectricityOutput
+Registered output Occupancy # WaterConsumption
+Aachen
+{"parameter_string": "2019-01-01###2019-01-02###60###2019###1440", "location": "Aachen"}
+adding output: TemperatureOutside to component Weather
+adding output: DirectNormalIrradiance to component Weather
+adding output: DirectNormalIrradianceExtra to component Weather
+adding output: DiffuseHorizontalIrradiance to component Weather
+adding output: GlobalHorizontalIrradiance to component Weather
+adding output: Altitude to component Weather
+adding output: Azimuth to component Weather
+adding output: ApparentZenith to component Weather
+adding output: WindSpeed to component Weather
+Executing hisim.components.weather.__init__ took 1.12 seconds
+Registering component outputs on Weather
+Registered output Weather # TemperatureOutside
+Registered output Weather # DirectNormalIrradiance
+Registered output Weather # DirectNormalIrradianceExtra
+Registered output Weather # DiffuseHorizontalIrradiance
+Registered output Weather # GlobalHorizontalIrradiance
+Registered output Weather # Altitude
+Registered output Weather # Azimuth
+Registered output Weather # ApparentZenith
+Registered output Weather # WindSpeed
+{"parameter_string": "2019-01-01###2019-01-02###60###2019###1440", "time": 2019, "location": "Aachen", "module_name": "Hanwha_HSL60P6_PA_4_250T__2013_", "integrate_inverter": true, "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_", "power": 10000.0, "azimuth": 180, "tilt": 30}
+adding output: ElectricityOutput to component PVSystem1
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='WindSpeed', SourceClassName='Weather', SourceOutputName='WindSpeed', SourceInstanceName=None)]}
+Executing hisim.components.generic_pv_system.__init__ took 0.52 seconds
+Registering component outputs on PVSystem1
+Registered output PVSystem1 # ElectricityOutput
+adding output: ElectricityOutput to component ElectricityGrid_BaseLoad
+Executing hisim.components.sumbuilder.__init__ took 0.00 seconds
+Registering component outputs on ElectricityGrid_BaseLoad
+Registered output ElectricityGrid_BaseLoad # ElectricityOutput
+adding output: Residence Temperature to component Building
+adding output: TotalEnergyToResidence to component Building
+adding output: SolarGainThroughWindows to component Building
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting occupancy default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'Occupancy': [ComponentConnection(TargetInputName='HeatingByResidents', SourceClassName='Occupancy', SourceOutputName='HeatingByResidents', SourceInstanceName=None)]}
+Executing hisim.components.building.__init__ took 0.14 seconds
+Registering component outputs on Building
+Registered output Building # Residence Temperature
+Registered output Building # TotalEnergyToResidence
+Registered output Building # SolarGainThroughWindows
+adding output: State to component HeatPumpController
+setting building default connections in Heatpumpcontroller
+added connections: {'Building': [ComponentConnection(TargetInputName='Residence Temperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+Registering component outputs on HeatPumpController
+Registered output HeatPumpController # State
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: Heating to component HeatPump
+adding output: Cooling to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+adding output: NumberOfCycles to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting controller default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'HeatPumpController': [ComponentConnection(TargetInputName='State', SourceClassName='HeatPumpController', SourceOutputName='State', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+Registering component outputs on HeatPump
+Registered output HeatPump # ThermalEnergyDelivered
+Registered output HeatPump # Heating
+Registered output HeatPump # Cooling
+Registered output HeatPump # ElectricityOutput
+Registered output HeatPump # NumberOfCycles
+connected input 'PVSystem1 # TemperatureOutside' to 'Weather # TemperatureOutside'
+connected input 'PVSystem1 # DirectNormalIrradiance' to 'Weather # DirectNormalIrradiance'
+connected input 'PVSystem1 # DirectNormalIrradianceExtra' to 'Weather # DirectNormalIrradianceExtra'
+connected input 'PVSystem1 # DiffuseHorizontalIrradiance' to 'Weather # DiffuseHorizontalIrradiance'
+connected input 'PVSystem1 # GlobalHorizontalIrradiance' to 'Weather # GlobalHorizontalIrradiance'
+connected input 'PVSystem1 # Azimuth' to 'Weather # Azimuth'
+connected input 'PVSystem1 # ApparentZenith' to 'Weather # ApparentZenith'
+connected input 'PVSystem1 # WindSpeed' to 'Weather # WindSpeed'
+connected input 'ElectricityGrid_BaseLoad # Input1' to 'Occupancy # ElectricityOutput'
+connected input 'ElectricityGrid_BaseLoad # Input2' to 'PVSystem1 # ElectricityOutput'
+connected input 'Building # ThermalEnergyDelivered' to 'HeatPump # ThermalEnergyDelivered'
+connected input 'Building # Altitude' to 'Weather # Azimuth'
+connected input 'Building # Azimuth' to 'Weather # Azimuth'
+connected input 'Building # ApparentZenith' to 'Weather # ApparentZenith'
+connected input 'Building # DirectNormalIrradiance' to 'Weather # DirectNormalIrradiance'
+connected input 'Building # DirectNormalIrradianceExtra' to 'Weather # DirectNormalIrradianceExtra'
+connected input 'Building # DiffuseHorizontalIrradiance' to 'Weather # DiffuseHorizontalIrradiance'
+connected input 'Building # GlobalHorizontalIrradiance' to 'Weather # GlobalHorizontalIrradiance'
+connected input 'Building # TemperatureOutside' to 'Weather # TemperatureOutside'
+connected input 'Building # HeatingByResidents' to 'Occupancy # HeatingByResidents'
+connected input 'HeatPumpController # Residence Temperature' to 'Building # Residence Temperature'
+connected input 'HeatPumpController # ElectricityInput' to 'ElectricityGrid_BaseLoad # ElectricityOutput'
+connected input 'HeatPump # State' to 'HeatPumpController # State'
+connected input 'HeatPump # TemperatureOutside' to 'Weather # TemperatureOutside'
+Executing hisim.simulator.connect_all_components took 0.01 seconds
+finished connecting all components. A total of 7 components were defined. They have a total of 24 outputs.
+Starting simulation for 1440 timesteps
+Output column: Occupancy - NumberByResidents [Any - -]
+Output column: Occupancy - HeatingByResidents [Heating - W]
+Output column: Occupancy - ElectricityOutput [Electricity - W]
+Output column: Occupancy - WaterConsumption [WarmWater - L]
+Output column: Weather - TemperatureOutside [Temperature - °C]
+Output column: Weather - DirectNormalIrradiance [Irradiance - W per square meter]
+Output column: Weather - DirectNormalIrradianceExtra [Irradiance - W per square meter]
+Output column: Weather - DiffuseHorizontalIrradiance [Irradiance - W per square meter]
+Output column: Weather - GlobalHorizontalIrradiance [Irradiance - W per square meter]
+Output column: Weather - Altitude [Any - Degrees]
+Output column: Weather - Azimuth [Any - Degrees]
+Output column: Weather - ApparentZenith [Any - Degrees]
+Output column: Weather - WindSpeed [Speed - m/s]
+Output column: PVSystem1 - ElectricityOutput [Electricity - W]
+Output column: ElectricityGrid_BaseLoad - ElectricityOutput [Electricity - W]
+Output column: Building - Residence Temperature [Temperature - °C]
+Output column: Building - TotalEnergyToResidence [Heating - W]
+Output column: Building - SolarGainThroughWindows [Heating - W]
+Output column: HeatPumpController - State [Any - -]
+Output column: HeatPump - ThermalEnergyDelivered [Heating - W]
+Output column: HeatPump - Heating [Heating - W]
+Output column: HeatPump - Cooling [Cooling - W]
+Output column: HeatPump - ElectricityOutput [Electricity - W]
+Output column: HeatPump - NumberOfCycles [Any - -]
+selected 0 options
+Executing hisim.simulator.prepare_post_processing took 0.12 seconds
+Executing hisim.postprocessing.postprocessing_main.__init__ took 0.06 seconds
+not plotting sankeys
+not exporting to CSV
+Executing hisim.postprocessing.postprocessing_main.run took 6.86 seconds
+Executing hisim.simulator.run_all_timesteps took 7.26 seconds
+#################################
+finished @ 19-May-2022 13:17:04
+finished @ 19-May-2022 13:17:04
+duration: 9.478131
+#################################
+
+C:\Users\Johanna\Desktop\HiSIM\tests
+Executing tests.test_examples.test_basic_household_with_default_connections took 9.55 seconds
+#################################
+starting simulation of ../examples/basic_household.py basic_household_explicit
+Start @ 19-May-2022 13:17:04 
+../examples/basic_household.py basic_household_explicitStart @ 19-May-2022 13:17:04
+#################################
+Executing hisim.simulator.__init__ took 0.04 seconds
+adding output: NumberByResidents to component Occupancy
+adding output: HeatingByResidents to component Occupancy
+adding output: ElectricityOutput to component Occupancy
+adding output: WaterConsumption to component Occupancy
+Executing hisim.components.loadprofilegenerator_connector.__init__ took 0.34 seconds
+Registering component outputs on Occupancy
+Registered output Occupancy # NumberByResidents
+Registered output Occupancy # HeatingByResidents
+Registered output Occupancy # ElectricityOutput
+Registered output Occupancy # WaterConsumption
+Aachen
+{"parameter_string": "2019-01-01###2019-01-02###60###2019###1440", "location": "Aachen"}
+adding output: TemperatureOutside to component Weather
+adding output: DirectNormalIrradiance to component Weather
+adding output: DirectNormalIrradianceExtra to component Weather
+adding output: DiffuseHorizontalIrradiance to component Weather
+adding output: GlobalHorizontalIrradiance to component Weather
+adding output: Altitude to component Weather
+adding output: Azimuth to component Weather
+adding output: ApparentZenith to component Weather
+adding output: WindSpeed to component Weather
+Executing hisim.components.weather.__init__ took 1.06 seconds
+Registering component outputs on Weather
+Registered output Weather # TemperatureOutside
+Registered output Weather # DirectNormalIrradiance
+Registered output Weather # DirectNormalIrradianceExtra
+Registered output Weather # DiffuseHorizontalIrradiance
+Registered output Weather # GlobalHorizontalIrradiance
+Registered output Weather # Altitude
+Registered output Weather # Azimuth
+Registered output Weather # ApparentZenith
+Registered output Weather # WindSpeed
+{"parameter_string": "2019-01-01###2019-01-02###60###2019###1440", "time": 2019, "location": "Aachen", "module_name": "Hanwha_HSL60P6_PA_4_250T__2013_", "integrate_inverter": true, "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_", "power": 10000.0, "azimuth": 180, "tilt": 30}
+adding output: ElectricityOutput to component PVSystem1
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='WindSpeed', SourceClassName='Weather', SourceOutputName='WindSpeed', SourceInstanceName=None)]}
+Executing hisim.components.generic_pv_system.__init__ took 0.51 seconds
+Registering component outputs on PVSystem1
+Registered output PVSystem1 # ElectricityOutput
+adding output: ElectricityOutput to component ElectricityGrid_BaseLoad
+Executing hisim.components.sumbuilder.__init__ took 0.00 seconds
+Registering component outputs on ElectricityGrid_BaseLoad
+Registered output ElectricityGrid_BaseLoad # ElectricityOutput
+adding output: Residence Temperature to component Building
+adding output: TotalEnergyToResidence to component Building
+adding output: SolarGainThroughWindows to component Building
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting occupancy default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='Altitude', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'Occupancy': [ComponentConnection(TargetInputName='HeatingByResidents', SourceClassName='Occupancy', SourceOutputName='HeatingByResidents', SourceInstanceName=None)]}
+Executing hisim.components.building.__init__ took 0.14 seconds
+Registering component outputs on Building
+Registered output Building # Residence Temperature
+Registered output Building # TotalEnergyToResidence
+Registered output Building # SolarGainThroughWindows
+adding output: State to component HeatPumpController
+setting building default connections in Heatpumpcontroller
+added connections: {'Building': [ComponentConnection(TargetInputName='Residence Temperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+Registering component outputs on HeatPumpController
+Registered output HeatPumpController # State
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: Heating to component HeatPump
+adding output: Cooling to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+adding output: NumberOfCycles to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting controller default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'HeatPumpController': [ComponentConnection(TargetInputName='State', SourceClassName='HeatPumpController', SourceOutputName='State', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+Registering component outputs on HeatPump
+Registered output HeatPump # ThermalEnergyDelivered
+Registered output HeatPump # Heating
+Registered output HeatPump # Cooling
+Registered output HeatPump # ElectricityOutput
+Registered output HeatPump # NumberOfCycles
+connected input 'PVSystem1 # TemperatureOutside' to 'Weather # TemperatureOutside'
+connected input 'PVSystem1 # DirectNormalIrradiance' to 'Weather # DirectNormalIrradiance'
+connected input 'PVSystem1 # DirectNormalIrradianceExtra' to 'Weather # DirectNormalIrradianceExtra'
+connected input 'PVSystem1 # DiffuseHorizontalIrradiance' to 'Weather # DiffuseHorizontalIrradiance'
+connected input 'PVSystem1 # GlobalHorizontalIrradiance' to 'Weather # GlobalHorizontalIrradiance'
+connected input 'PVSystem1 # Azimuth' to 'Weather # Azimuth'
+connected input 'PVSystem1 # ApparentZenith' to 'Weather # ApparentZenith'
+connected input 'PVSystem1 # WindSpeed' to 'Weather # WindSpeed'
+connected input 'ElectricityGrid_BaseLoad # Input1' to 'Occupancy # ElectricityOutput'
+connected input 'ElectricityGrid_BaseLoad # Input2' to 'PVSystem1 # ElectricityOutput'
+connected input 'Building # ThermalEnergyDelivered' to 'HeatPump # ThermalEnergyDelivered'
+connected input 'Building # Altitude' to 'Weather # Altitude'
+connected input 'Building # Azimuth' to 'Weather # Azimuth'
+connected input 'Building # ApparentZenith' to 'Weather # ApparentZenith'
+connected input 'Building # DirectNormalIrradiance' to 'Weather # DirectNormalIrradiance'
+connected input 'Building # DirectNormalIrradianceExtra' to 'Weather # DirectNormalIrradianceExtra'
+connected input 'Building # DiffuseHorizontalIrradiance' to 'Weather # DiffuseHorizontalIrradiance'
+connected input 'Building # GlobalHorizontalIrradiance' to 'Weather # GlobalHorizontalIrradiance'
+connected input 'Building # TemperatureOutside' to 'Weather # TemperatureOutside'
+connected input 'Building # HeatingByResidents' to 'Occupancy # HeatingByResidents'
+connected input 'HeatPumpController # Residence Temperature' to 'Building # Residence Temperature'
+connected input 'HeatPumpController # ElectricityInput' to 'ElectricityGrid_BaseLoad # ElectricityOutput'
+connected input 'HeatPump # State' to 'HeatPumpController # State'
+connected input 'HeatPump # TemperatureOutside' to 'Weather # TemperatureOutside'
+Executing hisim.simulator.connect_all_components took 0.01 seconds
+finished connecting all components. A total of 7 components were defined. They have a total of 24 outputs.
+Starting simulation for 1440 timesteps
+Output column: Occupancy - NumberByResidents [Any - -]
+Output column: Occupancy - HeatingByResidents [Heating - W]
+Output column: Occupancy - ElectricityOutput [Electricity - W]
+Output column: Occupancy - WaterConsumption [WarmWater - L]
+Output column: Weather - TemperatureOutside [Temperature - °C]
+Output column: Weather - DirectNormalIrradiance [Irradiance - W per square meter]
+Output column: Weather - DirectNormalIrradianceExtra [Irradiance - W per square meter]
+Output column: Weather - DiffuseHorizontalIrradiance [Irradiance - W per square meter]
+Output column: Weather - GlobalHorizontalIrradiance [Irradiance - W per square meter]
+Output column: Weather - Altitude [Any - Degrees]
+Output column: Weather - Azimuth [Any - Degrees]
+Output column: Weather - ApparentZenith [Any - Degrees]
+Output column: Weather - WindSpeed [Speed - m/s]
+Output column: PVSystem1 - ElectricityOutput [Electricity - W]
+Output column: ElectricityGrid_BaseLoad - ElectricityOutput [Electricity - W]
+Output column: Building - Residence Temperature [Temperature - °C]
+Output column: Building - TotalEnergyToResidence [Heating - W]
+Output column: Building - SolarGainThroughWindows [Heating - W]
+Output column: HeatPumpController - State [Any - -]
+Output column: HeatPump - ThermalEnergyDelivered [Heating - W]
+Output column: HeatPump - Heating [Heating - W]
+Output column: HeatPump - Cooling [Cooling - W]
+Output column: HeatPump - ElectricityOutput [Electricity - W]
+Output column: HeatPump - NumberOfCycles [Any - -]
+selected 7 options
+selected: PostProcessingOptions.Plot_Line
+selected: PostProcessingOptions.Plot_Carpet
+selected: PostProcessingOptions.Plot_Sankey
+selected: PostProcessingOptions.Plot_Day
+selected: PostProcessingOptions.Plot_Bar
+selected: PostProcessingOptions.Open_Directory
+selected: PostProcessingOptions.Export_To_CSV
+Executing hisim.simulator.prepare_post_processing took 0.11 seconds
+Executing hisim.postprocessing.postprocessing_main.__init__ took 0.05 seconds
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+plotting sankeys
+exporting to csv
+Executing hisim.postprocessing.postprocessing_main.export_results_to_csv took 0.18 seconds
+Executing hisim.postprocessing.postprocessing_main.run took 33.14 seconds
+Executing hisim.simulator.run_all_timesteps took 33.51 seconds
+#################################
+finished @ 19-May-2022 13:17:39
+finished @ 19-May-2022 13:17:39
+duration: 35.650821
+#################################
+
+C:\Users\Johanna\Desktop\HiSIM\tests
+Executing tests.test_examples.test_basic_household_with_all_resultfiles took 35.74 seconds
+Executing tests.test_examples.test_modular_household_configurations took 0.00 seconds
+#################################
+starting simulation of ../examples/examples.py first_example
+Start @ 19-May-2022 13:17:40 
+../examples/examples.py first_exampleStart @ 19-May-2022 13:17:40
+#################################
+Executing hisim.simulator.__init__ took 0.06 seconds
+Starting first example: 
+adding output: Random Numbers to component Random numbers 100-200
+Registering component outputs on Random numbers 100-200
+Registered output Random numbers 100-200 # Random Numbers
+adding output: Random Numbers to component Random numbers 10-20
+Registering component outputs on Random numbers 10-20
+Registered output Random numbers 10-20 # Random Numbers
+adding output: Sum to component Sum
+Registering component outputs on Sum
+Registered output Sum # Sum
+connected input 'Sum # Input 1' to 'Random numbers 100-200 # Random Numbers'
+connected input 'Sum # Input 2' to 'Random numbers 10-20 # Random Numbers'
+Executing hisim.simulator.connect_all_components took 0.00 seconds
+finished connecting all components. A total of 3 components were defined. They have a total of 3 outputs.
+Starting simulation for 1440 timesteps
+Output column: Random numbers 100-200 - Random Numbers [Any - -]
+Output column: Random numbers 10-20 - Random Numbers [Any - -]
+Output column: Sum - Sum [Any - -]
+selected 7 options
+selected: PostProcessingOptions.Plot_Line
+selected: PostProcessingOptions.Plot_Carpet
+selected: PostProcessingOptions.Plot_Sankey
+selected: PostProcessingOptions.Plot_Day
+selected: PostProcessingOptions.Plot_Bar
+selected: PostProcessingOptions.Open_Directory
+selected: PostProcessingOptions.Export_To_CSV
+Executing hisim.simulator.prepare_post_processing took 0.02 seconds
+Executing hisim.postprocessing.postprocessing_main.__init__ took 0.05 seconds
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+plotting sankeys
+exporting to csv
+Executing hisim.postprocessing.postprocessing_main.export_results_to_csv took 0.03 seconds
+Executing hisim.postprocessing.postprocessing_main.run took 6.17 seconds
+Executing hisim.simulator.run_all_timesteps took 6.27 seconds
+#################################
+finished @ 19-May-2022 13:17:46
+finished @ 19-May-2022 13:17:46
+duration: 6.345516
+#################################
+
+Executing tests.test_examples.test_first_example took 6.35 seconds
+#################################
+starting simulation of ../examples/examples.py second_example
+Start @ 19-May-2022 13:17:46 
+../examples/examples.py second_exampleStart @ 19-May-2022 13:17:46
+#################################
+Executing hisim.simulator.__init__ took 0.07 seconds
+Starting second example
+adding output: Random Numbers to component Random numbers 100-200
+Registering component outputs on Random numbers 100-200
+Registered output Random numbers 100-200 # Random Numbers
+adding output: Random Numbers to component Random numbers 10-20
+Registering component outputs on Random numbers 10-20
+Registered output Random numbers 10-20 # Random Numbers
+adding output: MyTransformerOutput to component MyTransformer
+adding output: MyTransformerOutput2 to component MyTransformer
+Registering component outputs on MyTransformer
+Registered output MyTransformer # MyTransformerOutput
+Registered output MyTransformer # MyTransformerOutput2
+adding output: Sum to component Sum
+Registering component outputs on Sum
+Registered output Sum # Sum
+connected input 'MyTransformer # Input1' to 'Random numbers 10-20 # Random Numbers'
+connected input 'Sum # Input 1' to 'Random numbers 100-200 # Random Numbers'
+connected input 'Sum # Input 2' to 'MyTransformer # MyTransformerOutput'
+Executing hisim.simulator.connect_all_components took 0.00 seconds
+finished connecting all components. A total of 4 components were defined. They have a total of 5 outputs.
+Starting simulation for 1440 timesteps
+Output column: Random numbers 100-200 - Random Numbers [Any - -]
+Output column: Random numbers 10-20 - Random Numbers [Any - -]
+Output column: MyTransformer - MyTransformerOutput [Any - -]
+Output column: MyTransformer - MyTransformerOutput2 [Any - -]
+Output column: Sum - Sum [Any - -]
+selected 7 options
+selected: PostProcessingOptions.Plot_Line
+selected: PostProcessingOptions.Plot_Carpet
+selected: PostProcessingOptions.Plot_Sankey
+selected: PostProcessingOptions.Plot_Day
+selected: PostProcessingOptions.Plot_Bar
+selected: PostProcessingOptions.Open_Directory
+selected: PostProcessingOptions.Export_To_CSV
+Executing hisim.simulator.prepare_post_processing took 0.06 seconds
+Executing hisim.postprocessing.postprocessing_main.__init__ took 0.08 seconds
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+Carpet plot can only deal with data for 365 days in 1h resolution
+plotting sankeys
+exporting to csv
+Executing hisim.postprocessing.postprocessing_main.export_results_to_csv took 0.05 seconds
+Executing hisim.postprocessing.postprocessing_main.run took 9.69 seconds
+Executing hisim.simulator.run_all_timesteps took 9.92 seconds
+#################################
+finished @ 19-May-2022 13:17:56
+finished @ 19-May-2022 13:17:56
+duration: 10.004428
+#################################
+
+Executing tests.test_examples.test_second_example took 10.01 seconds
+adding output: Water Demand to component Electrolyzer
+adding output: Hydrogen Output to component Electrolyzer
+adding output: Oxygen Output to component Electrolyzer
+adding output: Energy Losses to component Electrolyzer
+adding output: Unused Power to component Electrolyzer
+adding output: ElectricityRealNeeded to component Electrolyzer
+adding output: Electrolyzer Efficiency to component Electrolyzer
+adding output: Power Level to component Electrolyzer
+adding output: Current Hydrogen Fill Level Absolute to component HydrogenStorage
+adding output: Current Hydrogen Fill Level Percent to component HydrogenStorage
+adding output: Storage Delta to component HydrogenStorage
+adding output: Hydrogen Not Stored to component HydrogenStorage
+adding output: Hydrogen Not Released to component HydrogenStorage
+adding output: Hydrogen Storage Energy Demand to component HydrogenStorage
+adding output: Hydrogen Losses to component HydrogenStorage
+adding output: Discharging Hydrogen Amount Real to component HydrogenStorage
+[4000, 0, 0, 0.001114707341269841, 0.0001248472222222222, 0.000989860119047619, 400.0, 1600, 2400, 6.239583333333332, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+[4000, 0, 0, 0.001114707341269841, 0.0001248472222222222, 0.000989860119047619, 400.0, 1600, 2400, 6.239583333333332, 100.0, 0.007490833333333333, 1.4981666666666666e-05, 0.0001248472222222222, 0.0, 0, 0.0, 0.0, 0.0]
+adding output: Hot Water Energy Output to component GasHeater
+adding output: MassflowOutputTemperature to component GasHeater
+adding output: GasDemand to component GasHeater
+adding output: ThermalOutputPower to component GasHeater
+[1, 30, 0.2582496413199426, 40, 10800.0, 10800.0]
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: Heating to component HeatPump
+adding output: Cooling to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+adding output: NumberOfCycles to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting controller default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'HeatPumpController': [ComponentConnection(TargetInputName='State', SourceClassName='HeatPumpController', SourceOutputName='State', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.01 seconds
+adding output: State to component HeatPumpController
+setting building default connections in Heatpumpcontroller
+added connections: {'Building': [ComponentConnection(TargetInputName='Residence Temperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+adding output: WaterOutputTemperatureHeatingWater to component HeatStorage
+adding output: WaterOutputTemperatureWarmWater to component HeatStorage
+adding output: StorageEnergyLoss to component HeatStorage
+adding output: WaterOutputStorageforHeaters to component HeatStorage
+Aachen
+{"parameter_string": "2021-01-01###2022-01-01###60###2021###525600", "location": "Aachen"}
+adding output: TemperatureOutside to component Weather
+adding output: DirectNormalIrradiance to component Weather
+adding output: DirectNormalIrradianceExtra to component Weather
+adding output: DiffuseHorizontalIrradiance to component Weather
+adding output: GlobalHorizontalIrradiance to component Weather
+adding output: Altitude to component Weather
+adding output: Azimuth to component Weather
+adding output: ApparentZenith to component Weather
+adding output: WindSpeed to component Weather
+Executing hisim.components.weather.__init__ took 1.10 seconds
+{"parameter_string": "2021-01-01###2022-01-01###60###2021###525600", "time": 2019, "location": "Aachen", "module_name": "Hanwha_HSL60P6_PA_4_250T__2013_", "integrate_inverter": true, "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_", "power": 10, "azimuth": 180, "tilt": 30}
+adding output: ElectricityOutput to component PVSystem1
+setting weather default connections
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradiance', SourceClassName='Weather', SourceOutputName='DirectNormalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='DirectNormalIrradianceExtra', SourceClassName='Weather', SourceOutputName='DirectNormalIrradianceExtra', SourceInstanceName=None), ComponentConnection(TargetInputName='DiffuseHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='DiffuseHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='GlobalHorizontalIrradiance', SourceClassName='Weather', SourceOutputName='GlobalHorizontalIrradiance', SourceInstanceName=None), ComponentConnection(TargetInputName='Azimuth', SourceClassName='Weather', SourceOutputName='Azimuth', SourceInstanceName=None), ComponentConnection(TargetInputName='ApparentZenith', SourceClassName='Weather', SourceOutputName='ApparentZenith', SourceInstanceName=None), ComponentConnection(TargetInputName='WindSpeed', SourceClassName='Weather', SourceOutputName='WindSpeed', SourceInstanceName=None)]}
+Executing hisim.components.generic_pv_system.__init__ took 33.01 seconds
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: Heating to component HeatPump
+adding output: Cooling to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+adding output: NumberOfCycles to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting controller default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'HeatPumpController': [ComponentConnection(TargetInputName='State', SourceClassName='HeatPumpController', SourceOutputName='State', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.01 seconds
+adding output: State to component HeatPumpController
+setting building default connections in Heatpumpcontroller
+added connections: {'Building': [ComponentConnection(TargetInputName='Residence Temperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+C:\Users\Johanna\Desktop\HiSIM\hisim\inputs\heat_pump_hplib
+adding output: ThermalOutputPower to component HeatPump
+adding output: ElectricalInputPower to component HeatPump
+adding output: COP to component HeatPump
+adding output: TemperatureOutput to component HeatPump
+adding output: MassFlowOutput to component HeatPump
+adding output: TimeOn to component HeatPump
+adding output: TimeOff to component HeatPump
+[1, -7, 47.0, -7, 10000.0, 7074.0, 1.41, 52.0, 0.476, 60, 0]
+adding output: ThermalEnergyDelivered to component Vitocal 300-A AWO-AC 301.B071
+adding output: ElectricityOutput to component Vitocal 300-A AWO-AC 301.B071
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting l1 default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'L1_Controller': [ComponentConnection(TargetInputName='l1_DeviceSignal', SourceClassName='L1_Controller', SourceOutputName='l1_DeviceSignal', SourceInstanceName=None), ComponentConnection(TargetInputName='l1_RunTimeSignal', SourceClassName='L1_Controller', SourceOutputName='l1_RunTimeSignal', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump_modular.__init__ took 0.00 seconds
+setting l2 default connections in l1
+added connections: {'L2_Controller': [ComponentConnection(TargetInputName='l2_DeviceSignal', SourceClassName='L2_Controller', SourceOutputName='l2_DeviceSignal', SourceInstanceName=None)]}
+adding output: l1_DeviceSignal to component L1_Controller
+Executing hisim.components.controller_l1_generic_runtime.__init__ took 0.00 seconds
+setting building default connections in L2 Controller
+added connections: {'Building': [ComponentConnection(TargetInputName='ReferenceTemperature', SourceClassName='Building', SourceOutputName='Residence Temperature', SourceInstanceName=None)]}
+adding output: l2_DeviceSignal to component L2_Controller
+Executing hisim.components.controller_l2_generic_heatpump_modular.__init__ took 0.00 seconds
+adding output: NumberByResidents to component Occupancy
+adding output: HeatingByResidents to component Occupancy
+adding output: ElectricityOutput to component Occupancy
+adding output: WaterConsumption to component Occupancy
+Executing hisim.components.loadprofilegenerator_connector.__init__ took 4.10 seconds
+adding output: ThermalEnergyDelivered to component HeatPump
+adding output: Heating to component HeatPump
+adding output: Cooling to component HeatPump
+adding output: ElectricityOutput to component HeatPump
+adding output: NumberOfCycles to component HeatPump
+setting weather default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)]}
+setting controller default connections in HeatPump
+added connections: {'Weather': [ComponentConnection(TargetInputName='TemperatureOutside', SourceClassName='Weather', SourceOutputName='TemperatureOutside', SourceInstanceName=None)], 'HeatPumpController': [ComponentConnection(TargetInputName='State', SourceClassName='HeatPumpController', SourceOutputName='State', SourceInstanceName=None)]}
+Executing hisim.components.generic_heat_pump.__init__ took 0.00 seconds
+adding output: State to component FlexibleController
+adding output: ElectricityOutput to component Washing
+adding output: Task to component Washing
+Signal: 1, Electricity: 0.20805582786885163, Task: 1
+Aachen
+{"parameter_string": "2021-01-01###2022-01-01###60###2021###525600", "location": "Aachen"}
+adding output: TemperatureOutside to component Weather
+adding output: DirectNormalIrradiance to component Weather
+adding output: DirectNormalIrradianceExtra to component Weather
+adding output: DiffuseHorizontalIrradiance to component Weather
+adding output: GlobalHorizontalIrradiance to component Weather
+adding output: Altitude to component Weather
+adding output: Azimuth to component Weather
+adding output: ApparentZenith to component Weather
+adding output: WindSpeed to component Weather
+Executing hisim.components.weather.__init__ took 1.17 seconds

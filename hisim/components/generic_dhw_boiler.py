@@ -189,7 +189,7 @@ class Boiler( cp.Component ):
                                                                          lt.Units.Celsius )
         
         if self.config.fuel == 'electricity':
-            self.electricity_output_c = self.add_output( self.ComponentName,
+            self.ElectricityOutputC = self.add_output( self.ComponentName,
                                                          self.ElectricityOutput,
                                                          lt.LoadTypes.Electricity,
                                                          lt.Units.Watt )
@@ -270,7 +270,7 @@ class Boiler( cp.Component ):
         stsv.set_output_value( self.TemperatureMeanC, self.state.temperature_in_K - 273.15 )
         
         if self.config.fuel == 'electricity':
-            stsv.set_output_value( self.electricity_output_c, self.config.power * signal )
+            stsv.set_output_value( self.ElectricityOutputC, self.config.power * signal )
               
             #put forecast into dictionary
             if self.my_simulation_parameters.system_config.predictive:

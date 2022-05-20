@@ -120,11 +120,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
     my_occupancy = loadprofilegenerator_connector.Occupancy( profile_name=occupancy_profile, my_simulation_parameters = my_simulation_parameters )
     my_sim.add_component( my_occupancy )
     
-    # Add price signal
-    if predictive == True:
-        my_price_signal = generic_price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
-        my_sim.add_component( my_price_signal )
-    
     #initialize list of components representing the actual load profile and operation counter
     operation_counter = 0
     electricity_load_profiles : List[ Union[ sumbuilder.ElectricityGrid, loadprofilegenerator_connector.Occupancy ] ] = [ my_occupancy ]
@@ -171,6 +166,7 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         #         )
     
     if boiler_included: 
+        
         my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters,
                                                                                   source_weight = 1 )
         my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
@@ -217,35 +213,54 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         my_heating.connect_only_predefined_connections( my_weather ) 
         my_heating.connect_only_predefined_connections( my_heating_controller_l1 )
         my_sim.add_component( my_heating )
-        if predictive == True:
-            my_heating_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )
-            
-            l3_HeatPumpSignal = my_heating_controller_l3.add_component_output( source_output_name = lt.InandOutputType.ControlSignal,
-                                                                               source_tags = [ lt.ComponentType.HeatPump ],
-                                                                               source_weight = 1,
-                                                                               source_load_type = lt.LoadTypes.OnOff,
-                                                                               source_unit = lt.Units.binary )
-            
-            my_heating_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
-                                                            src_object = l3_HeatPumpSignal )
-            
-            my_heating_controller_l3.add_component_input_and_connect( source_component_class = my_heating_controller_l1,
-                                                                      source_component_output = my_heating_controller_l1.l1_DeviceSignal,
-                                                                      source_load_type= lt.LoadTypes.OnOff,
-                                                                      source_unit= lt.Units.binary,
-                                                                      source_tags = [ lt.ComponentType.HeatPump, lt.InandOutputType.ControlSignal ],
-                                                                      source_weight = 1 )
-            
-            my_sim.add_component( my_heating_controller_l3 )
-            
         my_building.connect_input( my_building.ThermalEnergyDelivered,
                                     my_heating.ComponentName,
                                     my_heating.ThermalEnergyDelivered )
         
-        # if smart_devices_included:
-        #     my_smart_device.connect_only_predefined_connections( my_predictive_controller )
-        #     my_predictive_controller.connect_only_predefined_connections( my_smart_device )
-        # if boiler_included == 'electricity':
-        #     my_boiler_controller.connect_only_predefined_connections( my_predictive_controller )
-        #     my_predictive_controller.connect_only_predefined_connections( my_boiler_controller )
+        if predictive == True:
+            #add price signal
+            my_price_signal = generic_price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
+            my_sim.add_component( my_price_signal )
+            
+            #construct predictive controller
+            my_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )
+            
+            #connect boiler
+            if boiler_included == 'electricity':
+                l3_BoilerSignal = my_controller_l3.add_component_output(    source_output_name = lt.InandOutputType.ControlSignal,
+                                                                                    source_tags = [ lt.ComponentType.Boiler ],
+                                                                                    source_weight = 1,
+                                                                                    source_load_type = lt.LoadTypes.OnOff,
+                                                                                    source_unit = lt.Units.binary )
+            
+                my_boiler_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_dhw_boiler.L2_Controller.l3_DeviceSignal,
+                                                               src_object = l3_BoilerSignal )
+                
+                my_controller_l3.add_component_input_and_connect( source_component_class = my_boiler_controller_l1,
+                                                                  source_component_output = my_boiler_controller_l1.l1_DeviceSignal,
+                                                                          source_load_type= lt.LoadTypes.OnOff,
+                                                                          source_unit= lt.Units.binary,
+                                                                          source_tags = [ lt.ComponentType.Boiler, lt.InandOutputType.ControlSignal ],
+                                                                          source_weight = 1 )
+                
+            #connect heat pump    
+            if heating_device_included == 'heat_pump':
+            
+                l3_HeatPumpSignal = my_controller_l3.add_component_output( source_output_name = lt.InandOutputType.ControlSignal,
+                                                                           source_tags = [ lt.ComponentType.HeatPump ],
+                                                                           source_weight = 1,
+                                                                           source_load_type = lt.LoadTypes.OnOff,
+                                                                           source_unit = lt.Units.binary )
+                
+                my_heating_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
+                                                                src_object = l3_HeatPumpSignal )
+                
+                my_controller_l3.add_component_input_and_connect( source_component_class = my_heating_controller_l1,
+                                                                  source_component_output = my_heating_controller_l1.l1_DeviceSignal,
+                                                                  source_load_type= lt.LoadTypes.OnOff,
+                                                                  source_unit= lt.Units.binary,
+                                                                  source_tags = [ lt.ComponentType.HeatPump, lt.InandOutputType.ControlSignal ],
+                                                                  source_weight = 1 )
+            
+            my_sim.add_component( my_controller_l3 )
                 

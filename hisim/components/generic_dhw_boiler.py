@@ -69,7 +69,7 @@ class BoilerState:
     This data class saves the state of the simulation results.
     """
 
-    def __init__( self, timestep : int = 0, volume_in_l : float = 200, temperature_in_K : float = 273.15 + 50 ):
+    def __init__( self, timestep : int = -1, volume_in_l : float = 200, temperature_in_K : float = 273.15 + 50 ):
         """
         Parameters
         ----------
@@ -200,7 +200,7 @@ class Boiler( cp.Component ):
                                                       lt.LoadTypes.Hydrogen,
                                                       lt.Units.kg_per_sec )
         else:
-            raise Exception(" The fuel ", str( self.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
+            raise Exception(" The fuel ", str( self.config.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
             
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
@@ -272,7 +272,7 @@ class Boiler( cp.Component ):
         if self.config.fuel == 'electricity':
             stsv.set_output_value( self.electricity_output_c, self.config.power * signal )
               
-             #put forecast into dictionary
+            #put forecast into dictionary
             if self.my_simulation_parameters.system_config.predictive:
                 #only in first timestep
                 if self.state.timestep + 1 == timestep:

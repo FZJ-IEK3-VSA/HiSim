@@ -111,7 +111,10 @@ class SimRepository:
         self.my_dynamic_dict[ component_type ][ source_weight ] = entry
 
     def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int ) -> Any:
-        return self.my_dynamic_dict[ component_type ][ source_weight ]
+        try:
+            return self.my_dynamic_dict[ component_type ][ source_weight ]
+        except:
+            return None
     
     def get_dynamic_component_weights( self, component_type : lt.ComponentType ) -> list :
         return list( self.my_dynamic_dict[ component_type ].keys( ) )
@@ -317,9 +320,9 @@ class DynamicComponent(Component):
                 
     def get_dynamic_input( self, stsv : SingleTimeStepValues,
                                  component_type : lt.ComponentType,
-                                 weight_counter : int ):
-        #initialize flag variable
-        flag : bool = False
+                                 weight_counter : int ) -> Any:
+        
+        inputvalue = None
     
         #check if component of component type is available
         for index, element in enumerate( self.MyComponentInputs ): #loop over all inputs
@@ -327,13 +330,12 @@ class DynamicComponent(Component):
                 if tag.__class__ == lt.ComponentType: #enter if tag is component type
                     if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
                         inputvalue = stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) )
-                        flag = True
                         break
                     else:
                         continue
                 else:
                     continue
-        return inputvalue, flag
+        return inputvalue
     
     def set_dynamic_output( self, stsv : SingleTimeStepValues,
                                   component_type : lt.ComponentType,

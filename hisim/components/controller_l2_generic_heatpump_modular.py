@@ -191,11 +191,11 @@ class L2_Controller( cp.Component ):
                 T_min_cooling = self.T_min_cooling 
                 self.state.is_compulsory( )
                 self.previous_state.is_compulsory( )
-            else:
-                T_max_heating = self.T_max_heating 
-                T_min_heating = self.T_min_heating
-                T_max_cooling = self.T_max_cooling
-                T_min_cooling = self.T_min_cooling 
+        else:
+            T_max_heating = self.T_max_heating 
+            T_min_heating = self.T_min_heating
+            T_max_cooling = self.T_max_cooling
+            T_min_cooling = self.T_min_cooling 
 
         #check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
         if self.state.is_first_iteration( timestep ):

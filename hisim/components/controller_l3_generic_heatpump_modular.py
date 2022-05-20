@@ -141,35 +141,44 @@ class L3_Controller( cp.DynamicComponent ):
             totalload = [ a - b for ( a, b ) in zip( totalload, pvforecast ) ]      
         
 
-        #TODO: loop over devices, right now just heatpump with weight 1
-        component_type = lt.ComponentType.HeatPump
-        weight_counter = 1
+        #initialize device signals
         signal = [ ]
         
-        flag = False
-            
-        #try if input is available -> flag is False if not
-        devicestate, flag = self.get_dynamic_input( stsv = stsv,
-                                                    component_type = lt.ComponentType.HeatPump,
-                                                    weight_counter = 1 )
+        #loops over components -> also fixes hierachy in control
+        for component_type in [ lt.ComponentType.Boiler, lt.ComponentType.HeatPump ]:
         
-        if flag == True:
-            shiftableload = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
-            steps = len( shiftableload )
+            devicestate = 0
+            weight_counter = 1
             
-            #calculate price and peak and get controller signal
-            price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
-            signal.append( self.decision_maker( price_per_kWh = price_per_kWh, peak = peak ) )
+            #loop over all source weights, breaks if one is missing
+            while devicestate is not None:
                 
-            #recompute base load if device was activated
-            if devicestate == 1:
-                totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
+                #try if input is available -> returns None if not
+                devicestate = self.get_dynamic_input( stsv = stsv,
+                                                      component_type = component_type,
+                                                      weight_counter = weight_counter )
+                print( timestep, component_type, weight_counter, devicestate )
                 
-            self.set_dynamic_output( stsv = stsv, 
-                                     component_type = lt.ComponentType.HeatPump,
-                                     weight_counter = 1,
-                                     output_value = signal[ - 1 ] )
-            
-            self.signal = ControllerSignal( signal = signal )
+                #control if input was available
+                if devicestate is not None:
+                    shiftableload = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
+                    steps = len( shiftableload )
+                    
+                    #calculate price and peak and get controller signal
+                    price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
+                    signal.append( self.decision_maker( price_per_kWh = price_per_kWh, peak = peak ) )
+                        
+                    #recompute base load if device was activated
+                    if devicestate == 1:
+                        totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
+                        
+                    self.set_dynamic_output( stsv = stsv, 
+                                             component_type = component_type,
+                                             weight_counter = weight_counter,
+                                             output_value = signal[ - 1 ] )
+                #count up    
+                weight_counter += 1
+                
+        self.signal = ControllerSignal( signal = signal )
             
        

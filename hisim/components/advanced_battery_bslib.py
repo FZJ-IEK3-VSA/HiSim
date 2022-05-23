@@ -127,44 +127,6 @@ class Battery(Component):
 class BatteryState:
     soc: float = 0
 
-class BatteryController(Component):
-    ElectricityInput = "ElectricityInput"
-    State = "State"
-
-    def __init__(self, my_simulation_parameters: SimulationParameters ):
-        super().__init__(name="BatteryController",my_simulation_parameters=my_simulation_parameters)
-
-        self.inputC : ComponentInput = self.add_input(object_name=self.ComponentName,
-                                                      field_name=self.ElectricityInput,
-                                                      load_type=LoadTypes.Electricity,
-                                                      unit=Units.Watt,
-                                                      mandatory=True)
-
-        self.stateC : ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                        field_name=self.State,
-                                                        load_type=LoadTypes.Any,
-                                                        unit=Units.Any)
-
-    def i_save_state(self):
-        pass
-
-    def i_restore_state(self):
-        pass
-
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
-        pass
-
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
-        load = stsv.get_input_value(self.inputC)
-
-        if load < 0.0:
-            state = 1.0
-        elif load > 0.0:
-            state = - 1.0
-        else:
-            state = 0.0
-
-        stsv.set_output_value(self.stateC, state)
 
 
 

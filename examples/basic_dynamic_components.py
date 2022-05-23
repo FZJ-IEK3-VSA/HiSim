@@ -2,7 +2,7 @@ from typing import Optional, List, Union
 import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
-from hisim.components import advanced_battery
+from hisim.components import advanced_battery_bslib
 from hisim.components import weather
 from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
@@ -35,13 +35,15 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
 
-    parameter=np.load(os.path.join(utils.HISIMPATH["advanced_battery"]["siemens_junelight"]))
-
-    my_advanced_battery_1 = advanced_battery.AdvancedBattery(my_simulation_parameters=my_simulation_parameters,
-                                                             parameter=parameter,
+    my_advanced_battery_1 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
+                                                             system_id='SG1',
+                                                             p_inv_custom=5.0,
+                                                             e_bat_custom=10.0,
                                                              name="AdvancedBattery1")
-    my_advanced_battery_2 = advanced_battery.AdvancedBattery(my_simulation_parameters=my_simulation_parameters,
-                                                             parameter=parameter,
+    my_advanced_battery_2 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
+                                                             system_id='SG1',
+                                                             p_inv_custom=2.5,
+                                                             e_bat_custom=5.0,
                                                              name="AdvancedBattery2")
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
                                                              gas_type="Methan",

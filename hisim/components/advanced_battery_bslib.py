@@ -35,7 +35,8 @@ class Battery(Component):
     def __init__(self, my_simulation_parameters: SimulationParameters,
                 system_id: str,
                 p_inv_custom: float = 0,
-                e_bat_custom: float = 0):
+                e_bat_custom: float = 0,
+                name: str = "Battery"):
         """
         Loads the parameters of the specified battery storage.
 
@@ -49,7 +50,7 @@ class Battery(Component):
             Useable battery capacity. Only for system_ids of type "Generic". [kWh]
         """
 
-        super().__init__(name="Battery", my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
 
         self.system_id = system_id
 

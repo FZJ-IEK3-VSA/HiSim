@@ -39,12 +39,12 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                              system_id='SG1',
                                                              p_inv_custom=5.0,
                                                              e_bat_custom=10.0,
-                                                             name="AdvancedBattery1")
+                                                             name="Battery1")
     my_advanced_battery_2 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
                                                              system_id='SG1',
                                                              p_inv_custom=2.5,
                                                              e_bat_custom=5.0,
-                                                             name="AdvancedBattery2")
+                                                             name="Battery2")
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
                                                              gas_type="Methan",
                                                              name="CHP1",
@@ -78,13 +78,13 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                          my_photovoltaic_system.ComponentName,
                                          my_photovoltaic_system.ElectricityOutput)
     my_cl2.add_component_input_and_connect( source_component_class=my_advanced_battery_1,
-                                               source_component_output=my_advanced_battery_1.ACBatteryPower,
+                                               source_component_output=my_advanced_battery_1.AcBatteryPower,
                                                source_load_type= lt.LoadTypes.Electricity,
                                                source_unit= lt.Units.Watt,
                                                source_tags=[lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
                                                source_weight=1)
     my_cl2.add_component_input_and_connect( source_component_class=my_advanced_battery_2,
-                                               source_component_output=my_advanced_battery_2.ACBatteryPower,
+                                               source_component_output=my_advanced_battery_2.AcBatteryPower,
                                                source_load_type= lt.LoadTypes.Electricity,
                                                source_unit= lt.Units.Watt,
                                                source_tags=[lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
@@ -101,9 +101,9 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                source_load_type= lt.LoadTypes.Electricity,
                                                source_unit= lt.Units.Watt)
 
-    my_advanced_battery_1.connect_dynamic_input(input_fieldname=advanced_battery.AdvancedBattery.LoadingPowerInput,
+    my_advanced_battery_1.connect_dynamic_input(input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
                                         src_object=electricity_to_or_from_battery_target_1)
-    my_advanced_battery_2.connect_dynamic_input(input_fieldname=advanced_battery.AdvancedBattery.LoadingPowerInput,
+    my_advanced_battery_2.connect_dynamic_input(input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
                                         src_object=electricity_to_or_from_battery_target_2)
 
     my_cl2.add_component_input_and_connect( source_component_class=my_advanced_fuel_cell_1,

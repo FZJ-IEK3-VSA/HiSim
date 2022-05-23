@@ -8,7 +8,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.random_numbers import RandomNumbers
 from hisim.components.example_transformer import Transformer
 from hisim.components.sumbuilder import SumBuilderForTwoInputs
-from hisim.components.advanced_battery import AdvancedBattery
 from hisim import loadtypes
 from hisim import utils
 

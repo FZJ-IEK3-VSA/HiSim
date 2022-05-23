@@ -60,6 +60,10 @@ class L1_Controller( cp.Component ):
         Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
     heating_season_end : int, optional
         Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
+    source_weight : int, optional
+        Weight of component, relevant if there is more than one component of same type, defines hierachy in control. The default is 1.
+    component type : str, optional
+        Name of component to be controlled
     """
     # Inputs
     l2_DeviceSignal = "l2_DeviceSignal"
@@ -74,9 +78,11 @@ class L1_Controller( cp.Component ):
     def __init__( self, 
                   my_simulation_parameters : SimulationParameters,
                   min_operation_time : int = 3600,
-                  min_idle_time : int = 900 ):
+                  min_idle_time : int = 900,
+                  source_weight : int = 1,
+                  name : str = '' ):
         
-        super().__init__( "L1_Controller", my_simulation_parameters = my_simulation_parameters )
+        super().__init__( "L1_Controller" + name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( min_operation_time, min_idle_time )
         
         #add inputs

@@ -95,9 +95,10 @@ class Units(str, enum.Enum):
 @enum.unique
 class ComponentType(str, enum.Enum):
     # Unphysical
-
+    PV = "PV"
     HeatPump = "HeatPump"
     GasHeater = "GasHeater"
+    Boiler = "Boiler"
     Battery = "Battery"
     FuelCell = "FuelCell"
     Heaters = [HeatPump, GasHeater]

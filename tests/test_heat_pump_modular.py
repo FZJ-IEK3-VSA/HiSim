@@ -2,7 +2,7 @@ from hisim import component as cp
 #import components as cps
 #import components
 from hisim.components import generic_heat_pump_modular
-from hisim.components import controller_l1_generic_heatpump_modular
+from hisim.components import controller_l1_generic_runtime
 from hisim.components import controller_l2_generic_heatpump_modular
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -36,7 +36,7 @@ def test_heat_pump_modular():
                                                        my_simulation_parameters = my_simulation_parameters )
 
     # Set L1 Heat Pump Controller
-    my_heat_pump_controller_l1 = controller_l1_generic_heatpump_modular.L1_Controller( min_operation_time = minimum_operation_time,
+    my_heat_pump_controller_l1 = controller_l1_generic_runtime.L1_Controller( min_operation_time = minimum_operation_time,
                                                                                        min_idle_time = minimum_idle_time, 
                                                                                        my_simulation_parameters = my_simulation_parameters )
     

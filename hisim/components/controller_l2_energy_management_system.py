@@ -54,15 +54,6 @@ class Controller(cp.Component):
     For this storage provides heat for a load profile or for the
     building. As well Heat Demand can be simulated without storage.
 
-    Notizen:
-    - In DefaulConnection(siehe PVS von Noah) etwas hinzufügen, sodass In-Und outputs generisch erzeugt werden können.
-     Muss dafür checken ob Verbindung schon existiert und sonst Namen erzeugen und Verbindung setzen. (Max)
-
-    - EMS darauf ausgelegt, dass Wärmespeicher zwischengeschaltet ist
-
-    - Heizungsanlage: L2 Gebäudetemperaturregler (unabh. von L2EMS), zieht aus Wärmespeicher und lädt Gebäude (Tjarko+Max)
-
-    - L3 Setzt Gebäudetemperatur und Speichertemperatur um/neu
     """
     #Inputs
 
@@ -140,12 +131,12 @@ class Controller(cp.Component):
                                                                                   self.ElectricityConsumptionBuilding,
                                                                                   lt.LoadTypes.Electricity,
                                                                                   lt.Units.Watt,
-                                                                                  True)
+                                                                                  False)
         self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                         self.ElectricityOutputPvs,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt,
-                                                                        True)
+                                                                        False)
 
         self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityToOrFromBatteryReal,
@@ -462,53 +453,63 @@ class Controller(cp.Component):
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
         '''
 
-            #Logic of regulating HeatDemand:
-        #First heat up WarmWaterStorage->more important, than heat up HeatingWater
-        #But only one Storage can be heated up in a TimeStep!
-        #Simulate WarmWater
-
-        delta_temperature_ww = self.state.temperature_storage_target_ww_C - stsv.get_input_value(self.temperature_storage_warm_water)
-        delta_temperature_hw = self.state.temperature_storage_target_hw_C - stsv.get_input_value(self.temperature_storage_heating_water)
-
-        # Choose which Storage should be heated up
-        if delta_temperature_ww>=0 and delta_temperature_hw>=0:
-            if delta_temperature_hw <= delta_temperature_ww:
-                control_signal_choose_storage = 1
-            else:
-                control_signal_choose_storage = 2
-        elif delta_temperature_ww<0 and delta_temperature_hw<0:
-            if delta_temperature_hw <= delta_temperature_ww:
-                control_signal_choose_storage = 1
-            else:
-                control_signal_choose_storage = 2
-        elif delta_temperature_ww<=0 and delta_temperature_hw>=0:
+        #######HEAT########
+        # Logic of regulating HeatDemand:
+        # First heat up WarmWaterStorage->more important, than heat up HeatingWater
+        # But only one Storage can be heated up in a TimeStep!
+        # Simulate WarmWater
+        delta_temperature_ww = self.state.temperature_storage_target_ww_C - stsv.get_input_value(
+            self.temperature_storage_warm_water)
+        delta_temperature_hw = self.state.temperature_storage_target_hw_C - stsv.get_input_value(
+            self.temperature_storage_heating_water)
+        if stsv.get_input_value(self.temperature_storage_warm_water) == 0 and stsv.get_input_value(
+                self.temperature_storage_heating_water) != 0:
             control_signal_choose_storage = 2
-        elif delta_temperature_ww >= 0 and delta_temperature_hw <= 0:
+        elif stsv.get_input_value(self.temperature_storage_warm_water) != 0 and stsv.get_input_value(
+                self.temperature_storage_heating_water) == 0:
             control_signal_choose_storage = 1
+        else:
+            # Choose which Storage should be heated up
+            if delta_temperature_ww >= 0 and delta_temperature_hw >= 0:
+                if delta_temperature_hw <= delta_temperature_ww:
+                    control_signal_choose_storage = 1
+                else:
+                    control_signal_choose_storage = 2
+            elif delta_temperature_ww < 0 and delta_temperature_hw < 0:
+                if delta_temperature_hw <= delta_temperature_ww:
+                    control_signal_choose_storage = 1
+                else:
+                    control_signal_choose_storage = 2
+            elif delta_temperature_ww <= 0 and delta_temperature_hw >= 0:
+                control_signal_choose_storage = 2
+            elif delta_temperature_ww >= 0 and delta_temperature_hw <= 0:
+                control_signal_choose_storage = 1
 
         # Heats up storage
         if control_signal_choose_storage == 1:
-            self.state.temperature_storage_target_ww_C, self.state.timestep_of_hysteresis_ww = self.simulate_storage(stsv=stsv,
-                                                      delta_temperature=delta_temperature_ww,
-                                                      timestep=timestep,
-                                                      temperature_storage=stsv.get_input_value(self.temperature_storage_warm_water),
-                                                      temperature_storage_target=self.temperature_storage_target_warm_water,
-                                                      temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_ww,
-                                                      temperature_storage_target_C=self.state.temperature_storage_target_ww_C,
-                                                      timestep_of_hysteresis=self.state.timestep_of_hysteresis_ww)
+            self.state.temperature_storage_target_ww_C, self.state.timestep_of_hysteresis_ww = self.simulate_storage(
+                stsv=stsv,
+                delta_temperature=delta_temperature_ww,
+                timestep=timestep,
+                temperature_storage=stsv.get_input_value(self.temperature_storage_warm_water),
+                temperature_storage_target=self.temperature_storage_target_warm_water,
+                temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_ww,
+                temperature_storage_target_C=self.state.temperature_storage_target_ww_C,
+                timestep_of_hysteresis=self.state.timestep_of_hysteresis_ww)
         elif control_signal_choose_storage == 2:
-            delta_temperature_hw = self.state.temperature_storage_target_hw_C - stsv.get_input_value(self.temperature_storage_heating_water)
-            self.state.temperature_storage_target_hw_C, self.state.timestep_of_hysteresis_hw = self.simulate_storage(stsv=stsv,
-                                                      delta_temperature=delta_temperature_hw,
-                                                      timestep=timestep,
-                                                      temperature_storage=stsv.get_input_value(self.temperature_storage_heating_water),
-                                                      temperature_storage_target=self.temperature_storage_target_heating_water,
-                                                      temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_hw,
-                                                      temperature_storage_target_C=self.state.temperature_storage_target_hw_C,
-                                                      timestep_of_hysteresis=self.state.timestep_of_hysteresis_hw)
+            delta_temperature_hw = self.state.temperature_storage_target_hw_C - stsv.get_input_value(
+                self.temperature_storage_heating_water)
+            self.state.temperature_storage_target_hw_C, self.state.timestep_of_hysteresis_hw = self.simulate_storage(
+                stsv=stsv,
+                delta_temperature=delta_temperature_hw,
+                timestep=timestep,
+                temperature_storage=stsv.get_input_value(self.temperature_storage_heating_water),
+                temperature_storage_target=self.temperature_storage_target_heating_water,
+                temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_hw,
+                temperature_storage_target_C=self.state.temperature_storage_target_hw_C,
+                timestep_of_hysteresis=self.state.timestep_of_hysteresis_hw)
 
         stsv.set_output_value(self.control_signal_choose_storage, control_signal_choose_storage)
-
 
 
 class ControllerGeneric(cp.DynamicComponent):

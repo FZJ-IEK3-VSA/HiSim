@@ -5,7 +5,7 @@ import pandas as pd
 import numpy as np
 import os
 from dataclasses import dataclass
-from  dataclasses_json import dataclass_json
+from dataclasses_json import dataclass_json
 # Owned
 from hisim import utils
 from hisim import component as cp
@@ -38,6 +38,7 @@ The implementation of the RC_BuildingSimulator project can be found under the fo
 https://github.com/architecture-building-systems/RC_BuildingSimulator
 """
 
+
 @lru_cache(maxsize=16)
 def calc_solar_gains(sun_azimuth,
                      DNI,
@@ -64,33 +65,33 @@ def calc_solar_gains(sun_azimuth,
     :rtype: float
     """
     poa_irrad = pvlib.irradiance.get_total_irradiance(alititude_tilt,
-                                     azimuth_tilt,
-                                     apparent_zenith,
-                                     sun_azimuth,
-                                     DNI,
-                                     GHI,
-                                     DHI,
-                                     dni_extra)
+                                                      azimuth_tilt,
+                                                      apparent_zenith,
+                                                      sun_azimuth,
+                                                      DNI,
+                                                      GHI,
+                                                      DHI,
+                                                      dni_extra)
 
     if math.isnan(poa_irrad["poa_direct"]):
         return 0
     else:
         return poa_irrad["poa_direct"] * reduction_factor_with_area
 
+
 class BuildingState:
 
     def __init__(self,
-                 t_m:float,
-                 c_m:float):
-        self.t_m:float = t_m
-        self.c_m:float = c_m
+                 t_m: float,
+                 c_m: float):
+        self.t_m: float = t_m
+        self.c_m: float = c_m
 
     def cal_stored_energy(self) -> float:
         return (self.t_m * self.c_m) / 3600
 
     def self_copy(self):
         return BuildingState(self.t_m, self.c_m)
-
 
 
 @dataclass_json
@@ -100,8 +101,6 @@ class BuildingConfig:
     building_code: str
     bClass: str
     initial_temperature: float
-
-
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -142,14 +141,14 @@ class Building(cp.Component):
     """
 
     # Inputs -> heating device
-    ThermalEnergyDelivered = "ThermalEnergyDelivered" #either thermal energy delivered
-    MassInput = "MassInput"                           #or mass input and temperature input
+    ThermalEnergyDelivered = "ThermalEnergyDelivered"  # either thermal energy delivered
+    MassInput = "MassInput"  # or mass input and temperature input
     TemperatureInput = "TemperatureInput"
-    
-    #Inputs -> occupancy 
+
+    # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
-    
-    #Inputs -> weather
+
+    # Inputs -> weather
     Altitude = "Altitude"
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
@@ -170,6 +169,8 @@ class Building(cp.Component):
     CurrentStoredEnergy = "CurrentStoredEnergy"
     MassOutput = "MassOutput"
     TemperatureOutput = "TemperatureOutput"
+    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+
     # Similar components to connect to:
     # 1. Weather
     # 2. Occupancy
@@ -180,13 +181,15 @@ class Building(cp.Component):
                  my_simulation_parameters: SimulationParameters,
                  building_code="DE.N.SFH.05.Gen.ReEx.001.002",
                  bClass="medium",
-                 initial_temperature=23):
+                 initial_temperature=23,
+                 heating_reference_temperature=-14):
         super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
-        self.buildingConfig = BuildingConfig(my_simulation_parameters, building_code=building_code, bClass=bClass,initial_temperature = initial_temperature)
+        self.buildingConfig = BuildingConfig(my_simulation_parameters, building_code=building_code, bClass=bClass,
+                                             initial_temperature=initial_temperature)
         self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig)
 
-        self.c_m:float = 0
+        self.c_m: float = 0
         self.c_m_ref: float = 0
         self.h_tr_em: float = 0
         self.h_tr_is: float = 0
@@ -202,181 +205,190 @@ class Building(cp.Component):
         self.q_sol_ref: float = 0
         self.q_h_nd_ref: float = 0
 
-
-
+        self.max_thermal_building_demand = self.calculate_max_thermal_building_demand(building_code=building_code,
+                                                                                      heating_reference_temperature=heating_reference_temperature,
+                                                                                      initial_temperature=initial_temperature)
         self.build(bClass, building_code)
 
-        self.state:BuildingState = BuildingState(t_m=initial_temperature, c_m=self.c_m)
+        self.state: BuildingState = BuildingState(t_m=initial_temperature, c_m=self.c_m)
         self.previous_state = self.state.self_copy()
 
-    #===================================================================================================================
-        #the name might be misleading, usually energy is given in Wh or Joule and power is given in W, here it is power actually
-        self.thermal_energy_deliveredC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                        self.ThermalEnergyDelivered,
-                                                                        lt.LoadTypes.Heating,
-                                                                        lt.Units.Watt,
-                                                                        False)
+        # ===================================================================================================================
+        # the name might be misleading, usually energy is given in Wh or Joule and power is given in W, here it is power actually
+        self.thermal_energy_deliveredC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.ThermalEnergyDelivered,
+                                                                           lt.LoadTypes.Heating,
+                                                                           lt.Units.Watt,
+                                                                           False)
         self.mass_inputC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                         self.MassInput,
-                                                         lt.LoadTypes.WarmWater,
-                                                         lt.Units.kg_per_sec,
-                                                         False)
+                                                             self.MassInput,
+                                                             lt.LoadTypes.WarmWater,
+                                                             lt.Units.kg_per_sec,
+                                                             False)
         self.temperature_inputC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                self.TemperatureInput,
-                                                                lt.LoadTypes.WarmWater,
-                                                                lt.Units.Celsius,
-                                                                False)
+                                                                    self.TemperatureInput,
+                                                                    lt.LoadTypes.WarmWater,
+                                                                    lt.Units.Celsius,
+                                                                    False)
 
-        self.altitudeC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                         self.Altitude,
-                                                         lt.LoadTypes.Any,
-                                                         lt.Units.Degrees,
-                                                         True)
-        self.azimuthC : cp.ComponentInput  = self.add_input(self.ComponentName,
-                                                         self.Azimuth,
-                                                         lt.LoadTypes.Any,
-                                                         lt.Units.Degrees,
-                                                         True)
-        self.apparent_zenithC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                self.ApparentZenith,
-                                                                lt.LoadTypes.Any,
-                                                                lt.Units.Degrees,
-                                                                True)
-        self.DNIC : cp.ComponentInput      = self.add_input(self.ComponentName,
-                                                            self.DirectNormalIrradiance,
-                                                            lt.LoadTypes.Irradiance,
-                                                            lt.Units.Wm2,
-                                                            True)
-        self.DNIextraC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                         self.DirectNormalIrradianceExtra,
-                                                         lt.LoadTypes.Irradiance,
-                                                         lt.Units.Wm2,
-                                                         True)
-        self.DHIC : cp.ComponentInput      = self.add_input(self.ComponentName,
-                                                        self.DiffuseHorizontalIrradiance,
-                                                        lt.LoadTypes.Irradiance,
-                                                        lt.Units.Wm2,
-                                                        True)
+        self.altitudeC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                           self.Altitude,
+                                                           lt.LoadTypes.Any,
+                                                           lt.Units.Degrees,
+                                                           True)
+        self.azimuthC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                          self.Azimuth,
+                                                          lt.LoadTypes.Any,
+                                                          lt.Units.Degrees,
+                                                          True)
+        self.apparent_zenithC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.ApparentZenith,
+                                                                  lt.LoadTypes.Any,
+                                                                  lt.Units.Degrees,
+                                                                  True)
+        self.DNIC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                      self.DirectNormalIrradiance,
+                                                      lt.LoadTypes.Irradiance,
+                                                      lt.Units.Wm2,
+                                                      True)
+        self.DNIextraC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                           self.DirectNormalIrradianceExtra,
+                                                           lt.LoadTypes.Irradiance,
+                                                           lt.Units.Wm2,
+                                                           True)
+        self.DHIC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                      self.DiffuseHorizontalIrradiance,
+                                                      lt.LoadTypes.Irradiance,
+                                                      lt.Units.Wm2,
+                                                      True)
         self.GHIC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                   self.GlobalHorizontalIrradiance,
-                                                   lt.LoadTypes.Irradiance,
-                                                   lt.Units.Wm2,
-                                                   True)
-        
-
-        self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                      self.TemperatureOutside,
-                                                      lt.LoadTypes.Temperature,
-                                                      lt.Units.Celsius,
+                                                      self.GlobalHorizontalIrradiance,
+                                                      lt.LoadTypes.Irradiance,
+                                                      lt.Units.Wm2,
                                                       True)
 
-        self.occupancy_heat_gainC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                    self.HeatingByResidents,
-                                                                    lt.LoadTypes.Heating,
-                                                                    lt.Units.Watt,
-                                                                    True)
+        self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                        self.TemperatureOutside,
+                                                        lt.LoadTypes.Temperature,
+                                                        lt.Units.Celsius,
+                                                        True)
 
-        self.t_mC : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                      self.TemperatureMean,
-                                                      lt.LoadTypes.Temperature,
-                                                      lt.Units.Celsius)
-        self.total_power_to_residenceC : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                           self.TotalEnergyToResidence,
-                                                                           lt.LoadTypes.Heating,
-                                                                           lt.Units.Watt)
-        self.solar_gain_through_windowsC : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                             self.SolarGainThroughWindows,
+        self.occupancy_heat_gainC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                      self.HeatingByResidents,
+                                                                      lt.LoadTypes.Heating,
+                                                                      lt.Units.Watt,
+                                                                      True)
+
+        self.t_mC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                        self.TemperatureMean,
+                                                        lt.LoadTypes.Temperature,
+                                                        lt.Units.Celsius)
+        self.total_power_to_residenceC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                             self.TotalEnergyToResidence,
                                                                              lt.LoadTypes.Heating,
                                                                              lt.Units.Watt)
-        
-        self.add_default_connections( Weather, self.get_weather_default_connections( ) )
-        self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
-        
-        #self.t_airC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.solar_gain_through_windowsC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                               self.SolarGainThroughWindows,
+                                                                               lt.LoadTypes.Heating,
+                                                                               lt.Units.Watt)
+        self.var_max_thermal_building_demand: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                                   self.ReferenceMaxHeatBuildingDemand,
+                                                                                   lt.LoadTypes.Heating,
+                                                                                   lt.Units.Watt)
+        self.add_default_connections(Weather, self.get_weather_default_connections())
+        self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
+
+        # self.t_airC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                self.TemperatureAir,
         #                                                lt.LoadTypes.Temperature,
         #                                                lt.Units.Celsius)
-        #self.internal_lossC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        # self.internal_lossC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                        self.InternalLoss,
         #                                                        lt.LoadTypes.Heating,
         #                                                        lt.Units.Watt)
-        #self.old_stored_energyC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        # self.old_stored_energyC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                        self.OldStoredEnergy,
         #                                                        lt.LoadTypes.Any,
         #                                                        lt.Units.Any)
-        #self.current_stored_energyC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        # self.current_stored_energyC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                        self.CurrentStoredEnergy,
         #                                                        lt.LoadTypes.Any,
         #                                                        lt.Units.Any)
-        #self.stored_energy_variationC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        # self.stored_energy_variationC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                                 self.StoredEnergyVariation,
         #                                                                 lt.LoadTypes.Any,
         #                                                                 lt.Units.Any)
         #
-        #self.mass_output: cp.ComponentOutput = self.add_output(self.ComponentName,
+        # self.mass_output: cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                    self.MassOutput,
         #                                                    lt.LoadTypes.WarmWater,
         #                                                    lt.Units.kg_per_sec)
-        #self.temperature_output: cp.ComponentOutput = self.add_output(self.ComponentName,
+        # self.temperature_output: cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                           self.TemperatureOutput,
         #                                                           lt.LoadTypes.WarmWater,
         #                                                           lt.Units.Celsius)
-        
+
     def get_weather_default_connections(self):
         log.information("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
-        connections.append(cp.ComponentConnection(Building.Altitude,weather_classname, Weather.Azimuth))
-        connections.append(cp.ComponentConnection(Building.Azimuth,weather_classname, Weather.Azimuth))
-        connections.append(cp.ComponentConnection(Building.ApparentZenith,weather_classname, Weather.ApparentZenith))
-        connections.append(cp.ComponentConnection(Building.DirectNormalIrradiance,weather_classname, Weather.DirectNormalIrradiance))
-        connections.append(cp.ComponentConnection(Building.DirectNormalIrradianceExtra,weather_classname, Weather.DirectNormalIrradianceExtra))
-        connections.append(cp.ComponentConnection(Building.DiffuseHorizontalIrradiance,weather_classname, Weather.DiffuseHorizontalIrradiance))
-        connections.append(cp.ComponentConnection(Building.GlobalHorizontalIrradiance,weather_classname, Weather.GlobalHorizontalIrradiance))
-        connections.append(cp.ComponentConnection(Building.TemperatureOutside,weather_classname, Weather.TemperatureOutside))
+        connections.append(cp.ComponentConnection(Building.Altitude, weather_classname, Weather.Azimuth))
+        connections.append(cp.ComponentConnection(Building.Azimuth, weather_classname, Weather.Azimuth))
+        connections.append(cp.ComponentConnection(Building.ApparentZenith, weather_classname, Weather.ApparentZenith))
+        connections.append(
+            cp.ComponentConnection(Building.DirectNormalIrradiance, weather_classname, Weather.DirectNormalIrradiance))
+        connections.append(cp.ComponentConnection(Building.DirectNormalIrradianceExtra, weather_classname,
+                                                  Weather.DirectNormalIrradianceExtra))
+        connections.append(cp.ComponentConnection(Building.DiffuseHorizontalIrradiance, weather_classname,
+                                                  Weather.DiffuseHorizontalIrradiance))
+        connections.append(cp.ComponentConnection(Building.GlobalHorizontalIrradiance, weather_classname,
+                                                  Weather.GlobalHorizontalIrradiance))
+        connections.append(
+            cp.ComponentConnection(Building.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
         return connections
-    
+
     def get_occupancy_default_connections(self):
         log.information("setting occupancy default connections")
         connections = []
         occupancy_classname = Occupancy.get_classname()
-        connections.append( cp.ComponentConnection( Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents ) )
+        connections.append(
+            cp.ComponentConnection(Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents))
         return connections
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
-        #if timestep >=10392 and force_convergence:
+        # if timestep >=10392 and force_convergence:
         #    log.information("Stop herj!")
-        #if force_convergence:
+        # if force_convergence:
         #    return
 
         # Gets inputs
         if hasattr(self, "solar_gain_through_windows") is False:
             altitude = stsv.get_input_value(self.altitudeC)
             azimuth = stsv.get_input_value(self.azimuthC)
-            DNI = stsv.get_input_value(self.DNIC) #/ self.seconds_per_timestep
-            DHI = stsv.get_input_value(self.DHIC) #/ self.seconds_per_timestep
-            GHI = stsv.get_input_value(self.GHIC) #/ self.seconds_per_timestep
-            dni_extra = stsv.get_input_value(self.DNIextraC) #/ self.seconds_per_timestep
+            DNI = stsv.get_input_value(self.DNIC)  # / self.seconds_per_timestep
+            DHI = stsv.get_input_value(self.DHIC)  # / self.seconds_per_timestep
+            GHI = stsv.get_input_value(self.GHIC)  # / self.seconds_per_timestep
+            dni_extra = stsv.get_input_value(self.DNIextraC)  # / self.seconds_per_timestep
             apparent_zenith = stsv.get_input_value(self.apparent_zenithC)
 
-        occupancy_heat_gain = stsv.get_input_value( self.occupancy_heat_gainC )
-        t_out = stsv.get_input_value( self.t_outC )
-
+        occupancy_heat_gain = stsv.get_input_value(self.occupancy_heat_gainC)
+        t_out = stsv.get_input_value(self.t_outC)
 
         # With TES [In Development]
         if self.mass_inputC.SourceOutput is not None:
             if force_convergence:
                 return
-            heat_demand = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
+
+            heat_demand = stsv.get_input_value(self.thermal_energy_deliveredC)
             mass_input_sec = stsv.get_input_value(self.mass_inputC)  # kg/s
-            #mass_input = mass_input_sec * self.seconds_per_timestep  # kg
+            # mass_input = mass_input_sec * self.seconds_per_timestep  # kg
             mass_input = mass_input_sec
             temperature_input = stsv.get_input_value(self.temperature_inputC)  # °C
 
             if heat_demand > 0 and (mass_input == 0 and temperature_input == 0):
                 """first iteration --> random numbers"""
                 temperature_input = 40.456
-                #mass_input = 0.0123 * self.seconds_per_timestep
+                # mass_input = 0.0123 * self.seconds_per_timestep
                 mass_input = 0.0123
 
             if heat_demand > 0:
@@ -387,11 +399,11 @@ class Building(cp.Component):
                 mass_flow_level = 0
                 # K = W / (W/kgK * kg/s)
                 temperature_delta_heat = heat_demand / (
-                    PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
+                        PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
                 while temperature_delta_heat > LoadConfig.delta_T:
                     mass_flow_level += 1
                     temperature_delta_heat = heat_demand / (
-                        PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
+                            PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
 
                 # kg/timestep = kg/s * seconds_per_timestep
                 mass_input_load = massflows_possible[mass_flow_level] * self.seconds_per_timestep
@@ -408,26 +420,25 @@ class Building(cp.Component):
                 temperature_new = temperature_input
                 mass_input_load = 0
 
-
             mass_output_load = mass_input_load / self.seconds_per_timestep  # kg/timestep --> kg/s
             self.test_new_temperature = temperature_new
 
-            #stsv.set_output_value(self.mass_output, mass_output_load)
-            #stsv.set_output_value(self.temperature_output, temperature_new)
+            # stsv.set_output_value(self.mass_output, mass_output_load)
+            # stsv.set_output_value(self.temperature_output, temperature_new)
 
         # Only with HeatPump
         elif self.thermal_energy_deliveredC.SourceOutput is not None:
-            #the name thermal_energy_delivered might be misleading, because it is actually power in W
-            thermal_energy_delivered = stsv.get_input_value( self.thermal_energy_deliveredC )
+            # the name thermal_energy_delivered might be misleading, because it is actually power in W
+            thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
         else:
             thermal_energy_delivered = 10
-
         t_m_prev = self.state.t_m
-        #old_stored_energy = self.state.cal_stored_energy()
+
+        # old_stored_energy = self.state.cal_stored_energy()
 
         # Performs calculations
         if hasattr(self, "solar_gain_through_windows") is False:
-            #@JG I guess you wanted to transfer W to Wh
+            # @JG I guess you wanted to transfer W to Wh
             solar_gain_through_windows = self.get_solar_gain_through_windows(altitude=altitude,
                                                                              azimuth=azimuth,
                                                                              DNI=DNI,
@@ -436,33 +447,36 @@ class Building(cp.Component):
                                                                              dni_extra=dni_extra,
                                                                              apparent_zenith=apparent_zenith)
         else:
-            solar_gain_through_windows = self.solar_gain_through_windows[ timestep ]
+            solar_gain_through_windows = self.solar_gain_through_windows[timestep]
 
-        t_m, t_air, t_s, phi_loss = self.calc_temperatures_crank_nicolson( energy_demand = thermal_energy_delivered,
-                                              internal_gains = occupancy_heat_gain,
-                                              solar_gains = solar_gain_through_windows,
-                                              t_out = t_out,
-                                              t_m_prev = t_m_prev )
+        t_m, t_air, t_s, phi_loss = self.calc_temperatures_crank_nicolson(energy_demand=thermal_energy_delivered,
+                                                                          internal_gains=occupancy_heat_gain,
+                                                                          solar_gains=solar_gain_through_windows,
+                                                                          t_out=t_out,
+                                                                          t_m_prev=t_m_prev)
 
         self.state.t_m = t_m
-        #self.state.t_m = t_m
-        #current_stored_energy = self.state.cal_stored_energy()
+        # self.state.t_m = t_m
+        # current_stored_energy = self.state.cal_stored_energy()
 
-        #stored_energy_variation = current_stored_energy - old_stored_energy
+        # stored_energy_variation = current_stored_energy - old_stored_energy
         total_energy_to_residence = solar_gain_through_windows + occupancy_heat_gain + thermal_energy_delivered
-        #internal_loss = total_energy_to_residence - stored_energy_variation
+        # internal_loss = total_energy_to_residence - stored_energy_variation
 
         # Returns outputs
-        #stsv.set_output_value(self.t_mC, t_air)
+        # stsv.set_output_value(self.t_mC, t_air)
         stsv.set_output_value(self.t_mC, t_m)
-        #stsv.set_output_value(self.t_airC, t_air)
-        stsv.set_output_value(self.total_power_to_residenceC, phi_loss ) #phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
-        stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows ) #convert Wh back to W
+        # stsv.set_output_value(self.t_airC, t_air)
+        stsv.set_output_value(self.total_power_to_residenceC,
+                              phi_loss)  # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
+        stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows)  # convert Wh back to W
+        stsv.set_output_value(self.var_max_thermal_building_demand,
+                              self.max_thermal_building_demand)  # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
 
-        #stsv.set_output_value(self.internal_lossC, internal_loss)
-        #stsv.set_output_value(self.stored_energy_variationC, stored_energy_variation)
-        #stsv.set_output_value(self.current_stored_energyC, current_stored_energy)
-        #stsv.set_output_value(self.old_stored_energyC, old_stored_energy)
+        # stsv.set_output_value(self.internal_lossC, internal_loss)
+        # stsv.set_output_value(self.stored_energy_variationC, stored_energy_variation)
+        # stsv.set_output_value(self.current_stored_energyC, current_stored_energy)
+        # stsv.set_output_value(self.old_stored_energyC, old_stored_energy)
 
         # Saves solar gains cache
         if not self.is_in_cache:
@@ -483,13 +497,12 @@ class Building(cp.Component):
     def build(self, bClass, buildingcode):
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         self.timesteps = self.my_simulation_parameters.timesteps
-
-        self.parameters = [ bClass, buildingcode ]
+        self.parameters = [bClass, buildingcode]
 
         # CONSTANTS
-        self.h_ms = 9.1         # Heat transfer coefficient between nodes "m" and "s" (12.2.2 E64 P79)
-        self.lambda_at = 4.5    # Dimensionless ratio between surfaces and the useful surfaces (7.2.2.2 E9 P36)
-        self.h_is = 3.45        # Heat transfer coefficient between nodes "air" and "s" (7.2.2.2 E9 P35)
+        self.h_ms = 9.1  # Heat transfer coefficient between nodes "m" and "s" (12.2.2 E64 P79)
+        self.lambda_at = 4.5  # Dimensionless ratio between surfaces and the useful surfaces (7.2.2.2 E9 P36)
+        self.h_is = 3.45  # Heat transfer coefficient between nodes "air" and "s" (7.2.2.2 E9 P35)
         self.bClass_f_a = {
             "very light": 2.5,
             "light": 2.5,
@@ -516,7 +529,25 @@ class Building(cp.Component):
         # Gets conductances
         self.get_conducs()
 
-        #self.calc_solar_gains_jit = jit(nopython=True)(calc_solar_gains)
+        # self.calc_solar_gains_jit = jit(nopython=True)(calc_solar_gains)
+
+    def calculate_max_thermal_building_demand(self,
+                                              building_code: str,
+                                              initial_temperature: float,
+                                              heating_reference_temperature: float):
+
+        df = pd.read_csv(utils.HISIMPATH["housing"],
+                         decimal=",",
+                         sep=";",
+                         encoding="cp1252",
+                         low_memory=False)
+        buildingdata = df.loc[df["Code_BuildingVariant"] == building_code]
+
+        max_thermal_building_demand = (buildingdata["h_Transmission"].values[0] +
+                                       buildingdata["h_Ventilation"].values[
+                                           0]) * (initial_temperature - heating_reference_temperature) * \
+                                      buildingdata["A_C_Ref"].values[0]
+        return max_thermal_building_demand
 
     def __str__(self):
         entire = str()
@@ -525,7 +556,7 @@ class Building(cp.Component):
             if index == 0:
                 entire = line
             else:
-                entire = "{}\n{}".format(entire,line)
+                entire = "{}\n{}".format(entire, line)
         return entire
 
     def write_to_report(self):
@@ -551,13 +582,13 @@ class Building(cp.Component):
 
         lines.append(" ")
         lines.append("Capacitance:")
-        lines.append("Capacitance [Wh/m^2.K]: {:4.2f}".format(self.c_m*3600/self.A_f))
-        lines.append("Capacitance [Wh/K]: {:4.2f}".format((self.c_m*3600)))
+        lines.append("Capacitance [Wh/m^2.K]: {:4.2f}".format(self.c_m * 3600 / self.A_f))
+        lines.append("Capacitance [Wh/K]: {:4.2f}".format((self.c_m * 3600)))
         lines.append("Capacitance [J/K]: {:4.2f}".format(self.c_m))
 
         lines.append("Capacitance Ref [Wh/m^2.K]: {:4.2f}".format(self.c_m_ref))
         lines.append("Capacitance Ref [Wh/K]: {:4.2f}".format(self.c_m_ref * self.A_f))
-        lines.append("Capacitance Ref [J/K]: {:4.2f}".format((self.c_m_ref * self.A_f) /3600))
+        lines.append("Capacitance Ref [J/K]: {:4.2f}".format((self.c_m_ref * self.A_f) / 3600))
 
         lines.append(" ")
         lines.append("Heat Transfers:")
@@ -616,7 +647,7 @@ class Building(cp.Component):
         # h_tr_w: conductance between exterior temperature and surface temperature
         # Objects: Doors, windows, curtain walls and windowed walls ISO 7.2.2.2
         ws = ["Window_1", "Window_2", "Door_1"]
-        #ws = ["Window_1", "Window_2"]
+        # ws = ["Window_1", "Window_2"]
 
         self.h_tr_w = 0.0
         for w in ws:
@@ -627,7 +658,7 @@ class Building(cp.Component):
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         # Conductance of opaque surfaces to exterior [W/K]
-        opaque_walls = ["Wall_1", "Wall_2", "Wall_3", "Roof_1", "Roof_2","Floor_1","Floor_2"]
+        opaque_walls = ["Wall_1", "Wall_2", "Wall_3", "Roof_1", "Roof_2", "Floor_1", "Floor_2"]
         # h_tr_em_inv = 0.0
         # for ow in opaque_walls:
         #     h_tr_em_obj = float(self.buildingdata["H_Transmission_" + ow].values[0])
@@ -636,8 +667,8 @@ class Building(cp.Component):
         # self.h_tr_em = 1/h_tr_em_inv
 
         # Version 1
-        #self.h_tr_em = 0.0
-        #for ow in opaque_walls:
+        # self.h_tr_em = 0.0
+        # for ow in opaque_walls:
         #    self.h_tr_em += float(self.buildingdata["H_Transmission_" + ow].values[0])
 
         # Version 2
@@ -645,9 +676,7 @@ class Building(cp.Component):
         for ow in opaque_walls:
             self.h_tr_op += float(self.buildingdata["H_Transmission_" + ow].values[0])
 
-        self.h_tr_em = 1 / ( (1/self.h_tr_op) - (1/self.h_tr_ms) )
-
-
+        self.h_tr_em = 1 / ((1 / self.h_tr_op) - (1 / self.h_tr_ms))
 
     def get_h_tr_is(self):
         """
@@ -672,15 +701,16 @@ class Building(cp.Component):
             ach_tot = ach_infl + ach_vent  # Total Air Changes Per Hour
             # temperature adjustment factor taking ventilation and infiltration
             # [ISO: E -27]
-            b_ek = (1 - (ach_vent / (ach_tot) ) * ventilation_efficiency)
-            self.h_ve_adj = float(1200 * b_ek * self.room_vol * (ach_tot / 3600)) # Conductance through ventilation [W/M]
+            b_ek = (1 - (ach_vent / (ach_tot)) * ventilation_efficiency)
+            self.h_ve_adj = float(
+                1200 * b_ek * self.room_vol * (ach_tot / 3600))  # Conductance through ventilation [W/M]
         elif self.ven_method == "EPISCOPE":
-            #cp = 0.00028378 * 1E3  # [Wh/m3K]
+            # cp = 0.00028378 * 1E3  # [Wh/m3K]
             cp = 0.34
             self.h_ve_adj = cp * float(self.buildingdata["n_air_use"] + self.buildingdata["n_air_infiltration"]) * \
                             self.A_f * float(self.buildingdata["h_room"])
 
-    def get_physical_param(self) :
+    def get_physical_param(self):
         # Windows area
         self.get_windows()
 
@@ -697,15 +727,16 @@ class Building(cp.Component):
         # Building volume (TABULA: Conditioned building volume)
         self.room_vol = float(self.buildingdata["V_C"].values[0])
 
-
         # Reference properties from TABULA, but not used in the model
-        self.q_sol_ref = float((self.buildingdata["q_sol"].values[0]))               # Floor area related heat load during heating season
-        self.q_int_ref = float(self.buildingdata["q_int"].values[0])                 # Floor area related internal heat sources during heating season
-        self.q_ht_ref = float(self.buildingdata["q_ht"].values[0])                   # Floor area related annual losses
-        self.q_h_nd_ref = float(self.buildingdata["q_h_nd"].values[0])               # Energy need for heating
+        self.q_sol_ref = float(
+            (self.buildingdata["q_sol"].values[0]))  # Floor area related heat load during heating season
+        self.q_int_ref = float(
+            self.buildingdata["q_int"].values[0])  # Floor area related internal heat sources during heating season
+        self.q_ht_ref = float(self.buildingdata["q_ht"].values[0])  # Floor area related annual losses
+        self.q_h_nd_ref = float(self.buildingdata["q_h_nd"].values[0])  # Energy need for heating
 
         # Internal heat capacity [Wh/(m^2.K)] (TABULA: Internal heat capacity)
-        self.c_m_ref = float(self.buildingdata["c_m"].values[0])                         # internal heat capacity per m2 reference area
+        self.c_m_ref = float(self.buildingdata["c_m"].values[0])  # internal heat capacity per m2 reference area
 
         # References properties
         self.h_ve_adj_ref = float(self.buildingdata["h_Ventilation"].values[0]) * self.A_f
@@ -728,8 +759,7 @@ class Building(cp.Component):
                          sep=";",
                          encoding="cp1252",
                          low_memory=False)
-                         #error_bad_lines=False)
-
+        # error_bad_lines=False)
 
         # Gets parameters from chosen building
         self.buildingdata = df.loc[df["Code_BuildingVariant"] == buildingcode]
@@ -749,7 +779,7 @@ class Building(cp.Component):
         self.windows = []
         self.windows_area = 0.0
         south_angle = 180
-        #windows_angles = {"South": south_angle,
+        # windows_angles = {"South": south_angle,
         #                  "East": south_angle - 90,
         #                  "North": south_angle + 180,
         #                  "West": south_angle + 90}
@@ -777,15 +807,14 @@ class Building(cp.Component):
                                            external_shading_vertical_reduction_factor=F_sh_vertical))
                 self.windows_area += area
 
-
-
         # if nothing exists, initialize the empty arrays for caching, else read stuff
-        if not self.is_in_cache: # cache_filepath is None or  (not os.path.isfile(cache_filepath)):
+        if not self.is_in_cache:  # cache_filepath is None or  (not os.path.isfile(cache_filepath)):
             self.cache = [0] * self.my_simulation_parameters.timesteps
         else:
-            self.solar_gain_through_windows = pd.read_csv(self.cache_file_path, sep=',', decimal='.')['solar_gain_through_windows'].tolist()
+            self.solar_gain_through_windows = pd.read_csv(self.cache_file_path, sep=',', decimal='.')[
+                'solar_gain_through_windows'].tolist()
 
-    #@cached(cache=LRUCache(maxsize=16))
+    # @cached(cache=LRUCache(maxsize=16))
     def get_solar_gain_through_windows(self, altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith):
         """
         Calculates the thermal solar gain passed to
@@ -794,21 +823,20 @@ class Building(cp.Component):
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
         """
         solar_gains = 0.0
-        
-        #parameters = [altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith]
-        #def calc_solar_gainxs(window):
+
+        # parameters = [altitude, azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith]
+        # def calc_solar_gainxs(window):
         #    return window.calc_solar_gains(*parameters)
 
-
-        #windows = self.windows
-        #if (DNI == 0 and DHI == 0 and GHI == 0) is False:
-        #@Johanna: looks good, but is very bad - somehow turns out to be always False -> so take the easy way
-        if ( DNI != 0 or DHI != 0 or GHI != 0 ) :
-        #if (DNI == 0 and DHI == 0 and GHI == 0 and dni_extra == 0) is False:
-            #a_pool = Pool()
-            #result = a_pool.starmap(calc_solar_gainxs, windows)
+        # windows = self.windows
+        # if (DNI == 0 and DHI == 0 and GHI == 0) is False:
+        # @Johanna: looks good, but is very bad - somehow turns out to be always False -> so take the easy way
+        if (DNI != 0 or DHI != 0 or GHI != 0):
+            # if (DNI == 0 and DHI == 0 and GHI == 0 and dni_extra == 0) is False:
+            # a_pool = Pool()
+            # result = a_pool.starmap(calc_solar_gainxs, windows)
             for index, window in enumerate(self.windows):
-                #solar_gains = windows.calc_solar_gains(sun_altitude=altitude,
+                # solar_gains = windows.calc_solar_gains(sun_altitude=altitude,
                 #                         sun_azimuth=azimuth,
                 #                         DNI=DNI,
                 #                         DHI=DHI,
@@ -853,9 +881,9 @@ class Building(cp.Component):
         # Updates t_w
         t_air = self.calc_t_air(t_out, t_s)
 
-        return t_m,  t_air, t_s, phi_loss
-        #return t_m, t_air, t_s
-        #return self.t_m, self.t_air, self.t_opperative, self.t_s
+        return t_m, t_air, t_s, phi_loss
+        # return t_m, t_air, t_s
+        # return self.t_m, self.t_air, self.t_opperative, self.t_s
 
     def calc_heat_flow(self, t_out, internal_gains, solar_gains, energy_demand):
         """
@@ -880,21 +908,20 @@ class Building(cp.Component):
                        (self.h_tr_w / (9.1 * self.A_t))) * (0.5 * internal_gains + solar_gains)
         # Heatflow to the thermal mass node in W
         self.phi_m = (self.A_m / self.A_t) * \
-            (0.5 * internal_gains + solar_gains)
+                     (0.5 * internal_gains + solar_gains)
 
-        self.phi_loss = ( self.h_tr_w / (9.1 * self.A_t) ) * (0.5 * internal_gains + solar_gains)
+        self.phi_loss = (self.h_tr_w / (9.1 * self.A_t)) * (0.5 * internal_gains + solar_gains)
         return self.phi_loss
 
-    def calc_t_m_next(self,t_m_prev):
+    def calc_t_m_next(self, t_m_prev):
         """
         Primary Equation, calculates the temperature of the next time step
         # (C.4) in [C.3 ISO 13790]
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
         """
-        #changed 3600s per hour to seconds per timestep, which solves all problems and makes time correction redundant
-        self.t_m_next = ( (t_m_prev * ( ( self.c_m / self.seconds_per_timestep ) - 0.5 * ( self.h_tr_3 + self.h_tr_em ) ) ) +
-                         self.phi_m_tot ) / ( ( self.c_m / self.seconds_per_timestep ) + 0.5 * ( self.h_tr_3 + self.h_tr_em ) )
-
+        # changed 3600s per hour to seconds per timestep, which solves all problems and makes time correction redundant
+        self.t_m_next = ((t_m_prev * ((self.c_m / self.seconds_per_timestep) - 0.5 * (self.h_tr_3 + self.h_tr_em))) +
+                         self.phi_m_tot) / ((self.c_m / self.seconds_per_timestep) + 0.5 * (self.h_tr_3 + self.h_tr_em))
 
     def calc_phi_m_tot(self, t_out):
         """
@@ -908,9 +935,8 @@ class Building(cp.Component):
         t_supply = t_out  # ASSUMPTION: Supply air comes straight from the outside air
 
         self.phi_m_tot = self.phi_m + self.h_tr_em * t_out + \
-            self.h_tr_3 * ( self.phi_st + self.h_tr_w * t_out + self.h_tr_1 *
-                           ((self.phi_ia / self.h_ve_adj) + t_supply)) / self.h_tr_2
-
+                         self.h_tr_3 * (self.phi_st + self.h_tr_w * t_out + self.h_tr_1 *
+                                        ((self.phi_ia / self.h_ve_adj) + t_supply)) / self.h_tr_2
 
     def calc_t_m(self, t_m_prev):
         """
@@ -918,7 +944,7 @@ class Building(cp.Component):
         # (C.9) in [C.3 ISO 13790]
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
         """
-        return (t_m_prev + self.t_m_next)/2
+        return (t_m_prev + self.t_m_next) / 2
 
     def calc_t_s(self, t_out, t_m):
         """
@@ -931,8 +957,8 @@ class Building(cp.Component):
         t_supply = t_out  # ASSUMPTION: Supply air comes straight from the outside air
 
         return (self.h_tr_ms * t_m + self.phi_st + self.h_tr_w * t_out + self.h_tr_1 *
-                    (t_supply + self.phi_ia / self.h_ve_adj)) / \
-                   (self.h_tr_ms + self.h_tr_w + self.h_tr_1)
+                (t_supply + self.phi_ia / self.h_ve_adj)) / \
+               (self.h_tr_ms + self.h_tr_w + self.h_tr_1)
 
     def calc_t_air(self, t_out, t_s):
         """
@@ -946,12 +972,14 @@ class Building(cp.Component):
 
         # Calculate the temperature of the inside air
         return (self.h_tr_is * t_s + self.h_ve_adj *
-                      t_supply + self.phi_ia) / (self.h_tr_is + self.h_ve_adj)
+                t_supply + self.phi_ia) / (self.h_tr_is + self.h_ve_adj)
+
 
 class Window(object):
     """
     Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (Check header)
     """
+
     def __init__(self,
                  azimuth_tilt=None,
                  alititude_tilt=90,
@@ -979,13 +1007,13 @@ class Window(object):
         self.frame_area_fraction_reduction_factor = frame_area_fraction_reduction_factor
 
         self.reduction_factor = glass_solar_transmittance \
-                      * nonperpendicular_reduction_factor * external_shading_vertical_reduction_factor \
-                      * (1 - frame_area_fraction_reduction_factor)
+                                * nonperpendicular_reduction_factor * external_shading_vertical_reduction_factor \
+                                * (1 - frame_area_fraction_reduction_factor)
 
         self.reduction_factor_with_area = self.reduction_factor * area
 
-    #@cached(cache=LRUCache(maxsize=5))
-    #@lru_cache
+    # @cached(cache=LRUCache(maxsize=5))
+    # @lru_cache
     def calc_solar_gains(self, sun_altitude, sun_azimuth, DNI, DHI, GHI, dni_extra, apparent_zenith):
         """
         Calculates the Solar Gains in the building zone through the set Window
@@ -1029,11 +1057,11 @@ class Window(object):
         if math.isnan(poa_irrad["poa_direct"]):
             self.incident_solar = 0
         else:
-            self.incident_solar = (poa_irrad["poa_direct"])* self.area
+            self.incident_solar = (poa_irrad["poa_direct"]) * self.area
 
         solar_gains = self.incident_solar * self.glass_solar_transmittance \
-                                       * self.nonperpendicular_reduction_factor * self.external_shading_vertical_reduction_factor \
-                                       * ( 1 - self.frame_area_fraction_reduction_factor)
+                      * self.nonperpendicular_reduction_factor * self.external_shading_vertical_reduction_factor \
+                      * (1 - self.frame_area_fraction_reduction_factor)
         return solar_gains
 
     def calc_direct_solar_factor(self, sun_altitude, sun_azimuth, apparent_zenith):
@@ -1056,22 +1084,21 @@ class Window(object):
         direct_factor = math.cos(aoi) / (math.sin(sun_altitude_rad))
 
         # Solution from the above mentioned study
-        #direct_factor = (math.cos(sun_altitude_rad) * math.sin(self.alititude_tilt_rad) * \
+        # direct_factor = (math.cos(sun_altitude_rad) * math.sin(self.alititude_tilt_rad) * \
         #                math.cos(sun_azimuth_rad - self.azimuth_tilt_rad) + \
         #                math.sin(sun_altitude_rad) * math.cos(self.alititude_tilt_rad)) / (math.sin(sun_altitude_rad))
 
-        #direct_factor = max(0, direct_factor)
+        # direct_factor = max(0, direct_factor)
 
         ## Solution from GitHub repository
-        #direct_factor = math.cos(sun_altitude_rad) * math.sin(self.alititude_tilt_rad) * \
+        # direct_factor = math.cos(sun_altitude_rad) * math.sin(self.alititude_tilt_rad) * \
         #                math.cos(sun_azimuth_rad - self.azimuth_tilt_rad) + \
         #                math.sin(sun_altitude_rad) * math.cos(self.alititude_tilt_rad)
 
-
         ## If the sun is in front of the window surface
-        #if(math.degrees(math.acos(direct_factor)) > 90):
+        # if(math.degrees(math.acos(direct_factor)) > 90):
         #    direct_factor = 0
-        #else:
+        # else:
         #    pass
 
         return direct_factor
@@ -1083,6 +1110,86 @@ class Window(object):
         """
         # Proportion of incident light on the window surface
         return (1 + math.cos(self.alititude_tilt_rad)) / 2
+
+
+class BuildingController(cp.Component):
+    """
+    BuildingController class calculates on base of the maximal Building
+    Thermal Demand and the difference of the actual Building Tempreature
+    to the Target/Minimal Building Tempreature how much the building is suppose
+    to be heated up. This Output is called "RealBuildingHeatDemand".
+
+    Parameters
+    ----------
+    sim_params : Simulator
+        Simulator object used to carry the simulation using this class
+    """
+
+    # Inputs
+    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+    ResidenceTemperature = "ResidenceTemperature"
+    # Outputs
+    RealHeatBuildingDemand = "RealHeatBuildingDemand"
+    LevelOfUtilization = "LevelOfUtilization"
+
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 minimal_building_temperature=20):
+        super().__init__(name="BuildingController", my_simulation_parameters=my_simulation_parameters)
+        self.minimal_building_temperature = minimal_building_temperature
+
+        # ===================================================================================================================
+        self.ref_max_thermal_build_demand: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                              self.ReferenceMaxHeatBuildingDemand,
+                                                                              lt.LoadTypes.Heating,
+                                                                              lt.Units.Watt,
+                                                                              True)
+        self.residence_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                       self.ResidenceTemperature,
+                                                                       lt.LoadTypes.Temperature,
+                                                                       lt.Units.Celsius,
+                                                                       True)
+        self.real_heat_building_demand: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                             self.RealHeatBuildingDemand,
+                                                                             lt.LoadTypes.Heating,
+                                                                             lt.Units.Watt)
+        self.level_of_utilization: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                        self.LevelOfUtilization,
+                                                                        lt.LoadTypes.Any,
+                                                                        lt.Units.Percent)
+
+    def build(self):
+        pass
+
+    def write_to_report(self):
+        pass
+
+    def i_save_state(self):
+        pass
+
+    def i_restore_state(self):
+        pass
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+        pass
+
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+        residence_temperature = stsv.get_input_value(self.residence_temperature)
+        delta_temp_for_lvl_of_util = 1  # delta_temperature_for_level_of_utilization
+
+        if residence_temperature > self.minimal_building_temperature:
+            level_of_utilization = 0
+        elif residence_temperature < self.minimal_building_temperature - delta_temp_for_lvl_of_util:
+            level_of_utilization = 1
+        else:
+            level_of_utilization = self.minimal_building_temperature - residence_temperature
+
+        real_heat_building_demand = level_of_utilization * stsv.get_input_value(self.ref_max_thermal_build_demand)
+        stsv.set_output_value(self.real_heat_building_demand, real_heat_building_demand)
+        stsv.set_output_value(self.level_of_utilization, level_of_utilization)
+
+
+
 
 
 

@@ -3,6 +3,7 @@ import math
 import pvlib
 import pandas as pd
 import numpy as np
+import copy
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -92,6 +93,15 @@ class BuildingState:
 
     def self_copy(self):
         return BuildingState(self.t_m, self.c_m)
+
+class BuildingControllerState:
+
+    def __init__(self,
+                 temperature_building_target_C: float,
+                 level_of_utilization:float):
+        self.temperature_building_target_C: float = temperature_building_target_C
+
+        self.level_of_utilization:float = level_of_utilization
 
 
 @dataclass_json
@@ -1134,9 +1144,14 @@ class BuildingController(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 minimal_building_temperature=20):
+                 minimal_building_temperature=20,
+                 stop_heating_building_temperature=21):
         super().__init__(name="BuildingController", my_simulation_parameters=my_simulation_parameters)
         self.minimal_building_temperature = minimal_building_temperature
+        self.stop_heating_building_temperature = stop_heating_building_temperature
+        self.state = BuildingControllerState(temperature_building_target_C=minimal_building_temperature,
+                                             level_of_utilization=0)
+        self.previous_state = copy.copy(self.state)
 
         # ===================================================================================================================
         self.ref_max_thermal_build_demand: cp.ComponentInput = self.add_input(self.ComponentName,
@@ -1165,28 +1180,32 @@ class BuildingController(cp.Component):
         pass
 
     def i_save_state(self):
-        pass
+        self.previous_state = copy.deepcopy(self.state)
 
     def i_restore_state(self):
-        pass
+        self.state = copy.deepcopy(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
-        residence_temperature = stsv.get_input_value(self.residence_temperature)
-        delta_temp_for_lvl_of_util = 1  # delta_temperature_for_level_of_utilization
+        building_temperature = stsv.get_input_value(self.residence_temperature)
+        minimal_building_temperature=self.minimal_building_temperature
+        delta_temp_for_lvl_of_util = 0.4 # delta_temperature_for_level_of_utilization
 
-        if residence_temperature > self.minimal_building_temperature:
+        # Building is warm enough
+        if building_temperature > minimal_building_temperature:
             level_of_utilization = 0
-        elif residence_temperature < self.minimal_building_temperature - delta_temp_for_lvl_of_util:
+        # Building get heated up, when temperature is underneath target temperature
+        elif building_temperature < minimal_building_temperature - delta_temp_for_lvl_of_util:
             level_of_utilization = 1
         else:
-            level_of_utilization = self.minimal_building_temperature - residence_temperature
+            level_of_utilization = minimal_building_temperature - building_temperature
 
-        real_heat_building_demand = level_of_utilization * stsv.get_input_value(self.ref_max_thermal_build_demand)
+        real_heat_building_demand = self.state.level_of_utilization * stsv.get_input_value(self.ref_max_thermal_build_demand)
+        self.state.level_of_utilization = level_of_utilization
+        stsv.set_output_value(self.level_of_utilization, self.state.level_of_utilization)
         stsv.set_output_value(self.real_heat_building_demand, real_heat_building_demand)
-        stsv.set_output_value(self.level_of_utilization, level_of_utilization)
 
 
 

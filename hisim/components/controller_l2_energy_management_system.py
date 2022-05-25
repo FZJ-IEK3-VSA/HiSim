@@ -213,13 +213,10 @@ class Controller(cp.Component):
         pass
 
     def i_save_state(self):
-        #abändern, siehe Storage
-        pass
-        self.previous_state = self.state
+        self.previous_state = copy.deepcopy(self.state)
 
     def i_restore_state(self):
-        pass
-        self.state = self.previous_state
+        self.state = copy.deepcopy(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
@@ -688,13 +685,10 @@ class ControllerGeneric(cp.DynamicComponent):
         pass
 
     def i_save_state(self):
-        #abändern, siehe Storage
-        pass
-        self.previous_state = self.state
+        self.previous_state = copy.deepcopy(self.state)
 
     def i_restore_state(self):
-        pass
-        self.state = self.previous_state
+        self.state = copy.deepcopy(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass

@@ -76,7 +76,7 @@ def test_storage():
     # WW-Storage is choosed to be heated up
     assert 1 == stsv.values[control_signal_choose_storage.GlobalIndex]
     # Temperature of Heating-Water Storage sinks
-    assert 39.99853585732638 == stsv.values[my_storage.T_sp_C_hw.GlobalIndex]
+    assert 39.97334630595229== stsv.values[my_storage.T_sp_C_hw.GlobalIndex]
     # Temperature of Heating-Water Storage raise
     assert 40.02265485276707 == stsv.values[my_storage.T_sp_C_ww.GlobalIndex]
     # Energy Loss of Storage

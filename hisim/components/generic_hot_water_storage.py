@@ -241,10 +241,10 @@ class HeatStorage(Component):
 
 class HeatStorageController(cp.Component):
     """
-    BuildingController class calculates on base of the maximal Building
-    Thermal Demand and the difference of the actual Building Tempreature
-    to the Target/Minimal Building Tempreature how much the building is suppose
-    to be heated up. This Output is called "RealBuildingHeatDemand".
+    HeatStorageController class calculates on base of the maximal Building
+    Thermal Demand and the TemperatureHeatingStorage and Building Tempreature
+    the real thermal demand for the Heating Storage.
+    This Output is called "RealThermalDemandHeatingWater".
 
     Parameters
     ----------
@@ -269,9 +269,6 @@ class HeatStorageController(cp.Component):
         super().__init__(name="HeatStorageController", my_simulation_parameters=my_simulation_parameters)
         self.initial_temperature_heating_storage = initial_temperature_heating_storage
         self.initial_temperature_building = initial_temperature_building
-        self.state = HeatStorageState(T_sp_ww=40, T_sp_hw=40)
-        self.previous_state = copy.copy(self.state)
-
         # ===================================================================================================================
         # Inputs
         self.ref_max_thermal_build_demand: ComponentInput = self.add_input(self.ComponentName,
@@ -306,19 +303,17 @@ class HeatStorageController(cp.Component):
         pass
 
     def i_save_state(self):
-        self.previous_state = copy.deepcopy(self.state)
+        pass
 
     def i_restore_state(self):
-        self.state = copy.deepcopy(self.previous_state)
-
+        pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
-        T_sp_var_hw = self.state.T_sp_hw # Start-Temp-Storage
+        T_sp_var_hw = stsv.get_input_value(self.heating_storage_temperature)  # Start-Temp-Storage
         last_var_hw = stsv.get_input_value(self.real_thermal_demand_building)
-
         max_mass_flow_heat_storage = stsv.get_input_value(self.ref_max_thermal_build_demand) / (
                     4.1851 * 1000 * (self.initial_temperature_heating_storage - self.initial_temperature_building))
 
@@ -328,5 +323,5 @@ class HeatStorageController(cp.Component):
         if max_last_var_hw < last_var_hw:
             last_var_hw = max_last_var_hw
 
-        self.state.T_sp_hw = stsv.get_input_value(self.heating_storage_temperature)
+
         stsv.set_output_value(self.real_thermal_demand_heating_water, last_var_hw)

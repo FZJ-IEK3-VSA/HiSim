@@ -18,6 +18,7 @@ def test_basic_household():
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func,mysimpar )
     log.information(os.getcwd())
+
 @utils.measure_execution_time
 def test_basic_household_with_default_connections():
   #  if os.path.isdir("../hisim/inputs/cache"):

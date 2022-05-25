@@ -34,7 +34,6 @@ class HeatStorage(Component):
     ThermalDemandWarmWater = "ThermalDemandHeating"  # Warmwater for showering, washing etc...
     ControlSignalChooseStorage = "ControlSignalChooseStorage"
     BuildingTemperature = "BuildingTemperature"
-    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
 
     OutsideTemperature = "OutsideTemperature"
     ThermalInputPower1 = "ThermalInputPower1"
@@ -57,8 +56,6 @@ class HeatStorage(Component):
                  V_SP_warm_water=100,
                  temperature_of_warm_water_extratcion=32,
                  ambient_temperature=15,
-                 initial_temperature_building=23,
-                 initial_temperature_heating_storage=35,
                  sim_params=None):
         super().__init__(name="HeatStorage", my_simulation_parameters=my_simulation_parameters)
         self.V_SP_heating_water = V_SP_heating_water
@@ -67,8 +64,6 @@ class HeatStorage(Component):
         self.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
         self.ambient_temperature = ambient_temperature
         self.cw = 4812
-        self.initial_temperature_building = initial_temperature_building
-        self.initial_temperature_heating_storage = initial_temperature_heating_storage
 
         self.state = HeatStorageState(T_sp_ww=40, T_sp_hw=40)
         self.previous_state = copy.copy(self.state)
@@ -119,11 +114,6 @@ class HeatStorage(Component):
                                                                    lt.LoadTypes.Heating,
                                                                    lt.Units.Watt,
                                                                    False)
-        self.ref_max_thermal_build_demand: ComponentInput = self.add_input(self.ComponentName,
-                                                                           self.ReferenceMaxHeatBuildingDemand,
-                                                                           lt.LoadTypes.Heating,
-                                                                           lt.Units.Watt,
-                                                                           False)
 
         self.T_sp_C_hw: ComponentOutput = self.add_output(self.ComponentName,
                                                           self.WaterOutputTemperatureHeatingWater,
@@ -210,13 +200,6 @@ class HeatStorage(Component):
         last_var_ww = stsv.get_input_value(self.thermal_demand_warm_water)
         last_var_hw = stsv.get_input_value(self.thermal_demand_heating_water)
 
-        max_mass_flow_heat_storage = stsv.get_input_value(self.ref_max_thermal_build_demand) / (
-                    4.1851 * 1000 * (self.initial_temperature_heating_storage - self.initial_temperature_building))
-        max_last_var_hw = max_mass_flow_heat_storage * 4.185 * 1000 * (
-                    T_sp_var_hw - stsv.get_input_value(self.building_temperature))
-        if max_last_var_hw < last_var_hw:
-            last_var_hw = max_last_var_hw
-
         result_ww = [T_sp_var_ww, 0]
         result_hw = [T_sp_var_hw, 0]
         T_sp_C = (T_sp_var_ww + T_sp_var_hw) / 2
@@ -256,3 +239,94 @@ class HeatStorage(Component):
 
 
 
+class HeatStorageController(cp.Component):
+    """
+    BuildingController class calculates on base of the maximal Building
+    Thermal Demand and the difference of the actual Building Tempreature
+    to the Target/Minimal Building Tempreature how much the building is suppose
+    to be heated up. This Output is called "RealBuildingHeatDemand".
+
+    Parameters
+    ----------
+    sim_params : Simulator
+        Simulator object used to carry the simulation using this class
+    """
+
+    # Inputs
+    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+    TemperatureHeatingStorage = "TemperatureHeatingStorage"
+    BuildingTemperature = "BuildingTemperature"
+    RealHeatBuildingDemand= "RealHeatBuildingDemand"
+    # Outputs
+    RealThermalDemandHeatingWater = "RealThermalDemandHeatingWater"
+
+
+    def __init__(self,
+                 my_simulation_parameters: SimulationParameters,
+                 initial_temperature_building=20,
+                 initial_temperature_heating_storage=35,
+                 ):
+        super().__init__(name="HeatStorageController", my_simulation_parameters=my_simulation_parameters)
+        self.initial_temperature_heating_storage = initial_temperature_heating_storage
+        self.initial_temperature_building = initial_temperature_building
+        self.state = HeatStorageState(T_sp_ww=40, T_sp_hw=40)
+        self.previous_state = copy.copy(self.state)
+
+        # ===================================================================================================================
+        # Inputs
+        self.ref_max_thermal_build_demand: ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.ReferenceMaxHeatBuildingDemand,
+                                                                           lt.LoadTypes.Heating,
+                                                                           lt.Units.Watt,
+                                                                           False)
+        self.heating_storage_temperature: ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.TemperatureHeatingStorage,
+                                                                           lt.LoadTypes.Temperature,
+                                                                           lt.Units.Celsius,
+                                                                           False)
+        self.building_temperature: ComponentInput = self.add_input(self.ComponentName,
+                                                                           self.BuildingTemperature,
+                                                                           lt.LoadTypes.Temperature,
+                                                                           lt.Units.Celsius,
+                                                                           False)
+        self.real_thermal_demand_building = self.add_input(self.ComponentName,
+                                                                self.RealHeatBuildingDemand,
+                                                                lt.LoadTypes.Heating,
+                                                                lt.Units.Watt,
+                                                                False)
+        # Outputs
+        self.real_thermal_demand_heating_water: ComponentOutput = self.add_output(self.ComponentName,
+                                                                       self.RealThermalDemandHeatingWater,
+                                                                       lt.LoadTypes.Heating,
+                                                                       lt.Units.Watt)
+    def build(self):
+        pass
+
+    def write_to_report(self):
+        pass
+
+    def i_save_state(self):
+        self.previous_state = copy.deepcopy(self.state)
+
+    def i_restore_state(self):
+        self.state = copy.deepcopy(self.previous_state)
+
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+        pass
+
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+        T_sp_var_hw = self.state.T_sp_hw # Start-Temp-Storage
+        last_var_hw = stsv.get_input_value(self.real_thermal_demand_building)
+
+        max_mass_flow_heat_storage = stsv.get_input_value(self.ref_max_thermal_build_demand) / (
+                    4.1851 * 1000 * (self.initial_temperature_heating_storage - self.initial_temperature_building))
+
+        max_last_var_hw = max_mass_flow_heat_storage * 4.185 * 1000 * (
+                    T_sp_var_hw - stsv.get_input_value(self.building_temperature))
+
+        if max_last_var_hw < last_var_hw:
+            last_var_hw = max_last_var_hw
+
+        self.state.T_sp_hw = stsv.get_input_value(self.heating_storage_temperature)
+        stsv.set_output_value(self.real_thermal_demand_heating_water, last_var_hw)

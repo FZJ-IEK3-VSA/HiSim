@@ -100,9 +100,10 @@ class BuildingControllerState:
                  temperature_building_target_C: float,
                  level_of_utilization:float):
         self.temperature_building_target_C: float = temperature_building_target_C
-
         self.level_of_utilization:float = level_of_utilization
-
+    def clone( self ):
+        return BuildingControllerState( temperature_building_target_C = self.temperature_building_target_C,
+                                        level_of_utilization = self.level_of_utilization )
 
 @dataclass_json
 @dataclass
@@ -1151,7 +1152,8 @@ class BuildingController(cp.Component):
         self.stop_heating_building_temperature = stop_heating_building_temperature
         self.state = BuildingControllerState(temperature_building_target_C=minimal_building_temperature,
                                              level_of_utilization=0)
-        self.previous_state = copy.copy(self.state)
+        self.previous_state = self.state.clone( )
+
 
         # ===================================================================================================================
         self.ref_max_thermal_build_demand: cp.ComponentInput = self.add_input(self.ComponentName,
@@ -1180,10 +1182,10 @@ class BuildingController(cp.Component):
         pass
 
     def i_save_state(self):
-        self.previous_state = copy.deepcopy(self.state)
+        self.previous_state = self.state.clone( )
 
     def i_restore_state(self):
-        self.state = copy.deepcopy(self.previous_state)
+        self.state = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass

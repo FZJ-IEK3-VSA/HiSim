@@ -22,6 +22,9 @@ class HeatStorageState:
     def __init__(self, T_sp_ww: float, T_sp_hw: float):
         self.T_sp_ww = T_sp_ww
         self.T_sp_hw = T_sp_hw
+    def clone( self ):
+        return HeatStorageState( T_sp_ww = self.T_sp_ww,
+                                        T_sp_hw = self.T_sp_hw )
 
 
 class HeatStorage(Component):
@@ -66,7 +69,7 @@ class HeatStorage(Component):
         self.cw = 4812
 
         self.state = HeatStorageState(T_sp_ww=40, T_sp_hw=40)
-        self.previous_state = copy.copy(self.state)
+        self.previous_state = self.state.clone( )
 
         self.thermal_demand_heating_water: ComponentInput = self.add_input(self.ComponentName,
                                                                            self.ThermalDemandHeatingWater,
@@ -140,10 +143,10 @@ class HeatStorage(Component):
         pass
 
     def i_save_state(self):
-        self.previous_state = copy.deepcopy(self.state)
+        self.previous_state = self.state.clone( )
 
     def i_restore_state(self):
-        self.state = copy.deepcopy(self.previous_state)
+        self.state = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass

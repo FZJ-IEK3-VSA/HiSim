@@ -93,7 +93,7 @@ def basic_household_only_heat(my_sim, my_simulation_parameters: Optional[Simulat
                                                        initial_temperature_heating_storage=temperature_storage_target_heating_water)
 
     # Build Controller
-    my_controller_heat= controller_l2_energy_management_system.Controller( my_simulation_parameters= my_simulation_parameters,
+    my_controller_heat= controller_l2_energy_management_system.ControllerHeat( my_simulation_parameters= my_simulation_parameters,
                                                                                temperature_storage_target_heating_water=temperature_storage_target_heating_water)
 
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )

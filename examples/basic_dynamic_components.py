@@ -16,7 +16,15 @@ from hisim import component as cp
 import numpy as np
 import os
 from hisim import utils
+
+
 def basic_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+    """
+    In this example a generic controller is added. The generic controller
+    makes it possible to add component generically.
+    Here two fuel_cell/chp_systems and two batteries
+    are added.
+    """
     year = 2018
     seconds_per_timestep = 60 * 15
     # Set weather
@@ -53,7 +61,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                              gas_type="Methan",
                                                              name="CHP2",
                                                              operating_mode="electricity")
-    my_cl2 = cl2.ControllerGeneric(my_simulation_parameters=my_simulation_parameters)
+    my_cl2 = cl2.ControllerElectricityGeneric(my_simulation_parameters=my_simulation_parameters)
 
     my_occupancy = loadprofilegenerator_connector.Occupancy( profile_name=occupancy_profile, my_simulation_parameters = my_simulation_parameters )
 

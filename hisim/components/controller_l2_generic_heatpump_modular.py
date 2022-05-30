@@ -70,17 +70,19 @@ class L2_Controller( cp.Component ):
     T_min_heating: float, optional
         Minimum comfortable temperature for residents during heating period, in °C. The default is 19 °C.
     T_max_heating: float, optional
-        Minimum comfortable temperature for residents during heating period, in °C. The default is 23 °C.
+        Maximum comfortable temperature for residents during heating period, in °C. The default is 23 °C.
     T_min_cooling: float, optional
         Minimum comfortable temperature for residents during cooling period, in °C. The default is 23 °C.
     T_max_cooling: float, optional
-        Minimum comfortable temperature for residents during cooling period, in °C. The default is 26 °C.
+        Maximum comfortable temperature for residents during cooling period, in °C. The default is 26 °C.
     T_tolerance : float, optional
         Temperature difference the building may go below or exceed the comfort temperature band with, because of recommendations from L3. The default is 1 °C.
     heating_season_begin : int, optional
         Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
     heating_season_end : int, optional
-        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
+        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150.
+    source_weight : int, optional
+        Weight of component, relevant if there is more than one component of same type, defines hierachy in control. The default is 1.
     """
     # Inputs
     ReferenceTemperature = "ReferenceTemperature"
@@ -105,8 +107,9 @@ class L2_Controller( cp.Component ):
                   T_max_cooling : float = 25.0,
                   T_tolerance : float   = 1.0,
                   heating_season_begin : int = 270,
-                  heating_season_end : int = 150 ):
-        super().__init__( "L2_Controller", my_simulation_parameters = my_simulation_parameters )
+                  heating_season_end : int = 150,
+                  source_weight : int = 1 ):
+        super().__init__( "L2_Controller_HeatPump" + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, T_tolerance, heating_season_begin, heating_season_end )
 
         #Component Inputs
@@ -116,13 +119,12 @@ class L2_Controller( cp.Component ):
                                                                             Units.Celsius,
                                                                             mandatory = True )
         self.add_default_connections( Building, self.get_building_default_connections( ) )
-        if my_simulation_parameters.system_config.predictive == True:
-            self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                                        self.l3_DeviceSignal,
-                                                                        LoadTypes.OnOff,
-                                                                        Units.binary,
-                                                                        mandatory = False )
-        self.add_default_connections( controller_l3_generic_heatpump_modular.L3_Controller, self.get_l3_controller_default_connections( ) )
+        
+        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
+                                                                    self.l3_DeviceSignal,
+                                                                    LoadTypes.OnOff,
+                                                                    Units.binary,
+                                                                    mandatory = False )
         
         #Component outputs
         self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
@@ -135,13 +137,6 @@ class L2_Controller( cp.Component ):
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean ) )
-        return connections
-    
-    def get_l3_controller_default_connections( self ):
-        log.information("setting L3 default connections in L2 Controller")
-        connections = [ ]
-        L3_classname = controller_l3_generic_heatpump_modular.L3_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L2_Controller.l3_DeviceSignal, L3_classname, controller_l3_generic_heatpump_modular.L3_Controller.l3_HeatPumpSignal ) )
         return connections
 
     def build( self, T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, T_tolerance, heating_season_begin, heating_season_end ):
@@ -178,23 +173,29 @@ class L2_Controller( cp.Component ):
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )
 
         #get l3 recommendation if available
-        l3state = 0
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.l3_DeviceSignalC.SourceOutput is not None:
             l3state = stsv.get_input_value( self.l3_DeviceSignalC )
         
-        #reset temperature limits if recommended from l3
-        if l3state == 1 :
-            T_max_heating = self.T_max_heating + self.T_tolerance
-            T_min_heating = self.T_min_heating - self.T_tolerance
-            T_max_cooling = self.T_max_cooling + self.T_tolerance
-            T_min_cooling = self.T_min_cooling - self.T_tolerance
-            self.state.is_compulsory( )
-            self.previous_state.is_compulsory( )
-        elif l3state == 0:
-            T_max_heating = self.T_max_heating
+            #reset temperature limits if recommended from l3
+            if l3state == 1 :
+                T_max_heating = self.T_max_heating + self.T_tolerance
+                T_min_heating = self.T_min_heating
+                T_max_cooling = self.T_max_cooling
+                T_min_cooling = self.T_min_cooling - self.T_tolerance
+                self.state.is_compulsory( )
+                self.previous_state.is_compulsory( )
+            elif l3state == 0:
+                T_max_heating = self.T_max_heating 
+                T_min_heating = self.T_min_heating - self.T_tolerance
+                T_max_cooling = self.T_max_cooling + self.T_tolerance
+                T_min_cooling = self.T_min_cooling 
+                self.state.is_compulsory( )
+                self.previous_state.is_compulsory( )
+        else:
+            T_max_heating = self.T_max_heating 
             T_min_heating = self.T_min_heating
             T_max_cooling = self.T_max_cooling
-            T_min_cooling = self.T_min_cooling
+            T_min_cooling = self.T_min_cooling 
 
         #check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
         if self.state.is_first_iteration( timestep ):
@@ -216,7 +217,7 @@ class L2_Controller( cp.Component ):
                 if self.state.compulsory == 1:
                     #use previous state if it is compulsory
                     pass
-                elif self.my_simulation_parameters.system_config.predictive == True:
+                elif self.l3_DeviceSignalC.SourceOutput is not None:
                     #use recommendation from l3 if available and not compulsory
                     self.state.state = l3state
                 else:
@@ -238,7 +239,7 @@ class L2_Controller( cp.Component ):
                 if self.state.compulsory == 1:
                     #use previous state if it compulsory
                     pass
-                elif self.my_simulation_parameters.system_config.predictive == True:
+                elif self.l3_DeviceSignalC.SourceOutput is not None:
                     #use recommendation from l3 if available and not compulsory
                     self.state.state = l3state
                 else:

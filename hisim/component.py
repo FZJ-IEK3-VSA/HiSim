@@ -87,17 +87,40 @@ class SingleTimeStepValues:
 
 
 class SimRepository:
-    def __init__(self):
-        self.my_dict = {}
+    def __init__( self ):
+        self.my_dict : dict[ str, Any ] = { }
+        self.my_dynamic_dict : dict[ lt.ComponentType, dict[ int, Any ] ] = { elem : { } for elem in lt.ComponentType }
 
-    def set_entry(self, key: str, entry: Any):
-        self.my_dict[key] = entry
+    def set_entry(self, key: str, entry: Any ):
+        self.my_dict[ key ] = entry
 
     def get_entry(self, key: str) -> Any:
         return self.my_dict[key]
     
+    def exist_entry( self, key : str ) -> bool:
+        try:
+            self.get_entry( key )
+            return True
+        except:
+            return False
+    
     def delete_entry( self, key : str ):
         self.my_dict.pop( key )
+        
+    def set_dynamic_entry( self, component_type: lt.ComponentType, source_weight: int, entry ):
+        self.my_dynamic_dict[ component_type ][ source_weight ] = entry
+
+    def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int ) -> Any:
+        try:
+            return self.my_dynamic_dict[ component_type ][ source_weight ]
+        except:
+            return None
+    
+    def get_dynamic_component_weights( self, component_type : lt.ComponentType ) -> list :
+        return list( self.my_dynamic_dict[ component_type ].keys( ) )
+    
+    def delete_dynamic_entry( self, component_type: lt.ComponentType, source_weight: int ) -> Any:
+        self.my_dynamic_dict[ component_type ].pop( source_weight )
 
 class Component:
     @classmethod
@@ -294,7 +317,43 @@ class DynamicComponent(Component):
                                                                      SourceUnit=source_unit,
                                                                      SourceTags=source_tags,
                                                                      SourceWeight=source_weight))
-
+                
+    def get_dynamic_input( self, stsv : SingleTimeStepValues,
+                                 component_type : lt.ComponentType,
+                                 weight_counter : int ) -> Any:
+        
+        inputvalue = None
+    
+        #check if component of component type is available
+        for index, element in enumerate( self.MyComponentInputs ): #loop over all inputs
+            for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
+                if tag.__class__ == lt.ComponentType: #enter if tag is component type
+                    if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
+                        inputvalue = stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) )
+                        break
+                    else:
+                        continue
+                else:
+                    continue
+        return inputvalue
+    
+    def set_dynamic_output( self, stsv : SingleTimeStepValues,
+                                  component_type : lt.ComponentType,
+                                  weight_counter : int,
+                                  output_value : float ):
+    
+        #check if component of component type is available
+        for index, element in enumerate( self.MyComponentOutputs ): #loop over all inputs
+            for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
+                if tag.__class__ == lt.ComponentType: #enter if tag is component type
+                    if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
+                        stsv.set_output_value( self.__getattribute__( element.SourceComponentClass ), output_value )
+                        break
+                    else:
+                        continue
+                else:
+                    continue
+    
     def add_component_output(self, source_output_name: str,
                              source_tags: list,
                              source_load_type: lt.LoadTypes,

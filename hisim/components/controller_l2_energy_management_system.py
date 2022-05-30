@@ -31,7 +31,7 @@ class ControllerState:
     """
     def __init__(self, control_signal_gas_heater: float,
                  control_signal_chp: float,
-                 control_signal_heat_pump: int,
+                 control_signal_heat_pump: float,
                  temperature_storage_target_ww_C: float,
                  temperature_storage_target_hw_C: float,
                  timestep_of_hysteresis_ww:int,
@@ -94,7 +94,7 @@ class ControllerHeat(cp.Component):
                                      temperature_storage_target_hw_C = self.temperature_storage_target_heating_water,
                                      timestep_of_hysteresis_ww=0,
                                      timestep_of_hysteresis_hw=0)
-        self.previous_state = self.state.copy()
+        self.previous_state = self.state.clone()
 
 
         ###Inputs
@@ -944,7 +944,6 @@ class ControllerHeatGeneric(cp.DynamicComponent):
         pass
 
     def i_save_state(self):
-        #abändern, siehe Storage
         self.previous_state = self.state.clone()
 
     def i_restore_state(self):

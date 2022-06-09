@@ -164,7 +164,7 @@ HISIMPATH : Dict[str,Any]      = {"results": os.path.join(hisim_abs_path, "resul
                    "tasks": [os.path.join(hisim_inputs,
                                           "loadprofiles",
                                           "electrical-load_2-smart-appliances",
-                                          "data_processed",
+                                          "LPG_output",
                                           "FlexibilityEvents.HH1.json"),
                              os.path.join(hisim_inputs,
                                           "loadprofiles",

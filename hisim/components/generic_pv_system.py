@@ -174,35 +174,19 @@ def simPhotovoltaicSimple(
 @dataclass_json
 @dataclass
 class PVSystemConfig:
-    parameter_string: str
-    time: int
-    location: str
-    module_name: str
-    integrate_inverter: bool
-    inverter_name: str
-    power: float
-    azimuth : float
-    tilt : float
-
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 time: int,
-                 location: str,
-                 power: float,
-                 module_name: str,
-                 integrate_inverter: bool,
-                 inverter_name: str,
-                 azimuth : float,
-                 tilt : float ):
-        self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.time = time
-        self.location = location
-        self.module_name = module_name
-        self.integrate_inverter = integrate_inverter
-        self.inverter_name = inverter_name
-        self.power = power
-        self.azimuth = azimuth
-        self.tilt = tilt
+    #parameter_string: str
+    #my_simulation_parameters: SimulationParameters
+    name: str = 'PVSystem'
+    time: int = 2019
+    location: str = "Aachen"
+    module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_"
+    integrate_inverter: bool = True
+    inverter_name: str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
+    power: float = 10E3
+    azimuth : float = 180
+    tilt : float = 30
+    load_module_data: bool = False
+    source_weight: int = 1
 
 class PVSystem( cp.Component ):
     """
@@ -252,31 +236,13 @@ class PVSystem( cp.Component ):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 my_simulation_repository : Optional[ cp.SimRepository ] = None, 
-                 time : int = 2019,
-                 location : str = "Aachen",
-                 power : float = 10E3,
-                 load_module_data : bool = False,
-                 module_name : str = "Hanwha_HSL60P6_PA_4_250T__2013_",
-                 integrateInverter : bool = True,
-                 inverter_name : str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-                 azimuth : float = 180,
-                 tilt : float = 30,
-                 source_weight : int = 1,
-                 name : str = 'PVSystem' ):
-        
-        super().__init__( name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.pvconfig = PVSystemConfig( my_simulation_parameters = my_simulation_parameters,
-                                        time = time,
-                                        location = location, 
-                                        module_name = module_name,
-                                        integrate_inverter = integrateInverter, 
-                                        inverter_name = inverter_name,
-                                        power = power, 
-                                        azimuth = azimuth,
-                                        tilt = tilt )
-        
-        self.build( load_module_data, my_simulation_repository, source_weight )
+                 my_simulation_repository : Optional[ cp.SimRepository ] = None):
+        self.my_simulation_parameters = my_simulation_parameters
+        self.pvconfig=self.get_config()
+
+        super().__init__( self.pvconfig.name + str( self.pvconfig.source_weight ), my_simulation_parameters = my_simulation_parameters )
+
+        self.build( self.pvconfig.load_module_data, my_simulation_repository, self.pvconfig.source_weight )
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -334,7 +300,10 @@ class PVSystem( cp.Component ):
                                                              False)
 
         self.add_default_connections(Weather, self.get_weather_default_connections())
-
+    @staticmethod
+    def get_config(PVSystemConfig: PVSystemConfig):
+        pv_config=PVSystemConfig
+        return pv_config
     def get_weather_default_connections(self):
         log.information("setting weather default connections")
         connections = []

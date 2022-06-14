@@ -15,7 +15,7 @@ from hisim import loadtypes as lt
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
-from hisim.components import generic_smart_device_2
+from hisim.components import generic_smart_device
 # from hisim.components import generic_dhw_boiler
 from hisim.components import generic_district_heating
 from hisim.components import controller_l1_generic_runtime
@@ -112,6 +112,15 @@ class L3_Controller( cp.DynamicComponent ):
         self.threshold_price = threshold_price
         self.signal = ControllerSignal( )
         self.previous_signal = ControllerSignal( )
+        self.source_weights_sorted : list = [ ]
+        self.components_sorted : list[ lt.ComponentType ] = [ ]
+        
+    def sort_source_weights_and_components( self ):
+        SourceTags = [ elem.SourceTags[ 0 ] for elem in self.MyComponentInputs ]
+        SourceWeights = [ elem.SourceWeight for elem in self.MyComponentInputs ]
+        sortindex = sorted( range( len( SourceWeights) ), key = lambda k: SourceWeights[ k ] )
+        self.source_weights_sorted = [ SourceWeights[ i ] for i in sortindex ]
+        self.components_sorted = [ SourceTags[ i ] for i in sortindex ]
         
     def decision_maker( self, price_per_kWh, peak ):   
         if ( ( not self.threshold_peak ) or peak < self.threshold_peak ) and price_per_kWh < self.threshold_price:
@@ -130,6 +139,10 @@ class L3_Controller( cp.DynamicComponent ):
 
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
         
+        if timestep == 0:
+            self.sort_source_weights_and_components( )
+            
+        
         totalload = self.simulation_repository.get_entry( loadprofilegenerator_connector.Occupancy.Electricity_Demand_Forecast_24h )
         priceinjectionforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Injection_Forecast_24h )
         pricepurchaseforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Purchase_Forecast_24h )
@@ -139,45 +152,46 @@ class L3_Controller( cp.DynamicComponent ):
         for elem in self.simulation_repository.get_dynamic_component_weights( component_type = lt.ComponentType.PV ) :
             pvforecast = self.simulation_repository.get_dynamic_entry( component_type = lt.ComponentType.PV, source_weight = elem )
             totalload = [ a - b for ( a, b ) in zip( totalload, pvforecast ) ]      
-        
 
         #initialize device signals
         signal = [ ]
+        ind = 0
+        end = len( self.source_weights_sorted )
         
         #loops over components -> also fixes hierachy in control
-        for component_type in [ lt.ComponentType.Boiler, lt.ComponentType.HeatPump ]:
-        
+        while ind < end:
             devicestate = 0
-            weight_counter = 1
+            weight_counter = self.source_weights_sorted[ ind ]
+            component_type = self.components_sorted[ ind ]
             
             #loop over all source weights, breaks if one is missing
-            while devicestate is not None:
+            if component_type in [ lt.ComponentType.HeatPump, lt.ComponentType.Boiler ]:
                 
                 #try if input is available -> returns None if not
                 devicestate = self.get_dynamic_input( stsv = stsv,
-                                                      component_type = component_type,
+                                                      tags = [ component_type ],
                                                       weight_counter = weight_counter )
-                print( timestep, component_type, weight_counter, devicestate )
+                shiftableload = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
+                steps = len( shiftableload )
                 
-                #control if input was available
-                if devicestate is not None:
-                    shiftableload = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
-                    steps = len( shiftableload )
+                #calculate price and peak and get controller signal
+                price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
+                signal.append( self.decision_maker( price_per_kWh = price_per_kWh, peak = peak ) )
                     
-                    #calculate price and peak and get controller signal
-                    price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
-                    signal.append( self.decision_maker( price_per_kWh = price_per_kWh, peak = peak ) )
-                        
-                    #recompute base load if device was activated
-                    if devicestate == 1:
-                        totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
-                        
-                    self.set_dynamic_output( stsv = stsv, 
-                                             component_type = component_type,
-                                             weight_counter = weight_counter,
-                                             output_value = signal[ - 1 ] )
-                #count up    
-                weight_counter += 1
+                #recompute base load if device was activated
+                if devicestate == 1:
+                    totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
+                    
+                self.set_dynamic_output( stsv = stsv, 
+                                         tags = [ component_type ],
+                                         weight_counter = weight_counter,
+                                         output_value = signal[ - 1 ] )
+                ind += 1
+                
+            elif component_type == lt.ComponentType.SmartDevice:
+                 ind += 1
+                 
+            """TODO: set and get dynamic inputs also based on In and Output Type, implement control for smart device"""
                 
         self.signal = ControllerSignal( signal = signal )
             

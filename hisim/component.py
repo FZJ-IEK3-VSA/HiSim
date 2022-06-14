@@ -1,6 +1,6 @@
 # Generic
 
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Union
 import typing
 from hisim.simulationparameters import SimulationParameters
 # Package
@@ -290,7 +290,7 @@ class DynamicComponent(Component):
                                         source_component_output: ComponentOutput,
                                         source_load_type: lt.LoadTypes,
                                         source_unit: lt.Units,
-                                        source_tags: list,
+                                        source_tags: List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
                                         source_weight: int):
 
         # Label Input and generate variable
@@ -319,40 +319,32 @@ class DynamicComponent(Component):
                                                                      SourceWeight=source_weight))
                 
     def get_dynamic_input( self, stsv : SingleTimeStepValues,
-                                 component_type : lt.ComponentType,
+                                 tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
                                  weight_counter : int ) -> Any:
-        
+        """returns input value from first dynamic input with component type and weight"""
         inputvalue = None
     
         #check if component of component type is available
         for index, element in enumerate( self.MyComponentInputs ): #loop over all inputs
-            for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
-                if tag.__class__ == lt.ComponentType: #enter if tag is component type
-                    if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
-                        inputvalue = stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) )
-                        break
-                    else:
-                        continue
-                else:
-                    continue
+            if all( tag in element.SourceTags for tag in tags ) and weight_counter == element.SourceWeight:
+                inputvalue = stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) )
+                break
+            else:
+                continue
         return inputvalue
     
     def set_dynamic_output( self, stsv : SingleTimeStepValues,
-                                  component_type : lt.ComponentType,
+                                  tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
                                   weight_counter : int,
                                   output_value : float ):
+        """sets all output values with given component type and weight"""
     
         #check if component of component type is available
         for index, element in enumerate( self.MyComponentOutputs ): #loop over all inputs
-            for tag in element.SourceTags: #loop over tags, one is lt.ComponentType, other is lt.InandOutputType
-                if tag.__class__ == lt.ComponentType: #enter if tag is component type
-                    if tag == component_type and element.SourceWeight == weight_counter : #enter if ComponentType and sourceweight match
-                        stsv.set_output_value( self.__getattribute__( element.SourceComponentClass ), output_value )
-                        break
-                    else:
-                        continue
-                else:
-                    continue
+            if all( tag in element.SourceTags for tag in tags ) and weight_counter == element.SourceWeight:
+                stsv.set_output_value( self.__getattribute__( element.SourceComponentClass ), output_value )
+            else:
+                continue
     
     def add_component_output(self, source_output_name: str,
                              source_tags: list,

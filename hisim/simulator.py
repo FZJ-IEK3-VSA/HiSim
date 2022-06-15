@@ -197,6 +197,12 @@ class Simulator:
         """
         for wc in self.WrappedComponents:
             wc.connect_inputs(self.all_outputs)
+    def set_parameters(self, simulation_parameters: SimulationParameters) -> SimulationParameters:
+        """
+        Store the simulation parameters as an attribute of Simulator class.
+        """
+        self.SimulationParameters = simulation_parameters
+        return simulation_parameters
 
     def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
         """

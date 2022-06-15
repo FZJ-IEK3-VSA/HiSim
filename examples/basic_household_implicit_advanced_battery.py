@@ -70,7 +70,7 @@ if __name__ == '__main__':
 
             #my_pvs = {generic_pv_system.PVSystem : my_pvs_config}
 
-            my_cfg.add_component(generic_pv_system.PVSystem.get_config(generic_pv_system.PVSystemConfig(name="PVSystem2")))
+            my_cfg.add_component({generic_pv_system.PVSystem.__name__:generic_pv_system.PVSystem.get_config(generic_pv_system.PVSystemConfig(name="PVSystem2"))})
 
                 # Battery
             my_battery = {"AdvancedBattery": {}}
@@ -93,7 +93,7 @@ if __name__ == '__main__':
             # Set connections
             my_connection_component = ComponentsConnection(first_component="Weather",
                                                            second_component="PVSystem")
-            #my_cfg.add_connection(my_connection_component)
+            my_cfg.add_connection(my_connection_component)
 
             my_pvs_to_controller = ComponentsConnection(first_component="PVSystem",
                                                      second_component="Controller",

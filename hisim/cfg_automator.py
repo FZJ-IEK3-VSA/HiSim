@@ -227,11 +227,12 @@ class ConfigurationGenerator:
                 #logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
         elif isinstance(user_components_name, dict):
             for user_component_name, parameters in user_components_name.items():
-                if user_component_name.__class__ == str:
+                if parameters.__class__ == dict:
                     self._components[user_component_name] = parameters
-                else:
 
-                    self._components[user_component_name.__module__ +"."+ user_component_name.__name__] = parameters.__dict__
+                else:
+                    self._components[user_component_name] = parameters.__dict__
+                    #self._components[user_component_name.__module__ +"."+ user_component_name.__name__] = parameters.__dict__
                 #logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
         else:
             self._components[user_components_name.__module__] = user_components_name.__doc__
@@ -342,13 +343,18 @@ class SetupFunction:
         self.electricity_grids : List[ElectricityGrid] = []
         self.electricity_grid_consumption : List[ElectricityGrid] = []
         self.component_class_children=[]
+        self.component_file_children=[]
     def build(self, my_sim):
         self.add_simulation_parameters(my_sim)
-        self.component_class_children = self.find_all_component_class_children()
+        self.component_class_children, self.component_file_children = self.find_all_component_class_children()
         for comp in self.cfg["Components"]:
+
             if comp in globals():
                 if comp == "Weather":
-                    continue
+                    #continue
+                    pass
+                self.add_component(comp, my_sim)
+            elif comp in self.component_file_children:
                 self.add_component(comp, my_sim)
         for grouping_key, grouping_value in self.cfg["Groupings"].items():
             self.add_grouping(grouping_value, my_sim)
@@ -369,8 +375,12 @@ class SetupFunction:
 
     def find_all_component_class_children(self ):
         classname = component.Component
+        component_file_children=[]
         component_class_children = [cls for cls in classname.__subclasses__() if cls != component.DynamicComponent]
-        return component_class_children
+        for file_child in component_class_children:
+            if file_child not in component_file_children:
+                component_file_children.append(file_child.__module__)
+        return component_class_children, component_file_children
     def add_component(self, comp, my_sim, electricity_output=None):
         # Save parameters of class
         # Retrieve class signature
@@ -380,7 +390,15 @@ class SetupFunction:
             if signature.parameters[parameter_name].annotation == component.SimulationParameters or parameter_name == "my_simulation_parameters":
                 self.cfg["Components"][comp][parameter_name] = my_sim.SimulationParameters
         try:
+            if globals()(globals()[comp].__module__)
+            comp_config=comp+"Config"
             self._components.append(globals()[comp](**self.cfg["Components"][comp]))
+            self._components.append(globals()[comp](**self.cfg["Components"][comp]))
+            cfg_to_add=self.cfg["Components"][comp].__delitem__("my_simulation_parameters")
+
+            globals()[comp].get_config(globals()[comp_config](**self.cfg["Components"][comp]))
+            get_config
+            #hier muss objekt von PV-System erzeugt werden
         except Exception as e:
             print("Adding Component {} resulted in a failure".format(comp))
             print("Please, investigate implementation mistakes in this Component.")

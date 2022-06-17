@@ -265,7 +265,7 @@ class Component:
 @dataclass
 class DynamicConnectionInput:
     SourceComponentClass: str
-    SourceComponentOutput: ComponentOutput
+    SourceComponentOutput: str
     SourceLoadType: lt.LoadTypes
     SourceUnit: lt.Units
     SourceTags: list
@@ -287,7 +287,7 @@ class DynamicComponent(Component):
         self.MyComponentOutputs = my_component_outputs
     def add_component_input_and_connect(self,
                                         source_component_class: Component,
-                                        source_component_output: ComponentOutput,
+                                        source_component_output: str,
                                         source_load_type: lt.LoadTypes,
                                         source_unit: lt.Units,
                                         source_tags: List[ Union[ lt.ComponentType, lt.InandOutputType ] ],

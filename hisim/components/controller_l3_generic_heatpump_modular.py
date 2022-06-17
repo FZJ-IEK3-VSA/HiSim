@@ -7,6 +7,7 @@ Created on Tue Apr 26 12:59:48 2022
 
 # Generic/Built-in
 from typing import Optional, List
+import numpy as np
 
 #Owned
 from hisim import log
@@ -161,6 +162,7 @@ class L3_Controller( cp.DynamicComponent ):
         #loops over components -> also fixes hierachy in control
         while ind < end:
             devicestate = 0
+            #print( self.source_weights_sorted )
             weight_counter = self.source_weights_sorted[ ind ]
             component_type = self.components_sorted[ ind ]
             
@@ -189,9 +191,67 @@ class L3_Controller( cp.DynamicComponent ):
                 ind += 1
                 
             elif component_type == lt.ComponentType.SmartDevice:
-                 ind += 1
+                #get forecasts
+                profiles = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
+                prof_act = profiles[ 0 ]
+                prof_next = profiles[ 1 ]
+                
+                #get inputs
+                lastactivation = self.get_dynamic_input( stsv = stsv,
+                                                         tags = [ component_type, lt.InandOutputType.LastActivation ],
+                                                         weight_counter = weight_counter )
+                earliestactivation = self.get_dynamic_input( stsv = stsv,
+                                                             tags = [ component_type, lt.InandOutputType.EarliestActivation ],
+                                                             weight_counter = weight_counter )
+                latestactivation = self.get_dynamic_input( stsv = stsv,
+                                                           tags = [ component_type, lt.InandOutputType.LatestActivation ],
+                                                           weight_counter = weight_counter )
+                
+                #relevant timesteps
+                horizon = int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
+                lastactivated = max( lastactivation + len( prof_act ) - timestep, 0 )
+                
+                #initialize activation signal
+                activation = timestep + horizon
+                
+                #assign to profile if device is running
+                if lastactivated > 0:
+                    if lastactivated < horizon:
+                        profile = prof_act[ timestep - lastactivation :  ] + [ 0 ] * ( horizon - timestep + lastactivation )
+                    else:
+                        profile = prof_act[ timestep - lastactivation : timestep - lastactivation + horizon ]
+                else:
+                    profile = [ 0 ] * horizon
+                
+                #test activation if possible
+                if earliestactivation - timestep < horizon:
+                    #define interval and initialize price
+                    iteration_begin = max( earliestactivation - timestep, lastactivated )
+                    iteration_end = min( latestactivation - timestep, horizon - len( prof_next ) )
+                    price = np.inf
+                    
+                    #loop over possibilities and save best ones
+                    for possibility in range( iteration_begin, iteration_end ):
+                        shiftableload = profile[ : possibility ] + prof_next + profile[ possibility + len( prof_next ) : ]
+                        price_per_kWh, _ = price_and_peak( totalload, shiftableload, pricepurchaseforecast, priceinjectionforecast )
+                        if price_per_kWh < price:
+                            price = price_per_kWh
+                            activation = timestep + possibility
+                            profile = [ * shiftableload ]
+                
+                #compute new load
+                totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]
                  
-            """TODO: set and get dynamic inputs also based on In and Output Type, implement control for smart device"""
+                #set output: timestep of best activation
+                self.set_dynamic_output( stsv = stsv, 
+                                         tags = [ component_type, lt.InandOutputType.RecommendedActivation ],
+                                         weight_counter = weight_counter,
+                                         output_value = activation )
+                print( timestep, weight_counter, activation )
+                            
+                ind += 3
+            
+                 
                 
         self.signal = ControllerSignal( signal = signal )
             

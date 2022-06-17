@@ -112,6 +112,10 @@ class InandOutputType(str, enum.Enum):
     ControlSignal = "ControlSignal"
     ElectricityTarget = "ElectricityTarget"
     ElectricityReal = "ElectricityReal"
+    LastActivation = "LastActivation"
+    LatestActivation = "LatestActivation"
+    EarliestActivation = "EarliestActivation"
+    RecommendedActivation = "RecommendedActivation"
 
 
 

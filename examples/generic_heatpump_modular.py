@@ -156,24 +156,25 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
         
         #read in available smart devices
         filepath = utils.HISIMPATH[ "smart_devices" ][ "device_collection" ] 
-        count = 0
+        count = 1
         device_collection = [ ]
         
         with open( filepath, 'r' ) as f:
-            count = 0
+            i = 0
             formatreader = csv.reader( f, delimiter = ';' )
             for line in formatreader:
-                if count > 1:
+                if i > 1:
                     device_collection.append( line[ 0 ] )
-                count += 1
+                i += 1
         
         #create all smart devices
         count = 1
-        for elem in device_collection:
-            my_smart_device = generic_smart_device.SmartDevice( identifier = elem,
+        my_smart_devices : List[ generic_smart_device.SmartDevice ] = [ ]
+        for device in device_collection:
+            my_smart_devices.append( generic_smart_device.SmartDevice( identifier = device,
                                                                 source_weight = count,
-                                                                my_simulation_parameters = my_simulation_parameters )
-            my_sim.add_component( my_smart_device )
+                                                                my_simulation_parameters = my_simulation_parameters ) )
+            my_sim.add_component( my_smart_devices[ count - 1 ] )
             count += 1
     
     if boiler_included: 
@@ -270,13 +271,46 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                 my_heating_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
                                                                 src_object = l3_HeatPumpSignal )
                 
+                print( my_heating_controller_l1.l1_DeviceSignal, type( my_heating_controller_l1.l1_DeviceSignal ) )
+                
                 my_controller_l3.add_component_input_and_connect( source_component_class = my_heating_controller_l1,
                                                                   source_component_output = my_heating_controller_l1.l1_DeviceSignal,
-                                                                  source_load_type= lt.LoadTypes.OnOff,
-                                                                  source_unit= lt.Units.binary,
+                                                                  source_load_type = lt.LoadTypes.OnOff,
+                                                                  source_unit = lt.Units.binary,
                                                                   source_tags = [ lt.ComponentType.HeatPump, lt.InandOutputType.ControlSignal ],
                                                                   source_weight = my_heating_controller_l1.source_weight )
                 count += 1
+                
+            if smart_devices_included:
+                for elem in my_smart_devices:
+                    l3_ActivationSignal = my_controller_l3.add_component_output( source_output_name = lt.InandOutputType.RecommendedActivation,
+                                                                                 source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.RecommendedActivation ],
+                                                                                 source_weight = elem.source_weight,
+                                                                                 source_load_type = lt.LoadTypes.Activation,
+                                                                                 source_unit = lt.Units.timesteps )  
+                    elem.connect_dynamic_input( input_fieldname = generic_smart_device.SmartDevice.l3_DeviceActivation,
+                                                src_object = l3_ActivationSignal )
+                    
+                    
+                    # elem.connect_dynamic_input( in)
+                    my_controller_l3.add_component_input_and_connect( source_component_class = elem,
+                                                                      source_component_output = elem.LastActivation,
+                                                                      source_load_type = lt.LoadTypes.Activation,
+                                                                      source_unit = lt.Units.timesteps,
+                                                                      source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.LastActivation ],
+                                                                      source_weight = elem.source_weight )
+                    my_controller_l3.add_component_input_and_connect( source_component_class = elem,
+                                                                      source_component_output = elem.EarliestActivation,
+                                                                      source_load_type = lt.LoadTypes.Activation,
+                                                                      source_unit = lt.Units.timesteps,
+                                                                      source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.EarliestActivation ],
+                                                                      source_weight = elem.source_weight )
+                    my_controller_l3.add_component_input_and_connect( source_component_class = elem,
+                                                                      source_component_output = elem.LatestActivation,
+                                                                      source_load_type = lt.LoadTypes.Activation,
+                                                                      source_unit = lt.Units.timesteps,
+                                                                      source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.LatestActivation ],
+                                                                      source_weight = elem.source_weight )
             
             my_sim.add_component( my_controller_l3 )
                 

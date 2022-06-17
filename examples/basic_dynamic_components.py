@@ -113,6 +113,8 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                         src_object=electricity_to_or_from_battery_target_1)
     my_advanced_battery_2.connect_dynamic_input(input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
                                         src_object=electricity_to_or_from_battery_target_2)
+    
+    print( type(my_advanced_fuel_cell_1.ElectricityOutput))
 
     my_cl2.add_component_input_and_connect( source_component_class=my_advanced_fuel_cell_1,
                                                source_component_output=my_advanced_fuel_cell_1.ElectricityOutput,

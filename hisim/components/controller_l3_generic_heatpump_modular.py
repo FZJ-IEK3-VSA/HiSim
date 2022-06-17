@@ -62,6 +62,12 @@ def price_and_peak( totalload : List, shiftableload : List, pricepurchaseforecas
     
     return price_per_kWh, peak
 
+def advance( component_type : lt.ComponentType, ind : int ) -> int:
+    if component_type in [ lt.ComponentType.HeatPump, lt.ComponentType.Boiler ]:
+        return ind + 1
+    elif component_type == lt.ComponentType.SmartDevice:
+        return ind + 3
+
 class ControllerSignal:
     """class to save predictive output signal from predictive controller
         -1 shut off device if possible
@@ -142,7 +148,6 @@ class L3_Controller( cp.DynamicComponent ):
         
         if timestep == 0:
             self.sort_source_weights_and_components( )
-            
         
         totalload = self.simulation_repository.get_entry( loadprofilegenerator_connector.Occupancy.Electricity_Demand_Forecast_24h )
         priceinjectionforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Injection_Forecast_24h )
@@ -156,7 +161,8 @@ class L3_Controller( cp.DynamicComponent ):
 
         #initialize device signals
         signal = [ ]
-        ind = 0
+        ind = 0 #input index
+        pos = 0 #output index, position of output in signal of ControllerSignal
         end = len( self.source_weights_sorted )
         
         #loops over components -> also fixes hierachy in control
@@ -165,94 +171,100 @@ class L3_Controller( cp.DynamicComponent ):
             #print( self.source_weights_sorted )
             weight_counter = self.source_weights_sorted[ ind ]
             component_type = self.components_sorted[ ind ]
-            
-            #loop over all source weights, breaks if one is missing
-            if component_type in [ lt.ComponentType.HeatPump, lt.ComponentType.Boiler ]:
                 
-                #try if input is available -> returns None if not
-                devicestate = self.get_dynamic_input( stsv = stsv,
-                                                      tags = [ component_type ],
-                                                      weight_counter = weight_counter )
-                shiftableload = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
-                steps = len( shiftableload )
-                
-                #calculate price and peak and get controller signal
-                price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
-                signal.append( self.decision_maker( price_per_kWh = price_per_kWh, peak = peak ) )
-                    
-                #recompute base load if device was activated
-                if devicestate == 1:
-                    totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
-                    
-                self.set_dynamic_output( stsv = stsv, 
+            if force_convergence:
+                print( pos, self.signal.signal )
+                self.set_dynamic_output( stsv = stsv,
                                          tags = [ component_type ],
                                          weight_counter = weight_counter,
-                                         output_value = signal[ - 1 ] )
-                ind += 1
+                                         output_value = self.signal.signal[ pos ] )
+                pos += 1
+                ind = advance( component_type, ind )
                 
-            elif component_type == lt.ComponentType.SmartDevice:
-                #get forecasts
-                profiles = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
-                prof_act = profiles[ 0 ]
-                prof_next = profiles[ 1 ]
+            else:
+                if component_type in [ lt.ComponentType.HeatPump, lt.ComponentType.Boiler ]: #loop over all source weights, breaks if one is missing
                 
-                #get inputs
-                lastactivation = self.get_dynamic_input( stsv = stsv,
-                                                         tags = [ component_type, lt.InandOutputType.LastActivation ],
-                                                         weight_counter = weight_counter )
-                earliestactivation = self.get_dynamic_input( stsv = stsv,
-                                                             tags = [ component_type, lt.InandOutputType.EarliestActivation ],
-                                                             weight_counter = weight_counter )
-                latestactivation = self.get_dynamic_input( stsv = stsv,
-                                                           tags = [ component_type, lt.InandOutputType.LatestActivation ],
-                                                           weight_counter = weight_counter )
-                
-                #relevant timesteps
-                horizon = int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
-                lastactivated = max( lastactivation + len( prof_act ) - timestep, 0 )
-                
-                #initialize activation signal
-                activation = timestep + horizon
-                
-                #assign to profile if device is running
-                if lastactivated > 0:
-                    if lastactivated < horizon:
-                        profile = prof_act[ timestep - lastactivation :  ] + [ 0 ] * ( horizon - timestep + lastactivation )
-                    else:
-                        profile = prof_act[ timestep - lastactivation : timestep - lastactivation + horizon ]
-                else:
-                    profile = [ 0 ] * horizon
-                
-                #test activation if possible
-                if earliestactivation - timestep < horizon:
-                    #define interval and initialize price
-                    iteration_begin = max( earliestactivation - timestep, lastactivated )
-                    iteration_end = min( latestactivation - timestep, horizon - len( prof_next ) )
-                    price = np.inf
+                    #try if input is available -> returns None if not
+                    devicestate = self.get_dynamic_input( stsv = stsv,
+                                                          tags = [ component_type ],
+                                                          weight_counter = weight_counter )
+                    shiftableload = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
+                    steps = len( shiftableload )
                     
-                    #loop over possibilities and save best ones
-                    for possibility in range( iteration_begin, iteration_end ):
-                        shiftableload = profile[ : possibility ] + prof_next + profile[ possibility + len( prof_next ) : ]
-                        price_per_kWh, _ = price_and_peak( totalload, shiftableload, pricepurchaseforecast, priceinjectionforecast )
-                        if price_per_kWh < price:
-                            price = price_per_kWh
-                            activation = timestep + possibility
-                            profile = [ * shiftableload ]
+                    #calculate price and peak and get controller signal
+                    price_per_kWh, peak = price_and_peak( totalload[ : steps ], shiftableload, pricepurchaseforecast[ : steps ], priceinjectionforecast[ : steps ] )
+                    signal.append( self.decision_maker( price_per_kWh = price_per_kWh, peak = peak ) )
+                        
+                    #recompute base load if device was activated
+                    if devicestate == 1:
+                        totalload = [ a + b for ( a, b ) in zip( totalload[ : steps ], shiftableload ) ] + totalload[ steps : ]
+                        
+                    self.set_dynamic_output( stsv = stsv, 
+                                             tags = [ component_type ],
+                                             weight_counter = weight_counter,
+                                             output_value = signal[ - 1 ] )
                 
-                #compute new load
-                totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]
-                 
-                #set output: timestep of best activation
-                self.set_dynamic_output( stsv = stsv, 
-                                         tags = [ component_type, lt.InandOutputType.RecommendedActivation ],
-                                         weight_counter = weight_counter,
-                                         output_value = activation )
-                print( timestep, weight_counter, activation )
-                            
-                ind += 3
-            
-                 
+                elif component_type == lt.ComponentType.SmartDevice:
                 
-        self.signal = ControllerSignal( signal = signal )
+                    #get forecasts
+                    profiles = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )
+                    prof_act = profiles[ 0 ]
+                    prof_next = profiles[ 1 ]
+                    
+                    #get inputs
+                    lastactivation = self.get_dynamic_input( stsv = stsv,
+                                                             tags = [ component_type, lt.InandOutputType.LastActivation ],
+                                                             weight_counter = weight_counter )
+                    earliestactivation = self.get_dynamic_input( stsv = stsv,
+                                                                 tags = [ component_type, lt.InandOutputType.EarliestActivation ],
+                                                                 weight_counter = weight_counter )
+                    latestactivation = self.get_dynamic_input( stsv = stsv,
+                                                               tags = [ component_type, lt.InandOutputType.LatestActivation ],
+                                                               weight_counter = weight_counter )
+                    
+                    #relevant timesteps
+                    horizon = int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
+                    lastactivated = max( lastactivation + len( prof_act ) - timestep, 0 )
+                    
+                    #initialize activation signal
+                    activation = timestep + horizon
+                    
+                    #assign to profile if device is running
+                    if lastactivated > 0:
+                        if lastactivated < horizon:
+                            profile = prof_act[ timestep - lastactivation :  ] + [ 0 ] * ( horizon - timestep + lastactivation )
+                        else:
+                            profile = prof_act[ timestep - lastactivation : timestep - lastactivation + horizon ]
+                    else:
+                        profile = [ 0 ] * horizon
+                    
+                    #test activation if possible
+                    if earliestactivation - timestep < horizon:
+                        #define interval and initialize price
+                        iteration_begin = max( earliestactivation - timestep, lastactivated )
+                        iteration_end = min( latestactivation - timestep, horizon - len( prof_next ) )
+                        price = np.inf
+                        
+                        #loop over possibilities and save best ones
+                        for possibility in range( iteration_begin, iteration_end ):
+                            shiftableload = profile[ : possibility ] + prof_next + profile[ possibility + len( prof_next ) : ]
+                            price_per_kWh, _ = price_and_peak( totalload, shiftableload, pricepurchaseforecast, priceinjectionforecast )
+                            if price_per_kWh < price:
+                                price = price_per_kWh
+                                activation = timestep + possibility
+                                profile = [ * shiftableload ]
+                    
+                    #compute new load
+                    totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]
+                     
+                    #set output: timestep of best activation
+                    signal.append( activation )
+                    self.set_dynamic_output( stsv = stsv, 
+                                             tags = [ component_type ],
+                                             weight_counter = weight_counter,
+                                             output_value = signal[ - 1 ] )
+                    
+                ind = advance( component_type, ind ) 
+                self.signal = ControllerSignal( signal = signal )
             
        

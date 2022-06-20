@@ -35,7 +35,7 @@ class Carpet(Chart):
         try:
             database = self.data.values.reshape( xdims, ydims )
         except ValueError:
-           log.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           log.error("Carpet plot can only deal with data for 365 days" )
            print( len( self.data ), xdims, ydims )
            return
         if np.max(np.abs(self.data.values)) > 1.5E3:
@@ -85,7 +85,7 @@ class Carpet(Chart):
         try:
             database = self.data.values.reshape( xdims, ydims )
         except ValueError:
-           log.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           log.error("Carpet plot can only deal with data for 7 days")
            print( len( self.data ), xdims, ydims )
            return
         if np.max(np.abs(self.data.values)) > 1.5E3:
@@ -135,7 +135,7 @@ class Carpet(Chart):
         try:
             database = self.data.values.reshape( xdims, ydims )
         except ValueError:
-           log.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           log.error("Carpet plot can only deal with data for 30 days" )
            print( len( self.data ), xdims, ydims )
            return
         if np.max(np.abs(self.data.values)) > 1.5E3:

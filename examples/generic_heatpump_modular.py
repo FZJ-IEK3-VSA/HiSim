@@ -75,8 +75,9 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
     
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options( year = year,
+        my_simulation_parameters = SimulationParameters.january_only( year = year,
                                                                                seconds_per_timestep = seconds_per_timestep )
+        my_simulation_parameters.enable_all_options( )
     my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', heating_device_included = 'heat_pump' )  
     my_sim.SimulationParameters = my_simulation_parameters
     
@@ -270,8 +271,6 @@ def generic_heatpump_modular_explicit( my_sim, my_simulation_parameters: Optiona
                 
                 my_heating_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
                                                                 src_object = l3_HeatPumpSignal )
-                
-                print( my_heating_controller_l1.l1_DeviceSignal, type( my_heating_controller_l1.l1_DeviceSignal ) )
                 
                 my_controller_l3.add_component_input_and_connect( source_component_class = my_heating_controller_l1,
                                                                   source_component_output = my_heating_controller_l1.l1_DeviceSignal,

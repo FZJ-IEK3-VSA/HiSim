@@ -6,7 +6,7 @@ Created on Tue Apr 26 12:59:48 2022
 """
 
 # Generic/Built-in
-from typing import Optional, List
+from typing import Optional, List, Tuple
 import numpy as np
 
 #Owned
@@ -32,7 +32,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def price_and_peak( totalload : List, shiftableload : List, pricepurchaseforecast : List, priceinjectionforecast : List ):
+def price_and_peak( totalload : List, shiftableload : List, pricepurchaseforecast : List, priceinjectionforecast : List ) -> Tuple[ float, float ]:
     """calculate price per kWh of device which is activated and maximal load peak
     
     Parameters:
@@ -46,19 +46,23 @@ def price_and_peak( totalload : List, shiftableload : List, pricepurchaseforecas
     priceinjectionforecast : list
         Forecast of the pricesignal for injection.
     """
+    if sum( shiftableload ) == 0:
+        price_per_kWh = 2.0 * sum( pricepurchaseforecast )
+        peak = 0.0
+    else:
+        #calculate load when device is switched on
+        potentialload = [ a + b for ( a, b ) in zip( totalload, shiftableload ) ]
+        
+        #calculate price
+        price_with = [ a * b for ( a, b ) in zip( potentialload, pricepurchaseforecast ) if a > 0 ] \
+            + [ a * b for ( a, b ) in zip( potentialload, priceinjectionforecast ) if a < 0 ]
+        price_without = [ a * b for ( a, b ) in zip( totalload, pricepurchaseforecast ) if a > 0 ] \
+            + [ a * b for ( a, b ) in zip( totalload, priceinjectionforecast ) if a < 0 ]
+         
+        price_per_kWh = ( sum( price_with ) - sum( price_without ) ) / sum( shiftableload )
     
-    #calculate load when device is switched on
-    potentialload = [ a + b for ( a, b ) in zip( totalload, shiftableload ) ]
-    
-    #calculate price
-    price_with = [ a * b for ( a, b ) in zip( potentialload, pricepurchaseforecast ) if a > 0 ] \
-        + [ a * b for ( a, b ) in zip( potentialload, priceinjectionforecast ) if a < 0 ]
-    price_without = [ a * b for ( a, b ) in zip( totalload, pricepurchaseforecast ) if a > 0 ] \
-        + [ a * b for ( a, b ) in zip( totalload, priceinjectionforecast ) if a < 0 ]
-    price_per_kWh = ( sum( price_with ) - sum( price_without ) ) / sum( shiftableload )
-    
-    #calculate peak
-    peak = max( totalload )
+        #calculate peak
+        peak = max( totalload )
     
     return price_per_kWh, peak
 
@@ -67,6 +71,8 @@ def advance( component_type : lt.ComponentType, ind : int ) -> int:
         return ind + 1
     elif component_type == lt.ComponentType.SmartDevice:
         return ind + 3
+    else:
+        return ind
 
 class ControllerSignal:
     """class to save predictive output signal from predictive controller
@@ -129,7 +135,7 @@ class L3_Controller( cp.DynamicComponent ):
         self.source_weights_sorted = [ SourceWeights[ i ] for i in sortindex ]
         self.components_sorted = [ SourceTags[ i ] for i in sortindex ]
         
-    def decision_maker( self, price_per_kWh, peak ):   
+    def decision_maker( self, price_per_kWh : float , peak : float ) -> int :   
         if ( ( not self.threshold_peak ) or peak < self.threshold_peak ) and price_per_kWh < self.threshold_price:
             return 1
         else:
@@ -151,13 +157,12 @@ class L3_Controller( cp.DynamicComponent ):
         
         totalload = self.simulation_repository.get_entry( loadprofilegenerator_connector.Occupancy.Electricity_Demand_Forecast_24h )
         priceinjectionforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Injection_Forecast_24h )
-        pricepurchaseforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Purchase_Forecast_24h )
-        
+        pricepurchaseforecast = self.simulation_repository.get_entry( generic_price_signal.PriceSignal.Price_Purchase_Forecast_24h )        
         
         #substract PV production from laod, if available
         for elem in self.simulation_repository.get_dynamic_component_weights( component_type = lt.ComponentType.PV ) :
             pvforecast = self.simulation_repository.get_dynamic_entry( component_type = lt.ComponentType.PV, source_weight = elem )
-            totalload = [ a - b for ( a, b ) in zip( totalload, pvforecast ) ]      
+            totalload = [ a - b for ( a, b ) in zip( totalload, pvforecast ) ]   
 
         #initialize device signals
         signal = [ ]
@@ -168,12 +173,10 @@ class L3_Controller( cp.DynamicComponent ):
         #loops over components -> also fixes hierachy in control
         while ind < end:
             devicestate = 0
-            #print( self.source_weights_sorted )
             weight_counter = self.source_weights_sorted[ ind ]
             component_type = self.components_sorted[ ind ]
                 
             if force_convergence:
-                print( pos, self.signal.signal )
                 self.set_dynamic_output( stsv = stsv,
                                          tags = [ component_type ],
                                          weight_counter = weight_counter,
@@ -244,6 +247,7 @@ class L3_Controller( cp.DynamicComponent ):
                         iteration_begin = max( earliestactivation - timestep, lastactivated )
                         iteration_end = min( latestactivation - timestep, horizon - len( prof_next ) )
                         price = np.inf
+                        #self.threshold_price = 25
                         
                         #loop over possibilities and save best ones
                         for possibility in range( iteration_begin, iteration_end ):
@@ -253,6 +257,10 @@ class L3_Controller( cp.DynamicComponent ):
                                 price = price_per_kWh
                                 activation = timestep + possibility
                                 profile = [ * shiftableload ]
+                                continue
+                        # if self.threshold_price < 25:
+                        #     self.threshold_price = price
+                        #print( timestep, price, activation  )
                     
                     #compute new load
                     totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]

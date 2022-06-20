@@ -179,7 +179,9 @@ class PostProcessor:
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
                                    time_correction_factor=self.ppdt.time_correction_factor)
-                my_carpet.plot()
+               # my_carpet.plot_year()
+               # my_carpet.plot_week( )
+                my_carpet.plot_january( )
 
             if PostProcessingOptions.Plot_Day in self.ppdt.postProcessingOptions:
                     my_days = ChartSingleDay(output=output.FullName,

@@ -67,8 +67,8 @@ class PriceSignal(cp.Component):
         pass
 
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
-        priceinjectionforecast = [ 10  ] * self.day
-        pricepurchaseforecast = [ 50  ] * self.day
+        priceinjectionforecast = [ 10  ] * int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
+        pricepurchaseforecast = [ 50  ] * int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
         # pricepurchaseforecast = [ ]
         # for step in range( self.day ):
         #     x = timestep % self.day
@@ -85,8 +85,7 @@ class PriceSignal(cp.Component):
     def build_dummy( self, start : int, end: int ):
         self.start = start
         self.end = end
-        self.day = int( 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep )
-
+        
     def write_to_report(self):
         lines = []
         lines.append( "Price signal: {}".format( "dummy" ) )

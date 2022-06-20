@@ -50,6 +50,10 @@ class SimulationParameters:
     @classmethod
     def january_only(cls, year: int, seconds_per_timestep: int):
         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep)
+    
+    @classmethod
+    def one_week_only(cls, year: int, seconds_per_timestep: int):
+        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 8), seconds_per_timestep)
 
     @classmethod
     def one_day_only(cls, year: int, seconds_per_timestep: int):

@@ -100,7 +100,7 @@ class SmartDevice( cp.Component ):
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
         #mandatory Output
-        self.electricity_outputC: cp.ComponentOutput = self.add_output( self.ComponentName,
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
                                                                         self.ElectricityOutput,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt )
@@ -153,7 +153,7 @@ class SmartDevice( cp.Component ):
                     activation = stsv.get_input_value( self.l3_DeviceActivationC )
                 #if last possible switch on force activation
                 if timestep >= self.latest_start[ self.state.position ]: #needs to be activated
-                    activation == timestep
+                    activation = timestep
                     
                 if timestep == activation:
                     self.state.run( timestep, self.electricity_profile[ self.state.position ] )
@@ -170,7 +170,7 @@ class SmartDevice( cp.Component ):
         else:
             self.state.run( timestep, self.electricity_profile[ self.state.position ] )
 
-        stsv.set_output_value( self.electricity_outputC, self.state.actual_power )
+        stsv.set_output_value( self.ElectricityOutputC, self.state.actual_power )
         
         if self.predictive == True:
             #pass conditions to smart controller

@@ -24,19 +24,19 @@ class Carpet(Chart):
                          units=units,
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
-    def plot(self):
-
+    def plot_year(self):
         #if(len(self.data.index) != 365*24):
          #   logging.error("Carpet plot can only deal with data for 365 days in 1h resolution")
           #  return
         #log.information("starting carpet plots")
-        xdims = 365 #number of days
+        xdims = 365
         ydims = int( len( self.data ) / 365 ) #number of calculated timesteps per day
         y_steps_per_hour = int( ydims / 24 )
         try:
             database = self.data.values.reshape( xdims, ydims )
         except ValueError:
            log.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           print( len( self.data ), xdims, ydims )
            return
         if np.max(np.abs(self.data.values)) > 1.5E3:
             database = database * 1E-3
@@ -54,7 +54,6 @@ class Carpet(Chart):
         plot = ax.pcolormesh(plot_data, cmap=cm)
         plt.colorbar(plot).set_label(self.units)
 
-
         y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour ).tolist()
         # y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
         ax.set_yticks(y_ticks)
@@ -64,6 +63,106 @@ class Carpet(Chart):
         x_ticks = np.arange(15, 346, 30).tolist()
         ax.set_xticks(x_ticks)
         ax.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
+
+        # optimizing fonts
+        fig.autofmt_xdate(rotation=45)
+        # setting axis of the plot
+        ax.set_ylabel('Daytime [h]')
+        ax.set_xlabel('Month of the year')
+        #plt.title(self.title)
+        # ax.set_ylabel('Daytime [h]', fontdict={'size': 14})
+        # ax.set_xlabel('Month of the year', fontsize=14)
+
+        # plt.show()
+#        log.information("finished carpet plot: " + self.filepath)
+        plt.savefig(self.filepath, bbox_inches='tight')
+        plt.close()
+        
+    def plot_week(self):
+        xdims = 7
+        ydims = int( len( self.data ) / 7 ) #number of calculated timesteps per day
+        y_steps_per_hour = int( ydims / 24 )
+        try:
+            database = self.data.values.reshape( xdims, ydims )
+        except ValueError:
+           log.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           print( len( self.data ), xdims, ydims )
+           return
+        if np.max(np.abs(self.data.values)) > 1.5E3:
+            database = database * 1E-3
+            self.units = "k{}".format(self.units)
+        plot_data = np.flip(database.transpose(), axis=0)
+        # plot_data = database
+
+        # sns.set(font_scale=float(1.5))
+        fig = plt.figure(figsize=(10, 5), dpi=500)
+
+        ax = fig.add_subplot(111)
+        mycolors = 'viridis'
+        cm = plt.cm.get_cmap(mycolors)
+
+        plot = ax.pcolormesh(plot_data, cmap=cm)
+        plt.colorbar(plot).set_label(self.units)
+
+        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour ).tolist()
+        # y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
+        ax.set_yticks(y_ticks)
+        y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
+        ax.set_yticklabels([str(i) for i in y_ticks_labels])
+
+        # x_ticks = np.arange(15, 346, 30).tolist()
+        # ax.set_xticks(x_ticks)
+        # ax.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
+
+        # optimizing fonts
+        fig.autofmt_xdate(rotation=45)
+        # setting axis of the plot
+        ax.set_ylabel('Daytime [h]')
+        ax.set_xlabel('Month of the year')
+        #plt.title(self.title)
+        # ax.set_ylabel('Daytime [h]', fontdict={'size': 14})
+        # ax.set_xlabel('Month of the year', fontsize=14)
+
+        # plt.show()
+#        log.information("finished carpet plot: " + self.filepath)
+        plt.savefig(self.filepath, bbox_inches='tight')
+        plt.close()
+
+    def plot_january(self):  
+        xdims = 30
+        ydims = int( len( self.data ) / 30 ) #number of calculated timesteps per day
+        y_steps_per_hour = int( ydims / 24 )
+        try:
+            database = self.data.values.reshape( xdims, ydims )
+        except ValueError:
+           log.error("Carpet plot can only deal with data for 365 days in 1h resolution")
+           print( len( self.data ), xdims, ydims )
+           return
+        if np.max(np.abs(self.data.values)) > 1.5E3:
+            database = database * 1E-3
+            self.units = "k{}".format(self.units)
+        plot_data = np.flip(database.transpose(), axis=0)
+        # plot_data = database
+
+        # sns.set(font_scale=float(1.5))
+        fig = plt.figure(figsize=(10, 5), dpi=500)
+
+        ax = fig.add_subplot(111)
+        mycolors = 'viridis'
+        cm = plt.cm.get_cmap(mycolors)
+
+        plot = ax.pcolormesh(plot_data, cmap=cm)
+        plt.colorbar(plot).set_label(self.units)
+
+        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour ).tolist()
+        # y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
+        ax.set_yticks(y_ticks)
+        y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
+        ax.set_yticklabels([str(i) for i in y_ticks_labels])
+
+        # x_ticks = np.arange(15, 346, 30).tolist()
+        # ax.set_xticks(x_ticks)
+        # ax.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
 
         # optimizing fonts
         fig.autofmt_xdate(rotation=45)

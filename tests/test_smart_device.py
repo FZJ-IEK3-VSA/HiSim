@@ -1,69 +1,48 @@
 from hisim import component as cp
 from hisim.components import generic_heat_pump
-from hisim.components import generic_smart_device_controller
 from hisim.components import generic_smart_device
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim import utils
 from tests import functions_for_testing as fft
-def test_smart_device_library():
-    """
-    Test if it can load the smart device library
-    """
-    # Heat Pump
-    manufacturer = "Viessmann Werke GmbH & Co KG"
-    name = "Vitocal 300-A AWO-AC 301.B07"
-    minimum_idle_time = 30
-    minimum_operation_time = 15
-    mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
-                                                                 seconds_per_timestep=60)
-    # Set Heat Pump
-    generic_heat_pump.HeatPump(manufacturer=manufacturer,
-                           name=name,
-                           min_operation_time=minimum_idle_time,
-                           min_idle_time=minimum_operation_time, my_simulation_parameters=mysim)
+
+import csv
 
 def test_smart_device():
     """
     Test time shifting for smart devices
     """
-    seconds_per_timestep = 60
+    #initialize simulation parameters
+    mysim: SimulationParameters = SimulationParameters.full_year( year=2021,
+                                                                 seconds_per_timestep = 60 ) 
+    #read in first available smart device
+    filepath = utils.HISIMPATH[ "smart_devices" ][ "device_collection" ] 
+    
+    with open( filepath, 'r' ) as f:
+        i = 0
+        formatreader = csv.reader( f, delimiter = ';' )
+        for line in formatreader:
+            if i > 1:
+                device = line[ 0 ]
+            i += 1
+     
+    #create smart_device        
+    my_smart_device = generic_smart_device.SmartDevice( identifier = device, source_weight = 0, my_simulation_parameters = mysim )
+    
+    #get first activation and corrisponding profile from data (SmartDevice Class reads in data )
+    activation = my_smart_device.latest_start[ 0 ]
+    profile = my_smart_device.electricity_profile[ 0 ]
 
-    available_electricity = 0
-
-    available_electricity_outputC = cp.ComponentOutput("ElectricityHomeGrid",
-                                                       "ElectricityOutput",
-                                                       lt.LoadTypes.Electricity,
-                                                       lt.Units.Watt)
-    mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
-                                                                 seconds_per_timestep=60)
-    # Create Controller
-    my_flexible_controller = generic_smart_device_controller.GenericSurplusController(my_simulation_parameters=mysim, mode=1)
-    # Create Controllable
-    my_controllable = generic_smart_device.Controllable("Washing", my_simulation_parameters=mysim)
-
-    number_of_outputs = fft.get_number_of_outputs([available_electricity_outputC,my_flexible_controller,my_controllable])
+    #assign outputs correctly
+    number_of_outputs = 1
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
+    my_smart_device.ElectricityOutputC.GlobalIndex = 0
+    
+    # Simulate and check that (a) device is activated at latest possible starting point, (b) device runs with the defined power profile
+    my_smart_device.i_restore_state()
+    for j in range( activation + len( profile ) ):
+        my_smart_device.i_simulate( j, stsv, False )
+        if j >= activation:
+            assert stsv.values[ 0 ] == profile[ j - activation ]
 
-    # Connect inputs and outputs
-    my_flexible_controller.electricity_inputC.SourceOutput = available_electricity_outputC
-    my_controllable.ApplianceRun.SourceOutput = my_flexible_controller.stateC
-
-    # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components([available_electricity_outputC,my_flexible_controller,my_controllable])
-    stsv.values[available_electricity_outputC.GlobalIndex] = available_electricity
-
-    #Simulate
-    timestep = 2149
-    my_controllable.i_save_state()
-    my_controllable.i_restore_state()
-    my_flexible_controller.i_simulate(timestep, stsv,  False)
-    my_controllable.i_simulate(timestep, stsv, False)
-    log.information("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[my_flexible_controller.stateC.GlobalIndex],
-                                                                   stsv.values[my_controllable.electricity_outputC.GlobalIndex],
-                                                                   stsv.values[my_controllable.taskC.GlobalIndex]))
-
-    # Signal
-    assert 1.0 == stsv.values[my_flexible_controller.stateC.GlobalIndex]
-    # Electricity Load for flexibility
-    assert 0.20805582786885163 == stsv.values[my_controllable.electricity_outputC.GlobalIndex]

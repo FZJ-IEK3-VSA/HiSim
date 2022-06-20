@@ -498,7 +498,7 @@ class PVSystem( cp.Component ):
                 wind_speed = my_simulation_repository.get_entry( Weather.Weather_WindSpeed_yearly_forecast )
                 
                 x= [ ]
-                for i in range( len( dni_extra ) ):
+                for i in range( self.my_simulation_parameters.timesteps ):
                     x.append( simPhotovoltaicFast( dni_extra[ i ], DNI[ i ], DHI[ i ], GHI[ i ], azimuth[ i ], apparent_zenith[ i ], temperature[ i ], wind_speed[ i ], self.pvconfig.azimuth, self.pvconfig.tilt ) )
 
                 self.output = x

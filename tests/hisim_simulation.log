@@ -5404,3 +5404,18 @@ adding output: Azimuth to component Weather
 adding output: ApparentZenith to component Weather
 adding output: WindSpeed to component Weather
 Executing hisim.components.weather.__init__ took 0.96 seconds
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0
+adding output: ElectricityOutput to component SmartDevice0

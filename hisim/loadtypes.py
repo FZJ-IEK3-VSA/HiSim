@@ -41,6 +41,7 @@ class LoadTypes(str, enum.Enum):
     
     #Controllers:
     OnOff = "OnOff" #encoding: 0 means off and 1 means on
+    Activation = 'Activation'
     
 @enum.unique
 class Units(str, enum.Enum):
@@ -85,6 +86,7 @@ class Units(str, enum.Enum):
 
     # Time
     Seconds = "s"
+    timesteps = 'timesteps'
     
     # Cost
     c_per_kWh = "Cents per kWh"
@@ -96,19 +98,24 @@ class Units(str, enum.Enum):
 class ComponentType(str, enum.Enum):
     # Unphysical
     PV = "PV"
+    SmartDevice = "SmartDevice"
     HeatPump = "HeatPump"
     GasHeater = "GasHeater"
     Boiler = "Boiler"
     Battery = "Battery"
     FuelCell = "FuelCell"
     Heaters = [HeatPump, GasHeater]
+    
 @enum.unique
 class InandOutputType(str, enum.Enum):
-
     Massflow = "Massflow"
     ControlSignal = "ControlSignal"
     ElectricityTarget = "ElectricityTarget"
     ElectricityReal = "ElectricityReal"
+    LastActivation = "LastActivation"
+    LatestActivation = "LatestActivation"
+    EarliestActivation = "EarliestActivation"
+    RecommendedActivation = "RecommendedActivation"
 
 
 

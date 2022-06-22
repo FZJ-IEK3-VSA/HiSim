@@ -1,19 +1,23 @@
 # Generic/Built-in
+import pandas as pd
 import json
 import numpy as np
-import copy
-#import matplotlib.pyplot as plt
-from typing import List, Any
+import math as ma
+from typing import Optional
 
 # Owned
-import hisim.log as log
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.utils import HISIMPATH
+from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim import utils
+from hisim.components import controller_l3_predictive
+from hisim.components import generic_pv_system
+from hisim.components import generic_price_signal
+from hisim.components import controller_l3_predictive
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.components.configuration import PhysicsConfig
 
-
-__authors__ = "Vitor Hugo Bellotto Zago"
+__authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
@@ -22,210 +26,226 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-class ControllableState:
-    def __init__(self, start=0, currentprofile=None, toRun=False, stateRun=False):
-        self.starttimestep = start
-        self.profile = currentprofile
-        if self.profile != None:
-            self.profile_length = len(self.profile)
-        self.isRunning = toRun
-        self.alreadyRun = stateRun
-
-    def cal_profile(self,timestep):
-        if self.profile == None:
-            return 0.0
-        elif timestep >= len(self.profile) + self.starttimestep:
-            return 0.0
-        else:
-            try:
-                return self.profile[timestep-self.starttimestep]
-            except:
-                log.error('unclear error')
-
-class Flexibility:
+class SmartDeviceState:
+    """Component representing smart appliance
+    
+    Parameters:
+    -----------
+    actual power : float, optional
+        Power of smart appliance at given timestep
+    timestep_of_activation : int, optional
+        Timestep, where the device was activated. The default is -999.
+    time_to_go : integer, optional
+        Duration of the power profile, which follows for the nex time steps. The default is 0.
+    position : integer, optional
+        Index of demand profile relevent for the given timestep. The default is 0.
     """
-    Represents an execution of a flexibility device
+    
+    def __init__( self, actual_power : float = 0, timestep_of_activation : int = -999, time_to_go : int = 0, position : int = 0 ):
+        self.actual_power = actual_power
+        self.timestep_of_activation = timestep_of_activation
+        self.time_to_go = time_to_go
+        self.position = position
+        
+    def clone( self ):
+        return SmartDeviceState( self.actual_power, self.timestep_of_activation, self.time_to_go, self.position ) 
+        
+    def run( self, timestep : int, electricity_profile : list ):
+        
+        #device activation
+        if timestep > self.timestep_of_activation + self.time_to_go:
+            self.timestep_of_activation = timestep
+            self.time_to_go = len( electricity_profile )
+            self.actual_power = electricity_profile[ 0 ]
+            
+        if timestep < self.timestep_of_activation + self.time_to_go:
+            #device is running    
+            self.actual_power = electricity_profile[ timestep - self.timestep_of_activation ]
+        
+        #device deactivation
+        if timestep == self.timestep_of_activation + self.time_to_go:
+            self.position = self.position + 1
+            self.time_to_go = 0
+            self.actual_power = 0
+    
+class SmartDevice( cp.Component ):
     """
+    Class component that provides availablity and profiles of flexible smart devices like shiftable (in time) washing machines and dishwashers. 
+    Data provided or based on LPG exports.
 
-    def __init__(self,name):
-        self.name = name
-        self.InitialStep : List[int] = []
-        self.LastestStep : List[int] = []
-        self.ElecProfiles : List[List[float]] = []
-
-        self.ProfilesLen : List[int] = []
-        self.HasExec : List[int] = []
-        self.NumExecutions : int = 0
-        self.sum_local:float = 0.0
-
-class Controllable(Component):
+    Parameters
+    -----------------------------------------------
+    profile: string
+        profile code corresponded to the family or residents configuration
     """
-    Imports data from Load Profile Generator. Data contains
-    time-shiftable appliances
-    :key
-    """
-    State = "State"
-
+      
+    #optional Inputs
+    l3_DeviceActivation = "l3_DeviceActivation"
+    
+    # Outputs
+    #mandatory
     ElectricityOutput = "ElectricityOutput"
-    Task="Task"
+    
+    #optional
+    LastActivation = "LastActivation"
+    EarliestActivation = "EarliestActivation"
+    LatestActivation = "LatestActivation"
 
-    def __init__(self, name, my_simulation_parameters: SimulationParameters ):
-        super().__init__(name, my_simulation_parameters=my_simulation_parameters)
-        self.values: List[float] = []
+    def __init__( self,
+                  identifier : str,
+                  source_weight : int,
+                  my_simulation_parameters: SimulationParameters ):
+        super().__init__ ( name = 'SmartDevice' + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
 
-        # Imports flexibilities from LPG
-        self.flexibility_names : List[str] = []
-        self.flexibilities : List[Flexibility] = []
-
-        with open(HISIMPATH["tasks"][1]) as f:
-            data = json.load(f)
-        self.data_size = len(data)
-
-        start = 1
-
-        self.add_new_flexibility(data[start])
-
-        for arg in data[(start+1):]:
-            has_been_found = False
-            for i_flex in range(len(self.flexibilities)):
-                if self.flexibilities[i_flex].name in arg["Device"]["Name"]:
-                    self.append_flex_data(arg, i_flex)
-                    has_been_found = True
-            if has_been_found == False:
-                self.add_new_flexibility(arg)
-
-        # Create entire timeline for
-        self.itask: List[Any] = []
-        for i_flex in range(len(self.flexibilities)):
-            self.itask.append(np.zeros((self.flexibilities[i_flex].LastestStep[-1]), dtype=int))
-
-        # Fills profiles with corresponded execution
-        for ytask in range(len(self.itask)):
-            for step in range(len(self.flexibilities[ytask].InitialStep)):
-                for timestep in range(self.flexibilities[ytask].InitialStep[step], self.flexibilities[ytask].LastestStep[step]):
-                        self.itask[ytask][timestep] = step + 1
-
-        self.is_flex_in_database()
-
-        self.itask = self.itask[self.i_xtask]
-        self.InitialStep = self.flexibilities[self.i_xtask].InitialStep
-        self.LastestStep = self.flexibilities[self.i_xtask].LastestStep
-        self.ElecProfiles = self.flexibilities[self.i_xtask].ElecProfiles
-
-        #log.information("ComponentName: {}".format(self.ComponentName.split()[0]))
-        #log.information("InitialStep: {}".format(self.InitialStep))
-        #log.information("Lastest Step: {}".format(self.LastestStep))
-
-        self.ProfilesLen = self.flexibilities[self.i_xtask].ProfilesLen
-        self.HasExec = self.flexibilities[self.i_xtask].HasExec
-
-        self.ApplianceRun: ComponentInput = self.add_input(self.ComponentName,
-                                                             self.State,
-                                                             lt.LoadTypes.Any,
-                                                             lt.Units.Any,
-                                                             True)
-
-        self.electricity_outputC: ComponentOutput = self.add_output(self.ComponentName,
-                                                                  self.ElectricityOutput,
-                                                                  lt.LoadTypes.Electricity,
-                                                                  lt.Units.Watt)
-
-        self.taskC: ComponentOutput = self.add_output(self.ComponentName,
-                                                      self.Task,
-                                                      lt.LoadTypes.Any,
-                                                      lt.Units.Any)
-
-        self.state = ControllableState()
-        self.previous_state = copy.copy(self.state)
-
-        self.calc_total_load()
-
-
-    def add_new_flexibility(self,arg):
-        self.flexibility_names.append(arg["Device"]["Name"])
-        self.flexibilities.append(Flexibility(name=arg["Device"]["Name"]))
-        self.append_flex_data(arg, len(self.flexibilities) - 1)
-
-    def append_flex_data(self, arg, i_flex):
-        """
-        Appends the data about the flexibility execution. This
-        includes earlist start, latest start, the conversion factor,
-        profile and execution boolean.
-        """
-        self.flexibilities[i_flex].InitialStep.append(arg['EarliestStart']['ExternalStep'] - 10)
-        self.flexibilities[i_flex].LastestStep.append(arg['LatestStart']['ExternalStep'])
-        self.flexibilities[i_flex].ElecProfiles.append(
-            [i*arg['Profiles'][2]['LoadType']['ConversionFactor']*1E3 for i in arg['Profiles'][2]['Values']])
-        # self.flexibilities[i_flex].ElecProfiles.append(
-        #     [i for i in arg['Profiles'][2]['Values']])
-        self.flexibilities[i_flex].ProfilesLen.append(len(arg['Profiles'][2]['Values']))
-        self.flexibilities[i_flex].HasExec.append(0)
-
-    def is_flex_in_database(self):
-        flex_found = False
-        for i_flex in range(len(self.flexibilities)):
-            if self.ComponentName.split()[0] in self.flexibilities[i_flex].name:
-                self.i_xtask = i_flex
-                flex_found = True
-        if flex_found is False:
-            raise Exception("No such flexibility was found.")
-
-    def calc_total_load(self):
-        sum_total_load:float = 0
-        sum_num_flex:float = 0
-        for index, flex in enumerate(self.flexibilities):
-            sum_local:float = 0
-            for elec_profile in flex.ElecProfiles:
-                sum_local = sum_local + sum(elec_profile)
-            self.flexibilities[index].sum_local = sum_local
-            self.flexibilities[index].NumExecutions = len(flex.InitialStep)
-            sum_num_flex += self.flexibilities[index].NumExecutions
-            sum_total_load += sum_local
-        self.number_of_flexibilities = sum_num_flex
-        self.sum_total_load = sum_total_load
-
-
-    def i_save_state(self):
-        self.previous_state = copy.copy(self.state)
+        self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
+        
+        #mandatory Output
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
+                                                                        self.ElectricityOutput,
+                                                                        lt.LoadTypes.Electricity,
+                                                                        lt.Units.Watt )
+        self.l3_DeviceActivationC: cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                       self.l3_DeviceActivation,
+                                                                       lt.LoadTypes.Activation,
+                                                                       lt.Units.timesteps,
+                                                                       mandatory = False )
+        
+        if self.predictive:    
+            self.LastActivationC: cp.ComponentOutput = self.add_output( object_name = self.ComponentName,
+                                                                        field_name = self.LastActivation,
+                                                                        load_type = lt.LoadTypes.Activation,
+                                                                        unit = lt.Units.timesteps )
+            self.EarliestActivationC: cp.ComponentOutput = self.add_output( object_name = self.ComponentName,
+                                                                            field_name = self.EarliestActivation,
+                                                                            load_type = lt.LoadTypes.Activation,
+                                                                            unit = lt.Units.timesteps )
+            self.LatestActivationC: cp.ComponentOutput = self.add_output( object_name = self.ComponentName,
+                                                                          field_name = self.LatestActivation,
+                                                                          load_type = lt.LoadTypes.Activation,
+                                                                          unit = lt.Units.timesteps )
+            
+    def i_save_state( self ):
+        self.previous_state : SmartDeviceState = self.state.clone( )
 
     def i_restore_state(self):
-        self.state = copy.copy(self.previous_state)
+        self.state : SmartDeviceState = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
-        stsv.set_output_value(self.taskC, self.itask[timestep])
-        #log.information(self.itask[timestep])
-        #log.information(self.flexibilities[0].InitialStep)
-        #log.information(self.flexibilities[0].LastestStep)
-        #plt.plot(self.itask[2155:6490])
-        #plt.show()
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
+        
+        #initialize power
+        self.state.actual_power = 0
+        
+        #set forecast in first timestep
+        if timestep == 0 and self.predictive:
+            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.SmartDevice, source_weight = self.source_weight, 
+                                                                      entry = [ [ ], self.electricity_profile[ 0 ] ] ) 
+        
+        #if not already running: check if activation makes sense
+        if timestep > self.state.timestep_of_activation + self.state.time_to_go:
+            if timestep > self.earliest_start[ self.state.position ]: #needs to be switched off
+                #initialize next activation
+                activation = timestep + 10 
+                #when predictive read in best activation
+                if self.predictive:
+                    activation = stsv.get_input_value( self.l3_DeviceActivationC )
+                #if last possible switch on force activation
+                if timestep >= self.latest_start[ self.state.position ]: #needs to be activated
+                    activation = timestep
+                    
+                if timestep == activation:
+                    self.state.run( timestep, self.electricity_profile[ self.state.position ] )
+                    if self.predictive == True:
+                        if self.state.position < len( self.electricity_profile ) - 1:
+                            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.SmartDevice, source_weight = self.source_weight, 
+                                                                          entry = [ self.electricity_profile[ self.state.position ], self.electricity_profile[ self.state.position + 1 ] ] ) 
+                            
+                        elif self.state.position == len( self.electricity_profile ) - 1:
+                            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.SmartDevice, source_weight = self.source_weight, 
+                                                                          entry = [ self.electricity_profile[ self.state.position ], [ ] ] )
+        
+        #run device if it was already activated
+        else:
+            self.state.run( timestep, self.electricity_profile[ self.state.position ] )
 
-        # Check if flexibility is still running
-        if self.state.isRunning:
-            # Check if flexibility finished already
-            if timestep > self.state.starttimestep + self.state.profile_length:
-                # Deactivate current flexibility
-                self.itask[self.itask == self.itask[self.state.starttimestep]] = 0
-                self.state = ControllableState()
-            return stsv.set_output_value(self.electricity_outputC, float(self.state.cal_profile(timestep)))
-        # Check if controller sent signal to run flexibility and if a flexibility can be run in this timestep
-        if stsv.get_input_value(self.ApplianceRun) and (self.itask[timestep] != 0):
-            self.state = ControllableState(timestep, self.ElecProfiles[int(self.itask[timestep]-1)], toRun=True)
-            return stsv.set_output_value(self.electricity_outputC, self.state.profile[0])
+        stsv.set_output_value( self.ElectricityOutputC, self.state.actual_power )
+        
+        if self.predictive == True:
+            #pass conditions to smart controller
+            stsv.set_output_value( self.LastActivationC, self.state.timestep_of_activation )
+            stsv.set_output_value( self.EarliestActivationC, self.earliest_start[ self.state.position ] )
+            stsv.set_output_value( self.LatestActivationC, self.latest_start[ self.state.position ] )
+        
+    def build( self, identifier, source_weight, seconds_per_timestep : int = 60 ):
+
+        #load smart device profile
+        smart_device_profile = [ ]
+        filepath = utils.HISIMPATH[ "smart_devices" ][ "profile_data" ] 
+        f = open( filepath )
+        smart_device_profile = json.load( f )
+        f.close()
+        
+        if not smart_device_profile:
+            raise NameError( 'LPG data for smart appliances is missing or located missleadingly' )
+        
+        #initializing relevant data
+        earliest_start, latest_start, electricity_profile = [ ], [ ], [ ]
+        
+        minutes_per_timestep = seconds_per_timestep / 60
+        
+        if not minutes_per_timestep.is_integer( ):
+            raise TypeError( 'Up to now smart appliances have only been implemented for time resolutions corresponding to multiples of one minute' )
+        minutes_per_timestep = int( minutes_per_timestep )
+        
+        #reading in data from json file and adopting to given time resolution
+        for sample in smart_device_profile :
+            device_name = str( sample[ 'Device' ][ 'Name' ] )
+            if device_name == identifier:
+                #earliest start in given time resolution -> integer value
+                x = sample[ 'EarliestStart' ][ 'ExternalStep' ] 
+                #skip if occurs in calibration days (negative sign )
+                if x < 0:
+                    continue
+                # timestep (in minutes) the profile is shifted in the first step of the external time resolution
+                offset = minutes_per_timestep -  x % minutes_per_timestep
+                #earliest start in given time resolution -> float value
+                x = x / minutes_per_timestep
+                #latest start in given time resolution 
+                y = sample[ 'LatestStart' ][ 'ExternalStep' ] /  minutes_per_timestep 
+                #number of timesteps in given time resolution -> integer value
+                z = ma.ceil( x + sample[ 'TotalDuration' ] / minutes_per_timestep ) - ma.floor( x )
+                #earliest and latest start in new time resolution -> integer value
+                earliest_start.append( ma.floor( x ) ) 
+                latest_start.append( ma.ceil( y ) )
+            
+                #get shiftable load profile    
+                el = sample[ 'Profiles' ][ 2 ][ 'TimeOffsetInSteps' ] * [ 0 ] + sample[ 'Profiles' ][ 2 ][ 'Values' ]
+            
+                #average profiles given in 1 minute resolution to given time resolution
+                elem_el = [ ]
+                #append first timestep which may not fill  the entire 15 minutes
+                elem_el.append( sum( el[ : offset ] ) / offset )
+                
+                for i in range( z - 2 ):
+                    elem_el.append( sum( el[ offset + minutes_per_timestep * i : offset + ( i + 1 ) * minutes_per_timestep ] ) / minutes_per_timestep )
+                
+                last = el[ offset + ( i + 1 ) * minutes_per_timestep : ]
+                if offset != minutes_per_timestep:
+                    elem_el.append( sum( last ) / ( minutes_per_timestep - offset ) )
+                electricity_profile.append( elem_el )
+        
+        self.source_weight = source_weight    
+        self.earliest_start = earliest_start + [ self.my_simulation_parameters.timesteps ] #append value to continue simulation after last necesary run of flexible device at end of year
+        self.latest_start = latest_start + [ self.my_simulation_parameters.timesteps + 999 ] #append value to continue simulation after last necesary run of smart device at end of year
+        self.electricity_profile = electricity_profile
+        self.state = SmartDeviceState( )
+        self.previous_state = SmartDeviceState( )
+        self.predictive = self.my_simulation_parameters.system_config.predictive
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.ComponentName))
-        lines.append("Number of flexibility of the simulation timeline: {}".format(self.number_of_flexibilities))
-        lines.append("Number of unexecuted flexibility: {}".format(len(list(dict.fromkeys(self.itask)))-1))
-        lines.append("Non executed flexibility: {}".format(list(dict.fromkeys(self.itask))[1:]))
-        lines.append("Total electricity load: {:.0f} kWh".format(self.sum_total_load * 1E-3))
-        lines.append("----- Flexibilities -----")
-        for index, flex in enumerate(self.flexibilities):
-            lines.append("Name: {}".format(self.flexibility_names[index]))
-            lines.append("Number of executions: {}".format(flex.NumExecutions))
-            lines.append("Total: {:.0f} kWh".format(flex.sum_local * 1E-3))
-            lines.append(" ")
+        lines.append("DeviceName: {}".format( self.ComponentName ) )
         return lines
+        

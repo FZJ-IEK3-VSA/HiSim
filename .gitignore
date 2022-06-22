@@ -135,4 +135,4 @@ hisim/inputs/cache
 examples/results
 
 # simulation log
-/tests/hisim_simulation.log
+tests\hisim_simulation.log

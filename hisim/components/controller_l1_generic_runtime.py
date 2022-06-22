@@ -83,7 +83,7 @@ class L1_Controller( cp.Component ):
                   name : str = '' ):
         
         super().__init__( "L1_Controller" + name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.build( min_operation_time, min_idle_time )
+        self.build( min_operation_time, min_idle_time, source_weight )
         
         #add inputs
         self.l2_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
@@ -112,10 +112,11 @@ class L1_Controller( cp.Component ):
         connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heatpump_modular.L2_Controller.l2_DeviceSignal ) )
         return connections
 
-    def build( self, min_operation_time, min_idle_time ):
+    def build( self, min_operation_time, min_idle_time, source_weight ):
         
         self.on_time = int( min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
+        self.source_weight = source_weight
         
         self.state0 = L1_ControllerState( )
         self.state = L1_ControllerState( )

@@ -191,6 +191,7 @@ class PostProcessingOptions(IntEnum):
     Plot_Bar = 5
     Open_Directory = 6
     Export_To_CSV = 7
+    Compute_KPI = 8
 
 class Outputs:
 

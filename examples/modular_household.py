@@ -274,10 +274,11 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                     my_heating.ThermalEnergyDelivered )
         count += 1
         
+        #add price signal
+        my_price_signal = generic_price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
+        my_sim.add_component( my_price_signal )
+        
         if predictive == True:
-            #add price signal
-            my_price_signal = generic_price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
-            my_sim.add_component( my_price_signal )
             
             #construct predictive controller
             my_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )

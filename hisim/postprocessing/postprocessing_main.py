@@ -179,9 +179,7 @@ class PostProcessor:
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
                                    time_correction_factor=self.ppdt.time_correction_factor)
-                my_carpet.plot_year()
-               # my_carpet.plot_week( )
-               # my_carpet.plot_january( )
+                my_carpet.plot( xdims = int( ( self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date ).days ) )
 
             if PostProcessingOptions.Plot_Day in self.ppdt.postProcessingOptions:
                     my_days = ChartSingleDay(output=output.FullName,
@@ -214,6 +212,13 @@ class PostProcessor:
         if PostProcessingOptions.Export_To_CSV in self.ppdt.postProcessingOptions:
             log.information("exporting to csv")
             self.export_results_to_csv()
+        else:
+            log.information("not exporting to CSV")
+            
+         # Export all results to CSV
+        if PostProcessingOptions.Compute_KPI in self.ppdt.postProcessingOptions:
+            log.information("Computing KPIs")
+            self.compute_KPIs( )
         else:
             log.information("not exporting to CSV")
 
@@ -261,6 +266,10 @@ class PostProcessor:
         self.report.open()
         self.report.write(text)
         self.report.close()
+        
+    def compute_KPIs( self ):
+        for column in self.ppdt.results:
+            print( column )
     #
     # def cal_pos_sim(self):
     #     self.write_components_to_report()

@@ -39,19 +39,22 @@ def test_hydrogen_generator():
 
     #===================================================================================================================
     # Set Hydrogen Generator
+    my_electrolyzer_config=generic_electrolyzer_and_h2_storage.ElectrolyzerConfig(
+                                                            component_name="Electrolyzer",
+                                                            waste_energy=waste_energy,
+                                                            min_power=min_power,
+                                                            max_power=max_power,
+                                                            min_power_percent=min_power_percent,
+                                                            max_power_percent=max_power_percent,
+                                                            min_hydrogen_production_rate_hour=min_hydrogen_production_rate_hour,
+                                                            max_hydrogen_production_rate_hour=max_hydrogen_production_rate_hour,
+                                                            pressure_hydrogen_output=pressure_hydrogen_output
+                                                            )
     my_electrolyzer = generic_electrolyzer_and_h2_storage.Electrolyzer(
                                     my_simulation_parameters=my_simulation_parameters,
-                                    waste_energy=waste_energy,
-                                    min_power=min_power,
-                                    max_power=max_power,
-                                    min_power_percent=min_power_percent,
-                                    max_power_percent=max_power_percent,
-                                    min_hydrogen_production_rate_hour=min_hydrogen_production_rate_hour,
-                                    max_hydrogen_production_rate_hour=max_hydrogen_production_rate_hour,
-                                    pressure_hydrogen_output=pressure_hydrogen_output)
-
-    my_hydrogen_storage = generic_electrolyzer_and_h2_storage.HydrogenStorage(
-                                    my_simulation_parameters=my_simulation_parameters,
+                                    config=my_electrolyzer_config)
+    my_hydrogen_storage_config= generic_electrolyzer_and_h2_storage.HydrogenStorageConfig(
+                                    component_name="HydrogenStorage",
                                     min_capacity=min_capacity,
                                     max_capacity=max_capacity,
                                     starting_fill=starting_fill,
@@ -60,6 +63,10 @@ def test_hydrogen_generator():
                                     energy_for_charge=energy_for_charge,
                                     energy_for_discharge=energy_for_discharge,
                                     loss_factor_per_day=loss_factor_per_day)
+
+    my_hydrogen_storage = generic_electrolyzer_and_h2_storage.HydrogenStorage(
+                                    my_simulation_parameters=my_simulation_parameters,
+                                    config=my_hydrogen_storage_config)
 
     # Set Fake Outputs for Gas Heater
     electricity_input = cp.ComponentOutput("FakeElectricityInput",

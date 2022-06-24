@@ -2,6 +2,8 @@
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -12,18 +14,22 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
 
+@dataclass_json
+@dataclass
 class GasHeaterConfig:
     """
     Gas Heater Config
     """
-    is_modulating = True
-    P_th_min = 1_000                    # [W]
-    P_th_max = 12_000                    # [W]
-    eff_th_min = 0.60                   # [-]
-    eff_th_max = 0.90                   # [-]
-    delta_T = 25
-    mass_flow_max = P_th_max / (4180 * delta_T)     # kg/s ## -> ~0.07
-    temperature_max = 80                # [°C]
+    is_modulating : bool
+    P_th_min : float           # [W]
+    P_th_max : float           # [W]
+    eff_th_min : float         # [-]
+    eff_th_max : float         # [-]
+    delta_T : float            # [°C]
+    mass_flow_max :   float  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
+    temperature_max :  float   # [°C]
+    temperaturedelta : float   # [°C]
+    power_max :float           # [W]
 
 class GasHeater(Component):
     """
@@ -39,7 +45,7 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"
 
-    def __init__(self,my_simulation_parameters: SimulationParameters ,temperaturedelta=10,power_max=12_000):
+    def __init__(self,my_simulation_parameters: SimulationParameters , config : GasHeaterConfig):
         super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
         self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
@@ -53,13 +59,28 @@ class GasHeater(Component):
                                                      load_type=lt.LoadTypes.Heating,
                                                      unit=lt.Units.Watt)
 
-        self.P_th_min = GasHeaterConfig.P_th_min
-        self.P_th_max = power_max
-        self.eff_th_min = GasHeaterConfig.eff_th_min
-        self.eff_th_max = GasHeaterConfig.eff_th_max
-        self.temperature_max = GasHeaterConfig.temperature_max
-        self.temperaturedelta = temperaturedelta
+        self.P_th_min = config.P_th_min
+        self.P_th_max = config.power_max
+        self.eff_th_min = config.eff_th_min
+        self.eff_th_max = config.eff_th_max
+        self.temperature_max = config.temperature_max
+        self.temperaturedelta = config.temperaturedelta
 
+    @staticmethod
+    def get_default_config():
+        config=GasHeaterConfig(
+                    temperaturedelta = 10,
+                    power_max = 12_000,
+                    is_modulating = True,
+                    P_th_min = 1_000  ,# [W]
+                    P_th_max = 12_000 , # [W]
+                    eff_th_min = 0.60  ,# [-]
+                    eff_th_max = 0.90  ,# [-]
+                    delta_T = 25,
+                    mass_flow_max = 12_000 / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
+                    temperature_max = 80  # [°C])
+                    )
+        return config
     def write_to_report(self):
         pass
 

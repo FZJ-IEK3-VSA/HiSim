@@ -25,15 +25,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class OccupancyConfig:
-    parameter_string: str
     profile_name: str
-
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 profile_name: str):
-        self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.profile_name = profile_name
-
 
 class Occupancy(cp.Component):
     """
@@ -79,10 +71,10 @@ class Occupancy(cp.Component):
     @utils.measure_execution_time
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
-                  profile_name="CH01"):
+                  config: OccupancyConfig):
         super().__init__(name="Occupancy", my_simulation_parameters=my_simulation_parameters)
-        self.profile_name = profile_name
-        self.occupancyConfig = OccupancyConfig(my_simulation_parameters=my_simulation_parameters, profile_name=profile_name)
+        self.profile_name = config.profile_name
+        self.occupancyConfig = config
         self.build()
 
         # Inputs - Not Mandatories
@@ -127,7 +119,10 @@ class Occupancy(cp.Component):
                                                                    self.WaterConsumption,
                                                                    lt.LoadTypes.WarmWater,
                                                                    lt.Units.Liter)
-
+    @staticmethod
+    def get_default_config():
+        config= OccupancyConfig(profile_name = "CH01")
+        return config
     def i_save_state(self):
         pass
 

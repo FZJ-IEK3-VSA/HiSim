@@ -6,6 +6,22 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+
+@dataclass_json
+@dataclass
+class CSVLoaderConfig:
+    component_name: str
+    csv_filename: str
+    column: int
+    loadtype: lt.LoadTypes
+    unit: lt.Units
+    column_name: str
+    sep: str
+    decimal: str
+    multiplier: float
+
 class CSVLoader(cp.Component):
     """
     Class component loads CSV file containing some
@@ -41,31 +57,24 @@ class CSVLoader(cp.Component):
     Output1: str = "CSV Profile"
 
     def __init__(self,
-                 component_name: str,
-                 csv_filename: str,
-                 column: int,
-                 loadtype: lt.LoadTypes,
-                 unit: lt.Units,
-                 column_name: str,
-                 my_simulation_parameters: SimulationParameters,
-                 sep: str = ";",
-                 decimal: str = ".",
-                 multiplier: float = 1):
-        super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
+                 config:CSVLoaderConfig,
+                 my_simulation_parameters: SimulationParameters):
+        self.csvconfig = config
+        super().__init__(name=self.csvconfig.component_name, my_simulation_parameters=my_simulation_parameters)
 
         self.output1 : cp.ComponentOutput = self.add_output(self.ComponentName,
                                             self.Output1,
-                                            loadtype,
-                                            unit)
-        self.output1.DisplayName = column_name
-        self.multiplier = multiplier
+                                            self.csvconfig.loadtype,
+                                            self.csvconfig.unit)
+        self.output1.DisplayName = self.csvconfig.column_name
+        self.multiplier = self.csvconfig.multiplier
 
         # ? self.column = column
-        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], csv_filename), sep=sep, decimal=decimal)
-        dfcolumn = df.iloc[:, [column]]
-        self.column_name = column_name
+        df = pd.read_csv(os.path.join(utils.HISIMPATH["inputs"], self.csvconfig.csv_filename), sep=self.csvconfig.sep, decimal=self.csvconfig.decimal)
+        dfcolumn = df.iloc[:, [self.csvconfig.column]]
+        self.column_name = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
-            raise Exception("Timesteps: " + str(self.my_simulation_parameters.timesteps) + " vs. Lines in CSV " + csv_filename + ": " + str(len(self.column_name)))
+            raise Exception("Timesteps: " + str(self.my_simulation_parameters.timesteps) + " vs. Lines in CSV " + self.csvconfig.csv_filename + ": " + str(len(self.column_name)))
 
         self.column = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []

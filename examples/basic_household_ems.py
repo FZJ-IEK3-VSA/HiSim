@@ -72,29 +72,29 @@ def basic_household_only_heat(my_sim, my_simulation_parameters: Optional[Simulat
     my_sim.SimulationParameters = my_simulation_parameters
 
     # Build occupancy
-    my_occupancy = loadprofilegenerator_connector.Occupancy(profile_name=occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=loadprofilegenerator_connector.Occupancy.get_default_config(), my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
-    my_weather = weather.Weather(location=location, my_simulation_parameters= my_simulation_parameters)
+    my_weather = weather.Weather(config=weather.Weather.get_default_config(), my_simulation_parameters= my_simulation_parameters)
 
     # Build Gas Heater
-    my_gas_heater = generic_gas_heater.GasHeater(my_simulation_parameters=my_simulation_parameters)
+    my_gas_heater = generic_gas_heater.GasHeater(config=generic_gas_heater.GasHeater.get_default_config(),my_simulation_parameters=my_simulation_parameters)
 
     # Build Building
-    my_building = building.Building(my_simulation_parameters= my_simulation_parameters, initial_temperature=initial_temperature)
-    my_building_controller = building.BuildingController(my_simulation_parameters= my_simulation_parameters,
-                                                         minimal_building_temperature=minimal_building_temperature)
+    my_building = building.Building(config=building.Building.get_default_config(),my_simulation_parameters= my_simulation_parameters)
+    my_building_controller = building.BuildingController( config=building.BuildingController.get_default_config(),
+                                                          my_simulation_parameters= my_simulation_parameters)
 
     # Build Storage
-    my_storage = generic_hot_water_storage.HeatStorage(my_simulation_parameters=my_simulation_parameters)
+    my_storage = generic_hot_water_storage.HeatStorage(config=generic_hot_water_storage.HeatStorage.get_default_config(),
+                                                       my_simulation_parameters=my_simulation_parameters)
 
-    my_storage_controller = generic_hot_water_storage.HeatStorageController(my_simulation_parameters=my_simulation_parameters,
-                                                       initial_temperature_building=initial_temperature,
-                                                       initial_temperature_heating_storage=temperature_storage_target_heating_water)
+    my_storage_controller = generic_hot_water_storage.HeatStorageController(config=generic_hot_water_storage.HeatStorageController.get_default_config(),
+                                                                            my_simulation_parameters=my_simulation_parameters)
 
     # Build Controller
-    my_controller_heat= controller_l2_energy_management_system.ControllerHeat( my_simulation_parameters= my_simulation_parameters,
-                                                                               temperature_storage_target_heating_water=temperature_storage_target_heating_water)
+    my_controller_heat= controller_l2_energy_management_system.ControllerHeat(config= controller_l2_energy_management_system.ControllerHeat.get_default_config(),
+                                                                               my_simulation_parameters= my_simulation_parameters)
 
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )
 

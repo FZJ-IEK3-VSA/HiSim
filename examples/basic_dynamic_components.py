@@ -31,6 +31,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     location = "Aachen"
     # Set occupancy
     occupancy_profile = "CH01"
+
     # Set photovoltaic system
     time = 2019
     power = 3E3
@@ -38,45 +39,61 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
     integrateInverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
+    name = 'PVSystem'
+    azimuth  = 180
+    tilt  = 30
+    source_weight  = 0
+
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.SimulationParameters = my_simulation_parameters
 
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig( system_id='SG1',
+                                                                         p_inv_custom=5.0,
+                                                                         e_bat_custom=10.0,
+                                                                         name="Battery1")
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig( system_id='SG1',
+                                                                         p_inv_custom=2.5,
+                                                                         e_bat_custom=5.0,
+                                                                         name="Battery2")
     my_advanced_battery_1 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
-                                                             system_id='SG1',
-                                                             p_inv_custom=5.0,
-                                                             e_bat_custom=10.0,
-                                                             name="Battery1")
+                                                           config= my_advanced_battery_config_1)
     my_advanced_battery_2 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
-                                                             system_id='SG1',
-                                                             p_inv_custom=2.5,
-                                                             e_bat_custom=5.0,
-                                                             name="Battery2")
+                                                           config= my_advanced_battery_config_2)
+
+    my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHP.get_default_config()
+    my_advanced_fuel_cell_config_2 = advanced_fuel_cell.CHP.get_default_config()
+    my_advanced_fuel_cell_config_1.name="CHP1"
+    my_advanced_fuel_cell_config_2.name= "CHP2"
+
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
-                                                             gas_type="Methan",
-                                                             name="CHP1",
-                                                             operating_mode="electricity")
+                                                     config=my_advanced_fuel_cell_config_1)
     my_advanced_fuel_cell_2 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
-                                                             gas_type="Methan",
-                                                             name="CHP2",
-                                                             operating_mode="electricity")
+                                                     config=my_advanced_fuel_cell_config_2)
     my_cl2 = cl2.ControllerElectricityGeneric(my_simulation_parameters=my_simulation_parameters)
 
-    my_occupancy = loadprofilegenerator_connector.Occupancy( profile_name=occupancy_profile, my_simulation_parameters = my_simulation_parameters )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
+    my_occupancy = loadprofilegenerator_connector.Occupancy( config=my_occupancy_config, my_simulation_parameters = my_simulation_parameters )
 
-    my_weather = weather.Weather( location=location, my_simulation_parameters = my_simulation_parameters,
+    my_weather_config = weather.WeatherConfig(location=location)
+    my_weather = weather.Weather( config=my_weather_config, my_simulation_parameters = my_simulation_parameters,
                                   my_simulation_repository = my_sim.simulation_repository )
 
+    my_photovoltaic_system_config= generic_pv_system.PVSystemConfig(time=time,
+                                          location=location,
+                                          power=power,
+                                          load_module_data=load_module_data,
+                                          module_name=module_name,
+                                          integrate_inverter=integrateInverter,
+                                          tilt=tilt,
+                                          azimuth = azimuth,
+                                          inverter_name=inverter_name,
+                                          source_weight = source_weight,
+                                          name=name)
     my_photovoltaic_system = generic_pv_system.PVSystem(my_simulation_parameters=my_simulation_parameters,
                                                         my_simulation_repository=my_sim.simulation_repository,
-                                                        time=time,
-                                                        location=location,
-                                                        power=power,
-                                                        load_module_data=load_module_data,
-                                                        module_name=module_name,
-                                                        integrateInverter=integrateInverter,
-                                                        inverter_name=inverter_name)
+                                                        config=my_photovoltaic_system_config)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 
     my_cl2.connect_input(my_cl2.ElectricityConsumptionBuilding,

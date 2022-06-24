@@ -9,6 +9,7 @@ def test_photovoltaic():
     weather_location = "Aachen"
     seconds_per_timestep = 60
     power = 10
+
     repo = component.SimRepository()
 
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
@@ -19,9 +20,12 @@ def test_photovoltaic():
     # PVS:  1 output
 
     # Sets Occupancy
-    my_weather = weather.Weather( location = weather_location, my_simulation_parameters = mysim, my_simulation_repository = repo )
+    my_weather_config=weather.WeatherConfig(location = weather_location)
+    my_weather = weather.Weather( config = my_weather_config, my_simulation_parameters = mysim, my_simulation_repository = repo )
     my_weather.set_sim_repo(repo)
-    my_pvs = generic_pv_system.PVSystem(power=power,my_simulation_parameters=mysim, my_simulation_repository = repo )
+    my_pvs_config= generic_pv_system.PVSystem.get_default_config()
+    my_pvs_config.power=power
+    my_pvs = generic_pv_system.PVSystem(config=my_pvs_config,my_simulation_parameters=mysim, my_simulation_repository = repo )
     my_pvs.set_sim_repo(repo)
 
     number_of_outputs = fft.get_number_of_outputs([my_weather,my_pvs])

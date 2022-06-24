@@ -9,7 +9,8 @@ from hisim.simulationparameters import SimulationParameters
 import hisim.log as log
 import pandas as pd
 import os
-
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 import math
 
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
@@ -21,25 +22,32 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
-
-class CHPConfigSimple:
+@dataclass_json
+@dataclass
+class CHPConfig:
     """
     CHP Config
     """
-    is_modulating = True
-    P_el_min = 2_000        # [W]
-    P_th_min = 3_000        # [W]
-    eff_el_min = 0.2        # [-]
-    eff_th_min = 0.5        # [-]
-    mass_flow_max=0.011     #kg/s
-    P_el_max = 3_000        # [W]
-    P_th_max = 4_000        # [W]
-    eff_el_max = 0.4        # [-]
-    eff_th_max = 0.55       # [-]
-    temperature_max=80
-    delta_T=10
+    name:str
+    min_operation_time : float
+    min_idle_time :float
+    gas_type : str
+    operating_mode :str
+    p_el_max :float       # [W]
+    is_modulating :bool
+    P_el_min :float       # [W]
+    P_th_min :float       # [W]
+    eff_el_min :float     # [-]
+    eff_th_min :float     # [-]
+    mass_flow_max:float   #kg/s
+    P_el_max :float       # [W]
+    P_th_max :float       # [W]
+    eff_el_max :float     # [-]
+    eff_th_max :float     # [-]
+    temperature_max:float
+    delta_T:float
 
-class CHPConfig:
+class CHPConfigAdvanced:
 
     # system_name = "BlueGEN15"
     # system_name = "Dachs 0.8"
@@ -109,12 +117,12 @@ class CHP(Component):
     NumberofCycles = "NumberofCycles"
     ThermalOutputPower = "ThermalOutputPower"
     GasDemandReal="GasDemandReal"
-    def __init__(self, my_simulation_parameters: SimulationParameters, name="CHP",min_operation_time=60, min_idle_time=15,gas_type="Hydrogen",operating_mode="both",p_el_max=3600):
-        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
-        self.min_operation_time = min_operation_time
-        self.min_idle_time = min_idle_time
-        self. gas_type = gas_type #Gas Type can be "Hydrogen" or "Methan"
-        self.operating_mode=operating_mode #operating_mode=["both","heat","electricity"]
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: CHPConfig):
+        super().__init__(name=config.name, my_simulation_parameters=my_simulation_parameters)
+        self.min_operation_time = config.min_operation_time
+        self.min_idle_time = config.min_idle_time
+        self. gas_type = config.gas_type #Gas Type can be "Hydrogen" or "Methan"
+        self.operating_mode=config.operating_mode #operating_mode=["both","heat","electricity"]
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
@@ -122,26 +130,26 @@ class CHP(Component):
         self.previous_state = copy.deepcopy(self.state)
 
         #the 3600 comes from Normalised chp from p_el_max=3600. Look up chp_system_lib for more information
-        self.P_el_max = p_el_max
-        usually_P_el_max= CHPConfigSimple.P_el_max
-        self.P_th_max = CHPConfigSimple.P_th_max*(self.P_el_max/usually_P_el_max)
-        self.P_th_min = CHPConfigSimple.P_th_min
-        self.P_el_min = CHPConfigSimple.P_el_min
+        self.P_el_max = config.p_el_max
+        usually_P_el_max= config.P_el_max
+        self.P_th_max = config.P_th_max*(self.P_el_max/usually_P_el_max)
+        self.P_th_min = config.P_th_min
+        self.P_el_min = config.P_el_min
 
         if self.P_el_max < self.P_el_min or self.P_th_max < self.P_th_min:
             self.P_el_max=self.P_el_min+100
             self.P_th_max=self.P_th_max+100
 
-        self.mass_flow_max = CHPConfigSimple.mass_flow_max * (self.P_el_max/usually_P_el_max)
-        if self.mass_flow_max < CHPConfigSimple.mass_flow_max:
-            self.mass_flow_max=CHPConfigSimple.mass_flow_max
-        self.eff_th_min:float = CHPConfigSimple.eff_th_min
-        self.eff_th_max = CHPConfigSimple.eff_th_max
-        self.eff_el_min:float = CHPConfigSimple.eff_el_min
-        self.eff_el_max = CHPConfigSimple.eff_el_max
-        self.temperature_max = CHPConfigSimple.temperature_max
+        self.mass_flow_max = config.mass_flow_max * (self.P_el_max/usually_P_el_max)
+        if self.mass_flow_max < config.mass_flow_max:
+            self.mass_flow_max=config.mass_flow_max
+        self.eff_th_min:float = config.eff_th_min
+        self.eff_th_max = config.eff_th_max
+        self.eff_el_min:float = config.eff_el_min
+        self.eff_el_max = config.eff_el_max
+        self.temperature_max = config.temperature_max
 
-        self.delta_T=CHPConfigSimple.delta_T
+        self.delta_T=config.delta_T
 
         #Inputs
         self.control_signal: ComponentInput = self.add_input(self.ComponentName, CHP.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, False)
@@ -164,8 +172,28 @@ class CHP(Component):
 
 
 
-
-
+    @staticmethod
+    def get_default_config():
+        config=CHPConfig(
+                        name = "CHP",
+                        min_operation_time = 60,
+                        min_idle_time = 15,
+                        gas_type = "Hydrogen",
+                        operating_mode = "both",
+                        p_el_max = 3600,
+                        is_modulating = True,
+                        P_el_min = 2_000,
+                        P_th_min = 3_000,
+                        eff_el_min = 0.2,
+                        eff_th_min = 0.5,
+                        mass_flow_max = 0.011,
+                        P_el_max = 3_000,
+                        P_th_max = 4_000,
+                        eff_el_max = 0.4,
+                        eff_th_max = 0.55,
+                        temperature_max = 80,
+                        delta_T = 10)
+        return config
     def i_save_state(self):
         self.previous_state = copy.deepcopy(self.state)
         self.number_of_cycles_previous = self.number_of_cycles

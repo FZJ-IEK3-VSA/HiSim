@@ -108,21 +108,16 @@ class BuildingControllerState:
 @dataclass_json
 @dataclass
 class BuildingConfig:
-    parameter_string: str
+    heating_reference_temperature: float
     building_code: str
     bClass: str
     initial_temperature: float
 
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 building_code: str,
-                 bClass: str,
-                 initial_temperature: float):
-        self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.building_code = building_code
-        self.bClass = bClass
-        self.initial_temperature = initial_temperature
-
+@dataclass_json
+@dataclass
+class BuildingControllerConfig:
+    minimal_building_temperature: float
+    stop_heating_building_temperature: float
 
 class Building(cp.Component):
     """
@@ -189,15 +184,11 @@ class Building(cp.Component):
 
     @utils.measure_execution_time
     def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-                 bClass="medium",
-                 initial_temperature=23,
-                 heating_reference_temperature=-14):
+                 my_simulation_parameters: SimulationParameters, config: BuildingConfig):
+
         super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
-        self.buildingConfig = BuildingConfig(my_simulation_parameters, building_code=building_code, bClass=bClass,
-                                             initial_temperature=initial_temperature)
+        self.buildingConfig=config
         self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig)
 
         self.c_m: float = 0
@@ -216,12 +207,12 @@ class Building(cp.Component):
         self.q_sol_ref: float = 0
         self.q_h_nd_ref: float = 0
 
-        self.max_thermal_building_demand = self.calculate_max_thermal_building_demand(building_code=building_code,
-                                                                                      heating_reference_temperature=heating_reference_temperature,
-                                                                                      initial_temperature=initial_temperature)
-        self.build(bClass, building_code)
+        self.max_thermal_building_demand = self.calculate_max_thermal_building_demand(building_code=config.building_code,
+                                                                                      heating_reference_temperature=config.heating_reference_temperature,
+                                                                                      initial_temperature=config.initial_temperature)
+        self.build(config.bClass, config.building_code)
 
-        self.state: BuildingState = BuildingState(t_m=initial_temperature, c_m=self.c_m)
+        self.state: BuildingState = BuildingState(t_m=config.initial_temperature, c_m=self.c_m)
         self.previous_state = self.state.self_copy()
 
         # ===================================================================================================================
@@ -338,7 +329,14 @@ class Building(cp.Component):
         #                                                           self.TemperatureOutput,
         #                                                           lt.LoadTypes.WarmWater,
         #                                                           lt.Units.Celsius)
-
+    @staticmethod
+    def get_default_config():
+        config = BuildingConfig(
+                        building_code = "DE.N.SFH.05.Gen.ReEx.001.002",
+                        bClass = "medium",
+                        initial_temperature = 23,
+                        heating_reference_temperature = -14)
+        return config
     def get_weather_default_connections(self):
         log.information("setting weather default connections")
         connections = []
@@ -1145,12 +1143,11 @@ class BuildingController(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 minimal_building_temperature=20,
-                 stop_heating_building_temperature=21):
+                 config: BuildingControllerConfig):
         super().__init__(name="BuildingController", my_simulation_parameters=my_simulation_parameters)
-        self.minimal_building_temperature = minimal_building_temperature
-        self.stop_heating_building_temperature = stop_heating_building_temperature
-        self.state = BuildingControllerState(temperature_building_target_C=minimal_building_temperature,
+        self.minimal_building_temperature = config.minimal_building_temperature
+        self.stop_heating_building_temperature = config.stop_heating_building_temperature
+        self.state = BuildingControllerState(temperature_building_target_C=config.minimal_building_temperature,
                                              level_of_utilization=0)
         self.previous_state = self.state.clone( )
 
@@ -1174,7 +1171,12 @@ class BuildingController(cp.Component):
                                                                         self.LevelOfUtilization,
                                                                         lt.LoadTypes.Any,
                                                                         lt.Units.Percent)
-
+    @staticmethod
+    def get_default_config():
+        config=BuildingControllerConfig(
+                minimal_building_temperature = 20,
+                stop_heating_building_temperature = 21)
+        return config
     def build(self):
         pass
 

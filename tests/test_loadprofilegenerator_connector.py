@@ -13,7 +13,9 @@ def test_occupancy():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    my_occupancy = loadprofilegenerator_connector.Occupancy(profile_name=my_occupancy_profile, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy_config=loadprofilegenerator_connector.Occupancy.get_default_config()
+    my_occupancy_config.profile_name=my_occupancy_profile
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     number_of_outputs = fft.get_number_of_outputs([my_occupancy])
     stsv = component.SingleTimeStepValues(number_of_outputs)

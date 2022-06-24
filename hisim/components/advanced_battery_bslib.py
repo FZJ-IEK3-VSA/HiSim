@@ -2,6 +2,7 @@
 from copy import deepcopy
 from dataclasses import dataclass
 from bslib import bslib as bsl
+from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
@@ -16,6 +17,14 @@ __version__ = "0.1"
 __maintainer__ = "Tjarko Tjaden"
 __email__ = "tjarko.tjaden@hs-emden-leer.de"
 __status__ = "development"
+
+@dataclass_json
+@dataclass
+class BatteryConfig:
+    system_id: str
+    p_inv_custom: float
+    e_bat_custom: float
+    name: str
 
 class Battery(Component):
     """
@@ -33,10 +42,7 @@ class Battery(Component):
     StateOfCharge = "StateOfCharge"             # [0..1]
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
-                system_id: str,
-                p_inv_custom: float = 0,
-                e_bat_custom: float = 0,
-                name: str = "Battery"):
+                 config:BatteryConfig):
         """
         Loads the parameters of the specified battery storage.
 
@@ -49,14 +55,14 @@ class Battery(Component):
         e_bat_custom : numeric, default 0
             Useable battery capacity. Only for system_ids of type "Generic". [kWh]
         """
+        self.battery_config = config
+        super().__init__(name=self.battery_config.name, my_simulation_parameters=my_simulation_parameters)
 
-        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
+        self.system_id = self.battery_config.system_id
 
-        self.system_id = system_id
+        self.p_inv_custom = self.battery_config.p_inv_custom
 
-        self.p_inv_custom = p_inv_custom
-
-        self.e_bat_custom = e_bat_custom
+        self.e_bat_custom = self.battery_config.e_bat_custom
 
         # Component has states
         self.state = BatteryState()
@@ -89,7 +95,14 @@ class Battery(Component):
                                                      field_name=self.StateOfCharge,
                                                      load_type=LoadTypes.Any,
                                                      unit=Units.Any)
-
+    @staticmethod
+    def get_default_config():
+        config=BatteryConfig(
+            system_id ='SG1',
+            p_inv_custom =5,
+            e_bat_custom = 10,
+            name= "Battery")
+        return config
     def i_save_state(self):
         self.previous_state = deepcopy(self.state)
 

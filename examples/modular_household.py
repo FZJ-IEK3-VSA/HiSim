@@ -66,12 +66,25 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
     building_class = "medium"
     initial_temperature = 23
+    heating_reference_temperature=-14
 
     # Set weather
     location = "Aachen"
     
     # Set occupancy
     occupancy_profile = "CH01"
+
+    # Set PV-System
+    time = 2019
+    power = 10E3
+    load_module_data = False
+    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
+    integrateInverter = True
+    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
+    name = 'PVSystem'
+    azimuth  = 180
+    tilt  = 30
+
     
     # Build system parameters
     if my_simulation_parameters is None:
@@ -118,7 +131,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     ##### Build Components #####
     
     # Build occupancy
-    my_occupancy = loadprofilegenerator_connector.Occupancy( profile_name=occupancy_profile, my_simulation_parameters = my_simulation_parameters )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile)
+    my_occupancy = loadprofilegenerator_connector.Occupancy( config=my_occupancy_config, my_simulation_parameters = my_simulation_parameters )
     my_sim.add_component( my_occupancy )
     
     #initialize list of components representing the actual load profile and operation counter
@@ -128,28 +142,55 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
 
     # Build Weather
-    my_weather = weather.Weather( location=location, my_simulation_parameters = my_simulation_parameters, 
+    my_weather_config = weather.WeatherConfig(location="Aachen")
+    my_weather = weather.Weather( config=my_weather_config, my_simulation_parameters = my_simulation_parameters,
                                   my_simulation_repository = my_sim.simulation_repository )
     my_sim.add_component( my_weather )
     
     # Build building
-    my_building = building.Building( building_code = building_code,
-                                     bClass = building_class,
-                                     initial_temperature = initial_temperature,
+    my_building_config=building.BuildingConfig(building_code = building_code,
+                                            bClass = building_class,
+                                            initial_temperature = initial_temperature,
+                                            heating_reference_temperature = heating_reference_temperature )
+    my_building = building.Building( config=my_building_config,
                                      my_simulation_parameters = my_simulation_parameters )
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
     my_sim.add_component( my_building )
 
+
+
     if pv_included:
+        my_photovoltaic_system_config_1 = generic_pv_system.PVSystemConfig(time=time,
+                                                                           location=location,
+                                                                           power=power,
+                                                                           load_module_data=load_module_data,
+                                                                           module_name=module_name,
+                                                                           integrate_inverter=integrateInverter,
+                                                                           tilt=tilt,
+                                                                           azimuth=azimuth,
+                                                                           inverter_name=inverter_name,
+                                                                           source_weight=1,
+                                                                           name=name)
         my_photovoltaic_system1 = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,
                                                my_simulation_repository = my_sim.simulation_repository,                                        
-                                               source_weight = 1 )
+                                               config = my_photovoltaic_system_config_1 )
         my_photovoltaic_system1.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system1 )
-        
+
+        my_photovoltaic_system_config_2 = generic_pv_system.PVSystemConfig(time=time,
+                                                                           location=location,
+                                                                           power=power,
+                                                                           load_module_data=load_module_data,
+                                                                           module_name=module_name,
+                                                                           integrate_inverter=integrateInverter,
+                                                                           tilt=tilt,
+                                                                           azimuth=azimuth,
+                                                                           inverter_name=inverter_name,
+                                                                           source_weight=2,
+                                                                           name=name)
         my_photovoltaic_system2 = generic_pv_system.PVSystem( my_simulation_parameters = my_simulation_parameters,
                                                my_simulation_repository = my_sim.simulation_repository,
-                                               source_weight = 2 )
+                                               config = my_photovoltaic_system_config_2 )
         my_photovoltaic_system2.connect_only_predefined_connections( my_weather )
         my_sim.add_component( my_photovoltaic_system2 )
 

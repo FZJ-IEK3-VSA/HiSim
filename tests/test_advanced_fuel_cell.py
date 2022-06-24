@@ -21,11 +21,14 @@ def test_chp_system():
 
     #===================================================================================================================
     # Set Gas Heater
-    my_chp_system = advanced_fuel_cell.CHP(min_operation_time=min_operation_time,
-                                   min_idle_time=min_idle_time,
-                                   gas_type=gas_type,
-                                   operating_mode=operating_mode,
-                                   p_el_max=p_el_max,
+    my_chp_system_config= advanced_fuel_cell.CHP.get_default_config()
+    my_chp_system_config.min_operation_time=60
+    my_chp_system_config.min_idle_time = 15
+    my_chp_system_config.gas_type = "Methan"
+    my_chp_system_config.operating_mode = "electricity"
+    my_chp_system_config.p_el_max=3_000
+
+    my_chp_system = advanced_fuel_cell.CHP(config=my_chp_system_config,
                                    my_simulation_parameters=my_simulation_parameters)
     # Set Fake Outputs for Gas Heater
     control_signal = cp.ComponentOutput("FakeControlSignal",

@@ -277,7 +277,6 @@ class PostProcessor:
             elif '[Electricity - W]' in column:
                 self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results[ column ]
             else:
-                print( column )
                 continue
             
         #initilize lines for report
@@ -302,16 +301,18 @@ class PostProcessor:
             
             #evaluate electricity price
             gridpurchase = self.ppdt.results[ 'consumption' ] - self.ppdt.results[ 'production' ]
-            price = ( ( gridpurchase[ gridpurchase > 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ gridpurchase > 0 ] ).sum( ) \
-                    - ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
-                    * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                    
-            lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
+            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
+                price = ( ( gridpurchase[ gridpurchase > 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ gridpurchase > 0 ] ).sum( ) \
+                        - ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
+                        * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+                        
+                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
         
         else:
-            price = ( self.ppdt.results[ 'consumption' ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
-                * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
+            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
+                price = ( self.ppdt.results[ 'consumption' ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
+                    * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
             
         self.write_to_report( lines )
 

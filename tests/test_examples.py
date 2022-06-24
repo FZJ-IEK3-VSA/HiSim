@@ -76,9 +76,8 @@ def test_basic_household_with_all_resultfiles():
 def test_modular_household_configurations( ):
     path = "../examples/modular_household.py"
     func = "modular_household_explicit"
-    mysimpar = SimulationParameters.one_day_only( year = 2019, seconds_per_timestep = 60 )
+    mysimpar = SimulationParameters.one_day_only( year = 2019, seconds_per_timestep = 60 * 15 )
     hisim_main.main( path, func, mysimpar )
-    pass
 @utils.measure_execution_time
 def test_first_example():
     path = "../examples/examples.py"

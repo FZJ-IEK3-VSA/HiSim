@@ -305,10 +305,9 @@ class PostProcessor:
             lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
             
             #evaluate electricity price
-            gridpurchase = self.ppdt.results[ 'consumption' ] - self.ppdt.results[ 'production' ]
             if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
-                price = ( ( gridpurchase[ gridpurchase > 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ gridpurchase > 0 ] ).sum( ) \
-                        - ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
+                price = - ( ( injection[ injection < 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ injection < 0 ] ).sum( ) \
+                        + ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
                         * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
                         
                 lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )

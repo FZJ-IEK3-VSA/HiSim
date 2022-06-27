@@ -52,11 +52,13 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig( system_id='SG1',
                                                                          p_inv_custom=5.0,
                                                                          e_bat_custom=10.0,
-                                                                         name="Battery1")
+                                                                         name="Battery",
+                                                                         source_weight = 1 )
     my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig( system_id='SG1',
                                                                          p_inv_custom=2.5,
                                                                          e_bat_custom=5.0,
-                                                                         name="Battery2")
+                                                                         name="Battery",
+                                                                         source_weight = 2 )
     my_advanced_battery_1 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
                                                            config= my_advanced_battery_config_1)
     my_advanced_battery_2 = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters,
@@ -96,12 +98,12 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                         config=my_photovoltaic_system_config)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 
-    my_cl2.connect_input(my_cl2.ElectricityConsumptionBuilding,
-                                         my_occupancy.ComponentName,
-                                         my_occupancy.ElectricityOutput)
-    # my_cl2.connect_input(my_cl2.ElectricityOutputPvs,
-    #                                      my_photovoltaic_system.ComponentName,
-    #                                      my_photovoltaic_system.ElectricityOutput)
+    my_cl2.add_component_inputs_and_connect( source_component_classes = [ my_occupancy ],
+                                             outputstring = 'ElectricityOutput',
+                                             source_load_type = lt.LoadTypes.Electricity,
+                                             source_unit = lt.Units.Watt,
+                                             source_tags = [ lt.InandOutputType.Consumption ],
+                                             source_weight = 999 )
     my_cl2.add_component_inputs_and_connect( source_component_classes = [ my_photovoltaic_system ],
                                              outputstring = 'ElectricityOutput',
                                              source_load_type = lt.LoadTypes.Electricity,
@@ -123,12 +125,12 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
 
     electricity_to_or_from_battery_target_1 = my_cl2.add_component_output(source_output_name=lt.InandOutputType.ElectricityTarget,
                                                source_tags=[lt.ComponentType.Battery],
-                                               source_weight=1,
+                                               source_weight=my_advanced_battery_1.source_weight,
                                                source_load_type= lt.LoadTypes.Electricity,
                                                source_unit= lt.Units.Watt)
     electricity_to_or_from_battery_target_2 = my_cl2.add_component_output(source_output_name=lt.InandOutputType.ElectricityTarget,
                                                source_tags=[lt.ComponentType.Battery],
-                                               source_weight=2,
+                                               source_weight=my_advanced_battery_2.source_weight,
                                                source_load_type= lt.LoadTypes.Electricity,
                                                source_unit= lt.Units.Watt)
 

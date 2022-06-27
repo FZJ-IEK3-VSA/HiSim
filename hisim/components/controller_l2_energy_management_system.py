@@ -563,6 +563,7 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         self.limit_to_shave= limit_to_shave
 
         ###Inputs
+        """
         self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                   self.ElectricityConsumptionBuilding,
                                                                                   lt.LoadTypes.Electricity,
@@ -572,8 +573,6 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                                               self.ElectricityDemandHeatPump,
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,
-                                                                              False)
-        """
         self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                         self.ElectricityOutputPvs,
                                                                         lt.LoadTypes.Electricity,
@@ -824,12 +823,11 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         
         #get production
         production = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Production ], weight_counter = 999 ) )
+        consumption = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Consumption ], weight_counter = 999 ) )
         
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        delta_demand = production \
-                       - stsv.get_input_value(self.electricity_consumption_building) \
-                       -stsv.get_input_value(self.electricity_demand_heat_pump)
+        delta_demand = production - consumption
 
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption(delta_demand=delta_demand,stsv=stsv)

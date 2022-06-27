@@ -23,10 +23,12 @@ def test_advanced_battery_bslib():
     p_inv_custom = 5    # kW
     e_bat_custom = 10   # kWh
     name = "Battery"
+    source_weight = 1
     my_advanced_battery_config=advanced_battery_bslib.BatteryConfig (system_id=system_id,
                                                                      p_inv_custom=p_inv_custom,
                                                                      e_bat_custom=e_bat_custom,
-                                                                     name=name)
+                                                                     name=name,
+                                                                     source_weight=source_weight )
     my_advanced_battery = advanced_battery_bslib.Battery(config=my_advanced_battery_config,
                                                          my_simulation_parameters=my_simulation_parameters)
 

@@ -179,9 +179,7 @@ class PostProcessor:
                                    units=output.Unit,
                                    directorypath=self.ppdt.directory_path,
                                    time_correction_factor=self.ppdt.time_correction_factor)
-                my_carpet.plot_year()
-               # my_carpet.plot_week( )
-               # my_carpet.plot_january( )
+                my_carpet.plot( xdims = int( ( self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date ).days ) )
 
             if PostProcessingOptions.Plot_Day in self.ppdt.postProcessingOptions:
                     my_days = ChartSingleDay(output=output.FullName,
@@ -214,6 +212,13 @@ class PostProcessor:
         if PostProcessingOptions.Export_To_CSV in self.ppdt.postProcessingOptions:
             log.information("exporting to csv")
             self.export_results_to_csv()
+        else:
+            log.information("not exporting to CSV")
+            
+         # Export all results to CSV
+        if PostProcessingOptions.Compute_KPI in self.ppdt.postProcessingOptions:
+            log.information("Computing KPIs")
+            self.compute_KPIs( )
         else:
             log.information("not exporting to CSV")
 
@@ -261,6 +266,56 @@ class PostProcessor:
         self.report.open()
         self.report.write(text)
         self.report.close()
+        
+    def compute_KPIs( self ):
+        #sum consumption and production of individual components
+        self.ppdt.results[ 'consumption' ] = 0
+        self.ppdt.results[ 'production' ] = 0
+        for column in self.ppdt.results:
+            if 'PVSystem' in column:
+                self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results[ column ]
+            elif '[Electricity - W]' in column:
+                self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results[ column ]
+            else:
+                continue
+            
+        #initilize lines for report
+        lines = [ ]
+         
+        #sum over time and write to report
+        consumption_sum = self.ppdt.results[ 'consumption' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+        lines.append( "Consumption: {:4.0f} kWh".format( consumption_sum ) )
+        
+        production_sum = self.ppdt.results[ 'production' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+        lines.append( "Production: {:4.0f} kWh".format( production_sum ) )
+        
+        if production_sum > 0:
+            #evaluate injection, sum over time and wite to 
+            injection = ( self.ppdt.results[ 'production' ] - self.ppdt.results[ 'consumption' ] ) 
+            injection_sum = injection[ injection > 0 ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+            lines.append( "Injection: {:4.0f} kWh".format( injection_sum ) )
+            
+            #evaluate self consumption rate and autarky rate:
+            lines.append( "Autarky Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / consumption_sum ) )
+            lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
+            
+            #evaluate electricity price
+            gridpurchase = self.ppdt.results[ 'consumption' ] - self.ppdt.results[ 'production' ]
+            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
+                price = ( ( gridpurchase[ gridpurchase > 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ gridpurchase > 0 ] ).sum( ) \
+                        - ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
+                        * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+                        
+                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
+        
+        else:
+            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
+                price = ( self.ppdt.results[ 'consumption' ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
+                    * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
+            
+        self.write_to_report( lines )
+
     #
     # def cal_pos_sim(self):
     #     self.write_components_to_report()

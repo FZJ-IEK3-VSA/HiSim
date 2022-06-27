@@ -99,9 +99,15 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     my_cl2.connect_input(my_cl2.ElectricityConsumptionBuilding,
                                          my_occupancy.ComponentName,
                                          my_occupancy.ElectricityOutput)
-    my_cl2.connect_input(my_cl2.ElectricityOutputPvs,
-                                         my_photovoltaic_system.ComponentName,
-                                         my_photovoltaic_system.ElectricityOutput)
+    # my_cl2.connect_input(my_cl2.ElectricityOutputPvs,
+    #                                      my_photovoltaic_system.ComponentName,
+    #                                      my_photovoltaic_system.ElectricityOutput)
+    my_cl2.add_component_inputs_and_connect( source_component_classes = [ my_photovoltaic_system ],
+                                             outputstring = 'ElectricityOutput',
+                                             source_load_type = lt.LoadTypes.Electricity,
+                                             source_unit = lt.Units.Watt,
+                                             source_tags = [ lt.InandOutputType.Production ],
+                                             source_weight = 999 )
     my_cl2.add_component_input_and_connect( source_component_class=my_advanced_battery_1,
                                                source_component_output=my_advanced_battery_1.AcBatteryPower,
                                                source_load_type= lt.LoadTypes.Electricity,

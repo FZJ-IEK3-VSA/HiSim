@@ -318,6 +318,45 @@ class DynamicComponent(Component):
                                                                      SourceTags=source_tags,
                                                                      SourceWeight=source_weight))
                 
+    def add_component_inputs_and_connect(self,
+                                        source_component_classes: List[ Component ],
+                                        outputstring: str,
+                                        source_load_type: lt.LoadTypes,
+                                        source_unit: lt.Units,
+                                        source_tags: List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
+                                        source_weight: int):
+        """finds all outputs of listed components containing outputstring in outputname, adds inputs to dynamic component and connects the outputs"""
+
+        # Label Input and generate variable
+        num_inputs = len(self.inputs)
+
+        # Connect Input and define it as DynamicConnectionInput
+        for component in source_component_classes:
+            for output_var in component.outputs:
+                if outputstring in output_var.DisplayName :
+                    source_component_output = output_var.DisplayName
+                    
+                    label = "Input{}".format(num_inputs)
+                    vars( self )[ label ] = label
+            
+                    # Define Input as Component Input and add it to inputs
+                    myinput = ComponentInput( self.ComponentName, label, source_load_type, source_unit, True )
+                    self.inputs.append( myinput )
+                    myinput.src_object_name = component.ComponentName
+                    myinput.src_field_name = str( source_component_output )
+                    self.__setattr__( label, myinput )
+                    num_inputs += 1
+                    
+                    self.connect_input(label,
+                                       component.ComponentName,
+                                       output_var.FieldName)
+                    self.MyComponentInputs.append(DynamicConnectionInput(SourceComponentClass=label,
+                                                                         SourceComponentOutput=source_component_output,
+                                                                         SourceLoadType=source_load_type,
+                                                                         SourceUnit=source_unit,
+                                                                         SourceTags=source_tags,
+                                                                         SourceWeight=source_weight))
+                
     def get_dynamic_input( self, stsv : SingleTimeStepValues,
                                  tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
                                  weight_counter : int ) -> Any:
@@ -332,6 +371,20 @@ class DynamicComponent(Component):
             else:
                 continue
         return inputvalue
+    
+    def get_dynamic_inputs( self, stsv : SingleTimeStepValues,
+                                  tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
+                                  weight_counter : int ) -> List:
+        """returns input values from all dynamic inputs with component type and weight"""
+        inputvalues = [ ]
+    
+        #check if component of component type is available
+        for index, element in enumerate( self.MyComponentInputs ): #loop over all inputs
+            if all( tag in element.SourceTags for tag in tags ) and weight_counter == element.SourceWeight:
+                inputvalues.append( stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) ) )
+            else:
+                continue
+        return inputvalues
     
     def set_dynamic_output( self, stsv : SingleTimeStepValues,
                                   tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ],

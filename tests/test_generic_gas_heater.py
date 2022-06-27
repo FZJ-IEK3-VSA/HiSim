@@ -16,9 +16,12 @@ def test_gas_heater():
     power_max = 12_000
     #===================================================================================================================
     # Set Gas Heater
-    my_gas_heater = generic_gas_heater.GasHeater(temperaturedelta=temperaturedelta,
-                                       power_max=power_max,
-                                       my_simulation_parameters=my_simulation_parameters)
+    my_gas_heater_config=generic_gas_heater.GasHeater.get_default_config()
+    my_gas_heater_config.temperaturedelta=temperaturedelta
+    my_gas_heater_config.power_max = power_max
+
+    my_gas_heater = generic_gas_heater.GasHeater(config=my_gas_heater_config,
+                                                 my_simulation_parameters=my_simulation_parameters)
 
     # Set Fake Outputs for Gas Heater
     control_signal = cp.ComponentOutput("FakeControlSignal",

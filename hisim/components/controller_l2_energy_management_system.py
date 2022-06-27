@@ -9,7 +9,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from typing import List
-
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -19,6 +20,23 @@ __version__ = "0.1"
 __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
+
+@dataclass_json
+@dataclass
+class ControllerHeatConfig:
+    temperature_storage_target_warm_water: float = 50
+    temperature_storage_target_heating_water: float = 35
+    temperature_storage_target_hysteresis_ww: float = 45
+    temperature_storage_target_hysteresis_hw: float = 35
+
+
+@dataclass_json
+@dataclass
+class ControllerElectricityConfig:
+    strategy: str = "optimize_own_consumption"
+    # strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
+    limit_to_shave: float = 0
+
 # class ControllerState
 class ControllerState:
     """
@@ -76,16 +94,13 @@ class ControllerHeat(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 temperature_storage_target_warm_water: float  = 50,
-                 temperature_storage_target_heating_water: float  =35,
-                 temperature_storage_target_hysteresis_ww: float =45,
-                 temperature_storage_target_hysteresis_hw: float =30):
+                 config: ControllerHeatConfig):
         super().__init__(name="ControllerHeat", my_simulation_parameters=my_simulation_parameters)
 
-        self.temperature_storage_target_warm_water=temperature_storage_target_warm_water
-        self.temperature_storage_target_heating_water=temperature_storage_target_heating_water
-        self.temperature_storage_target_hysteresis_hw=temperature_storage_target_hysteresis_hw
-        self.temperature_storage_target_hysteresis_ww=temperature_storage_target_hysteresis_ww
+        self.temperature_storage_target_warm_water=config.temperature_storage_target_warm_water
+        self.temperature_storage_target_heating_water=config.temperature_storage_target_heating_water
+        self.temperature_storage_target_hysteresis_hw=config.temperature_storage_target_hysteresis_hw
+        self.temperature_storage_target_hysteresis_ww=config.temperature_storage_target_hysteresis_ww
 
         self.state = ControllerState(control_signal_heat_pump=0,
                                      control_signal_gas_heater=0,
@@ -135,7 +150,13 @@ class ControllerHeat(cp.Component):
                                                                          lt.LoadTypes.Any,
                                                                          lt.Units.Any,
                                                                          False)
-
+    @staticmethod
+    def get_default_config():
+        config = ControllerHeatConfig(temperature_storage_target_warm_water= 50,
+                                      temperature_storage_target_heating_water= 35,
+                                      temperature_storage_target_hysteresis_ww= 45,
+                                      temperature_storage_target_hysteresis_hw= 35)
+        return config
     def build(self, mode):
         self.mode = mode
 
@@ -151,7 +172,7 @@ class ControllerHeat(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    # Simulates waterstorages and defines the control signals to heat up storages
+    # Simulates and defines the control signals to heat up storages
     # work as a 2-point Ruler with Hysteresis
     def simulate_storage(self,delta_temperature:float,
                          stsv: cp.SingleTimeStepValues,
@@ -259,8 +280,6 @@ class ControllerHeat(cp.Component):
 
         stsv.set_output_value(self.control_signal_choose_storage, control_signal_choose_storage)
 
-
-
 class ControllerElectricity(cp.Component):
     """
     Controlls energy flows for electricity and heat demand.
@@ -283,12 +302,11 @@ class ControllerElectricity(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 strategy : str = "optimize_own_consumption",#strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
-                 limit_to_shave: float =0):
+                 config: ControllerElectricityConfig):
         super().__init__(name="ControllerElectricity", my_simulation_parameters=my_simulation_parameters)
 
-        self.strategy=strategy
-        self.limit_to_shave= limit_to_shave
+        self.strategy=config.strategy
+        self.limit_to_shave= config.limit_to_shave
 
         ###Inputs
         self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,

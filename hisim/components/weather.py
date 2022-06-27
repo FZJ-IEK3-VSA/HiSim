@@ -42,14 +42,7 @@ https://github.com/FZJ-IEK3-VSA/tsib
 @dataclass_json
 @dataclass()
 class WeatherConfig:
-    parameter_string: str
-    location: str
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 location:str):
-        self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.location = location
-
+    location: str="Aachen"
 
 class Weather(Component):
     """
@@ -99,14 +92,15 @@ class Weather(Component):
 
     @utils.measure_execution_time
     def __init__(self,
-                 my_simulation_parameters: SimulationParameters, 
-                 location : str = "Aachen",
+                 my_simulation_parameters: SimulationParameters,
+                 config : WeatherConfig,
                  my_simulation_repository : Optional[ SimRepository ] = None ):
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)
         if(my_simulation_parameters is None):
             raise Exception("Simparameters was none")
-        self.weatherConfig = WeatherConfig(my_simulation_parameters,location)
-        self.build( location, my_simulation_parameters, my_simulation_repository )
+        self.weatherConfig = config
+        self.parameter_string = my_simulation_parameters.get_unique_key()
+        self.build( self.weatherConfig.location, my_simulation_parameters, my_simulation_repository )
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
                                                         self.TemperatureOutside,
@@ -162,6 +156,10 @@ class Weather(Component):
         self.apparent_zenith_list: List[float]
         self.DHI_list: List[float]
 
+    @staticmethod
+    def get_default_config():
+        config= WeatherConfig(location="Aachen")
+        return config
     def i_save_state(self):
         pass
 

@@ -1,6 +1,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
 from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
 
 # Import modules from HiSim
@@ -17,6 +18,14 @@ __maintainer__ = "Tjarko Tjaden"
 __email__ = "tjarko.tjaden@hs-emden-leer.de"
 __status__ = "development"
 
+@dataclass_json
+@dataclass
+class HeatPumpHplibConfig:
+    model: str
+    group_id: int
+    t_in: float
+    t_out_val: float
+    p_th_set: float
 
 class HeatPumpHplib(Component):
     """
@@ -41,12 +50,7 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"                                           # s
     TimeOff = "TimeOff"                                         # s
 
-    def __init__(self, my_simulation_parameters: SimulationParameters,
-                model: str,
-                group_id: int = -1,
-                t_in: float = -300,
-                t_out_val: float = -300,
-                p_th_set: float = -300):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: HeatPumpHplibConfig):
         """
         Loads the parameters of the specified heat pump.
 
@@ -70,15 +74,15 @@ class HeatPumpHplib(Component):
         """
         super().__init__(name="HeatPump", my_simulation_parameters=my_simulation_parameters)
 
-        self.model = model
+        self.model = config.model
 
-        self.group_id = group_id
+        self.group_id = config.group_id
 
-        self.t_in = t_in
+        self.t_in = config.t_in
 
-        self.t_out_val = t_out_val
+        self.t_out_val = config.t_out_val
 
-        self.p_th_set = p_th_set
+        self.p_th_set = config.p_th_set
 
         # Component has states
         self.state = HeatPumpState()
@@ -148,7 +152,14 @@ class HeatPumpHplib(Component):
                                                       field_name=self.TimeOff,
                                                       load_type=LoadTypes.Time,
                                                       unit=Units.Seconds)
-
+    @staticmethod
+    def get_defaul_config():
+        config= HeatPumpHplibConfig(model="Generic",
+                                    group_id= -1,
+                                    t_in= -300,
+                                    t_out_val= -300,
+                                    p_th_set= -30)
+        return config
     def i_save_state(self):
         self.previous_state = deepcopy(self.state)
 

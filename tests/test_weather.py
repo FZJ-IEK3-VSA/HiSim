@@ -7,7 +7,8 @@ def test_weather():
     mysim:  SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=60)
     repo = component.SimRepository()
-    my_weather = weather.Weather(location="Aachen", my_simulation_parameters=mysim)
+    my_weather_config=weather.Weather.get_default_config()
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
 
     number_of_outputs = fft.get_number_of_outputs([my_weather])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)

@@ -17,11 +17,14 @@ def test_storage():
     ambient_temperature = 15
 
     #===================================================================================================================
-    # Set Heat Pump
-    my_storage = generic_hot_water_storage.HeatStorage(V_SP_heating_water=V_SP_heating_water,
-                                     V_SP_warm_water=V_SP_warm_water,
-                                     temperature_of_warm_water_extratcion=temperature_of_warm_water_extratcion,
-                                     ambient_temperature=ambient_temperature,
+    # Set Storage
+    my_storage_config= generic_hot_water_storage.HeatStorage.get_default_config()
+    my_storage_config.V_SP_heating_water =V_SP_heating_water
+    my_storage_config.V_SP_warm_water = V_SP_warm_water
+    my_storage_config.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
+    my_storage_config.ambient_temperature = ambient_temperature
+
+    my_storage = generic_hot_water_storage.HeatStorage(config=my_storage_config,
                                      my_simulation_parameters=my_simulation_parameters)
 
     thermal_demand_heating_water = cp.ComponentOutput("FakeThermalDemandHeatingWater",

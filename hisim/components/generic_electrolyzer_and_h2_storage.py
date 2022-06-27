@@ -1,7 +1,8 @@
 # Owned
 from hisim.simulationparameters import SimulationParameters
 
-
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 
 from hisim import loadtypes as lt
@@ -17,6 +18,32 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
 #
+
+@dataclass_json
+@dataclass
+class ElectrolyzerConfig:
+    component_name: str
+    waste_energy: float # [W]
+    min_power: float # [W]
+    max_power: float # [W]
+    min_power_percent: float # [%]
+    max_power_percent: float # [W]
+    min_hydrogen_production_rate_hour: float # [Nl/h]
+    max_hydrogen_production_rate_hour: float # [Nl/h]
+    pressure_hydrogen_output: float # [bar]
+
+@dataclass_json
+@dataclass
+class HydrogenStorageConfig:
+    component_name: str
+    min_capacity: float # [kg_H2]
+    max_capacity: float # [kg_H2]
+    starting_fill: float # [kg_H2]
+    max_charging_rate_hour: float # [kg/h]
+    max_discharging_rate_hour: float # [kg/h]
+    energy_for_charge: float # [kWh/kg]
+    energy_for_discharge: float # [kWh/kg]
+    loss_factor_per_day: float # [lost_%/day]
 
 class ElectrolyzerSimulation:
     def __init__(self,
@@ -152,17 +179,9 @@ class Electrolyzer(Component):
     ElectricityRealNeeded = "ElectricityRealNeeded"
 
     def __init__(self,my_simulation_parameters: SimulationParameters,
-                 component_name:str ="Electrolyzer",
-                 waste_energy:float =400, # [W]
-                 min_power:float=1_200, # [W]
-                 max_power:float=2_400, # [W]
-                 min_power_percent:float=60, # [%],
-                 max_power_percent: float = 100,  # [W]
-                 min_hydrogen_production_rate_hour: float = 300,  # [Nl/h]
-                 max_hydrogen_production_rate_hour: float = 5000,  # [Nl/h]
-                 pressure_hydrogen_output: float = 30  # [bar]
-                 ):
-        super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
+                 config: ElectrolyzerConfig):
+
+        super().__init__(config.component_name, my_simulation_parameters=my_simulation_parameters)
 
         # input
         self.hydrogen_not_stored: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.HydrogenNotStored, lt.LoadTypes.Hydrogen, lt.Units.kg, True)
@@ -179,24 +198,39 @@ class Electrolyzer(Component):
         self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.Any, lt.Units.Any)
         self.power_level: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.PowerLevel, lt.LoadTypes.Any, lt.Units.Percent)
 
-        self.max_power = max_power
-        self.min_power = min_power
-        self.waste_energy = waste_energy
-        min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-        max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
+        self.max_power = config.max_power
+        self.min_power = config.min_power
+        self.waste_energy = config.waste_energy
+        min_hydrogen_production_rate = config.min_hydrogen_production_rate_hour / 3600  # [Nl/s]
+        max_hydrogen_production_rate = config.max_hydrogen_production_rate_hour / 3600  # [Nl/s]
 
-        self.electrolyzer = ElectrolyzerSimulation(waste_energy = waste_energy,
-                                                   min_power =min_power,
-                                                   max_power =max_power,
-                                                   min_power_percent =min_power_percent,
-                                                   max_power_percent =max_power_percent,
-                                                   min_hydrogen_production_rate_hour =min_hydrogen_production_rate_hour,
-                                                   max_hydrogen_production_rate_hour =max_hydrogen_production_rate_hour,
+        self.electrolyzer = ElectrolyzerSimulation(waste_energy = config.waste_energy,
+                                                   min_power =config.min_power,
+                                                   max_power =config.max_power,
+                                                   min_power_percent =config.min_power_percent,
+                                                   max_power_percent =config.max_power_percent,
+                                                   min_hydrogen_production_rate_hour =config.min_hydrogen_production_rate_hour,
+                                                   max_hydrogen_production_rate_hour =config.max_hydrogen_production_rate_hour,
                                                    min_hydrogen_production_rate =min_hydrogen_production_rate,
                                                    max_hydrogen_production_rate =max_hydrogen_production_rate,
-                                                   pressure_hydrogen_output =pressure_hydrogen_output)
+                                                   pressure_hydrogen_output =config.pressure_hydrogen_output)
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.previous_state = 0
+
+    @staticmethod
+    def get_default_config():
+        config=ElectrolyzerConfig(
+            component_name= "Electrolyzer",
+            waste_energy=400,  # [W]
+            min_power= 1_200,  # [W]
+            max_power= 2_400,  # [W]
+            min_power_percent = 60,  # [%],
+            max_power_percent = 100,  # [W]
+            min_hydrogen_production_rate_hour = 300,  # [Nl/h]
+            max_hydrogen_production_rate_hour = 5000,  # [Nl/h]
+            pressure_hydrogen_output = 30  # [bar]
+            )
+        return config
     def i_save_state(self):
         self.previous_state = self.electrolyzer.state
 
@@ -418,17 +452,8 @@ class HydrogenStorage(Component):
     DischargingHydrogenAmountReal= "Discharging Hydrogen Amount Real"               # kg/s
 
     def __init__(self, my_simulation_parameters:SimulationParameters,
-                 component_name: str ="HydrogenStorage",
-                 min_capacity: float= 0,
-                 max_capacity: float= 0,
-                 starting_fill: float= 0,
-                 max_charging_rate_hour: float = 0,
-                 max_discharging_rate_hour: float = 0,
-                 energy_for_charge: float = 0,
-                 energy_for_discharge: float= 0,
-                 loss_factor_per_day: float = 0
-                 ):
-        super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
+                 config:HydrogenStorageConfig):
+        super().__init__(config.component_name, my_simulation_parameters=my_simulation_parameters)
         self.charging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, True)
         self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountTarget, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
 
@@ -441,24 +466,35 @@ class HydrogenStorage(Component):
         self.hydrogen_losses: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenLosses, lt.LoadTypes.Hydrogen, lt.Units.kg)
         self.discharging_hydrogen_real: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountReal, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
 
-        self.max_capacity=max_capacity
+        self.max_capacity=config.max_capacity
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.previous_state:float = 0
-        self.max_charging_rate = max_charging_rate_hour / 3600
-        self.max_discharging_rate = max_discharging_rate_hour / 3600
+        self.max_charging_rate = config.max_charging_rate_hour / 3600
+        self.max_discharging_rate = config.max_discharging_rate_hour / 3600
 
-        self.hydrogenstorage = HydrogenStorageSimulation(fill=starting_fill,
-                                                         max_capacity=max_capacity ,
-                                                         min_capacity=min_capacity,
+        self.hydrogenstorage = HydrogenStorageSimulation(fill=config.starting_fill,
+                                                         max_capacity=config.max_capacity ,
+                                                         min_capacity=config.min_capacity,
                                                          max_charging_rate=self.max_charging_rate,
                                                          max_discharging_rate=self.max_discharging_rate,
-                                                         energy_to_charge=energy_for_charge,
-                                                         energy_to_discharge=energy_for_discharge,
-                                                         loss_factor=loss_factor_per_day
+                                                         energy_to_charge=config.energy_for_charge,
+                                                         energy_to_discharge=config.energy_for_discharge,
+                                                         loss_factor=config.loss_factor_per_day
                                                          )
 
-
-
+    @staticmethod
+    def get_default_config():
+        config=HydrogenStorageConfig(
+            component_name = "HydrogenStorage",
+            min_capacity = 0,
+            max_capacity = 500,
+            starting_fill = 400,
+            max_charging_rate_hour = 2,
+            max_discharging_rate_hour = 2,
+            energy_for_charge = 0,
+            energy_for_discharge= 0,
+            loss_factor_per_day= 0)
+        return config
     def i_save_state(self):
         self.previous_state = self.hydrogenstorage.fill
 

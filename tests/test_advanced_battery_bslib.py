@@ -22,11 +22,13 @@ def test_advanced_battery_bslib():
     system_id = 'SG1'   # Generic ac coupled battery storage system
     p_inv_custom = 5    # kW
     e_bat_custom = 10   # kWh
-
-    my_advanced_battery = advanced_battery_bslib.Battery(system_id=system_id,
-                                                        p_inv_custom=p_inv_custom,
-                                                        e_bat_custom=e_bat_custom,
-                                                        my_simulation_parameters=my_simulation_parameters)
+    name = "Battery"
+    my_advanced_battery_config=advanced_battery_bslib.BatteryConfig (system_id=system_id,
+                                                                     p_inv_custom=p_inv_custom,
+                                                                     e_bat_custom=e_bat_custom,
+                                                                     name=name)
+    my_advanced_battery = advanced_battery_bslib.Battery(config=my_advanced_battery_config,
+                                                         my_simulation_parameters=my_simulation_parameters)
 
     # Set Fake Input
     loading_power_input = cp.ComponentOutput("FakeLoadingPowerInput",

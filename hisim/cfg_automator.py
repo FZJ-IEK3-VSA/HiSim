@@ -7,6 +7,7 @@ from inspect import isclass
 from pkgutil import iter_modules
 from pathlib import Path as gg
 from importlib import import_module
+from typing import Any, Dict
 import logging
 
 import hisim.component as component
@@ -32,8 +33,8 @@ __status__ = "development"
 
 # iterate through the modules in the current package
 package_dir = os.path.join(gg(__file__).resolve().parent, "components")
-
-for (_, module_name, _) in iter_modules([package_dir]):
+_ : Any
+for (_, module_name,_ ) in iter_modules([package_dir]):
 
     # import the module and iterate through its attributes
     module = import_module(f"hisim.components.{module_name}")
@@ -273,7 +274,7 @@ class ConfigurationGenerator:
         self._groupings[grouping_components.component_name] = grouping_components.configuration
         #logging.info("Component Grouping {} has been created.".format(grouping_components.component_name))
 
-    def add_connection(self, connection_components: ComponentsConnection):
+    def add_connection(self, connection_components):
         """
         Add connections among the previously assigned components. Connections can be performed manually or
         automatically.
@@ -321,7 +322,8 @@ class ConfigurationGenerator:
             json.dump(self.data, f, indent=4)
 
     def run(self):
-        hisim.main("cfg_automator", "basic_household_implicit")
+        pass
+        #hisim.main("cfg_automator", "basic_household_implicit")
 
     def run_parameter_studies(self):
         for component_class, parameter_name_and_range in self._parameters_range_studies.items():
@@ -350,8 +352,8 @@ class SetupFunction:
         self._components = []
         self._connections = []
         self._groupings = []
-        self.electricity_grids : List[ElectricityGrid] = []
-        self.electricity_grid_consumption : List[ElectricityGrid] = []
+        #self.electricity_grids : List[ElectricityGrid] = []
+        #self.electricity_grid_consumption : List[ElectricityGrid] = []
         self.component_class_children=[]
         self.component_file_children=[]
         self.component_module_list=[]
@@ -379,10 +381,11 @@ class SetupFunction:
         # Timeline configuration
         method = self.cfg["SimulationParameters"]["method"]
         self.cfg["SimulationParameters"].pop("method", None)
+        self._simulation_parameters: sim.SimulationParameters
         if method == "full_year":
-            self._simulation_parameters: sim.SimulationParameters = sim.SimulationParameters.full_year_all_options(**self.cfg["SimulationParameters"])
+            self._simulation_parameters = sim.SimulationParameters.full_year_all_options(**self.cfg["SimulationParameters"])
         elif method == "one_day_only":
-            self._simulation_parameters: sim.SimulationParameters = sim.SimulationParameters.one_day_only(**self.cfg["SimulationParameters"])
+            self._simulation_parameters = sim.SimulationParameters.one_day_only(**self.cfg["SimulationParameters"])
         my_sim.set_parameters(self._simulation_parameters)
 
 
@@ -474,7 +477,7 @@ class SetupFunction:
                 second_component = component
             elif type(component).__name__ == grouping["First Component"]:
                 first_component = component
-
+        '''
         my_concatenated_component = CalculateOperation(name=grouping["Component Name"])
         my_concatenated_component.connect_input(src_object_name=first_component.ComponentName,
                                                 src_field_name=getattr(first_component, grouping["First Component Output"]))
@@ -484,9 +487,8 @@ class SetupFunction:
         self._components.append(my_concatenated_component)
         my_sim.add_component(my_concatenated_component)
 
+        '''
     def add_connection(self, connection):
-        first_component = None
-        second_component = None
 
         for component in self._components:
             component_name= component.ComponentName
@@ -504,20 +506,17 @@ class SetupFunction:
             second_component.connect_similar_inputs(first_component)
         elif connection["Method"] == "Manual":
             try:
-
                 second_component.connect_input(input_fieldname=getattr(second_component, connection["Second Component Input"]),
                                                src_object_name=first_component.ComponentName,
                                                src_field_name=getattr(first_component, connection["First Component Output"]))
             except Exception as e:
                 print(e)
                 print("Incorrect Connection")
-                print("first_component: "+  first_component)
-                print("second_component: "+ second_component)
 
     def add_configuration(self, my_sim: sim.Simulator):
         #my_sim.add_configuration(self.cfg_raw)
         pass
-
+    '''
     def add_to_electricity_grid(self, my_sim, next_component, electricity_grid_label=None):
         n_consumption_components = len(self.electricity_grids)
         if electricity_grid_label is None:
@@ -543,7 +542,7 @@ class SetupFunction:
             list_components = [self.electricity_grid_consumption[-1], "Sum", next_component]
         self.electricity_grid_consumption.append(ElectricityGrid(name=electricity_grid_label, grid=list_components))
         my_sim.add_component(self.electricity_grid_consumption[-1])
-
+    '''
 def basic_household_implicit(my_sim: sim.Simulator):
     my_setup_function = SetupFunction()
     my_setup_function.build(my_sim)

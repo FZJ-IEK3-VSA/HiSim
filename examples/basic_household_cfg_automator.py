@@ -25,21 +25,25 @@ import hisim.simulator as sim
 from hisim.cfg_automator import ConfigurationGenerator, SetupFunction, ComponentsConnection, ComponentsGrouping
 import hisim.loadtypes as loadtypes
 
-__authors__ = "Vitor Hugo Bellotto Zago"
+__authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
+__maintainer__ = "Maximilian Hillen"
+__email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
-# to start mutliple simulations a name for different cfg.json files has to be added
 
 def basic_household_implicit(my_sim: sim.Simulator,my_simulation_parameters: Optional[sim.SimulationParameters] = None):
-    # Set simulation parameters
-    year = 2021
-    seconds_per_timestep = 60
+    """
+    This setup function emulates an household including
+    the basic components. Here the cfg_automator is used
+    to setup multiple simulations in a queue.
+    For this example the battery_capacity and the pv-power
+    is changed in the queue
+
+    """
 
     my_setup_function = SetupFunction()
     my_setup_function.build(my_sim)
@@ -47,7 +51,7 @@ def basic_household_implicit(my_sim: sim.Simulator,my_simulation_parameters: Opt
 if __name__ == '__main__':
 
     pvs_powers = [5E3, 10E3]
-    capacity = [5]
+    capacity = [5,10]
     name="cfg1"
     for pvs_power in pvs_powers:
         for capacity_i in capacity:
@@ -55,24 +59,11 @@ if __name__ == '__main__':
             my_cfg = ConfigurationGenerator()
 
             # Set simulation param
-            SimulationParameters = {"year": 2019,
+            simulation_parameters = {"year": 2019,
                                     "seconds_per_timestep": 60 * 15,
                                     "method": "full_year"}
-            my_cfg.add_simulation_parameters(my_simulation_parameters=SimulationParameters)
-            '''
-            todo
-            - heat- & electric-demand, pv-system über csv
-            - warmwater über building
-            - Komponenten:
-                - Storage
-                - heatpump
-                - Battery
-                - GasHeater
-                - CHP
-                - Electrolyzer
-                
-            
-            '''
+            my_cfg.add_simulation_parameters(my_simulation_parameters=simulation_parameters)
+
             ####################################################################################################################
             # Set components
             # CSV-Loaders
@@ -121,8 +112,7 @@ if __name__ == '__main__':
             my_cfg.add_component(my_weather)
 
             # PVS
-            my_pvs_config=generic_pv_system.PVSystemConfig(name="PVSystem2",
-                                                           source_weight="")
+            my_pvs_config=generic_pv_system.PVSystem.get_default_config()
             my_pvs = {my_cfg.set_name(generic_pv_system.PVSystem): my_pvs_config}
             #my_cfg.add_component(my_pvs)
 
@@ -197,64 +187,65 @@ if __name__ == '__main__':
                                                            second_component="PVSystem2")
 
             # Outputs from Weather
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="Azimuth",
                                                      second_component_input="Altitude")
-            my_cfg.add_connection(my_electric_demand_to_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="Azimuth",
                                                      second_component_input="Azimuth")
-            my_cfg.add_connection(my_electric_demand_to_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="ApparentZenith",
                                                      second_component_input="ApparentZenith")
-            my_cfg.add_connection(my_electric_demand_to_controller)
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="DirectNormalIrradiance",
                                                      second_component_input="DirectNormalIrradiance")
-            my_cfg.add_connection(my_electric_demand_to_controller)
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="DirectNormalIrradianceExtra",
                                                      second_component_input="DirectNormalIrradianceExtra")
-            my_cfg.add_connection(my_electric_demand_to_controller)
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="DiffuseHorizontalIrradiance",
                                                      second_component_input="DiffuseHorizontalIrradiance")
-            my_cfg.add_connection(my_electric_demand_to_controller)
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="Weather",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="GlobalHorizontalIrradiance",
                                                      second_component_input="GlobalHorizontalIrradiance")
-            my_cfg.add_connection(my_electric_demand_to_controller)
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Weather",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="Weather",
                                                                     second_component="Building",
                                                                     method="Manual",
                                                                     first_component_output="TemperatureOutside",
                                                                     second_component_input="TemperatureOutside")
-            my_cfg.add_connection(my_electric_demand_to_controller)
+            my_cfg.add_connection(component_connection)
 
             # Outputs from CSV Loaders
-            my_electric_demand_to_controller = ComponentsConnection(first_component="csv_load_loader_electric",
+            component_connection = ComponentsConnection(first_component="csv_load_loader_electric",
                                                      second_component="ControllerElectricity",
                                                      method="Manual",
                                                      first_component_output="Output1",
                                                      second_component_input="ElectricityConsumptionBuilding")
-            my_cfg.add_connection(my_electric_demand_to_controller)
+            my_cfg.add_connection(component_connection)
 
             my_pvs_to_controller = ComponentsConnection(first_component="csv_load_loader_pv",
                                                      second_component="ControllerElectricity",
@@ -264,200 +255,200 @@ if __name__ == '__main__':
             my_cfg.add_connection(my_pvs_to_controller)
 
             # Output from Occupancy
-            my_electric_demand_to_controller = ComponentsConnection(first_component="Occupancy",
+            component_connection = ComponentsConnection(first_component="Occupancy",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="HeatingByResidents",
                                                      second_component_input="HeatingByResidents")
-            my_cfg.add_connection(my_electric_demand_to_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from  ControllerHeat
-            my_storage_controller = ComponentsConnection(first_component="ControllerHeat",
+            component_connection = ComponentsConnection(first_component="ControllerHeat",
                                                      second_component="HeatStorage",
                                                      method="Manual",
                                                      first_component_output="ControlSignalChooseStorage",
                                                      second_component_input="ControlSignalChooseStorage")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="ControllerHeat",
+            component_connection = ComponentsConnection(first_component="ControllerHeat",
                                                      second_component="GasHeater",
                                                      method="Manual",
                                                      first_component_output="ControlSignalGasHeater",
                                                      second_component_input="ControlSignal")
-            my_cfg.add_connection(my_storage_controller)
-            my_storage_controller = ComponentsConnection(first_component="ControllerHeat",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="ControllerHeat",
                                                      second_component="CHP",
                                                      method="Manual",
                                                      first_component_output="ControlSignalChp",
                                                      second_component_input="ControlSignal")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from  ControllerElectricity
-            my_storage_controller = ComponentsConnection(first_component="ControllerElectricity",
+            component_connection = ComponentsConnection(first_component="ControllerElectricity",
                                                      second_component="Battery",
                                                      method="Manual",
                                                      first_component_output="ElectricityToOrFromBatteryTarget",
                                                      second_component_input="LoadingPowerInput")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="ControllerElectricity",
+            component_connection  = ComponentsConnection(first_component="ControllerElectricity",
                                                      second_component="Electrolyzer",
                                                      method="Manual",
                                                      first_component_output="ElectricityToElectrolyzerTarget",
                                                      second_component_input="ElectricityInput")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="ControllerElectricity",
+            component_connection = ComponentsConnection(first_component="ControllerElectricity",
                                                      second_component="CHP",
                                                      method="Manual",
                                                      first_component_output="ElectricityFromCHPTarget",
                                                      second_component_input="ElectricityFromCHPTarget")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from Storage
-            my_storage_controller = ComponentsConnection(first_component="HeatStorage",
+            component_connection = ComponentsConnection(first_component="HeatStorage",
                                                      second_component="HeatStorageController",
                                                      method="Manual",
                                                      first_component_output="WaterOutputTemperatureHeatingWater",
                                                      second_component_input="TemperatureHeatingStorage")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="HeatStorage",
+            component_connection = ComponentsConnection(first_component="HeatStorage",
                                                      second_component="CHP",
                                                      method="Manual",
                                                      first_component_output="WaterOutputStorageforHeaters",
                                                      second_component_input="MassflowInputTemperature")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="HeatStorage",
+            component_connection = ComponentsConnection(first_component="HeatStorage",
                                                      second_component="Building",
                                                      method="Manual",
                                                      first_component_output="RealHeatForBuilding",
                                                      second_component_input="ThermalEnergyDelivered")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="HeatStorage",
+            component_connection = ComponentsConnection(first_component="HeatStorage",
                                                      second_component="ControllerHeat",
                                                      method="Manual",
                                                      first_component_output="WaterOutputTemperatureHeatingWater",
                                                      second_component_input="StorageTemperatureHeatingWater")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="HeatStorage",
+            component_connection = ComponentsConnection(first_component="HeatStorage",
                                                      second_component="GasHeater",
                                                      method="Manual",
                                                      first_component_output="WaterOutputStorageforHeaters",
                                                      second_component_input="MassflowInputTemperature")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from StorageController
-            my_storage_controller = ComponentsConnection(first_component="HeatStorageController",
+            component_connection = ComponentsConnection(first_component="HeatStorageController",
                                                      second_component="HeatStorage",
                                                      method="Manual",
                                                      first_component_output="RealThermalDemandHeatingWater",
                                                      second_component_input="ThermalDemandHeatingWater")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from  Building
-            my_storage_controller = ComponentsConnection(first_component="Building",
+            component_connection = ComponentsConnection(first_component="Building",
                                                      second_component="HeatStorageController",
                                                      method="Manual",
                                                      first_component_output="TemperatureMean",
                                                      second_component_input="BuildingTemperature")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="Building",
+            component_connection = ComponentsConnection(first_component="Building",
                                                      second_component="ControllerHeat",
                                                      method="Manual",
                                                      first_component_output="TemperatureMean",
                                                      second_component_input="ResidenceTemperature")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="Building",
+            component_connection = ComponentsConnection(first_component="Building",
                                                      second_component="BuildingController",
                                                      method="Manual",
                                                      first_component_output="TemperatureMean",
                                                      second_component_input="ResidenceTemperature")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="Building",
+            component_connection = ComponentsConnection(first_component="Building",
                                                      second_component="HeatStorageController",
                                                      method="Manual",
                                                      first_component_output="ReferenceMaxHeatBuildingDemand",
                                                      second_component_input="ReferenceMaxHeatBuildingDemand")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
-            my_storage_controller = ComponentsConnection(first_component="Building",
+            component_connection = ComponentsConnection(first_component="Building",
                                                      second_component="BuildingController",
                                                      method="Manual",
                                                      first_component_output="ReferenceMaxHeatBuildingDemand",
                                                      second_component_input="ReferenceMaxHeatBuildingDemand")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from  BuildingController
-            my_storage_controller = ComponentsConnection(first_component="BuildingController",
+            component_connection = ComponentsConnection(first_component="BuildingController",
                                                      second_component="HeatStorageController",
                                                      method="Manual",
                                                      first_component_output="RealHeatBuildingDemand",
                                                      second_component_input="RealHeatBuildingDemand")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
 
             # Output from GasHeater
-            my_storage_controller = ComponentsConnection(first_component="GasHeater",
+            component_connection = ComponentsConnection(first_component="GasHeater",
                                                      second_component="HeatStorage",
                                                      method="Manual",
                                                      first_component_output="ThermalOutputPower",
                                                      second_component_input="ThermalInputPower1")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from CHP
-            my_storage_controller = ComponentsConnection(first_component="CHP",
+            component_connection = ComponentsConnection(first_component="CHP",
                                                      second_component="HeatStorage",
                                                      method="Manual",
                                                      first_component_output="ThermalOutputPower",
                                                      second_component_input="ThermalInputPower2")
-            my_cfg.add_connection(my_storage_controller)
-            my_storage_controller = ComponentsConnection(first_component="CHP",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="CHP",
                                                      second_component="ControllerElectricity",
                                                      method="Manual",
                                                      first_component_output="ElectricityOutput",
                                                      second_component_input="ElectricityFromCHPReal")
-            my_cfg.add_connection(my_storage_controller)
-            my_storage_controller = ComponentsConnection(first_component="CHP",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="CHP",
                                                      second_component="HydrogenStorage",
                                                      method="Manual",
                                                      first_component_output="GasDemandTarget",
                                                      second_component_input="DischargingHydrogenAmountTarget")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from Electrolyzer
-            my_storage_controller = ComponentsConnection(first_component="Electrolyzer",
+            component_connection = ComponentsConnection(first_component="Electrolyzer",
                                                      second_component="ControllerElectricity",
                                                      method="Manual",
                                                      first_component_output="UnusedPower",
                                                      second_component_input="ElectricityToElectrolyzerUnused")
-            my_cfg.add_connection(my_storage_controller)
-            my_storage_controller = ComponentsConnection(first_component="Electrolyzer",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="Electrolyzer",
                                                      second_component="HydrogenStorage",
                                                      method="Manual",
                                                      first_component_output="HydrogenOutput",
                                                      second_component_input="ChargingHydrogenAmount")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Outputs from HydrogenStorage
-            my_storage_controller = ComponentsConnection(first_component="HydrogenStorage",
+            component_connection = ComponentsConnection(first_component="HydrogenStorage",
                                                          second_component="CHP",
                                                          method="Manual",
                                                          first_component_output="HydrogenNotReleased",
                                                          second_component_input="HydrogenNotReleased")
-            my_cfg.add_connection(my_storage_controller)
-            my_storage_controller = ComponentsConnection(first_component="HydrogenStorage",
+            my_cfg.add_connection(component_connection)
+            component_connection = ComponentsConnection(first_component="HydrogenStorage",
                                                          second_component="Electrolyzer",
                                                          method="Manual",
                                                          first_component_output="HydrogenNotStored",
                                                          second_component_input="HydrogenNotStored")
-            my_cfg.add_connection(my_storage_controller)
+            my_cfg.add_connection(component_connection)
 
             # Output from Battery
             my_controller_to_battery = ComponentsConnection(first_component="Battery",
@@ -473,8 +464,7 @@ if __name__ == '__main__':
             my_cfg.dump()
             #os.chdir("..")
             #os.chdir("hisim")
-            os.system("python ../hisim/hisim_main.py basic_household_implicit_advanced_battery basic_household_implicit")
-
+            os.system("python ../hisim/hisim_main.py basic_household_cfg_automator basic_household_implicit")
 
 
 

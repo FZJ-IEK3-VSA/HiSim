@@ -271,12 +271,17 @@ class PostProcessor:
         #sum consumption and production of individual components
         self.ppdt.results[ 'consumption' ] = 0
         self.ppdt.results[ 'production' ] = 0
-        for column in self.ppdt.results:
-            if 'PVSystem' in column:
-                self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results[ column ]
-            elif '[Electricity - W]' in column:
-                self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results[ column ]
+        self.ppdt.results[ 'storage' ] = 0
+        for index, output in enumerate(self.ppdt.all_outputs):
+            if 'PVSystem' in output.FullName:
+                self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
+            elif 'ElectricityOutput' in output.FullName:
+                self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
+            elif 'AcBatteryPower' in output.FullName:
+                print( output.FullName, 1 )
+                self.ppdt.results[ 'storage' ] = self.ppdt.results[ 'storage' ] + self.ppdt.results.iloc[:, index]
             else:
+                print( output.FullName, 2 )
                 continue
             
         #initilize lines for report
@@ -291,7 +296,7 @@ class PostProcessor:
         
         if production_sum > 0:
             #evaluate injection, sum over time and wite to 
-            injection = ( self.ppdt.results[ 'production' ] - self.ppdt.results[ 'consumption' ] ) 
+            injection = ( self.ppdt.results[ 'production' ] - self.ppdt.results[ 'storage' ] - self.ppdt.results[ 'consumption' ] ) 
             injection_sum = injection[ injection > 0 ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
             lines.append( "Injection: {:4.0f} kWh".format( injection_sum ) )
             
@@ -300,10 +305,9 @@ class PostProcessor:
             lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
             
             #evaluate electricity price
-            gridpurchase = self.ppdt.results[ 'consumption' ] - self.ppdt.results[ 'production' ]
             if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
-                price = ( ( gridpurchase[ gridpurchase > 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ gridpurchase > 0 ] ).sum( ) \
-                        - ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
+                price = - ( ( injection[ injection < 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ injection < 0 ] ).sum( ) \
+                        + ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
                         * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
                         
                 lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )

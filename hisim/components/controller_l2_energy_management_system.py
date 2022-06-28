@@ -537,8 +537,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
     #Inputs
 
     ElectricityConsumptionBuilding="ElectricityConsumptionBuilding"
-    ElectricityOutputPvs = "ElectricityOutputPvs"
     ElectricityDemandHeatPump= "ElectricityDemandHeatPump"
+    #ElectricityOutputPvs = "ElectricityOutputPvs"
     MyComponentInputs: List[cp.DynamicConnectionInput] = []
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
 
@@ -563,17 +563,21 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         self.limit_to_shave= limit_to_shave
 
         ###Inputs
+        """
         self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                   self.ElectricityConsumptionBuilding,
                                                                                   lt.LoadTypes.Electricity,
                                                                                   lt.Units.Watt,
                                                                                   False)
+        self.electricity_demand_heat_pump: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                              self.ElectricityDemandHeatPump,
+                                                                              lt.LoadTypes.Electricity,
+                                                                              lt.Units.Watt,
         self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                         self.ElectricityOutputPvs,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt,
                                                                         False)
-        '''
         self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityToOrFromBatteryReal,
                                                                               lt.LoadTypes.Electricity,
@@ -584,15 +588,9 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                                       lt.LoadTypes.Electricity,
                                                                       lt.Units.Watt,
                                                                       False)                                                                      
-        '''
+        """
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityToElectrolyzerUnused,
-                                                                              lt.LoadTypes.Electricity,
-                                                                              lt.Units.Watt,
-                                                                              False)
-
-        self.electricity_demand_heat_pump: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                              self.ElectricityDemandHeatPump,
                                                                               lt.LoadTypes.Electricity,
                                                                               lt.Units.Watt,
                                                                               False)
@@ -822,11 +820,14 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
 
         ###ELECTRICITY#####
         limit_to_shave=self.limit_to_shave
+        
+        #get production
+        production = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Production ], weight_counter = 999 ) )
+        consumption = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Consumption ], weight_counter = 999 ) )
+        
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        delta_demand = stsv.get_input_value(self.electricity_output_pvs) \
-                       - stsv.get_input_value(self.electricity_consumption_building) \
-                       -stsv.get_input_value(self.electricity_demand_heat_pump)
+        delta_demand = production - consumption
 
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption(delta_demand=delta_demand,stsv=stsv)

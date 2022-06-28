@@ -271,6 +271,8 @@ class L3_Controller( cp.DynamicComponent ):
                                              tags = [ component_type ],
                                              weight_counter = weight_counter,
                                              output_value = signal[ - 1 ] )
+                else:
+                    continue
                     
                 ind = advance( component_type, ind ) 
                 self.signal = ControllerSignal( signal = signal )

@@ -25,6 +25,7 @@ class BatteryConfig:
     p_inv_custom: float
     e_bat_custom: float
     name: str
+    source_weight : int
 
 class Battery(Component):
     """
@@ -56,7 +57,9 @@ class Battery(Component):
             Useable battery capacity. Only for system_ids of type "Generic". [kWh]
         """
         self.battery_config = config
-        super().__init__(name=self.battery_config.name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=self.battery_config.name + str( self.battery_config.source_weight ), my_simulation_parameters=my_simulation_parameters)
+        
+        self.source_weight = self.battery_config.source_weight
 
         self.system_id = self.battery_config.system_id
 
@@ -101,7 +104,8 @@ class Battery(Component):
             system_id ='SG1',
             p_inv_custom =5,
             e_bat_custom = 10,
-            name= "Battery")
+            name= "Battery",
+            source_weight = 1 )
         return config
     def i_save_state(self):
         self.previous_state = deepcopy(self.state)

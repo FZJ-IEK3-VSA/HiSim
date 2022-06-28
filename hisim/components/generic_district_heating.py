@@ -7,7 +7,6 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
-from hisim.components import controller_l3_predictive
 from hisim import log
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

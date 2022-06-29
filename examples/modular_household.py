@@ -91,7 +91,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                       seconds_per_timestep = seconds_per_timestep )
         my_simulation_parameters.enable_all_options( )
     my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', 
-                                                  heating_device_included = 'heat_pump', battery_included = True, chp_included = True )  
+                                                  heatpump_included = True, battery_included = True, chp_included = True )  
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration
@@ -99,43 +99,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     pv_included = my_simulation_parameters.system_config.pv_included #True or False
     smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
     boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
-    heating_device_included = my_simulation_parameters.system_config.heating_device_included  
+    heatpump_included = my_simulation_parameters.system_config.heatpump_included  
     battery_included = my_simulation_parameters.system_config.battery_included
     chp_included = my_simulation_parameters.system_config.chp_included
-      
-    #set heating system and boiler
-    min_operation_time = 3600
-    min_idle_time = 2700
-
-    #Set heating system
-    if heating_device_included == 'heat_pump':
-        # Set heat pump controller
-        T_min_heating = 19.0
-        T_max_heating = 23.0
-        T_min_cooling = 23.0
-        T_max_cooling = 26.0
-        T_tolerance = 1.0
-        heating_season_begin = 240
-        heating_season_end = 150
-        
-    elif heating_device_included in [ 'district_heating', 'oil_heater' ]:
-        efficiency = 0.85
-        T_min = 20.0
-        T_max = 21.0
-        P_on = 5000
-        on_time = 2700
-        off_time = 1800
-        heating_season_begin = 240
-        heating_season_end = 150
-    
-    elif heating_device_included:
-        raise NameError( 'Heating Device definition', heating_device_included, 'not known. Choose heat_pump, oil_heater, district_heating, or False.' )
-        
-    if battery_included:
-        system_id = 'SG1'
-        p_inv_custom = 5.0
-        e_bat_custom = 10.0
-        batteryname = "Battery"
 
     ##### Build Components #####
     
@@ -229,20 +195,19 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             count += 1
     
     if boiler_included: 
-        
-        my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters,
-                                                                                  source_weight = count )
-        my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
-                                                                               min_operation_time = min_operation_time,
-                                                                               min_idle_time = min_idle_time,
-                                                                               source_weight = count,
-                                                                               name = 'Boiler' )
-        my_boiler_controller_l1.connect_only_predefined_connections( my_boiler_controller_l2 )
-        my_sim.add_component( my_boiler_controller_l1 )
+        l2_config = controller_l2_generic_dhw_boiler.L2_Controller.get_default_config( )
+        l2_config.source_weight = count
+        l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
         config = generic_dhw_boiler.Boiler.get_default_config( )
         config.source_weight = count
-        my_boiler = generic_dhw_boiler.Boiler( my_simulation_parameters = my_simulation_parameters,
-                                               config = config )
+        count += 1
+        
+        my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = l2_config )
+        my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters, config = l1_config )
+        my_boiler_controller_l1.connect_only_predefined_connections( my_boiler_controller_l2 )
+        my_sim.add_component( my_boiler_controller_l1 )
+        my_boiler = generic_dhw_boiler.Boiler( my_simulation_parameters = my_simulation_parameters, config = config )
         my_boiler.connect_only_predefined_connections( my_boiler_controller_l1 )
         my_boiler.connect_only_predefined_connections( my_occupancy )
         my_sim.add_component( my_boiler )
@@ -250,33 +215,24 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_boiler_controller_l2.connect_only_predefined_connections( my_boiler )
         my_sim.add_component( my_boiler_controller_l2 )
         consumption.append( my_boiler )
+        
+    if heatpump_included :
+        l2_config = controller_l2_generic_heatpump_modular.L2_Controller.get_default_config( )
+        l2_config.source_weight = count
+        l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
+        heatpump_config = generic_heat_pump_modular.HeatPump.get_default_config( )
+        heatpump_config.source_weight = count
         count += 1
         
-    if heating_device_included == 'heat_pump':
-        
-        my_heatpump_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller(    my_simulation_parameters = my_simulation_parameters,
-                                                                                            T_min_heating = T_min_heating,
-                                                                                            T_max_heating = T_max_heating,
-                                                                                            T_min_cooling = T_min_cooling,
-                                                                                            T_max_cooling = T_max_cooling,
-                                                                                            T_tolerance = T_tolerance,
-                                                                                            heating_season_begin = heating_season_begin,
-                                                                                            heating_season_end = heating_season_end,
-                                                                                            source_weight = count )
+        my_heatpump_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = l2_config )
         my_heatpump_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_heatpump_controller_l2 )
         
-        my_heatpump_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
-                                                                                min_operation_time = min_operation_time,
-                                                                                min_idle_time = min_idle_time,
-                                                                                source_weight = count,
-                                                                                name = 'HeatPump' )
+        my_heatpump_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters, config = l1_config )
         my_heatpump_controller_l1.connect_only_predefined_connections( my_heatpump_controller_l2 )
         my_sim.add_component( my_heatpump_controller_l1 )
-        my_heatpump = generic_heat_pump_modular.HeatPump( my_simulation_parameters = my_simulation_parameters,
-                                                         heating_season_begin = heating_season_begin,
-                                                         heating_season_end = heating_season_end,
-                                                         source_weight = count )
+        my_heatpump = generic_heat_pump_modular.HeatPump( config = heatpump_config, my_simulation_parameters = my_simulation_parameters )
         my_heatpump.connect_only_predefined_connections( my_weather ) 
         my_heatpump.connect_only_predefined_connections( my_heatpump_controller_l1 )
         my_sim.add_component( my_heatpump )
@@ -301,11 +257,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                      source_weight = 999 )
         
     if battery_included:
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig( system_id = system_id,
-                                                                           p_inv_custom = p_inv_custom,
-                                                                           e_bat_custom = e_bat_custom,
-                                                                           name = batteryname,
-                                                                           source_weight = count )
+        my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config( )
+        my_advanced_battery_config.source_weight = count
         count += 1 
         my_advanced_battery = advanced_battery_bslib.Battery( my_simulation_parameters = my_simulation_parameters, config = my_advanced_battery_config )
         
@@ -386,7 +339,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             count += 1
             
         #connect heat pump    
-        if heating_device_included == 'heat_pump':
+        if heatpump_included:
         
             l3_HeatPumpSignal = my_controller_l3.add_component_output( source_output_name = lt.InandOutputType.ControlSignal,
                                                                        source_tags = [ lt.ComponentType.HeatPump ],

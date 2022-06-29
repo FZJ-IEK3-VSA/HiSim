@@ -24,6 +24,30 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+@dataclass_json
+@dataclass
+class L2Config:
+    """
+    L2 Config
+    """
+    name: str
+    source_weight: int
+    T_min : float       
+    T_max : float
+    T_tolerance : float
+
+    def __init__( self,
+                  name : str,
+                  source_weight : int,
+                  T_min : float,       
+                  T_max : float,
+                  T_tolerance : float ):
+        self.name = name
+        self.source_weight = source_weight
+        self.T_min = T_min
+        self.T_max = T_max
+        self.T_tolerance = T_tolerance
+
 class L2_ControllerState:
     """
     This data class saves the state of the heat pump.
@@ -93,14 +117,9 @@ class L2_Controller( cp.Component ):
     # 2. HeatPump
     
     @utils.measure_execution_time
-    def __init__( self, 
-                  my_simulation_parameters : SimulationParameters,
-                  T_min : float = 45.0,
-                  T_max : float = 60.0,
-                  T_tolerance : float = 10.0,
-                  source_weight : int = 1 ):
-        super().__init__( "L2_Controller_Boiler" + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.build( T_min, T_max, T_tolerance )
+    def __init__( self, my_simulation_parameters : SimulationParameters, config : L2Config ):
+        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        self.build( config )
 
         #Component Inputs
         self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(     self.ComponentName,
@@ -128,12 +147,22 @@ class L2_Controller( cp.Component ):
         boiler_classname = Boiler.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, Boiler.TemperatureMean ) )
         return connections
+    
+    @staticmethod
+    def get_default_config():
+        config = L2Config( name = 'L2Boiler',
+                           source_weight =  1,
+                           T_min = 45.0,
+                           T_max = 60.0,
+                           T_tolerance = 10.0 )
+        return config
 
-    def build( self, T_min, T_max, T_tolerance ):
-        
-        self.T_min = T_min
-        self.T_max = T_max
-        self.T_tolerance = T_tolerance
+    def build( self, config ):
+        self.name = config.name
+        self.source_weight = config.source_weight
+        self.T_min = config.T_min
+        self.T_max = config.T_max
+        self.T_tolerance = config.T_tolerance
         self.state = L2_ControllerState( )
         self.previous_state = L2_ControllerState( )
 

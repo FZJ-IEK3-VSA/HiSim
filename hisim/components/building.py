@@ -7,6 +7,7 @@ import copy
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from typing import List
 # Owned
 from hisim import utils
 from hisim import component as cp
@@ -119,7 +120,7 @@ class BuildingControllerConfig:
     minimal_building_temperature: float
     stop_heating_building_temperature: float
 
-class Building(cp.Component):
+class Building(cp.DynamicComponent):
     """
     Building class provides multiple typologies of residences based on the
     EPISCOPE/TABULA project database. EPISCOPE/TABULA project involves a
@@ -176,6 +177,10 @@ class Building(cp.Component):
     MassOutput = "MassOutput"
     TemperatureOutput = "TemperatureOutput"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+    
+    #dynamic
+    MyComponentInputs: List[cp.DynamicConnectionInput] = []
+    MyComponentOutputs: List[cp.DynamicConnectionOutput] = []
 
     # Similar components to connect to:
     # 1. Weather
@@ -186,7 +191,10 @@ class Building(cp.Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters, config: BuildingConfig):
 
-        super().__init__(name="Building", my_simulation_parameters=my_simulation_parameters)
+        super().__init__( my_component_inputs = self.MyComponentInputs,
+                          my_component_outputs = self.MyComponentOutputs,
+                          name = "Building", 
+                          my_simulation_parameters = my_simulation_parameters )
         # variable typing init for mypy
         self.buildingConfig=config
         self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig)
@@ -440,7 +448,7 @@ class Building(cp.Component):
             # the name thermal_energy_delivered might be misleading, because it is actually power in W
             thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
         else:
-            thermal_energy_delivered = 10
+            thermal_energy_delivered = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.HeatToBuilding ], weight_counter = 999 ) )
         t_m_prev = self.state.t_m
 
         # old_stored_energy = self.state.cal_stored_energy()

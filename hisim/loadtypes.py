@@ -122,6 +122,10 @@ class InandOutputType(str, enum.Enum):
     #Energy Management System
     Production = "Production"
     Consumption = "Consumption"
+    
+    #Heating
+    HeatToBuilding = "HeatToBuilding"
+    HeatToBuffer = "HeatToBuffer"
 
 
 

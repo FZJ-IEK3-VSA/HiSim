@@ -292,7 +292,7 @@ class L1_Controller( cp.Component ):
         
     @staticmethod
     def get_default_config():
-        config = L1CHPConfig( name = 'CHP',
+        config = L1CHPConfig( name = 'L1CHP',
                               source_weight =  1,
                               min_operation_time = 14400,
                               min_idle_time = 7200 )

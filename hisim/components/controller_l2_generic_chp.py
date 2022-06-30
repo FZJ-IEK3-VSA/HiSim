@@ -130,7 +130,7 @@ class L2_Controller( cp.Component ):
     def get_default_config():
         config = L2CHPConfig( name = 'L2CHP',
                               source_weight = 1,
-                              T_min = 18,
+                              T_min = 20,
                               T_max = 22 ) 
         return config
         

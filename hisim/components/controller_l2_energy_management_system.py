@@ -536,8 +536,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
     """
     #Inputs
 
-    ElectricityConsumptionBuilding="ElectricityConsumptionBuilding"
-    ElectricityDemandHeatPump= "ElectricityDemandHeatPump"
+    #ElectricityConsumptionBuilding="ElectricityConsumptionBuilding"
+    #ElectricityDemandHeatPump= "ElectricityDemandHeatPump"
     #ElectricityOutputPvs = "ElectricityOutputPvs"
     MyComponentInputs: List[cp.DynamicConnectionInput] = []
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
@@ -683,9 +683,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                 continue
             break
         return demand
+    
     def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
-
-
         electricity_to_or_from_grid:float = 0
         MyComponentInputs=self.MyComponentInputs
         MyComponentOutputs=self.MyComponentOutputs

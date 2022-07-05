@@ -448,7 +448,7 @@ class Building(cp.DynamicComponent):
             # the name thermal_energy_delivered might be misleading, because it is actually power in W
             thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
         else:
-            thermal_energy_delivered = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.HeatToBuilding ], weight_counter = 999 ) )
+            thermal_energy_delivered = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.HeatToBuilding ] ) )
         t_m_prev = self.state.t_m
 
         # old_stored_energy = self.state.cal_stored_energy()

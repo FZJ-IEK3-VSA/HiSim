@@ -76,11 +76,11 @@ class GCHP( cp.Component ):
         self.build( config )
 
         #Inputs
-        self.l1_DeviceSignalC: ComponentInput = self.add_input( self.ComponentName, 
-                                                               self.l1_DeviceSignal, 
-                                                               lt.LoadTypes.OnOff, 
-                                                               lt.Units.binary,
-                                                               mandatory = True )
+        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName, 
+                                                                self.l1_DeviceSignal, 
+                                                                lt.LoadTypes.OnOff, 
+                                                                lt.Units.binary,
+                                                                mandatory = True )
         
         #Component outputs
         self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output( self.ComponentName,

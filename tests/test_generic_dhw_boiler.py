@@ -7,27 +7,15 @@ from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 
 def test_simple_bucket_boiler_state():
+    
+    #simulation parameters
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
-    # Boiler
-    volume = 200
-    surface : float = 1.2
-    u_value : float = 0.36
-    T_warmwater : float = 50
-    T_drainwater : float = 10
-    power : float = 2400
-    efficiency : float = 1
-    fuel : str = 'electricity'
-    
-    # Boiler Controller L1
-    minimum_idle_time = 30 * 60
-    minimum_operation_time = 15 * 60
-
-    # Boiler Controller L2
-    T_min = 45.0
-    T_max = 60.0
-    T_tolerance = 10.0
+    # Boiler defualt config
+    l2_config = controller_l2_generic_dhw_boiler.L2_Controller.get_default_config( )
+    l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
+    boiler_config = generic_dhw_boiler.Boiler.get_default_config( )
     
     #definition of outputs
     number_of_outputs = 5
@@ -35,24 +23,12 @@ def test_simple_bucket_boiler_state():
 
     #===================================================================================================================
     # Set Boiler
-    my_boiler = generic_dhw_boiler.Boiler( my_simulation_parameters=my_simulation_parameters,
-                                           volume = volume, 
-                                           surface = surface,
-                                           u_value = u_value,
-                                           T_warmwater = T_warmwater,
-                                           T_drainwater = T_drainwater,
-                                           power = power,
-                                           efficiency = efficiency,
-                                           fuel = fuel )
+    my_boiler = generic_dhw_boiler.Boiler( config = boiler_config, my_simulation_parameters=my_simulation_parameters )
     # Set L1 Boiler Controller
-    my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( min_operation_time = minimum_operation_time,
-                                                                           min_idle_time = minimum_idle_time, 
-                                                                           my_simulation_parameters = my_simulation_parameters )
+    my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( config = l1_config, my_simulation_parameters = my_simulation_parameters )
     
     # Set L2 Heat Pump Controller
-    my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller(  my_simulation_parameters = my_simulation_parameters,
-                                                                               T_min = T_min,
-                                                                               T_max = T_max )
+    my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller(  config = l2_config, my_simulation_parameters = my_simulation_parameters )
     
     #definition of hot water use 
     WW_use = cp.ComponentOutput( "FakeWarmwaterUse",

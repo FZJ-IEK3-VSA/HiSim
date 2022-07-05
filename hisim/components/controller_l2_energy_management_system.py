@@ -524,9 +524,7 @@ class ControllerElectricity(cp.Component):
         elif self.strategy == "peak_shaving_into_grid":
             self.peak_shaving_into_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
         elif self.strategy == "peak_shaving_from_grid":
-            self.peak_shaving_from_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
-
-
+            self.peak_shaving_from_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv) 
 
 class ControllerElectricityGeneric(cp.DynamicComponent):
     """
@@ -535,10 +533,6 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
     Component can be added generically
     """
     #Inputs
-
-    #ElectricityConsumptionBuilding="ElectricityConsumptionBuilding"
-    #ElectricityDemandHeatPump= "ElectricityDemandHeatPump"
-    #ElectricityOutputPvs = "ElectricityOutputPvs"
     MyComponentInputs: List[cp.DynamicConnectionInput] = []
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
 
@@ -550,10 +544,10 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
     CheckPeakShaving="CheckPeakShaving"
 
     @utils.measure_execution_time
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 strategy : str = "optimize_own_consumption",#strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
-                 limit_to_shave: float =0):
+    def __init__( self,
+                  my_simulation_parameters: SimulationParameters,
+                  strategy : str = "optimize_own_consumption",#strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
+                  limit_to_shave: float = 0 ):
         super().__init__(my_component_inputs=self.MyComponentInputs,
                          my_component_outputs=self.MyComponentOutputs,
                          name="Controller",
@@ -561,34 +555,6 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
 
         self.strategy=strategy
         self.limit_to_shave= limit_to_shave
-
-        ###Inputs
-        """
-        self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                                  self.ElectricityConsumptionBuilding,
-                                                                                  lt.LoadTypes.Electricity,
-                                                                                  lt.Units.Watt,
-                                                                                  False)
-        self.electricity_demand_heat_pump: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                              self.ElectricityDemandHeatPump,
-                                                                              lt.LoadTypes.Electricity,
-                                                                              lt.Units.Watt,
-        self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                        self.ElectricityOutputPvs,
-                                                                        lt.LoadTypes.Electricity,
-                                                                        lt.Units.Watt,
-                                                                        False)
-        self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                              self.ElectricityToOrFromBatteryReal,
-                                                                              lt.LoadTypes.Electricity,
-                                                                              lt.Units.Watt,
-                                                                              False)
-        self.electricity_from_chp_real: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                      self.ElectricityFromCHPReal,
-                                                                      lt.LoadTypes.Electricity,
-                                                                      lt.Units.Watt,
-                                                                      False)                                                                      
-        """
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityToElectrolyzerUnused,
                                                                               lt.LoadTypes.Electricity,
@@ -607,23 +573,21 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                                          lt.LoadTypes.Electricity,
                                                                          lt.Units.Watt,
                                                                          False)
-        '''
-        self.electricity_to_or_from_battery_target: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                         self.ElectricityToOrFromBatteryTarget,
-                                                                         lt.LoadTypes.Electricity,
-                                                                         lt.Units.Watt,
-                                                                         False)
-        self.electricity_from_chp_target: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                 self.ElectricityFromCHPTarget,
-                                                                 lt.LoadTypes.Electricity,
-                                                                 lt.Units.Watt,
-                                                                 False)                                                                 
-        '''
         self.check_peak_shaving: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                          self.CheckPeakShaving,
                                                                          lt.LoadTypes.Any,
                                                                          lt.Units.Any,
                                                                          False)
+        
+    def sort_source_weights_and_components( self ):
+        SourceTags = [ elem.SourceTags[ 0 ] for elem in self.MyComponentInputs ]
+        SourceWeights = [ elem.SourceWeight for elem in self.MyComponentInputs ]
+        sortindex = sorted( range( len( SourceWeights) ), key = lambda k: SourceWeights[ k ] )
+        self.source_weights_sorted = [ SourceWeights[ i ] for i in sortindex ]
+        self.components_sorted = [ SourceTags[ i ] for i in sortindex ]
+        
+    def get_entries_of_type( self, component_type : lt.ComponentType ):
+        return self.components_sorted.index( component_type )
 
     def build(self, mode):
         self.mode = mode
@@ -684,6 +648,39 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
             break
         return demand
     
+    def control_electricity_component_iterative( self, deltademand : float, 
+                                                       stsv : cp.SingleTimeStepValues,
+                                                       weight_counter : int,
+                                                       component_type : lt.ComponentType ):
+        
+        is_battery = None
+        #get previous signal and substract from total balance
+        previous_signal = self.get_dynamic_input( stsv = stsv, tags = [ component_type ], weight_counter = weight_counter )
+        
+        #control from substracted balance
+        if component_type == lt.ComponentType.Battery:
+            self.set_dynamic_output( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityTarget ], weight_counter = weight_counter, output_value = deltademand )
+            deltademand = deltademand - previous_signal
+
+        elif component_type == lt.ComponentType.FuelCell:
+            if deltademand < 0:
+                self.set_dynamic_output( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityTarget ], weight_counter = weight_counter, output_value = -deltademand )
+                deltademand = deltademand + previous_signal
+                if deltademand > 0:
+                    is_battery = self.get_entries_of_type( lt.ComponentType.Battery )
+            else:
+                self.set_dynamic_output( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityTarget ], weight_counter = weight_counter, output_value = 0 )
+        
+        return deltademand, is_battery
+    
+    def postprocess_battery( self, deltademand : float,
+                                   stsv : cp.SingleTimeStepValues,
+                                   ind : int ):
+        previous_signal = self.get_dynamic_input( stsv = stsv, tags = [ self.components_sorted[ ind ] ] , weight_counter = self.source_weights_sorted[ ind ] )
+        self.set_dynamic_output( stsv = stsv, tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget ], 
+                                 weight_counter = self.source_weights_sorted[ ind ], output_value = deltademand + previous_signal )
+        return deltademand - previous_signal
+    
     def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
         electricity_to_or_from_grid:float = 0
         MyComponentInputs=self.MyComponentInputs
@@ -711,6 +708,28 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
 
 
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
+        
+    def optimize_own_consumption_iterative( self, delta_demand: float, stsv: cp.SingleTimeStepValues ):
+        skip_CHP = False
+        for ind in range( len( self.source_weights_sorted ) ): 
+            component_type = self.components_sorted[ ind ]
+            source_weight = self.source_weights_sorted[ ind ]
+            if component_type in [ lt.ComponentType.Battery, lt.ComponentType.FuelCell ]:
+                if not skip_CHP or component_type == lt.ComponentType.Battery: 
+                    delta_demand, is_battery = self.control_electricity_component_iterative( deltademand = delta_demand,
+                                                                                             stsv = stsv,
+                                                                                             weight_counter = source_weight,
+                                                                                             component_type = component_type )
+                else:
+                    self.set_dynamic_output( stsv = stsv, tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ], 
+                                 weight_counter = source_weight, output_value = 0 )
+                if is_battery is not None:
+                    delta_demand = self.postprocess_battery( deltademand = delta_demand,
+                                                             stsv = stsv,
+                                                             ind = is_battery )
+                    skip_CHP = True
+                    
+        
 
 
     #seasonal storaging is almost the same as own_consumption, but a electrolyzer is added
@@ -816,20 +835,24 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,force_convergence : bool):
         if force_convergence:
             return
+        
+        if timestep == 0:
+            self.sort_source_weights_and_components( )
 
         ###ELECTRICITY#####
         limit_to_shave=self.limit_to_shave
         
         #get production
-        production = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Production ], weight_counter = 999 ) )
-        consumption = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Consumption ], weight_counter = 999 ) )
+        production = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Production ] ) )
+        consumption = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.Consumption ] ) )
         
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
         delta_demand = production - consumption
 
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption(delta_demand=delta_demand,stsv=stsv)
+            self.optimize_own_consumption_iterative( delta_demand = delta_demand, stsv = stsv )
+            stsv.set_output_value( self.electricity_to_or_from_grid, delta_demand )
         '''
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)

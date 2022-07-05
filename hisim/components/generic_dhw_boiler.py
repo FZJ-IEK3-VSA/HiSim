@@ -35,7 +35,7 @@ __status__ = "development"
 @dataclass
 class BoilerConfig:
     name : str
-    source_weight : str
+    source_weight : int
     parameter_string: str
     volume : float
     surface : float
@@ -48,7 +48,7 @@ class BoilerConfig:
 
     def __init__( self,
                   name : str,
-                  source_weight : str,
+                  source_weight : int,
                   volume : float,
                   surface : float,
                   u_value : float,

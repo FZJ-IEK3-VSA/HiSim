@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/katex.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/katex.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script src="https://unpkg.com/mermaid@7.1.2/dist/mermaid.min.js"></script>
+<style>
+@charset "utf-8";
+
+/**
+ * markdown.css
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see http://gnu.org/licenses/lgpl.txt.
+ *
+ * @project      Weblog and Open Source Projects of Florian Wolters
+ * @version      GIT: $Id$
+ * @package      xhtml-css
+ * @author       Florian Wolters <florian.wolters.85@googlemail.com>
+ * @copyright    2012 Florian Wolters
+ * @cssdoc       version 1.0-pre
+ * @license      http://gnu.org/licenses/lgpl.txt GNU Lesser General Public License
+ * @link         http://github.com/FlorianWolters/jekyll-bootstrap-theme
+ * @media        all
+ * @valid        true
+ */
+
+img {
+	max-width: 100%;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+table, th, td {
+	border: 1px solid #EAEAEA;
+	border-radius: 3px;
+	padding: 5px;
+}
+
+tr:nth-child(even) {
+	background-color: #F8F8F8;
+}
+
+body {
+    font-family: Helvetica, Arial, Freesans, clean, sans-serif;
+    padding:1em;
+    margin:auto;
+    max-width:42em;
+    background:#fefefe;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: bold;
+}
+
+h1 {
+    color: #000000;
+    font-size: 28px;
+}
+
+h2 {
+    border-bottom: 1px solid #CCCCCC;
+    color: #000000;
+    font-size: 24px;
+}
+
+h3 {
+    font-size: 18px;
+}
+
+h4 {
+    font-size: 16px;
+}
+
+h5 {
+    font-size: 14px;
+}
+
+h6 {
+    color: #777777;
+    background-color: inherit;
+    font-size: 14px;
+}
+
+hr {
+    height: 0.2em;
+    border: 0;
+    color: #CCCCCC;
+    background-color: #CCCCCC;
+}
+
+p, blockquote, ul, ol, dl, li, table, pre {
+    margin: 15px 0;
+}
+
+code, pre {
+    border-radius: 3px;
+    background-color: #F8F8F8;
+    color: inherit;
+}
+
+code {
+    border: 1px solid #EAEAEA;
+    margin: 0 2px;
+    padding: 0 5px;
+}
+
+pre {
+    border: 1px solid #CCCCCC;
+    line-height: 1.25em;
+    overflow: auto;
+    padding: 6px 10px;
+}
+
+pre > code {
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+a, a:visited {
+    color: #4183C4;
+    background-color: inherit;
+    text-decoration: none;
+}
+
+
+figure figcaption {
+    text-align: center;
+    font-size: 12px;
+}
+</style>
+</head>
+<body>
+<div class="document">
+<div class="header"></div><div class="inner">
+<h2 id="toc_1">Electrical load profiles</h2>
+
+<p><strong>Sources and Licenses</strong>:</p>
+
+<p>All sources are located in <code>data_raw</code></p>
+
+<ul dir="auto">
+<li>Electricity consumption of 28 German companies in 15-min resolution. <a href="https://doi.org/10.5445/IR/1000098027">https://doi.org/10.5445/IR/1000098027</a> <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg" alt="License: CC BY 4.0"></a></li>
+<li>SCiBER: A new public data set of municipal building consumption. <a href="https://doi.org/10.1145/3208903.3210281">https://doi.org/10.1145/3208903.3210281</a> <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg" alt="License: CC BY 4.0"></a></li>
+<li>Felduntersuchung zu Behavioral Energy Efficiency Potentialen von privaten Haushalten. <a href="https://doi.org/10.5281/zenodo.3855575">https://doi.org/10.5281/zenodo.3855575</a> <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg" alt="License: CC BY 4.0"></a></li>
+<li>Tjaden, Tjarko. (2021). Electrical load profile from a tool manufacturer [Data set]. Zenodo. <a href="https://doi.org/10.5281/zenodo.4683455">https://doi.org/10.5281/zenodo.4683455</a> <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg" alt="License: CC BY 4.0"></a></li>
+<li>Tjaden, Tjarko. (2021). Electrical load profile from an eletrocplating company [Data set]. Zenodo. <a href="https://doi.org/10.5281/zenodo.4683479">https://doi.org/10.5281/zenodo.4683479</a> <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg" alt="License: CC BY 4.0"></a></li>
+<li>Standard Load Profiles (SLP): <a href="https://www.bdew.de/energie/standardlastprofile-strom/">https://www.bdew.de/energie/standardlastprofile-strom/</a> </li>
+</ul>
+
+<p><strong>Summary</strong>:</p>
+
+<p>Normalized electrical load profiles for several buildings. Based on the raw data, listed above, normalized (1000 kWh/a) reference profiles were created.</p>
+
+<p>To determine reference profiles, several simulations with different pv generator sizes and with/without battery storage were conducted. The profile(s) with the lowest mean deviation in degree of self-sufficiency compared to the median results were chosen as reference profile.</p>
+
+<p>For details have a look into the <code>process_data.ipynb</code> notebook.</p>
+
+<p><strong>Content</strong>:</p>
+
+<p>See Table 6 in VDI 4657 Sheet 3:</p>
+
+<table dir="auto">
+<thead>
+<tr>
+<th style="text-align: left">Abbreviation</th>
+<th style="text-align: left">Example</th>
+<th style="text-align: left">bandwidth of application <br /> in MWh/a</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td style="text-align: left"><strong>Households</strong></td>
+<td style="text-align: left"></td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left">LP_W_W</td>
+<td style="text-align: left">Single flat</td>
+<td style="text-align: left">0,5 - 2</td>
+</tr>
+<tr>
+<td style="text-align: left">LP_W_EFH</td>
+<td style="text-align: left">Single family house</td>
+<td style="text-align: left">2 - 8</td>
+</tr>
+<tr>
+<td style="text-align: left">LP_W_MFH_</td>
+<td style="text-align: left">Multi family house. <br /> small (k), medium (m), big (g)</td>
+<td style="text-align: left">k: 5- 15<br /> m: 15 - 45<br /> g: 45 - 100</td>
+</tr>
+<tr>
+<td style="text-align: left">*_WP025, *_WP050, *_WP075</td>
+<td style="text-align: left">Addition for all household profiles starting with “LP_W”, where the electrical load profile then has a proportion of the electricity consumption for a heat pump of 25%, 50% or 75%</td>
+<td style="text-align: left">raised by energy consumption of heat pump</td>
+</tr>
+<tr>
+<td style="text-align: left"><strong>Municipal buildings</strong></td>
+<td style="text-align: left"></td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left">LP_Ö_Schule_</td>
+<td style="text-align: left">Schools.<br /> small (k), medium (m), big (g)</td>
+<td style="text-align: left">k: 20 - 100 <br /> m: 100 -300 <br /> g: 300 - 800</td>
+</tr>
+<tr>
+<td style="text-align: left">LP_Ö_Büro_</td>
+<td style="text-align: left">Administration (weekdays)</td>
+<td style="text-align: left">k: 25 - 100 <br /> m: 100 - 300</td>
+</tr>
+<tr>
+<td style="text-align: left"><strong>Commercial buildings</strong></td>
+<td style="text-align: left"></td>
+<td style="text-align: left"></td>
+</tr>
+<tr>
+<td style="text-align: left">LP_G0 to G6 and <br /> LP_L0 to L2</td>
+<td style="text-align: left">Standard load profiles</td>
+<td style="text-align: left">no limitation</td>
+</tr>
+<tr>
+<td style="text-align: left">LP_G_MV</td>
+<td style="text-align: left">Manufacturing industry / metal processing</td>
+<td style="text-align: left">250 - 1000</td>
+</tr>
+<tr>
+<td style="text-align: left">LP_G_G</td>
+<td style="text-align: left">Manufacturing / Electroplating</td>
+<td style="text-align: left">250 - 1000</td>
+</tr>
+<tr>
+<td style="text-align: left">LP_G_MH</td>
+<td style="text-align: left">furniture shop</td>
+<td style="text-align: left">175 - 725</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<script>renderMathInElement(document.body);</script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script>mermaid.initialize({startOnLoad:true});</script>
+</body>
+</html>

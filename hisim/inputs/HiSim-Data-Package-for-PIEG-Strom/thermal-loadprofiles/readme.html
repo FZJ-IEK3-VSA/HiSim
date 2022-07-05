@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/katex.min.css" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/styles/default.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/katex.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.9.0-alpha2/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.12.0/highlight.min.js"></script>
+<script src="https://unpkg.com/mermaid@7.1.2/dist/mermaid.min.js"></script>
+<style>
+@charset "utf-8";
+
+/**
+ * markdown.css
+ *
+ * This program is free software: you can redistribute it and/or modify it under
+ * the terms of the GNU Lesser General Public License as published by the Free
+ * Software Foundation, either version 3 of the License, or (at your option) any
+ * later version.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with this program. If not, see http://gnu.org/licenses/lgpl.txt.
+ *
+ * @project      Weblog and Open Source Projects of Florian Wolters
+ * @version      GIT: $Id$
+ * @package      xhtml-css
+ * @author       Florian Wolters <florian.wolters.85@googlemail.com>
+ * @copyright    2012 Florian Wolters
+ * @cssdoc       version 1.0-pre
+ * @license      http://gnu.org/licenses/lgpl.txt GNU Lesser General Public License
+ * @link         http://github.com/FlorianWolters/jekyll-bootstrap-theme
+ * @media        all
+ * @valid        true
+ */
+
+img {
+	max-width: 100%;
+}
+
+table {
+	border-collapse: collapse;
+	width: 100%;
+}
+
+table, th, td {
+	border: 1px solid #EAEAEA;
+	border-radius: 3px;
+	padding: 5px;
+}
+
+tr:nth-child(even) {
+	background-color: #F8F8F8;
+}
+
+body {
+    font-family: Helvetica, Arial, Freesans, clean, sans-serif;
+    padding:1em;
+    margin:auto;
+    max-width:42em;
+    background:#fefefe;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: bold;
+}
+
+h1 {
+    color: #000000;
+    font-size: 28px;
+}
+
+h2 {
+    border-bottom: 1px solid #CCCCCC;
+    color: #000000;
+    font-size: 24px;
+}
+
+h3 {
+    font-size: 18px;
+}
+
+h4 {
+    font-size: 16px;
+}
+
+h5 {
+    font-size: 14px;
+}
+
+h6 {
+    color: #777777;
+    background-color: inherit;
+    font-size: 14px;
+}
+
+hr {
+    height: 0.2em;
+    border: 0;
+    color: #CCCCCC;
+    background-color: #CCCCCC;
+}
+
+p, blockquote, ul, ol, dl, li, table, pre {
+    margin: 15px 0;
+}
+
+code, pre {
+    border-radius: 3px;
+    background-color: #F8F8F8;
+    color: inherit;
+}
+
+code {
+    border: 1px solid #EAEAEA;
+    margin: 0 2px;
+    padding: 0 5px;
+}
+
+pre {
+    border: 1px solid #CCCCCC;
+    line-height: 1.25em;
+    overflow: auto;
+    padding: 6px 10px;
+}
+
+pre > code {
+    border: 0;
+    margin: 0;
+    padding: 0;
+}
+
+a, a:visited {
+    color: #4183C4;
+    background-color: inherit;
+    text-decoration: none;
+}
+
+
+figure figcaption {
+    text-align: center;
+    font-size: 12px;
+}
+</style>
+</head>
+<body>
+<div class="document">
+<div class="header"></div><div class="inner">
+<h2 id="toc_1">Domestic hot water load profiles from 1 to 200 persons</h2>
+
+<h3 id="toc_1.1">Sources and License:</h3>
+
+<ul dir="auto">
+<li><p><code>docs</code> -&gt; Software: DHWcalc v2.02b</p></li>
+<li><p><code>data_processed</code> <a href="https://creativecommons.org/licenses/by/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY%204.0-lightgrey.svg" alt="License: CC BY 4.0"></a></p></li>
+</ul>
+
+<h3 id="toc_1.2">Summary:</h3>
+
+<p>The data set contains domestic hat water (dhw) load profiles from 1 up to 200 persons. The profiles where generated with the software DHWcalc (v2.02b) under default settings with a mean water consumption of 40 liters at 45°C per person and day, which reperesents an average consumption.</p>
+
+<p>For the calculation of the load profile in W the cold water temperature (T_coldwater) was assumed to vary between 10 and 15 °C </p>
+
+<p>T_coldwater = 12.5 + 2.5 * sin(270° + (DOY/365) * 360°)</p>
+
+<p>with DOY = day of year. The yearly energy consumption results in <strong>555 kWh per person and year</strong>.</p>
+
+<h3 id="toc_1.3">Content</h3>
+
+<ul dir="auto">
+<li><strong>files</strong>: 200 dhw load profiles with the number representing the number of persons</li>
+</ul>
+
+<pre><code>dhw_1.csv
+...
+...
+dhw_200.csv
+</code></pre>
+
+<ul dir="auto">
+<li><strong>columns per file</strong>:</li>
+</ul>
+
+<pre><code>datetime [yyyy-MM-dd hh:mm:ss+01:00/02:00]
+flow rate at 45 °C [kg/h]
+load [W]
+</code></pre>
+
+<ul dir="auto">
+<li><p><strong>length</strong>: 1 year</p></li>
+<li><p><strong>time increment</strong>: 1min / 15min / 60min</p></li>
+</ul>
+
+<h3 id="toc_1.4">Important hints:</h3>
+
+<ul dir="auto">
+<li>all files in <code>data_processed</code> were calculated with the skript <code>process_data.ipynb</code></li>
+<li><em>A value with, for example, a timestamp 12:00:00 represents the mean value from this timestamp until the following timestamp.</em></li>
+<li><em>datetime column is in CET / CEST</em></li>
+</ul>
+</div>
+</div>
+<script>renderMathInElement(document.body);</script>
+<script>hljs.initHighlightingOnLoad();</script>
+<script>mermaid.initialize({startOnLoad:true});</script>
+</body>
+</html>

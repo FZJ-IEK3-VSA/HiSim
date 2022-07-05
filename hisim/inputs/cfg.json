@@ -1,0 +1,410 @@
+{
+    "SimulationParameters": {
+        "year": 2019,
+        "seconds_per_timestep": 900,
+        "method": "full_year"
+    },
+    "Components": {
+        "hisim.components.csvloader.CSVLoader": {
+            "component_name": "csv_load_loader_electric",
+            "csv_filename": "electrical-loadprofiles/data_processed/LP_W_EFH.csv",
+            "column": 1,
+            "loadtype": "Electricity",
+            "unit": "W",
+            "column_name": "power_demand",
+            "sep": ",",
+            "decimal": ".",
+            "multiplier": 3
+        },
+        "hisim.components.csvloader.CSVLoader_number1": {
+            "component_name": "csv_load_loader_thermal",
+            "csv_filename": "thermal-loadprofiles/data_processed/15min/dhw_1.csv",
+            "column": 1,
+            "loadtype": "Heating",
+            "unit": "W",
+            "column_name": "power_demand",
+            "sep": ",",
+            "decimal": ".",
+            "multiplier": 3
+        },
+        "hisim.components.csvloader.CSVLoader_number2": {
+            "component_name": "csv_load_loader_pv",
+            "csv_filename": "photovoltaic/data_processed/15min/pv_1_a_2015.csv",
+            "column": 1,
+            "loadtype": "Electricity",
+            "unit": "W",
+            "column_name": "power_demand",
+            "sep": ",",
+            "decimal": ".",
+            "multiplier": 3
+        },
+        "hisim.components.weather.Weather": {
+            "location": "Aachen"
+        },
+        "hisim.components.advanced_battery_bslib.Battery": {
+            "system_id": "SG1",
+            "p_inv_custom": 5,
+            "e_bat_custom": 10,
+            "name": "Battery",
+            "source_weight": 1
+        },
+        "hisim.components.controller_l2_energy_management_system.ControllerHeat": {
+            "temperature_storage_target_warm_water": 50,
+            "temperature_storage_target_heating_water": 35,
+            "temperature_storage_target_hysteresis_ww": 45,
+            "temperature_storage_target_hysteresis_hw": 35
+        },
+        "hisim.components.controller_l2_energy_management_system.ControllerElectricity": {
+            "strategy": "optimize_own_consumption",
+            "limit_to_shave": 0
+        },
+        "hisim.components.generic_hot_water_storage.HeatStorage": {
+            "V_SP_heating_water": 1000,
+            "V_SP_warm_water": 100,
+            "temperature_of_warm_water_extratcion": 32,
+            "ambient_temperature": 15,
+            "T_sp_ww": 40,
+            "T_sp_hw": 40
+        },
+        "hisim.components.generic_hot_water_storage.HeatStorageController": {
+            "initial_temperature_building": 20,
+            "initial_temperature_heating_storage": 35
+        },
+        "hisim.components.generic_gas_heater.GasHeater": {
+            "is_modulating": true,
+            "P_th_min": 1000,
+            "P_th_max": 12000,
+            "eff_th_min": 0.6,
+            "eff_th_max": 0.9,
+            "delta_T": 25,
+            "mass_flow_max": 0.11483253588516747,
+            "temperature_max": 80,
+            "temperaturedelta": 10,
+            "power_max": 12000
+        },
+        "hisim.components.advanced_fuel_cell.CHP": {
+            "name": "CHP",
+            "min_operation_time": 60,
+            "min_idle_time": 15,
+            "gas_type": "Hydrogen",
+            "operating_mode": "both",
+            "p_el_max": 3600,
+            "is_modulating": true,
+            "P_el_min": 2000,
+            "P_th_min": 3000,
+            "eff_el_min": 0.2,
+            "eff_th_min": 0.5,
+            "mass_flow_max": 0.011,
+            "P_el_max": 3000,
+            "P_th_max": 4000,
+            "eff_el_max": 0.4,
+            "eff_th_max": 0.55,
+            "temperature_max": 80,
+            "delta_T": 10
+        },
+        "hisim.components.generic_electrolyzer_and_h2_storage.Electrolyzer": {
+            "component_name": "Electrolyzer",
+            "waste_energy": 400,
+            "min_power": 1200,
+            "max_power": 2400,
+            "min_power_percent": 60,
+            "max_power_percent": 100,
+            "min_hydrogen_production_rate_hour": 300,
+            "max_hydrogen_production_rate_hour": 5000,
+            "pressure_hydrogen_output": 30
+        },
+        "hisim.components.generic_electrolyzer_and_h2_storage.HydrogenStorage": {
+            "component_name": "HydrogenStorage",
+            "min_capacity": 0,
+            "max_capacity": 500,
+            "starting_fill": 400,
+            "max_charging_rate_hour": 2,
+            "max_discharging_rate_hour": 2,
+            "energy_for_charge": 0,
+            "energy_for_discharge": 0,
+            "loss_factor_per_day": 0
+        },
+        "hisim.components.building.Building": {
+            "heating_reference_temperature": -14,
+            "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+            "bClass": "medium",
+            "initial_temperature": 23
+        },
+        "hisim.components.building.BuildingController": {
+            "minimal_building_temperature": 20,
+            "stop_heating_building_temperature": 21
+        },
+        "hisim.components.loadprofilegenerator_connector.Occupancy": {
+            "profile_name": "CH01"
+        }
+    },
+    "Groupings": {},
+    "Connections": {
+        "Connection1_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "Azimuth",
+            "Second Component Input": "Altitude"
+        },
+        "Connection2_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "Azimuth",
+            "Second Component Input": "Azimuth"
+        },
+        "Connection3_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "ApparentZenith",
+            "Second Component Input": "ApparentZenith"
+        },
+        "Connection4_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "DirectNormalIrradiance",
+            "Second Component Input": "DirectNormalIrradiance"
+        },
+        "Connection5_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "DirectNormalIrradianceExtra",
+            "Second Component Input": "DirectNormalIrradianceExtra"
+        },
+        "Connection6_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "DiffuseHorizontalIrradiance",
+            "Second Component Input": "DiffuseHorizontalIrradiance"
+        },
+        "Connection7_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "GlobalHorizontalIrradiance",
+            "Second Component Input": "GlobalHorizontalIrradiance"
+        },
+        "Connection8_Weather_Building": {
+            "First Component": "Weather",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "TemperatureOutside",
+            "Second Component Input": "TemperatureOutside"
+        },
+        "Connection9_csv_load_loader_electric_ControllerElectricity": {
+            "First Component": "csv_load_loader_electric",
+            "Second Component": "ControllerElectricity",
+            "Method": "Manual",
+            "First Component Output": "Output1",
+            "Second Component Input": "ElectricityConsumptionBuilding"
+        },
+        "Connection10_csv_load_loader_pv_ControllerElectricity": {
+            "First Component": "csv_load_loader_pv",
+            "Second Component": "ControllerElectricity",
+            "Method": "Manual",
+            "First Component Output": "Output1",
+            "Second Component Input": "ElectricityOutputPvs"
+        },
+        "Connection11_Occupancy_Building": {
+            "First Component": "Occupancy",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "HeatingByResidents",
+            "Second Component Input": "HeatingByResidents"
+        },
+        "Connection12_ControllerHeat_HeatStorage": {
+            "First Component": "ControllerHeat",
+            "Second Component": "HeatStorage",
+            "Method": "Manual",
+            "First Component Output": "ControlSignalChooseStorage",
+            "Second Component Input": "ControlSignalChooseStorage"
+        },
+        "Connection13_ControllerHeat_GasHeater": {
+            "First Component": "ControllerHeat",
+            "Second Component": "GasHeater",
+            "Method": "Manual",
+            "First Component Output": "ControlSignalGasHeater",
+            "Second Component Input": "ControlSignal"
+        },
+        "Connection14_ControllerHeat_CHP": {
+            "First Component": "ControllerHeat",
+            "Second Component": "CHP",
+            "Method": "Manual",
+            "First Component Output": "ControlSignalChp",
+            "Second Component Input": "ControlSignal"
+        },
+        "Connection15_ControllerElectricity_Battery": {
+            "First Component": "ControllerElectricity",
+            "Second Component": "Battery",
+            "Method": "Manual",
+            "First Component Output": "ElectricityToOrFromBatteryTarget",
+            "Second Component Input": "LoadingPowerInput"
+        },
+        "Connection16_ControllerElectricity_Electrolyzer": {
+            "First Component": "ControllerElectricity",
+            "Second Component": "Electrolyzer",
+            "Method": "Manual",
+            "First Component Output": "ElectricityToElectrolyzerTarget",
+            "Second Component Input": "ElectricityInput"
+        },
+        "Connection17_ControllerElectricity_CHP": {
+            "First Component": "ControllerElectricity",
+            "Second Component": "CHP",
+            "Method": "Manual",
+            "First Component Output": "ElectricityFromCHPTarget",
+            "Second Component Input": "ElectricityFromCHPTarget"
+        },
+        "Connection18_HeatStorage_HeatStorageController": {
+            "First Component": "HeatStorage",
+            "Second Component": "HeatStorageController",
+            "Method": "Manual",
+            "First Component Output": "WaterOutputTemperatureHeatingWater",
+            "Second Component Input": "TemperatureHeatingStorage"
+        },
+        "Connection19_HeatStorage_CHP": {
+            "First Component": "HeatStorage",
+            "Second Component": "CHP",
+            "Method": "Manual",
+            "First Component Output": "WaterOutputStorageforHeaters",
+            "Second Component Input": "MassflowInputTemperature"
+        },
+        "Connection20_HeatStorage_Building": {
+            "First Component": "HeatStorage",
+            "Second Component": "Building",
+            "Method": "Manual",
+            "First Component Output": "RealHeatForBuilding",
+            "Second Component Input": "ThermalEnergyDelivered"
+        },
+        "Connection21_HeatStorage_ControllerHeat": {
+            "First Component": "HeatStorage",
+            "Second Component": "ControllerHeat",
+            "Method": "Manual",
+            "First Component Output": "WaterOutputTemperatureHeatingWater",
+            "Second Component Input": "StorageTemperatureHeatingWater"
+        },
+        "Connection22_HeatStorage_GasHeater": {
+            "First Component": "HeatStorage",
+            "Second Component": "GasHeater",
+            "Method": "Manual",
+            "First Component Output": "WaterOutputStorageforHeaters",
+            "Second Component Input": "MassflowInputTemperature"
+        },
+        "Connection23_HeatStorageController_HeatStorage": {
+            "First Component": "HeatStorageController",
+            "Second Component": "HeatStorage",
+            "Method": "Manual",
+            "First Component Output": "RealThermalDemandHeatingWater",
+            "Second Component Input": "ThermalDemandHeatingWater"
+        },
+        "Connection24_Building_HeatStorageController": {
+            "First Component": "Building",
+            "Second Component": "HeatStorageController",
+            "Method": "Manual",
+            "First Component Output": "TemperatureMean",
+            "Second Component Input": "BuildingTemperature"
+        },
+        "Connection25_Building_ControllerHeat": {
+            "First Component": "Building",
+            "Second Component": "ControllerHeat",
+            "Method": "Manual",
+            "First Component Output": "TemperatureMean",
+            "Second Component Input": "ResidenceTemperature"
+        },
+        "Connection26_Building_BuildingController": {
+            "First Component": "Building",
+            "Second Component": "BuildingController",
+            "Method": "Manual",
+            "First Component Output": "TemperatureMean",
+            "Second Component Input": "ResidenceTemperature"
+        },
+        "Connection27_Building_HeatStorageController": {
+            "First Component": "Building",
+            "Second Component": "HeatStorageController",
+            "Method": "Manual",
+            "First Component Output": "ReferenceMaxHeatBuildingDemand",
+            "Second Component Input": "ReferenceMaxHeatBuildingDemand"
+        },
+        "Connection28_Building_BuildingController": {
+            "First Component": "Building",
+            "Second Component": "BuildingController",
+            "Method": "Manual",
+            "First Component Output": "ReferenceMaxHeatBuildingDemand",
+            "Second Component Input": "ReferenceMaxHeatBuildingDemand"
+        },
+        "Connection29_BuildingController_HeatStorageController": {
+            "First Component": "BuildingController",
+            "Second Component": "HeatStorageController",
+            "Method": "Manual",
+            "First Component Output": "RealHeatBuildingDemand",
+            "Second Component Input": "RealHeatBuildingDemand"
+        },
+        "Connection30_GasHeater_HeatStorage": {
+            "First Component": "GasHeater",
+            "Second Component": "HeatStorage",
+            "Method": "Manual",
+            "First Component Output": "ThermalOutputPower",
+            "Second Component Input": "ThermalInputPower1"
+        },
+        "Connection31_CHP_HeatStorage": {
+            "First Component": "CHP",
+            "Second Component": "HeatStorage",
+            "Method": "Manual",
+            "First Component Output": "ThermalOutputPower",
+            "Second Component Input": "ThermalInputPower2"
+        },
+        "Connection32_CHP_ControllerElectricity": {
+            "First Component": "CHP",
+            "Second Component": "ControllerElectricity",
+            "Method": "Manual",
+            "First Component Output": "ElectricityOutput",
+            "Second Component Input": "ElectricityFromCHPReal"
+        },
+        "Connection33_CHP_HydrogenStorage": {
+            "First Component": "CHP",
+            "Second Component": "HydrogenStorage",
+            "Method": "Manual",
+            "First Component Output": "GasDemandTarget",
+            "Second Component Input": "DischargingHydrogenAmountTarget"
+        },
+        "Connection34_Electrolyzer_ControllerElectricity": {
+            "First Component": "Electrolyzer",
+            "Second Component": "ControllerElectricity",
+            "Method": "Manual",
+            "First Component Output": "UnusedPower",
+            "Second Component Input": "ElectricityToElectrolyzerUnused"
+        },
+        "Connection35_Electrolyzer_HydrogenStorage": {
+            "First Component": "Electrolyzer",
+            "Second Component": "HydrogenStorage",
+            "Method": "Manual",
+            "First Component Output": "HydrogenOutput",
+            "Second Component Input": "ChargingHydrogenAmount"
+        },
+        "Connection36_HydrogenStorage_CHP": {
+            "First Component": "HydrogenStorage",
+            "Second Component": "CHP",
+            "Method": "Manual",
+            "First Component Output": "HydrogenNotReleased",
+            "Second Component Input": "HydrogenNotReleased"
+        },
+        "Connection37_HydrogenStorage_Electrolyzer": {
+            "First Component": "HydrogenStorage",
+            "Second Component": "Electrolyzer",
+            "Method": "Manual",
+            "First Component Output": "HydrogenNotStored",
+            "Second Component Input": "HydrogenNotStored"
+        },
+        "Connection38_Battery_ControllerElectricity": {
+            "First Component": "Battery",
+            "Second Component": "ControllerElectricity",
+            "Method": "Manual",
+            "First Component Output": "AcBatteryPower",
+            "Second Component Input": "ElectricityToOrFromBatteryReal"
+        }
+    }
+}

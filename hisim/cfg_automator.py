@@ -530,7 +530,7 @@ class SetupFunction:
                             full_class_path
                         )
                     )
-                    hisim.log.error(e)
+                    hisim.log.error(str(e))
                     raise RuntimeError(
                         f"Could not find the class for the component {full_class_path}"
                     )
@@ -543,7 +543,7 @@ class SetupFunction:
                             full_class_path
                         )
                     )
-                    hisim.log.error(e)
+                    hisim.log.error(str(e))
                     raise RuntimeError(
                         f"Could not find the config class for the component {full_class_path}"
                     )

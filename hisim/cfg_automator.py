@@ -1,3 +1,4 @@
+from cmath import log
 import json
 import os
 import inspect
@@ -13,10 +14,12 @@ import logging
 import hisim.component as component
 import hisim.simulator as sim
 import hisim.hisim_main
+import hisim.log
 from hisim.utils import HISIMPATH
 import hisim.simulator
 from os.path import dirname, basename, isfile, join
 import glob
+
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -26,15 +29,15 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-#logging.basicConfig(level=#logging.INFO)
+# logging.basicConfig(level=#logging.INFO)
 
 # IMPORT ALL COMPONENT CLASSES DYNAMICALLY
 # DIRTY CODE. GIVE ME BETTER SUGGESTIONS
 
 # iterate through the modules in the current package
 package_dir = os.path.join(gg(__file__).resolve().parent, "components")
-_ : Any
-for (_, module_name,_ ) in iter_modules([package_dir]):
+_: Any
+for (_, module_name, _) in iter_modules([package_dir]):
 
     # import the module and iterate through its attributes
     module = import_module(f"hisim.components.{module_name}")
@@ -46,15 +49,15 @@ for (_, module_name,_ ) in iter_modules([package_dir]):
             globals()[attribute_name] = attribute
 
 
-
 class ComponentsConnection:
-
-    def __init__(self,
-                 first_component,
-                 second_component,
-                 method=None,
-                 first_component_output=None,
-                 second_component_input=None):
+    def __init__(
+        self,
+        first_component,
+        second_component,
+        method=None,
+        first_component_output=None,
+        second_component_input=None,
+    ):
         self.first_component = first_component
         self.second_component = second_component
         self.first_component_output = first_component_output
@@ -67,25 +70,32 @@ class ComponentsConnection:
             self.run_manual()
 
     def run_automatic(self):
-        self.configuration = {"First Component" : self.first_component,
-                              "Second Component" : self.second_component,
-                              "Method": self.method}
+        self.configuration = {
+            "First Component": self.first_component,
+            "Second Component": self.second_component,
+            "Method": self.method,
+        }
+
     def run_manual(self):
-        self.configuration = {"First Component" : self.first_component,
-                              "Second Component" : self.second_component,
-                              "Method": self.method,
-                              "First Component Output" : self.first_component_output,
-                              "Second Component Input" : self.second_component_input}
+        self.configuration = {
+            "First Component": self.first_component,
+            "Second Component": self.second_component,
+            "Method": self.method,
+            "First Component Output": self.first_component_output,
+            "Second Component Input": self.second_component_input,
+        }
+
 
 class ComponentsGrouping:
-
-    def __init__(self,
-                 component_name,
-                 operation,
-                 first_component,
-                 second_component,
-                 first_component_output,
-                 second_component_output):
+    def __init__(
+        self,
+        component_name,
+        operation,
+        first_component,
+        second_component,
+        first_component_output,
+        second_component_output,
+    ):
         self.component_name = component_name
         self.operation = operation
         self.first_component = first_component
@@ -95,12 +105,15 @@ class ComponentsGrouping:
         self.run()
 
     def run(self):
-        self.configuration = {"Component Name": self.component_name,
-                              "Operation": self.operation,
-                              "First Component": self.first_component,
-                              "Second Component": self.second_component,
-                              "First Component Output": self.first_component_output,
-                              "Second Component Output": self.second_component_output}
+        self.configuration = {
+            "Component Name": self.component_name,
+            "Operation": self.operation,
+            "First Component": self.first_component,
+            "Second Component": self.second_component,
+            "First Component Output": self.first_component_output,
+            "Second Component Output": self.second_component_output,
+        }
+
 
 class ConfigurationGenerator:
 
@@ -149,9 +162,9 @@ class ConfigurationGenerator:
         self._groupings = {}
         self._connections = {}
         self._parameters_range_studies = {}
-    def set_name(self,name_to_set):
-        return name_to_set.__module__ + "." + name_to_set.__name__
 
+    def set_name(self, name_to_set):
+        return name_to_set.__module__ + "." + name_to_set.__name__
 
     def load_component_modules(self):
         """
@@ -162,6 +175,7 @@ class ConfigurationGenerator:
 
         """
         self.preloaded_components = {}
+
         def get_default_parameters_from_constructor(class_component):
             """
             Get the default arguments of either a function or
@@ -171,14 +185,25 @@ class ConfigurationGenerator:
             :param parameter:
             :return: a dictionary or list of the arguments
             """
-            constructor_function_var = [item for item in inspect.getmembers(class_component) if item[0] in "__init__"][0][1]
+            constructor_function_var = [
+                item
+                for item in inspect.getmembers(class_component)
+                if item[0] in "__init__"
+            ][0][1]
             sig = inspect.signature(constructor_function_var)
-            return {k: v.default for k, v in sig.parameters.items() if
-                            v.default is not inspect.Parameter.empty}
+            return {
+                k: v.default
+                for k, v in sig.parameters.items()
+                if v.default is not inspect.Parameter.empty
+            }
 
         classname = component.Component
-        component_class_children = [cls for cls in classname.__subclasses__() if cls != component.DynamicComponent]
-        #component_class_children = [cls.__name__ for cls in classname.__subclasses__() if cls != component.DynamicComponent]
+        component_class_children = [
+            cls
+            for cls in classname.__subclasses__()
+            if cls != component.DynamicComponent
+        ]
+        # component_class_children = [cls.__name__ for cls in classname.__subclasses__() if cls != component.DynamicComponent]
 
         for component_class in component_class_children:
             default_args = get_default_parameters_from_constructor(component_class)
@@ -190,7 +215,7 @@ class ConfigurationGenerator:
             # Save every component in the dictionary attribute
             self.preloaded_components[component_class] = default_args
 
-    def add_simulation_parameters(self, my_simulation_parameters = None):
+    def add_simulation_parameters(self, my_simulation_parameters=None):
         """
         Add the simulation parameters to the configuration JSON file list.
 
@@ -225,8 +250,10 @@ class ConfigurationGenerator:
         """
         if isinstance(user_components_name, list):
             for user_component_name in user_components_name:
-                self._components[user_component_name] = self.preloaded_components[user_component_name]
-                #logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
+                self._components[user_component_name] = self.preloaded_components[
+                    user_component_name
+                ]
+                # logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
         elif isinstance(user_components_name, dict):
             for user_component_name, parameters in user_components_name.items():
                 if parameters.__class__ == dict:
@@ -234,21 +261,28 @@ class ConfigurationGenerator:
 
                 else:
                     if str(user_component_name) in self._components:
-                        #quick annd dirty solution. checks if maximum of 10 components of the same are added
-                        for number in range(1,9):
-                            if str(user_component_name)+"_number"+str(number) in self._components:
+                        # quick annd dirty solution. checks if maximum of 10 components of the same are added
+                        for number in range(1, 9):
+                            if (
+                                str(user_component_name) + "_number" + str(number)
+                                in self._components
+                            ):
                                 continue
                             else:
-                                self._components[str(user_component_name)+"_number"+str(number)] = parameters.__dict__
+                                self._components[
+                                    str(user_component_name) + "_number" + str(number)
+                                ] = parameters.__dict__
                                 break
                     else:
                         self._components[str(user_component_name)] = parameters.__dict__
-                    #self._components[user_component_name.__module__ +"."+ user_component_name.__name__] = parameters.__dict__
-                #logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
+                    # self._components[user_component_name.__module__ +"."+ user_component_name.__name__] = parameters.__dict__
+                # logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
         else:
-            self._components[user_components_name.__module__] = user_components_name.__doc__
-            #self._components[user_components_name] = self.preloaded_components[user_components_name]
-            #logging.info("Component {} has been added to configuration JSON file.".format(user_components_name))
+            self._components[
+                user_components_name.__module__
+            ] = user_components_name.__doc__
+            # self._components[user_components_name] = self.preloaded_components[user_components_name]
+            # logging.info("Component {} has been added to configuration JSON file.".format(user_components_name))
 
     def add_grouping(self, grouping_components: ComponentsGrouping):
         """
@@ -271,8 +305,10 @@ class ConfigurationGenerator:
         ----------
         grouping_components: ComponentsGrouping
         """
-        self._groupings[grouping_components.component_name] = grouping_components.configuration
-        #logging.info("Component Grouping {} has been created.".format(grouping_components.component_name))
+        self._groupings[
+            grouping_components.component_name
+        ] = grouping_components.configuration
+        # logging.info("Component Grouping {} has been created.".format(grouping_components.component_name))
 
     def add_connection(self, connection_components):
         """
@@ -290,11 +326,13 @@ class ConfigurationGenerator:
         """
         number_of_connections = len(self._connections)
         i_connection = number_of_connections + 1
-        connection_name = "Connection{}_{}_{}".format(i_connection,
-                                                      connection_components.first_component,
-                                                      connection_components.second_component)
+        connection_name = "Connection{}_{}_{}".format(
+            i_connection,
+            connection_components.first_component,
+            connection_components.second_component,
+        )
         self._connections[connection_name] = connection_components.configuration
-        #logging.info("{} and {} have been connected ")
+        # logging.info("{} and {} have been connected ")
 
     def add_paramater_range(self, parameter_range):
         self._parameters_range_studies.update(parameter_range)
@@ -314,21 +352,28 @@ class ConfigurationGenerator:
 
     def dump(self):
 
-        self.data = {"SimulationParameters": self._simulation_parameters,
-                     "Components": self._components,
-                     "Groupings": self._groupings,
-                     "Connections": self._connections}
-        with open(""+HISIMPATH["cfg"], "w") as f:
+        self.data = {
+            "SimulationParameters": self._simulation_parameters,
+            "Components": self._components,
+            "Groupings": self._groupings,
+            "Connections": self._connections,
+        }
+        with open("" + HISIMPATH["cfg"], "w") as f:
             json.dump(self.data, f, indent=4)
 
     def run(self):
         pass
-        #hisim.main("cfg_automator", "basic_household_implicit")
+        # hisim.main("cfg_automator", "basic_household_implicit")
 
     def run_parameter_studies(self):
-        for component_class, parameter_name_and_range in self._parameters_range_studies.items():
-            #logging.info("Performing parameter study of component {}".format(component))
-            parameters_range_studies_entry = copy.deepcopy(self._parameters_range_studies)
+        for (
+            component_class,
+            parameter_name_and_range,
+        ) in self._parameters_range_studies.items():
+            # logging.info("Performing parameter study of component {}".format(component))
+            parameters_range_studies_entry = copy.deepcopy(
+                self._parameters_range_studies
+            )
             if isinstance(parameter_name_and_range, dict):
                 for parameter_name, range in parameter_name_and_range.items():
                     cached_range = range
@@ -341,36 +386,44 @@ class ConfigurationGenerator:
     def run_cross_parameter_studies(self):
         pass
 
-class SetupFunction:
 
+class SetupFunction:
     def __init__(self):
-        if os.path.isfile(""+HISIMPATH["cfg"]):
-            with open(os.path.join(""+HISIMPATH["cfg"])) as file:
+        file_path = str(HISIMPATH["cfg"])
+        if os.path.isfile(file_path):
+            with open(file_path) as file:
                 self.cfg = json.load(file)
-            #os.remove(""+HISIMPATH["cfg"])
+            # os.remove(""+HISIMPATH["cfg"])
+        else:
+            raise RuntimeError(f"File does not exist: {file_path}")
         self.cfg_raw = copy.deepcopy(self.cfg)
         self._components = []
         self._connections = []
         self._groupings = []
-        #self.electricity_grids : List[ElectricityGrid] = []
-        #self.electricity_grid_consumption : List[ElectricityGrid] = []
-        self.component_class_children=[]
-        self.component_file_children=[]
-        self.component_module_list=[]
+        # self.electricity_grids : List[ElectricityGrid] = []
+        # self.electricity_grid_consumption : List[ElectricityGrid] = []
+        self.component_class_children = []
+        self.component_file_children = []
+        self.component_module_list = []
+
     def build(self, my_sim):
         self.add_simulation_parameters(my_sim)
-        self.component_class_children, self.component_file_children, self.component_module_list = self.find_all_component_class_children()
+        (
+            self.component_class_children,
+            self.component_file_children,
+            self.component_module_list,
+        ) = self.find_all_component_class_children()
         for comp in self.cfg["Components"]:
             number_of_comp = ""
             if comp.__contains__("_number"):
-            # quick annd dirty solution. checks if maximum of 10 components of the same are added
+                # quick annd dirty solution. checks if maximum of 10 components of the same are added
                 for number in range(1, 9):
-                    if comp.__contains__("_number"+str(number)):
-                        comp = comp.replace("_number"+str(number), "")
-                        number_of_comp="_number"+str(number)
+                    if comp.__contains__("_number" + str(number)):
+                        comp = comp.replace("_number" + str(number), "")
+                        number_of_comp = "_number" + str(number)
 
-            if comp in self.component_class_children :
-                self.add_component(comp, my_sim,number_of_comp)
+            if comp in self.component_class_children:
+                self.add_component(comp, my_sim, number_of_comp)
         for grouping_key, grouping_value in self.cfg["Groupings"].items():
             self.add_grouping(grouping_value, my_sim)
         for connection_key, connection_value in self.cfg["Connections"].items():
@@ -383,32 +436,49 @@ class SetupFunction:
         self.cfg["SimulationParameters"].pop("method", None)
         self._simulation_parameters: sim.SimulationParameters
         if method == "full_year":
-            self._simulation_parameters = sim.SimulationParameters.full_year_all_options(**self.cfg["SimulationParameters"])
+            self._simulation_parameters = (
+                sim.SimulationParameters.full_year_all_options(
+                    **self.cfg["SimulationParameters"]
+                )
+            )
         elif method == "one_day_only":
-            self._simulation_parameters = sim.SimulationParameters.one_day_only(**self.cfg["SimulationParameters"])
+            self._simulation_parameters = sim.SimulationParameters.one_day_only(
+                **self.cfg["SimulationParameters"]
+            )
         my_sim.set_parameters(self._simulation_parameters)
 
-
-    def find_all_component_class_children(self ):
+    def find_all_component_class_children(self):
         classname = component.Component
-        component_file_children=[]
-        component_module=[]
-        component_class_children = [cls.__module__+"."+cls.__name__ for cls in classname.__subclasses__() if cls != component.DynamicComponent]
-        component_class_children_list = [cls for cls in classname.__subclasses__() if cls != component.DynamicComponent]
+        component_file_children = []
+        component_module = []
+        component_class_children = [
+            cls.__module__ + "." + cls.__name__
+            for cls in classname.__subclasses__()
+            if cls != component.DynamicComponent
+        ]
+        component_class_children_list = [
+            cls
+            for cls in classname.__subclasses__()
+            if cls != component.DynamicComponent
+        ]
 
         for file_child in component_class_children_list:
             component_module.append(file_child.__module__)
             component_file_children.append(file_child.__name__)
-            component_file_children.append(file_child.__name__+"Config")
+            component_file_children.append(file_child.__name__ + "Config")
 
         # return component_class_children, component_file_children
-        return component_class_children, component_file_children,component_module
-    def get_path(self,class_with_path):
+        return component_class_children, component_file_children, component_module
+
+    def get_path(self, class_with_path):
         return class_with_path.__module__ + "." + class_with_path.__name__
-    def add_component(self, comp, my_sim,number_of_comp, electricity_output=None):
+
+    def add_component(
+        self, full_class_path, my_sim, number_of_comp, electricity_output=None
+    ):
         # Save parameters of class
         # Retrieve class signature
-        '''
+        """
         path_to_components = dirname(__file__) + "\\components"
         list_of_all_components= glob.glob(join(path_to_components, "*.py"))
         stripped_list_of_all_components=[]
@@ -418,49 +488,104 @@ class SetupFunction:
             stripped = stripped.replace("\\", ".")
             stripped = stripped.replace(".py", "")
             stripped_list_of_all_components.append(stripped)
-        '''
+        """
+
+        clsmembers = None
+        full_instance_path = full_class_path + number_of_comp
         for component_to_check in self.component_class_children:
             try:
-                if component_to_check == comp:
+                if component_to_check == full_class_path:
+                    # removes the last part (after the last dot) of the component string (the class name)
                     seperater = "."
                     stripped = ""
-                    splitted_string = component_to_check.split(seperater, component_to_check.count("."))
+                    splitted_string = component_to_check.split(
+                        seperater, component_to_check.count(".")
+                    )
                     for i in range(component_to_check.count(".")):
                         if stripped == "":
-                            stripped=splitted_string[i]
+                            stripped = splitted_string[i]
                         else:
-                            stripped = stripped +"."+ splitted_string[i]
-                    clsmembers = inspect.getmembers(sys.modules[stripped], inspect.isclass)
+                            stripped = stripped + "." + splitted_string[i]
+                    clsmembers = [
+                        (name, cls)
+                        for name, cls in inspect.getmembers(
+                            sys.modules[stripped], inspect.isclass
+                        )
+                        if cls.__module__ == stripped
+                    ]
             except:
                 continue
+        if clsmembers is None:
+            raise RuntimeError("No class members were found")
 
+        component_class_to_add, component_class_to_add = None, None
         for type, component_class in clsmembers:
-            if self.get_path(component_class)==comp:
+            if self.get_path(component_class) == full_class_path:
                 try:
-                    component_class_to_add=component_class
+                    component_class_to_add = component_class
                     signature_component = inspect.signature(component_class)
                 except Exception as e:
-                    print("No relevant_component added. Investigate in Component: {} ".format(comp))
-                    print(e)
-            elif self.get_path(component_class)==comp+"Config":
+                    hisim.log.error(
+                        "No relevant_component added. Investigate in Component: {} ".format(
+                            full_class_path
+                        )
+                    )
+                    hisim.log.error(e)
+                    raise RuntimeError(
+                        f"Could not find the class for the component {full_class_path}"
+                    )
+            elif self.get_path(component_class) == full_class_path + "Config":
                 try:
-                    component_class_config_to_add=component_class
+                    component_class_config_to_add = component_class
                 except Exception as e:
-                    print("No relevant_component_config added. Investigate in Component: {} ".format(comp))
-                    print(e)
+                    hisim.log.error(
+                        "No relevant_component_config added. Investigate in Component: {} ".format(
+                            full_class_path
+                        )
+                    )
+                    hisim.log.error(e)
+                    raise RuntimeError(
+                        f"Could not find the config class for the component {full_class_path}"
+                    )
+
+        if component_class_to_add is None:
+            raise RuntimeError(
+                f"Could not find the class for the component {full_class_path}"
+            )
+        if component_class_config_to_add is None:
+            raise RuntimeError(
+                f"Could not find the config class for the component {full_class_path}"
+            )
 
         # Find if it has SimulationParameters and pass value
         for parameter_name in signature_component.parameters:
-            if signature_component.parameters[parameter_name].annotation == component.SimulationParameters or parameter_name == "my_simulation_parameters":
-                self.cfg["Components"][comp][parameter_name] = my_sim.SimulationParameters
+            if (
+                # double check in case the type annotation is missing
+                signature_component.parameters[parameter_name].annotation
+                == component.SimulationParameters
+                or parameter_name == "my_simulation_parameters"
+            ):
+                self.cfg["Components"][full_instance_path][
+                    parameter_name
+                ] = my_sim.SimulationParameters
         try:
 
-            self.cfg["Components"][comp].__delitem__("my_simulation_parameters")
-            config_class=component_class_config_to_add.from_dict(self.cfg["Components"][comp+number_of_comp])
-            self._components.append(component_class_to_add(config=config_class, my_simulation_parameters=self._simulation_parameters))
+            # self.cfg["Components"][comp].__delitem__("my_simulation_parameters")
+            config_class = component_class_config_to_add.from_dict(
+                self.cfg["Components"][full_instance_path]
+            )
+            print(str(config_class))
+            self._components.append(
+                component_class_to_add(
+                    config=config_class,
+                    my_simulation_parameters=self._simulation_parameters,
+                )
+            )
 
         except Exception as e:
-            print("Adding Component {} resulted in a failure".format(comp))
+            print(
+                "Adding Component {} resulted in a failure".format(full_instance_path)
+            )
             print("Might be Missing :   {} ".format(component_class_to_add))
             print("Please, investigate implementation mistakes in this Component.")
             print(e)
@@ -469,7 +594,7 @@ class SetupFunction:
         my_sim.add_component(self._components[-1])
         if electricity_output is not None:
             pass
-            #ToDo: Implement electricity sum here.
+            # ToDo: Implement electricity sum here.
 
     def add_grouping(self, grouping, my_sim):
         for component in self._components:
@@ -477,7 +602,7 @@ class SetupFunction:
                 second_component = component
             elif type(component).__name__ == grouping["First Component"]:
                 first_component = component
-        '''
+        """
         my_concatenated_component = CalculateOperation(name=grouping["Component Name"])
         my_concatenated_component.connect_input(src_object_name=first_component.ComponentName,
                                                 src_field_name=getattr(first_component, grouping["First Component Output"]))
@@ -487,16 +612,19 @@ class SetupFunction:
         self._components.append(my_concatenated_component)
         my_sim.add_component(my_concatenated_component)
 
-        '''
+        """
+
     def add_connection(self, connection):
 
         for component in self._components:
-            component_name= component.ComponentName
+            component_name = component.ComponentName
             if hasattr(component, "source_weight"):
-                if len(str(component.source_weight))==0:
+                if len(str(component.source_weight)) == 0:
                     pass
                 else:
-                    component_name=component_name[:-len(str(component.source_weight))]
+                    component_name = component_name[
+                        : -len(str(component.source_weight))
+                    ]
             if component_name == connection["Second Component"]:
                 second_component = component
             elif component_name == connection["First Component"]:
@@ -506,17 +634,24 @@ class SetupFunction:
             second_component.connect_similar_inputs(first_component)
         elif connection["Method"] == "Manual":
             try:
-                second_component.connect_input(input_fieldname=getattr(second_component, connection["Second Component Input"]),
-                                               src_object_name=first_component.ComponentName,
-                                               src_field_name=getattr(first_component, connection["First Component Output"]))
+                second_component.connect_input(
+                    input_fieldname=getattr(
+                        second_component, connection["Second Component Input"]
+                    ),
+                    src_object_name=first_component.ComponentName,
+                    src_field_name=getattr(
+                        first_component, connection["First Component Output"]
+                    ),
+                )
             except Exception as e:
                 print(e)
                 print("Incorrect Connection")
 
     def add_configuration(self, my_sim: sim.Simulator):
-        #my_sim.add_configuration(self.cfg_raw)
+        # my_sim.add_configuration(self.cfg_raw)
         pass
-    '''
+
+    """
     def add_to_electricity_grid(self, my_sim, next_component, electricity_grid_label=None):
         n_consumption_components = len(self.electricity_grids)
         if electricity_grid_label is None:
@@ -542,7 +677,9 @@ class SetupFunction:
             list_components = [self.electricity_grid_consumption[-1], "Sum", next_component]
         self.electricity_grid_consumption.append(ElectricityGrid(name=electricity_grid_label, grid=list_components))
         my_sim.add_component(self.electricity_grid_consumption[-1])
-    '''
+    """
+
+
 def basic_household_implicit(my_sim: sim.Simulator):
     my_setup_function = SetupFunction()
     my_setup_function.build(my_sim)

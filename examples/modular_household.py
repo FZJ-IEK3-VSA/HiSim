@@ -270,7 +270,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                     source_weight = my_advanced_battery.source_weight )
 
         electricity_to_or_from_battery_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
-                                                                                                source_tags = [ lt.ComponentType.Battery ],
+                                                                                                source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget ],
                                                                                                 source_weight = my_advanced_battery.source_weight,
                                                                                                 source_load_type = lt.LoadTypes.Electricity,
                                                                                                 source_unit = lt.Units.Watt )
@@ -287,20 +287,39 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         chp_config = generic_CHP.GCHP.get_default_config( )
         chp_config.source_weight = count
         count += 1
+        
+        #chp
+        my_chp = generic_CHP.GCHP( my_simulation_parameters = my_simulation_parameters,
+                                   config = chp_config )
+        my_sim.add_component( my_chp )
+        
+        #heat controller
         my_chp_controller_l2 = controller_l2_generic_chp.L2_Controller( my_simulation_parameters = my_simulation_parameters,
                                                                         config = l2_config )
         my_chp_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_chp_controller_l2 )
         
+        #run time controller
         my_chp_controller_l1 = generic_CHP.L1_Controller( my_simulation_parameters = my_simulation_parameters,
                                                           config = l1_config)
         my_chp_controller_l1.connect_only_predefined_connections( my_chp_controller_l2 )
         my_sim.add_component( my_chp_controller_l1 )
-        my_chp = generic_CHP.GCHP( my_simulation_parameters = my_simulation_parameters,
-                                   config = chp_config )
         my_chp.connect_only_predefined_connections( my_chp_controller_l1 )
-        my_sim.add_component( my_chp )
-      
+        
+        #electricity controller
+        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_chp,
+                                                                    source_component_output = my_chp.ElectricityOutput,
+                                                                    source_load_type = lt.LoadTypes.Electricity,
+                                                                    source_unit = lt.Units.Watt,
+                                                                    source_tags = [ lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityTarget ],
+                                                                    source_weight = my_chp.source_weight )
+        electricity_from_fuelcell_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                                           source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ],
+                                                                                           source_weight = my_chp.source_weight,
+                                                                                           source_load_type = lt.LoadTypes.Electricity,
+                                                                                           source_unit = lt.Units.Watt )
+        my_chp_controller_l1.connect_dynamic_input( input_fieldname = generic_CHP.L1_Controller.ElectricityTarget,
+                                                    src_object = electricity_from_fuelcell_target )
         production.append( my_chp )
         heater.append( my_chp )
         

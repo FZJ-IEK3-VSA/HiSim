@@ -109,6 +109,7 @@ class GCHP( cp.Component ):
     def build( self, config ):
         self.state = CHPState( )
         self.previous_state = CHPState( )
+        self.source_weight = config.source_weight
         self.p_th = config.p_th
         self.p_el = config.p_el
         self.p_fuel = config.p_fuel
@@ -208,10 +209,11 @@ class L1_Controller( cp.Component ):
     """
     # Inputs
     l2_DeviceSignal = "l2_DeviceSignal"
+    ElectricityTarget = "ElectricityTarget"
 
     # Outputs
     l1_DeviceSignal = "l1_DeviceSignal"
-
+    
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
@@ -219,7 +221,9 @@ class L1_Controller( cp.Component ):
                   my_simulation_parameters : SimulationParameters,
                   config : L1CHPConfig ):
         
-        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super().__init__( name = config.name + str( config.source_weight ), 
+                          my_simulation_parameters = my_simulation_parameters )
+        
         self.build( config )
         
         #add inputs
@@ -228,6 +232,12 @@ class L1_Controller( cp.Component ):
                                                                    lt.LoadTypes.OnOff,
                                                                    lt.Units.binary,
                                                                    mandatory = True )
+        self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                      self.ElectricityTarget,
+                                                                      lt.LoadTypes.Electricity,
+                                                                      lt.Units.Watt,
+                                                                      mandatory = True )
+
         self.add_default_connections( controller_l2_generic_chp.L2_Controller, self.get_l2_controller_default_connections( ) )
         
         
@@ -270,6 +280,7 @@ class L1_Controller( cp.Component ):
             pass
         
         l2_devicesignal = stsv.get_input_value( self.l2_DeviceSignalC )
+        electricity_target = stsv.get_input_value( self.ElectricityTargetC )
         
         #save reference state state0 in first iteration
         if self.state.is_first_iteration( timestep ):
@@ -283,9 +294,9 @@ class L1_Controller( cp.Component ):
             self.state.state = 0
         #check signal from l2 and turn on or off if it is necesary
         else:
-            if l2_devicesignal == 0 and self.state0.state == 1:
+            if ( l2_devicesignal == 0 or electricity_target <= 0 ) and self.state0.state == 1:
                 self.state.deactivation( timestep )
-            elif l2_devicesignal == 1 and self.state0.state == 0:
+            elif l2_devicesignal == 1 and electricity_target > 0 and self.state0.state == 0:
                 self.state.activation( timestep )
         
         stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )

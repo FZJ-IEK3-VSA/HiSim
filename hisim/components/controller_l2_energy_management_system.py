@@ -568,11 +568,6 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                                        lt.Units.Watt,
                                                                        False)
 
-        self.electricity_to_electrolyzer_target: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                         self.ElectricityToElectrolyzerTarget,
-                                                                         lt.LoadTypes.Electricity,
-                                                                         lt.Units.Watt,
-                                                                         False)
         self.check_peak_shaving: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                          self.CheckPeakShaving,
                                                                          lt.LoadTypes.Any,
@@ -652,10 +647,9 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                        stsv : cp.SingleTimeStepValues,
                                                        weight_counter : int,
                                                        component_type : lt.ComponentType ):
-        
         is_battery = None
         #get previous signal and substract from total balance
-        previous_signal = self.get_dynamic_input( stsv = stsv, tags = [ component_type ], weight_counter = weight_counter )
+        previous_signal = self.get_dynamic_input( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityReal ], weight_counter = weight_counter )
         
         #control from substracted balance
         if component_type == lt.ComponentType.Battery:
@@ -668,6 +662,13 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                 deltademand = deltademand + previous_signal
                 if deltademand > 0:
                     is_battery = self.get_entries_of_type( lt.ComponentType.Battery )
+            else:
+                self.set_dynamic_output( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityTarget ], weight_counter = weight_counter, output_value = 0 )
+                
+        elif component_type == lt.ComponentType.Electrolyzer:
+            if deltademand > 0:
+                self.set_dynamic_output( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityTarget ], weight_counter = weight_counter, output_value = deltademand )
+                deltademand = deltademand - previous_signal
             else:
                 self.set_dynamic_output( stsv = stsv, tags = [ component_type, lt.InandOutputType.ElectricityTarget ], weight_counter = weight_counter, output_value = 0 )
         
@@ -714,8 +715,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         for ind in range( len( self.source_weights_sorted ) ): 
             component_type = self.components_sorted[ ind ]
             source_weight = self.source_weights_sorted[ ind ]
-            if component_type in [ lt.ComponentType.Battery, lt.ComponentType.FuelCell ]:
-                if not skip_CHP or component_type == lt.ComponentType.Battery: 
+            if component_type in [ lt.ComponentType.Battery, lt.ComponentType.FuelCell, lt.ComponentType.Electrolyzer ]:
+                if not skip_CHP or component_type in [ lt.ComponentType.Battery, lt.ComponentType.Electrolyzer ]: 
                     delta_demand, is_battery = self.control_electricity_component_iterative( deltademand = delta_demand,
                                                                                              stsv = stsv,
                                                                                              weight_counter = source_weight,

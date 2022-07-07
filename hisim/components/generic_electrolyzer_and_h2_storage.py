@@ -84,7 +84,7 @@ class ElectrolyzerSimulation:
         self.waste_energy = waste_energy
         self.pressure_hydrogen_output = pressure_hydrogen_output   # not used so far
 
-    def convert_electricity(self, electricity_input, seconds_per_timestep,hydrogen_not_stored):
+    def convert_electricity(self, electricity_input, seconds_per_timestep, hydrogen_not_stored ):
         """
         Electricity from electricity distributor (combination of PV, Grid, CHP and demand) will be converted to hydrogen
 
@@ -238,10 +238,11 @@ class Electrolyzer(Component):
         self.electrolyzer.state = self.previous_state
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
-        electricity_input = stsv.get_input_value(self.electricity_input)
+        electricity_input = stsv.get_input_value( self.electricity_input )
+        hydrogen_input = stsv.get_input_value( self.hydrogen_not_stored )
 
         if electricity_input < 0:
-            raise Exception("trying to run electrolyzer with negative amount" + str(electricity_input))
+            raise Exception( "trying to run electrolyzer with negative amount" + str( electricity_input ) )
 
         # operations can be skipped if there is no action (electricity_input == 0) in this timestep
         # maybe advance this to electricity_input >= ElectrolyzerConfig.min_power
@@ -258,18 +259,14 @@ class Electrolyzer(Component):
         elif 0 <= electricity_input < self.min_power:
             unused_power = electricity_input
             electricity_input = 0
-        elif electricity_input < 0:
-            log.error("Electricity to electrolyzer is negative")
-            raise ValueError
-
         if electricity_input >= self.min_power:
             hydrogen_output, oxygen_output, power_level, electricity_needed = \
-                self.electrolyzer.convert_electricity(electricity_input, self.seconds_per_timestep,stsv.get_input_value(self.hydrogen_not_stored)/self.my_simulation_parameters.seconds_per_timestep)
+                self.electrolyzer.convert_electricity( electricity_input, self.seconds_per_timestep, hydrogen_input / self.seconds_per_timestep )
             # the losses ae included in the efficiency providedd by supplyer and are not calculated separately
-            losses_this_timestep = self.waste_energy * self.max_power/ self.max_power
+            losses_this_timestep = self.waste_energy
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
-            unused_power=unused_power+(electricity_input-electricity_needed)
-        electricity_real_needed=stsv.get_input_value(self.electricity_input)-unused_power
+            unused_power = unused_power + ( electricity_input - electricity_needed )
+        electricity_real_needed = stsv.get_input_value( self.electricity_input ) - unused_power
         # water is split into these products
         if oxygen_output==0:
             water_consumption=0
@@ -283,16 +280,15 @@ class Electrolyzer(Component):
             electrolyzer_efficiency = 0
             assert electricity_input < self.min_power
 
-        stsv.set_output_value(self.water_demand, water_consumption)
-        stsv.set_output_value(self.hydrogen_output, hydrogen_output)
-        stsv.set_output_value(self.oxygen_output, oxygen_output)
-        stsv.set_output_value(self.energy_losses, losses_this_timestep)
-        stsv.set_output_value(self.energy_losses, losses_this_timestep)
+        stsv.set_output_value( self.water_demand, water_consumption )
+        stsv.set_output_value( self.hydrogen_output, hydrogen_output )
+        stsv.set_output_value( self.oxygen_output, oxygen_output )
+        stsv.set_output_value( self.energy_losses, losses_this_timestep )
 
-        stsv.set_output_value(self.electricity_real_needed, electricity_real_needed)
-        stsv.set_output_value(self.unused_power, unused_power)
-        stsv.set_output_value(self.electrolyzer_efficiency, electrolyzer_efficiency)
-        stsv.set_output_value(self.power_level, power_level)
+        stsv.set_output_value( self.electricity_real_needed, electricity_real_needed )
+        stsv.set_output_value( self.unused_power, unused_power )
+        stsv.set_output_value( self.electrolyzer_efficiency, electrolyzer_efficiency )
+        stsv.set_output_value( self.power_level, power_level )
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden

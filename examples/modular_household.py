@@ -22,6 +22,8 @@ from hisim.components import controller_l2_energy_management_system
 from hisim.components import advanced_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import controller_l2_generic_chp
+from hisim.components import generic_electrolyzer
+from hisim.components import generic_hydrogen_storage
 from hisim import utils
 
 import os
@@ -280,6 +282,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_sim.add_component( my_advanced_battery )
         
     if chp_included:
+        #Fuel Cell default configurations
         l2_config = controller_l2_generic_chp.L2_Controller.get_default_config( )
         l2_config.source_weight = count
         l1_config = generic_CHP.L1_Controller.get_default_config( )
@@ -288,30 +291,30 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         chp_config.source_weight = count
         count += 1
         
-        #chp
+        #fuel cell
         my_chp = generic_CHP.GCHP( my_simulation_parameters = my_simulation_parameters,
                                    config = chp_config )
         my_sim.add_component( my_chp )
         
-        #heat controller
+        #heat controller of fuel cell
         my_chp_controller_l2 = controller_l2_generic_chp.L2_Controller( my_simulation_parameters = my_simulation_parameters,
                                                                         config = l2_config )
         my_chp_controller_l2.connect_only_predefined_connections( my_building )
         my_sim.add_component( my_chp_controller_l2 )
         
-        #run time controller
+        #run time controller of fuel cell
         my_chp_controller_l1 = generic_CHP.L1_Controller( my_simulation_parameters = my_simulation_parameters,
                                                           config = l1_config)
         my_chp_controller_l1.connect_only_predefined_connections( my_chp_controller_l2 )
         my_sim.add_component( my_chp_controller_l1 )
         my_chp.connect_only_predefined_connections( my_chp_controller_l1 )
         
-        #electricity controller
+        #electricity controller of fuel cell
         my_electricity_controller.add_component_input_and_connect(  source_component_class = my_chp,
                                                                     source_component_output = my_chp.ElectricityOutput,
                                                                     source_load_type = lt.LoadTypes.Electricity,
                                                                     source_unit = lt.Units.Watt,
-                                                                    source_tags = [ lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityTarget ],
+                                                                    source_tags = [ lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityReal ],
                                                                     source_weight = my_chp.source_weight )
         electricity_from_fuelcell_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
                                                                                            source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ],
@@ -320,8 +323,48 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                                            source_unit = lt.Units.Watt )
         my_chp_controller_l1.connect_dynamic_input( input_fieldname = generic_CHP.L1_Controller.ElectricityTarget,
                                                     src_object = electricity_from_fuelcell_target )
-        production.append( my_chp )
         heater.append( my_chp )
+        
+        #electrolyzer default configuration
+        l1_config = generic_electrolyzer.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
+        electrolyzer_config = generic_electrolyzer.Electrolyzer.get_default_config( )
+        electrolyzer_config.source_weight = count
+        count += 1
+        
+        #electrolyzer
+        my_electrolyzer = generic_electrolyzer.Electrolyzer( my_simulation_parameters = my_simulation_parameters,
+                                                             config = electrolyzer_config )
+        my_sim.add_component( my_electrolyzer )
+        
+        #run time controller of electrolyzer
+        my_electrolyzer_controller_l1 = generic_electrolyzer.L1_Controller( my_simulation_parameters = my_simulation_parameters,
+                                                                            config = l1_config)
+        my_sim.add_component( my_electrolyzer_controller_l1 )
+        my_electrolyzer.connect_only_predefined_connections( my_electrolyzer_controller_l1 )
+        
+        #electricity controller of fuel cell
+        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_electrolyzer,
+                                                                    source_component_output = my_electrolyzer.ElectricityOutput,
+                                                                    source_load_type = lt.LoadTypes.Electricity,
+                                                                    source_unit = lt.Units.Watt,
+                                                                    source_tags = [ lt.ComponentType.Electrolyzer, lt.InandOutputType.ElectricityReal ],
+                                                                    source_weight = my_electrolyzer.source_weight )
+        electricity_to_electrolyzer_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                                             source_tags = [ lt.ComponentType.Electrolyzer, lt.InandOutputType.ElectricityTarget ],
+                                                                                             source_weight = my_electrolyzer.source_weight,
+                                                                                             source_load_type = lt.LoadTypes.Electricity,
+                                                                                             source_unit = lt.Units.Watt )
+        my_electrolyzer_controller_l1.connect_dynamic_input( input_fieldname = generic_electrolyzer.L1_Controller.l2_ElectricityTarget,
+                                                    src_object = electricity_to_electrolyzer_target )
+        
+        h2storage_config = generic_hydrogen_storage.HydrogenStorage.get_default_config( )
+        my_h2storage = generic_hydrogen_storage.HydrogenStorage( my_simulation_parameters = my_simulation_parameters,
+                                                                 config = h2storage_config )
+        my_h2storage.connect_only_predefined_connections( my_electrolyzer )
+        my_h2storage.connect_only_predefined_connections( my_chp )
+        my_sim.add_component( my_h2storage )
+        
         
     my_building.add_component_inputs_and_connect(  source_component_classes = heater,
                                                    outputstring = 'ThermalEnergyDelivered',

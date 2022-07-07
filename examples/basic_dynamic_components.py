@@ -117,13 +117,13 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                             source_component_output = my_advanced_battery_1.AcBatteryPower,
                                             source_load_type = lt.LoadTypes.Electricity,
                                             source_unit = lt.Units.Watt,
-                                            source_tags = [ lt.ComponentType.Battery ],
+                                            source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityReal ],
                                             source_weight = 1 )
     my_cl2.add_component_input_and_connect( source_component_class = my_advanced_battery_2,
                                             source_component_output = my_advanced_battery_2.AcBatteryPower,
                                             source_load_type = lt.LoadTypes.Electricity,
                                             source_unit = lt.Units.Watt,
-                                            source_tags = [ lt.ComponentType.Battery ],
+                                            source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityReal ],
                                             source_weight = 2 )
 
     electricity_to_or_from_battery_target_1 = my_cl2.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
@@ -148,13 +148,13 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                             source_component_output = my_advanced_fuel_cell_1.ElectricityOutput,
                                             source_load_type = lt.LoadTypes.Electricity,
                                             source_unit = lt.Units.Watt,
-                                            source_tags = [ lt.ComponentType.FuelCell ],
+                                            source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityReal ],
                                             source_weight = 3 )
     my_cl2.add_component_input_and_connect( source_component_class = my_advanced_fuel_cell_2,
                                             source_component_output = my_advanced_fuel_cell_2.ElectricityOutput,
                                             source_load_type = lt.LoadTypes.Electricity,
                                             source_unit = lt.Units.Watt,
-                                            source_tags = [ lt.ComponentType.FuelCell ],
+                                            source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityReal ],
                                             source_weight = 4 )
 
     electricity_from_fuel_cell_target_1 = my_cl2.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,

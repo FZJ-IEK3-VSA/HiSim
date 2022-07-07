@@ -112,7 +112,7 @@ class GCHP( cp.Component ):
         self.source_weight = config.source_weight
         self.p_th = config.p_th
         self.p_el = config.p_el
-        self.p_fuel = config.p_fuel
+        self.p_fuel = config.p_fuel * 1e-8 / 1.41 #converted to kg / s
     
     def i_save_state(self):
         self.previous_state = self.state.clone( )
@@ -133,7 +133,7 @@ class GCHP( cp.Component ):
         stsv.set_output_value( self.ElectricityOutputC, self.state.state * self.p_el )
         
         #heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
-        stsv.set_output_value( self.FuelDeliveredC, ( self.state.state * self.p_fuel / 1.418 ) * 1e-8  )
+        stsv.set_output_value( self.FuelDeliveredC, self.state.state * self.p_fuel )
         
     def get_l1_controller_default_connections( self ):
         log.information("setting l1 default connections in generic CHP" )
@@ -152,16 +152,19 @@ class L1CHPConfig:
     source_weight : int
     min_operation_time : int
     min_idle_time : int
+    min_h2_soc : float
 
     def __init__( self,
                   name : str,
                   source_weight : int,
                   min_operation_time : int,
-                  min_idle_time : int ):
+                  min_idle_time : int,
+                  min_h2_soc : float ):
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
+        self.min_h2_SOC = min_h2_soc
         
 class L1_ControllerState:
     """
@@ -237,6 +240,12 @@ class L1_Controller( cp.Component ):
                                                                       lt.LoadTypes.Electricity,
                                                                       lt.Units.Watt,
                                                                       mandatory = True )
+        
+        # self.HydrogenSOC : cp.ComponentInput = self.add_input( self.ComponentName,
+        #                                                        self.HydrogenSOC,
+        #                                                        lt.LoadTypes.Hydrogen,
+        #                                                        lt.Units.Percent,
+        #                                                        mandatory = True )
 
         self.add_default_connections( controller_l2_generic_chp.L2_Controller, self.get_l2_controller_default_connections( ) )
         
@@ -306,7 +315,8 @@ class L1_Controller( cp.Component ):
         config = L1CHPConfig( name = 'L1CHP',
                               source_weight =  1,
                               min_operation_time = 14400,
-                              min_idle_time = 7200 )
+                              min_idle_time = 7200,
+                              min_h2_soc = 10 )
         return config
 
     def prin1t_outpu1t(self, t_m, state):

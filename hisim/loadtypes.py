@@ -104,6 +104,7 @@ class ComponentType(str, enum.Enum):
     Boiler = "Boiler"
     Battery = "Battery"
     FuelCell = "FuelCell"
+    Electrolyzer = "Electrolyzer"
     Heaters = [HeatPump, GasHeater]
     
 @enum.unique

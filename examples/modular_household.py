@@ -1,7 +1,9 @@
 from typing import Optional, List, Union
 
 import hisim.loadtypes as lt
+import hisim.log
 
+from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
@@ -82,6 +84,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     azimuth  = 180
     tilt  = 30
 
+    # path of system config file
+    system_config_filename = "system_config.json"
+
     #initialize components involved in production and consumption
     production = [ ]
     consumption = [ ]
@@ -92,8 +97,17 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_simulation_parameters = SimulationParameters.january_only( year = year,
                                                                       seconds_per_timestep = seconds_per_timestep )
         my_simulation_parameters.enable_all_options( )
-    my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', 
-                                                  heatpump_included = True, battery_included = True, chp_included = True )  
+
+    # try to read the system config from file
+    try:
+        with open(system_config_filename) as system_config_file:
+            system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
+        hisim.log.information(f"Read system config from {system_config_filename}")
+        my_simulation_parameters.system_config = system_config
+    except:
+        # file does not exist or could not be parsed - use default config
+        my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', 
+                                                    heatpump_included = True, battery_included = True, chp_included = True )  
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration

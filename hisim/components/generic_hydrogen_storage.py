@@ -156,7 +156,7 @@ class HydrogenStorage( cp.Component ):
             amount_stored = self.max_capacity - self.state.fill
             self.state.fill += amount_stored
             delta_not_stored = charging_rate - amount_stored / self.my_simulation_parameters.seconds_per_timestep
-            charging_rate = amount_stored / self.seconds_per_timestep
+            charging_rate = amount_stored / self.my_simulation_parameters.seconds_per_timestep
 
         power_demand = charging_rate * self.energy_for_charge * 3.6e6
         return charging_rate, power_demand, delta_not_stored

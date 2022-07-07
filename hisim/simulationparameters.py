@@ -13,15 +13,17 @@ class SystemConfig:
                  pv_included : bool = True,
                  smart_devices_included : bool = True,
                  boiler_included : Optional[ str ] = 'electricity',
-                 heating_device_included : Optional[ str ] = 'heat_pump',
-                 battery_included : bool = False ):
+                 heatpump_included : bool = True,
+                 battery_included : bool = False,
+                 chp_included : bool = False ):
         self.predictive = predictive
         self.prediction_horizon = prediction_horizon
         self.pv_included = pv_included
         self.smart_devices_included = smart_devices_included
         self.boiler_included = boiler_included
-        self.heating_device_included = heating_device_included
+        self.heatpump_included = heatpump_included
         self.battery_included = battery_included
+        self.chp_included = chp_included
 
 class SimulationParameters:
     def __init__(self, start_date, end_date, seconds_per_timestep, post_processing_options:List = []):
@@ -65,14 +67,16 @@ class SimulationParameters:
         return str(self.start_date) + "###" + str(self.end_date) + "###"  + str(self.seconds_per_timestep) + "###" + str(self.year) + "###" + str(self.timesteps)
     
     def reset_system_config( self, predictive : bool = False, prediction_horizon : int = 0, pv_included : bool = True, smart_devices_included : bool = True, 
-                                   boiler_included : Optional[ str ] = 'electricity', heating_device_included : Optional[ str ] = 'heat_pump', battery_included : bool = False ):
+                                   boiler_included : Optional[ str ] = 'electricity', heatpump_included : bool = True, battery_included : bool = False,
+                                   chp_included : bool = False ):
         self.system_config = SystemConfig( predictive = predictive,
                                            prediction_horizon = prediction_horizon,
                                            pv_included = pv_included, 
                                            smart_devices_included = smart_devices_included,
                                            boiler_included = boiler_included,
-                                           heating_device_included = heating_device_included,
-                                           battery_included = battery_included )
+                                           heatpump_included = heatpump_included,
+                                           battery_included = battery_included,
+                                           chp_included = chp_included )
     
     
 

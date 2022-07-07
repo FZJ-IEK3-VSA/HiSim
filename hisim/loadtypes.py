@@ -104,6 +104,7 @@ class ComponentType(str, enum.Enum):
     Boiler = "Boiler"
     Battery = "Battery"
     FuelCell = "FuelCell"
+    Electrolyzer = "Electrolyzer"
     Heaters = [HeatPump, GasHeater]
     
 @enum.unique
@@ -122,6 +123,10 @@ class InandOutputType(str, enum.Enum):
     #Energy Management System
     Production = "Production"
     Consumption = "Consumption"
+    
+    #Heating
+    HeatToBuilding = "HeatToBuilding"
+    HeatToBuffer = "HeatToBuffer"
 
 
 

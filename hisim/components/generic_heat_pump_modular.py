@@ -34,19 +34,23 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig:
+    name : str
+    source_weight : int
     parameter_string: str
     manufacturer: str
     device_name: str
     heating_season_begin : int
     heating_season_end : int
 
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 manufacturer: str,
-                 device_name: str,
-                 heating_season_begin : int,
-                 heating_season_end : int ) :
-        self.parameter_string = my_simulation_parameters.get_unique_key()
+    def __init__( self,
+                  name : str,
+                  source_weight : int,
+                  manufacturer: str,
+                  device_name: str,
+                  heating_season_begin : int,
+                  heating_season_end : int ) :
+        self.name = name
+        self.source_weight = source_weight
         self.manufacturer = manufacturer
         self.device_name = device_name
         self.heating_season_begin = heating_season_begin
@@ -104,24 +108,11 @@ class HeatPump(cp.Component):
     # 3. HeatPump l3 controller ( optional )
     
     @utils.measure_execution_time
-    def __init__( self,
-                  my_simulation_parameters: SimulationParameters,
-                  manufacturer : str = "Viessmann Werke GmbH & Co KG",
-                  device_name : str ="Vitocal 300-A AWO-AC 301.B07",
-                  heating_season_begin : int = 270,
-                  heating_season_end : int = 150,
-                  source_weight : int = 1,
-                  name : str = 'HeatPump' ):
+    def __init__( self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters ):
         
-        super().__init__( name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
-        
-        self.config = HeatPumpConfig(   my_simulation_parameters = my_simulation_parameters,
-                                        manufacturer = manufacturer,
-                                        device_name = device_name,
-                                        heating_season_begin = heating_season_begin,
-                                        heating_season_end = heating_season_end )
+        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
 
-        self.build( source_weight )
+        self.build( config )
 
         # Inputs - Mandatories
         self.TemperatureOutsideC: cp.ComponentInput = self.add_input(   self.ComponentName,
@@ -168,17 +159,27 @@ class HeatPump(cp.Component):
         connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
         connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
+    
+    @staticmethod
+    def get_default_config():
+        config = HeatPumpConfig( name = 'HeatPump',
+                                 source_weight = 1,
+                                 manufacturer = "Viessmann Werke GmbH & Co KG",
+                                 device_name ="Vitocal 300-A AWO-AC 301.B07",
+                                 heating_season_begin = 270,
+                                 heating_season_end = 150 )
+        return config
 
-    def build( self, source_weight ):
+    def build( self, config ):
         
-        self.source_weight = source_weight
+        self.source_weight = config.source_weight
 
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
         heat_pump_found = False
         for heat_pump in heat_pumps_database:
-            if heat_pump["Manufacturer"] == self.config.manufacturer and heat_pump["Name"] == self.config.device_name:
+            if heat_pump["Manufacturer"] == config.manufacturer and heat_pump["Name"] == config.device_name:
                 heat_pump_found = True
                 break
 
@@ -195,8 +196,8 @@ class HeatPump(cp.Component):
 
         self.max_heating_power = heat_pump['Nominal Heating Power A2/35'] * 1E3
         
-        self.heating_season_begin = self.config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-        self.heating_season_end = self.config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         
         self.state = HeatPumpState( )
         self.previous_state = HeatPumpState( )

@@ -47,6 +47,9 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
+       # my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
+       # my_simulation_parameters.enable_all_options( )                                                                          
+       
     my_sim.SimulationParameters = my_simulation_parameters
 
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig( system_id='SG1',
@@ -70,9 +73,9 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     my_advanced_fuel_cell_config_2.name= "CHP2"
 
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
-                                                     config=my_advanced_fuel_cell_config_1)
+                                                      config=my_advanced_fuel_cell_config_1)
     my_advanced_fuel_cell_2 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
-                                                     config=my_advanced_fuel_cell_config_2)
+                                                      config=my_advanced_fuel_cell_config_2)
     my_cl2 = cl2.ControllerElectricityGeneric(my_simulation_parameters=my_simulation_parameters)
 
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
@@ -110,72 +113,72 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                              source_unit = lt.Units.Watt,
                                              source_tags = [ lt.InandOutputType.Production ],
                                              source_weight = 999 )
-    my_cl2.add_component_input_and_connect( source_component_class=my_advanced_battery_1,
-                                               source_component_output=my_advanced_battery_1.AcBatteryPower,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt,
-                                               source_tags=[lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
-                                               source_weight=1)
-    my_cl2.add_component_input_and_connect( source_component_class=my_advanced_battery_2,
-                                               source_component_output=my_advanced_battery_2.AcBatteryPower,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt,
-                                               source_tags=[lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
-                                               source_weight=2)
+    my_cl2.add_component_input_and_connect( source_component_class = my_advanced_battery_1,
+                                            source_component_output = my_advanced_battery_1.AcBatteryPower,
+                                            source_load_type = lt.LoadTypes.Electricity,
+                                            source_unit = lt.Units.Watt,
+                                            source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityReal ],
+                                            source_weight = 1 )
+    my_cl2.add_component_input_and_connect( source_component_class = my_advanced_battery_2,
+                                            source_component_output = my_advanced_battery_2.AcBatteryPower,
+                                            source_load_type = lt.LoadTypes.Electricity,
+                                            source_unit = lt.Units.Watt,
+                                            source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityReal ],
+                                            source_weight = 2 )
 
-    electricity_to_or_from_battery_target_1 = my_cl2.add_component_output(source_output_name=lt.InandOutputType.ElectricityTarget,
-                                               source_tags=[lt.ComponentType.Battery],
-                                               source_weight=my_advanced_battery_1.source_weight,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt)
-    electricity_to_or_from_battery_target_2 = my_cl2.add_component_output(source_output_name=lt.InandOutputType.ElectricityTarget,
-                                               source_tags=[lt.ComponentType.Battery],
-                                               source_weight=my_advanced_battery_2.source_weight,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt)
+    electricity_to_or_from_battery_target_1 = my_cl2.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                           source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget ],
+                                                                           source_weight = my_advanced_battery_1.source_weight,
+                                                                           source_load_type = lt.LoadTypes.Electricity,
+                                                                           source_unit = lt.Units.Watt )
+    electricity_to_or_from_battery_target_2 = my_cl2.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                           source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget ],
+                                                                           source_weight = my_advanced_battery_2.source_weight,
+                                                                           source_load_type = lt.LoadTypes.Electricity,
+                                                                           source_unit = lt.Units.Watt )
 
-    my_advanced_battery_1.connect_dynamic_input(input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-                                        src_object=electricity_to_or_from_battery_target_1)
-    my_advanced_battery_2.connect_dynamic_input(input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-                                        src_object=electricity_to_or_from_battery_target_2)
+    my_advanced_battery_1.connect_dynamic_input( input_fieldname = advanced_battery_bslib.Battery.LoadingPowerInput,
+                                                 src_object = electricity_to_or_from_battery_target_1 )
+    my_advanced_battery_2.connect_dynamic_input( input_fieldname = advanced_battery_bslib.Battery.LoadingPowerInput,
+                                                 src_object = electricity_to_or_from_battery_target_2 )
     
     print( type(my_advanced_fuel_cell_1.ElectricityOutput))
 
-    my_cl2.add_component_input_and_connect( source_component_class=my_advanced_fuel_cell_1,
-                                               source_component_output=my_advanced_fuel_cell_1.ElectricityOutput,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt,
-                                               source_tags=[lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityReal],
-                                               source_weight=3)
-    my_cl2.add_component_input_and_connect( source_component_class=my_advanced_fuel_cell_2,
-                                               source_component_output=my_advanced_fuel_cell_2.ElectricityOutput,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt,
-                                               source_tags=[lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityReal],
-                                               source_weight=4)
+    my_cl2.add_component_input_and_connect( source_component_class = my_advanced_fuel_cell_1,
+                                            source_component_output = my_advanced_fuel_cell_1.ElectricityOutput,
+                                            source_load_type = lt.LoadTypes.Electricity,
+                                            source_unit = lt.Units.Watt,
+                                            source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityReal ],
+                                            source_weight = 3 )
+    my_cl2.add_component_input_and_connect( source_component_class = my_advanced_fuel_cell_2,
+                                            source_component_output = my_advanced_fuel_cell_2.ElectricityOutput,
+                                            source_load_type = lt.LoadTypes.Electricity,
+                                            source_unit = lt.Units.Watt,
+                                            source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityReal ],
+                                            source_weight = 4 )
 
-    electricity_from_fuel_cell_target_1 = my_cl2.add_component_output(source_output_name=lt.InandOutputType.ElectricityTarget,
-                                               source_tags=[lt.ComponentType.FuelCell],
-                                               source_weight=3,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt)
-    electricity_from_fuel_cell_target_2 = my_cl2.add_component_output(source_output_name=lt.InandOutputType.ElectricityTarget,
-                                               source_tags=[lt.ComponentType.FuelCell],
-                                               source_weight=4,
-                                               source_load_type= lt.LoadTypes.Electricity,
-                                               source_unit= lt.Units.Watt)
+    electricity_from_fuel_cell_target_1 = my_cl2.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                        source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ],
+                                                                        source_weight = 3,
+                                                                        source_load_type = lt.LoadTypes.Electricity,
+                                                                        source_unit = lt.Units.Watt )
+    electricity_from_fuel_cell_target_2 = my_cl2.add_component_output( source_output_name=lt.InandOutputType.ElectricityTarget,
+                                                                        source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ],
+                                                                        source_weight = 4,
+                                                                        source_load_type = lt.LoadTypes.Electricity,
+                                                                        source_unit = lt.Units.Watt )
 
-    my_advanced_fuel_cell_1.connect_dynamic_input(input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget,
-                                        src_object=electricity_from_fuel_cell_target_1)
-    my_advanced_fuel_cell_2.connect_dynamic_input(input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget,
-                                        src_object=electricity_from_fuel_cell_target_2)
+    my_advanced_fuel_cell_1.connect_dynamic_input( input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget,
+                                                    src_object=electricity_from_fuel_cell_target_1 )
+    my_advanced_fuel_cell_2.connect_dynamic_input( input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget,
+                                                    src_object=electricity_from_fuel_cell_target_2 )
 
-    my_sim.add_component(my_advanced_battery_1)
-    my_sim.add_component(my_advanced_battery_2)
-    my_sim.add_component(my_advanced_fuel_cell_1)
-    my_sim.add_component(my_advanced_fuel_cell_2)
-    my_sim.add_component(my_cl2)
+    my_sim.add_component( my_advanced_battery_1 )
+    my_sim.add_component( my_advanced_battery_2 )
+    my_sim.add_component( my_advanced_fuel_cell_1 )
+    my_sim.add_component( my_advanced_fuel_cell_2 )
+    my_sim.add_component( my_cl2)
     my_sim.add_component( my_weather )
     my_sim.add_component( my_occupancy )
-    my_sim.add_component(my_photovoltaic_system)
+    my_sim.add_component( my_photovoltaic_system )
 

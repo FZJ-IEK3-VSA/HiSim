@@ -34,6 +34,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BoilerConfig:
+    name : str
+    source_weight : int
     parameter_string: str
     volume : float
     surface : float
@@ -45,7 +47,8 @@ class BoilerConfig:
     fuel : str
 
     def __init__( self,
-                  my_simulation_parameters: SimulationParameters,
+                  name : str,
+                  source_weight : int,
                   volume : float,
                   surface : float,
                   u_value : float,
@@ -54,7 +57,8 @@ class BoilerConfig:
                   power : float, 
                   efficiency : float,
                   fuel : str ) :
-        self.parameter_string = my_simulation_parameters.get_unique_key()
+        self.name = name
+        self.source_weight = source_weight
         self.volume = volume
         self.surface = surface
         self.u = u_value
@@ -139,30 +143,11 @@ class Boiler( cp.Component ):
     ElectricityOutput = "ElectricityOutput"
     HydrogenOutput = "HydrogenOutput"
     
-    def __init__( self, my_simulation_parameters: SimulationParameters, 
-                        volume : float = 200, 
-                        surface : float = 1.2,
-                        u_value : float = 0.36,
-                        T_warmwater : float = 50,
-                        T_drainwater : float = 10,
-                        power : float = 2400,
-                        efficiency : float = 1,
-                        fuel : str = 'electricity',
-                        source_weight : int = 1,
-                        name : str = 'Boiler' ) :
+    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ):
 
-        super().__init__( name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         
-        self.config = BoilerConfig( my_simulation_parameters = my_simulation_parameters,
-                                    volume = volume,
-                                    surface = surface,
-                                    u_value = u_value,
-                                    T_warmwater = T_warmwater, 
-                                    T_drainwater = T_drainwater, 
-                                    power = power, 
-                                    efficiency = efficiency,
-                                    fuel = fuel )
-        self.build( source_weight )
+        self.build( config )
         
         #inputs
         self.WaterConsumptionC : cp.ComponentInput = self.add_input( self.ComponentName,
@@ -188,19 +173,19 @@ class Boiler( cp.Component ):
                                                                          lt.LoadTypes.Temperature,
                                                                          lt.Units.Celsius )
         
-        if self.config.fuel == 'electricity':
+        if self.fuel == 'electricity':
             self.ElectricityOutputC = self.add_output( self.ComponentName,
                                                          self.ElectricityOutput,
                                                          lt.LoadTypes.Electricity,
                                                          lt.Units.Watt )
         
-        elif self.config.fuel == 'hydrogen':
+        elif self.fuel == 'hydrogen':
             self.hydrogen_output_c = self.add_output( self.ComponentName,
                                                       self.HydrogenOutput,
                                                       lt.LoadTypes.Hydrogen,
                                                       lt.Units.kg_per_sec )
         else:
-            raise Exception(" The fuel ", str( self.config.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
+            raise Exception(" The fuel ", str( self.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
             
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
@@ -220,12 +205,35 @@ class Boiler( cp.Component ):
         connections.append( cp.ComponentConnection( Boiler.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
     
-    def build( self, source_weight ):
+    @staticmethod
+    def get_default_config():
+        config = BoilerConfig( name = 'Boiler',
+                               source_weight = 1, 
+                               volume = 200,
+                               surface = 1.2,
+                               u_value = 0.36,
+                               T_warmwater = 50,
+                               T_drainwater = 10,
+                               power = 2400,
+                               efficiency = 1,
+                               fuel  = 'electricity' )
+        return config
+    
+    def build( self, config : BoilerConfig ):
         
-        self.source_weight = source_weight
+        self.source_weight = config.source_weight
+        self.power = config.power
+        self.volume = config.volume
+        self.surface = config.surface
+        self.u = config.u
+        self.efficiency = config.efficiency
+        self.T_drainwater = config.T_drainwater
+        self.T_warmwater = config.T_warmwater
+        self.fuel = config.fuel
+        
         
         #initialize Boiler State
-        self.state = BoilerState( volume_in_l = self.config.volume, temperature_in_K = 273 + 50 )
+        self.state = BoilerState( volume_in_l = config.volume, temperature_in_K = 273 + 50 )
         self.previous_state = self.state.clone()
             
         self.write_to_report( )
@@ -233,8 +241,8 @@ class Boiler( cp.Component ):
     def write_to_report(self):
         lines = []
         lines.append("Name: {}".format("electric Boiler"))
-        lines.append("Power: {:4.0f} kW".format( ( self.config.power ) * 1E-3 ) )
-        lines.append( "Volume: {:4.0f} l".format( self.config.volume ) )
+        lines.append("Power: {:4.0f} kW".format( ( self.power ) * 1E-3 ) )
+        lines.append( "Volume: {:4.0f} l".format( self.volume ) )
         return lines
 
     def i_save_state( self ):
@@ -259,9 +267,9 @@ class Boiler( cp.Component ):
         #4.182 specific heat of water in kJ K^(-1) kg^(-1)
         #1e-3 conversion J to kJ
         energy = self.state.energy_from_temperature()
-        new_energy = energy - ( self.state.temperature_in_K - 293 ) * self.config.surface * self.config.u * self.my_simulation_parameters.seconds_per_timestep * 1e-3 \
-                                              - WW_consumption * ( self.config.T_warmwater - self.config.T_drainwater ) * 0.977 * 4.182 \
-                                              + signal * self.config.power * self.config.efficiency * self.my_simulation_parameters.seconds_per_timestep * 1e-3
+        new_energy = energy - ( self.state.temperature_in_K - 293 ) * self.surface * self.u * self.my_simulation_parameters.seconds_per_timestep * 1e-3 \
+                                              - WW_consumption * ( self.T_warmwater - self.T_drainwater ) * 0.977 * 4.182 \
+                                              + signal * self.power * self.efficiency * self.my_simulation_parameters.seconds_per_timestep * 1e-3
                                               
         #convert new energy to new temperature
         self.state.set_temperature_from_energy( new_energy )
@@ -269,8 +277,8 @@ class Boiler( cp.Component ):
         #save outputs
         stsv.set_output_value( self.TemperatureMeanC, self.state.temperature_in_K - 273.15 )
         
-        if self.config.fuel == 'electricity':
-            stsv.set_output_value( self.ElectricityOutputC, self.config.power * signal )
+        if self.fuel == 'electricity':
+            stsv.set_output_value( self.ElectricityOutputC, self.power * signal )
               
             #put forecast into dictionary
             if self.my_simulation_parameters.system_config.predictive:
@@ -279,188 +287,7 @@ class Boiler( cp.Component ):
                     self.state.timestep += 1
                     self.previous_state.timestep += 1
                     runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-                    self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.Boiler, source_weight = self.source_weight, entry = [ self.config.power ] * runtime )
+                    self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.Boiler, source_weight = self.source_weight, entry = [ self.power ] * runtime )
         else:
             #heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
-            stsv.set_output_value( self.hydrogen_output_c, ( self.config.power * signal / 1.418 ) * 1e-8 )
-
-# class ControllerState:
-#     """
-#     This data class saves the state of the controller.
-#     """
-
-#     def __init__( self, state : int = 0, timestep_of_last_action : int = -999 ):
-#         self.state = state
-#         self.timestep_of_last_action = timestep_of_last_action
-        
-#     def clone( self ):
-#         return ControllerState( state = self.state, timestep_of_last_action = self.timestep_of_last_action )
-
-# class BoilerController(cp.Component):
-#     """
-#     Boiler on/off controller. It activates boiler, when temperature falls below
-#     certain threshold and deactivates it if temperature exceeds limit.
-
-#     Parameters
-#     --------------
-#     t_water_min: float
-#         Minimum temperature of water in hot water storage -> in Kelvin
-#     t_water_max: float
-#         Maximum temperature of water in hot water storage -> in Kelvin
-#     P_on : float
-#         Power of boiler -> in Watt
-#     smart : bool
-#         One if boiler enforces heating in case of surplus from PV and 0 if it does not react to the situaltion.
-#     """
-#     # Inputs
-#     TemperatureMean = "Storage Temperature"
-#     BoilerSignal = "BoilerSignal"
-
-#     # Outputs
-#     BoilerControllerState = "BoilerControllerState"
-    
-#     #Forecasts
-#     BoilerLoadForecast = "BoilerLoadForecast"
-
-    # # Similar components to connect to:
-    # # 1. Building
-
-    # def __init__( self, my_simulation_parameters: SimulationParameters,
-    #                     t_water_min : float = 273.0 + 40.0,
-    #                     t_water_max : float = 273.0 + 80.0,
-    #                     P_on :        int =   2400,
-    #                     on_time :   int = 2700,
-    #                     off_time :  int = 1800 ):
-        
-    #     super().__init__( name="BoilerController", my_simulation_parameters = my_simulation_parameters )
-        
-    #     self.build( t_water_min = t_water_min,
-    #                 t_water_max = t_water_max,
-    #                 P_on = P_on,
-    #                 on_time = on_time,
-    #                 off_time = off_time )
-
-    #     #input
-    #     self.TemperatureMeanC: cp.ComponentInput = self.add_input( self.ComponentName,
-    #                                                                   self.TemperatureMean,
-    #                                                                   lt.LoadTypes.Temperature,
-    #                                                                   lt.Units.Kelvin,
-    #                                                                   mandatory = True )
-    #     if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.boiler_included == 'electricity':
-    #         self.BoilerSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
-    #                                                                 self.BoilerSignal,
-    #                                                                 lt.LoadTypes.Any,
-    #                                                                 lt.Units.Any,
-    #                                                                 mandatory = False )
-    #         self.add_default_connections( controller_l3_predictive.PredictiveController, self.get_predictive_controller_default_connections( ) )
-        
-        
-    #     #output
-    #     self.BoilerControllerStateC = self.add_output( self.ComponentName,
-    #                                                     self.BoilerControllerState,
-    #                                                     lt.LoadTypes.Any,
-    #                                                     lt.Units.Any )
-        
-    #     self.add_default_connections( Boiler, self.get_boiler_default_connections( ) )
-    
-    # def get_boiler_default_connections( self ):
-    #     log.information("setting boiler default connections")
-    #     connections = [ ]
-    #     boiler_classname = Boiler.get_classname( )
-    #     connections.append( cp.ComponentConnection( BoilerController.TemperatureMean, boiler_classname, Boiler.TemperatureMean ) )
-    #     return connections
-    
-    # def get_predictive_controller_default_connections( self ):
-    #     log.information( "setting predictive controller default connections") 
-    #     connections = [ ]
-    #     predictive_controller_classname = controller_l3_predictive.PredictiveController.get_classname( )
-    #     connections.append( cp.ComponentConnection( BoilerController.BoilerSignal, predictive_controller_classname, 
-    #                                                 controller_l3_predictive.PredictiveController.BoilerSignal ) )
-    #     return connections
-
-    # def build( self, t_water_min, t_water_max, P_on, on_time, off_time ):
-        
-    #     # state
-    #     self.state = ControllerState( )
-    #     self.previous_state = ControllerState( )
-
-    #     # Configuration
-    #     self.t_water_min = t_water_min
-    #     self.t_water_max = t_water_max
-    #     self.P_on = P_on
-    #     self.on_time = int( on_time / self.my_simulation_parameters.seconds_per_timestep )
-    #     self.off_time = int( off_time / self.my_simulation_parameters.seconds_per_timestep )
-        
-    # def activation( self, timestep ):
-    #     self.state.state = 2
-    #     self.state.timestep_of_last_action = timestep
-    #     #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
-    #     self.previous_state = self.state.clone( )
-
-    # def deactivation( self, timestep ):
-    #     self.state.state = -2
-    #     self.state.timestep_of_last_action = timestep 
-    #     #violently access previous timestep to avoid oscillation between 0 and 1 (decision is based on decision of previous time step)
-    #     self.previous_state = self.state.clone( )
-
-    # def i_save_state(self):
-    #     self.previous_state = self.state.clone( )
-
-    # def i_restore_state(self):
-    #     self.state = self.previous_state.clone( )
-
-    # def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
-    #     pass
-
-    # def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
-
-    #     if force_convergence: # please stop oscillating!
-    #         return
-        
-    #     if ( self.state.state == 2 and timestep < self.state.timestep_of_last_action + self.on_time ) or \
-    #           ( self.state.state == -2 and timestep < self.state.timestep_of_last_action + self.off_time ):
-    #         pass
-    #     else:
-    #         # Retrieves inputs
-    #         T_control = stsv.get_input_value( self.TemperatureMeanC )
-    
-    #         #on off control based on temperature limits
-    #         if T_control > self.t_water_max:
-    #             #stop heating if temperature exceeds upper limit
-    #             if self.state.state >= 0:
-    #                 self.deactivation( timestep )
-
-    #         elif T_control < self.t_water_min:
-    #             #start heating if temperature goes below lower limit
-    #             if self.state.state <= 0:
-    #                 self.activation( timestep )
-             
-    #         #continue working if other is not defined    
-    #         else:
-    #             if self.state.state > 0:
-    #                 self.state.state = 1
-    #             if self.state.state < 0:
-    #                 self.state.state = -1
-        
-    #         if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.boiler_included == 'electricity':
-    #             #put forecast into dictionary
-    #             if self.state.state > 0:
-    #                 self.simulation_repository.set_entry( self.BoilerLoadForecast, [ self.P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )
-    #             else:
-    #                 self.simulation_repository.set_entry( self.BoilerLoadForecast, [ self.P_on ] * self.on_time )
-                    
-    #             #read in signal and modify state if recommended
-    #             devicesignal = stsv.get_input_value( self.BoilerSignalC )
-    #             if self.state.state == 1 and devicesignal == -1:
-    #                 self.deactivation( timestep )
-                    
-    #             elif self.state.state == -1 and devicesignal == 1:
-    #                 self.activation( timestep )
-                 
-    #     stsv.set_output_value( self.BoilerControllerStateC, self.state.state )     
-
-    # # def log_output(self, t_m, state):
-    # #     log.information("==========================================")
-    # #     log.information("T m: {}".format(t_m))
-    # #     log.information("State: {}".format(state))
-
+            stsv.set_output_value( self.hydrogen_output_c, ( self.power * signal / 1.418 ) * 1e-8 )

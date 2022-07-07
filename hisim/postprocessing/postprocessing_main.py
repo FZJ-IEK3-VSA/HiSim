@@ -273,15 +273,14 @@ class PostProcessor:
         self.ppdt.results[ 'production' ] = 0
         self.ppdt.results[ 'storage' ] = 0
         for index, output in enumerate(self.ppdt.all_outputs):
-            if 'PVSystem' in output.FullName:
-                self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
-            elif 'ElectricityOutput' in output.FullName:
-                self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
+            if 'ElectricityOutput' in output.FullName:
+                if ( 'PVSystem' in output.FullName ) or ( 'CHP' in output.FullName ) :
+                    self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
+                else:
+                    self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
             elif 'AcBatteryPower' in output.FullName:
-                print( output.FullName, 1 )
                 self.ppdt.results[ 'storage' ] = self.ppdt.results[ 'storage' ] + self.ppdt.results.iloc[:, index]
             else:
-                print( output.FullName, 2 )
                 continue
             
         #initilize lines for report
@@ -300,8 +299,11 @@ class PostProcessor:
             injection_sum = injection[ injection > 0 ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
             lines.append( "Injection: {:4.0f} kWh".format( injection_sum ) )
             
+            batterylosses = self.ppdt.results[ 'storage' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+            print( batterylosses )
+            
             #evaluate self consumption rate and autarky rate:
-            lines.append( "Autarky Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / consumption_sum ) )
+            lines.append( "Autarky Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum - batterylosses ) / consumption_sum ) )
             lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
             
             #evaluate electricity price

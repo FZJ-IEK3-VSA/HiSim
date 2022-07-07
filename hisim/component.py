@@ -373,14 +373,13 @@ class DynamicComponent(Component):
         return inputvalue
     
     def get_dynamic_inputs( self, stsv : SingleTimeStepValues,
-                                  tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ],
-                                  weight_counter : int ) -> List:
+                                  tags : List[ Union[ lt.ComponentType, lt.InandOutputType ] ] ) -> List:
         """returns input values from all dynamic inputs with component type and weight"""
         inputvalues = [ ]
     
         #check if component of component type is available
         for index, element in enumerate( self.MyComponentInputs ): #loop over all inputs
-            if all( tag in element.SourceTags for tag in tags ) and weight_counter == element.SourceWeight:
+            if all( tag in element.SourceTags for tag in tags ):
                 inputvalues.append( stsv.get_input_value( self.__getattribute__( element.SourceComponentClass ) ) )
             else:
                 continue

@@ -9,21 +9,17 @@ from hisim.simulationparameters import SimulationParameters
 
 def test_heat_pump_modular():
 
+    #simulation parameters
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
-    # Heat Pump
-    manufacturer = "Viessmann Werke GmbH & Co KG"
-    name = "Vitocal 300-A AWO-AC 301.B07"
+    #reference power
     heat_pump_power = 7420.0
-
-    # L1 Heat Pump Controller 
-    minimum_idle_time = 30 * 60
-    minimum_operation_time = 15 * 60
     
-    # L2 Heat Pump Controller 
-    T_min_heating = 17
-    T_max_heating = 19
+    #default config
+    my_hp_config = generic_heat_pump_modular.HeatPump.get_default_config( )
+    l2_config = controller_l2_generic_heatpump_modular.L2_Controller.get_default_config( )
+    l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
 
     #definition of outputs
     number_of_outputs = 7
@@ -31,18 +27,15 @@ def test_heat_pump_modular():
 
     #===================================================================================================================
     # Set Heat Pump
-    my_heat_pump = generic_heat_pump_modular.HeatPump( manufacturer=manufacturer,
-                                                       name=name,
+    my_heat_pump = generic_heat_pump_modular.HeatPump( config = my_hp_config,
                                                        my_simulation_parameters = my_simulation_parameters )
 
     # Set L1 Heat Pump Controller
-    my_heat_pump_controller_l1 = controller_l1_generic_runtime.L1_Controller( min_operation_time = minimum_operation_time,
-                                                                                       min_idle_time = minimum_idle_time, 
-                                                                                       my_simulation_parameters = my_simulation_parameters )
+    my_heat_pump_controller_l1 = controller_l1_generic_runtime.L1_Controller( config = l1_config,
+                                                                              my_simulation_parameters = my_simulation_parameters )
     
     # Set L2 Heat Pump Controller
-    my_heat_pump_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller(  T_min_heating = T_min_heating,
-                                                                                        T_max_heating = T_max_heating, 
+    my_heat_pump_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller(  config = l2_config, 
                                                                                         my_simulation_parameters = my_simulation_parameters )
 
     #definition of weather output

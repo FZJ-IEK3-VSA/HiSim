@@ -8,6 +8,9 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l2_generic_heatpump_modular
 from hisim import log
 
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -16,6 +19,27 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
+
+@dataclass_json
+@dataclass
+class L1Config:
+    """
+    L1 Config
+    """
+    name: str
+    source_weight: int
+    min_operation_time : int      
+    min_idle_time : int
+
+    def __init__( self,
+                  name : str,
+                  source_weight : int,
+                  min_operation_time : int,
+                  min_idle_time : int ):
+        self.name = name
+        self.source_weight = source_weight
+        self.min_operation_time = min_operation_time
+        self.min_idle_time = min_idle_time
 
 class L1_ControllerState:
     """
@@ -75,15 +99,10 @@ class L1_Controller( cp.Component ):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__( self, 
-                  my_simulation_parameters : SimulationParameters,
-                  min_operation_time : int = 3600,
-                  min_idle_time : int = 900,
-                  source_weight : int = 1,
-                  name : str = '' ):
+    def __init__( self, my_simulation_parameters : SimulationParameters, config = L1Config ):
         
-        super().__init__( "L1_Controller" + name + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.build( min_operation_time, min_idle_time, source_weight )
+        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        self.build( config )
         
         #add inputs
         self.l2_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
@@ -111,12 +130,20 @@ class L1_Controller( cp.Component ):
         controller_classname = controller_l2_generic_heatpump_modular.L2_Controller.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heatpump_modular.L2_Controller.l2_DeviceSignal ) )
         return connections
+    
+    @staticmethod
+    def get_default_config():
+        config = L1Config( name = 'L1Controller',
+                           source_weight =  1,
+                           min_operation_time = 3600,
+                           min_idle_time = 900 ) 
+        return config
 
-    def build( self, min_operation_time, min_idle_time, source_weight ):
-        
-        self.on_time = int( min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
-        self.off_time = int( min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
-        self.source_weight = source_weight
+    def build( self, config ):
+        self.name = config.name
+        self.source_weight = config.source_weight
+        self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
+        self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
         
         self.state0 = L1_ControllerState( )
         self.state = L1_ControllerState( )

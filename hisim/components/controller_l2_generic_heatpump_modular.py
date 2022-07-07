@@ -12,6 +12,9 @@ from hisim.components import controller_l3_generic_heatpump_modular
 from hisim.components.building import Building
 from hisim import log
 
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -20,6 +23,43 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
+
+
+@dataclass_json
+@dataclass
+class L2Config:
+    """
+    L2 Config
+    """
+    name : str
+    source_weight : int
+    T_min_heating : float
+    T_max_heating : float
+    T_min_cooling : float
+    T_max_cooling : float
+    T_tolerance : float
+    heating_season_begin : int
+    heating_season_end : int
+
+    def __init__( self,
+                  name : str,
+                  source_weight : int,
+                  T_min_heating : float,
+                  T_max_heating : float,
+                  T_min_cooling : float,
+                  T_max_cooling : float,
+                  T_tolerance : float,
+                  heating_season_begin : int,
+                  heating_season_end : int ):
+        self.name = name
+        self.source_weight = source_weight
+        self.T_min_heating = T_min_heating
+        self.T_max_heating = T_max_heating
+        self.T_min_cooling = T_min_cooling
+        self.T_max_cooling = T_max_cooling
+        self.T_tolerance = T_tolerance
+        self.heating_season_begin = heating_season_begin
+        self.heating_season_end = heating_season_end
 
 class L2_ControllerState:
     """
@@ -99,18 +139,10 @@ class L2_Controller( cp.Component ):
     # 2. HeatPump
     
     @utils.measure_execution_time
-    def __init__( self, 
-                  my_simulation_parameters : SimulationParameters,
-                  T_min_heating : float = 20.0,
-                  T_max_heating : float = 22.0,
-                  T_min_cooling : float = 23.0,
-                  T_max_cooling : float = 25.0,
-                  T_tolerance : float   = 1.0,
-                  heating_season_begin : int = 270,
-                  heating_season_end : int = 150,
-                  source_weight : int = 1 ):
-        super().__init__( "L2_Controller_HeatPump" + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.build( T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, T_tolerance, heating_season_begin, heating_season_end )
+    def __init__( self, my_simulation_parameters : SimulationParameters, config = L2Config ):
+                  
+        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        self.build( config )
 
         #Component Inputs
         self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(     self.ComponentName,
@@ -138,16 +170,30 @@ class L2_Controller( cp.Component ):
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean ) )
         return connections
+    
+    @staticmethod
+    def get_default_config():
+        config = L2Config( name = 'L2HeatPump',
+                           source_weight =  1,
+                           T_min_heating = 20.0,
+                           T_max_heating = 22.0,
+                           T_min_cooling = 23.0,
+                           T_max_cooling = 25.0,
+                           T_tolerance = 1.0,
+                           heating_season_begin = 270,
+                           heating_season_end = 150 ) 
+        return config
 
-    def build( self, T_min_heating, T_max_heating, T_min_cooling, T_max_cooling, T_tolerance, heating_season_begin, heating_season_end ):
-        
-        self.T_min_heating = T_min_heating
-        self.T_max_heating = T_max_heating
-        self.T_min_cooling = T_min_cooling
-        self.T_max_cooling = T_max_cooling
-        self.T_tolerance = T_tolerance
-        self.heating_season_begin = heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-        self.heating_season_end = heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+    def build( self, config ): 
+        self.name = config.name
+        self.source_weight = config.source_weight   
+        self.T_min_heating = config.T_min_heating
+        self.T_max_heating = config.T_max_heating
+        self.T_min_cooling = config.T_min_cooling
+        self.T_max_cooling = config.T_max_cooling
+        self.T_tolerance = config.T_tolerance
+        self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state = L2_ControllerState( )
         self.previous_state = L2_ControllerState( )
 

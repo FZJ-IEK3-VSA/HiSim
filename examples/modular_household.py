@@ -20,6 +20,10 @@ from hisim.components import generic_district_heating
 from hisim.components import sumbuilder
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import advanced_battery_bslib
+from hisim.components import generic_CHP
+from hisim.components import controller_l2_generic_chp
+from hisim.components import generic_electrolyzer
+from hisim.components import generic_hydrogen_storage
 from hisim import utils
 
 import os
@@ -81,6 +85,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     #initialize components involved in production and consumption
     production = [ ]
     consumption = [ ]
+    heater = [ ]
     
     # Build system parameters
     if my_simulation_parameters is None:
@@ -88,7 +93,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                       seconds_per_timestep = seconds_per_timestep )
         my_simulation_parameters.enable_all_options( )
     my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', 
-                                                  heating_device_included = 'heat_pump', battery_included = True )  
+                                                  heatpump_included = True, battery_included = True, chp_included = True )  
     my_sim.SimulationParameters = my_simulation_parameters
     
     #get system configuration
@@ -96,42 +101,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     pv_included = my_simulation_parameters.system_config.pv_included #True or False
     smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
     boiler_included = my_simulation_parameters.system_config.boiler_included #Electricity, Hydrogen or False
-    heating_device_included = my_simulation_parameters.system_config.heating_device_included  
+    heatpump_included = my_simulation_parameters.system_config.heatpump_included  
     battery_included = my_simulation_parameters.system_config.battery_included
-      
-    #set heating system and boiler
-    min_operation_time = 3600
-    min_idle_time = 2700
-
-    #Set heating system
-    if heating_device_included == 'heat_pump':
-        # Set heat pump controller
-        T_min_heating = 19.0
-        T_max_heating = 23.0
-        T_min_cooling = 23.0
-        T_max_cooling = 26.0
-        T_tolerance = 1.0
-        heating_season_begin = 240
-        heating_season_end = 150
-        
-    elif heating_device_included in [ 'district_heating', 'oil_heater' ]:
-        efficiency = 0.85
-        T_min = 20.0
-        T_max = 21.0
-        P_on = 5000
-        on_time = 2700
-        off_time = 1800
-        heating_season_begin = 240
-        heating_season_end = 150
-    
-    elif heating_device_included:
-        raise NameError( 'Heating Device definition', heating_device_included, 'not known. Choose heat_pump, oil_heater, district_heating, or False.' )
-        
-    if battery_included:
-        system_id = 'SG1'
-        p_inv_custom = 5.0
-        e_bat_custom = 10.0
-        batteryname = "Battery"
+    chp_included = my_simulation_parameters.system_config.chp_included
 
     ##### Build Components #####
     
@@ -156,8 +128,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                      my_simulation_parameters = my_simulation_parameters )
     my_building.connect_only_predefined_connections( my_weather, my_occupancy )   
     my_sim.add_component( my_building )
-
-
+    
+    #add price signal
+    my_price_signal = generic_price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
+    my_sim.add_component( my_price_signal )
 
     if pv_included:
         my_photovoltaic_system_config_1 = generic_pv_system.PVSystemConfig( time = time,
@@ -223,19 +197,19 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             count += 1
     
     if boiler_included: 
+        l2_config = controller_l2_generic_dhw_boiler.L2_Controller.get_default_config( )
+        l2_config.source_weight = count
+        l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
+        config = generic_dhw_boiler.Boiler.get_default_config( )
+        config.source_weight = count
+        count += 1
         
-        my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters,
-                                                                                  source_weight = count )
-        my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
-                                                                               min_operation_time = min_operation_time,
-                                                                               min_idle_time = min_idle_time,
-                                                                               source_weight = count,
-                                                                               name = 'Boiler' )
+        my_boiler_controller_l2 = controller_l2_generic_dhw_boiler.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = l2_config )
+        my_boiler_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters, config = l1_config )
         my_boiler_controller_l1.connect_only_predefined_connections( my_boiler_controller_l2 )
         my_sim.add_component( my_boiler_controller_l1 )
-        my_boiler = generic_dhw_boiler.Boiler( my_simulation_parameters = my_simulation_parameters,
-                                               fuel = boiler_included,
-                                               source_weight = count )
+        my_boiler = generic_dhw_boiler.Boiler( my_simulation_parameters = my_simulation_parameters, config = config )
         my_boiler.connect_only_predefined_connections( my_boiler_controller_l1 )
         my_boiler.connect_only_predefined_connections( my_occupancy )
         my_sim.add_component( my_boiler )
@@ -243,86 +217,164 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_boiler_controller_l2.connect_only_predefined_connections( my_boiler )
         my_sim.add_component( my_boiler_controller_l2 )
         consumption.append( my_boiler )
+        
+    if heatpump_included :
+        l2_config = controller_l2_generic_heatpump_modular.L2_Controller.get_default_config( )
+        l2_config.source_weight = count
+        l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
+        heatpump_config = generic_heat_pump_modular.HeatPump.get_default_config( )
+        heatpump_config.source_weight = count
         count += 1
         
-    if heating_device_included == 'heat_pump':
+        my_heatpump_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = l2_config )
+        my_heatpump_controller_l2.connect_only_predefined_connections( my_building )
+        my_sim.add_component( my_heatpump_controller_l2 )
         
-        my_heating_controller_l2 = controller_l2_generic_heatpump_modular.L2_Controller(    my_simulation_parameters = my_simulation_parameters,
-                                                                                            T_min_heating = T_min_heating,
-                                                                                            T_max_heating = T_max_heating,
-                                                                                            T_min_cooling = T_min_cooling,
-                                                                                            T_max_cooling = T_max_cooling,
-                                                                                            T_tolerance = T_tolerance,
-                                                                                            heating_season_begin = heating_season_begin,
-                                                                                            heating_season_end = heating_season_end,
-                                                                                            source_weight = count )
-        my_heating_controller_l2.connect_only_predefined_connections( my_building )
-        my_sim.add_component( my_heating_controller_l2 )
-        
-        my_heating_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters,
-                                                                                min_operation_time = min_operation_time,
-                                                                                min_idle_time = min_idle_time,
-                                                                                source_weight = count,
-                                                                                name = 'HeatPump' )
-        my_heating_controller_l1.connect_only_predefined_connections( my_heating_controller_l2 )
-        my_sim.add_component( my_heating_controller_l1 )
-        my_heating = generic_heat_pump_modular.HeatPump( my_simulation_parameters = my_simulation_parameters,
-                                                         heating_season_begin = heating_season_begin,
-                                                         heating_season_end = heating_season_end,
-                                                         source_weight = count )
-        my_heating.connect_only_predefined_connections( my_weather ) 
-        my_heating.connect_only_predefined_connections( my_heating_controller_l1 )
-        my_sim.add_component( my_heating )
-        my_building.connect_input( my_building.ThermalEnergyDelivered,
-                                    my_heating.ComponentName,
-                                    my_heating.ThermalEnergyDelivered )
+        my_heatpump_controller_l1 = controller_l1_generic_runtime.L1_Controller( my_simulation_parameters = my_simulation_parameters, config = l1_config )
+        my_heatpump_controller_l1.connect_only_predefined_connections( my_heatpump_controller_l2 )
+        my_sim.add_component( my_heatpump_controller_l1 )
+        my_heatpump = generic_heat_pump_modular.HeatPump( config = heatpump_config, my_simulation_parameters = my_simulation_parameters )
+        my_heatpump.connect_only_predefined_connections( my_weather ) 
+        my_heatpump.connect_only_predefined_connections( my_heatpump_controller_l1 )
+        my_sim.add_component( my_heatpump )
+      
         count += 1
-        consumption.append( my_heating )
-        
-        #add price signal
-        my_price_signal = generic_price_signal.PriceSignal( my_simulation_parameters = my_simulation_parameters )
-        my_sim.add_component( my_price_signal )
+        consumption.append( my_heatpump )
+        heater.append( my_heatpump )
+
+    if battery_included or chp_included :
+        my_electricity_controller = controller_l2_energy_management_system.ControllerElectricityGeneric( my_simulation_parameters = my_simulation_parameters )
+        my_electricity_controller.add_component_inputs_and_connect(  source_component_classes = consumption,
+                                                                     outputstring = 'ElectricityOutput',
+                                                                     source_load_type = lt.LoadTypes.Electricity,
+                                                                     source_unit = lt.Units.Watt,
+                                                                     source_tags = [ lt.InandOutputType.Consumption ],
+                                                                     source_weight = 999 )
+        my_electricity_controller.add_component_inputs_and_connect(  source_component_classes = production,
+                                                                     outputstring = 'ElectricityOutput',
+                                                                     source_load_type = lt.LoadTypes.Electricity,
+                                                                     source_unit = lt.Units.Watt,
+                                                                     source_tags = [ lt.InandOutputType.Production ],
+                                                                     source_weight = 999 )
         
     if battery_included:
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig( system_id = system_id,
-                                                                           p_inv_custom = p_inv_custom,
-                                                                           e_bat_custom = e_bat_custom,
-                                                                           name = batteryname,
-                                                                           source_weight = count )
+        my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config( )
+        my_advanced_battery_config.source_weight = count
         count += 1 
-        my_battery_controller = controller_l2_energy_management_system.ControllerElectricityGeneric( my_simulation_parameters = my_simulation_parameters )
         my_advanced_battery = advanced_battery_bslib.Battery( my_simulation_parameters = my_simulation_parameters, config = my_advanced_battery_config )
         
-        my_battery_controller.add_component_inputs_and_connect(  source_component_classes = consumption,
-                                                                 outputstring = 'ElectricityOutput',
-                                                                 source_load_type = lt.LoadTypes.Electricity,
-                                                                 source_unit = lt.Units.Watt,
-                                                                 source_tags = [ lt.InandOutputType.Consumption ],
-                                                                 source_weight = 999 )
-        my_battery_controller.add_component_inputs_and_connect(  source_component_classes = production,
-                                                                 outputstring = 'ElectricityOutput',
-                                                                 source_load_type = lt.LoadTypes.Electricity,
-                                                                 source_unit = lt.Units.Watt,
-                                                                 source_tags = [ lt.InandOutputType.Production ],
-                                                                 source_weight = 999 )
-        my_battery_controller.add_component_input_and_connect(  source_component_class = my_advanced_battery,
-                                                                source_component_output = my_advanced_battery.AcBatteryPower,
-                                                                source_load_type = lt.LoadTypes.Electricity,
-                                                                source_unit = lt.Units.Watt,
-                                                                source_tags = [lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
-                                                                source_weight = my_advanced_battery.source_weight )
+        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_advanced_battery,
+                                                                    source_component_output = my_advanced_battery.AcBatteryPower,
+                                                                    source_load_type = lt.LoadTypes.Electricity,
+                                                                    source_unit = lt.Units.Watt,
+                                                                    source_tags = [lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
+                                                                    source_weight = my_advanced_battery.source_weight )
 
-        electricity_to_or_from_battery_target = my_battery_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
-                                                                                              source_tags = [ lt.ComponentType.Battery ],
-                                                                                              source_weight = my_advanced_battery.source_weight,
-                                                                                              source_load_type = lt.LoadTypes.Electricity,
-                                                                                              source_unit = lt.Units.Watt )
-       
+        electricity_to_or_from_battery_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                                                source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget ],
+                                                                                                source_weight = my_advanced_battery.source_weight,
+                                                                                                source_load_type = lt.LoadTypes.Electricity,
+                                                                                                source_unit = lt.Units.Watt )
     
         my_advanced_battery.connect_dynamic_input( input_fieldname = advanced_battery_bslib.Battery.LoadingPowerInput,
-                                                  src_object = electricity_to_or_from_battery_target )
-        my_sim.add_component( my_battery_controller )
+                                                   src_object = electricity_to_or_from_battery_target )
         my_sim.add_component( my_advanced_battery )
+        
+    if chp_included:
+        #Fuel Cell default configurations
+        l2_config = controller_l2_generic_chp.L2_Controller.get_default_config( )
+        l2_config.source_weight = count
+        l1_config = generic_CHP.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
+        chp_config = generic_CHP.GCHP.get_default_config( )
+        chp_config.source_weight = count
+        count += 1
+        
+        #fuel cell
+        my_chp = generic_CHP.GCHP( my_simulation_parameters = my_simulation_parameters,
+                                   config = chp_config )
+        my_sim.add_component( my_chp )
+        
+        #heat controller of fuel cell
+        my_chp_controller_l2 = controller_l2_generic_chp.L2_Controller( my_simulation_parameters = my_simulation_parameters,
+                                                                        config = l2_config )
+        my_chp_controller_l2.connect_only_predefined_connections( my_building )
+        my_sim.add_component( my_chp_controller_l2 )
+        
+        #run time controller of fuel cell
+        my_chp_controller_l1 = generic_CHP.L1_Controller( my_simulation_parameters = my_simulation_parameters,
+                                                          config = l1_config)
+        my_chp_controller_l1.connect_only_predefined_connections( my_chp_controller_l2 )
+        my_sim.add_component( my_chp_controller_l1 )
+        my_chp.connect_only_predefined_connections( my_chp_controller_l1 )
+        
+        #electricity controller of fuel cell
+        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_chp,
+                                                                    source_component_output = my_chp.ElectricityOutput,
+                                                                    source_load_type = lt.LoadTypes.Electricity,
+                                                                    source_unit = lt.Units.Watt,
+                                                                    source_tags = [ lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityReal ],
+                                                                    source_weight = my_chp.source_weight )
+        electricity_from_fuelcell_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                                           source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ],
+                                                                                           source_weight = my_chp.source_weight,
+                                                                                           source_load_type = lt.LoadTypes.Electricity,
+                                                                                           source_unit = lt.Units.Watt )
+        my_chp_controller_l1.connect_dynamic_input( input_fieldname = generic_CHP.L1_Controller.ElectricityTarget,
+                                                    src_object = electricity_from_fuelcell_target )
+        heater.append( my_chp )
+        
+        #electrolyzer default configuration
+        l1_config = generic_electrolyzer.L1_Controller.get_default_config( )
+        l1_config.source_weight = count
+        electrolyzer_config = generic_electrolyzer.Electrolyzer.get_default_config( )
+        electrolyzer_config.source_weight = count
+        count += 1
+        
+        #electrolyzer
+        my_electrolyzer = generic_electrolyzer.Electrolyzer( my_simulation_parameters = my_simulation_parameters,
+                                                             config = electrolyzer_config )
+        my_sim.add_component( my_electrolyzer )
+        
+        #run time controller of electrolyzer
+        my_electrolyzer_controller_l1 = generic_electrolyzer.L1_Controller( my_simulation_parameters = my_simulation_parameters,
+                                                                            config = l1_config)
+        my_sim.add_component( my_electrolyzer_controller_l1 )
+        my_electrolyzer.connect_only_predefined_connections( my_electrolyzer_controller_l1 )
+        
+        #electricity controller of fuel cell
+        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_electrolyzer,
+                                                                    source_component_output = my_electrolyzer.ElectricityOutput,
+                                                                    source_load_type = lt.LoadTypes.Electricity,
+                                                                    source_unit = lt.Units.Watt,
+                                                                    source_tags = [ lt.ComponentType.Electrolyzer, lt.InandOutputType.ElectricityReal ],
+                                                                    source_weight = my_electrolyzer.source_weight )
+        electricity_to_electrolyzer_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
+                                                                                             source_tags = [ lt.ComponentType.Electrolyzer, lt.InandOutputType.ElectricityTarget ],
+                                                                                             source_weight = my_electrolyzer.source_weight,
+                                                                                             source_load_type = lt.LoadTypes.Electricity,
+                                                                                             source_unit = lt.Units.Watt )
+        my_electrolyzer_controller_l1.connect_dynamic_input( input_fieldname = generic_electrolyzer.L1_Controller.l2_ElectricityTarget,
+                                                    src_object = electricity_to_electrolyzer_target )
+        
+        h2storage_config = generic_hydrogen_storage.HydrogenStorage.get_default_config( )
+        my_h2storage = generic_hydrogen_storage.HydrogenStorage( my_simulation_parameters = my_simulation_parameters,
+                                                                 config = h2storage_config )
+        my_h2storage.connect_only_predefined_connections( my_electrolyzer )
+        my_h2storage.connect_only_predefined_connections( my_chp )
+        my_sim.add_component( my_h2storage )
+        
+        
+    my_building.add_component_inputs_and_connect(  source_component_classes = heater,
+                                                   outputstring = 'ThermalEnergyDelivered',
+                                                   source_load_type = lt.LoadTypes.Heating,
+                                                   source_unit = lt.Units.Watt,
+                                                   source_tags = [ lt.InandOutputType.HeatToBuilding ],
+                                                   source_weight = 999 )
+        
+    if battery_included or chp_included:
+        my_sim.add_component( my_electricity_controller )
         
     if predictive == True:
         
@@ -349,23 +401,23 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             count += 1
             
         #connect heat pump    
-        if heating_device_included == 'heat_pump':
+        if heatpump_included:
         
             l3_HeatPumpSignal = my_controller_l3.add_component_output( source_output_name = lt.InandOutputType.ControlSignal,
                                                                        source_tags = [ lt.ComponentType.HeatPump ],
-                                                                       source_weight = my_heating.source_weight,
+                                                                       source_weight = my_heatpump.source_weight,
                                                                        source_load_type = lt.LoadTypes.OnOff,
                                                                        source_unit = lt.Units.binary )
             
-            my_heating_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
-                                                            src_object = l3_HeatPumpSignal )
+            my_heatpump_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
+                                                             src_object = l3_HeatPumpSignal )
             
-            my_controller_l3.add_component_input_and_connect( source_component_class = my_heating_controller_l1,
-                                                              source_component_output = my_heating_controller_l1.l1_DeviceSignal,
+            my_controller_l3.add_component_input_and_connect( source_component_class = my_heatpump_controller_l1,
+                                                              source_component_output = my_heatpump_controller_l1.l1_DeviceSignal,
                                                               source_load_type = lt.LoadTypes.OnOff,
                                                               source_unit = lt.Units.binary,
                                                               source_tags = [ lt.ComponentType.HeatPump, lt.InandOutputType.ControlSignal ],
-                                                              source_weight = my_heating_controller_l1.source_weight )
+                                                              source_weight = my_heatpump_controller_l1.source_weight )
             count += 1
             
         if smart_devices_included:

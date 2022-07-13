@@ -7,23 +7,14 @@ from hisim.utils import PostProcessingOptions
 @dataclass_json
 @dataclass()
 class SystemConfig:
-    def __init__( self,
-                 predictive : bool = False,
-                 prediction_horizon : int = 24 * 3600,
-                 pv_included : bool = True,
-                 smart_devices_included : bool = True,
-                 boiler_included : Optional[ str ] = 'electricity',
-                 heatpump_included : bool = True,
-                 battery_included : bool = False,
-                 chp_included : bool = False ):
-        self.predictive = predictive
-        self.prediction_horizon = prediction_horizon
-        self.pv_included = pv_included
-        self.smart_devices_included = smart_devices_included
-        self.boiler_included = boiler_included
-        self.heatpump_included = heatpump_included
-        self.battery_included = battery_included
-        self.chp_included = chp_included
+    predictive: bool = False
+    prediction_horizon: int = 24 * 3600
+    pv_included: bool = True
+    smart_devices_included: bool = True
+    boiler_included: Optional[str] = "electricity"
+    heatpump_included: bool = True
+    battery_included: bool = False
+    chp_included: bool = False
 
 class SimulationParameters:
     def __init__(self, start_date, end_date, seconds_per_timestep, post_processing_options:List = []):

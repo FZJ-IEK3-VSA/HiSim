@@ -257,10 +257,11 @@ class PostProcessor:
                                                                         column.split(' ', 3)[0])),
                                         sep=",", decimal=".")
         for column in self.ppdt.results_monthly:
-            self.ppdt.results_monthly[column].to_csv(os.path.join(self.ppdt.directory_path,
+            self.ppdt.results_monthly[column].to_csv( os.path.join(self.ppdt.directory_path,
                                                        "{}_{}_monthly.csv".format(column.split(' ', 3)[2],
                                                                                   column.split(' ', 3)[0])),
-                                          sep=",", decimal=".")
+                                          sep=",", decimal=".", header = [ "{} - monthly [{}".format(column.split('[', 1)[0],column.split('[', 1)[1] ) ] )
+            #print( "{} - monthly [{}".format(column.split('[', 1)[0],column.split('[', 1)[1]) )
 
     def write_to_report(self, text):
         self.report.open()

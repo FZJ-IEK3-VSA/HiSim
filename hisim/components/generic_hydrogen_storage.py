@@ -109,8 +109,8 @@ class HydrogenStorage( cp.Component ):
         config = HydrogenStorageConfig( name = "HydrogenStorage",
                                         source_weight = 1,
                                         min_capacity = 0,
-                                        max_capacity = 500,
-                                        starting_fill = 400,
+                                        max_capacity = 200,
+                                        starting_fill = 180,
                                         max_charging_rate_hour = 2,
                                         max_discharging_rate_hour = 2,
                                         energy_for_charge = 0,
@@ -158,7 +158,7 @@ class HydrogenStorage( cp.Component ):
             delta_not_stored = charging_rate - amount_stored / self.my_simulation_parameters.seconds_per_timestep
             charging_rate = amount_stored / self.my_simulation_parameters.seconds_per_timestep
 
-        power_demand = charging_rate * self.energy_for_charge * 3.6e6
+        power_demand = charging_rate * self.energy_for_charge * 3.6e3
         return charging_rate, power_demand, delta_not_stored
      
     def withdraw( self, discharging_rate : float ):
@@ -186,7 +186,7 @@ class HydrogenStorage( cp.Component ):
             delta_not_released = discharging_rate - amount_released / self.my_simulation_parameters.seconds_per_timestep
             discharging_rate = amount_released / self.my_simulation_parameters.seconds_per_timestep
             
-        power_demand = discharging_rate * self.energy_for_discharge * 3.6e6
+        power_demand = discharging_rate * self.energy_for_discharge * 3.6e3
         return discharging_rate, power_demand, delta_not_released
     
     def storage_losses( self ):
@@ -197,8 +197,8 @@ class HydrogenStorage( cp.Component ):
         self.source_weight = config.source_weight
         self.min_capacity = config.min_capacity
         self.max_capacity = config.max_capacity
-        self.max_charging_rate = ( config.max_charging_rate_hour / 3.6e6 ) * PhysicsConfig.hydrogen_density
-        self.max_discharging_rate = ( config.max_discharging_rate_hour / 3.6e6 ) * PhysicsConfig.hydrogen_density
+        self.max_charging_rate = ( config.max_charging_rate_hour / 3.6e3 )
+        self.max_discharging_rate = ( config.max_discharging_rate_hour / 3.6e3 )
         self.loss_factor = ( config.loss_factor_per_day / 100 ) * self.my_simulation_parameters.seconds_per_timestep / ( 24 * 3600 )
         self.energy_for_charge = config.energy_for_charge
         self.energy_for_discharge = config.energy_for_discharge
@@ -232,7 +232,7 @@ class HydrogenStorage( cp.Component ):
                 discharging_rate = 0
             else:
                 charging_rate = 0
-                discharging_rate = -delta
+                discharging_rate = -delta        
 
         if charging_rate > 0:
             charging_rate, power_demand, delta_not_stored = self.store( charging_rate )

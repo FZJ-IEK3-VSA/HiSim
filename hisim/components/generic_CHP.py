@@ -6,6 +6,7 @@ from hisim import utils
 #from math import floor
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l2_generic_chp
+from hisim.components import generic_hydrogen_storage
 import hisim.log as log
 import pandas as pd
 import os
@@ -164,7 +165,7 @@ class L1CHPConfig:
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
-        self.min_h2_SOC = min_h2_soc
+        self.min_h2_soc = min_h2_soc
         
 class L1_ControllerState:
     """
@@ -213,6 +214,7 @@ class L1_Controller( cp.Component ):
     # Inputs
     l2_DeviceSignal = "l2_DeviceSignal"
     ElectricityTarget = "ElectricityTarget"
+    HydrogenSOC = "HydrogenSOC"
 
     # Outputs
     l1_DeviceSignal = "l1_DeviceSignal"
@@ -241,13 +243,14 @@ class L1_Controller( cp.Component ):
                                                                       lt.Units.Watt,
                                                                       mandatory = True )
         
-        # self.HydrogenSOC : cp.ComponentInput = self.add_input( self.ComponentName,
-        #                                                        self.HydrogenSOC,
-        #                                                        lt.LoadTypes.Hydrogen,
-        #                                                        lt.Units.Percent,
-        #                                                        mandatory = True )
+        self.HydrogenSOCC : cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                self.HydrogenSOC,
+                                                                lt.LoadTypes.Hydrogen,
+                                                                lt.Units.Percent,
+                                                                mandatory = True )
 
         self.add_default_connections( controller_l2_generic_chp.L2_Controller, self.get_l2_controller_default_connections( ) )
+        self.add_default_connections( generic_hydrogen_storage.HydrogenStorage, self.get_hydrogen_storage_default_connections( ) )
         
         
         #add outputs
@@ -262,11 +265,20 @@ class L1_Controller( cp.Component ):
         controller_classname = controller_l2_generic_chp.L2_Controller.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_chp.L2_Controller.l2_DeviceSignal ) )
         return connections
+    
+    def get_hydrogen_storage_default_connections( self ):
+        log.information("setting generic H2 storage default connections in L1 of generic CHP" )
+        connections = [ ]
+        h2storage_classname = generic_hydrogen_storage.HydrogenStorage.get_classname( )
+        connections.append( cp.ComponentConnection( L1_Controller.HydrogenSOC, h2storage_classname, generic_hydrogen_storage.HydrogenStorage.HydrogenSOC ) )
+        return connections
 
     def build( self, config ):
         
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
+        #print( config )
+        self.SOCmin = config.min_h2_soc
         self.name = config.name
         self.source_weight = config.source_weight
         
@@ -290,6 +302,7 @@ class L1_Controller( cp.Component ):
         
         l2_devicesignal = stsv.get_input_value( self.l2_DeviceSignalC )
         electricity_target = stsv.get_input_value( self.ElectricityTargetC )
+        H2_SOC = stsv.get_input_value( self.HydrogenSOCC )
         
         #save reference state state0 in first iteration
         if self.state.is_first_iteration( timestep ):
@@ -303,11 +316,11 @@ class L1_Controller( cp.Component ):
             self.state.state = 0
         #check signal from l2 and turn on or off if it is necesary
         else:
-            if ( l2_devicesignal == 0 or electricity_target <= 0 ) and self.state0.state == 1:
+            if ( ( l2_devicesignal == 0 ) or ( electricity_target <= 0 ) or ( H2_SOC < self.SOCmin ) ) and self.state0.state == 1:
                 self.state.deactivation( timestep )
-            elif l2_devicesignal == 1 and electricity_target > 0 and self.state0.state == 0:
+            elif ( ( l2_devicesignal == 1 ) and ( electricity_target > 0 ) and ( H2_SOC >= self.SOCmin ) ) and self.state0.state == 0:
                 self.state.activation( timestep )
-        
+            
         stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )
         
     @staticmethod
@@ -316,7 +329,7 @@ class L1_Controller( cp.Component ):
                               source_weight =  1,
                               min_operation_time = 14400,
                               min_idle_time = 7200,
-                              min_h2_soc = 10 )
+                              min_h2_soc = 5 )
         return config
 
     def prin1t_outpu1t(self, t_m, state):

@@ -14,6 +14,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
+from hisim.components import generic_hydrogen_storage
 from hisim import log
 from hisim import utils
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -177,18 +178,21 @@ class L1ElectrolyzerConfig:
     min_operation_time : int
     min_idle_time : int
     P_min_electrolyzer : float
+    SOC_max_H2 : float
 
     def __init__( self,
                   name : str,
                   source_weight : int,
                   min_operation_time : int,
                   min_idle_time : int,
-                  P_min_electrolyzer : float ):
+                  P_min_electrolyzer : float,
+                  SOC_max_H2 : float ):
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
         self.P_min_electrolyzer = P_min_electrolyzer
+        self.SOC_max_H2 = SOC_max_H2
         
 class L1_ControllerState:
     """
@@ -236,6 +240,7 @@ class L1_Controller( cp.Component ):
     """
     # Inputs
     l2_ElectricityTarget = "l2_ElectricityTarget"
+    HydrogenSOC = "HydrogenSOC"
 
     # Outputs
     ElectricityTarget = "ElectricityTarget"
@@ -258,11 +263,25 @@ class L1_Controller( cp.Component ):
                                                                          lt.LoadTypes.Electricity,
                                                                          lt.Units.Watt,
                                                                          mandatory = True )
+        self.HydrogenSOCC : cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                self.HydrogenSOC,
+                                                                lt.LoadTypes.Hydrogen,
+                                                                lt.Units.Percent,
+                                                                mandatory = True )
         #add outputs
         self.ElectricityTargetC: cp.ComponentOutput = self.add_output(  self.ComponentName,
                                                                         self.ElectricityTarget,
                                                                         lt.LoadTypes.Electricity,
                                                                         lt.Units.Watt )
+        
+        self.add_default_connections( generic_hydrogen_storage.HydrogenStorage, self.get_hydrogenstorage_default_connections( ) )
+        
+    def get_hydrogenstorage_default_connections( self ):
+        log.information("setting generic H2 storage default connections in L1 of generic electrolyzer" )
+        connections = [ ]
+        h2storage_classname = generic_hydrogen_storage.HydrogenStorage.get_classname( )
+        connections.append( cp.ComponentConnection( L1_Controller.HydrogenSOC, h2storage_classname, generic_hydrogen_storage.HydrogenStorage.HydrogenSOC ) )
+        return connections
 
     def build( self, config ):
         
@@ -271,6 +290,7 @@ class L1_Controller( cp.Component ):
         self.name = config.name
         self.source_weight = config.source_weight
         self.Pmin = config.P_min_electrolyzer
+        self.SOCmax = config.SOC_max_H2
         
         self.state0 = L1_ControllerState( )
         self.state = L1_ControllerState( )
@@ -286,32 +306,48 @@ class L1_Controller( cp.Component ):
         pass
 
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
-        # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-        if force_convergence:
-            pass
         
         l2_electricity_target = stsv.get_input_value( self.l2_ElectricityTargetC )
+        H2_SOC = stsv.get_input_value( self.HydrogenSOCC )
         
         #save reference state state0 in first iteration
         if self.state.is_first_iteration( timestep ):
             self.state0 = self.state.clone( )
-        
+            
         #return device on if minimum operation time is not fulfilled and device was on in previous state
         if ( self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep ):
             self.state.state = 1
-            l2_electricity_target = max( self.Pmin, l2_electricity_target )
+            l2_electricity_target = max( self.Pmin, l2_electricity_target )   
         #return device off if minimum idle time is not fulfilled and device was off in previous state
         elif ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):
             self.state.state = 0
             l2_electricity_target = 0
-        #check signal from l2 and turn on or off if it is necesary
-        else:
-            if l2_electricity_target < self.Pmin and self.state0.state == 1:
-                self.state.deactivation( timestep )
-            elif l2_electricity_target >= self.Pmin and self.state0.state == 0:
-                self.state.activation( timestep )
+            print( 'this problem')
         
+        #catch cases where hydrogen storage is close to maximum level and signals oscillate -> just turn off electrolyzer
+        elif force_convergence:
+            if self.state0.state == 0:
+                self.state.state = 0
+            else:
+                self.state.deactivation( timestep )
+            l2_electricity_target = 0
+            pass
+        
+        #set point control
+        else:  
+            #if target electricity is too low or hydrogen storage too full: turn off
+            if ( ( l2_electricity_target < self.Pmin ) or ( H2_SOC > self.SOCmax ) ) and self.state0.state == 1:
+                self.state.deactivation( timestep )
+                print( 'that problem' )
+            #turns on if electricity is high enough and there is still space in storage, only works if being off is not compulsory
+            elif ( ( l2_electricity_target >= self.Pmin ) and ( H2_SOC <= self.SOCmax ) ) and self.state0.state == 0:
+                self.state.activation( timestep )
+                print( 'no problem' )
+            else:
+                pass
+                
         stsv.set_output_value( self.ElectricityTargetC, self.state.state * l2_electricity_target )
+        print( l2_electricity_target, self.Pmin, self.state.state )
         
     @staticmethod
     def get_default_config():
@@ -319,7 +355,8 @@ class L1_Controller( cp.Component ):
                                        source_weight =  1,
                                        min_operation_time = 14400,
                                        min_idle_time = 7200,
-                                       P_min_electrolyzer = 1200 )
+                                       P_min_electrolyzer = 1200,
+                                       SOC_max_H2 = 96 )
         return config
 
     def prin1t_outpu1t(self, t_m, state):

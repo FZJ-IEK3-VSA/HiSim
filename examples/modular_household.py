@@ -94,7 +94,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only( year = year,
+        my_simulation_parameters = SimulationParameters.full_year( year = year,
                                                                       seconds_per_timestep = seconds_per_timestep )
         my_simulation_parameters.enable_all_options( )
 
@@ -379,6 +379,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_h2storage.connect_only_predefined_connections( my_chp )
         my_sim.add_component( my_h2storage )
         
+        my_electrolyzer_controller_l1.connect_only_predefined_connections( my_h2storage )
+        my_chp_controller_l1.connect_only_predefined_connections( my_h2storage )
         
     my_building.add_component_inputs_and_connect(  source_component_classes = heater,
                                                    outputstring = 'ThermalEnergyDelivered',

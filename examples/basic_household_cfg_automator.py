@@ -83,15 +83,15 @@ if __name__ == "__main__":
             my_csv_loader_electric_config = csvloader.CSVLoaderConfig(
                 component_name="csv_load_loader_electric",
                 csv_filename=os.path.join(
-                    r"loadprofiles\electrical-warmwater-presence-load_1-family\data_processed\SumProfiles.HH1.Electricity.csv"
+                    r"HiSim-Data-Package-for-PIEG-Strom/electrical-loadprofiles/data_processed/15min/LP_G_G.csv"
                 ),
-                column=2,
+                column=1,
                 loadtype=loadtypes.LoadTypes.Electricity,
                 unit=loadtypes.Units.Watt,
                 column_name="power_demand",
-                multiplier=3,
-                sep=";",
-                decimal=",",
+                multiplier=1,
+                sep=",",
+                decimal=".",
             )
             my_cfg.add_component(
                 {my_cfg.set_name(csvloader.CSVLoader): my_csv_loader_electric_config}
@@ -100,15 +100,15 @@ if __name__ == "__main__":
             my_csv_loader_thermal_config = csvloader.CSVLoaderConfig(
                 component_name="csv_load_loader_thermal",
                 csv_filename=os.path.join(
-                    r"loadprofiles\electrical-warmwater-presence-load_1-family\data_processed\SumProfiles.HH1.Warm Water.csv"
+                    r"HiSim-Data-Package-for-PIEG-Strom/thermal-loadprofiles/data_processed/15min/dhw_1.csv"
                 ),
-                column=2,
+                column=1,
                 loadtype=loadtypes.LoadTypes.Heating,
                 unit=loadtypes.Units.Watt,
-                column_name="power_demand",
-                multiplier=3,
-                sep=";",
-                decimal=",",
+                column_name="hotwater_demand",
+                multiplier=1,
+                sep=",",
+                decimal=".",
             )
             my_cfg.add_component(
                 {my_cfg.set_name(csvloader.CSVLoader): my_csv_loader_thermal_config}
@@ -117,15 +117,15 @@ if __name__ == "__main__":
             my_csv_loader_pv_config = csvloader.CSVLoaderConfig(
                 component_name="csv_load_loader_pv",
                 csv_filename=os.path.join(
-                    r"loadprofiles\electrical-warmwater-presence-load_1-family\data_processed\SumProfiles.HH1.Electricity.csv"
+                    r"HiSim-Data-Package-for-PIEG-Strom/photovoltaic/data_processed/15min/pv_1_a_2015.csv"
                 ),
-                column=2,
+                column=3,
                 loadtype=loadtypes.LoadTypes.Electricity,
                 unit=loadtypes.Units.Watt,
-                column_name="power_demand",
-                multiplier=3,
-                sep=";",
-                decimal=",",
+                column_name="power_production",
+                multiplier=1,
+                sep=",",
+                decimal=".",
             )
             my_cfg.add_component(
                 {my_cfg.set_name(csvloader.CSVLoader): my_csv_loader_pv_config}
@@ -606,8 +606,8 @@ if __name__ == "__main__":
 
             # Export configuration file
             my_cfg.dump()
-            # os.chdir("..")
-            # os.chdir("hisim")
-            # os.system(
-            #     "python ../hisim/hisim_main.py basic_household_cfg_automator basic_household_implicit"
-            # )
+            #os.chdir("..")
+            #os.chdir("hisim")
+            os.system(
+                 "python ../hisim/hisim_main.py basic_household_cfg_automator basic_household_implicit"
+            )

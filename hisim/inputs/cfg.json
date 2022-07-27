@@ -7,36 +7,36 @@
     "Components": {
         "hisim.components.csvloader.CSVLoader": {
             "component_name": "csv_load_loader_electric",
-            "csv_filename": "electrical-loadprofiles/data_processed/LP_W_EFH.csv",
+            "csv_filename": "HiSim-Data-Package-for-PIEG-Strom/electrical-loadprofiles/data_processed/15min/LP_G_G.csv",
             "column": 1,
             "loadtype": "Electricity",
             "unit": "W",
             "column_name": "power_demand",
             "sep": ",",
             "decimal": ".",
-            "multiplier": 3
+            "multiplier": 1
         },
         "hisim.components.csvloader.CSVLoader_number1": {
             "component_name": "csv_load_loader_thermal",
-            "csv_filename": "thermal-loadprofiles/data_processed/15min/dhw_1.csv",
+            "csv_filename": "HiSim-Data-Package-for-PIEG-Strom/thermal-loadprofiles/data_processed/15min/dhw_1.csv",
             "column": 1,
             "loadtype": "Heating",
             "unit": "W",
-            "column_name": "power_demand",
+            "column_name": "hotwater_demand",
             "sep": ",",
             "decimal": ".",
-            "multiplier": 3
+            "multiplier": 1
         },
         "hisim.components.csvloader.CSVLoader_number2": {
             "component_name": "csv_load_loader_pv",
-            "csv_filename": "photovoltaic/data_processed/15min/pv_1_a_2015.csv",
-            "column": 1,
+            "csv_filename": "HiSim-Data-Package-for-PIEG-Strom/photovoltaic/data_processed/15min/pv_1_a_2015.csv",
+            "column": 3,
             "loadtype": "Electricity",
             "unit": "W",
-            "column_name": "power_demand",
+            "column_name": "power_production",
             "sep": ",",
             "decimal": ".",
-            "multiplier": 3
+            "multiplier": 1
         },
         "hisim.components.weather.Weather": {
             "location": "Aachen"

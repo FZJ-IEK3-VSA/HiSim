@@ -112,7 +112,6 @@ class Line(Chart):
 
 
 class Bar(Chart):
-    original = [385.66, 484.01, 981.05, 1096.7, 1157, 1299.9, 1415.3, 1266.1, 1075.8, 714.44, 422.51, 366.83]
 
     def __init__(self, output, data , units, dirpath, time_correction_factor):
         super().__init__(output, data, "Bar", units, dirpath, time_correction_factor)
@@ -132,7 +131,6 @@ class Bar(Chart):
 
         fig, ax = plt.subplots()
         plt.bar(ind, self.data * 1E-3, width, label="HiSim")
-        plt.bar(ind+width, self.original, width, label="PVSOL")
 
         plt.xticks(ind + width / 2)
 

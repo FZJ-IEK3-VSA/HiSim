@@ -32,8 +32,8 @@ def simulation_settings(my_sim: sim.Simulator,
 
 if __name__ == "__main__":
 
-    p_pv = [1, 2]
-    e_bat = [1, 2]
+    p_pv = [1]
+    e_bat = [1]
     name = "cfg"
     for p in p_pv:
         for e in e_bat:
@@ -44,7 +44,7 @@ if __name__ == "__main__":
             simulation_parameters = {
                 "year": 2019,
                 "seconds_per_timestep": 60 * 15,
-                "method": "full_year",
+                "method": "full_year_only_kpi",
             }
             my_cfg.add_simulation_parameters(
                 my_simulation_parameters=simulation_parameters

@@ -35,11 +35,20 @@ class SimulationParameters:
     def enable_all_options(self):
         for option in PostProcessingOptions:
             self.post_processing_options.append(option)
+    
+    def enable_only_kpi(self):
+        self.post_processing_options.append(PostProcessingOptions[1])
 
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int):
         pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
         pars.enable_all_options()
+        return pars
+
+    @classmethod
+    def full_year_only_kpi(cls, year: int, seconds_per_timestep: int):
+        pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
+        pars.enable_only_kpi()
         return pars
 
     @classmethod

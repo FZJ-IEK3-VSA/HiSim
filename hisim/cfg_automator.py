@@ -441,6 +441,12 @@ class SetupFunction:
                     **self.cfg["SimulationParameters"]
                 )
             )
+        elif method == "full_year_only_kpi":
+            self._simulation_parameters = (
+                sim.SimulationParameters.full_year_only_kpi(
+                **self.cfg["SimulationParameters"]
+                )
+            )
         elif method == "one_day_only":
             self._simulation_parameters = sim.SimulationParameters.one_day_only(
                 **self.cfg["SimulationParameters"]

@@ -72,7 +72,10 @@ class Battery(Component):
         self.previous_state = deepcopy(self.state)
 
         # Load battery object with parameters from bslib database
-        self.BAT = bsl.ACBatMod(system_id=self.system_id,
+        if self.e_bat_custom == 0:
+            self.BAT = 0
+        else:
+            self.BAT = bsl.ACBatMod(system_id=self.system_id,
                                 p_inv_custom=self.p_inv_custom,
                                 e_bat_custom=self.e_bat_custom)
 
@@ -101,12 +104,13 @@ class Battery(Component):
     @staticmethod
     def get_default_config():
         config=BatteryConfig(
-            system_id ='SG1',
-            p_inv_custom =5,
+            system_id = 'SG1',
+            p_inv_custom = 5,
             e_bat_custom = 10,
-            name= "Battery",
-            source_weight = 1 )
+            name = "Battery",
+            source_weight = 1)
         return config
+    
     def i_save_state(self):
         self.previous_state = deepcopy(self.state)
 
@@ -126,12 +130,17 @@ class Battery(Component):
         soc = self.state.soc
 
         # Simulate on timestep
-        results = self.BAT.simulate(p_load=p_set,
-                                    soc=soc,
-                                    dt=dt)
-        p_bs = results[0]
-        p_bat = results[1]
-        soc = results[2]
+        if self.BAT == 0:
+            p_bs = 0
+            p_bat = 0
+            soc = 0
+        else:    
+            results = self.BAT.simulate(p_load=p_set,
+                                        soc=soc,
+                                        dt=dt)
+            p_bs = results[0]
+            p_bat = results[1]
+            soc = results[2]
 
         # write values for output time series
         stsv.set_output_value(self.p_bs, p_bs)

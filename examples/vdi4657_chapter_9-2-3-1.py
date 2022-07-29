@@ -79,7 +79,7 @@ if __name__ == "__main__":
                             
                             # CSV-Loaders
                             my_csv_loader_electric_config = csvloader.CSVLoaderConfig(
-                                component_name="csv_load_loader_electric",
+                                component_name=eletrical_loadprofile[:-4],
                                 csv_filename=(eletrical_loadprofiles_path+eletrical_loadprofile),
                                 column=1,
                                 loadtype=loadtypes.LoadTypes.Electricity,
@@ -94,7 +94,7 @@ if __name__ == "__main__":
                             )
 
                             my_csv_loader_pv_config = csvloader.CSVLoaderConfig(
-                                component_name="csv_load_loader_pv",
+                                component_name="pv_'{}'_kWp/kWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
                                 csv_filename=(photovoltaic_profiles_path+'pv_'+region+'_'+type+'_'+year+'.csv'),
                                 column=3,
                                 loadtype=loadtypes.LoadTypes.Electricity,
@@ -112,7 +112,7 @@ if __name__ == "__main__":
                             my_battery_config = advanced_battery_bslib.BatteryConfig(system_id='SG1',
                                                                                     p_inv_custom=bat/2,
                                                                                     e_bat_custom=bat,
-                                                                                    name='Battery',
+                                                                                    name=str(bat),
                                                                                     source_weight=1)
 
                             my_cfg.add_component({my_cfg.set_name(advanced_battery_bslib.Battery): my_battery_config})
@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
                             # Outputs from CSV Loaders
                             component_connection = ComponentsConnection(
-                                first_component="csv_load_loader_electric",
+                                first_component=eletrical_loadprofile[:-4],
                                 second_component="ControllerElectricity",
                                 method="Manual",
                                 first_component_output="Output1",
@@ -146,7 +146,7 @@ if __name__ == "__main__":
                             my_cfg.add_connection(component_connection)
 
                             my_pvs_to_controller = ComponentsConnection(
-                                first_component="csv_load_loader_pv",
+                                first_component="pv_'{}'_kWp/kWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
                                 second_component="ControllerElectricity",
                                 method="Manual",
                                 first_component_output="Output1",
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
                             component_connection = ComponentsConnection(
                                 first_component="ControllerElectricity",
-                                second_component="Battery",
+                                second_component=str(bat),
                                 method="Manual",
                                 first_component_output="ElectricityToOrFromBatteryTarget",
                                 second_component_input="LoadingPowerInput",
@@ -167,7 +167,7 @@ if __name__ == "__main__":
 
                             # Output from Battery
                             my_controller_to_battery = ComponentsConnection(
-                                first_component="Battery",
+                                first_component=str(bat),
                                 second_component="ControllerElectricity",
                                 method="Manual",
                                 first_component_output="AcBatteryPower",

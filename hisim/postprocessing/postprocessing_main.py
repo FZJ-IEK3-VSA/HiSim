@@ -273,16 +273,23 @@ class PostProcessor:
         self.ppdt.results[ 'production' ] = 0
         self.ppdt.results[ 'storage' ] = 0
         for index, output in enumerate(self.ppdt.all_outputs):
-            if 'csv_load_loader_electric' in output.FullName:
-                self.ppdt.results[ 'consumption' ] +=self.ppdt.results[ 'consumption' ] +(self.ppdt.results.iloc[:, index])
-            elif 'csv_load_loader_pv' in output.FullName:
-                self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
             if 'ElectricityOutput' in output.FullName:
                 if ( 'PVSystem' in output.FullName ) or ( 'CHP' in output.FullName ) :
                     self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
                 else:
                     self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
+            elif output.FullName.endswith('CSV Profile'):
+                if output.FullName.startswith('pv_'):
+                    pv_size=float(output.FullName.split("'")[1])
+                    region=int(output.FullName.split("'")[3])
+                    type=output.FullName.split("'")[5]
+                    year=int(output.FullName.split("'")[7])
+                    self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
+                else:
+                    electric_loadprofile=(output.FullName[:-14])
+                    self.ppdt.results[ 'consumption' ] +=self.ppdt.results[ 'consumption' ] +(self.ppdt.results.iloc[:, index])
             elif 'AcBatteryPower' in output.FullName:
+                e_bat=float(output.FullName[:-18])
                 self.ppdt.results[ 'storage' ] = self.ppdt.results[ 'storage' ] + self.ppdt.results.iloc[:, index]
             else:
                 continue
@@ -290,6 +297,12 @@ class PostProcessor:
         #initilize lines for report
         lines = [ ]
         results_kpi=pd.DataFrame()
+        results_kpi['electric_loadprofile']=[electric_loadprofile]
+        results_kpi['weather_region']=[region]
+        results_kpi['weather_type']=[type]
+        results_kpi['weather_year']=[year]
+        results_kpi['p_pv']=[pv_size]
+        results_kpi['e_bat']=[e_bat]
         #sum over time and write to report
         consumption_sum = self.ppdt.results[ 'consumption' ].mean()*8.76
         results_kpi['consumption_sum [kWh]']=[consumption_sum]

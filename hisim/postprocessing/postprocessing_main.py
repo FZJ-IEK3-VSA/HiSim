@@ -273,6 +273,10 @@ class PostProcessor:
         self.ppdt.results[ 'production' ] = 0
         self.ppdt.results[ 'storage' ] = 0
         for index, output in enumerate(self.ppdt.all_outputs):
+            if 'csv_load_loader_electric' in output.FullName:
+                self.ppdt.results[ 'consumption' ] +=self.ppdt.results[ 'consumption' ] +(self.ppdt.results.iloc[:, index])
+            elif 'csv_load_loader_pv' in output.FullName:
+                self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
             if 'ElectricityOutput' in output.FullName:
                 if ( 'PVSystem' in output.FullName ) or ( 'CHP' in output.FullName ) :
                     self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
@@ -285,24 +289,29 @@ class PostProcessor:
             
         #initilize lines for report
         lines = [ ]
-         
+        results_kpi=pd.DataFrame()
         #sum over time and write to report
-        consumption_sum = self.ppdt.results[ 'consumption' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+        consumption_sum = self.ppdt.results[ 'consumption' ].mean()*8.76
+        results_kpi['consumption_sum [kWh]']=[consumption_sum]
         lines.append( "Consumption: {:4.0f} kWh".format( consumption_sum ) )
         
-        production_sum = self.ppdt.results[ 'production' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+        production_sum = self.ppdt.results[ 'production' ].mean()*8.76
+        results_kpi['production_sum [kWh]']=[production_sum]
         lines.append( "Production: {:4.0f} kWh".format( production_sum ) )
         
         if production_sum > 0:
             #evaluate injection, sum over time and wite to 
             injection = ( self.ppdt.results[ 'production' ] - self.ppdt.results[ 'storage' ] - self.ppdt.results[ 'consumption' ] ) 
             injection_sum = injection[ injection > 0 ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+            results_kpi['injection_sum [kWh]']=[injection_sum]
             lines.append( "Injection: {:4.0f} kWh".format( injection_sum ) )
             
-            batterylosses = self.ppdt.results[ 'storage' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+            batterylosses = self.ppdt.results[ 'storage' ].mean()*8.76
             print( batterylosses )
             
             #evaluate self consumption rate and autarky rate:
+            results_kpi['Autarky Rate [%]']=[100 * ( production_sum - injection_sum - batterylosses ) / consumption_sum] 
+            results_kpi['Self Consumption Rate [%]']=[100 * ( production_sum - injection_sum ) / production_sum]
             lines.append( "Autarky Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum - batterylosses ) / consumption_sum ) )
             lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
             
@@ -319,7 +328,7 @@ class PostProcessor:
                 price = ( self.ppdt.results[ 'consumption' ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
                     * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
                 lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
-            
+        results_kpi.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('results_kpi')),index=False)
         self.write_to_report( lines )
 
     #

@@ -37,7 +37,7 @@ class SimulationParameters:
             self.post_processing_options.append(option)
     
     def enable_only_kpi(self):
-        self.post_processing_options.append(PostProcessingOptions.Plot_Carpet)
+        self.post_processing_options.append(PostProcessingOptions.Compute_KPI)
 
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int):

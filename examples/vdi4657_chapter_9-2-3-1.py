@@ -95,14 +95,12 @@ if __name__ == "__main__":
 
                             my_csv_loader_pv_config = csvloader.CSVLoaderConfig(
                                 component_name="csv_load_loader_pv",
-                                csv_filename=os.path.join(
-                                    r"HiSim-Data-Package-for-PIEG-Strom/photovoltaic/data_processed/15min/pv_1_a_2015.csv"
-                                ),
+                                csv_filename=(photovoltaic_profiles_path+'pv_'+region+'_'+type+'_'+year+'.csv'),
                                 column=3,
                                 loadtype=loadtypes.LoadTypes.Electricity,
                                 unit=loadtypes.Units.Watt,
                                 column_name="power_production",
-                                multiplier=1,
+                                multiplier=pv,
                                 sep=",",
                                 decimal=".",
                             )
@@ -111,11 +109,13 @@ if __name__ == "__main__":
                             )
 
                             # Battery
-                            my_battery_config = advanced_battery_bslib.Battery.get_default_config()
-                            my_battery = {
-                                my_cfg.set_name(advanced_battery_bslib.Battery): my_battery_config
-                            }
-                            my_cfg.add_component(my_battery)
+                            my_battery_config = advanced_battery_bslib.BatteryConfig(system_id='SG1',
+                                                                                    p_inv_custom=bat/2,
+                                                                                    e_bat_custom=bat,
+                                                                                    name='Battery',
+                                                                                    source_weight=1)
+
+                            my_cfg.add_component({my_cfg.set_name(advanced_battery_bslib.Battery): my_battery_config})
 
                             # Controller
                             my_controller_electricity = {
@@ -134,10 +134,6 @@ if __name__ == "__main__":
                             # HINT:
                             # The name of the Component (f.e. first_component) has to be the same as the Class Name,
                             # out of the Component got a differen name-> see PVSystem2
-
-                            my_connection_component = ComponentsConnection(
-                                first_component="Weather", second_component="PVSystem2"
-                            )
 
                             # Outputs from CSV Loaders
                             component_connection = ComponentsConnection(

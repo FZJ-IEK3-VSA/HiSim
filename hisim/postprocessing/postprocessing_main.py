@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import numpy as np
 import sys
 import inspect
 import subprocess
@@ -268,32 +269,31 @@ class PostProcessor:
         self.report.close()
         
     def compute_KPIs( self ):
+        self.ppdt.results.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('df')))
         #sum consumption and production of individual components
-        self.ppdt.results[ 'consumption' ] = 0
-        self.ppdt.results[ 'production' ] = 0
-        self.ppdt.results[ 'storage' ] = 0
-        for index, output in enumerate(self.ppdt.all_outputs):
-            if 'ElectricityOutput' in output.FullName:
-                if ( 'PVSystem' in output.FullName ) or ( 'CHP' in output.FullName ) :
-                    self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
-                else:
-                    self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
-            elif output.FullName.endswith('CSV Profile'):
-                if output.FullName.startswith('pv_'):
-                    pv_size=float(output.FullName.split("'")[1])
-                    region=int(output.FullName.split("'")[3])
-                    type=output.FullName.split("'")[5]
-                    year=int(output.FullName.split("'")[7])
-                    self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
-                else:
-                    electric_loadprofile=(output.FullName[:-14])
-                    self.ppdt.results[ 'consumption' ] +=self.ppdt.results[ 'consumption' ] +(self.ppdt.results.iloc[:, index])
-            elif 'AcBatteryPower' in output.FullName:
-                e_bat=float(output.FullName[:-18])
-                self.ppdt.results[ 'storage' ] = self.ppdt.results[ 'storage' ] + self.ppdt.results.iloc[:, index]
-            else:
-                continue
-            
+        for column in self.ppdt.results:
+            if column.endswith('power_demand [Electricity - W]'):
+                electric_loadprofile=(column[:-33])
+                consumption_sum=self.ppdt.results[column].mean()*8.76
+            elif column.endswith('power_production [Electricity - W]'):
+                pv_size=float(column.split("'")[1])
+                region=int(column.split("'")[3])
+                type=column.split("'")[5]
+                year=int(column.split("'")[7])
+                production_sum=(self.ppdt.results[column].mean()*8.76)
+            elif column.endswith('AcBatteryPower [Electricity - W]'):
+                e_bat=float(column[:-36])
+                battery_discharge=np.minimum(0,self.ppdt.results[column].values).mean()*-8.76
+                battery_charge=np.maximum(0,self.ppdt.results[column].values).mean()*8.76
+            elif column.endswith('ElectricityToOrFromGrid [Electricity - W]'):
+                grid_supply = np.maximum(0,self.ppdt.results[column].values).mean()*8.76
+                grid_feed = np.minimum(0,self.ppdt.results[column].values).mean()*-8.76
+                print(grid_feed,grid_supply)
+                
+
+        autarkiegrad=(consumption_sum-grid_supply)/consumption_sum
+        eigenverbrauch=(production_sum-grid_feed)/production_sum    
+        print(autarkiegrad,eigenverbrauch)
         #initilize lines for report
         lines = [ ]
         results_kpi=pd.DataFrame()
@@ -303,46 +303,17 @@ class PostProcessor:
         results_kpi['weather_year']=[year]
         results_kpi['p_pv']=[pv_size]
         results_kpi['e_bat']=[e_bat]
-        #sum over time and write to report
-        consumption_sum = self.ppdt.results[ 'consumption' ].mean()*8.76
-        results_kpi['consumption_sum [kWh]']=[consumption_sum]
-        lines.append( "Consumption: {:4.0f} kWh".format( consumption_sum ) )
-        
-        production_sum = self.ppdt.results[ 'production' ].mean()*8.76
         results_kpi['production_sum [kWh]']=[production_sum]
-        lines.append( "Production: {:4.0f} kWh".format( production_sum ) )
-        
-        if production_sum > 0:
-            #evaluate injection, sum over time and wite to 
-            injection = ( self.ppdt.results[ 'production' ] - self.ppdt.results[ 'storage' ] - self.ppdt.results[ 'consumption' ] ) 
-            injection_sum = injection[ injection > 0 ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            results_kpi['injection_sum [kWh]']=[injection_sum]
-            lines.append( "Injection: {:4.0f} kWh".format( injection_sum ) )
-            
-            batterylosses = self.ppdt.results[ 'storage' ].mean()*8.76
-            print( batterylosses )
-            
-            #evaluate self consumption rate and autarky rate:
-            results_kpi['Autarky Rate [%]']=[100 * ( production_sum - injection_sum - batterylosses ) / consumption_sum] 
-            results_kpi['Self Consumption Rate [%]']=[100 * ( production_sum - injection_sum ) / production_sum]
-            lines.append( "Autarky Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum - batterylosses ) / consumption_sum ) )
-            lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
-            
-            #evaluate electricity price
-            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
-                price = - ( ( injection[ injection < 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ injection < 0 ] ).sum( ) \
-                        + ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
-                        * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                        
-                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
-        
-        else:
-            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
-                price = ( self.ppdt.results[ 'consumption' ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
-                    * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
+        results_kpi['consumption_sum [kWh]']=[consumption_sum]
+        results_kpi['battery_discharge [kWh]']=[battery_discharge]
+        results_kpi['battery_charge [kWh]']=[battery_charge]
+        results_kpi['grid_feed [kWh]']=[grid_feed]
+        results_kpi['grid_supply [kWh]']=[grid_supply]
+        results_kpi['autarkiegrad']=[autarkiegrad]
+        results_kpi['eigenverbrauch']=[eigenverbrauch]
+
         results_kpi.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('results_kpi')),index=False)
-        self.write_to_report( lines )
+        #self.write_to_report( lines )
 
     #
     # def cal_pos_sim(self):

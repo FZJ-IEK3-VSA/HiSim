@@ -253,6 +253,7 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self):
         for column in self.ppdt.results:
+            print(column.split(' ',3))
             self.ppdt.results[column].to_csv(os.path.join(self.ppdt.directory_path,
                                                      "{}_{}.csv".format(column.split(' ', 3)[2],
                                                                         column.split(' ', 3)[0])),
@@ -270,30 +271,31 @@ class PostProcessor:
         
     def compute_KPIs( self ):
         self.ppdt.results.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('df')))
+        consumption_sum=0
+        production_sum=0
+        battery_discharge=0
+        battery_charge=0
         #sum consumption and production of individual components
         for column in self.ppdt.results:
             if column.endswith('power_demand [Electricity - W]'):
                 electric_loadprofile=(column[:-33])
-                consumption_sum=self.ppdt.results[column].mean()*8.76
+                consumption_sum+=self.ppdt.results[column].mean()*8.76
             elif column.endswith('power_production [Electricity - W]'):
                 pv_size=float(column.split("'")[1])
                 region=int(column.split("'")[3])
                 type=column.split("'")[5]
                 year=int(column.split("'")[7])
-                production_sum=(self.ppdt.results[column].mean()*8.76)
+                production_sum+=(self.ppdt.results[column].mean()*8.76)
             elif column.endswith('AcBatteryPower [Electricity - W]'):
                 e_bat=float(column[:-36])
-                battery_discharge=np.minimum(0,self.ppdt.results[column].values).mean()*-8.76
-                battery_charge=np.maximum(0,self.ppdt.results[column].values).mean()*8.76
+                battery_discharge+=np.minimum(0,self.ppdt.results[column].values).mean()*-8.76
+                battery_charge+=np.maximum(0,self.ppdt.results[column].values).mean()*8.76
             elif column.endswith('ElectricityToOrFromGrid [Electricity - W]'):
                 grid_supply = np.maximum(0,self.ppdt.results[column].values).mean()*8.76
                 grid_feed = np.minimum(0,self.ppdt.results[column].values).mean()*-8.76
-                print(grid_feed,grid_supply)
-                
 
         autarkiegrad=(consumption_sum-grid_supply)/consumption_sum
         eigenverbrauch=(production_sum-grid_feed)/production_sum    
-        print(autarkiegrad,eigenverbrauch)
         #initilize lines for report
         lines = [ ]
         results_kpi=pd.DataFrame()

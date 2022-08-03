@@ -10,4 +10,4 @@ sphinx
 sphinx-rtd-theme
 dataclasses_json
 hplib
-bslib
+bslib==0.5

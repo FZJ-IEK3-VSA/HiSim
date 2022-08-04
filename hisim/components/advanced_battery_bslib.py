@@ -52,7 +52,7 @@ class Battery(Component):
         system_id : str
             Name (system_id) of the battery storage from bslib database.
         p_inv_custom : numeric, default 0
-            AC power of battery inverter. Only for system_ids of type "Generic". [kW]
+            AC power of battery inverter. Only for system_ids of type "Generic". [W]
         e_bat_custom : numeric, default 0
             Useable battery capacity. Only for system_ids of type "Generic". [kWh]
         """
@@ -105,7 +105,7 @@ class Battery(Component):
     def get_default_config():
         config=BatteryConfig(
             system_id = 'SG1',
-            p_inv_custom = 5,
+            p_inv_custom = 5000,
             e_bat_custom = 10,
             name = "Battery",
             source_weight = 1)

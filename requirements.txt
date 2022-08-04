@@ -9,5 +9,5 @@ pytest
 sphinx
 sphinx-rtd-theme
 dataclasses_json
-hplib
-bslib==0.5
+hplib==1.9
+bslib==0.6

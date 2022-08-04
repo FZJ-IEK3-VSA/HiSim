@@ -41,20 +41,21 @@ if __name__ == "__main__":
     os.chdir('../')
     rootpath = os.getcwd()
     profilepath = (rootpath+'/hisim/inputs/HiSim-Data-Package-for-PIEG-Strom')
-    eletrical_loadprofiles_path = (profilepath+'/electrical-loadprofiles/data_processed/15min/')
-    eletrical_loadprofiles = os.listdir(eletrical_loadprofiles_path)
+    electrical_loadprofiles_path = (profilepath+'/electrical-loadprofiles/data_processed/15min/')
+    electrical_loadprofiles = os.listdir(electrical_loadprofiles_path)
+    electrical_loadprofiles = ['LP_W_EFH.csv']
     photovoltaic_profiles_path = (profilepath+'/photovoltaic/data_processed/15min/')
     # weather
     weather_region = ['4']  # 1-15
     weather_year = ['2015'] # 2015,2045
     weather_type = ['a']    # (a)verage, extreme (s)ummer, extreme (w)inter
     # normalized photovoltaic power in kWp/MWh
-    p_pv = [1]#[0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+    p_pv = [0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
     # normalized battery capacity in kWh/MWh
-    e_bat = [1]#[0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+    e_bat = [0, 0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
 
     name = "cfg"
-    for eletrical_loadprofile in eletrical_loadprofiles:
+    for electrical_loadprofile in electrical_loadprofiles:
         for region in weather_region:
             for year in weather_year:
                 for type in weather_type:
@@ -79,8 +80,8 @@ if __name__ == "__main__":
                             
                             # CSV-Loaders
                             my_csv_loader_electric_config = csvloader.CSVLoaderConfig(
-                                component_name=eletrical_loadprofile[:-4],
-                                csv_filename=(eletrical_loadprofiles_path+eletrical_loadprofile),
+                                component_name=electrical_loadprofile[:-4],
+                                csv_filename=(electrical_loadprofiles_path+electrical_loadprofile),
                                 column=1,
                                 loadtype=loadtypes.LoadTypes.Electricity,
                                 unit=loadtypes.Units.Watt,
@@ -110,7 +111,7 @@ if __name__ == "__main__":
 
                             # Battery
                             my_battery_config = advanced_battery_bslib.BatteryConfig(system_id='SG1',
-                                                                                    p_inv_custom=bat/2,
+                                                                                    p_inv_custom=min(pv,bat)*0.75*1000,
                                                                                     e_bat_custom=bat,
                                                                                     name=str(bat),
                                                                                     source_weight=1)
@@ -133,11 +134,11 @@ if __name__ == "__main__":
 
                             # HINT:
                             # The name of the Component (f.e. first_component) has to be the same as the Class Name,
-                            # out of the Component got a differen name-> see PVSystem2
+                            # out of the Component got a differen name
 
                             # Outputs from CSV Loaders
                             component_connection = ComponentsConnection(
-                                first_component=eletrical_loadprofile[:-4],
+                                first_component=electrical_loadprofile[:-4],
                                 second_component="ControllerElectricity",
                                 method="Manual",
                                 first_component_output="Output1",

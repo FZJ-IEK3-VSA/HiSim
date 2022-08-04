@@ -216,12 +216,12 @@ class PostProcessor:
         else:
             log.information("not exporting to CSV")
             
-         # Export all results to CSV
+         # Calculate KPIs and save as CSV
         if PostProcessingOptions.Compute_KPI in self.ppdt.postProcessingOptions:
             log.information("Computing KPIs")
             self.compute_KPIs( )
         else:
-            log.information("not exporting to CSV")
+            log.information("not calculating KPIs")
 
 
         if len(self.ppdt.results) == 1440:
@@ -270,7 +270,7 @@ class PostProcessor:
         self.report.close()
         
     def compute_KPIs( self ):
-        self.ppdt.results.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('df')))
+        #self.ppdt.results.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('df')))
         consumption_sum=0
         production_sum=0
         battery_discharge=0

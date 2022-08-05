@@ -1,6 +1,6 @@
 from enum import Enum, IntEnum
 
-loging_level = 3
+logging_level = 3
 class LogPrio(IntEnum):
     Error = 1
     Warning = 2
@@ -52,7 +52,7 @@ def log(prio: int, message: str):
         prio_string = "TRC"
     else:
         raise ValueError("Unknown log priority: " + str(prio))
-    if prio <= loging_level:
+    if prio <= logging_level:
         print(str(prio_string) + ":" + message)
     with open('hisim_simulation.log', 'a') as f:
         f.write(message + "\n")

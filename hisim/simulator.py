@@ -141,7 +141,6 @@ class Simulator:
 
     """ Core class of HiSim: Runs the main loop. """
 
-
     @utils.measure_execution_time
     def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters):
         """ Initializes the simulator class and creates the result directory. """
@@ -150,6 +149,8 @@ class Simulator:
         self.setup_function = setup_function
 
         self._simulation_parameters: SimulationParameters = my_simulation_parameters
+        if self._simulation_parameters is not None:
+            log.logging_level = self._simulation_parameters.logging_level
 
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
@@ -165,13 +166,11 @@ class Simulator:
         # Creates and write result report
         self.report = pp.report.Report(dirpath=self.dirpath)
 
-    def simulation_parameters(self):
-        raise ValueError("invalid assignment")
-
     def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters):
+        """ Sets the simulation parameters and the logging level at the same time. """
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
-            log.loging_level = self._simulation_parameters.logging_level
+            log.logging_level = self._simulation_parameters.logging_level
 
     def add_component(self, component: cp.Component, is_cachable: bool = False):
         """ Adds component to simulator and wraps it up the output in the register. """
@@ -190,7 +189,6 @@ class Simulator:
         """ Connects the inputs from every component to the corresponding outputs. """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
-
 
     def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
         """ Executes one simulation timestep.

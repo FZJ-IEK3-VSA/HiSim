@@ -141,14 +141,20 @@ class Simulator:
 
     """ Core class of HiSim: Runs the main loop. """
 
+    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters):
+        self._simulation_parameters: SimulationParameters = my_simulation_parameters
+        if self._simulation_parameters is not None:
+            log.loging_level = self._simulation_parameters.logging_level
+
     @utils.measure_execution_time
     def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters):
         """ Initializes the simulator class and creates the result directory. """
         if setup_function is None:
             raise Exception("No setup function was set")
         self.setup_function = setup_function
-        log.loging_level = my_simulation_parameters.logging_level
-        self.simulation_parameters: SimulationParameters = my_simulation_parameters
+
+        self._simulation_parameters: SimulationParameters = my_simulation_parameters
+
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
 

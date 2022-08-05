@@ -16,6 +16,7 @@ pylint:
     disable:
       - too-many-instance-attributes
       - too-many-locals
+      - too-many-arguments
 #    disable:
 #      - too-many-locals
 #      - arguments-differ

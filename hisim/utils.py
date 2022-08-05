@@ -11,6 +11,7 @@ from typing import Any, Dict
 from functools import wraps
 from timeit import default_timer as timer
 
+from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
@@ -244,7 +245,7 @@ def load_smart_appliance(name):
     return data[name]
 
 
-def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters):
+def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters: SimulationParameters):
     """
 
     This will genererate a file path based on any dataclass_json
@@ -254,7 +255,7 @@ def get_cache_file(component_key: str, parameter_class: Any, my_simulation_param
     json_str = parameter_class.to_json()
     if(my_simulation_parameters is None):
         raise ValueError("Simulation parameters was none.")
-    simulation_parameter_str = my_simulation_parameters.to_json()
+    simulation_parameter_str = my_simulation_parameters.get_unique_key()
     json_str = json_str + simulation_parameter_str
     if len(json_str) < 5:
         raise Exception("Empty json detected for caching. This is a bug.")

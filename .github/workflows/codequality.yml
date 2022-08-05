@@ -22,21 +22,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest pylint pep8 prospector
+        pip install prospector
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install -e .
-    - name: Lint with pylint
+    - name: Lint with prospector
       working-directory: ./
       run: |
         prospector hisim/simulator.py
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150
 #        # pycodestyle hisim/simulator.py --max-line-length 150
-    - name: Lint with flake8
-      working-directory: ./
-      run: |
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-    #    # stop the build if there are Python syntax errors or undefined names
-       
-    #    # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-    #    flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics

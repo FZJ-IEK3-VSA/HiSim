@@ -26,7 +26,7 @@ def simulation_settings(my_sim: sim.Simulator,
 ):
     """
     This setup function represents the simulations for 
-    VDI guideline 4657 sheet 3, chapter 9.2.3.1
+    VDI guideline 4657 sheet 3, chapter 9.2.3.2
     """
     my_setup_function = SetupFunction()
     my_setup_function.build(my_sim)

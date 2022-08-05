@@ -16,6 +16,8 @@ class SystemConfig:
     battery_included: bool = False
     chp_included: bool = False
 
+@dataclass_json
+@dataclass()
 class SimulationParameters:
     def __init__(self, start_date, end_date, seconds_per_timestep, post_processing_options:List = []):
         self.start_date = start_date

@@ -244,7 +244,7 @@ def load_smart_appliance(name):
     return data[name]
 
 
-def get_cache_file(component_key: str, parameter_class: Any):
+def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters):
     """
 
     This will genererate a file path based on any dataclass_json
@@ -252,6 +252,10 @@ def get_cache_file(component_key: str, parameter_class: Any):
     The idea is to have a unique file path for every possible configuration
     """
     json_str = parameter_class.to_json()
+    if(my_simulation_parameters is None):
+        raise ValueError("Simulation parameters was none.")
+    simulation_parameter_str = my_simulation_parameters.to_json()
+    json_str = json_str + simulation_parameter_str
     if len(json_str) < 5:
         raise Exception("Empty json detected for caching. This is a bug.")
     json_str_encoded = json_str.encode('utf-8')

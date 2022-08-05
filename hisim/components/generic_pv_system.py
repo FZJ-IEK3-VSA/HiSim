@@ -455,7 +455,7 @@ class PVSystem( cp.Component ):
         self.source_weight = source_weight
         
         log.information(self.pvconfig.to_json())  # type: ignore
-        file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig)
+        file_exists, self.cache_filepath = utils.get_cache_file("PVSystem", self.pvconfig, self.my_simulation_parameters)
 
         if file_exists:
             self.output = pd.read_csv(self.cache_filepath, sep=',', decimal='.')['output'].tolist()

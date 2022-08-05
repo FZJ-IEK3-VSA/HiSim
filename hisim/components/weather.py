@@ -201,7 +201,7 @@ class Weather(Component):
         log.information(self.weatherConfig.to_json()) # type: ignore
         #log.information("2:" + json.dumps(self.weatherConfig))
 
-        cachefound, cache_filepath = utils.get_cache_file("Weather", self.weatherConfig)
+        cachefound, cache_filepath = utils.get_cache_file("Weather", self.weatherConfig, self.my_simulation_parameters)
         if cachefound:
             # read cached files
             my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding = "cp1252")

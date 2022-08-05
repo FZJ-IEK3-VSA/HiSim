@@ -115,7 +115,7 @@ class VehiclePure(cp.Component):
 
         self.capacity = capacity
 
-        cache_file_exists, cache_filepath = utils.get_cache_file(self.ComponentName,  self.evconfig)
+        cache_file_exists, cache_filepath = utils.get_cache_file(self.ComponentName,  self.evconfig, self.my_simulation_parameters)
         if cache_filepath is not None:
             self.car_in_charging_station = pd.read_csv(cache_filepath, sep=',', decimal='.')[
                 'CarInChargingStation'].tolist()

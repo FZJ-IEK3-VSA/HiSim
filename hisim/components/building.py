@@ -197,7 +197,7 @@ class Building(cp.DynamicComponent):
                           my_simulation_parameters = my_simulation_parameters )
         # variable typing init for mypy
         self.buildingConfig=config
-        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig)
+        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig, self.my_simulation_parameters)
 
         self.c_m: float = 0
         self.c_m_ref: float = 0

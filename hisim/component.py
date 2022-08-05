@@ -138,6 +138,8 @@ class Component:
         self.outputs_initialized: bool = False
         self.inputs_initialized: bool = False
         self.my_simulation_parameters:SimulationParameters = my_simulation_parameters
+        if my_simulation_parameters is None:
+            raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 

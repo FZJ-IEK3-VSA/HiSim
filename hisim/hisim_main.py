@@ -1,18 +1,21 @@
+""" Main module for HiSim: Starts the Simulator. """
 import importlib
 import sys
 from datetime import datetime
+import os
+
 from hisim import log
 import hisim.simulator as sim
-import os
-#from hisim.postprocessing import postprocessing_main as pp
 
-def main(path_to_module: str, function_in_module: str, my_simulation_parameters = None):
+
+def main(path_to_module: str, function_in_module: str, my_simulation_parameters=None):
+    """ Core function. """
     log.information("#################################")
-    log.information("starting simulation of " + path_to_module  + " " + function_in_module)
+    log.information("starting simulation of " + path_to_module + " " + function_in_module)
     starttime = datetime.now()
-    d4 = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.information("Start @ " + d4 + " "  )
-    log.profile(path_to_module  + " " + function_in_module + "Start @ " + d4 )
+    starting_date_time_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.information("Start @ " + starting_date_time_str + " ")
+    log.profile(path_to_module + " " + function_in_module + "Start @ " + starting_date_time_str)
     log.information("#################################")
     normalized_path = os.path.normpath(path_to_module)
     path_in_list = normalized_path.split(os.sep)
@@ -20,24 +23,23 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
     if len(path_in_list) >= 1:
         path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
         if os.path.isdir(path_to_be_added):
-            # Add current path to PYTHONPATH
+            #  Add current path to PYTHONPATH
             sys.path.append(path_to_be_added)
-            #for dirs in os.walk(path_to_be_added):
-            #    sys.path.append(dirs)
         else:
-            raise ValueError("Directory location of module location is nonexistent!\nDirectory entered: " + path_to_be_added)
-    suffix =module_filename[-3:]
+            raise ValueError(
+                f"Directory location of module location is nonexistent!\nDirectory entered: {path_to_be_added}")
+    suffix = module_filename[-3:]
     if suffix != ".py":
-        module_fullfilename = "{}.py".format(module_filename)
+        module_full_filename = f"{module_filename}.py"
     else:
-        module_fullfilename = module_filename
+        module_full_filename = module_filename
         module_filename = module_filename[:-3]
-    filepath = os.path.join(path_to_be_added, module_fullfilename)
+    filepath = os.path.join(path_to_be_added, module_full_filename)
     if os.path.isfile(filepath):
         # Get setup function to executable
         targetmodule = importlib.import_module(module_filename)
     else:
-        raise ValueError("Python script {}.py could not be found".format(module_filename))
+        raise ValueError(f"Python script {module_filename}.py could not be found")
 
     # Create a Simulator object based on setup function
     my_sim: sim.Simulator = sim.Simulator(module_directory=path_to_be_added,
@@ -54,20 +56,19 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
     my_sim.run_all_timesteps()
     log.information("#################################")
     endtime = datetime.now()
-    d4 = endtime.strftime("%d-%b-%Y %H:%M:%S")
-    log.information("finished @ " + d4)
-    log.profile("finished @ " + d4)
-    log.profile("duration: " + str((endtime-starttime).total_seconds()))
+    starting_date_time_str = endtime.strftime("%d-%b-%Y %H:%M:%S")
+    log.information("finished @ " + starting_date_time_str)
+    log.profile("finished @ " + starting_date_time_str)
+    log.profile("duration: " + str((endtime - starttime).total_seconds()))
     log.information("#################################")
     log.information("")
 
+
 if __name__ == "__main__":
-    #logging.basicConfig(level=logging.DEBUG)
     if len(sys.argv) < 3:
         log.information("HiSim needs two arguments")
-        quit()
+        sys.exit(1)
     filename = sys.argv[1]
-    functionname = sys.argv[2]
-    log.information("calling " + functionname + " from " + filename)
-    main(filename, functionname)
-
+    function_name = sys.argv[2]
+    log.information("calling " + function_name + " from " + filename)
+    main(filename, function_name)

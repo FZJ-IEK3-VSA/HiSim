@@ -203,7 +203,7 @@ class Occupancy(cp.Component):
             self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
 
     def build( self):
-        file_exists, cache_filepath = utils.get_cache_file(component_key=self.ComponentName, parameter_class=self.occupancyConfig)
+        file_exists, cache_filepath = utils.get_cache_file(component_key=self.ComponentName, parameter_class=self.occupancyConfig, my_simulation_parameters=self.my_simulation_parameters)
         if file_exists:
             dataframe = pd.read_csv(cache_filepath, sep=',', decimal='.', encoding = "cp1252")
             self.number_of_residents = dataframe['number_of_residents'].tolist()

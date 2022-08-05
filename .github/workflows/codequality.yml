@@ -32,6 +32,7 @@ jobs:
       working-directory: ./
       run: |
         prospector hisim/simulator.py
+        prospector hisim/hisim_main.py
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150
 #        # pycodestyle hisim/simulator.py --max-line-length 150

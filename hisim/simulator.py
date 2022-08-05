@@ -141,10 +141,6 @@ class Simulator:
 
     """ Core class of HiSim: Runs the main loop. """
 
-    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters):
-        self._simulation_parameters: SimulationParameters = my_simulation_parameters
-        if self._simulation_parameters is not None:
-            log.loging_level = self._simulation_parameters.logging_level
 
     @utils.measure_execution_time
     def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters):
@@ -169,9 +165,17 @@ class Simulator:
         # Creates and write result report
         self.report = pp.report.Report(dirpath=self.dirpath)
 
+    def simulation_parameters(self):
+        raise ValueError("invalid assignment")
+
+    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters):
+        self._simulation_parameters = my_simulation_parameters
+        if self._simulation_parameters is not None:
+            log.loging_level = self._simulation_parameters.logging_level
+
     def add_component(self, component: cp.Component, is_cachable: bool = False):
         """ Adds component to simulator and wraps it up the output in the register. """
-        if self.simulation_parameters is None:
+        if self._simulation_parameters is None:
             raise Exception("Simulation Parameters were not initialized")
         # set the repository
         component.set_sim_repo(self.simulation_repository)
@@ -187,10 +191,6 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
 
-    def set_parameters(self, simulation_parameters: SimulationParameters) -> SimulationParameters:
-        """ Store the simulation parameters as an attribute of Simulator class. """
-        self.simulation_parameters = simulation_parameters
-        return simulation_parameters
 
     def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
         """ Executes one simulation timestep.
@@ -263,7 +263,7 @@ class Simulator:
         """ Performs all the timesteps of the simulation and saves the results in the attribute results. """
         # Error Tests
         # Test if all parameters were initialized
-        if self.simulation_parameters is None:
+        if self._simulation_parameters is None:
             raise Exception("Simulation Parameters were not initialized")
 
         # Tests if wrapper has any components at all
@@ -278,13 +278,13 @@ class Simulator:
         log.information("finished connecting all components. A total of " + str(
             len(self.wrapped_components)) + " components were defined. They have a total of " + str(len(self.all_outputs)) + " outputs.")
         all_result_lines = []
-        log.information("Starting simulation for " + str(self.simulation_parameters.timesteps) + " timesteps")
+        log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
         starttime = datetime.datetime.now()
         total_iteration_tries = 0
 
-        for step in range(self.simulation_parameters.timesteps):
-            if self.simulation_parameters.timesteps % 500 == 0:
+        for step in range(self._simulation_parameters.timesteps):
+            if self._simulation_parameters.timesteps % 500 == 0:
                 log.information("Starting step " + str(step))
 
             (resulting_stsv, iteration_tries) = self.process_one_timestep(step)
@@ -312,7 +312,7 @@ class Simulator:
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
         """  Prepares the results from the simulation for the post processing. """
-        if len(all_result_lines) != self.simulation_parameters.timesteps:
+        if len(all_result_lines) != self._simulation_parameters.timesteps:
             raise Exception("not all lines were generated")
         # npr = np.concatenate(all_result_lines, axis=0)
         colum_names = []
@@ -337,7 +337,7 @@ class Simulator:
             directory_path=self.dirpath,
             results=results_data_frame,
             all_outputs=self.all_outputs,
-            simulation_parameters=self.simulation_parameters,
+            simulation_parameters=self._simulation_parameters,
             wrapped_components=self.wrapped_components,
             story=self.report.story,
             mode=1,
@@ -360,10 +360,10 @@ class Simulator:
             average_iteration_tries: float = 1
         else:
             average_iteration_tries = total_iteration_tries / step
-        time_elapsed = datetime.timedelta(seconds=((self.simulation_parameters.timesteps - step) / steps_per_second))
+        time_elapsed = datetime.timedelta(seconds=((self._simulation_parameters.timesteps - step) / steps_per_second))
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore
-        simulation_status = f"Simulating... {(step / self.simulation_parameters.timesteps) * 100:.1f}% "
+        simulation_status = f"Simulating... {(step / self._simulation_parameters.timesteps) * 100:.1f}% "
         simulation_status += f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds} min "
         simulation_status += f"| Speed: {steps_per_second:.0f} step/s "
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
@@ -373,9 +373,9 @@ class Simulator:
 
     def get_std_results(self, results_data_frame):
         """ Converts results into a pretty dataframe for post processing. """
-        pd_timeline = pd.date_range(start=self.simulation_parameters.start_date,
-                                    end=self.simulation_parameters.end_date,
-                                    freq=f'{self.simulation_parameters.seconds_per_timestep}S')[:-1]
+        pd_timeline = pd.date_range(start=self._simulation_parameters.start_date,
+                                    end=self._simulation_parameters.end_date,
+                                    freq=f'{self._simulation_parameters.seconds_per_timestep}S')[:-1]
         n_columns = results_data_frame.shape[1]
         # results_std = pd.DataFrame()
         # for i_column in range(n_columns):

@@ -69,7 +69,7 @@ def basic_household_only_heat(my_sim, my_simulation_parameters: Optional[Simulat
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
-    my_sim.simulation_parameters = my_simulation_parameters
+    my_sim.set_simulation_parameters (my_simulation_parameters)
 
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=loadprofilegenerator_connector.Occupancy.get_default_config(), my_simulation_parameters=my_simulation_parameters)

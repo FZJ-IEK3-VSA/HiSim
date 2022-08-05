@@ -445,7 +445,7 @@ class SetupFunction:
             self._simulation_parameters = sim.SimulationParameters.one_day_only(
                 **self.cfg["SimulationParameters"]
             )
-        my_sim.set_parameters(self._simulation_parameters)
+        my_sim.set_simulation_parameters(self._simulation_parameters)
 
     def find_all_component_class_children(self):
         classname = component.Component

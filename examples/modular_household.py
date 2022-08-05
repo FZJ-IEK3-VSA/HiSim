@@ -108,7 +108,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         # file does not exist or could not be parsed - use default config
         my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True, boiler_included = 'electricity', 
                                                     heatpump_included = True, battery_included = True, chp_included = True )  
-    my_sim.simulation_parameters = my_simulation_parameters
+    my_sim.set_simulation_parameters(my_simulation_parameters)
     
     #get system configuration
     predictive = my_simulation_parameters.system_config.predictive #True or False

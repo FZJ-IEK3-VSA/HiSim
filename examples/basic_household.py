@@ -84,7 +84,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
-    my_sim.simulation_parameters = my_simulation_parameters
+    my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
     my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
@@ -281,7 +281,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
                                                                                  seconds_per_timestep=seconds_per_timestep)
-    my_sim.simulation_parameters = my_simulation_parameters
+    my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config,

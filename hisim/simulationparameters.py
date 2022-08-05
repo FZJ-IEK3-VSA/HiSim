@@ -30,7 +30,7 @@ class SimulationParameters:
 
     """ Defines HOW the simulation is going to proceed: Time resolution, time span and all these things. """
 
-    def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: float, post_processing_options: List[int] = None):
+    def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int, post_processing_options: List[int] = None):
         """ Initializes the class. """
         self.start_date = start_date
         self.end_date = end_date

@@ -369,7 +369,7 @@ class Simulator:
         log.information(simulation_status)
         return lastmessage
 
-    def get_std_results(self, results_data_frame: pd.Dataframe) -> pd.Dataframe:
+    def get_std_results(self, results_data_frame: pd.DataFrame) -> pd.DataFrame:
         """ Converts results into a pretty dataframe for post processing. """
         pd_timeline = pd.date_range(start=self._simulation_parameters.start_date,
                                     end=self._simulation_parameters.end_date,

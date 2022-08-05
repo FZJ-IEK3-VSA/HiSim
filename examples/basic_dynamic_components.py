@@ -50,7 +50,7 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
        # my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
        # my_simulation_parameters.enable_all_options( )                                                                          
        
-    my_sim.SimulationParameters = my_simulation_parameters
+    my_sim.simulation_parameters = my_simulation_parameters
 
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig( system_id='SG1',
                                                                          p_inv_custom=5.0,

@@ -26,6 +26,7 @@ class SimulationParameters:
         self.timesteps: int = int(total_seconds/seconds_per_timestep)
         self.year = start_date.year
         self.post_processing_options = post_processing_options
+        self.logging_level = 3 # Info
         self.system_config = SystemConfig( )
 
     @classmethod

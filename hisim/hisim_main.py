@@ -25,7 +25,7 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
             #for dirs in os.walk(path_to_be_added):
             #    sys.path.append(dirs)
         else:
-            raise ValueError("Directory location of module location is nonexistent!\nDirectory entered: {}".format(path_to_be_added))
+            raise ValueError("Directory location of module location is nonexistent!\nDirectory entered: " + path_to_be_added)
     suffix =module_filename[-3:]
     if suffix != ".py":
         module_fullfilename = "{}.py".format(module_filename)
@@ -64,7 +64,7 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
 if __name__ == "__main__":
     #logging.basicConfig(level=logging.DEBUG)
     if len(sys.argv) < 3:
-        log.information("need two arguments")
+        log.information("HiSim needs two arguments")
         quit()
     filename = sys.argv[1]
     functionname = sys.argv[2]

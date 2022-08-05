@@ -30,7 +30,6 @@ import warnings
 
 class PostProcessingDataTransfer:
     def __init__(self,
-                  time_correction_factor,
                   directory_path,
                   results,
                   all_outputs,
@@ -42,7 +41,8 @@ class PostProcessingDataTransfer:
                   execution_time,
                   results_monthly,
                   ):
-        self.time_correction_factor =  time_correction_factor
+        # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
+        self.time_correction_factor =  simulation_parameters.seconds_per_timestep / 3600
         self.directory_path = directory_path
         self.results = results
         self.all_outputs = all_outputs
@@ -165,14 +165,14 @@ class PostProcessor:
               "day":0}
         #if len(self.results) == 60 * 24 * 365:
         for index, output in enumerate(self.ppdt.all_outputs):
-            if PostProcessingOptions.Plot_Line in  self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PlotLine in  self.ppdt.postProcessingOptions:
                 my_line = charts.Line(output=output.FullName,
                                data=self.ppdt.results.iloc[:, index],
                                units=output.Unit,
                                directorypath=self.ppdt.directory_path,
                                time_correction_factor=self.ppdt .time_correction_factor)
                 my_line.plot()
-            if PostProcessingOptions.Plot_Carpet in self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PlotCarpet in self.ppdt.postProcessingOptions:
                 #log.information("Making carpet plots")
                 my_carpet = charts.Carpet(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
@@ -181,7 +181,7 @@ class PostProcessor:
                                    time_correction_factor=self.ppdt.time_correction_factor)
                 my_carpet.plot( xdims = int( ( self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date ).days ) )
 
-            if PostProcessingOptions.Plot_Day in self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PlotDay in self.ppdt.postProcessingOptions:
                     my_days = ChartSingleDay(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
                                    units=output.Unit,
@@ -190,7 +190,7 @@ class PostProcessor:
                                    day=days["day"],
                                    month=days["month"])
                     my_days.plot()
-            if PostProcessingOptions.Plot_Bar in self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PlotBar in self.ppdt.postProcessingOptions:
                 my_bar = charts.Bar(output=output.FullName,
                              data=self.ppdt.results_monthly.iloc[:, index],
                              units=output.Unit,
@@ -200,7 +200,7 @@ class PostProcessor:
 
 
         # Plot sankey
-        if PostProcessingOptions.Plot_Sankey in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.PlotSankey in self.ppdt.postProcessingOptions:
             log.information("plotting sankeys")
         #    self.plot_sankeys()
         else:
@@ -209,14 +209,14 @@ class PostProcessor:
             log.information("not plotting sankeys")
 
         # Export all results to CSV
-        if PostProcessingOptions.Export_To_CSV in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.ExportToCSV in self.ppdt.postProcessingOptions:
             log.information("exporting to csv")
             self.export_results_to_csv()
         else:
             log.information("not exporting to CSV")
             
          # Export all results to CSV
-        if PostProcessingOptions.Compute_KPI in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.ComputeKPI in self.ppdt.postProcessingOptions:
             log.information("Computing KPIs")
             self.compute_KPIs( )
         else:
@@ -246,7 +246,7 @@ class PostProcessor:
                 #my_days.close()
 
         # Open file explorer
-        if PostProcessingOptions.Open_Directory in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.OpenDirectory in self.ppdt.postProcessingOptions:
             self.open_dir_in_file_explorer()
 
     @utils.measure_execution_time
@@ -396,8 +396,8 @@ class PostProcessor:
         """
         self.report.open()
         for wc in self.ppdt.wrapped_components:
-            if hasattr(wc.MyComponent, "write_to_report"):
-                component_content = wc.MyComponent.write_to_report()
+            if hasattr(wc.my_component, "write_to_report"):
+                component_content = wc.my_component.write_to_report()
                 if isinstance(component_content, list) is False:
                     component_content = [component_content]
                 self.report.write(component_content)

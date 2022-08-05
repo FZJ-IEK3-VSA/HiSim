@@ -55,15 +55,19 @@ class SingleTimeStepValues:
     def get_input_value(self, component_input: ComponentInput):
         if component_input.SourceOutput is None:
             return 0
-        if(component_input.SourceOutput.GlobalIndex < 0):
-            raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
+        # commented for performance reasons: this is called hundreds of millions of times and even
+        # this small check for better error messages is taking seconds
+        #if component_input.SourceOutput.GlobalIndex < 0:
+        #    raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
         return self.values[component_input.SourceOutput.GlobalIndex]
 
     def set_output_value(self, output: ComponentOutput, value: float):
-        if(output.GlobalIndex < 0):
-             raise Exception("Output Index was not set correctly for " + output.FullName + ". GlobalIndex was " +str(output.GlobalIndex))
-        if(output.GlobalIndex > len(self.values)-1):
-            raise Exception("Output Index was not set correctly for " + output.FullName)
+        # commented for performance reasons: this is called hundreds of millions of times and
+        # even this small check for better error messages is taking seconds
+        # if(output.GlobalIndex < 0):
+        #     raise Exception("Output Index was not set correctly for " + output.FullName + ". GlobalIndex was " +str(output.GlobalIndex))
+        # if(output.GlobalIndex > len(self.values)-1):
+        #    raise Exception("Output Index was not set correctly for " + output.FullName)
         self.values[output.GlobalIndex] = value
 
     def is_close_enough_to_previous(self, previous_values):
@@ -143,6 +147,7 @@ class Component:
         log.trace("added connections: " + str(self.default_connections))
 
     def set_sim_repo(self, simulation_repository: SimRepository):
+        """ """
         if simulation_repository is None:
             raise ValueError("simulation repository was none")
         self.simulation_repository = simulation_repository
@@ -238,7 +243,7 @@ class Component:
                                                                                               component.ComponentName))
 
     def get_input_definitions(self) -> List[ComponentInput]:
-        # delivers a list of inputs
+        """ delivers a list of inputs """
         return self.inputs
 
     def get_outputs(self) -> List[ComponentOutput]:

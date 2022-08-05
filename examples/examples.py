@@ -23,7 +23,7 @@ def first_example(my_sim: Simulator, my_simulation_parameters):
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=2021,
                                                                                      seconds_per_timestep=60)
-    my_sim.SimulationParameters = my_simulation_parameters
+    my_sim.simulation_parameters = my_simulation_parameters
 
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(name="Random numbers 100-200",
@@ -69,7 +69,7 @@ def second_example(my_sim: Simulator,my_simulation_parameters):
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=2021,
                                                                             seconds_per_timestep=60) # use a full year for testing
-    my_sim.SimulationParameters = my_simulation_parameters
+    my_sim.simulation_parameters = my_simulation_parameters
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(name="Random numbers 100-200",
                            timesteps=my_simulation_parameters.timesteps,

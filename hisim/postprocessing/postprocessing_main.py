@@ -14,7 +14,7 @@ from enum import Enum
 # Owned
 import hisim.log as log
 from hisim import utils
-from hisim.utils import PostProcessingOptions
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 import pickle
 #from . import charts

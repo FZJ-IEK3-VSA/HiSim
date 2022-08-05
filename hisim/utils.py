@@ -6,7 +6,6 @@ import inspect
 import hashlib
 import json
 
-from enum import IntEnum
 from typing import Any, Dict
 from functools import wraps
 from timeit import default_timer as timer
@@ -186,18 +185,6 @@ HISIMPATH: Dict[str, Any] = {"results": os.path.join(hisim_abs_path, "results"),
                                                            "Siemens_Junelight.npy")}
 
 
-class PostProcessingOptions(IntEnum):
-    """
-    Enum class for enabling / disabling parts of the post processing
-    """
-    PlotLine = 1
-    PlotCarpet = 2
-    PlotSankey = 3
-    PlotDay = 4
-    PlotBar = 5
-    OpenDirectory = 6
-    ExportToCSV = 7
-    ComputeKPI = 8
 
 
 # class Outputs:

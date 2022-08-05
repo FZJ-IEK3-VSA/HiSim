@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 
-from hisim.utils import PostProcessingOptions
+from hisim.postprocessingoptions import PostProcessingOptions
 
 
 @dataclass_json

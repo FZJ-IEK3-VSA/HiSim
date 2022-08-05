@@ -5,7 +5,7 @@ from hisim.simulationparameters import SimulationParameters
 import shutil
 import random
 from hisim import log
-from hisim.utils import PostProcessingOptions
+from hisim.postprocessingoptions import PostProcessingOptions
 import matplotlib.pyplot as plt
 from hisim import utils
 

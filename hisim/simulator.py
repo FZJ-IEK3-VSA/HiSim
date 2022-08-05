@@ -3,7 +3,7 @@
 
 import os
 import datetime
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Any
 import time
 
 import pandas as pd
@@ -40,7 +40,7 @@ class ComponentWrapper:
         # self.cachedict: = {}
         self.is_cachable = is_cachable
 
-    def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]):
+    def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
         """ Registers component outputs in the global list of components. """
         log.information("Registering component outputs on " + self.my_component.ComponentName)
         # register the output column
@@ -55,7 +55,7 @@ class ComponentWrapper:
             log.information("Registered output " + col.FullName)
             self.component_outputs.append(col)
 
-    def register_component_inputs(self, global_column_dict):
+    def register_component_inputs(self, global_column_dict: Dict[str, Any]):
         """ Gets the inputs for the current component from the global column dict and puts them into component_inputs. """
         log.information("Registering component inputs for " + self.my_component.ComponentName)
         # look up input columns and cache, so we only have the correct columns saved
@@ -345,13 +345,13 @@ class Simulator:
         )
         return ppdt
 
-    def show_progress(self, lastmessage, starttime, step, total_iteration_tries):
+    def show_progress(self, lastmessage: datetime.datetime, starttime: datetime.datetime, step: int, total_iteration_tries: int):
         """ ;akes the pretty progress messages with time estimate. """
         lastmessage = datetime.datetime.now()
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
         elapsed_minutes, elapsed_seconds = divmod(elapsed.seconds, 60)
-        elapsed_seconds = str(elapsed_seconds).zfill(2)
+        elapsed_seconds_str: str = str(elapsed_seconds).zfill(2)
         # Calculates steps achieved per time duration
         steps_per_second = step / elapsed.total_seconds()
         if step == 0:
@@ -362,14 +362,14 @@ class Simulator:
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore
         simulation_status = f"Simulating... {(step / self._simulation_parameters.timesteps) * 100:.1f}% "
-        simulation_status += f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds} min "
+        simulation_status += f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds_str} min "
         simulation_status += f"| Speed: {steps_per_second:.0f} step/s "
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
         simulation_status += f"| Avg. iterations {average_iteration_tries:.1f}"
         log.information(simulation_status)
         return lastmessage
 
-    def get_std_results(self, results_data_frame):
+    def get_std_results(self, results_data_frame: pd.Dataframe) -> pd.Dataframe:
         """ Converts results into a pretty dataframe for post processing. """
         pd_timeline = pd.date_range(start=self._simulation_parameters.start_date,
                                     end=self._simulation_parameters.end_date,

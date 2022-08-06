@@ -95,12 +95,12 @@ if __name__ == "__main__":
                             )
 
                             my_csv_loader_pv_config = csvloader.CSVLoaderConfig(
-                                component_name="pv_'{}'_kWp/kWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
+                                component_name="pv_'{}'_kWp/MWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
                                 csv_filename=(photovoltaic_profiles_path+'pv_'+region+'_'+type+'_'+year+'.csv'),
                                 column=3,
                                 loadtype=loadtypes.LoadTypes.Electricity,
                                 unit=loadtypes.Units.Watt,
-                                column_name="power_production",
+                                column_name="pv_power_production",
                                 multiplier=pv,
                                 sep=",",
                                 decimal=".",
@@ -147,7 +147,7 @@ if __name__ == "__main__":
                             my_cfg.add_connection(component_connection)
 
                             my_pvs_to_controller = ComponentsConnection(
-                                first_component="pv_'{}'_kWp/kWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
+                                first_component="pv_'{}'_kWp/MWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
                                 second_component="ControllerElectricity",
                                 method="Manual",
                                 first_component_output="Output1",

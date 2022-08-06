@@ -275,13 +275,21 @@ class PostProcessor:
         production_sum=0
         battery_discharge=0
         battery_charge=0
+        pv_size=0
+        chp_size=0
         #sum consumption and production of individual components
         for column in self.ppdt.results:
             if column.endswith('power_demand [Electricity - W]'):
                 electric_loadprofile=(column[:-33])
                 consumption_sum+=self.ppdt.results[column].mean()*8.76
-            elif column.endswith('power_production [Electricity - W]'):
+            elif column.endswith('pv_power_production [Electricity - W]'):
                 pv_size=float(column.split("'")[1])
+                region=int(column.split("'")[3])
+                type=column.split("'")[5]
+                year=int(column.split("'")[7])
+                production_sum+=(self.ppdt.results[column].mean()*8.76)
+            elif column.endswith('chp_power_production [Electricity - W]'):
+                chp_size=float(column.split("'")[1])
                 region=int(column.split("'")[3])
                 type=column.split("'")[5]
                 year=int(column.split("'")[7])
@@ -304,6 +312,7 @@ class PostProcessor:
         results_kpi['weather_type']=[type]
         results_kpi['weather_year']=[year]
         results_kpi['p_pv']=[pv_size]
+        results_kpi['p_chp']=[chp_size]
         results_kpi['e_bat']=[e_bat]
         results_kpi['production_sum [kWh]']=[production_sum]
         results_kpi['consumption_sum [kWh]']=[consumption_sum]

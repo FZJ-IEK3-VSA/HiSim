@@ -43,7 +43,6 @@ if __name__ == "__main__":
     profilepath = (rootpath+'/hisim/inputs/HiSim-Data-Package-for-PIEG-Strom')
     electrical_loadprofiles_path = (profilepath+'/electrical-loadprofiles/data_processed/15min/')
     electrical_loadprofiles = os.listdir(electrical_loadprofiles_path)
-    electrical_loadprofiles = ['LP_W_EFH.csv']
     photovoltaic_profiles_path = (profilepath+'/photovoltaic/data_processed/15min/')
     # weather
     weather_region = ['4']  # 1-15

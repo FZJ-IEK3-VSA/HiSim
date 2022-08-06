@@ -2,270 +2,72 @@
     "SimulationParameters": {
         "year": 2019,
         "seconds_per_timestep": 900,
-        "method": "full_year"
+        "method": "full_year_only_kpi"
     },
     "Components": {
         "hisim.components.csvloader.CSVLoader": {
-            "component_name": "csv_load_loader_thermal",
-            "csv_filename": "HiSim-Data-Package-for-PIEG-Strom/thermal-loadprofiles/data_processed/15min/dhw_4.csv",
+            "component_name": "LP_WP",
+            "csv_filename": "/home/tjarko/Apps/FZJ-IEK3-VSA/HiSim/hisim/inputs/HiSim-Data-Package-for-PIEG-Strom/electrical-loadprofiles/data_processed/15min/LP_WP.csv",
             "column": 1,
-            "loadtype": "Heating",
+            "loadtype": "Electricity",
             "unit": "W",
-            "column_name": "hotwater_demand",
+            "column_name": "power_demand",
             "sep": ",",
             "decimal": ".",
             "multiplier": 1
         },
-        "hisim.components.weather.Weather": {
-            "location": "Aachen"
+        "hisim.components.csvloader.CSVLoader_number1": {
+            "component_name": "chp_'0.5'_kW/MWh_region:'4'_type:'a'_year:'2015'",
+            "csv_filename": "/home/tjarko/Apps/FZJ-IEK3-VSA/HiSim/hisim/inputs/HiSim-Data-Package-for-PIEG-Strom/chp/data_processed/15min/chp_4_a_2015.csv",
+            "column": 1,
+            "loadtype": "Electricity",
+            "unit": "W",
+            "column_name": "chp_power_production",
+            "sep": ",",
+            "decimal": ".",
+            "multiplier": 0.5
         },
-        "hisim.components.controller_l2_energy_management_system.ControllerHeat": {
-            "temperature_storage_target_warm_water": 50,
-            "temperature_storage_target_heating_water": 35,
-            "temperature_storage_target_hysteresis_ww": 45,
-            "temperature_storage_target_hysteresis_hw": 35
+        "hisim.components.advanced_battery_bslib.Battery": {
+            "system_id": "SG1",
+            "p_inv_custom": 500.0,
+            "e_bat_custom": 1.0,
+            "name": "1.0",
+            "source_weight": 1
         },
-        "hisim.components.generic_hot_water_storage.HeatStorage": {
-            "V_SP_heating_water": 1000,
-            "V_SP_warm_water": 100,
-            "temperature_of_warm_water_extratcion": 32,
-            "ambient_temperature": 15,
-            "T_sp_ww": 40,
-            "T_sp_hw": 40
-        },
-        "hisim.components.generic_hot_water_storage.HeatStorageController": {
-            "initial_temperature_building": 20,
-            "initial_temperature_heating_storage": 35
-        },
-        "hisim.components.generic_gas_heater.GasHeater": {
-            "is_modulating": true,
-            "P_th_min": 1000,
-            "P_th_max": 12000,
-            "eff_th_min": 0.6,
-            "eff_th_max": 0.9,
-            "delta_T": 25,
-            "mass_flow_max": 0.11483253588516747,
-            "temperature_max": 80,
-            "temperaturedelta": 10,
-            "power_max": 12000
-        },
-        "hisim.components.advanced_fuel_cell.CHP": {
-            "name": "CHP",
-            "min_operation_time": 60,
-            "min_idle_time": 15,
-            "gas_type": "Hydrogen",
-            "operating_mode": "both",
-            "p_el_max": 3600,
-            "is_modulating": true,
-            "P_el_min": 2000,
-            "P_th_min": 3000,
-            "eff_el_min": 0.2,
-            "eff_th_min": 0.5,
-            "mass_flow_max": 0.011,
-            "P_el_max": 3000,
-            "P_th_max": 4000,
-            "eff_el_max": 0.4,
-            "eff_th_max": 0.55,
-            "temperature_max": 80,
-            "delta_T": 10
-        },
-        "hisim.components.building.Building": {
-            "heating_reference_temperature": -14,
-            "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
-            "bClass": "medium",
-            "initial_temperature": 23
-        },
-        "hisim.components.building.BuildingController": {
-            "minimal_building_temperature": 20,
-            "stop_heating_building_temperature": 21
-        },
-        "hisim.components.loadprofilegenerator_connector.Occupancy": {
-            "profile_name": "CH01"
+        "hisim.components.controller_l2_energy_management_system.ControllerElectricity": {
+            "strategy": "optimize_own_consumption",
+            "limit_to_shave": 0
         }
     },
     "Groupings": {},
     "Connections": {
-        "Connection1_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
+        "Connection1_LP_WP_ControllerElectricity": {
+            "First Component": "LP_WP",
+            "Second Component": "ControllerElectricity",
             "Method": "Manual",
-            "First Component Output": "Azimuth",
-            "Second Component Input": "Altitude"
+            "First Component Output": "Output1",
+            "Second Component Input": "ElectricityConsumptionBuilding"
         },
-        "Connection2_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
+        "Connection2_chp_'0.5'_kW/MWh_region:'4'_type:'a'_year:'2015'_ControllerElectricity": {
+            "First Component": "chp_'0.5'_kW/MWh_region:'4'_type:'a'_year:'2015'",
+            "Second Component": "ControllerElectricity",
             "Method": "Manual",
-            "First Component Output": "Azimuth",
-            "Second Component Input": "Azimuth"
+            "First Component Output": "Output1",
+            "Second Component Input": "ElectricityOutputPvs"
         },
-        "Connection3_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
+        "Connection3_ControllerElectricity_1.0": {
+            "First Component": "ControllerElectricity",
+            "Second Component": "1.0",
             "Method": "Manual",
-            "First Component Output": "ApparentZenith",
-            "Second Component Input": "ApparentZenith"
+            "First Component Output": "ElectricityToOrFromBatteryTarget",
+            "Second Component Input": "LoadingPowerInput"
         },
-        "Connection4_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
+        "Connection4_1.0_ControllerElectricity": {
+            "First Component": "1.0",
+            "Second Component": "ControllerElectricity",
             "Method": "Manual",
-            "First Component Output": "DirectNormalIrradiance",
-            "Second Component Input": "DirectNormalIrradiance"
-        },
-        "Connection5_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
-            "Method": "Manual",
-            "First Component Output": "DirectNormalIrradianceExtra",
-            "Second Component Input": "DirectNormalIrradianceExtra"
-        },
-        "Connection6_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
-            "Method": "Manual",
-            "First Component Output": "DiffuseHorizontalIrradiance",
-            "Second Component Input": "DiffuseHorizontalIrradiance"
-        },
-        "Connection7_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
-            "Method": "Manual",
-            "First Component Output": "GlobalHorizontalIrradiance",
-            "Second Component Input": "GlobalHorizontalIrradiance"
-        },
-        "Connection8_Weather_Building": {
-            "First Component": "Weather",
-            "Second Component": "Building",
-            "Method": "Manual",
-            "First Component Output": "TemperatureOutside",
-            "Second Component Input": "TemperatureOutside"
-        },
-        "Connection9_Occupancy_Building": {
-            "First Component": "Occupancy",
-            "Second Component": "Building",
-            "Method": "Manual",
-            "First Component Output": "HeatingByResidents",
-            "Second Component Input": "HeatingByResidents"
-        },
-        "Connection10_ControllerHeat_HeatStorage": {
-            "First Component": "ControllerHeat",
-            "Second Component": "HeatStorage",
-            "Method": "Manual",
-            "First Component Output": "ControlSignalChooseStorage",
-            "Second Component Input": "ControlSignalChooseStorage"
-        },
-        "Connection11_ControllerHeat_GasHeater": {
-            "First Component": "ControllerHeat",
-            "Second Component": "GasHeater",
-            "Method": "Manual",
-            "First Component Output": "ControlSignalGasHeater",
-            "Second Component Input": "ControlSignal"
-        },
-        "Connection12_ControllerHeat_CHP": {
-            "First Component": "ControllerHeat",
-            "Second Component": "CHP",
-            "Method": "Manual",
-            "First Component Output": "ControlSignalChp",
-            "Second Component Input": "ControlSignal"
-        },
-        "Connection13_HeatStorage_HeatStorageController": {
-            "First Component": "HeatStorage",
-            "Second Component": "HeatStorageController",
-            "Method": "Manual",
-            "First Component Output": "WaterOutputTemperatureHeatingWater",
-            "Second Component Input": "TemperatureHeatingStorage"
-        },
-        "Connection14_HeatStorage_CHP": {
-            "First Component": "HeatStorage",
-            "Second Component": "CHP",
-            "Method": "Manual",
-            "First Component Output": "WaterOutputStorageforHeaters",
-            "Second Component Input": "MassflowInputTemperature"
-        },
-        "Connection15_HeatStorage_Building": {
-            "First Component": "HeatStorage",
-            "Second Component": "Building",
-            "Method": "Manual",
-            "First Component Output": "RealHeatForBuilding",
-            "Second Component Input": "ThermalEnergyDelivered"
-        },
-        "Connection16_HeatStorage_ControllerHeat": {
-            "First Component": "HeatStorage",
-            "Second Component": "ControllerHeat",
-            "Method": "Manual",
-            "First Component Output": "WaterOutputTemperatureHeatingWater",
-            "Second Component Input": "StorageTemperatureHeatingWater"
-        },
-        "Connection17_HeatStorage_GasHeater": {
-            "First Component": "HeatStorage",
-            "Second Component": "GasHeater",
-            "Method": "Manual",
-            "First Component Output": "WaterOutputStorageforHeaters",
-            "Second Component Input": "MassflowInputTemperature"
-        },
-        "Connection18_HeatStorageController_HeatStorage": {
-            "First Component": "HeatStorageController",
-            "Second Component": "HeatStorage",
-            "Method": "Manual",
-            "First Component Output": "RealThermalDemandHeatingWater",
-            "Second Component Input": "ThermalDemandHeatingWater"
-        },
-        "Connection19_Building_HeatStorageController": {
-            "First Component": "Building",
-            "Second Component": "HeatStorageController",
-            "Method": "Manual",
-            "First Component Output": "TemperatureMean",
-            "Second Component Input": "BuildingTemperature"
-        },
-        "Connection20_Building_ControllerHeat": {
-            "First Component": "Building",
-            "Second Component": "ControllerHeat",
-            "Method": "Manual",
-            "First Component Output": "TemperatureMean",
-            "Second Component Input": "ResidenceTemperature"
-        },
-        "Connection21_Building_BuildingController": {
-            "First Component": "Building",
-            "Second Component": "BuildingController",
-            "Method": "Manual",
-            "First Component Output": "TemperatureMean",
-            "Second Component Input": "ResidenceTemperature"
-        },
-        "Connection22_Building_HeatStorageController": {
-            "First Component": "Building",
-            "Second Component": "HeatStorageController",
-            "Method": "Manual",
-            "First Component Output": "ReferenceMaxHeatBuildingDemand",
-            "Second Component Input": "ReferenceMaxHeatBuildingDemand"
-        },
-        "Connection23_Building_BuildingController": {
-            "First Component": "Building",
-            "Second Component": "BuildingController",
-            "Method": "Manual",
-            "First Component Output": "ReferenceMaxHeatBuildingDemand",
-            "Second Component Input": "ReferenceMaxHeatBuildingDemand"
-        },
-        "Connection24_BuildingController_HeatStorageController": {
-            "First Component": "BuildingController",
-            "Second Component": "HeatStorageController",
-            "Method": "Manual",
-            "First Component Output": "RealHeatBuildingDemand",
-            "Second Component Input": "RealHeatBuildingDemand"
-        },
-        "Connection25_GasHeater_HeatStorage": {
-            "First Component": "GasHeater",
-            "Second Component": "HeatStorage",
-            "Method": "Manual",
-            "First Component Output": "ThermalOutputPower",
-            "Second Component Input": "ThermalInputPower1"
-        },
-        "Connection26_CHP_HeatStorage": {
-            "First Component": "CHP",
-            "Second Component": "HeatStorage",
-            "Method": "Manual",
-            "First Component Output": "ThermalOutputPower",
-            "Second Component Input": "ThermalInputPower2"
+            "First Component Output": "AcBatteryPower",
+            "Second Component Input": "ElectricityToOrFromBatteryReal"
         }
     }
 }

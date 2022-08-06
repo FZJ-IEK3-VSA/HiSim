@@ -44,22 +44,22 @@ if __name__ == "__main__":
     electrical_loadprofiles_path = (profilepath+'/electrical-loadprofiles/data_processed/15min/')
     electrical_loadprofiles = os.listdir(electrical_loadprofiles_path)
     electrical_loadprofiles = ['LP_W_EFH.csv']
-    photovoltaic_profiles_path = (profilepath+'/photovoltaic/data_processed/15min/')
+    chp_profiles_path = (profilepath+'/chp/data_processed/15min/')
     # weather
     weather_region = ['4']  # 1-15
     weather_year = ['2015'] # 2015,2045
     weather_type = ['a']    # (a)verage, extreme (s)ummer, extreme (w)inter
     # normalized photovoltaic power in kWp/MWh
-    p_pv = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+    p_chp = [0, 0.025, 0.05, 0.075, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.50]
     # normalized battery capacity in kWh/MWh
-    e_bat = [0, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5]
+    e_bat = [0, 0.05, 0.1, 0.15, 0.20, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 
     name = "cfg"
     for electrical_loadprofile in electrical_loadprofiles:
         for region in weather_region:
             for year in weather_year:
                 for type in weather_type:
-                    for pv in p_pv:
+                    for chp in p_chp:
                         for bat in e_bat:
                             # Create configuration object
                             my_cfg = ConfigurationGenerator()
@@ -94,24 +94,24 @@ if __name__ == "__main__":
                                 {my_cfg.set_name(csvloader.CSVLoader): my_csv_loader_electric_config}
                             )
 
-                            my_csv_loader_pv_config = csvloader.CSVLoaderConfig(
-                                component_name="pv_'{}'_kWp/kWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
-                                csv_filename=(photovoltaic_profiles_path+'pv_'+region+'_'+type+'_'+year+'.csv'),
-                                column=3,
+                            my_csv_loader_chp_config = csvloader.CSVLoaderConfig(
+                                component_name="chp_'{}'_kW/MWh_region:'{}'_type:'{}'_year:'{}'".format(str(chp),region,type,year),
+                                csv_filename=(chp_profiles_path+'chp_'+region+'_'+type+'_'+year+'.csv'),
+                                column=1,
                                 loadtype=loadtypes.LoadTypes.Electricity,
                                 unit=loadtypes.Units.Watt,
-                                column_name="power_production",
-                                multiplier=pv,
+                                column_name="chp_power_production",
+                                multiplier=chp,
                                 sep=",",
                                 decimal=".",
                             )
                             my_cfg.add_component(
-                                {my_cfg.set_name(csvloader.CSVLoader): my_csv_loader_pv_config}
+                                {my_cfg.set_name(csvloader.CSVLoader): my_csv_loader_chp_config}
                             )
 
                             # Battery
                             my_battery_config = advanced_battery_bslib.BatteryConfig(system_id='SG1',
-                                                                                    p_inv_custom=min(pv,bat)*0.75*1000,
+                                                                                    p_inv_custom=bat*0.5*1000,
                                                                                     e_bat_custom=bat,
                                                                                     name=str(bat),
                                                                                     source_weight=1)
@@ -146,14 +146,14 @@ if __name__ == "__main__":
                             )
                             my_cfg.add_connection(component_connection)
 
-                            my_pvs_to_controller = ComponentsConnection(
-                                first_component="pv_'{}'_kWp/kWh_region:'{}'_type:'{}'_year:'{}'".format(str(pv),region,type,year),
+                            my_chp_to_controller = ComponentsConnection(
+                                first_component="chp_'{}'_kW/MWh_region:'{}'_type:'{}'_year:'{}'".format(str(chp),region,type,year),
                                 second_component="ControllerElectricity",
                                 method="Manual",
                                 first_component_output="Output1",
                                 second_component_input="ElectricityOutputPvs",
                             )
-                            my_cfg.add_connection(my_pvs_to_controller)
+                            my_cfg.add_connection(my_chp_to_controller)
 
                             # Output from  ControllerElectricity
 
@@ -179,5 +179,5 @@ if __name__ == "__main__":
                             # Export configuration file
                             my_cfg.dump()
                             os.system(
-                                "python hisim/hisim_main.py examples/vdi4657_chapter_9-2-3-1 simulation_settings"
+                                "python hisim/hisim_main.py examples/vdi4657_chapter_9-2-3-2 simulation_settings"
                             )

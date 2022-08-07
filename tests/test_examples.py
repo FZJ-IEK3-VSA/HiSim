@@ -9,10 +9,18 @@ from hisim.postprocessingoptions import PostProcessingOptions
 import matplotlib.pyplot as plt
 from hisim import utils
 
+
+#@utils.measure_execution_time
+#def test_basic_dynamic_components():
+#    path = "../examples/basic_dynamic_components.py"
+#    func = "basic_household_explicit"
+#    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+#    hisim_main.main(path, func,mysimpar )
+#    log.information(os.getcwd())
+
+
 @utils.measure_execution_time
 def test_basic_household():
-  #  if os.path.isdir("../hisim/inputs/cache"):
-   #     shutil.rmtree("../hisim/inputs/cache")
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
@@ -21,8 +29,6 @@ def test_basic_household():
 
 @utils.measure_execution_time
 def test_basic_household_with_default_connections():
-  #  if os.path.isdir("../hisim/inputs/cache"):
-   #     shutil.rmtree("../hisim/inputs/cache")
     path = "../examples/basic_household.py"
     func = "basic_household_with_default_connections"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
@@ -31,8 +37,6 @@ def test_basic_household_with_default_connections():
 
 @utils.measure_execution_time
 def test_basic_household_with_all_resultfiles():
-   # if os.path.isdir("../hisim/inputs/cache"):
-    #    shutil.rmtree("../hisim/inputs/cache")
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
@@ -40,6 +44,7 @@ def test_basic_household_with_all_resultfiles():
         mysimpar.post_processing_options.append(option)
     hisim_main.main(path, func,mysimpar )
     log.information(os.getcwd())
+
 
 #
 # def test_basic_household_with_all_resultfiles_full_year():

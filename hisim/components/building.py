@@ -95,16 +95,19 @@ class BuildingState:
     def self_copy(self):
         return BuildingState(self.t_m, self.c_m)
 
+
 class BuildingControllerState:
 
     def __init__(self,
                  temperature_building_target_C: float,
-                 level_of_utilization:float):
+                 level_of_utilization: float):
         self.temperature_building_target_C: float = temperature_building_target_C
-        self.level_of_utilization:float = level_of_utilization
-    def clone( self ):
-        return BuildingControllerState( temperature_building_target_C = self.temperature_building_target_C,
-                                        level_of_utilization = self.level_of_utilization )
+        self.level_of_utilization: float = level_of_utilization
+
+    def clone(self):
+        return BuildingControllerState(temperature_building_target_C=self.temperature_building_target_C,
+                                       level_of_utilization=self.level_of_utilization)
+
 
 @dataclass_json
 @dataclass
@@ -114,11 +117,13 @@ class BuildingConfig:
     bClass: str
     initial_temperature: float
 
+
 @dataclass_json
 @dataclass
 class BuildingControllerConfig:
     minimal_building_temperature: float
     stop_heating_building_temperature: float
+
 
 class Building(cp.DynamicComponent):
     """
@@ -177,10 +182,10 @@ class Building(cp.DynamicComponent):
     MassOutput = "MassOutput"
     TemperatureOutput = "TemperatureOutput"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
-    
-    #dynamic
-    MyComponentInputs: List[cp.DynamicConnectionInput] = []
-    MyComponentOutputs: List[cp.DynamicConnectionOutput] = []
+
+    # dynamic
+    my_component_inputs: List[cp.DynamicConnectionInput] = []
+    my_component_outputs: List[cp.DynamicConnectionOutput] = []
 
     # Similar components to connect to:
     # 1. Weather
@@ -191,13 +196,14 @@ class Building(cp.DynamicComponent):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters, config: BuildingConfig):
 
-        super().__init__( my_component_inputs = self.MyComponentInputs,
-                          my_component_outputs = self.MyComponentOutputs,
-                          name = "Building", 
-                          my_simulation_parameters = my_simulation_parameters )
+        super().__init__(my_component_inputs=self.my_component_inputs,
+                         my_component_outputs=self.my_component_outputs,
+                         name="Building",
+                         my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
-        self.buildingConfig=config
-        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig, self.my_simulation_parameters)
+        self.buildingConfig = config
+        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig,
+                                                                      self.my_simulation_parameters)
 
         self.c_m: float = 0
         self.c_m_ref: float = 0
@@ -215,9 +221,10 @@ class Building(cp.DynamicComponent):
         self.q_sol_ref: float = 0
         self.q_h_nd_ref: float = 0
 
-        self.max_thermal_building_demand = self.calculate_max_thermal_building_demand(building_code=config.building_code,
-                                                                                      heating_reference_temperature=config.heating_reference_temperature,
-                                                                                      initial_temperature=config.initial_temperature)
+        self.max_thermal_building_demand = self.calculate_max_thermal_building_demand(
+            building_code=config.building_code,
+            heating_reference_temperature=config.heating_reference_temperature,
+            initial_temperature=config.initial_temperature)
         self.build(config.bClass, config.building_code)
 
         self.state: BuildingState = BuildingState(t_m=config.initial_temperature, c_m=self.c_m)
@@ -337,14 +344,16 @@ class Building(cp.DynamicComponent):
         #                                                           self.TemperatureOutput,
         #                                                           lt.LoadTypes.WarmWater,
         #                                                           lt.Units.Celsius)
+
     @staticmethod
     def get_default_config():
         config = BuildingConfig(
-                        building_code = "DE.N.SFH.05.Gen.ReEx.001.002",
-                        bClass = "medium",
-                        initial_temperature = 23,
-                        heating_reference_temperature = -14)
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+            bClass="medium",
+            initial_temperature=23,
+            heating_reference_temperature=-14)
         return config
+
     def get_weather_default_connections(self):
         log.information("setting weather default connections")
         connections = []
@@ -448,7 +457,7 @@ class Building(cp.DynamicComponent):
             # the name thermal_energy_delivered might be misleading, because it is actually power in W
             thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
         else:
-            thermal_energy_delivered = sum( self.get_dynamic_inputs( stsv = stsv, tags = [ lt.InandOutputType.HeatToBuilding ] ) )
+            thermal_energy_delivered = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.HeatToBuilding]))
         t_m_prev = self.state.t_m
 
         # old_stored_energy = self.state.cal_stored_energy()
@@ -1157,8 +1166,7 @@ class BuildingController(cp.Component):
         self.stop_heating_building_temperature = config.stop_heating_building_temperature
         self.state = BuildingControllerState(temperature_building_target_C=config.minimal_building_temperature,
                                              level_of_utilization=0)
-        self.previous_state = self.state.clone( )
-
+        self.previous_state = self.state.clone()
 
         # ===================================================================================================================
         self.ref_max_thermal_build_demand: cp.ComponentInput = self.add_input(self.ComponentName,
@@ -1179,12 +1187,14 @@ class BuildingController(cp.Component):
                                                                         self.LevelOfUtilization,
                                                                         lt.LoadTypes.Any,
                                                                         lt.Units.Percent)
+
     @staticmethod
     def get_default_config():
-        config=BuildingControllerConfig(
-                minimal_building_temperature = 20,
-                stop_heating_building_temperature = 21)
+        config = BuildingControllerConfig(
+            minimal_building_temperature=20,
+            stop_heating_building_temperature=21)
         return config
+
     def build(self):
         pass
 
@@ -1192,18 +1202,18 @@ class BuildingController(cp.Component):
         pass
 
     def i_save_state(self):
-        self.previous_state = self.state.clone( )
+        self.previous_state = self.state.clone()
 
     def i_restore_state(self):
-        self.state = self.previous_state.clone( )
+        self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
         building_temperature = stsv.get_input_value(self.residence_temperature)
-        minimal_building_temperature=self.minimal_building_temperature
-        delta_temp_for_lvl_of_util = 0.4 # delta_temperature_for_level_of_utilization
+        minimal_building_temperature = self.minimal_building_temperature
+        delta_temp_for_lvl_of_util = 0.4  # delta_temperature_for_level_of_utilization
 
         # Building is warm enough
         if building_temperature > minimal_building_temperature:
@@ -1214,16 +1224,8 @@ class BuildingController(cp.Component):
         else:
             level_of_utilization = minimal_building_temperature - building_temperature
 
-        real_heat_building_demand = self.state.level_of_utilization * stsv.get_input_value(self.ref_max_thermal_build_demand)
+        real_heat_building_demand = self.state.level_of_utilization * stsv.get_input_value(
+            self.ref_max_thermal_build_demand)
         self.state.level_of_utilization = level_of_utilization
         stsv.set_output_value(self.level_of_utilization, self.state.level_of_utilization)
         stsv.set_output_value(self.real_heat_building_demand, real_heat_building_demand)
-
-
-
-
-
-
-
-
-

@@ -57,7 +57,7 @@ def basic_household_implicit(
     my_setup_function.build(my_sim)
 
 
-if __name__ == "__main__":
+def generate_json_for_cfg_automator():
 
     pvs_powers = [5e3, 10e3]
     capacity = [5, 10]

@@ -106,15 +106,15 @@ class L3_Controller( cp.DynamicComponent ):
     """
 
     # Inputs and Outputs
-    MyComponentInputs: List[ cp.DynamicConnectionInput ] = []
-    MyComponentOutputs: List[ cp.DynamicConnectionOutput ] = []
+    my_component_inputs: List[ cp.DynamicConnectionInput] = []
+    my_component_outputs: List[ cp.DynamicConnectionOutput] = []
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
                         threshold_price : float = 25,
                         threshold_peak : Optional[ float ] = None ):
         
-        super( ).__init__(  my_component_inputs = self.MyComponentInputs,
-                            my_component_outputs = self.MyComponentOutputs,
+        super( ).__init__(  my_component_inputs = self.my_component_inputs,
+                            my_component_outputs = self.my_component_outputs,
                             name = "L3Controller", 
                             my_simulation_parameters = my_simulation_parameters )
         
@@ -129,8 +129,8 @@ class L3_Controller( cp.DynamicComponent ):
         self.components_sorted : list[ lt.ComponentType ] = [ ]
         
     def sort_source_weights_and_components( self ):
-        SourceTags = [ elem.SourceTags[ 0 ] for elem in self.MyComponentInputs ]
-        SourceWeights = [ elem.SourceWeight for elem in self.MyComponentInputs ]
+        SourceTags = [ elem.SourceTags[ 0 ] for elem in self.my_component_inputs ]
+        SourceWeights = [ elem.SourceWeight for elem in self.my_component_inputs ]
         sortindex = sorted( range( len( SourceWeights) ), key = lambda k: SourceWeights[ k ] )
         self.source_weights_sorted = [ SourceWeights[ i ] for i in sortindex ]
         self.components_sorted = [ SourceTags[ i ] for i in sortindex ]

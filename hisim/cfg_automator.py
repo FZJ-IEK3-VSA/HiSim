@@ -567,7 +567,7 @@ class SetupFunction:
             ):
                 self.cfg["Components"][full_instance_path][
                     parameter_name
-                ] = my_sim.simulation_parameters
+                ] = my_sim._simulation_parameters
         try:
 
             # self.cfg["Components"][comp].__delitem__("my_simulation_parameters")

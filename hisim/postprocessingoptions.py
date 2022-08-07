@@ -12,3 +12,4 @@ class PostProcessingOptions(IntEnum):
     OpenDirectory = 6
     ExportToCSV = 7
     ComputeKPI = 8
+    GenerateReportPdf = 8

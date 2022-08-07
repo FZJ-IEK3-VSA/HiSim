@@ -3,13 +3,9 @@ import pandas as pd
 import sys
 import inspect
 import subprocess
-#import tkinter as tk
+
 import tkinter.filedialog as filedialog
 from enum import Enum
-
-#currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-#parentdir = os.path.dirname(currentdir)
-#sys.path.insert(0, parentdir)
 
 # Owned
 import hisim.log as log
@@ -66,66 +62,12 @@ class PostProcessor:
         self.ppdt = ppdt
         if ppdt is None:
             raise Exception("PPDT was none")
-        #self.resultsdir = resultsdir
-        #self.all_outputs = all_outputs
-        #self.time_correction_factor = time_correction_factor
-        #self.dirname = None
-        # self.flags = {"plot_line": plot_line,
-        #               "plot_carpet": plot_carpet,
-        #               "plot_sankey": plot_sankey,
-        #               "plot_day": plot_day,
-        #               "plot_bar": plot_bar,
-        #               "open_dir": open_dir,
-        #               "export_results_to_CSV": export_results_to_CSV}
         self.report = report.Report(setup_function=self.ppdt.setup_function, dirpath=self.ppdt.directory_path)
-        #self.cal_pos_sim()
-
-#    def open_latest_pickle(self):
- #       sim_pickle, dirpath, dirname = self.get_lastest_pickle()
-  #      self.dirname = dirname
-   #     #utils.del_file_type(dirname, ".png")
-    #    self.get_pickle_attributes(sim_pickle)
 
     def set_dir_results(self, dirname=None):
         if dirname is None:
             dirname = filedialog.askdirectory(initialdir=utils.HISIMPATH["results"])
         self.dirname = dirname
-
-    #def open_pickle(self, dirname):
-#        sim_pickle, dirpath = utils.open_pickle(dirname)
-#        utils.del_file_type(dirname, ".png")
-#        self.get_pickle_attributes(sim_pickle)
-
- #   def get_lastest_pickle(self):
-  #      stored_results_list = os.listdir(self.resultsdir)
-   #     execution_dates = []
-    #    for index, result_dir in enumerate(stored_results_list):
-     #       temp = result_dir.split("_")
-      #      execution_dates.append("{}_{}".format(temp[-2], temp[-1]))
-
-       # dir_index = execution_dates.index(max(execution_dates))
-        #latest_dir = stored_results_list[dir_index]
-        #latest_dir_path = os.path.join(self.resultsdir, latest_dir)
-        #for file in os.listdir(latest_dir_path):
-         #   if file.endswith(".pkl"):
-          #      pickle_file = file
-           #     break
-
-        #filepath = os.path.join(latest_dir_path, pickle_file)
-        #with open(filepath, 'rb') as input:
-#            extracted_pickle = pickle.load(input)
- #       return extracted_pickle, latest_dir_path, latest_dir
-
-    # def get_pickle_attributes(self, sim_pickle):
-    #     ppdt: PostProcessingDataTransfer = sim_pickle
-    #     self.dirpath = ppdt.directory_path
-    #     #self.dirpath = sim_pickle["directory_path"]
-
-    #     self.report.executation_time = ppdt.execution_time #  sim_pickle["execution_time"]
-    #     self.time_correction_factor = ppdt.time_correction_factor # sim_pickle["time_correction_factor"]
-    #     self.all_outputs = ppdt.all_outputs#  sim_pickle["all_outputs"]
-    #     self.results_m = ppdt.results_m # sim_pickle["results_m"]
-    #     self.WrappedComponents = ppdt.wrapped_components # sim_pickle["wrapped_components"]
 
     @utils.measure_execution_time
     def plot_sankeys(self):
@@ -156,14 +98,9 @@ class PostProcessor:
         # Define the directory name
         ##
         warnings.filterwarnings("ignore")
-#        if self.dirname is None:
- #           self.open_latest_pickle()
-  #      else:
-   #         self.open_pickle(self.dirname)
 
         days={"month":0,
               "day":0}
-        #if len(self.results) == 60 * 24 * 365:
         for index, output in enumerate(self.ppdt.all_outputs):
             if PostProcessingOptions.PlotLine in  self.ppdt.postProcessingOptions:
                 my_line = charts.Line(output=output.FullName,
@@ -214,7 +151,9 @@ class PostProcessor:
             self.export_results_to_csv()
         else:
             log.information("not exporting to CSV")
-            
+        if PostProcessingOptions.GenerateReportPdf in self.ppdt.postProcessingOptions:
+            self.write_components_to_report()
+
          # Export all results to CSV
         if PostProcessingOptions.ComputeKPI in self.ppdt.postProcessingOptions:
             log.information("Computing KPIs")
@@ -222,7 +161,7 @@ class PostProcessor:
         else:
             log.information("not exporting to CSV")
 
-
+        # only a single day has been calculated. This gets special charts for debugging.
         if len(self.ppdt.results) == 1440:
             for index, output in enumerate(self.ppdt.all_outputs):
                 if output.FullName == "Dummy # Residence Temperature":
@@ -243,7 +182,7 @@ class PostProcessor:
                                    day=0,
                                    month=0)
                 my_days.plot()
-                #my_days.close()
+                my_days.close()
 
         # Open file explorer
         if PostProcessingOptions.OpenDirectory in self.ppdt.postProcessingOptions:
@@ -261,7 +200,6 @@ class PostProcessor:
                                                        "{}_{}_monthly.csv".format(column.split(' ', 3)[2],
                                                                                   column.split(' ', 3)[0])),
                                           sep=",", decimal=".", header = [ "{} - monthly [{}".format(column.split('[', 1)[0],column.split('[', 1)[1] ) ] )
-            #print( "{} - monthly [{}".format(column.split('[', 1)[0],column.split('[', 1)[1]) )
 
     def write_to_report(self, text):
         self.report.open()
@@ -397,11 +335,20 @@ class PostProcessor:
         """
         self.report.open()
         for wc in self.ppdt.wrapped_components:
-            if hasattr(wc.my_component, "write_to_report"):
-                component_content = wc.my_component.write_to_report()
-                if isinstance(component_content, list) is False:
+            # if hasattr(wc.my_component, "write_to_report"):
+            component_content = wc.my_component.write_to_report()
+            if isinstance(component_content, list) is False:
+                component_content = [component_content]
+            if isinstance(component_content, str) is True:
                     component_content = [component_content]
-                self.report.write(component_content)
+            self.report.write(component_content)
+        all_output_names = []
+        for output in self.ppdt.all_outputs:
+            all_output_names.append(output.FullName + " [" + output.Unit + "]")
+        self.report.write(["### All Outputs"])
+        self.report.write(all_output_names)
+        #   def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
+        #                  sankey_flow_direction: Optional[bool] = None):
         self.report.close()
 
     def open_dir_in_file_explorer(self):
@@ -445,7 +392,6 @@ class PostProcessor:
             df.index = temp_df.index
 
         self.ppdt.results.index = pd_timeline
-        #self.ppdt.results_std = df
 
         dfm = pd.DataFrame()
         for i_column in range(n_columns):
@@ -459,15 +405,3 @@ class PostProcessor:
 
         self.result_m = dfm
 
-# if __name__ == "__main__":
-#     flags = {"plot_line": True,
-#              "plot_carpet": False,
-#              "plot_sankey": False,
-#              "plot_day": False,
-#              "plot_bar": False,
-#              "open_dir": True,
-#              "export_results_to_CSV": True}
-#     my_post_processing = PostProcessor(**flags)
-#     #my_post_processing.set_dir_results()
-#     my_post_processing.run()
-#     my_post_processing.open_dir_in_file_explorer()

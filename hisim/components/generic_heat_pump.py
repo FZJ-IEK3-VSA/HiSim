@@ -488,7 +488,12 @@ class HeatPumpController(cp.Component):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
-
+    def write_to_report(self):
+        lines = []
+        lines.append("Heat Pump Controller")
+        # todo: add more useful stuff here
+        lines.append("tbd")
+        return lines
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:

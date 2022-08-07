@@ -111,6 +111,13 @@ class ElectricityGrid(Component):
         return ElectricityGrid(name="{}Subtract{}".format(self.ComponentName, other_electricity_grid.ComponentName),
                                grid=[self, "Subtract", other_electricity_grid], my_simulation_parameters=self.my_simulation_parameters)
 
+    def write_to_report(self):
+        lines = []
+        lines.append("Electricity grid")
+        # todo: add more useful stuff here
+        lines.append("tbd")
+        return lines
+
     def connect_electricity_input(self, component: Component):
         if hasattr(component, 'ElectricityOutput') is False:
             raise Exception("Component does not contain electricity output.")

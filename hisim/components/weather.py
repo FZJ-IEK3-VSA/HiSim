@@ -156,6 +156,12 @@ class Weather(Component):
         self.apparent_zenith_list: List[float]
         self.DHI_list: List[float]
 
+    def write_to_report(self):
+        lines = []
+        lines.append("Weather")
+        lines.append(self.weatherConfig.to_json())
+        return lines
+
     @staticmethod
     def get_default_config():
         config= WeatherConfig(location="Aachen")

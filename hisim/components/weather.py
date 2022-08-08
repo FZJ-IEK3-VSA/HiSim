@@ -159,7 +159,7 @@ class Weather(Component):
     def write_to_report(self):
         lines = []
         lines.append("Weather")
-        lines.append(self.weatherConfig.to_json())
+        lines.append(self.weatherConfig.to_json())  # type: ignore
         return lines
 
     @staticmethod

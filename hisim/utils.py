@@ -1,6 +1,4 @@
-"""
-Contains various utility functions and utility classes
-"""
+""" Contains various utility functions and utility classes. """
 import os
 import inspect
 import hashlib
@@ -24,7 +22,7 @@ __status__ = "development"
 # Retrieves hisim directory absolute path
 hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))  # type: ignore
 hisim_inputs = os.path.join(hisim_abs_path, "inputs")
-hisim_postprocessing_img = os.path.join(hisim_abs_path, "postprocessing", "report")
+hisim_postprocessing_img = os.path.join(hisim_abs_path, "postprocessing", "report")  # noqa
 
 HISIMPATH: Dict[str, Any] = {"results": os.path.join(hisim_abs_path, "results"),
                              "inputs": os.path.join(hisim_abs_path, "inputs"),
@@ -184,9 +182,6 @@ HISIMPATH: Dict[str, Any] = {"results": os.path.join(hisim_abs_path, "results"),
                              "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery",
                                                            "Siemens_Junelight.npy")}
 
-
-
-
 # class Outputs:
 #     def __init__(self):
 #         self.number_of_outputs = 0
@@ -218,29 +213,25 @@ HISIMPATH: Dict[str, Any] = {"results": os.path.join(hisim_abs_path, "results"),
 #
 #         with open(os.path.join(HISIMPATH["cache_indices"]), "w", encoding="utf-8") as filestream:
 #             json.dump(cache_index, filestream, indent=4)
-#
 #     return cache_index
 
 
-def load_smart_appliance(name):
-    """
-    Loads file for a single smart appliance by name
-
-    """
+def load_smart_appliance(name):  # noqa
+    """ Loads file for a single smart appliance by name. """
     with open(HISIMPATH["smart_appliances"], encoding="utf-8") as filestream:
         data = json.load(filestream)
     return data[name]
 
 
-def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters: SimulationParameters):
-    """
+def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters: SimulationParameters):  # noqa
+    """ Gets a cache path for a given parameter set.
 
-    This will genererate a file path based on any dataclass_json
-    It works by turning the class into a json string, hashing the string and then using that as filename
-    The idea is to have a unique file path for every possible configuration
+    This will generate a file path based on any dataclass_json.
+    It works by turning the class into a json string, hashing the string and then using that as filename.
+    The idea is to have a unique file path for every possible configuration.
     """
     json_str = parameter_class.to_json()
-    if(my_simulation_parameters is None):
+    if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
     simulation_parameter_str = my_simulation_parameters.get_unique_key()
     json_str = json_str + simulation_parameter_str
@@ -331,16 +322,12 @@ def get_cache_file(component_key: str, parameter_class: Any, my_simulation_param
 #     else:
 #         database.to_csv(os.path.join(HISIMPATH["cache_dir"], csv_file), sep=",", decimal=".", index=False, encoding = "cp1252")
 
-def load_export_load_profile_generator(target):
-    """
-    Returns the paths for the SQL exported files from
-    the Load Profile Generator
-    """
+def load_export_load_profile_generator(target):  # noqa
+    """ Returns the paths for the SQL exported files from the Load Profile Generator. """
     targetpath = os.path.join(HISIMPATH["LoadProfileGenerator_export_directory"], target)
     if os.path.exists(targetpath):
-        EXPORTPATH = {"electric_vehicle": [os.path.join(targetpath, "Results.HH1.sqlite"),
-                                           os.path.join(targetpath, "Results.General.sqlite")]}
-        return EXPORTPATH
+        lpg_export_path = {"electric_vehicle": [os.path.join(targetpath, "Results.HH1.sqlite"), os.path.join(targetpath, "Results.General.sqlite")]}
+        return lpg_export_path
     raise ValueError("Target export from Load Profile Generator does not exist")
 
 
@@ -467,15 +454,11 @@ def load_export_load_profile_generator(target):
 #     return extracted_pickle, dir_path
 
 
-def measure_execution_time(my_function):
-    """
-    Utility function that works as decorator for measuring execution time
-    """
+def measure_execution_time(my_function):  # noqa
+    """ Utility function that works as decorator for measuring execution time. """
     @wraps(my_function)
     def function_wrapper_for_measuring_execution_time(*args, **kwargs):
-        """
-        Inner function for the time measuring utility decorator
-        """
+        """ Inner function for the time measuring utility decorator. """
         start = timer()
         result = my_function(*args, **kwargs)
         end = timer()

@@ -1,5 +1,6 @@
 from enum import IntEnum
 
+
 class PostProcessingOptions(IntEnum):
     """
     Enum class for enabling / disabling parts of the post processing

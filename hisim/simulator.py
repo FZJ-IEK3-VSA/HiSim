@@ -47,7 +47,6 @@ class ComponentWrapper:
         output_columns = self.my_component.get_outputs()
         for col in output_columns:
             col.GlobalIndex = len(all_outputs)  # noqa
-            # target_output: cp.ComponentOutput
             for output in all_outputs:
                 if output.FullName == col.FullName:
                     raise Exception("trying to register the same key twice: " + col.FullName)
@@ -159,7 +158,6 @@ class Simulator:
             os.mkdir(os.path.join(module_directory, "results"))
         directoryname = f"{setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.dirpath = os.path.join(module_directory, "results", directoryname)
-        # self.resultsdir = os.path.join(module_directory, "results")
         self.simulation_repository = cp.SimRepository()
         os.mkdir(self.dirpath)
 
@@ -228,9 +226,6 @@ class Simulator:
         while continue_calculation:
             # Loops through components
             for wrapped_component in self.wrapped_components:
-                # if timestep >= 10392:
-                #    log.information("Stop here!")
-
                 # Executes restore state for each component
                 wrapped_component.restore_state()
                 # Executes i_simulate for component
@@ -244,7 +239,6 @@ class Simulator:
             if iterative_tries > 10:
                 force_convergence = True
             if iterative_tries > 100:
-                # return "error"
                 list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
                 raise Exception("More than 100 tries in time step " + str(timestep) + "\n" + list_of_changed_values)
             # Copies actual values to previous variable
@@ -312,18 +306,16 @@ class Simulator:
         """  Prepares the results from the simulation for the post processing. """
         if len(all_result_lines) != self._simulation_parameters.timesteps:
             raise Exception("not all lines were generated")
-        # npr = np.concatenate(all_result_lines, axis=0)
         colum_names = []
         if self.setup_function is None:
             raise Exception("No setup function was set")
         entry: cp.ComponentOutput
-        # np_results = np.array(all_result_lines)
         for index, entry in enumerate(self.all_outputs):
             column_name = entry.get_pretty_name()
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
-            # self.all_outputs[index].Results = np_results[:, index]
         results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
+        # todo: fix this constant
         index = pd.date_range("2021-01-01 00:00:00", periods=len(results_data_frame), freq="T")
         results_data_frame.index = index
         end_counter = time.perf_counter()
@@ -375,19 +367,7 @@ class Simulator:
                                     end=self._simulation_parameters.end_date,
                                     freq=f'{self._simulation_parameters.seconds_per_timestep}S')[:-1]
         n_columns = results_data_frame.shape[1]
-        # results_std = pd.DataFrame()
-        # for i_column in range(n_columns):
-        #     temp_df = pd.DataFrame(self.results.values[:, i_column], index=pd_timeline, columns=[self.results.columns[i_column]])
-        #     if 'Temperature' in self.results.columns[i_column] or 'Percent' in self.results.columns[i_column]:
-        #         temp_df = temp_df.resample('H').interpolate(method='linear')
-        #     else:
-        #         temp_df = temp_df.resample('H').sum()
-        #     results_std[temp_df.columns[0]] = temp_df.values[:, 0]
-        #     results_std.index = temp_df.index
-
         results_data_frame.index = pd_timeline
-        # self.results_std = results_std
-
         results_merged = pd.DataFrame()
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(results_data_frame.values[:, i_column], index=pd_timeline,

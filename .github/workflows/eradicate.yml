@@ -28,7 +28,17 @@ jobs:
     - name: Lint with flake8
       working-directory: ./
       run: |
-        flake8 . --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/simulator.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/simulationparamters.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/postprocessingoptions.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/log.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/loadtypes.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/hisim_with_profiler.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/hisim_main.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components_finder.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+
+# reenable once all source files are fixed and no more commented out code is spread all over
+# flake8 . --count --select=E9,F63,F7,F82,E800 --show-source --statistics
     #    # stop the build if there are Python syntax errors or undefined names
        
     #    # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide

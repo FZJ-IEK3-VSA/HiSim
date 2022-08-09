@@ -73,6 +73,7 @@ class L1_Controller( cp.Component ):
     
     """
     L1 Heat Pump Controller. It takes care of the operation of the heat pump only in terms of running times.
+    It gets inputs from an L2-heat controller
 
     Parameters
     --------------

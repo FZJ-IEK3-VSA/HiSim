@@ -40,6 +40,7 @@ class L2Config:
     T_tolerance : float
     heating_season_begin : int
     heating_season_end : int
+    P_threshold : float
 
     def __init__( self,
                   name : str,
@@ -50,7 +51,8 @@ class L2Config:
                   T_max_cooling : float,
                   T_tolerance : float,
                   heating_season_begin : int,
-                  heating_season_end : int ):
+                  heating_season_end : int,
+                  P_threshold : float ):
         self.name = name
         self.source_weight = source_weight
         self.T_min_heating = T_min_heating
@@ -60,6 +62,7 @@ class L2Config:
         self.T_tolerance = T_tolerance
         self.heating_season_begin = heating_season_begin
         self.heating_season_end = heating_season_end
+        self.P_threshold = P_threshold
 
 class L2_ControllerState:
     """
@@ -126,7 +129,7 @@ class L2_Controller( cp.Component ):
     """
     # Inputs
     ReferenceTemperature = "ReferenceTemperature"
-    l3_DeviceSignal = "l3_DeviceSignal"
+    ElectricityTarget = "ElectricityTarget"
 
     # Outputs
     l2_DeviceSignal = "l2_DeviceSignal"
@@ -152,18 +155,17 @@ class L2_Controller( cp.Component ):
                                                                        mandatory = True)
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
-        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                  self.l3_DeviceSignal,
-                                                                  LoadTypes.ON_OFF,
-                                                                  Units.BINARY,
-                                                                  mandatory = False)
-        
-        #Component outputs
         self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
         
+        self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.ComponentName,
+                                                                      self.ElectricityTarget,
+                                                                      LoadTypes.ELECTRICITY,
+                                                                      Units.WATT,
+                                                                      mandatory = True )
+
     def get_building_default_connections( self ):
         log.information("setting building default connections in L2 Controller")
         connections = [ ]
@@ -181,7 +183,8 @@ class L2_Controller( cp.Component ):
                            T_max_cooling = 25.0,
                            T_tolerance = 1.0,
                            heating_season_begin = 270,
-                           heating_season_end = 150 ) 
+                           heating_season_end = 150,
+                           P_threshold = 1500 ) 
         return config
 
     def build( self, config ): 
@@ -194,6 +197,7 @@ class L2_Controller( cp.Component ):
         self.T_tolerance = config.T_tolerance
         self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.P_threshold = config.P_threshold
         self.state = L2_ControllerState( )
         self.previous_state = L2_ControllerState( )
 
@@ -219,8 +223,12 @@ class L2_Controller( cp.Component ):
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )
 
         #get l3 recommendation if available
-        if self.l3_DeviceSignalC.source_output is not None:
-            l3state = stsv.get_input_value( self.l3_DeviceSignalC )
+        if self.ElectricityTargetC.SourceOutput is not None:
+            electricity_target = stsv.get_input_value( self.ElectricityTargetC )
+            if electricity_target >= self.P_threshold:
+                l3state = 1
+            else:
+                l3state = 0
         
             #reset temperature limits if recommended from l3
             if l3state == 1 :
@@ -263,7 +271,7 @@ class L2_Controller( cp.Component ):
                 if self.state.compulsory == 1:
                     #use previous state if it is compulsory
                     pass
-                elif self.l3_DeviceSignalC.source_output is not None:
+                elif self.ElectricityTargetC.SourceOutput is not None:
                     #use recommendation from l3 if available and not compulsory
                     self.state.state = l3state
                 else:
@@ -285,7 +293,8 @@ class L2_Controller( cp.Component ):
                 if self.state.compulsory == 1:
                     #use previous state if it compulsory
                     pass
-                elif self.l3_DeviceSignalC.source_output is not None:
+
+                elif self.ElectricityTargetC.SourceOutput is not None:
                     #use recommendation from l3 if available and not compulsory
                     self.state.state = l3state
                 else:

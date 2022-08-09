@@ -47,12 +47,14 @@ class LoadTypes(str, enum.Enum):
     WATER = "Water"
     WARM_WATER = "WarmWater"
 
+    OIL = 'Oil'
+    DISTRICTHEATING = 'DistrictHeating'
+
     PRICE = "Price"
 
     # Controllers:
     ON_OFF = "OnOff"  # encoding: 0 means off and 1 means on
     ACTIVATION = 'Activation'
-
 
 @enum.unique
 class Units(str, enum.Enum):

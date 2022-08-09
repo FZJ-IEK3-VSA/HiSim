@@ -20,8 +20,8 @@ class SystemConfig:
     prediction_horizon: int = 24 * 3600
     pv_included: bool = True
     smart_devices_included: bool = True
-    boiler_included: Optional[str] = "electricity"
-    heatpump_included: bool = True
+    boiler_included: Optional[ str ] = "electricity"
+    HeatingSystemInstalled: Optional[ str ] = 'HeatPump'
     battery_included: bool = False
     chp_included: bool = False
 
@@ -91,7 +91,8 @@ class SimulationParameters:
 
     def reset_system_config(self, predictive: bool = False, prediction_horizon: int = 0, pv_included: bool = True,  # noqa
                             smart_devices_included: bool = True,
-                            boiler_included: Optional[str] = 'electricity', heatpump_included: bool = True,
+                            boiler_included: Optional[str] = 'electricity', 
+			    HeatingSystemInstalled : Optional[ str ] = 'HeatPump',
                             battery_included: bool = False,
                             chp_included: bool = False) -> None:  # noqa
         """ Configures a system config. """
@@ -100,6 +101,6 @@ class SimulationParameters:
                                           pv_included=pv_included,
                                           smart_devices_included=smart_devices_included,
                                           boiler_included=boiler_included,
-                                          heatpump_included=heatpump_included,
+                                          HeatingSystemInstalled = HeatingSystemInstalled,
                                           battery_included=battery_included,
                                           chp_included=chp_included)

@@ -685,7 +685,8 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=0)
 
-        elif component_type == lt.ComponentType.ELECTROLYZER:
+        elif component_type in [ lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEATPUMP:
+
             if deltademand > 0:
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=deltademand)
@@ -735,15 +736,15 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
 
     def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
         skip_CHP = False
-        for ind in range(len(self.source_weights_sorted)):
-            component_type = self.components_sorted[ind]
-            source_weight = self.source_weights_sorted[ind]
-            if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER]:
-                if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER]:
-                    delta_demand, is_battery = self.control_electricity_component_iterative(deltademand=delta_demand,
-                                                                                            stsv=stsv,
-                                                                                            weight_counter=source_weight,
-                                                                                            component_type=component_type)
+        for ind in range( len( self.source_weights_sorted ) ): 
+            component_type = self.components_sorted[ ind ]
+            source_weight = self.source_weights_sorted[ ind ]
+            if component_type in [ lt.ComponentType.BATTERY, lt.ComponentType.FUELCELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEATPUMP ]:
+                if not skip_CHP or component_type in [ lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEATPUMP ]: 
+                    delta_demand, is_battery = self.control_electricity_component_iterative( deltademand = delta_demand,
+                                                                                             stsv = stsv,
+                                                                                             weight_counter = source_weight,
+                                                                                             component_type = component_type )
                 else:
                     self.set_dynamic_output(stsv=stsv,
                                             tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_TARGET],

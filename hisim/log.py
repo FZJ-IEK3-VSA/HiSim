@@ -1,64 +1,78 @@
-from enum import Enum, IntEnum
+""" Logging functionality for all of HiSim. """
 
-logging_level = 3
+from enum import IntEnum
+
+LOGGING_LEVEL = 3
+
+
 class LogPrio(IntEnum):
-    Error = 1
-    Warning = 2
-    Information = 3
-    Debug = 4
-    Profile = 5
-    Trace = 6
+
+    """ Define a logging priority. """
+
+    ERROR = 1
+    WARNING = 2
+    INFORMATION = 3
+    DEBUG = 4
+    PROFILE = 5
+    TRACE = 6
 
 
 def error(message: str):
-    log(LogPrio.Error, message)
+    """ Log an error message. """
+    log(LogPrio.ERROR, message)
 
 
 def warning(message: str):
-    log(LogPrio.Warning, message)
+    """ Log a warning message. """
+    log(LogPrio.WARNING, message)
 
 
 def information(message: str):
-    log(LogPrio.Information, message)
+    """ Log a information message. """
+    log(LogPrio.INFORMATION, message)
 
 
 def trace(message: str):
-    log(LogPrio.Trace, message)
+    """ Log a trace message. """
+    log(LogPrio.TRACE, message)
 
 
 def debug(message: str):
-    log(LogPrio.Debug, message)
+    """ Log a debug message. """
+    log(LogPrio.DEBUG, message)
 
 
 def profile(message: str):
-    log(LogPrio.Profile, message)
-    log_profile_file(LogPrio.Profile, message)
+    """ Log a profile message. """
+    log(LogPrio.PROFILE, message)
+    log_profile_file(message)
 
 
 def log(prio: int, message: str):
+    """ Write and print a log message. """
     # if(prio < LogPrio.Debug):
     prio_string: str
-    if prio == LogPrio.Error:
+    if prio == LogPrio.ERROR:
         prio_string = "ERR"
-    elif prio == LogPrio.Warning:
+    elif prio == LogPrio.WARNING:
         prio_string = "WRN"
-    elif prio == LogPrio.Information:
+    elif prio == LogPrio.INFORMATION:
         prio_string = "IFO"
-    elif prio == LogPrio.Debug:
+    elif prio == LogPrio.DEBUG:
         prio_string = "DBG"
-    elif prio == LogPrio.Profile:
+    elif prio == LogPrio.PROFILE:
         prio_string = "PRF"
-    elif prio == LogPrio.Trace:
+    elif prio == LogPrio.TRACE:
         prio_string = "TRC"
     else:
         raise ValueError("Unknown log priority: " + str(prio))
-    if prio <= logging_level:
+    if prio <= LOGGING_LEVEL:
         print(str(prio_string) + ":" + message)
-    with open('hisim_simulation.log', 'a') as f:
-        f.write(message + "\n")
+    with open('hisim_simulation.log', 'a', encoding="utf-8") as filestream:
+        filestream.write(message + "\n")
 
 
-def log_profile_file(prio: int, message: str):
-    # if(prio < LogPrio.Debug):
-    with open('profiling_timeuse.log', 'a') as f:
-        f.write(message + "\n")
+def log_profile_file(message: str):
+    """ Write log message to logfile. """
+    with open('profiling_timeuse.log', 'a', encoding="utf-8") as filestream:
+        filestream.write(message + "\n")

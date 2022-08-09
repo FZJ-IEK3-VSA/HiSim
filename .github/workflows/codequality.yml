@@ -35,7 +35,8 @@ jobs:
         prospector hisim/simulator.py
         prospector hisim/simulationparameters.py
         prospector hisim/postprocessingoptions.py
-        
+        prospector hisim/log.py
+        prospector hisim/loadtypes.py
         prospector hisim/hisim_main.py
         
         

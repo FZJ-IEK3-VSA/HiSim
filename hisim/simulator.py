@@ -149,7 +149,7 @@ class Simulator:
 
         self._simulation_parameters: SimulationParameters = my_simulation_parameters
         if self._simulation_parameters is not None:
-            log.logging_level = self._simulation_parameters.logging_level
+            log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
@@ -168,7 +168,7 @@ class Simulator:
         """ Sets the simulation parameters and the logging level at the same time. """
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
-            log.logging_level = self._simulation_parameters.logging_level
+            log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
     def add_component(self, component: cp.Component, is_cachable: bool = False):
         """ Adds component to simulator and wraps it up the output in the register. """

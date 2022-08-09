@@ -58,3 +58,4 @@ vulture:
   run: true
   disable:
     - unused-variable
+    - unused-function

@@ -102,14 +102,14 @@ class PostProcessor:
         days={"month":0,
               "day":0}
         for index, output in enumerate(self.ppdt.all_outputs):
-            if PostProcessingOptions.PlotLine in  self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PLOT_LINE in  self.ppdt.postProcessingOptions:
                 my_line = charts.Line(output=output.FullName,
                                data=self.ppdt.results.iloc[:, index],
                                units=output.Unit,
                                directorypath=self.ppdt.directory_path,
                                time_correction_factor=self.ppdt .time_correction_factor)
                 my_line.plot()
-            if PostProcessingOptions.PlotCarpet in self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PLOT_CARPET in self.ppdt.postProcessingOptions:
                 #log.information("Making carpet plots")
                 my_carpet = charts.Carpet(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
@@ -118,7 +118,7 @@ class PostProcessor:
                                    time_correction_factor=self.ppdt.time_correction_factor)
                 my_carpet.plot( xdims = int( ( self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date ).days ) )
 
-            if PostProcessingOptions.PlotDay in self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PLOT_SINGLE_DAYS in self.ppdt.postProcessingOptions:
                     my_days = ChartSingleDay(output=output.FullName,
                                    data=self.ppdt.results.iloc[:, index],
                                    units=output.Unit,
@@ -127,7 +127,7 @@ class PostProcessor:
                                    day=days["day"],
                                    month=days["month"])
                     my_days.plot()
-            if PostProcessingOptions.PlotBar in self.ppdt.postProcessingOptions:
+            if PostProcessingOptions.PLOT_BAR_CHARTS in self.ppdt.postProcessingOptions:
                 my_bar = charts.Bar(output=output.FullName,
                              data=self.ppdt.results_monthly.iloc[:, index],
                              units=output.Unit,
@@ -137,7 +137,7 @@ class PostProcessor:
 
 
         # Plot sankey
-        if PostProcessingOptions.PlotSankey in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.PLOT_SANKEY in self.ppdt.postProcessingOptions:
             log.information("plotting sankeys")
         #    self.plot_sankeys()
         else:
@@ -146,16 +146,16 @@ class PostProcessor:
             log.information("not plotting sankeys")
 
         # Export all results to CSV
-        if PostProcessingOptions.ExportToCSV in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.EXPORT_TO_CSV in self.ppdt.postProcessingOptions:
             log.information("exporting to csv")
             self.export_results_to_csv()
         else:
             log.information("not exporting to CSV")
-        if PostProcessingOptions.GenerateReportPdf in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.GENERATE_PDF_REPORT in self.ppdt.postProcessingOptions:
             self.write_components_to_report()
 
          # Export all results to CSV
-        if PostProcessingOptions.ComputeKPI in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.COMPUTE_KPI in self.ppdt.postProcessingOptions:
             log.information("Computing KPIs")
             self.compute_KPIs( )
         else:
@@ -185,7 +185,7 @@ class PostProcessor:
                 my_days.close()
 
         # Open file explorer
-        if PostProcessingOptions.OpenDirectory in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in self.ppdt.postProcessingOptions:
             self.open_dir_in_file_explorer()
 
     @utils.measure_execution_time

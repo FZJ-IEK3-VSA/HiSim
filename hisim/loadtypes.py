@@ -109,24 +109,24 @@ class ComponentType(str, enum.Enum):
     
 @enum.unique
 class InandOutputType(str, enum.Enum):
-    Massflow = "Massflow"
-    ControlSignal = "ControlSignal"
-    ElectricityTarget = "ElectricityTarget"
-    ElectricityReal = "ElectricityReal"
-    
-    #L3
-    LastActivation = "LastActivation"
-    LatestActivation = "LatestActivation"
-    EarliestActivation = "EarliestActivation"
-    RecommendedActivation = "RecommendedActivation"
-    
-    #Energy Management System
-    Production = "Production"
-    Consumption = "Consumption"
-    
-    #Heating
-    HeatToBuilding = "HeatToBuilding"
-    HeatToBuffer = "HeatToBuffer"
 
+    """ For dynamic controllers. """
+    
+    MASS_FLOW = "Massflow"
+    CONTROL_SIGNAL = "ControlSignal"
+    ELECTRICITY_TARGET = "ElectricityTarget"
+    ELECTRICITY_REAL = "ElectricityReal"
 
+    # L3
+    LAST_ACTIVATION = "LastActivation"
+    LATEST_ACTIVATION = "LatestActivation"
+    EARLIEST_ACTIVATION = "EarliestActivation"
+    RECOMMENDED_ACTIVATION = "RecommendedActivation"
 
+    # Energy Management System
+    PRODUCTION = "Production"
+    CONSUMPTION = "Consumption"
+
+    # Heating
+    HEAT_TO_BUILDING = "HeatToBuilding"
+    HEAT_TO_BUFFER = "HeatToBuffer"

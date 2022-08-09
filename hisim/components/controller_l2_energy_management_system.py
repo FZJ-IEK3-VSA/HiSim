@@ -663,33 +663,33 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                 component_type: lt.ComponentType):
         is_battery = None
         # get previous signal and substract from total balance
-        previous_signal = self.get_dynamic_input(stsv=stsv, tags=[component_type, lt.InandOutputType.ElectricityReal],
+        previous_signal = self.get_dynamic_input(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_REAL],
                                                  weight_counter=weight_counter)
 
         # control from substracted balance
         if component_type == lt.ComponentType.Battery:
-            self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ElectricityTarget],
+            self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                     weight_counter=weight_counter, output_value=deltademand)
             deltademand = deltademand - previous_signal
 
         elif component_type == lt.ComponentType.FuelCell:
             if deltademand < 0:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ElectricityTarget],
+                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=-deltademand)
                 deltademand = deltademand + previous_signal
                 if deltademand > 0:
                     is_battery = self.get_entries_of_type(lt.ComponentType.Battery)
             else:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ElectricityTarget],
+                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=0)
 
         elif component_type == lt.ComponentType.Electrolyzer:
             if deltademand > 0:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ElectricityTarget],
+                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=deltademand)
                 deltademand = deltademand - previous_signal
             else:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ElectricityTarget],
+                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=0)
 
         return deltademand, is_battery
@@ -699,7 +699,7 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                             ind: int):
         previous_signal = self.get_dynamic_input(stsv=stsv, tags=[self.components_sorted[ind]],
                                                  weight_counter=self.source_weights_sorted[ind])
-        self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget],
+        self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.Battery, lt.InandOutputType.ELECTRICITY_TARGET],
                                 weight_counter=self.source_weights_sorted[ind],
                                 output_value=deltademand + previous_signal)
         return deltademand - previous_signal
@@ -716,8 +716,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                               weight_counter=weight_counter,
                                                               component_type=[lt.ComponentType.Battery,
                                                                               lt.ComponentType.FuelCell],
-                                                              input_type=lt.InandOutputType.ElectricityReal,
-                                                              output_type=lt.InandOutputType.ElectricityTarget)
+                                                              input_type=lt.InandOutputType.ELECTRICITY_REAL,
+                                                              output_type=lt.InandOutputType.ELECTRICITY_TARGET)
 
         # more electricity than needed
         if delta_demand > 0:
@@ -744,7 +744,7 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                                                             component_type=component_type)
                 else:
                     self.set_dynamic_output(stsv=stsv,
-                                            tags=[lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget],
+                                            tags=[lt.ComponentType.FuelCell, lt.InandOutputType.ELECTRICITY_TARGET],
                                             weight_counter=source_weight, output_value=0)
                 if is_battery is not None:
                     delta_demand = self.postprocess_battery(deltademand=delta_demand,
@@ -864,8 +864,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         limit_to_shave = self.limit_to_shave
 
         # get production
-        production = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.Production]))
-        consumption = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.Consumption]))
+        production = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.PRODUCTION]))
+        consumption = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.CONSUMPTION]))
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign

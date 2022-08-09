@@ -215,15 +215,15 @@ class L3_Controller( cp.DynamicComponent ):
                     prof_next = profiles[ 1 ]
                     
                     #get inputs
-                    lastactivation = self.get_dynamic_input( stsv = stsv,
-                                                             tags = [ component_type, lt.InandOutputType.LastActivation ],
-                                                             weight_counter = weight_counter )
-                    earliestactivation = self.get_dynamic_input( stsv = stsv,
-                                                                 tags = [ component_type, lt.InandOutputType.EarliestActivation ],
-                                                                 weight_counter = weight_counter )
-                    latestactivation = self.get_dynamic_input( stsv = stsv,
-                                                               tags = [ component_type, lt.InandOutputType.LatestActivation ],
-                                                               weight_counter = weight_counter )
+                    lastactivation = self.get_dynamic_input(stsv = stsv,
+                                                            tags = [component_type, lt.InandOutputType.LAST_ACTIVATION],
+                                                            weight_counter = weight_counter)
+                    earliestactivation = self.get_dynamic_input(stsv = stsv,
+                                                                tags = [component_type, lt.InandOutputType.EARLIEST_ACTIVATION],
+                                                                weight_counter = weight_counter)
+                    latestactivation = self.get_dynamic_input(stsv = stsv,
+                                                              tags = [component_type, lt.InandOutputType.LATEST_ACTIVATION],
+                                                              weight_counter = weight_counter)
                     
                     #relevant timesteps
                     horizon = int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )

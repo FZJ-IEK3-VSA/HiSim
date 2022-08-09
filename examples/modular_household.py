@@ -259,18 +259,18 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
     if battery_included or chp_included :
         my_electricity_controller = controller_l2_energy_management_system.ControllerElectricityGeneric( my_simulation_parameters = my_simulation_parameters )
-        my_electricity_controller.add_component_inputs_and_connect(  source_component_classes = consumption,
-                                                                     outputstring = 'ElectricityOutput',
-                                                                     source_load_type = lt.LoadTypes.Electricity,
-                                                                     source_unit = lt.Units.Watt,
-                                                                     source_tags = [ lt.InandOutputType.Consumption ],
-                                                                     source_weight = 999 )
-        my_electricity_controller.add_component_inputs_and_connect(  source_component_classes = production,
-                                                                     outputstring = 'ElectricityOutput',
-                                                                     source_load_type = lt.LoadTypes.Electricity,
-                                                                     source_unit = lt.Units.Watt,
-                                                                     source_tags = [ lt.InandOutputType.Production ],
-                                                                     source_weight = 999 )
+        my_electricity_controller.add_component_inputs_and_connect(source_component_classes = consumption,
+                                                                   outputstring = 'ElectricityOutput',
+                                                                   source_load_type = lt.LoadTypes.Electricity,
+                                                                   source_unit = lt.Units.Watt,
+                                                                   source_tags = [lt.InandOutputType.CONSUMPTION],
+                                                                   source_weight = 999)
+        my_electricity_controller.add_component_inputs_and_connect(source_component_classes = production,
+                                                                   outputstring = 'ElectricityOutput',
+                                                                   source_load_type = lt.LoadTypes.Electricity,
+                                                                   source_unit = lt.Units.Watt,
+                                                                   source_tags = [lt.InandOutputType.PRODUCTION],
+                                                                   source_weight = 999)
         
     if battery_included:
         my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config( )
@@ -278,18 +278,18 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         count += 1 
         my_advanced_battery = advanced_battery_bslib.Battery( my_simulation_parameters = my_simulation_parameters, config = my_advanced_battery_config )
         
-        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_advanced_battery,
-                                                                    source_component_output = my_advanced_battery.AcBatteryPower,
-                                                                    source_load_type = lt.LoadTypes.Electricity,
-                                                                    source_unit = lt.Units.Watt,
-                                                                    source_tags = [lt.ComponentType.Battery,lt.InandOutputType.ElectricityReal],
-                                                                    source_weight = my_advanced_battery.source_weight )
+        my_electricity_controller.add_component_input_and_connect(source_component_class = my_advanced_battery,
+                                                                  source_component_output = my_advanced_battery.AcBatteryPower,
+                                                                  source_load_type = lt.LoadTypes.Electricity,
+                                                                  source_unit = lt.Units.Watt,
+                                                                  source_tags = [lt.ComponentType.Battery, lt.InandOutputType.ELECTRICITY_REAL],
+                                                                  source_weight = my_advanced_battery.source_weight)
 
-        electricity_to_or_from_battery_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
-                                                                                                source_tags = [ lt.ComponentType.Battery, lt.InandOutputType.ElectricityTarget ],
-                                                                                                source_weight = my_advanced_battery.source_weight,
-                                                                                                source_load_type = lt.LoadTypes.Electricity,
-                                                                                                source_unit = lt.Units.Watt )
+        electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(source_output_name = lt.InandOutputType.ELECTRICITY_TARGET,
+                                                                                               source_tags = [lt.ComponentType.Battery, lt.InandOutputType.ELECTRICITY_TARGET],
+                                                                                               source_weight = my_advanced_battery.source_weight,
+                                                                                               source_load_type = lt.LoadTypes.Electricity,
+                                                                                               source_unit = lt.Units.Watt)
     
         my_advanced_battery.connect_dynamic_input( input_fieldname = advanced_battery_bslib.Battery.LoadingPowerInput,
                                                    src_object = electricity_to_or_from_battery_target )
@@ -324,17 +324,17 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_chp.connect_only_predefined_connections( my_chp_controller_l1 )
         
         #electricity controller of fuel cell
-        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_chp,
-                                                                    source_component_output = my_chp.ElectricityOutput,
-                                                                    source_load_type = lt.LoadTypes.Electricity,
-                                                                    source_unit = lt.Units.Watt,
-                                                                    source_tags = [ lt.ComponentType.FuelCell,lt.InandOutputType.ElectricityReal ],
-                                                                    source_weight = my_chp.source_weight )
-        electricity_from_fuelcell_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
-                                                                                           source_tags = [ lt.ComponentType.FuelCell, lt.InandOutputType.ElectricityTarget ],
-                                                                                           source_weight = my_chp.source_weight,
-                                                                                           source_load_type = lt.LoadTypes.Electricity,
-                                                                                           source_unit = lt.Units.Watt )
+        my_electricity_controller.add_component_input_and_connect(source_component_class = my_chp,
+                                                                  source_component_output = my_chp.ElectricityOutput,
+                                                                  source_load_type = lt.LoadTypes.Electricity,
+                                                                  source_unit = lt.Units.Watt,
+                                                                  source_tags = [lt.ComponentType.FuelCell, lt.InandOutputType.ELECTRICITY_REAL],
+                                                                  source_weight = my_chp.source_weight)
+        electricity_from_fuelcell_target = my_electricity_controller.add_component_output(source_output_name = lt.InandOutputType.ELECTRICITY_TARGET,
+                                                                                          source_tags = [lt.ComponentType.FuelCell, lt.InandOutputType.ELECTRICITY_TARGET],
+                                                                                          source_weight = my_chp.source_weight,
+                                                                                          source_load_type = lt.LoadTypes.Electricity,
+                                                                                          source_unit = lt.Units.Watt)
         my_chp_controller_l1.connect_dynamic_input( input_fieldname = generic_CHP.L1_Controller.ElectricityTarget,
                                                     src_object = electricity_from_fuelcell_target )
         heater.append( my_chp )
@@ -358,17 +358,17 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_electrolyzer.connect_only_predefined_connections( my_electrolyzer_controller_l1 )
         
         #electricity controller of fuel cell
-        my_electricity_controller.add_component_input_and_connect(  source_component_class = my_electrolyzer,
-                                                                    source_component_output = my_electrolyzer.ElectricityOutput,
-                                                                    source_load_type = lt.LoadTypes.Electricity,
-                                                                    source_unit = lt.Units.Watt,
-                                                                    source_tags = [ lt.ComponentType.Electrolyzer, lt.InandOutputType.ElectricityReal ],
-                                                                    source_weight = my_electrolyzer.source_weight )
-        electricity_to_electrolyzer_target = my_electricity_controller.add_component_output( source_output_name = lt.InandOutputType.ElectricityTarget,
-                                                                                             source_tags = [ lt.ComponentType.Electrolyzer, lt.InandOutputType.ElectricityTarget ],
-                                                                                             source_weight = my_electrolyzer.source_weight,
-                                                                                             source_load_type = lt.LoadTypes.Electricity,
-                                                                                             source_unit = lt.Units.Watt )
+        my_electricity_controller.add_component_input_and_connect(source_component_class = my_electrolyzer,
+                                                                  source_component_output = my_electrolyzer.ElectricityOutput,
+                                                                  source_load_type = lt.LoadTypes.Electricity,
+                                                                  source_unit = lt.Units.Watt,
+                                                                  source_tags = [lt.ComponentType.Electrolyzer, lt.InandOutputType.ELECTRICITY_REAL],
+                                                                  source_weight = my_electrolyzer.source_weight)
+        electricity_to_electrolyzer_target = my_electricity_controller.add_component_output(source_output_name = lt.InandOutputType.ELECTRICITY_TARGET,
+                                                                                            source_tags = [lt.ComponentType.Electrolyzer, lt.InandOutputType.ELECTRICITY_TARGET],
+                                                                                            source_weight = my_electrolyzer.source_weight,
+                                                                                            source_load_type = lt.LoadTypes.Electricity,
+                                                                                            source_unit = lt.Units.Watt)
         my_electrolyzer_controller_l1.connect_dynamic_input( input_fieldname = generic_electrolyzer.L1_Controller.l2_ElectricityTarget,
                                                     src_object = electricity_to_electrolyzer_target )
         
@@ -382,12 +382,12 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_electrolyzer_controller_l1.connect_only_predefined_connections( my_h2storage )
         my_chp_controller_l1.connect_only_predefined_connections( my_h2storage )
         
-    my_building.add_component_inputs_and_connect(  source_component_classes = heater,
-                                                   outputstring = 'ThermalEnergyDelivered',
-                                                   source_load_type = lt.LoadTypes.Heating,
-                                                   source_unit = lt.Units.Watt,
-                                                   source_tags = [ lt.InandOutputType.HeatToBuilding ],
-                                                   source_weight = 999 )
+    my_building.add_component_inputs_and_connect(source_component_classes = heater,
+                                                 outputstring = 'ThermalEnergyDelivered',
+                                                 source_load_type = lt.LoadTypes.Heating,
+                                                 source_unit = lt.Units.Watt,
+                                                 source_tags = [lt.InandOutputType.HEAT_TO_BUILDING],
+                                                 source_weight = 999)
         
     if battery_included or chp_included:
         my_sim.add_component( my_electricity_controller )
@@ -399,73 +399,73 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         
         #connect boiler
         if boiler_included == 'electricity':
-            l3_BoilerSignal = my_controller_l3.add_component_output(    source_output_name = lt.InandOutputType.ControlSignal,
-                                                                        source_tags = [ lt.ComponentType.Boiler ],
-                                                                        source_weight = my_boiler.source_weight,
-                                                                        source_load_type = lt.LoadTypes.OnOff,
-                                                                        source_unit = lt.Units.binary )
+            l3_BoilerSignal = my_controller_l3.add_component_output(source_output_name = lt.InandOutputType.CONTROL_SIGNAL,
+                                                                    source_tags = [ lt.ComponentType.Boiler ],
+                                                                    source_weight = my_boiler.source_weight,
+                                                                    source_load_type = lt.LoadTypes.OnOff,
+                                                                    source_unit = lt.Units.binary)
         
             my_boiler_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_dhw_boiler.L2_Controller.l3_DeviceSignal,
                                                            src_object = l3_BoilerSignal )
             
-            my_controller_l3.add_component_input_and_connect(   source_component_class = my_boiler_controller_l1,
-                                                                source_component_output = my_boiler_controller_l1.l1_DeviceSignal,
-                                                                source_load_type= lt.LoadTypes.OnOff,
-                                                                source_unit= lt.Units.binary,
-                                                                source_tags = [ lt.ComponentType.Boiler, lt.InandOutputType.ControlSignal ],
-                                                                source_weight = my_boiler_controller_l1.source_weight )
+            my_controller_l3.add_component_input_and_connect(source_component_class = my_boiler_controller_l1,
+                                                             source_component_output = my_boiler_controller_l1.l1_DeviceSignal,
+                                                             source_load_type= lt.LoadTypes.OnOff,
+                                                             source_unit= lt.Units.binary,
+                                                             source_tags = [lt.ComponentType.Boiler, lt.InandOutputType.CONTROL_SIGNAL],
+                                                             source_weight = my_boiler_controller_l1.source_weight)
             count += 1
             
         #connect heat pump    
         if heatpump_included:
         
-            l3_HeatPumpSignal = my_controller_l3.add_component_output( source_output_name = lt.InandOutputType.ControlSignal,
-                                                                       source_tags = [ lt.ComponentType.HeatPump ],
-                                                                       source_weight = my_heatpump.source_weight,
-                                                                       source_load_type = lt.LoadTypes.OnOff,
-                                                                       source_unit = lt.Units.binary )
+            l3_HeatPumpSignal = my_controller_l3.add_component_output(source_output_name = lt.InandOutputType.CONTROL_SIGNAL,
+                                                                      source_tags = [ lt.ComponentType.HeatPump ],
+                                                                      source_weight = my_heatpump.source_weight,
+                                                                      source_load_type = lt.LoadTypes.OnOff,
+                                                                      source_unit = lt.Units.binary)
             
             my_heatpump_controller_l2.connect_dynamic_input( input_fieldname = controller_l2_generic_heatpump_modular.L2_Controller.l3_DeviceSignal,
                                                              src_object = l3_HeatPumpSignal )
             
-            my_controller_l3.add_component_input_and_connect( source_component_class = my_heatpump_controller_l1,
-                                                              source_component_output = my_heatpump_controller_l1.l1_DeviceSignal,
-                                                              source_load_type = lt.LoadTypes.OnOff,
-                                                              source_unit = lt.Units.binary,
-                                                              source_tags = [ lt.ComponentType.HeatPump, lt.InandOutputType.ControlSignal ],
-                                                              source_weight = my_heatpump_controller_l1.source_weight )
+            my_controller_l3.add_component_input_and_connect(source_component_class = my_heatpump_controller_l1,
+                                                             source_component_output = my_heatpump_controller_l1.l1_DeviceSignal,
+                                                             source_load_type = lt.LoadTypes.OnOff,
+                                                             source_unit = lt.Units.binary,
+                                                             source_tags = [lt.ComponentType.HeatPump, lt.InandOutputType.CONTROL_SIGNAL],
+                                                             source_weight = my_heatpump_controller_l1.source_weight)
             count += 1
             
         if smart_devices_included:
             for elem in my_smart_devices:
-                l3_ActivationSignal = my_controller_l3.add_component_output( source_output_name = lt.InandOutputType.RecommendedActivation,
-                                                                             source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.RecommendedActivation ],
-                                                                             source_weight = elem.source_weight,
-                                                                             source_load_type = lt.LoadTypes.Activation,
-                                                                             source_unit = lt.Units.timesteps )  
+                l3_ActivationSignal = my_controller_l3.add_component_output(source_output_name = lt.InandOutputType.RECOMMENDED_ACTIVATION,
+                                                                            source_tags = [lt.ComponentType.SmartDevice, lt.InandOutputType.RECOMMENDED_ACTIVATION],
+                                                                            source_weight = elem.source_weight,
+                                                                            source_load_type = lt.LoadTypes.Activation,
+                                                                            source_unit = lt.Units.timesteps)
                 elem.connect_dynamic_input( input_fieldname = generic_smart_device.SmartDevice.l3_DeviceActivation,
                                             src_object = l3_ActivationSignal )
                 
                 
                 # elem.connect_dynamic_input( in)
-                my_controller_l3.add_component_input_and_connect( source_component_class = elem,
-                                                                  source_component_output = elem.LastActivation,
-                                                                  source_load_type = lt.LoadTypes.Activation,
-                                                                  source_unit = lt.Units.timesteps,
-                                                                  source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.LastActivation ],
-                                                                  source_weight = elem.source_weight )
-                my_controller_l3.add_component_input_and_connect( source_component_class = elem,
-                                                                  source_component_output = elem.EarliestActivation,
-                                                                  source_load_type = lt.LoadTypes.Activation,
-                                                                  source_unit = lt.Units.timesteps,
-                                                                  source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.EarliestActivation ],
-                                                                  source_weight = elem.source_weight )
-                my_controller_l3.add_component_input_and_connect( source_component_class = elem,
-                                                                  source_component_output = elem.LatestActivation,
-                                                                  source_load_type = lt.LoadTypes.Activation,
-                                                                  source_unit = lt.Units.timesteps,
-                                                                  source_tags = [ lt.ComponentType.SmartDevice, lt.InandOutputType.LatestActivation ],
-                                                                  source_weight = elem.source_weight )
+                my_controller_l3.add_component_input_and_connect(source_component_class = elem,
+                                                                 source_component_output = elem.LastActivation,
+                                                                 source_load_type = lt.LoadTypes.Activation,
+                                                                 source_unit = lt.Units.timesteps,
+                                                                 source_tags = [lt.ComponentType.SmartDevice, lt.InandOutputType.LAST_ACTIVATION],
+                                                                 source_weight = elem.source_weight)
+                my_controller_l3.add_component_input_and_connect(source_component_class = elem,
+                                                                 source_component_output = elem.EarliestActivation,
+                                                                 source_load_type = lt.LoadTypes.Activation,
+                                                                 source_unit = lt.Units.timesteps,
+                                                                 source_tags = [lt.ComponentType.SmartDevice, lt.InandOutputType.EARLIEST_ACTIVATION],
+                                                                 source_weight = elem.source_weight)
+                my_controller_l3.add_component_input_and_connect(source_component_class = elem,
+                                                                 source_component_output = elem.LatestActivation,
+                                                                 source_load_type = lt.LoadTypes.Activation,
+                                                                 source_unit = lt.Units.timesteps,
+                                                                 source_tags = [lt.ComponentType.SmartDevice, lt.InandOutputType.LATEST_ACTIVATION],
+                                                                 source_weight = elem.source_weight)
         
         my_sim.add_component( my_controller_l3 )
                 

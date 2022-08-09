@@ -113,18 +113,18 @@ class L2_Controller( cp.Component ):
         self.build( config )
 
         #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(     self.ComponentName,
-                                                                            self.ReferenceTemperature,
-                                                                            LoadTypes.Temperature,
-                                                                            Units.Celsius,
-                                                                            mandatory = True )
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                       self.ReferenceTemperature,
+                                                                       LoadTypes.TEMPERATURE,
+                                                                       Units.CELSIUS,
+                                                                       mandatory = True)
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
         #Component outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                     self.l2_DeviceSignal,
-                                                                     LoadTypes.OnOff,
-                                                                     Units.binary )
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                    self.l2_DeviceSignal,
+                                                                    LoadTypes.ON_OFF,
+                                                                    Units.BINARY)
         
     @staticmethod
     def get_default_config():

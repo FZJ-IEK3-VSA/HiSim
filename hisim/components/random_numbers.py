@@ -18,8 +18,8 @@ class RandomNumbers(Component):
             self.values.append(number)
         self.output1 = self.add_output(self.ComponentName,
                                        RandomNumbers.RandomOutput,
-                                       lt.LoadTypes.Any,
-                                       lt.Units.Any)
+                                       lt.LoadTypes.ANY,
+                                       lt.Units.ANY)
 
     def i_restore_state(self):
         pass

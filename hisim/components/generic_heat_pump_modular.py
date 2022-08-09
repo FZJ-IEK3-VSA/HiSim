@@ -115,32 +115,32 @@ class HeatPump(cp.Component):
         self.build( config )
 
         # Inputs - Mandatories
-        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(   self.ComponentName,
-                                                                        self.TemperatureOutside,
-                                                                        lt.LoadTypes.Any,
-                                                                        lt.Units.Celsius,
-                                                                        mandatory = True )
+        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                     self.TemperatureOutside,
+                                                                     lt.LoadTypes.ANY,
+                                                                     lt.Units.CELSIUS,
+                                                                     mandatory = True)
         
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                                    self.l1_DeviceSignal,
-                                                                    lt.LoadTypes.OnOff,
-                                                                    lt.Units.binary,
-                                                                    mandatory = True )
-        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                    self.l1_RunTimeSignal,
-                                                                    lt.LoadTypes.Any,
-                                                                    lt.Units.Any,
-                                                                    mandatory = False )
+        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.l1_DeviceSignal,
+                                                                  lt.LoadTypes.ON_OFF,
+                                                                  lt.Units.BINARY,
+                                                                  mandatory = True)
+        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                   self.l1_RunTimeSignal,
+                                                                   lt.LoadTypes.ANY,
+                                                                   lt.Units.ANY,
+                                                                   mandatory = False)
         
         #Outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(   self.ComponentName,
-                                                                              self.ThermalEnergyDelivered,
-                                                                              lt.LoadTypes.Heating,
-                                                                              lt.Units.Watt )
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(  self.ComponentName,
-                                                                        self.ElectricityOutput,
-                                                                        lt.LoadTypes.Electricity,
-                                                                        lt.Units.Watt )
+        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                           self.ThermalEnergyDelivered,
+                                                                           lt.LoadTypes.HEATING,
+                                                                           lt.Units.WATT)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                      self.ElectricityOutput,
+                                                                      lt.LoadTypes.ELECTRICITY,
+                                                                      lt.Units.WATT)
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
@@ -249,7 +249,7 @@ class HeatPump(cp.Component):
                 self.state.timestep += 1
                 self.previous_state.timestep += 1
                 runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-                self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.HeatPump, source_weight = self.source_weight, entry = [ self.max_heating_power / cop ] * runtime )
+                self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.HEAT_PUMP, source_weight = self.source_weight, entry =[self.max_heating_power / cop] * runtime)
 
     def prin1t_outpu1t(self, t_m, state):
         log.information("==========================================")

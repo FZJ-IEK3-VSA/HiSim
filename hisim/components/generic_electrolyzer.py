@@ -89,19 +89,19 @@ class Electrolyzer( cp.Component ):
                               my_simulation_parameters = my_simulation_parameters )
         self.build( config )
         
-        self.ElectricityTargetC: cp.ComponentInput = self.add_input( self.ComponentName, 
-                                                                     Electrolyzer.ElectricityTarget, 
-                                                                     lt.LoadTypes.Electricity, 
-                                                                     lt.Units.Watt, 
-                                                                     True )
-        self.HydrogenOutputC: cp.ComponentOutput = self.add_output( self.ComponentName, 
-                                                                    Electrolyzer.HydrogenOutput, 
-                                                                    lt.LoadTypes.Hydrogen, 
-                                                                    lt.Units.kg_per_sec )
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName, 
-                                                                       Electrolyzer.ElectricityOutput, 
-                                                                       lt.LoadTypes.Electricity, 
-                                                                       lt.Units.Watt )
+        self.ElectricityTargetC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                    Electrolyzer.ElectricityTarget,
+                                                                    lt.LoadTypes.ELECTRICITY,
+                                                                    lt.Units.WATT,
+                                                                    True)
+        self.HydrogenOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                   Electrolyzer.HydrogenOutput,
+                                                                   lt.LoadTypes.HYDROGEN,
+                                                                   lt.Units.KG_PER_SEC)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                      Electrolyzer.ElectricityOutput,
+                                                                      lt.LoadTypes.ELECTRICITY,
+                                                                      lt.Units.WATT)
         self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
         
     @staticmethod
@@ -258,21 +258,21 @@ class L1_Controller( cp.Component ):
         self.build( config )
         
         #add inputs
-        self.l2_ElectricityTargetC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                         self.l2_ElectricityTarget,
-                                                                         lt.LoadTypes.Electricity,
-                                                                         lt.Units.Watt,
-                                                                         mandatory = True )
-        self.HydrogenSOCC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                self.HydrogenSOC,
-                                                                lt.LoadTypes.Hydrogen,
-                                                                lt.Units.Percent,
-                                                                mandatory = True )
+        self.l2_ElectricityTargetC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                        self.l2_ElectricityTarget,
+                                                                        lt.LoadTypes.ELECTRICITY,
+                                                                        lt.Units.WATT,
+                                                                        mandatory = True)
+        self.HydrogenSOCC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                               self.HydrogenSOC,
+                                                               lt.LoadTypes.HYDROGEN,
+                                                               lt.Units.PERCENT,
+                                                               mandatory = True)
         #add outputs
-        self.ElectricityTargetC: cp.ComponentOutput = self.add_output(  self.ComponentName,
-                                                                        self.ElectricityTarget,
-                                                                        lt.LoadTypes.Electricity,
-                                                                        lt.Units.Watt )
+        self.ElectricityTargetC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                      self.ElectricityTarget,
+                                                                      lt.LoadTypes.ELECTRICITY,
+                                                                      lt.Units.WATT)
         
         self.add_default_connections( generic_hydrogen_storage.HydrogenStorage, self.get_hydrogenstorage_default_connections( ) )
         

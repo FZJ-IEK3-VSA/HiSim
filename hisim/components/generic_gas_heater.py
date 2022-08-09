@@ -47,17 +47,17 @@ class GasHeater(Component):
 
     def __init__(self,my_simulation_parameters: SimulationParameters , config : GasHeaterConfig):
         super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
-        self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.Any, lt.Units.Percent, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.Water, lt.Units.Celsius, True)
+        self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
+        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
 
 
-        self.mass_out: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutput, lt.LoadTypes.Water, lt.Units.kg_per_sec)
-        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutputTemperature, lt.LoadTypes.Water, lt.Units.Celsius)
-        self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, GasHeater.GasDemand, lt.LoadTypes.Gas, lt.Units.kWh)
+        self.mass_out: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
+        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
+        self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH)
         self.p_th: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                      field_name=self.ThermalOutputPower,
-                                                     load_type=lt.LoadTypes.Heating,
-                                                     unit=lt.Units.Watt)
+                                                     load_type=lt.LoadTypes.HEATING,
+                                                     unit=lt.Units.WATT)
 
         self.P_th_min = config.P_th_min
         self.P_th_max = config.power_max

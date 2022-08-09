@@ -73,24 +73,24 @@ class PostProcessor:
     def plot_sankeys(self):
         for i_display_name in [name for name, display_name in lt.DisplayNames.__members__.items()]:
             my_sankey = charts.SankeyHISIM(name=i_display_name,
-                                    data=self.ppdt.all_outputs,
-                                    units=lt.Units.Any,
-                                    directorypath=self.ppdt.directory_path,
-                                    time_correction_factor=self.ppdt.time_correction_factor)
+                                           data=self.ppdt.all_outputs,
+                                           units=lt.Units.ANY,
+                                           directorypath=self.ppdt.directory_path,
+                                           time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot()
         if any(component_output.ObjectName == "HeatPump" for component_output in self.ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="HeatPump",
-                                    data=self.ppdt.all_outputs,
-                                    units=lt.Units.Any,
-                                    directorypath=self.ppdt.directory_path,
-                                    time_correction_factor=self.ppdt.time_correction_factor)
+                                           data=self.ppdt.all_outputs,
+                                           units=lt.Units.ANY,
+                                           directorypath=self.ppdt.directory_path,
+                                           time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot_heat_pump()
         if any(component_output.ObjectName == "Building" for component_output in self.ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="Building",
-                                    data=self.ppdt.all_outputs,
-                                    units=lt.Units.Any,
-                                    directorypath=self.ppdt.directory_path,
-                                    time_correction_factor=self.ppdt.time_correction_factor)
+                                           data=self.ppdt.all_outputs,
+                                           units=lt.Units.ANY,
+                                           directorypath=self.ppdt.directory_path,
+                                           time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot_building()
 
     @utils.measure_execution_time

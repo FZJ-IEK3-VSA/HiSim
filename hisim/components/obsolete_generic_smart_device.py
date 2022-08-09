@@ -120,20 +120,20 @@ class Controllable(Component):
         self.HasExec = self.flexibilities[self.i_xtask].HasExec
 
         self.ApplianceRun: ComponentInput = self.add_input(self.ComponentName,
-                                                             self.State,
-                                                             lt.LoadTypes.Any,
-                                                             lt.Units.Any,
-                                                             True)
+                                                           self.State,
+                                                           lt.LoadTypes.ANY,
+                                                           lt.Units.ANY,
+                                                           True)
 
         self.electricity_outputC: ComponentOutput = self.add_output(self.ComponentName,
-                                                                  self.ElectricityOutput,
-                                                                  lt.LoadTypes.Electricity,
-                                                                  lt.Units.Watt)
+                                                                    self.ElectricityOutput,
+                                                                    lt.LoadTypes.ELECTRICITY,
+                                                                    lt.Units.WATT)
 
         self.taskC: ComponentOutput = self.add_output(self.ComponentName,
                                                       self.Task,
-                                                      lt.LoadTypes.Any,
-                                                      lt.Units.Any)
+                                                      lt.LoadTypes.ANY,
+                                                      lt.Units.ANY)
 
         self.state = ControllableState()
         self.previous_state = copy.copy(self.state)

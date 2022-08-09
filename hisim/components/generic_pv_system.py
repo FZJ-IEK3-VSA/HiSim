@@ -247,59 +247,59 @@ class PVSystem( cp.Component ):
         self.build( self.pvconfig.load_module_data, my_simulation_repository, self.pvconfig.source_weight )
 
         self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                        self.TemperatureOutside,
-                                                        lt.LoadTypes.Temperature,
-                                                        lt.Units.Celsius,
-                                                        True)
-
-        self.DNIC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                    self.DirectNormalIrradiance,
-                                                    lt.LoadTypes.Irradiance,
-                                                    lt.Units.Wm2,
-                                                    True)
-
-        self.DNIextraC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                         self.DirectNormalIrradianceExtra,
-                                                         lt.LoadTypes.Irradiance,
-                                                         lt.Units.Wm2,
+                                                         self.TemperatureOutside,
+                                                         lt.LoadTypes.TEMPERATURE,
+                                                         lt.Units.CELSIUS,
                                                          True)
 
+        self.DNIC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                       self.DirectNormalIrradiance,
+                                                       lt.LoadTypes.IRRADIANCE,
+                                                       lt.Units.WATT_PER_SQUARE_METER,
+                                                       True)
+
+        self.DNIextraC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                            self.DirectNormalIrradianceExtra,
+                                                            lt.LoadTypes.IRRADIANCE,
+                                                            lt.Units.WATT_PER_SQUARE_METER,
+                                                            True)
+
         self.DHIC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                   self.DiffuseHorizontalIrradiance,
-                                                   lt.LoadTypes.Irradiance,
-                                                   lt.Units.Wm2,
-                                                   True)
+                                                      self.DiffuseHorizontalIrradiance,
+                                                      lt.LoadTypes.IRRADIANCE,
+                                                      lt.Units.WATT_PER_SQUARE_METER,
+                                                      True)
 
         self.GHIC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                   self.GlobalHorizontalIrradiance,
-                                                   lt.LoadTypes.Irradiance,
-                                                   lt.Units.Wm2,
-                                                   True)
+                                                      self.GlobalHorizontalIrradiance,
+                                                      lt.LoadTypes.IRRADIANCE,
+                                                      lt.Units.WATT_PER_SQUARE_METER,
+                                                      True)
 
         self.azimuthC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                        self.Azimuth,
-                                                        lt.LoadTypes.Any,
-                                                        lt.Units.Degrees,
-                                                        True)
+                                                           self.Azimuth,
+                                                           lt.LoadTypes.ANY,
+                                                           lt.Units.DEGREES,
+                                                           True)
 
         self.apparent_zenithC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                self.ApparentZenith,
-                                                                lt.LoadTypes.Any,
-                                                                lt.Units.Degrees,
-                                                                True)
+                                                                   self.ApparentZenith,
+                                                                   lt.LoadTypes.ANY,
+                                                                   lt.Units.DEGREES,
+                                                                   True)
 
         self.wind_speedC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                          self.WindSpeed,
-                                                          lt.LoadTypes.Speed,
-                                                          lt.Units.MeterPerSecond,
-                                                          True)
+                                                             self.WindSpeed,
+                                                             lt.LoadTypes.SPEED,
+                                                             lt.Units.METER_PER_SECOND,
+                                                             True)
 
 
         self.electricity_outputC : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                             PVSystem.ElectricityOutput,
-                                                             lt.LoadTypes.Electricity,
-                                                             lt.Units.Watt,
-                                                             False)
+                                                                        PVSystem.ElectricityOutput,
+                                                                        lt.LoadTypes.ELECTRICITY,
+                                                                        lt.Units.WATT,
+                                                                        False)
 
         self.add_default_connections(Weather, self.get_weather_default_connections())
     @staticmethod

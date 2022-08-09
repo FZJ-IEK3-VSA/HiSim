@@ -62,19 +62,19 @@ class ComponentName(Component):
 
         self.input_from_other_component: ComponentInput = self.add_input(object_name=self.ComponentName,
                                                                          field_name=self.InputFromOtherComponent,
-                                                                         load_type=LoadTypes.Electricity,
-                                                                         unit=Units.Watt,
+                                                                         load_type=LoadTypes.ELECTRICITY,
+                                                                         unit=Units.WATT,
                                                                          mandatory=True)
 
         self.output_with_state: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                                   field_name=self.OutputWithState,
-                                                                  load_type=LoadTypes.Electricity,
-                                                                  unit=Units.Wh)
+                                                                  load_type=LoadTypes.ELECTRICITY,
+                                                                  unit=Units.WATT_HOUR)
 
         self.output_without_state: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                                      field_name=self.OutputWithoutState,
-                                                                     load_type=LoadTypes.Electricity,
-                                                                     unit=Units.Watt)
+                                                                     load_type=LoadTypes.ELECTRICITY,
+                                                                     unit=Units.WATT)
         self.factor = 1.0
 
     def i_save_state(self):

@@ -122,24 +122,24 @@ class L2_Controller( cp.Component ):
         self.build( config )
 
         #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(     self.ComponentName,
-                                                                            self.ReferenceTemperature,
-                                                                            LoadTypes.Temperature,
-                                                                            Units.Celsius,
-                                                                            mandatory = True )
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                       self.ReferenceTemperature,
+                                                                       LoadTypes.TEMPERATURE,
+                                                                       Units.CELSIUS,
+                                                                       mandatory = True)
         self.add_default_connections( Boiler, self.get_boiler_default_connections( ) )
         
-        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(  self.ComponentName,
-                                                                    self.l3_DeviceSignal,
-                                                                    LoadTypes.OnOff,
-                                                                    Units.binary,
-                                                                    mandatory = False )
+        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.l3_DeviceSignal,
+                                                                  LoadTypes.ON_OFF,
+                                                                  Units.BINARY,
+                                                                  mandatory = False)
         
         #Component outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                     self.l2_DeviceSignal,
-                                                                     LoadTypes.OnOff,
-                                                                     Units.binary )
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                    self.l2_DeviceSignal,
+                                                                    LoadTypes.ON_OFF,
+                                                                    Units.BINARY)
         
     def get_boiler_default_connections( self ):
         log.information("setting boiler default connections in L2 Controller")

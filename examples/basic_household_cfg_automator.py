@@ -86,8 +86,8 @@ def generate_json_for_cfg_automator():
                     r"loadprofiles\electrical-warmwater-presence-load_1-family\data_processed\SumProfiles.HH1.Electricity.csv"
                 ),
                 column=2,
-                loadtype=loadtypes.LoadTypes.Electricity,
-                unit=loadtypes.Units.Watt,
+                loadtype=loadtypes.LoadTypes.ELECTRICITY,
+                unit=loadtypes.Units.WATT,
                 column_name="power_demand",
                 multiplier=3,
                 sep=";",
@@ -103,8 +103,8 @@ def generate_json_for_cfg_automator():
                     r"loadprofiles\electrical-warmwater-presence-load_1-family\data_processed\SumProfiles.HH1.Warm Water.csv"
                 ),
                 column=2,
-                loadtype=loadtypes.LoadTypes.Heating,
-                unit=loadtypes.Units.Watt,
+                loadtype=loadtypes.LoadTypes.HEATING,
+                unit=loadtypes.Units.WATT,
                 column_name="power_demand",
                 multiplier=3,
                 sep=";",
@@ -120,8 +120,8 @@ def generate_json_for_cfg_automator():
                     r"loadprofiles\electrical-warmwater-presence-load_1-family\data_processed\SumProfiles.HH1.Electricity.csv"
                 ),
                 column=2,
-                loadtype=loadtypes.LoadTypes.Electricity,
-                unit=loadtypes.Units.Watt,
+                loadtype=loadtypes.LoadTypes.ELECTRICITY,
+                unit=loadtypes.Units.WATT,
                 column_name="power_demand",
                 multiplier=3,
                 sep=";",

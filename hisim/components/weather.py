@@ -104,48 +104,48 @@ class Weather(Component):
 
         self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
                                                         self.TemperatureOutside,
-                                                        lt.LoadTypes.Temperature,
-                                                        lt.Units.Celsius)
+                                                        lt.LoadTypes.TEMPERATURE,
+                                                        lt.Units.CELSIUS)
 
         self.DNIC : ComponentOutput = self.add_output(self.ComponentName,
                                                       self.DirectNormalIrradiance,
-                                                      lt.LoadTypes.Irradiance,
-                                                      lt.Units.Wm2)
+                                                      lt.LoadTypes.IRRADIANCE,
+                                                      lt.Units.WATT_PER_SQUARE_METER)
 
         self.DNIextraC : ComponentOutput = self.add_output(self.ComponentName,
                                                            self.DirectNormalIrradianceExtra,
-                                                           lt.LoadTypes.Irradiance,
-                                                           lt.Units.Wm2)
+                                                           lt.LoadTypes.IRRADIANCE,
+                                                           lt.Units.WATT_PER_SQUARE_METER)
 
         self.DHIC: ComponentOutput = self.add_output(self.ComponentName,
                                                      self.DiffuseHorizontalIrradiance,
-                                                     lt.LoadTypes.Irradiance,
-                                                     lt.Units.Wm2)
+                                                     lt.LoadTypes.IRRADIANCE,
+                                                     lt.Units.WATT_PER_SQUARE_METER)
 
         self.GHIC: ComponentOutput = self.add_output(self.ComponentName,
                                                      self.GlobalHorizontalIrradiance,
-                                                     lt.LoadTypes.Irradiance,
-                                                     lt.Units.Wm2)
+                                                     lt.LoadTypes.IRRADIANCE,
+                                                     lt.Units.WATT_PER_SQUARE_METER)
 
         self.altitudeC : ComponentOutput = self.add_output(self.ComponentName,
                                                            self.Altitude,
-                                                           lt.LoadTypes.Any,
-                                                           lt.Units.Degrees)
+                                                           lt.LoadTypes.ANY,
+                                                           lt.Units.DEGREES)
 
         self.azimuthC : ComponentOutput = self.add_output(self.ComponentName,
                                                           self.Azimuth,
-                                                          lt.LoadTypes.Any,
-                                                          lt.Units.Degrees)
+                                                          lt.LoadTypes.ANY,
+                                                          lt.Units.DEGREES)
 
         self.apparent_zenithC : ComponentOutput = self.add_output(self.ComponentName,
                                                                   self.ApparentZenith,
-                                                                  lt.LoadTypes.Any,
-                                                                  lt.Units.Degrees)
+                                                                  lt.LoadTypes.ANY,
+                                                                  lt.Units.DEGREES)
 
         self.wind_speedC: ComponentOutput = self.add_output(self.ComponentName,
                                                             self.WindSpeed,
-                                                            lt.LoadTypes.Speed,
-                                                            lt.Units.MeterPerSecond)
+                                                            lt.LoadTypes.SPEED,
+                                                            lt.Units.METER_PER_SECOND)
         self.temperature_list : List[float]
         self.DNI_list: List[float]
         self.DNIextra_list: List[float]

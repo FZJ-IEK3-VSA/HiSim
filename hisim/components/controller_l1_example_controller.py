@@ -20,8 +20,8 @@ class SimpleController(Component):
 
     def __init__(self, name: str, my_simulation_parameters: SimulationParameters ):
         super().__init__(name, my_simulation_parameters=my_simulation_parameters)
-        self.input1: ComponentInput = self.add_input(self.ComponentName, SimpleController.StorageFillLevel, lt.LoadTypes.Electricity, lt.Units.kWh, True)
-        self.output1: ComponentOutput = self.add_output(self.ComponentName, SimpleController.GasHeaterPowerPercent, lt.LoadTypes.Gas, lt.Units.Percent)
+        self.input1: ComponentInput = self.add_input(self.ComponentName, SimpleController.StorageFillLevel, lt.LoadTypes.ELECTRICITY, lt.Units.KWH, True)
+        self.output1: ComponentOutput = self.add_output(self.ComponentName, SimpleController.GasHeaterPowerPercent, lt.LoadTypes.GAS, lt.Units.PERCENT)
         self.state = 0
         self.previous_state = self.state
 

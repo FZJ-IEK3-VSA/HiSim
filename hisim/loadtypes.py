@@ -1,117 +1,135 @@
-"""
+""" Enum classes to help against string constants.
 
 Guidelines for enum classes:
     1. Write members names extensively, with no abbreviation, i.e., 'Watt' instead of 'W'.
-    2. Attributes should follow the International System of Units (SI) [https://en.wikipedia.org/wiki/International_System_of_Units], i.e., for power the attribute is 'W'.
+    2. Attributes should follow the International System of Units (SI)
+    [https://en.wikipedia.org/wiki/International_System_of_Units], i.e., for power the attribute is 'W'.
     3. Do not use multipliers such as 'Kilowatt'.
         3.1 Exceptions to this rule are: 'Kilometer', 'Kilogram'.
-        3.2 In case of an exception, the simple form should be avoided altogether, e.g., given the 'Kilometer' is an Unit, then 'Meter' should not be used.
+        3.2 In case of an exception, the simple form should be avoided altogether, e.g., given the 'Kilometer'
+        is an Unit, then 'Meter' should not be used.
 
 """
 
 import enum
 
+
 @enum.unique
 class DisplayNames(str, enum.Enum):
-    ElectricityOutput = "ElectricityOutput"
-    ElectricityInput = "ElectricityInput"
+
+    """ For the sankey plotting. """
+
+    ELECTRICITY_OUTPUT = "ElectricityOutput"
+    ELECTRICITY_INPUT = "ElectricityInput"
+
 
 @enum.unique
 class LoadTypes(str, enum.Enum):
-    Any = "Any"
 
-    Electricity = "Electricity"
-    Irradiance = "Irradiance"
-    Speed = "Speed"
-    Heating = "Heating"
-    Cooling = "Cooling"
+    """ Load type named constants so that they are the same everywhere and no typos happen. """
 
-    Volume = "Volume"
-    Temperature = "Temperature"
-    Time = "Time"
+    ANY = "Any"
+
+    ELECTRICITY = "Electricity"
+    IRRADIANCE = "Irradiance"
+    SPEED = "Speed"
+    HEATING = "Heating"
+    COOLING = "Cooling"
+
+    VOLUME = "Volume"
+    TEMPERATURE = "Temperature"
+    TIME = "Time"
 
     # Substance
-    Gas = "Gas"
-    Hydrogen = "Hydrogen"
-    Oxygen = "Oxygen"
-    Water = "Water"
-    WarmWater = "WarmWater"
-    
-    Price = "Price"
-    
-    #Controllers:
-    OnOff = "OnOff" #encoding: 0 means off and 1 means on
-    Activation = 'Activation'
-    
+    GAS = "Gas"
+    HYDROGEN = "Hydrogen"
+    OXYGEN = "Oxygen"
+    WATER = "Water"
+    WARM_WATER = "WarmWater"
+
+    PRICE = "Price"
+
+    # Controllers:
+    ON_OFF = "OnOff"  # encoding: 0 means off and 1 means on
+    ACTIVATION = 'Activation'
+
+
 @enum.unique
 class Units(str, enum.Enum):
+
+    """ Unit Constants. """
+
     # Unphysical
-    Any = "-"
-    Percent = "%"
+    ANY = "-"
+    PERCENT = "%"
 
     # Power
-    Watt = "W"
-    kW = "kW"
-    kWh_per_timestep = "kWh per timestep"
+    WATT = "W"
+    KILOWATT = "kW"
+    KWH_PER_TIMESTEP = "kWh per timestep"
 
     # Power per area
-    Wm2 = "W per square meter"
-    Whm2 = "Wh per square meter"
+    WATT_PER_SQUARE_METER = "W per square meter"
+    WATT_HOUR_PER_SQUARE_METER = "Wh per square meter"
 
     # Speed
-    MeterPerSecond = "m/s"
+    METER_PER_SECOND = "m/s"
 
     # Energy
-    Wh = "Wh"
-    kWh = "kWh"
+    WATT_HOUR = "Wh"
+    KWH = "kWh"
 
     # Volume
-    Liter = "L"
+    LITER = "L"
 
     # Volume per time
-    l_per_timestep = "Liter per timestep"
+    LITER_PER_TIMESTEP = "Liter per timestep"
 
     # Mass
-    kg = "kg"
+    KG = "kg"
 
     # Mass flow
-    kg_per_sec = "kg/s"
+    KG_PER_SEC = "kg/s"
 
     # Degrees
-    Celsius = "°C"
-    Kelvin = 'K'
+    CELSIUS = "°C"
+    KELVIN = 'K'
 
     # Degrees
-    Degrees = "Degrees"
+    DEGREES = "Degrees"
 
     # Time
-    Seconds = "s"
-    timesteps = 'timesteps'
-    
+    SECONDS = "s"
+    TIMESTEPS = 'timesteps'
+
     # Cost
-    c_per_kWh = "Cents per kWh"
-    
-    #binary for controllers
-    binary = 'binary'
+    CENTS_PER_KWH = "Cents per kWh"
+
+    # Binary for controllers
+    BINARY = 'binary'
+
 
 @enum.unique
 class ComponentType(str, enum.Enum):
-    # Unphysical
+
+    """ Component types for use in dynamic controllers. """
+
     PV = "PV"
-    SmartDevice = "SmartDevice"
-    HeatPump = "HeatPump"
-    GasHeater = "GasHeater"
-    Boiler = "Boiler"
-    Battery = "Battery"
-    FuelCell = "FuelCell"
-    Electrolyzer = "Electrolyzer"
-    Heaters = [HeatPump, GasHeater]
-    
+    SMART_DEVICE = "SmartDevice"
+    HEAT_PUMP = "HeatPump"
+    GAS_HEATER = "GasHeater"
+    ELECTRIC_BOILER = "Boiler"
+    BATTERY = "Battery"
+    FUEL_CELL = "FuelCell"
+    ELECTROLYZER = "Electrolyzer"
+    HEATERS = [HEAT_PUMP, GAS_HEATER]
+
+
 @enum.unique
 class InandOutputType(str, enum.Enum):
 
     """ For dynamic controllers. """
-    
+
     MASS_FLOW = "Massflow"
     CONTROL_SIGNAL = "ControlSignal"
     ELECTRICITY_TARGET = "ElectricityTarget"

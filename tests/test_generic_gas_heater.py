@@ -26,13 +26,13 @@ def test_gas_heater():
     # Set Fake Outputs for Gas Heater
     control_signal = cp.ComponentOutput("FakeControlSignal",
                              "ControlSignal",
-                             lt.LoadTypes.Any,
-                             lt.Units.Percent)
+                                        lt.LoadTypes.ANY,
+                                        lt.Units.PERCENT)
 
     mass_flow_input_temperature = cp.ComponentOutput( "FakeMassflowInputTemperature",
                               "MassflowInputTemperature",
-                              lt.LoadTypes.Water,
-                              lt.Units.Celsius)
+                                                      lt.LoadTypes.WATER,
+                                                      lt.Units.CELSIUS)
 
     number_of_outputs = fft.get_number_of_outputs([control_signal,mass_flow_input_temperature,my_gas_heater])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

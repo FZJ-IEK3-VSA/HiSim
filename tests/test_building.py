@@ -55,8 +55,8 @@ def test_building():
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",
                                                                 "ThermalDelivery",
-                                                                LoadTypes.Heating,
-                                                                Units.Watt)
+                                                                LoadTypes.HEATING,
+                                                                Units.WATT)
     t5 = time.perf_counter()
     log.profile("T2: " + str(t4 - t5))
 

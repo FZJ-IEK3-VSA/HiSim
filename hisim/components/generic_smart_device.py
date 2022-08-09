@@ -100,29 +100,29 @@ class SmartDevice( cp.Component ):
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
         #mandatory Output
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                        self.ElectricityOutput,
-                                                                        lt.LoadTypes.Electricity,
-                                                                        lt.Units.Watt )
-        self.l3_DeviceActivationC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                       self.l3_DeviceActivation,
-                                                                       lt.LoadTypes.Activation,
-                                                                       lt.Units.timesteps,
-                                                                       mandatory = False )
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                      self.ElectricityOutput,
+                                                                      lt.LoadTypes.ELECTRICITY,
+                                                                      lt.Units.WATT)
+        self.l3_DeviceActivationC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                      self.l3_DeviceActivation,
+                                                                      lt.LoadTypes.ACTIVATION,
+                                                                      lt.Units.TIMESTEPS,
+                                                                      mandatory = False)
         
         if self.predictive:    
-            self.LastActivationC: cp.ComponentOutput = self.add_output( object_name = self.ComponentName,
-                                                                        field_name = self.LastActivation,
-                                                                        load_type = lt.LoadTypes.Activation,
-                                                                        unit = lt.Units.timesteps )
-            self.EarliestActivationC: cp.ComponentOutput = self.add_output( object_name = self.ComponentName,
-                                                                            field_name = self.EarliestActivation,
-                                                                            load_type = lt.LoadTypes.Activation,
-                                                                            unit = lt.Units.timesteps )
-            self.LatestActivationC: cp.ComponentOutput = self.add_output( object_name = self.ComponentName,
-                                                                          field_name = self.LatestActivation,
-                                                                          load_type = lt.LoadTypes.Activation,
-                                                                          unit = lt.Units.timesteps )
+            self.LastActivationC: cp.ComponentOutput = self.add_output(object_name = self.ComponentName,
+                                                                       field_name = self.LastActivation,
+                                                                       load_type = lt.LoadTypes.ACTIVATION,
+                                                                       unit = lt.Units.TIMESTEPS)
+            self.EarliestActivationC: cp.ComponentOutput = self.add_output(object_name = self.ComponentName,
+                                                                           field_name = self.EarliestActivation,
+                                                                           load_type = lt.LoadTypes.ACTIVATION,
+                                                                           unit = lt.Units.TIMESTEPS)
+            self.LatestActivationC: cp.ComponentOutput = self.add_output(object_name = self.ComponentName,
+                                                                         field_name = self.LatestActivation,
+                                                                         load_type = lt.LoadTypes.ACTIVATION,
+                                                                         unit = lt.Units.TIMESTEPS)
             
     def i_save_state( self ):
         self.previous_state : SmartDeviceState = self.state.clone( )
@@ -140,8 +140,8 @@ class SmartDevice( cp.Component ):
         
         #set forecast in first timestep
         if timestep == 0 and self.predictive:
-            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.SmartDevice, source_weight = self.source_weight, 
-                                                                      entry = [ [ ], self.electricity_profile[ 0 ] ] ) 
+            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
+                                                         entry = [ [ ], self.electricity_profile[ 0 ] ])
         
         #if not already running: check if activation makes sense
         if timestep > self.state.timestep_of_activation + self.state.time_to_go:
@@ -159,12 +159,12 @@ class SmartDevice( cp.Component ):
                     self.state.run( timestep, self.electricity_profile[ self.state.position ] )
                     if self.predictive == True:
                         if self.state.position < len( self.electricity_profile ) - 1:
-                            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.SmartDevice, source_weight = self.source_weight, 
-                                                                          entry = [ self.electricity_profile[ self.state.position ], self.electricity_profile[ self.state.position + 1 ] ] ) 
+                            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
+                                                                         entry = [ self.electricity_profile[ self.state.position ], self.electricity_profile[ self.state.position + 1 ] ])
                             
                         elif self.state.position == len( self.electricity_profile ) - 1:
-                            self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.SmartDevice, source_weight = self.source_weight, 
-                                                                          entry = [ self.electricity_profile[ self.state.position ], [ ] ] )
+                            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
+                                                                         entry = [ self.electricity_profile[ self.state.position ], [ ] ])
         
         #run device if it was already activated
         else:

@@ -41,8 +41,8 @@ def first_example(my_sim: Simulator, my_simulation_parameters):
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(name="Sum",
-                                    loadtype=loadtypes.LoadTypes.Any,
-                                    unit=loadtypes.Units.Any, my_simulation_parameters=my_simulation_parameters)
+                                    loadtype=loadtypes.LoadTypes.ANY,
+                                    unit=loadtypes.Units.ANY, my_simulation_parameters=my_simulation_parameters)
     # Connect inputs from sum object to both previous outputs
     my_sum.connect_input(input_fieldname=my_sum.SumInput1,
                          src_object_name=my_rn1.ComponentName,
@@ -93,8 +93,8 @@ def second_example(my_sim: Simulator,my_simulation_parameters):
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(name="Sum",
-                                    loadtype=loadtypes.LoadTypes.Any,
-                                    unit=loadtypes.Units.Any, my_simulation_parameters=my_simulation_parameters)
+                                    loadtype=loadtypes.LoadTypes.ANY,
+                                    unit=loadtypes.Units.ANY, my_simulation_parameters=my_simulation_parameters)
     # Connect inputs from sum object to both previous outputs
     my_sum.connect_input(input_fieldname=my_sum.SumInput1,
                          src_object_name=my_rn1.ComponentName,

@@ -78,30 +78,30 @@ class Battery(cp.Component):
         self.previous_state = copy.deepcopy(self.state)
 
         self.inputC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                      self.ElectricityInput,
-                                                      lt.LoadTypes.Electricity,
-                                                      lt.Units.Watt,
-                                                      True)
+                                                         self.ElectricityInput,
+                                                         lt.LoadTypes.ELECTRICITY,
+                                                         lt.Units.WATT,
+                                                         True)
         self.stateC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                      self.State,
-                                                      lt.LoadTypes.Any,
-                                                      lt.Units.Any,
-                                                      True)
+                                                         self.State,
+                                                         lt.LoadTypes.ANY,
+                                                         lt.Units.ANY,
+                                                         True)
 
         self.state_of_chargeC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                          self.StateOfCharge,
-                                                          lt.LoadTypes.Any,
-                                                          lt.Units.Any)
+                                                                    self.StateOfCharge,
+                                                                    lt.LoadTypes.ANY,
+                                                                    lt.Units.ANY)
 
         self.stored_energyC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                               self.StoredEnergy,
-                                                               lt.LoadTypes.Electricity,
-                                                               lt.Units.Wh)
+                                                                  self.StoredEnergy,
+                                                                  lt.LoadTypes.ELECTRICITY,
+                                                                  lt.Units.WATT_HOUR)
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                               self.ElectricityOutput,
-                                                               lt.LoadTypes.Electricity,
-                                                               lt.Units.Watt)
+                                                                       self.ElectricityOutput,
+                                                                       lt.LoadTypes.ELECTRICITY,
+                                                                       lt.Units.WATT)
 
     def build(self, manufacturer, model, base):
         self.base = base
@@ -185,14 +185,14 @@ class BatteryController(cp.Component):
         super().__init__(name="BatteryController", my_simulation_parameters=my_simulation_parameters)
 
         self.inputC : cp.ComponentInput = self.add_input(self.ComponentName,
-                                                      self.ElectricityInput,
-                                                      lt.LoadTypes.Electricity,
-                                                      lt.Units.Watt,
-                                                      True)
+                                                         self.ElectricityInput,
+                                                         lt.LoadTypes.ELECTRICITY,
+                                                         lt.Units.WATT,
+                                                         True)
         self.stateC : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                        self.State,
-                                                        lt.LoadTypes.Any,
-                                                        lt.Units.Any)
+                                                           self.State,
+                                                           lt.LoadTypes.ANY,
+                                                           lt.Units.ANY)
 
     def i_save_state(self):
         pass

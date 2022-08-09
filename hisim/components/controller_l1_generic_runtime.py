@@ -105,24 +105,24 @@ class L1_Controller( cp.Component ):
         self.build( config )
         
         #add inputs
-        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                   self.l2_DeviceSignal,
-                                                                   LoadTypes.OnOff,
-                                                                   Units.binary,
-                                                                   mandatory = True )
+        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.l2_DeviceSignal,
+                                                                  LoadTypes.ON_OFF,
+                                                                  Units.BINARY,
+                                                                  mandatory = True)
         self.add_default_connections( controller_l2_generic_heatpump_modular.L2_Controller, self.get_l2_controller_default_connections( ) )
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(    self.ComponentName,
-                                                                        self.l1_DeviceSignal,
-                                                                        LoadTypes.OnOff,
-                                                                        Units.binary )
+        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                    self.l1_DeviceSignal,
+                                                                    LoadTypes.ON_OFF,
+                                                                    Units.BINARY)
         if self.my_simulation_parameters.system_config.predictive == True:
-            self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(   self.ComponentName,
-                                                                            self.l1_RunTimeSignal,
-                                                                            LoadTypes.Any,
-                                                                            Units.Any )
+            self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                         self.l1_RunTimeSignal,
+                                                                         LoadTypes.ANY,
+                                                                         Units.ANY)
         
     def get_l2_controller_default_connections( self ):
         log.information("setting l2 default connections in l1")

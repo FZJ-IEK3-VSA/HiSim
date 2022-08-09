@@ -34,16 +34,16 @@ def test_chp_system():
     # Set Fake Inputs
     electricity_target = cp.ComponentOutput( 'FakeElectricityTarget',
                                              "l2_ElectricityTarget",
-                                             lt.LoadTypes.Electricity,
-                                             lt.Units.Watt )
+                                             lt.LoadTypes.ELECTRICITY,
+                                             lt.Units.WATT)
     hydrogensoc = cp.ComponentOutput( 'FakeH2SOC',
                                       'HydrogenSOC',
-                                      lt.LoadTypes.Hydrogen,
-                                      lt.Units.Percent )
+                                      lt.LoadTypes.HYDROGEN,
+                                      lt.Units.PERCENT)
     l2_devicesignal = cp.ComponentOutput( 'FakeHeatSignal',
                                           'l2_DeviceSignal',
-                                          lt.LoadTypes.OnOff,
-                                          lt.Units.binary )
+                                          lt.LoadTypes.ON_OFF,
+                                          lt.Units.BINARY)
     
     number_of_outputs = fft.get_number_of_outputs( [ my_chp, my_chp_controller, electricity_target, hydrogensoc, l2_devicesignal ] )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues( number_of_outputs )

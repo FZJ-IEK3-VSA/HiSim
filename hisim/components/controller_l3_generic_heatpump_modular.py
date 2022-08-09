@@ -67,9 +67,9 @@ def price_and_peak( totalload : List, shiftableload : List, pricepurchaseforecas
     return price_per_kWh, peak
 
 def advance( component_type : lt.ComponentType, ind : int ) -> int:
-    if component_type in [ lt.ComponentType.HeatPump, lt.ComponentType.Boiler ]:
+    if component_type in [lt.ComponentType.HEAT_PUMP, lt.ComponentType.ELECTRIC_BOILER]:
         return ind + 1
-    elif component_type == lt.ComponentType.SmartDevice:
+    elif component_type == lt.ComponentType.SMART_DEVICE:
         return ind + 3
     else:
         return ind
@@ -185,7 +185,7 @@ class L3_Controller( cp.DynamicComponent ):
                 ind = advance( component_type, ind )
                 
             else:
-                if component_type in [ lt.ComponentType.HeatPump, lt.ComponentType.Boiler ]: #loop over all source weights, breaks if one is missing
+                if component_type in [lt.ComponentType.HEAT_PUMP, lt.ComponentType.ELECTRIC_BOILER]: #loop over all source weights, breaks if one is missing
                 
                     #try if input is available -> returns None if not
                     devicestate = self.get_dynamic_input( stsv = stsv,
@@ -207,7 +207,7 @@ class L3_Controller( cp.DynamicComponent ):
                                              weight_counter = weight_counter,
                                              output_value = signal[ - 1 ] )
                 
-                elif component_type == lt.ComponentType.SmartDevice:
+                elif component_type == lt.ComponentType.SMART_DEVICE:
                 
                     #get forecasts
                     profiles = self.simulation_repository.get_dynamic_entry( component_type = component_type, source_weight = weight_counter )

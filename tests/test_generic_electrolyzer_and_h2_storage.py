@@ -71,16 +71,16 @@ def test_hydrogen_generator():
     # Set Fake Outputs for Gas Heater
     electricity_input = cp.ComponentOutput("FakeElectricityInput",
                              "ElectricityInput",
-                             lt.LoadTypes.Electricity,
-                             lt.Units.Watt)
+                                           lt.LoadTypes.ELECTRICITY,
+                                           lt.Units.WATT)
     hydrogen_not_stored = cp.ComponentOutput("FakeHydrogenNotStored",
                              "HydrogenNotStored",
-                             lt.LoadTypes.Hydrogen,
-                             lt.Units.kg)
+                                             lt.LoadTypes.HYDROGEN,
+                                             lt.Units.KG)
     discharging_hydrogen_amount_target = cp.ComponentOutput("DischargingHydrogenAmountTarget",
                              "DischargingHydrogenAmountTarget",
-                             lt.LoadTypes.Hydrogen,
-                             lt.Units.kg_per_sec)
+                                                            lt.LoadTypes.HYDROGEN,
+                                                            lt.Units.KG_PER_SEC)
 
     number_of_outputs = fft.get_number_of_outputs([electricity_input,hydrogen_not_stored,discharging_hydrogen_amount_target,my_electrolyzer,my_hydrogen_storage])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

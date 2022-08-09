@@ -75,5 +75,5 @@ class SmartController(Component):
                     raise Exception("Input has to be a component!")
                 elif hasattr(component, "ElectricityOutput") is False:
                     raise Exception("Input Component does not have Electricity Output!")
-                self.connect_input(self.WrappedControllers[index].ElectricityInput, component.ComponentName, component.ElectricityOutput)
+                self.connect_input(self.WrappedControllers[index].ELECTRICITY_INPUT, component.ComponentName, component.ElectricityOutput)
 

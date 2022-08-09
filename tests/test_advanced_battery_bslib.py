@@ -29,8 +29,8 @@ def test_advanced_battery_bslib():
     # Set Fake Input
     loading_power_input = cp.ComponentOutput("FakeLoadingPowerInput",
                              "LoadingPowerInput",
-                             lt.LoadTypes.Electricity,
-                             lt.Units.Watt)
+                                             lt.LoadTypes.ELECTRICITY,
+                                             lt.Units.WATT)
 
     number_of_outputs = fft.get_number_of_outputs([my_advanced_battery,loading_power_input])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

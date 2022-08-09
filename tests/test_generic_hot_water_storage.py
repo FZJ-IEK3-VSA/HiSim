@@ -29,23 +29,23 @@ def test_storage():
 
     thermal_demand_heating_water = cp.ComponentOutput("FakeThermalDemandHeatingWater",
                              "ThermalDemandHeatingWater",
-                             lt.LoadTypes.Any,
-                             lt.Units.Percent)
+                                                      lt.LoadTypes.ANY,
+                                                      lt.Units.PERCENT)
 
     thermal_demand_warm_water = cp.ComponentOutput("FakeThermalDemandWarmWater",
                               "ThermalDemandWarmWater",
-                              lt.LoadTypes.Water,
-                              lt.Units.Celsius)
+                                                   lt.LoadTypes.WATER,
+                                                   lt.Units.CELSIUS)
 
     control_signal_choose_storage = cp.ComponentOutput("FakeControlSignalChooseStorage",
                               "ControlSignalChooseStorage",
-                              lt.LoadTypes.Water,
-                              lt.Units.Celsius)
+                                                       lt.LoadTypes.WATER,
+                                                       lt.Units.CELSIUS)
 
     thermal_input_power1 = cp.ComponentOutput("FakeThermalInputPower1",
                               "ThermalInputPower1",
-                              lt.LoadTypes.Water,
-                              lt.Units.Celsius)
+                                              lt.LoadTypes.WATER,
+                                              lt.Units.CELSIUS)
 
     my_storage.thermal_demand_heating_water.SourceOutput = thermal_demand_heating_water
     my_storage.thermal_demand_warm_water.SourceOutput = thermal_demand_warm_water

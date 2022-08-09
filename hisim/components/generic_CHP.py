@@ -77,25 +77,25 @@ class GCHP( cp.Component ):
         self.build( config )
 
         #Inputs
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName, 
-                                                                self.l1_DeviceSignal, 
-                                                                lt.LoadTypes.OnOff, 
-                                                                lt.Units.binary,
-                                                                mandatory = True )
+        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.l1_DeviceSignal,
+                                                                  lt.LoadTypes.ON_OFF,
+                                                                  lt.Units.BINARY,
+                                                                  mandatory = True)
         
         #Component outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                            self.ThermalEnergyDelivered,
-                                                                            lt.LoadTypes.Heating,
-                                                                            lt.Units.Watt )
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                       self.ElectricityOutput,
-                                                                       lt.LoadTypes.Electricity,
-                                                                       lt.Units.Watt )
-        self.FuelDeliveredC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                   self.FuelDelivered,
-                                                                   lt.LoadTypes.Hydrogen,
-                                                                   lt.Units.kg_per_sec )
+        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                           self.ThermalEnergyDelivered,
+                                                                           lt.LoadTypes.HEATING,
+                                                                           lt.Units.WATT)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                      self.ElectricityOutput,
+                                                                      lt.LoadTypes.ELECTRICITY,
+                                                                      lt.Units.WATT)
+        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                  self.FuelDelivered,
+                                                                  lt.LoadTypes.HYDROGEN,
+                                                                  lt.Units.KG_PER_SEC)
         self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
 
     @staticmethod
@@ -232,32 +232,32 @@ class L1_Controller( cp.Component ):
         self.build( config )
         
         #add inputs
-        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                   self.l2_DeviceSignal,
-                                                                   lt.LoadTypes.OnOff,
-                                                                   lt.Units.binary,
-                                                                   mandatory = True )
-        self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                      self.ElectricityTarget,
-                                                                      lt.LoadTypes.Electricity,
-                                                                      lt.Units.Watt,
-                                                                      mandatory = True )
+        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.l2_DeviceSignal,
+                                                                  lt.LoadTypes.ON_OFF,
+                                                                  lt.Units.BINARY,
+                                                                  mandatory = True)
+        self.ElectricityTargetC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                     self.ElectricityTarget,
+                                                                     lt.LoadTypes.ELECTRICITY,
+                                                                     lt.Units.WATT,
+                                                                     mandatory = True)
         
-        self.HydrogenSOCC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                self.HydrogenSOC,
-                                                                lt.LoadTypes.Hydrogen,
-                                                                lt.Units.Percent,
-                                                                mandatory = True )
+        self.HydrogenSOCC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                               self.HydrogenSOC,
+                                                               lt.LoadTypes.HYDROGEN,
+                                                               lt.Units.PERCENT,
+                                                               mandatory = True)
 
         self.add_default_connections( controller_l2_generic_chp.L2_Controller, self.get_l2_controller_default_connections( ) )
         self.add_default_connections( generic_hydrogen_storage.HydrogenStorage, self.get_hydrogen_storage_default_connections( ) )
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(    self.ComponentName,
-                                                                        self.l1_DeviceSignal,
-                                                                        lt.LoadTypes.OnOff,
-                                                                        lt.Units.binary )
+        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                    self.l1_DeviceSignal,
+                                                                    lt.LoadTypes.ON_OFF,
+                                                                    lt.Units.BINARY)
         
     def get_l2_controller_default_connections( self ):
         log.information("setting l2 default connections in l1")

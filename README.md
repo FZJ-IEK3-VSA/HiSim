@@ -120,9 +120,9 @@ Connecting Input/Outputs
 Let `my_home_electricity_grid` and `my_appliance` be Component objects used in the setup function. The object `my_apppliance` has an output `ElectricityOutput` that has to be connected to an object `ElectricityGrid`. The object `my_home_electricity_grid` has an input `ElectricityInput`, where this connection takes place. In the setup function, the connection is performed with the method `connect_input` from the `Simulator` class:
 
 ```python
-my_home_electricity_grid.connect_input(input_fieldname=my_home_electricity_grid.ElectricityInput,
+my_home_electricity_grid.connect_input(input_fieldname=my_home_electricity_grid.ELECTRICITY_INPUT,
                                        src_object_name=my_appliance.ComponentName,
-                                       src_field_name=my_appliance.ElectricityOutput)
+                                       src_field_name=my_appliance.ELECTRICITY_OUTPUT)
 ```
 
 Configuration Automator

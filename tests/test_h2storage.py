@@ -24,13 +24,13 @@ def test_chp_system():
     # Set Fake Inputs
     h2_input = cp.ComponentOutput( "FakeHydrogenInput",
                                    "HydrogenInput",
-                                   lt.LoadTypes.Hydrogen,
-                                   lt.Units.kg_per_sec )
+                                   lt.LoadTypes.HYDROGEN,
+                                   lt.Units.KG_PER_SEC)
     
     h2_output = cp.ComponentOutput( "FakeHydrogenOutput",
                                    "HydrogenOutput",
-                                   lt.LoadTypes.Hydrogen,
-                                   lt.Units.kg_per_sec )
+                                    lt.LoadTypes.HYDROGEN,
+                                    lt.Units.KG_PER_SEC)
     
     number_of_outputs = fft.get_number_of_outputs( [ my_h2_storage, h2_input, h2_output ] )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

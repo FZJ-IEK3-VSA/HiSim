@@ -33,8 +33,8 @@ def test_simple_bucket_boiler_state():
     #definition of hot water use 
     WW_use = cp.ComponentOutput( "FakeWarmwaterUse",
                                  "WaterConsumption",
-                                 lt.LoadTypes.WarmWater,
-                                 lt.Units.Liter )
+                                 lt.LoadTypes.WARM_WATER,
+                                 lt.Units.LITER)
     
     
     #connection of in- and outputs

@@ -33,18 +33,18 @@ def test_chp_system():
     # Set Fake Outputs for Gas Heater
     control_signal = cp.ComponentOutput("FakeControlSignal",
                              "ControlSignal",
-                             lt.LoadTypes.Any,
-                             lt.Units.Percent)
+                                        lt.LoadTypes.ANY,
+                                        lt.Units.PERCENT)
 
     massflow_input_temperature= cp.ComponentOutput("FakeMassflowInputTemperature",
                              "MassflowInputTemperature",
-                             lt.LoadTypes.Water,
-                             lt.Units.Celsius)
+                                                   lt.LoadTypes.WATER,
+                                                   lt.Units.CELSIUS)
 
     electricity_from_CHP_target = cp.ComponentOutput("FakeElectricityFromCHPTarget",
                              "ElectricityFromCHPTarget",
-                             lt.LoadTypes.Electricity,
-                             lt.Units.Watt)
+                                                     lt.LoadTypes.ELECTRICITY,
+                                                     lt.Units.WATT)
 
     my_chp_system.control_signal.SourceOutput = control_signal
     my_chp_system.mass_inp_temp.SourceOutput = massflow_input_temperature

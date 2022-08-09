@@ -78,26 +78,26 @@ class Battery(Component):
 
         # Define component inputs
         self.p_set: ComponentInput = self.add_input(object_name=self.ComponentName,
-                                                   field_name=self.LoadingPowerInput,
-                                                   load_type=LoadTypes.Electricity,
-                                                   unit=Units.Watt,
-                                                   mandatory=True)
+                                                    field_name=self.LoadingPowerInput,
+                                                    load_type=LoadTypes.ELECTRICITY,
+                                                    unit=Units.WATT,
+                                                    mandatory=True)
 
         # Define component outputs
         self.p_bs: ComponentOutput = self.add_output(object_name=self.ComponentName,
                                                      field_name=self.AcBatteryPower,
-                                                     load_type=LoadTypes.Electricity,
-                                                     unit=Units.Watt)
+                                                     load_type=LoadTypes.ELECTRICITY,
+                                                     unit=Units.WATT)
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                     field_name=self.DcBatteryPower,
-                                                     load_type=LoadTypes.Electricity,
-                                                     unit=Units.Watt)
+                                                      field_name=self.DcBatteryPower,
+                                                      load_type=LoadTypes.ELECTRICITY,
+                                                      unit=Units.WATT)
 
         self.soc: ComponentOutput = self.add_output(object_name=self.ComponentName,
-                                                     field_name=self.StateOfCharge,
-                                                     load_type=LoadTypes.Any,
-                                                     unit=Units.Any)
+                                                    field_name=self.StateOfCharge,
+                                                    load_type=LoadTypes.ANY,
+                                                    unit=Units.ANY)
     @staticmethod
     def get_default_config():
         config=BatteryConfig(

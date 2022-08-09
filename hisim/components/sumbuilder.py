@@ -85,16 +85,16 @@ class ElectricityGrid(Component):
         super().__init__(name="{}_{}".format("ElectricityGrid", name), my_simulation_parameters=my_simulation_parameters)
         self.signal=signal
         self.operations: List[str] = []
-        self.loadtype = lt.LoadTypes.Electricity
-        self.unit = lt.Units.Watt
+        self.loadtype = lt.LoadTypes.ELECTRICITY
+        self.unit = lt.Units.WATT
 
         if grid is not None:
             self.connect_all(grid)
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                   self.ElectricityOutput,
-                                                                   lt.LoadTypes.Electricity,
-                                                                   lt.Units.Watt)
+                                                                       self.ElectricityOutput,
+                                                                       lt.LoadTypes.ELECTRICITY,
+                                                                       lt.Units.WATT)
     def add_numbered_input(self) -> cp.ComponentInput:
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)

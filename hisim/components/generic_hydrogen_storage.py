@@ -85,21 +85,21 @@ class HydrogenStorage( cp.Component ):
         
         self.build( config )
         
-        self.HydrogenInputC : cp.ComponentInput = self.add_input( self.ComponentName, 
-                                                                  self.HydrogenInput, 
-                                                                  lt.LoadTypes.Hydrogen, 
-                                                                  lt.Units.kg_per_sec,
+        self.HydrogenInputC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                 self.HydrogenInput,
+                                                                 lt.LoadTypes.HYDROGEN,
+                                                                 lt.Units.KG_PER_SEC,
+                                                                 True)
+        self.HydrogenOutputC : cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                  self.HydrogenOutput,
+                                                                  lt.LoadTypes.HYDROGEN,
+                                                                  lt.Units.KG_PER_SEC,
                                                                   True)
-        self.HydrogenOutputC : cp.ComponentInput = self.add_input( self.ComponentName, 
-                                                                   self.HydrogenOutput,
-                                                                   lt.LoadTypes.Hydrogen, 
-                                                                   lt.Units.kg_per_sec,
-                                                                   True )
 
-        self.HydrogenSOCC : cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                  self.HydrogenSOC,
-                                                                  lt.LoadTypes.Hydrogen,
-                                                                  lt.Units.Percent )
+        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                 self.HydrogenSOC,
+                                                                 lt.LoadTypes.HYDROGEN,
+                                                                 lt.Units.PERCENT)
         
         self.add_default_connections( generic_electrolyzer.Electrolyzer, self.get_electrolyzer_default_connections( ) )
         self.add_default_connections( generic_CHP.GCHP, self.get_fuelcell_default_connections( ) )

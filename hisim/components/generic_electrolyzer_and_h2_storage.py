@@ -184,19 +184,19 @@ class Electrolyzer(Component):
         super().__init__(config.component_name, my_simulation_parameters=my_simulation_parameters)
 
         # input
-        self.hydrogen_not_stored: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.HydrogenNotStored, lt.LoadTypes.Hydrogen, lt.Units.kg, True)
+        self.hydrogen_not_stored: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.HydrogenNotStored, lt.LoadTypes.HYDROGEN, lt.Units.KG, True)
 
-        self.electricity_input: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.ElectricityInput, lt.LoadTypes.Electricity, lt.Units.Watt, True)
+        self.electricity_input: ComponentInput = self.add_input(self.ComponentName, Electrolyzer.ElectricityInput, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
         # output
-        self.water_demand: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.WaterDemand, lt.LoadTypes.Water, lt.Units.kg_per_sec)
-        self.hydrogen_output: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.HydrogenOutput, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec)
-        self.oxygen_output: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.OxygenOutput, lt.LoadTypes.Oxygen, lt.Units.kg_per_sec)
-        self.energy_losses: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.EnergyLosses, lt.LoadTypes.Electricity, lt.Units.Watt)
-        self.unused_power: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.UnusedPower, lt.LoadTypes.Electricity, lt.Units.Watt)
-        self.electricity_real_needed: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectricityRealNeeded, lt.LoadTypes.Electricity, lt.Units.Watt)
+        self.water_demand: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.WaterDemand, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
+        self.hydrogen_output: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.HydrogenOutput, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
+        self.oxygen_output: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.OxygenOutput, lt.LoadTypes.OXYGEN, lt.Units.KG_PER_SEC)
+        self.energy_losses: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.EnergyLosses, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.unused_power: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.UnusedPower, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.electricity_real_needed: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectricityRealNeeded, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
-        self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.Any, lt.Units.Any)
-        self.power_level: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.PowerLevel, lt.LoadTypes.Any, lt.Units.Percent)
+        self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.power_level: ComponentOutput = self.add_output(self.ComponentName, Electrolyzer.PowerLevel, lt.LoadTypes.ANY, lt.Units.PERCENT)
 
         self.max_power = config.max_power
         self.min_power = config.min_power
@@ -450,17 +450,17 @@ class HydrogenStorage(Component):
     def __init__(self, my_simulation_parameters:SimulationParameters,
                  config:HydrogenStorageConfig):
         super().__init__(config.component_name, my_simulation_parameters=my_simulation_parameters)
-        self.charging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, True)
-        self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountTarget, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
+        self.charging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC, True)
+        self.discharging_hydrogen: ComponentInput = self.add_input(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountTarget, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC, False)
 
-        self.current_fill: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.CurrentHydrogenFillLevel, lt.LoadTypes.Hydrogen, lt.Units.kg)
-        self.current_fill_percent: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.CurrentHydrogenFillLevelPercent, lt.LoadTypes.Hydrogen, lt.Units.Percent)
-        self.storage_delta: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.StorageDelta, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec)
-        self.hydrogen_not_stored: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenNotStored, lt.LoadTypes.Hydrogen, lt.Units.kg)
-        self.hydrogen_not_released: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenNotReleased, lt.LoadTypes.Hydrogen, lt.Units.kg)
-        self.hydrogen_storage_energy_demand: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenStorageEnergyDemand, lt.LoadTypes.Electricity, lt.Units.Watt)
-        self.hydrogen_losses: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenLosses, lt.LoadTypes.Hydrogen, lt.Units.kg)
-        self.discharging_hydrogen_real: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountReal, lt.LoadTypes.Hydrogen, lt.Units.kg_per_sec, False)
+        self.current_fill: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.CurrentHydrogenFillLevel, lt.LoadTypes.HYDROGEN, lt.Units.KG)
+        self.current_fill_percent: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.CurrentHydrogenFillLevelPercent, lt.LoadTypes.HYDROGEN, lt.Units.PERCENT)
+        self.storage_delta: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.StorageDelta, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
+        self.hydrogen_not_stored: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenNotStored, lt.LoadTypes.HYDROGEN, lt.Units.KG)
+        self.hydrogen_not_released: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenNotReleased, lt.LoadTypes.HYDROGEN, lt.Units.KG)
+        self.hydrogen_storage_energy_demand: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenStorageEnergyDemand, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.hydrogen_losses: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.HydrogenLosses, lt.LoadTypes.HYDROGEN, lt.Units.KG)
+        self.discharging_hydrogen_real: ComponentOutput = self.add_output(self.ComponentName, HydrogenStorage.DischargingHydrogenAmountReal, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC, False)
 
         self.max_capacity=config.max_capacity
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep

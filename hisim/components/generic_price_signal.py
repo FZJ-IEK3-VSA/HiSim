@@ -48,14 +48,14 @@ class PriceSignal(cp.Component):
                           end = int( 16 * 3600 / my_simulation_parameters.seconds_per_timestep ) )
         
         # Outputs
-        self.PricePurchaseC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                    self.PricePurchase,
-                                                                    lt.LoadTypes.Price,
-                                                                    lt.Units.c_per_kWh )
-        self.PriceInjectionC: cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                    self.PriceInjection,
-                                                                    lt.LoadTypes.Price,
-                                                                    lt.Units.c_per_kWh )
+        self.PricePurchaseC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                  self.PricePurchase,
+                                                                  lt.LoadTypes.PRICE,
+                                                                  lt.Units.CENTS_PER_KWH)
+        self.PriceInjectionC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                   self.PriceInjection,
+                                                                   lt.LoadTypes.PRICE,
+                                                                   lt.Units.CENTS_PER_KWH)
 
     def i_save_state(self):
         pass

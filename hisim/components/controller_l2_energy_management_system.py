@@ -118,40 +118,40 @@ class ControllerHeat(cp.Component):
         ###Inputs
         self.temperature_storage_warm_water: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                 self.StorageTemperatureWarmWater,
-                                                                                lt.LoadTypes.Water,
-                                                                                lt.Units.Celsius,
+                                                                                lt.LoadTypes.WATER,
+                                                                                lt.Units.CELSIUS,
                                                                                 False)
         self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                    self.StorageTemperatureHeatingWater,
-                                                                                   lt.LoadTypes.Water,
-                                                                                   lt.Units.Celsius,
+                                                                                   lt.LoadTypes.WATER,
+                                                                                   lt.Units.CELSIUS,
                                                                                    False)
         self.temperature_residence: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                        self.ResidenceTemperature,
-                                                                       lt.LoadTypes.Temperature,
-                                                                       lt.Units.Celsius,
+                                                                       lt.LoadTypes.TEMPERATURE,
+                                                                       lt.Units.CELSIUS,
                                                                        False)
 
         # Outputs
         self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                              self.ControlSignalGasHeater,
-                                                                             lt.LoadTypes.Any,
-                                                                             lt.Units.Percent,
+                                                                             lt.LoadTypes.ANY,
+                                                                             lt.Units.PERCENT,
                                                                              False)
         self.control_signal_chp: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                       self.ControlSignalChp,
-                                                                      lt.LoadTypes.Any,
-                                                                      lt.Units.Percent,
+                                                                      lt.LoadTypes.ANY,
+                                                                      lt.Units.PERCENT,
                                                                       False)
         self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                             self.ControlSignalHeatPump,
-                                                                            lt.LoadTypes.Any,
-                                                                            lt.Units.Percent,
+                                                                            lt.LoadTypes.ANY,
+                                                                            lt.Units.PERCENT,
                                                                             False)
         self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                  self.ControlSignalChooseStorage,
-                                                                                 lt.LoadTypes.Any,
-                                                                                 lt.Units.Any,
+                                                                                 lt.LoadTypes.ANY,
+                                                                                 lt.Units.ANY,
                                                                                  False)
 
     @staticmethod
@@ -323,57 +323,57 @@ class ControllerElectricity(cp.Component):
         ###Inputs
         self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                   self.ElectricityConsumptionBuilding,
-                                                                                  lt.LoadTypes.Electricity,
-                                                                                  lt.Units.Watt,
+                                                                                  lt.LoadTypes.ELECTRICITY,
+                                                                                  lt.Units.WATT,
                                                                                   False)
         self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                         self.ElectricityOutputPvs,
-                                                                        lt.LoadTypes.Electricity,
-                                                                        lt.Units.Watt,
+                                                                        lt.LoadTypes.ELECTRICITY,
+                                                                        lt.Units.WATT,
                                                                         False)
 
         self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                      self.ElectricityToOrFromBatteryReal,
-                                                                                     lt.LoadTypes.Electricity,
-                                                                                     lt.Units.Watt,
+                                                                                     lt.LoadTypes.ELECTRICITY,
+                                                                                     lt.Units.WATT,
                                                                                      False)
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                     self.ElectricityToElectrolyzerUnused,
-                                                                                    lt.LoadTypes.Electricity,
-                                                                                    lt.Units.Watt,
+                                                                                    lt.LoadTypes.ELECTRICITY,
+                                                                                    lt.Units.WATT,
                                                                                     False)
         self.electricity_from_chp_real: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                            self.ElectricityFromCHPReal,
-                                                                           lt.LoadTypes.Electricity,
-                                                                           lt.Units.Watt,
+                                                                           lt.LoadTypes.ELECTRICITY,
+                                                                           lt.Units.WATT,
                                                                            False)
         self.electricity_demand_heat_pump: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                               self.ElectricityDemandHeatPump,
-                                                                              lt.LoadTypes.Electricity,
-                                                                              lt.Units.Watt,
+                                                                              lt.LoadTypes.ELECTRICITY,
+                                                                              lt.Units.WATT,
                                                                               False)
 
         # Outputs
 
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                self.ElectricityToOrFromGrid,
-                                                                               lt.LoadTypes.Electricity,
-                                                                               lt.Units.Watt,
+                                                                               lt.LoadTypes.ELECTRICITY,
+                                                                               lt.Units.WATT,
                                                                                False)
         self.electricity_from_chp_target: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                self.ElectricityFromCHPTarget,
-                                                                               lt.LoadTypes.Electricity,
-                                                                               lt.Units.Watt,
+                                                                               lt.LoadTypes.ELECTRICITY,
+                                                                               lt.Units.WATT,
                                                                                False)
         self.electricity_to_electrolyzer_target: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                       self.ElectricityToElectrolyzerTarget,
-                                                                                      lt.LoadTypes.Electricity,
-                                                                                      lt.Units.Watt,
+                                                                                      lt.LoadTypes.ELECTRICITY,
+                                                                                      lt.Units.WATT,
                                                                                       False)
         self.electricity_to_or_from_battery_target: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                          self.ElectricityToOrFromBatteryTarget,
-                                                                                         lt.LoadTypes.Electricity,
-                                                                                         lt.Units.Watt,
+                                                                                         lt.LoadTypes.ELECTRICITY,
+                                                                                         lt.Units.WATT,
                                                                                          False)
 
     def build(self, mode):
@@ -571,21 +571,21 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         self.limit_to_shave = limit_to_shave
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                     self.ElectricityToElectrolyzerUnused,
-                                                                                    lt.LoadTypes.Electricity,
-                                                                                    lt.Units.Watt,
+                                                                                    lt.LoadTypes.ELECTRICITY,
+                                                                                    lt.Units.WATT,
                                                                                     False)
 
         # Outputs
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                self.ElectricityToOrFromGrid,
-                                                                               lt.LoadTypes.Electricity,
-                                                                               lt.Units.Watt,
+                                                                               lt.LoadTypes.ELECTRICITY,
+                                                                               lt.Units.WATT,
                                                                                False)
 
         self.check_peak_shaving: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                       self.CheckPeakShaving,
-                                                                      lt.LoadTypes.Any,
-                                                                      lt.Units.Any,
+                                                                      lt.LoadTypes.ANY,
+                                                                      lt.Units.ANY,
                                                                       False)
 
     def sort_source_weights_and_components(self):
@@ -630,10 +630,10 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                 if tags.__class__ == lt.ComponentType and tags in component_type:
                     if element.SourceWeight == weight_counter:
                         # more electricity than needed
-                        if tags == lt.ComponentType.Battery:
+                        if tags == lt.ComponentType.BATTERY:
                             stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), demand)
                             break
-                        elif tags == lt.ComponentType.FuelCell:
+                        elif tags == lt.ComponentType.FUEL_CELL:
                             if demand < 0:
                                 stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), -demand)
                             else:
@@ -646,10 +646,10 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
             for tags in element.SourceTags:
                 if tags.__class__ == lt.ComponentType and tags in component_type:
                     if element.SourceWeight == weight_counter:
-                        if tags == lt.ComponentType.Battery:
+                        if tags == lt.ComponentType.BATTERY:
                             demand = demand - stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
                             break
-                        elif tags == lt.ComponentType.FuelCell:
+                        elif tags == lt.ComponentType.FUEL_CELL:
                             demand = demand + stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
                             break
             else:
@@ -667,23 +667,23 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                  weight_counter=weight_counter)
 
         # control from substracted balance
-        if component_type == lt.ComponentType.Battery:
+        if component_type == lt.ComponentType.BATTERY:
             self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                     weight_counter=weight_counter, output_value=deltademand)
             deltademand = deltademand - previous_signal
 
-        elif component_type == lt.ComponentType.FuelCell:
+        elif component_type == lt.ComponentType.FUEL_CELL:
             if deltademand < 0:
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=-deltademand)
                 deltademand = deltademand + previous_signal
                 if deltademand > 0:
-                    is_battery = self.get_entries_of_type(lt.ComponentType.Battery)
+                    is_battery = self.get_entries_of_type(lt.ComponentType.BATTERY)
             else:
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=0)
 
-        elif component_type == lt.ComponentType.Electrolyzer:
+        elif component_type == lt.ComponentType.ELECTROLYZER:
             if deltademand > 0:
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=deltademand)
@@ -699,7 +699,7 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                             ind: int):
         previous_signal = self.get_dynamic_input(stsv=stsv, tags=[self.components_sorted[ind]],
                                                  weight_counter=self.source_weights_sorted[ind])
-        self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.Battery, lt.InandOutputType.ELECTRICITY_TARGET],
+        self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
                                 weight_counter=self.source_weights_sorted[ind],
                                 output_value=deltademand + previous_signal)
         return deltademand - previous_signal
@@ -714,8 +714,8 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
                                                               my_component_inputs=my_component_inputs,
                                                               my_component_outputs=my_component_outputs,
                                                               weight_counter=weight_counter,
-                                                              component_type=[lt.ComponentType.Battery,
-                                                                              lt.ComponentType.FuelCell],
+                                                              component_type=[lt.ComponentType.BATTERY,
+                                                                              lt.ComponentType.FUEL_CELL],
                                                               input_type=lt.InandOutputType.ELECTRICITY_REAL,
                                                               output_type=lt.InandOutputType.ELECTRICITY_TARGET)
 
@@ -736,15 +736,15 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         for ind in range(len(self.source_weights_sorted)):
             component_type = self.components_sorted[ind]
             source_weight = self.source_weights_sorted[ind]
-            if component_type in [lt.ComponentType.Battery, lt.ComponentType.FuelCell, lt.ComponentType.Electrolyzer]:
-                if not skip_CHP or component_type in [lt.ComponentType.Battery, lt.ComponentType.Electrolyzer]:
+            if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER]:
+                if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER]:
                     delta_demand, is_battery = self.control_electricity_component_iterative(deltademand=delta_demand,
                                                                                             stsv=stsv,
                                                                                             weight_counter=source_weight,
                                                                                             component_type=component_type)
                 else:
                     self.set_dynamic_output(stsv=stsv,
-                                            tags=[lt.ComponentType.FuelCell, lt.InandOutputType.ELECTRICITY_TARGET],
+                                            tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_TARGET],
                                             weight_counter=source_weight, output_value=0)
                 if is_battery is not None:
                     delta_demand = self.postprocess_battery(deltademand=delta_demand,
@@ -957,40 +957,40 @@ class ControllerHeatGeneric(cp.DynamicComponent):
         ###Inputs
         self.temperature_storage_warm_water: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                 self.StorageTemperatureWarmWater,
-                                                                                lt.LoadTypes.Water,
-                                                                                lt.Units.Celsius,
+                                                                                lt.LoadTypes.WATER,
+                                                                                lt.Units.CELSIUS,
                                                                                 False)
         self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                                    self.StorageTemperatureHeatingWater,
-                                                                                   lt.LoadTypes.Water,
-                                                                                   lt.Units.Celsius,
+                                                                                   lt.LoadTypes.WATER,
+                                                                                   lt.Units.CELSIUS,
                                                                                    False)
         self.temperature_residence: cp.ComponentInput = self.add_input(self.ComponentName,
                                                                        self.ResidenceTemperature,
-                                                                       lt.LoadTypes.Temperature,
-                                                                       lt.Units.Celsius,
+                                                                       lt.LoadTypes.TEMPERATURE,
+                                                                       lt.Units.CELSIUS,
                                                                        False)
 
         # Outputs
         self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                              self.ControlSignalGasHeater,
-                                                                             lt.LoadTypes.Any,
-                                                                             lt.Units.Percent,
+                                                                             lt.LoadTypes.ANY,
+                                                                             lt.Units.PERCENT,
                                                                              False)
         self.control_signal_chp: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                       self.ControlSignalChp,
-                                                                      lt.LoadTypes.Any,
-                                                                      lt.Units.Percent,
+                                                                      lt.LoadTypes.ANY,
+                                                                      lt.Units.PERCENT,
                                                                       False)
         self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                             self.ControlSignalHeatPump,
-                                                                            lt.LoadTypes.Any,
-                                                                            lt.Units.Percent,
+                                                                            lt.LoadTypes.ANY,
+                                                                            lt.Units.PERCENT,
                                                                             False)
         self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                                                  self.ControlSignalChooseStorage,
-                                                                                 lt.LoadTypes.Any,
-                                                                                 lt.Units.Any,
+                                                                                 lt.LoadTypes.ANY,
+                                                                                 lt.Units.ANY,
                                                                                  False)
 
     def build(self, mode):

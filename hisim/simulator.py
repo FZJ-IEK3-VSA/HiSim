@@ -110,8 +110,8 @@ class ComponentWrapper:
                     # Check if ComponentOutput and ComponentInput have the same units
                     if cinput.Unit != global_output.Unit:
                         # Check the use of "Units.Any"
-                        if (cinput.Unit == lt.Units.Any and global_output.Unit != lt.Units.Any) or (
-                                cinput.Unit != lt.Units.Any and global_output.Unit == lt.Units.Any):
+                        if (cinput.Unit == lt.Units.ANY and global_output.Unit != lt.Units.ANY) or (
+                                cinput.Unit != lt.Units.ANY and global_output.Unit == lt.Units.ANY):
                             log.warning(
                                 f"The input {cinput.FieldName} (cp: {cinput.ObjectName}, unit: {cinput.Unit}) "
                                 f"and output {global_output.FieldName}(cp: {global_output.ObjectName}, unit: {global_output.Unit}) "

@@ -79,15 +79,15 @@ class Occupancy(cp.Component):
 
         # Inputs - Not Mandatories
         self.ww_mass_input: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                            self.WW_MassInput,
-                                                            lt.LoadTypes.WarmWater,
-                                                            lt.Units.kg_per_sec,
-                                                            False)
+                                                               self.WW_MassInput,
+                                                               lt.LoadTypes.WARM_WATER,
+                                                               lt.Units.KG_PER_SEC,
+                                                               False)
         self.ww_temperature_input: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                   self.WW_TemperatureInput,
-                                                                   lt.LoadTypes.WarmWater,
-                                                                   lt.Units.Celsius,
-                                                                   False)
+                                                                      self.WW_TemperatureInput,
+                                                                      lt.LoadTypes.WARM_WATER,
+                                                                      lt.Units.CELSIUS,
+                                                                      False)
 
         # Outputs
         #self.ww_mass_output: cp.ComponentOutput = self.add_output(self.ComponentName,
@@ -102,23 +102,23 @@ class Occupancy(cp.Component):
         #self.demand_satisfied: cp.ComponentOutput = self.add_output(self.ComponentName, self.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
         self.number_of_residentsC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                     self.NumberByResidents,
-                                                                     lt.LoadTypes.Any,
-                                                                     lt.Units.Any)
+                                                                        self.NumberByResidents,
+                                                                        lt.LoadTypes.ANY,
+                                                                        lt.Units.ANY)
         self.heating_by_residentsC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                      self.HeatingByResidents,
-                                                                      lt.LoadTypes.Heating,
-                                                                      lt.Units.Watt)
+                                                                         self.HeatingByResidents,
+                                                                         lt.LoadTypes.HEATING,
+                                                                         lt.Units.WATT)
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                         self.ElectricityOutput,
-                                                                         lt.LoadTypes.Electricity,
-                                                                         lt.Units.Watt,
-                                                                         True)
+                                                                       self.ElectricityOutput,
+                                                                       lt.LoadTypes.ELECTRICITY,
+                                                                       lt.Units.WATT,
+                                                                       True)
 
         self.water_consumptionC : cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                                   self.WaterConsumption,
-                                                                   lt.LoadTypes.WarmWater,
-                                                                   lt.Units.Liter)
+                                                                       self.WaterConsumption,
+                                                                       lt.LoadTypes.WARM_WATER,
+                                                                       lt.Units.LITER)
     @staticmethod
     def get_default_config():
         config= OccupancyConfig(profile_name = "CH01")

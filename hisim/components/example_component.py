@@ -66,23 +66,23 @@ class Dummy(Component):
 
         self.thermal_energy_deliveredC : ComponentInput = self.add_input(self.ComponentName,
                                                                          self.ThermalEnergyDelivered,
-                                                                         lt.LoadTypes.Heating,
-                                                                         lt.Units.Watt,
+                                                                         lt.LoadTypes.HEATING,
+                                                                         lt.Units.WATT,
                                                                          False)
 
         self.t_mC : ComponentOutput = self.add_output(self.ComponentName,
                                                       self.TemperatureMean,
-                                                      lt.LoadTypes.Temperature,
-                                                      lt.Units.Celsius)
+                                                      lt.LoadTypes.TEMPERATURE,
+                                                      lt.Units.CELSIUS)
 
         self.electricity_outputC: ComponentOutput = self.add_output(self.ComponentName,
-                                                               self.ElectricityOutput,
-                                                               lt.LoadTypes.Electricity,
-                                                               lt.Units.Watt)
+                                                                    self.ElectricityOutput,
+                                                                    lt.LoadTypes.ELECTRICITY,
+                                                                    lt.Units.WATT)
         self.stored_energyC: ComponentOutput = self.add_output(self.ComponentName,
                                                                self.StoredEnergy,
-                                                               lt.LoadTypes.Heating,
-                                                               lt.Units.Watt)
+                                                               lt.LoadTypes.HEATING,
+                                                               lt.Units.WATT)
         self.temperature:float = -300
 
 

@@ -41,14 +41,14 @@ def test_heat_pump_modular():
     #definition of weather output
     t_air_outdoorC = cp.ComponentOutput("FakeTemperatureOutside",
                                         "TemperatureAir",
-                                        lt.LoadTypes.Temperature,
-                                        lt.Units.Watt)
+                                        lt.LoadTypes.TEMPERATURE,
+                                        lt.Units.WATT)
     
     #definition of building output
     t_mC = cp.ComponentOutput("FakeHouse",
                               "TemperatureMean",
-                              lt.LoadTypes.Temperature,
-                              lt.Units.Watt)
+                              lt.LoadTypes.TEMPERATURE,
+                              lt.Units.WATT)
     
     #connection of in- and outputs
     my_heat_pump_controller_l2.ReferenceTemperatureC.SourceOutput = t_mC

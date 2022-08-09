@@ -23,20 +23,20 @@ def test_heat_pump_hplib():
     # Create fake component outputs as inputs for simulation
     on_off_switch = cp.ComponentOutput("Fake_on_off_switch",
                               "Fake_on_off_switch",
-                              lt.LoadTypes.Any,
-                              lt.Units.Any)
+                                       lt.LoadTypes.ANY,
+                                       lt.Units.ANY)
     t_in_primary = cp.ComponentOutput("Fake_t_in_primary",
                               "Fake_t_in_primary",
-                              lt.LoadTypes.Any,
-                              lt.Units.Any)
+                                      lt.LoadTypes.ANY,
+                                      lt.Units.ANY)
     t_in_secondary = cp.ComponentOutput("Fake_t_in_secondary",
                               "Fake_t_in_secondary",
-                              lt.LoadTypes.Any,
-                              lt.Units.Any)
+                                        lt.LoadTypes.ANY,
+                                        lt.Units.ANY)
     t_amb = cp.ComponentOutput("Fake_t_amb",
                               "Fake_t_amb",
-                              lt.LoadTypes.Any,
-                              lt.Units.Any)
+                               lt.LoadTypes.ANY,
+                               lt.Units.ANY)
 
     # Initialize component
     heatpump_config=HeatPumpHplibConfig(model=model, group_id=group_id, t_in=t_in, t_out_val=t_out, p_th_set=p_th_set)

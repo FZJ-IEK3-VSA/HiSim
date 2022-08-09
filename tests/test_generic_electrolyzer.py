@@ -27,12 +27,12 @@ def test_chp_system():
     # Set Fake Inputs
     electricity_target = cp.ComponentOutput( 'FakeElectricityTarget',
                                              "l2_ElectricityTarget",
-                                             lt.LoadTypes.Electricity,
-                                             lt.Units.Watt )
+                                             lt.LoadTypes.ELECTRICITY,
+                                             lt.Units.WATT)
     hydrogensoc = cp.ComponentOutput( 'FakeH2SOC',
                                       'HydrogenSOC',
-                                      lt.LoadTypes.Hydrogen,
-                                      lt.Units.Percent )
+                                      lt.LoadTypes.HYDROGEN,
+                                      lt.Units.PERCENT)
     
     number_of_outputs = fft.get_number_of_outputs( [ my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc ] )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues( number_of_outputs )

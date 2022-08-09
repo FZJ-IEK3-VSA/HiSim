@@ -33,8 +33,8 @@ def test_smart_device():
 
     available_electricity_outputC = cp.ComponentOutput("ElectricityHomeGrid",
                                                        "ElectricityOutput",
-                                                       lt.LoadTypes.Electricity,
-                                                       lt.Units.Watt)
+                                                       lt.LoadTypes.ELECTRICITY,
+                                                       lt.Units.WATT)
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                  seconds_per_timestep=60)
     # Create Controller

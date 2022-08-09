@@ -61,7 +61,7 @@ class SimpleStorage(Component):
         self.current_fill: ComponentOutput = self.add_output(self.ComponentName, SimpleStorage.CurrentFillLevel,
                                                              loadtype, unit)
         self.current_fill_percent: ComponentOutput = self.add_output(self.ComponentName, SimpleStorage.CurrentFillLevelPercent,
-                                                                     loadtype, lt.Units.Percent)
+                                                                     loadtype, lt.Units.PERCENT)
         self.state = SimpleStorageState(0, capacity)
         self.capacity = capacity
         self.previous_state = copy.copy(self.state)

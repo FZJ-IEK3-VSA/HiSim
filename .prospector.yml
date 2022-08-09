@@ -18,6 +18,7 @@ pylint:
       - too-many-locals
       - too-many-arguments
       - abstract-method
+      - pointless-string-statement
 #    disable:
 #      - too-many-locals
 #      - arguments-differ
@@ -59,3 +60,4 @@ vulture:
   disable:
     - unused-variable
     - unused-function
+    - unused-attribute

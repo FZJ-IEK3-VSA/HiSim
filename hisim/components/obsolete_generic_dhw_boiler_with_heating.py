@@ -7,7 +7,7 @@ from math import pi
 from typing import Union, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+from typing import Any
 # Owned
 import hisim.component as cp
 from hisim import loadtypes as lt
@@ -41,9 +41,10 @@ class BoilerConfig:
     surface : float
     u_value : float
     T_warmwater : float 
-    T_drainwater : float
-    T_ambient : float
-    outputtype : str
+    T_drainwater : float 
+    power : float 
+    efficiency : float
+    fuel : str
 
     def __init__( self,
                   name : str,
@@ -53,8 +54,9 @@ class BoilerConfig:
                   u_value : float,
                   T_warmwater : float, 
                   T_drainwater : float, 
-                  T_ambient : float,
-                  outputtype : str ) :
+                  power : float, 
+                  efficiency : float,
+                  fuel : str ) :
         self.name = name
         self.source_weight = source_weight
         self.volume = volume
@@ -62,8 +64,9 @@ class BoilerConfig:
         self.u = u_value
         self.T_warmwater = T_warmwater + 273.15
         self.T_drainwater = T_drainwater + 273.15
-        self.T_ambient = T_ambient + 273.15
-        self.outputtype = outputtype
+        self.power = power
+        self.efficiency = efficiency
+        self.fuel = fuel
 
 class BoilerState:
     """
@@ -85,7 +88,7 @@ class BoilerState:
         self.temperature_in_K = temperature_in_K
         self.volume_in_l = volume_in_l
 
-    def clone(self):
+    def clone(self) -> Any:
         return BoilerState( self.timestep, self.volume_in_l, self.temperature_in_K)
 
     def energy_from_temperature( self ) -> float:
@@ -95,7 +98,7 @@ class BoilerState:
         return self.temperature_in_K * self.volume_in_l * 0.977 * 4.182 #energy given in kJ
 
 
-    def set_temperature_from_energy( self, energy_in_kJ):
+    def set_temperature_from_energy( self, energy_in_kJ: float) -> None:
         "converts energy contained in storage (kJ) into temperature (K)"
         #0.977 is the density of water in kg/l
         #4.182 is the specific heat of water in kJ / ( K * kg )
@@ -103,7 +106,9 @@ class BoilerState:
     
 class Boiler( cp.Component ):
     """
-    Simple boiler implementation: energy bucket model, extract energy, add energy and convert back to temperatere
+    Simple boiler implementation - energy bucket model: extracts energy, adds energy and converts back to temperatere
+    The boiler considers a simple heating with constant power. It relies on two input signals: hot water demand and a
+    control signal for heating and outputs electricity demand or hydrogen demand as well as the boiler temperature.  
     
     Parameters
     ----------
@@ -129,77 +134,81 @@ class Boiler( cp.Component ):
         Weight of component, relevant if there is more than one boiler, defines hierachy in control. The default is 1.
     """
     # Inputs
-    HeatDelivery = "HeatDelivery"
-    HeatConsumption = 'HeatConsumption'
+    l1_DeviceSignal = "l1_DeviceSignal"
+    l1_RunTimeSignal = 'l1_RunTimeSignal'
     WaterConsumption = "WaterConsumption"
 
     # obligatory Outputs
     TemperatureMean = "TemperatureMean"
+
+    #availble Outputs
+    ElectricityOutput = "ElectricityOutput"
+    HydrogenOutput = "HydrogenOutput"
     
-    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ):
+    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ) -> None:
 
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         
         self.build( config )
         
-        if self.
-        self.WaterConsumptionC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                     self.WaterConsumption,
-                                                                     lt.LoadTypes.WarmWater,
-                                                                     lt.Units.Liter, 
-                                                                     mandatory = True )
+        #inputs
+        self.WaterConsumptionC : cp.ComponentInput = self.add_input(self.component_name,
+                                                                    self.WaterConsumption,
+                                                                    lt.LoadTypes.WARM_WATER,
+                                                                    lt.Units.LITER,
+                                                                    mandatory = True)
         
-        self.l1_DeviceSignalC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                    self.l1_DeviceSignal,
-                                                                    lt.LoadTypes.OnOff,
-                                                                    lt.Units.binary,
-                                                                    mandatory = True )
-        self.l1_RunTimeSignalC : cp.ComponentInput = self.add_input( self.ComponentName,
+        self.l1_DeviceSignalC : cp.ComponentInput = self.add_input(self.component_name,
+                                                                   self.l1_DeviceSignal,
+                                                                   lt.LoadTypes.ON_OFF,
+                                                                   lt.Units.BINARY,
+                                                                   mandatory = True)
+        self.l1_RunTimeSignalC : cp.ComponentInput = self.add_input(self.component_name,
                                                                     self.l1_RunTimeSignal,
-                                                                    lt.LoadTypes.Any,
-                                                                    lt.Units.Any,
-                                                                    mandatory = False )
+                                                                    lt.LoadTypes.ANY,
+                                                                    lt.Units.ANY,
+                                                                    mandatory = False)
         
         #Outputs
-        self.TemperatureMeanC : cp.ComponentOutput = self.add_output( self.ComponentName,
-                                                                         self.TemperatureMean,
-                                                                         lt.LoadTypes.Temperature,
-                                                                         lt.Units.Celsius )
+        self.TemperatureMeanC : cp.ComponentOutput = self.add_output(self.component_name,
+                                                                     self.TemperatureMean,
+                                                                     lt.LoadTypes.TEMPERATURE,
+                                                                     lt.Units.CELSIUS)
         
         if self.fuel == 'electricity':
-            self.ElectricityOutputC = self.add_output( self.ComponentName,
-                                                         self.ElectricityOutput,
-                                                         lt.LoadTypes.Electricity,
-                                                         lt.Units.Watt )
+            self.ElectricityOutputC = self.add_output(self.component_name,
+                                                      self.ElectricityOutput,
+                                                      lt.LoadTypes.ELECTRICITY,
+                                                      lt.Units.WATT)
         
         elif self.fuel == 'hydrogen':
-            self.hydrogen_output_c = self.add_output( self.ComponentName,
-                                                      self.HydrogenOutput,
-                                                      lt.LoadTypes.Hydrogen,
-                                                      lt.Units.kg_per_sec )
+            self.hydrogen_output_c = self.add_output(self.component_name,
+                                                     self.HydrogenOutput,
+                                                     lt.LoadTypes.HYDROGEN,
+                                                     lt.Units.KG_PER_SEC)
         else:
             raise Exception(" The fuel ", str( self.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
             
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
         
-    def get_occupancy_default_connections( self ):
+    def get_occupancy_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting occupancy default connections in dhw boiler" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         occupancy_classname = Occupancy.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, Occupancy.WaterConsumption ) )
         return connections
     
-    def get_l1_controller_default_connections( self ):
+    def get_l1_controller_default_connections( self )-> List[cp.ComponentConnection]:
         log.information( "setting l1 default connections in dhw boiler"  )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
         connections.append( cp.ComponentConnection( Boiler.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
     
     @staticmethod
-    def get_default_config():
+    def get_default_config()-> BoilerConfig:
         config = BoilerConfig( name = 'Boiler',
                                source_weight = 1, 
                                volume = 200,
@@ -207,20 +216,21 @@ class Boiler( cp.Component ):
                                u_value = 0.36,
                                T_warmwater = 50,
                                T_drainwater = 10,
-                               T_ambient : 20,
-                               outputtype : 'Boiler' )
+                               power = 2400,
+                               efficiency = 1,
+                               fuel  = 'electricity' )
         return config
     
-    def build( self, config : BoilerConfig ):
+    def build( self, config : BoilerConfig )-> None:
         
         self.source_weight = config.source_weight
+        self.power = config.power
         self.volume = config.volume
         self.surface = config.surface
         self.u = config.u
         self.efficiency = config.efficiency
-        self.T_warmwater = config.T_warmwater
         self.T_drainwater = config.T_drainwater
-        self.T_ambient = config.T_ambient
+        self.T_warmwater = config.T_warmwater
         self.fuel = config.fuel
         
         
@@ -230,22 +240,23 @@ class Boiler( cp.Component ):
             
         self.write_to_report( )
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines:List[str] = []
         lines.append("Name: {}".format("electric Boiler"))
+        lines.append("Power: {:4.0f} kW".format( ( self.power ) * 1E-3 ) )
         lines.append( "Volume: {:4.0f} l".format( self.volume ) )
         return lines
 
-    def i_save_state( self ):
+    def i_save_state( self ) -> None:
         self.previous_state = self.state.clone()
 
-    def i_restore_state( self ):
+    def i_restore_state( self )  -> None:
         self.state = self.previous_state.clone()
 
-    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
+    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues )  -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
         
         # Retrieves inputs
         WW_consumption = stsv.get_input_value( self.WaterConsumptionC )
@@ -278,7 +289,7 @@ class Boiler( cp.Component ):
                     self.state.timestep += 1
                     self.previous_state.timestep += 1
                     runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-                    self.simulation_repository.set_dynamic_entry( component_type = lt.ComponentType.Boiler, source_weight = self.source_weight, entry = [ self.power ] * runtime )
+                    self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.ELECTRIC_BOILER, source_weight = self.source_weight, entry =[self.power] * runtime)
         else:
             #heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
             stsv.set_output_value( self.hydrogen_output_c, ( self.power * signal / 1.418 ) * 1e-8 )

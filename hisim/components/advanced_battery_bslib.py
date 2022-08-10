@@ -140,6 +140,9 @@ class Battery(Component):
 
         # write values to state
         self.state.soc = soc
+        
+    def write_to_report( self ):
+        pass
 
     def write_to_report(self):
         lines = []

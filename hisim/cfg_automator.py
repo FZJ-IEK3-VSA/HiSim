@@ -11,6 +11,7 @@ from importlib import import_module
 from typing import Any, Dict
 import logging
 
+import dynamic_component
 import hisim.component as component
 import hisim.simulator as sim
 import hisim.hisim_main
@@ -201,7 +202,7 @@ class ConfigurationGenerator:
         component_class_children = [
             cls
             for cls in classname.__subclasses__()
-            if cls != component.DynamicComponent
+            if cls != dynamic_component.DynamicComponent
         ]
         # component_class_children = [cls.__name__ for cls in classname.__subclasses__() if cls != component.DynamicComponent]
 
@@ -454,12 +455,12 @@ class SetupFunction:
         component_class_children = [
             cls.__module__ + "." + cls.__name__
             for cls in classname.__subclasses__()
-            if cls != component.DynamicComponent
+            if cls != dynamic_component.DynamicComponent
         ]
         component_class_children_list = [
             cls
             for cls in classname.__subclasses__()
-            if cls != component.DynamicComponent
+            if cls != dynamic_component.DynamicComponent
         ]
 
         for file_child in component_class_children_list:

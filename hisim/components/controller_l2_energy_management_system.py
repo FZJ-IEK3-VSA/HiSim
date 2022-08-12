@@ -3,6 +3,8 @@
 # Owned
 import copy
 import numpy as np
+
+import dynamic_component
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -539,19 +541,19 @@ class ControllerElectricity(cp.Component):
             self.peak_shaving_from_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave, stsv=stsv)
 
 
-class ControllerElectricityGeneric(cp.DynamicComponent):
+class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     """
     Controlls energy flows for electricity.
     Electricity storages can be ruled in 4 different strategies.
     Component can be added generically
     """
     # Inputs
-    my_component_inputs: List[cp.DynamicConnectionInput] = []
+    my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
 
     # Outputs
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
-    my_component_outputs: List[cp.DynamicConnectionOutput] = []
+    my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
 
     CheckPeakShaving = "CheckPeakShaving"
@@ -901,7 +903,7 @@ class ControllerElectricityGeneric(cp.DynamicComponent):
         '''
 
 
-class ControllerHeatGeneric(cp.DynamicComponent):
+class ControllerHeatGeneric(dynamic_component.DynamicComponent):
     """
     Controlls energy flows for heat demand.
     Heat Demand can be simulated by a sinking storage temperature.
@@ -914,10 +916,10 @@ class ControllerHeatGeneric(cp.DynamicComponent):
     StorageTemperatureHeatingWater = "StorageTemperatureHeatingWater"
     StorageTemperatureWarmWater = "StorageTemperatureWarmWater"
     ResidenceTemperature = "ResidenceTemperature"
-    my_component_inputs: List[cp.DynamicConnectionInput] = []
+    my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
 
     # Outputs
-    my_component_outputs: List[cp.DynamicConnectionOutput] = []
+    my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
 
     ControlSignalGasHeater = "ControlSignalGasHeater"
     ControlSignalChp = "ControlSignalChp"

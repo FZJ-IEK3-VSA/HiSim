@@ -162,29 +162,33 @@ class OverviewGenerator:
 
         if (len(myfi.classes)) > 0:
             self.add_to_cell(column=column, row=row, value="Classes", worksheet=worksheet1)
+            myclass: ClassInformation
             for myclass in myfi.classes:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=myclass.member_name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=myclass.class_name, worksheet=worksheet1)
                 subcol = self.add_to_cell(column=subcol, row=row, value=myclass.lines_of_code, worksheet=worksheet1)
             row = row + 1
         if (len(myfi.methods)) > 0:
             self.add_to_cell(column=column, row=row, value="Methods", worksheet=worksheet1)
+            mymethods: MethodInformation
             for mymethods in myfi.methods:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=mymethods.member_name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=mymethods.method_name, worksheet=worksheet1)
             row = row + 1
         if (len(myfi.strings)) > 0:
             self.add_to_cell(column=column, row=row, value="Strings", worksheet=worksheet1)
+            mystr: StringInformation
             for mystr in myfi.strings:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=mystr.member_name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=mystr.string_name, worksheet=worksheet1)
                 subcol = self.add_to_cell(column=subcol, row=row, value=mystr.string_value, worksheet=worksheet1)
             row = row + 1
         if (len(myfi.others)) > 0:
             self.add_to_cell(column=column, row=row, value="Others", worksheet=worksheet1)
+            otherstuff: OtherMembers
             for otherstuff in myfi.others:
                 row = row + 1
                 subcol = column + 1

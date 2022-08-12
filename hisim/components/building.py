@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import List
 # Owned
+import dynamic_component
 from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -125,7 +126,7 @@ class BuildingControllerConfig:
     stop_heating_building_temperature: float
 
 
-class Building(cp.DynamicComponent):
+class Building(dynamic_component.DynamicComponent):
     """
     Building class provides multiple typologies of residences based on the
     EPISCOPE/TABULA project database. EPISCOPE/TABULA project involves a
@@ -184,8 +185,8 @@ class Building(cp.DynamicComponent):
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
 
     # dynamic
-    my_component_inputs: List[cp.DynamicConnectionInput] = []
-    my_component_outputs: List[cp.DynamicConnectionOutput] = []
+    my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
+    my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
 
     # Similar components to connect to:
     # 1. Weather

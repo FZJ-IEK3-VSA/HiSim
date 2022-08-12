@@ -140,3 +140,4 @@ examples/results
 # simulation log
 tests\hisim_simulation.log
 hisim/components_information.xlsx
+tests/components_information.xlsx

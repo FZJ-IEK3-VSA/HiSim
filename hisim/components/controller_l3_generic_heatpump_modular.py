@@ -10,6 +10,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 #Owned
+import dynamic_component
 from hisim import log
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -87,7 +88,7 @@ class ControllerSignal:
     def clone( self ):
         return ControllerSignal( signal = self.signal ) 
         
-class L3_Controller( cp.DynamicComponent ):
+class L3_Controller(dynamic_component.DynamicComponent):
     """
     Predictive controller. It takes data from the dictionary my_simulation_repository
     and decides if device should be activated or not. The predictive controller is a central
@@ -106,8 +107,8 @@ class L3_Controller( cp.DynamicComponent ):
     """
 
     # Inputs and Outputs
-    my_component_inputs: List[ cp.DynamicConnectionInput] = []
-    my_component_outputs: List[ cp.DynamicConnectionOutput] = []
+    my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
+    my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
                         threshold_price : float = 25,

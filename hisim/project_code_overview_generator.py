@@ -293,7 +293,7 @@ class OverviewGenerator:
         for dirpath, _, filenames in os.walk(hisim_dir):
             for filename in [f for f in filenames if f.endswith(".py")]:
                 pypath = os.path.join(dirpath, filename)
-                if pypath.__contains__(".eggs"):
+                if ".eggs" in pypath:
                     continue
                 files.append(pypath)
         return files

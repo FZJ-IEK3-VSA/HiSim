@@ -55,7 +55,7 @@ def test_gas_heater():
 
     # Mass-Flow out of Gas-Heater to heat up Storages or House
     assert stsv.values[my_gas_heater.mass_out.GlobalIndex] == 0.2582496413199426
-    # Tempreature of Water out of GasHeater
+    # Temperature of Water out of GasHeater
     assert stsv.values[my_gas_heater.mass_out_temp.GlobalIndex] == temperaturedelta + stsv.values[mass_flow_input_temperature.GlobalIndex]
     # Real Power of GasHeater
     assert stsv.values[my_gas_heater.p_th.GlobalIndex] == 10_800

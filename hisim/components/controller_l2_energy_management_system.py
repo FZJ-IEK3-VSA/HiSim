@@ -4,7 +4,7 @@
 import copy
 import numpy as np
 
-import dynamic_component
+from hisim import dynamic_component
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters

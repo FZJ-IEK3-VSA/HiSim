@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import List
 # Owned
-import dynamic_component
 from hisim import utils
 from hisim import component as cp
+from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import log
 

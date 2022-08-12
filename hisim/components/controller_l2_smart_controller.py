@@ -8,7 +8,7 @@ from typing import List
 from hisim import loadtypes as lt
 from abc import ABC, abstractmethod
 from hisim.simulationparameters import SimulationParameters
-# NOT BEING ANYWHERE
+
 
 class SmartController(Component):
 

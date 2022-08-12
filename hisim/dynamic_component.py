@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Union, Any
 
-import loadtypes as lt
-from component import Component, ComponentInput, SingleTimeStepValues, ComponentOutput
+import hisim.loadtypes as lt
+from hisim.component import Component, ComponentInput, SingleTimeStepValues, ComponentOutput
 
 
 @dataclass

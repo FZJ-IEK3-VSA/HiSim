@@ -10,7 +10,7 @@ from typing import Optional, List, Tuple
 import numpy as np
 
 #Owned
-import dynamic_component
+from hisim import dynamic_component
 from hisim import log
 from hisim import component as cp
 from hisim import loadtypes as lt

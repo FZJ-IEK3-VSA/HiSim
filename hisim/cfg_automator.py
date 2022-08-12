@@ -11,7 +11,7 @@ from importlib import import_module
 from typing import Any, Dict
 import logging
 
-import dynamic_component
+from hisim import dynamic_component
 import hisim.component as component
 import hisim.simulator as sim
 import hisim.hisim_main
@@ -38,7 +38,7 @@ __status__ = "development"
 # iterate through the modules in the current package
 package_dir = os.path.join(gg(__file__).resolve().parent, "components")
 
-for (_, module_name, _) in iter_modules([package_dir]):
+for (_idx1, module_name, _idx2) in iter_modules([package_dir]):
 
     # import the module and iterate through its attributes
     module = import_module(f"hisim.components.{module_name}")

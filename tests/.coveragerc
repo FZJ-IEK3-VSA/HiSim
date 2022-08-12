@@ -4,5 +4,5 @@ branch = True
 [html]
 directory = coverage_html_report
 [report]
-fail_under=75
+fail_under=60
 

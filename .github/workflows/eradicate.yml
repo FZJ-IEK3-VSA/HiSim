@@ -35,7 +35,7 @@ jobs:
         flake8 hisim/loadtypes.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/hisim_with_profiler.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/hisim_main.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
-        flake8 hisim/components_finder.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/project_code_overview_generator.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
 
 # reenable once all source files are fixed and no more commented out code is spread all over
 # flake8 . --count --select=E9,F63,F7,F82,E800 --show-source --statistics

@@ -1,12 +1,14 @@
 """ Makes an overview of all the components and collects important information for each module. """
+from typing import List, Any
 from pathlib import Path as Pathlibpath
 import importlib
+import importlib.util
 from dataclasses import dataclass, field
 import inspect
 import os
 import sys
 from openpyxl import Workbook  # type: ignore
-from typing import  List, Any
+
 __authors__ = "Noah Pflugradt, Maximilian Hillen"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3"
 __license__ = "MIT"
@@ -17,62 +19,96 @@ __status__ = "development"
 
 BuiltInAttributes = [
     "__builtins__",
-"__cached__",
-"__doc__",
-"__file__",
-"__name__",
-"__package__",
-"__path__",
+    "__cached__",
+    "__doc__",
+    "__file__",
+    "__name__",
+    "__package__",
+    "__path__",
 ]
+
 
 @dataclass
 class ClassInformation:
-    Name: str = ""
-    Lines_of_Code: int = 0
+
+    """ Stores information about classes. """
+
+    class_name: str = ""
+    lines_of_code: int = 0
+
 
 @dataclass
 class StringInformation:
-    Name: str = ""
-    Value: str = ""
+
+    """ Stores information for strings. """
+
+    string_name: str = ""
+    string_value: str = ""
+
 
 @dataclass
 class MethodInformation:
-    Name: str = ""
+
+    """ Stores information about methods. """
+
+    method_name: str = ""
+
 
 @dataclass
 class ListInformation:
-    Name: str = ""
+
+    """ Stores information for all lists. """
+
+    list_name: str = ""
+
 
 @dataclass
 class DictInformation:
-    Name: str = ""
+
+    """ Stores information for all dictionaries. """
+
+    dict_name: str = ""
+
 
 @dataclass
 class OtherMembers:
-    Name: str = ""
-    VariableType: str = ""
+
+    """ Stores information for all other members of the files. """
+
+    member_name: str = ""
+    variable_type: str = ""
+
+
 @dataclass
 class FileInformation:
-    ModuleName: str = ""
-    FileName: str = ""
-    Length: str  = ""
-    Authors: str = ""
-    Copyright: str = ""
-    Credits: str = ""
-    License: str = ""
-    Version: str = ""
-    Maintainer: str = ""
-    Email: str = ""
-    Status: str = ""
-    Lines: int = 0
-    Python_Module_Loading_Possible: bool = False
-    Classes: List[ClassInformation] = field(default_factory=list)
-    Methods: List[MethodInformation] = field(default_factory=list)
-    Strings: List[StringInformation] = field(default_factory=list)
-    Lists: List[ListInformation] = field(default_factory=list)
-    Dicts: List[DictInformation] = field(default_factory=list)
-    Others: List[OtherMembers] = field(default_factory=list)
+
+    """ Stores the information about a single file. """
+
+    module_name: str = ""
+    file_name: str = ""
+    length: str = ""
+    authors: str = ""
+    copyright: str = ""
+    credits: str = ""
+    license: str = ""
+    version: str = ""
+    maintainer: str = ""
+    email: str = ""
+    status: str = ""
+    lines: int = 0
+    python_module_loading_possible: bool = False
+    classes: List[ClassInformation] = field(default_factory=list)
+    methods: List[MethodInformation] = field(default_factory=list)
+    strings: List[StringInformation] = field(default_factory=list)
+    lists: List[ListInformation] = field(default_factory=list)
+    dicts: List[DictInformation] = field(default_factory=list)
+    others: List[OtherMembers] = field(default_factory=list)
+
+
 class OverviewGenerator:
+
+    """ Generates an overview of all modules. """
+
     def add_to_cell(self, column: int, row: int, value: Any, worksheet):
         """ Write data to the Excel sheet. """
         worksheet.cell(column=column, row=row, value=value)
@@ -108,71 +144,65 @@ class OverviewGenerator:
         workbook.save(dest_filename)
 
     def write_one_file_block(self, myfi, row, worksheet1):
-        """ writes the block for a single file to excel"""
+        """ Writes the block for a single file to excel. """
         column: int = 1
-        column = self.add_to_cell(column=column, row=row, value=myfi.ModuleName, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.FileName, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Lines, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Python_Module_Loading_Possible,
+        column = self.add_to_cell(column=column, row=row, value=myfi.module_name, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.file_name, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.lines, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.python_module_loading_possible,
                                   worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Authors, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Copyright, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Email, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.License, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Maintainer, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Maintainer, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Status, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.Version, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.authors, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.copyright, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.email, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.license, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.maintainer, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.maintainer, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.status, worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.version, worksheet=worksheet1)
 
-        if (len(myfi.Classes)) > 0:
+        if (len(myfi.classes)) > 0:
             self.add_to_cell(column=column, row=row, value="Classes", worksheet=worksheet1)
-            for myclass in myfi.Classes:
+            for myclass in myfi.classes:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=myclass.Name, worksheet=worksheet1)
-                subcol = self.add_to_cell(column=subcol, row=row, value=myclass.Lines_of_Code, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=myclass.member_name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=myclass.lines_of_code, worksheet=worksheet1)
             row = row + 1
-        if (len(myfi.Methods)) > 0:
+        if (len(myfi.methods)) > 0:
             self.add_to_cell(column=column, row=row, value="Methods", worksheet=worksheet1)
-            for mymethods in myfi.Methods:
+            for mymethods in myfi.methods:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=mymethods.Name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=mymethods.member_name, worksheet=worksheet1)
             row = row + 1
-        if (len(myfi.Strings)) > 0:
+        if (len(myfi.strings)) > 0:
             self.add_to_cell(column=column, row=row, value="Strings", worksheet=worksheet1)
-            for mystr in myfi.Strings:
+            for mystr in myfi.strings:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=mystr.Name, worksheet=worksheet1)
-                subcol = self.add_to_cell(column=subcol, row=row, value=mystr.Value, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=mystr.member_name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=mystr.string_value, worksheet=worksheet1)
             row = row + 1
-        if (len(myfi.Others)) > 0:
+        if (len(myfi.others)) > 0:
             self.add_to_cell(column=column, row=row, value="Others", worksheet=worksheet1)
-            for otherstuff in myfi.Others:
+            for otherstuff in myfi.others:
                 row = row + 1
                 subcol = column + 1
-                subcol = self.add_to_cell(column=subcol, row=row, value=otherstuff.Name, worksheet=worksheet1)
-                subcol = self.add_to_cell(column=subcol, row=row, value=otherstuff.VariableType, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=otherstuff.member_name, worksheet=worksheet1)
+                subcol = self.add_to_cell(column=subcol, row=row, value=otherstuff.variable_type, worksheet=worksheet1)
             row = row + 1
         return row
 
-    def process_one_file(self, filename):
-        # import the module and iterate through its attributes
+    def process_one_file(self, filename): # noqa
+        """ Import the module and iterate through its attributes. """
         myfi: FileInformation = FileInformation()
 
-        myfi.FileName = filename
-        myfi.ModuleName = os.path.basename(filename)
+        myfi.file_name = filename
+        myfi.module_name = os.path.basename(filename)
         self.analyze_file_directly(filename, myfi)
-        try:
-            spec = importlib.util.spec_from_file_location(myfi.ModuleName, myfi.FileName)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-            sys.modules[myfi.ModuleName] = module
-        except:  # noqa
-            module = None
+        module = self.try_to_load_module(myfi)
         if module is None:
-            myfi.Python_Module_Loading_Possible = False
+            myfi.python_module_loading_possible = False
             return myfi
 
         python_module_name = module.__name__
@@ -187,60 +217,73 @@ class OverviewGenerator:
             strname = str(module_member[0])
             strval = str(module_member[1])
             if str(mytype) == "<class 'type'>":
-                ci = ClassInformation()
-                ci.Name = strname
-                ci.Lines_of_Code = len(inspect.getsourcelines(module_member[1]))
-                myfi.Classes.append(ci)
+                class_info = ClassInformation()
+                class_info.class_name = strname
+                class_info.lines_of_code = len(inspect.getsourcelines(module_member[1]))
+                myfi.classes.append(class_info)
                 continue
             if str(mytype) == "<class 'module'>":
                 continue
             if str(mytype) == "<class 'function'>":
-                mi = MethodInformation(module_member[0])
-                myfi.Methods.append(mi)
+                method_information = MethodInformation(module_member[0])
+                myfi.methods.append(method_information)
                 continue
             if str(mytype) == "<class 'str'>":
                 self.process_string_attribute(myfi, strname, strval)
                 continue
             if str(mytype) == "<class 'list'>":
-                li = ListInformation(str(module_member[0]))
-                myfi.Lists.append(li)
+                list_information = ListInformation(strname)
+                myfi.lists.append(list_information)
                 continue
             if str(mytype) == "<class 'dict'>":
-                dii = DictInformation(str(module_member[0]))
-                myfi.Dicts.append(dii)
+                dii = DictInformation(strname)
+                myfi.dicts.append(dii)
                 continue
-            oi = OtherMembers(str(module_member[0]), str(mytype))
-            myfi.Others.append(oi)
+            other_information = OtherMembers(strname, str(mytype))
+            myfi.others.append(other_information)
         return myfi
 
+    def try_to_load_module(self, myfi):
+        """ Tries to load a file as python module. Returns None if it couldn't be loaded. """
+        try:
+            spec = importlib.util.spec_from_file_location(myfi.module_name, myfi.file_name)
+            module = importlib.util.module_from_spec(spec)  # type: ignore
+            spec.loader.exec_module(module)  # type: ignore
+            sys.modules[myfi.module_name] = module  # type: ignore
+        except:  # noqa
+            module = None
+        return module
+
     def process_string_attribute(self, myfi, strname, strval):
+        """ Processes all attributes that are of of the type string. """
         if strname == "__authors__":
-            myfi.Authors = strval
+            myfi.authors = strval
         elif strname == "__copyright__":
-            myfi.Copyright = strval
+            myfi.copyright = strval
         elif strname == "__email__":
-            myfi.Email = strval
+            myfi.email = strval
         elif strname == "__license__":
-            myfi.License = strval
+            myfi.license = strval
         elif strname == "__maintainer__":
-            myfi.Maintainer = strval
+            myfi.maintainer = strval
         elif strname == "__status__":
-            myfi.Status = strval
+            myfi.status = strval
         elif strname == "__version__":
-            myfi.Version = strval
+            myfi.version = strval
         else:
             sti = StringInformation(strname, strval)
-            myfi.Strings.append(sti)
+            myfi.strings.append(sti)
 
     def analyze_file_directly(self, filename, myfi):
+        """ Analyze all the files and count the lines in each file. Could be expanded with more checks. """
         count = 0
         with open(filename, "r", encoding="utf8") as sourcefile:
             for count, _line in enumerate(sourcefile):
                 pass
-        myfi.Lines = count
+        myfi.lines = count
 
     def collect_files(self):
-        # Iterate through the modules in the current package
+        """ Iterate through the modules in the current package. """
         hisim_dir = Pathlibpath(__file__).resolve().parent.parent
         files = []
         for dirpath, _, filenames in os.walk(hisim_dir):

@@ -36,7 +36,7 @@ __status__ = "development"
 
 # iterate through the modules in the current package
 package_dir = os.path.join(gg(__file__).resolve().parent, "components")
-_: Any
+
 for (_, module_name, _) in iter_modules([package_dir]):
 
     # import the module and iterate through its attributes

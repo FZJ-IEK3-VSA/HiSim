@@ -76,6 +76,7 @@ class SimulationParameters:
     def one_day_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
+
     @classmethod
     def one_day_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """

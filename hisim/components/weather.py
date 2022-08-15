@@ -392,7 +392,7 @@ class Weather(Component):
     def calc_sun_position2(self, hoy):
         return self.altitude_list[hoy], self.azimuth_list[hoy]
 
-def readTRY(location="Aachen", year=2015):
+def readTRY(location="Seville", year=2015):
     """
     Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
@@ -408,43 +408,73 @@ def readTRY(location="Aachen", year=2015):
     # get the correct file path
     filepath = os.path.join(HISIMPATH["weather"][location])
 
-    # get the geoposition
-    with open(filepath + ".dat", encoding="utf-8") as fp:
-        lines = fp.readlines()
-        location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
-        lat = float(lines[1][20:37])
-        lon = float(lines[2][15:30])
-    location = {"name": location_name, "latitude": lat, "longitude": lon}
-
-    # check if time series data already exists as .csv with DNI
-    if os.path.isfile(filepath + ".csv"):
-        data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True,sep=";",decimal=",")
-        data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
-    # else read from .dat and calculate DNI etc.
-    else:
+    SouhternEurope=["Madrid","Seville","Bilbao"]
+    LocationisSouthernEurope= location in SouhternEurope
+    if LocationisSouthernEurope:
+        # get the geoposition
+        with open(filepath + ".dat", encoding="utf-8") as fp:
+            lines = fp.readlines()
+            location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
+            lat = float(lines[1][20:25])
+            lon = float(lines[2][15:20])
+        location = {"name": location_name, "latitude": lat, "longitude": lon}
         # get data
         data = pd.read_csv(
-            filepath + ".dat", sep=r"\s+", skiprows=([i for i in range(0, 31)])
+            filepath + ".dat", sep=",", skiprows=([i for i in range(0,11)])
         )
-        data.index = pd.date_range(
-            "{}-01-01 00:30:00".format(year), periods=8760, freq="H", tz="Europe/Berlin"
-        )
-        data["GHI"] = data["D"] + data["B"]
-        data = data.rename(columns={"D": "DHI",
-                                    "t": "T",
-                                    "WG": "Wspd",
+        data=data.drop(data.index[8761:8772])
+        data.index = pd.date_range(  
+            "{}-01-01 00:30:00".format(year), periods=8760, freq="H", tz="Europe/Berlin")
+        #data["GHI"] = data["D"] + data["B"]
+        data = data.rename(columns={"DHI": "DHI",
+                                    "Temperature": "T",
+                                    "Wind Speed": "Wspd",
                                     "MM": "Month",
                                     "DD": "Day",
                                     "HH": "Hour",
-                                    "p": "Pressure",
-                                    "WR": "Wdir"})
-
-        # calculate direct normal
-        data["DNI"] = calculateDNI(data["B"], lon, lat)
-        # data["DNI"] = data["B"]
-
-        # save as .csv
-        #data.to_csv(filepath + ".csv",sep=";",decimal=",")
+                                    "Pressure": "Pressure",
+                                    "Wind Direction": "Wdir",
+                                    "GHI": "GHI",
+                                    "DNI":"DNI"})
+        solarPos = pvlib.solarposition.get_solarposition(data["GHI"].index, lat, lon)
+    else:
+        # get the geoposition
+        with open(filepath + ".dat", encoding="utf-8") as fp:
+            lines = fp.readlines()
+            location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
+            lat = float(lines[1][20:37])
+            lon = float(lines[2][15:30])
+        location = {"name": location_name, "latitude": lat, "longitude": lon}
+    
+        # check if time series data already exists as .csv with DNI
+        if os.path.isfile(filepath + ".csv"):
+            data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True,sep=";",decimal=",")
+            data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
+        # else read from .dat and calculate DNI etc.
+        else:
+            # get data
+            data = pd.read_csv(
+                filepath + ".dat", sep=r"\s+", skiprows=([i for i in range(0, 31)])
+            )
+            data.index = pd.date_range(
+                "{}-01-01 00:30:00".format(year), periods=8760, freq="H", tz="Europe/Berlin"
+            )
+            data["GHI"] = data["D"] + data["B"]
+            data = data.rename(columns={"D": "DHI",
+                                        "t": "T",
+                                        "WG": "Wspd",
+                                        "MM": "Month",
+                                        "DD": "Day",
+                                        "HH": "Hour",
+                                        "p": "Pressure",
+                                        "WR": "Wdir"})
+    
+            # calculate direct normal
+            data["DNI"] = calculateDNI(data["B"], lon, lat)
+            # data["DNI"] = data["B"]
+    
+            # save as .csv
+            #data.to_csv(filepath + ".csv",sep=";",decimal=",")
 
     return data, location
 

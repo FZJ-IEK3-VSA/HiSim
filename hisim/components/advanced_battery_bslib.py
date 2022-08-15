@@ -141,6 +141,12 @@ class Battery(Component):
         # write values to state
         self.state.soc = soc
 
+    def write_to_report(self):
+        lines = []
+        lines.append("Advanced Battery bslib: " + self.ComponentName )
+        return lines
+
+
 @dataclass
 class BatteryState:
     soc: float = 0

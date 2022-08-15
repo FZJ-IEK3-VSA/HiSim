@@ -216,7 +216,10 @@ class Electrolyzer(Component):
                                                    pressure_hydrogen_output =config.pressure_hydrogen_output)
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.previous_state = 0
-
+    def write_to_report(self):
+        lines = []
+        lines.append("CHP operation with constant electical and thermal power: " + self.ComponentName )
+        return lines
     @staticmethod
     def get_default_config():
         config=ElectrolyzerConfig(
@@ -559,4 +562,10 @@ class HydrogenStorage(Component):
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
+
+    def write_to_report(self):
+        lines = []
+        lines.append("Hydrogen Storage: " + self.ComponentName )
+        return lines
+
 

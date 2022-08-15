@@ -140,7 +140,12 @@ class L3_Controller(dynamic_component.DynamicComponent):
         if ( ( not self.threshold_peak ) or peak < self.threshold_peak ) and price_per_kWh < self.threshold_price:
             return 1
         else:
-            return 0 
+            return 0
+
+    def write_to_report(self):
+        lines = []
+        lines.append("L3 Controller Heat Pump: " + self.ComponentName )
+        return lines
 
     def i_save_state( self ):
         self.previous_signal = self.signal.clone( )

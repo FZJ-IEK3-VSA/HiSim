@@ -70,7 +70,13 @@ class GCHP( cp.Component ):
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
-    
+
+    def write_to_report(self):
+        lines = []
+        lines.append("CHP operation with constant electical and thermal power: " + self.ComponentName )
+        return lines
+
+
     
     def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ):
         super().__init__( name = config.name + str( config.source_weight ), my_simulation_parameters=my_simulation_parameters )
@@ -336,4 +342,9 @@ class L1_Controller( cp.Component ):
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
-        
+
+    def write_to_report(self):
+        lines = []
+        lines.append("Generic CHP L1 Controller: " + self.ComponentName )
+        return lines
+

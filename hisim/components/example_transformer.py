@@ -30,3 +30,8 @@ class Transformer(Component):
         startval_2 = stsv.get_input_value(self.input2)
         stsv.set_output_value(self.output1, startval_1 * 5)
         stsv.set_output_value(self.output2, startval_2 * 1000)
+    def write_to_report(self):
+        lines = []
+        lines.append("Transformer: " + self.ComponentName )
+        return lines
+

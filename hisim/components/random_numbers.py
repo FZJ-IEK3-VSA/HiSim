@@ -12,6 +12,8 @@ class RandomNumbers(Component):
     def __init__(self, name: str, timesteps: int, minimum: float, maximum: float, my_simulation_parameters: SimulationParameters ):
         super().__init__(name, my_simulation_parameters=my_simulation_parameters)
         self.values: List[float] = []
+        self.minimum = minimum
+        self.maximum = maximum
         number_range = maximum - minimum
         for x in range(timesteps):
             number = minimum + random.random() * number_range
@@ -33,3 +35,10 @@ class RandomNumbers(Component):
 
     def i_save_state(self):
         pass
+
+    def write_to_report(self):
+        lines =[]
+        lines.append("Random number Generator: {}".format(self.ComponentName))
+        lines.append("Minimum number: {}".format(self.minimum))
+        lines.append("Maximum number: {}".format(self.maximum))
+        return lines

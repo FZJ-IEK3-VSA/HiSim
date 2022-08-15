@@ -195,3 +195,9 @@ class L1_Controller( cp.Component ):
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
+
+    def write_to_report(self):
+        lines = []
+        lines.append("Generic Controller L1: " + self.ComponentName )
+        return lines
+

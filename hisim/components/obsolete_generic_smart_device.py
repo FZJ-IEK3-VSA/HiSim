@@ -1,4 +1,3 @@
-# type: ignore
 # Generic/Built-in
 import json
 import numpy as np

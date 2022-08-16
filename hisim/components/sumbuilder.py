@@ -215,6 +215,13 @@ class SumBuilderForTwoInputs(Component):
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)
         stsv.set_output_value(self.output1, val1+val2)
+    
+    def write_to_report(self):
+        lines =[]
+        lines.append("Sumbuilder for two inputs: {}".format(self.ComponentName))
+        lines.append("Input 1: {}".format(self.input1.FullName))
+        lines.append("Input 2: {}".format(self.input2.FullName))
+        return lines
 
 class SumBuilderForThreeInputs(Component):
     SumInput1 = "Input 1"

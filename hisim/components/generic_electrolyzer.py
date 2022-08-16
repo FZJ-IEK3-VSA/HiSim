@@ -114,7 +114,11 @@ class Electrolyzer( cp.Component ):
                                      max_hydrogen_production_rate_hour = 5000  # [Nl/h]
                                      )
         return config
-    
+
+    def write_to_report(self):
+        lines = []
+        lines.append("Generic Electrolyzer: " + self.ComponentName )
+        return lines
     def get_l1_controller_default_connections( self ):
         log.information("setting l1 default connections in generic electrolyzer" )
         connections = [ ]
@@ -364,3 +368,7 @@ class L1_Controller( cp.Component ):
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
 
+    def write_to_report(self):
+        lines = []
+        lines.append("L1 Controller Electrolyzer: " + self.ComponentName )
+        return lines

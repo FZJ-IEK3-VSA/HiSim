@@ -250,3 +250,9 @@ class HydrogenStorage( cp.Component ):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
+
+    def write_to_report(self):
+        lines = []
+        lines.append("Hydrogen Storage: " + self.ComponentName )
+        return lines
+

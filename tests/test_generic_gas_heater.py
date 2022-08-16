@@ -38,13 +38,13 @@ def test_gas_heater():
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Link inputs and outputs
-    my_gas_heater.control_signal.SourceOutput = control_signal
-    my_gas_heater.mass_inp_temp.SourceOutput = mass_flow_input_temperature
+    my_gas_heater.control_signal.source_output = control_signal
+    my_gas_heater.mass_inp_temp.source_output = mass_flow_input_temperature
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([control_signal,mass_flow_input_temperature,my_gas_heater])
-    stsv.values[control_signal.GlobalIndex] = 1
-    stsv.values[mass_flow_input_temperature.GlobalIndex] = 30
+    stsv.values[control_signal.global_index] = 1
+    stsv.values[mass_flow_input_temperature.global_index] = 30
 
 
     timestep = 30
@@ -54,9 +54,9 @@ def test_gas_heater():
     log.information(str(stsv.values))
 
     # Mass-Flow out of Gas-Heater to heat up Storages or House
-    assert stsv.values[my_gas_heater.mass_out.GlobalIndex] == 0.2582496413199426
+    assert stsv.values[my_gas_heater.mass_out.global_index] == 0.2582496413199426
     # Temperature of Water out of GasHeater
-    assert stsv.values[my_gas_heater.mass_out_temp.GlobalIndex] == temperaturedelta + stsv.values[mass_flow_input_temperature.GlobalIndex]
+    assert stsv.values[my_gas_heater.mass_out_temp.global_index] == temperaturedelta + stsv.values[mass_flow_input_temperature.global_index]
     # Real Power of GasHeater
-    assert stsv.values[my_gas_heater.p_th.GlobalIndex] == 10_800
+    assert stsv.values[my_gas_heater.p_th.global_index] == 10_800
 

@@ -49,23 +49,23 @@ def test_heat_pump():
                               lt.LoadTypes.TEMPERATURE,
                               lt.Units.WATT)
 
-    my_heat_pump_controller.t_mC.SourceOutput = t_mC
+    my_heat_pump_controller.t_mC.source_output = t_mC
 
-    my_heat_pump.t_outC.SourceOutput = t_air_outdoorC
-    my_heat_pump.stateC.SourceOutput = my_heat_pump_controller.stateC
+    my_heat_pump.t_outC.source_output = t_air_outdoorC
+    my_heat_pump.stateC.source_output = my_heat_pump_controller.stateC
 
     # Link inputs and outputs
-    t_mC.GlobalIndex = 0
+    t_mC.global_index = 0
     stsv.values[0] = 10
 
-    my_heat_pump_controller.stateC.GlobalIndex = 1
+    my_heat_pump_controller.stateC.global_index = 1
 
-    my_heat_pump.thermal_energy_deliveredC.GlobalIndex = 2
-    my_heat_pump.heatingC.GlobalIndex = 3
-    my_heat_pump.coolingC.GlobalIndex = 4
-    my_heat_pump.electricity_outputC.GlobalIndex = 5
-    my_heat_pump.number_of_cyclesC.GlobalIndex = 6
-    t_air_outdoorC.GlobalIndex = 7
+    my_heat_pump.thermal_energy_deliveredC.global_index = 2
+    my_heat_pump.heatingC.global_index = 3
+    my_heat_pump.coolingC.global_index = 4
+    my_heat_pump.electricity_outputC.global_index = 5
+    my_heat_pump.number_of_cyclesC.global_index = 6
+    t_air_outdoorC.global_index = 7
     j = 60
     # Simulate
     my_heat_pump_controller.i_restore_state()

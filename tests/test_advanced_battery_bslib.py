@@ -35,12 +35,12 @@ def test_advanced_battery_bslib():
     number_of_outputs = fft.get_number_of_outputs([my_advanced_battery,loading_power_input])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
-    my_advanced_battery.p_set.SourceOutput = loading_power_input
+    my_advanced_battery.p_set.source_output = loading_power_input
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_advanced_battery, loading_power_input])
 
-    stsv.values[loading_power_input.GlobalIndex] = 4000
+    stsv.values[loading_power_input.global_index] = 4000
 
     timestep = 1000
 
@@ -49,7 +49,7 @@ def test_advanced_battery_bslib():
     log.information(str(stsv.values))
 
     # Check if set power is charged
-    assert stsv.values[my_advanced_battery.p_bs.GlobalIndex] == 4000
-    assert stsv.values[my_advanced_battery.p_bat.GlobalIndex] == 3807.546
-    assert stsv.values[my_advanced_battery.soc.GlobalIndex] == 0.006185227970066665
+    assert stsv.values[my_advanced_battery.p_bs.global_index] == 4000
+    assert stsv.values[my_advanced_battery.p_bat.global_index] == 3807.546
+    assert stsv.values[my_advanced_battery.soc.global_index] == 0.006185227970066665
 

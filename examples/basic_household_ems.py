@@ -100,52 +100,52 @@ def basic_household_only_heat(my_sim, my_simulation_parameters: Optional[Simulat
 
 
     my_storage.connect_input(my_storage.ThermalDemandHeatingWater,
-                              my_storage_controller.ComponentName,
-                              my_storage_controller.RealThermalDemandHeatingWater)
+                             my_storage_controller.component_name,
+                             my_storage_controller.RealThermalDemandHeatingWater)
     my_storage.connect_input(my_storage.ControlSignalChooseStorage,
-                              my_controller_heat.ComponentName,
-                              my_controller_heat.ControlSignalChooseStorage)
+                             my_controller_heat.component_name,
+                             my_controller_heat.ControlSignalChooseStorage)
 
     my_storage_controller.connect_input(my_storage_controller.TemperatureHeatingStorage,
-                              my_storage.ComponentName,
-                              my_storage.WaterOutputTemperatureHeatingWater)
+                                        my_storage.component_name,
+                                        my_storage.WaterOutputTemperatureHeatingWater)
     my_storage_controller.connect_input(my_storage_controller.BuildingTemperature,
-                              my_building.ComponentName,
-                              my_building.TemperatureMean)
+                                        my_building.component_name,
+                                        my_building.TemperatureMean)
     my_storage_controller.connect_input(my_storage_controller.ReferenceMaxHeatBuildingDemand,
-                              my_building.ComponentName,
-                              my_building.ReferenceMaxHeatBuildingDemand)
+                                        my_building.component_name,
+                                        my_building.ReferenceMaxHeatBuildingDemand)
     my_storage_controller.connect_input(my_storage_controller.RealHeatBuildingDemand,
-                              my_building_controller.ComponentName,
-                              my_building_controller.RealHeatBuildingDemand)
+                                        my_building_controller.component_name,
+                                        my_building_controller.RealHeatBuildingDemand)
 
     my_building_controller.connect_input(my_building_controller.ReferenceMaxHeatBuildingDemand,
-                              my_building.ComponentName,
-                              my_building.ReferenceMaxHeatBuildingDemand)
+                                         my_building.component_name,
+                                         my_building.ReferenceMaxHeatBuildingDemand)
     my_building_controller.connect_input(my_building_controller.ResidenceTemperature,
-                              my_building.ComponentName,
-                              my_building.TemperatureMean)
+                                         my_building.component_name,
+                                         my_building.TemperatureMean)
     my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_storage.ComponentName,
+                              my_storage.component_name,
                               my_storage.RealHeatForBuilding)
 
     my_controller_heat.connect_input(my_controller_heat.StorageTemperatureHeatingWater,
-                              my_storage.ComponentName,
-                              my_storage.WaterOutputTemperatureHeatingWater)
+                                     my_storage.component_name,
+                                     my_storage.WaterOutputTemperatureHeatingWater)
 
     my_controller_heat.connect_input(my_controller_heat.ResidenceTemperature,
-                              my_building.ComponentName,
-                              my_building.TemperatureMean)
+                                     my_building.component_name,
+                                     my_building.TemperatureMean)
 
     my_gas_heater.connect_input(my_gas_heater.ControlSignal,
-                              my_controller_heat.ComponentName,
-                              my_controller_heat.ControlSignalGasHeater)
+                                my_controller_heat.component_name,
+                                my_controller_heat.ControlSignalGasHeater)
     my_gas_heater.connect_input(my_gas_heater.MassflowInputTemperature,
-                              my_storage.ComponentName,
-                              my_storage.WaterOutputStorageforHeaters)
+                                my_storage.component_name,
+                                my_storage.WaterOutputStorageforHeaters)
     my_storage.connect_input(my_storage.ThermalInputPower1,
-                              my_gas_heater.ComponentName,
-                              my_gas_heater.ThermalOutputPower)
+                             my_gas_heater.component_name,
+                             my_gas_heater.ThermalOutputPower)
 
     my_sim.add_component(my_building_controller)
     my_sim.add_component(my_controller_heat)

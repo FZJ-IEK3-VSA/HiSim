@@ -1,3 +1,4 @@
+from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.components import generic_pv_system
@@ -10,7 +11,7 @@ def test_photovoltaic():
     seconds_per_timestep = 60
     power = 10
 
-    repo = component.SimRepository()
+    repo = sim_repository.SimRepository()
 
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=seconds_per_timestep)
@@ -31,18 +32,18 @@ def test_photovoltaic():
     number_of_outputs = fft.get_number_of_outputs([my_weather,my_pvs])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
 
-    my_pvs.t_outC.SourceOutput = my_weather.t_outC
-    my_pvs.azimuthC.SourceOutput = my_weather.azimuthC
-    my_pvs.DNIC.SourceOutput = my_weather.DNIC
-    my_pvs.DNIextraC.SourceOutput = my_weather.DNIextraC
-    my_pvs.DHIC.SourceOutput = my_weather.DHIC
-    my_pvs.GHIC.SourceOutput = my_weather.GHIC
-    my_pvs.apparent_zenithC.SourceOutput = my_weather.apparent_zenithC
-    my_pvs.wind_speedC.SourceOutput = my_weather.wind_speedC
+    my_pvs.t_outC.source_output = my_weather.t_outC
+    my_pvs.azimuthC.source_output = my_weather.azimuthC
+    my_pvs.DNIC.source_output = my_weather.DNIC
+    my_pvs.DNIextraC.source_output = my_weather.DNIextraC
+    my_pvs.DHIC.source_output = my_weather.DHIC
+    my_pvs.GHIC.source_output = my_weather.GHIC
+    my_pvs.apparent_zenithC.source_output = my_weather.apparent_zenithC
+    my_pvs.wind_speedC.source_output = my_weather.wind_speedC
 
     fft.add_global_index_of_components([my_weather,my_pvs])
 
     timestep = 655
     my_weather.i_simulate(timestep, stsv,  False)
     my_pvs.i_simulate(timestep, stsv,  False)
-    assert abs(0.4532226665022684- stsv.values[ my_pvs.electricity_outputC.GlobalIndex]) <0.05
+    assert abs(0.4532226665022684 - stsv.values[ my_pvs.electricity_outputC.global_index]) < 0.05

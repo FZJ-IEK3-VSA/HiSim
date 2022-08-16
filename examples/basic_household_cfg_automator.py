@@ -29,7 +29,7 @@ from hisim.cfg_automator import (
     ComponentsGrouping,
 )
 import hisim.loadtypes as loadtypes
-
+from typing import Dict, Any
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -68,7 +68,7 @@ def generate_json_for_cfg_automator():
             my_cfg = ConfigurationGenerator()
 
             # Set simulation param
-            simulation_parameters = {
+            simulation_parameters: Dict[str, Any] = {
                 "year": 2019,
                 "seconds_per_timestep": 60 * 15,
                 "method": "full_year",
@@ -259,7 +259,7 @@ def generate_json_for_cfg_automator():
 
             # Outputs from Weather
 
-            component_connection = ComponentsConnection(
+            component_connection:ComponentsConnection = ComponentsConnection(
                 first_component="Weather",
                 second_component="Building",
                 method="Manual",

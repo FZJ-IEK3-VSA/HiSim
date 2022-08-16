@@ -12,13 +12,13 @@ class GenericSurplusController(cp.Component):
         self.build(mode)
 
         # Retrieves Electricity SUM
-        self.electricity_inputC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_inputC: cp.ComponentInput = self.add_input(self.component_name,
                                                                     self.ElectricityInput,
                                                                     lt.LoadTypes.ELECTRICITY,
                                                                     lt.Units.WATT,
                                                                     True)
         # Returns boolean based on control condition
-        self.stateC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.stateC: cp.ComponentOutput = self.add_output(self.component_name,
                                                           self.State,
                                                           lt.LoadTypes.ANY,
                                                           lt.Units.ANY)

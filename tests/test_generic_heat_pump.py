@@ -49,10 +49,10 @@ def test_heat_pump():
                               lt.LoadTypes.TEMPERATURE,
                               lt.Units.WATT)
 
-    my_heat_pump_controller.t_mC.SourceOutput = t_mC
+    my_heat_pump_controller.t_mC.source_output = t_mC
 
-    my_heat_pump.t_outC.SourceOutput = t_air_outdoorC
-    my_heat_pump.stateC.SourceOutput = my_heat_pump_controller.stateC
+    my_heat_pump.t_outC.source_output = t_air_outdoorC
+    my_heat_pump.stateC.source_output = my_heat_pump_controller.stateC
 
     number_of_outputs = fft.get_number_of_outputs([t_air_outdoorC,t_mC,my_heat_pump,my_heat_pump_controller])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
@@ -61,7 +61,7 @@ def test_heat_pump():
     fft.add_global_index_of_components([t_air_outdoorC,t_mC,my_heat_pump,my_heat_pump_controller])
     # Link inputs and outputs
 
-    stsv.values[t_mC.GlobalIndex] = 10
+    stsv.values[t_mC.global_index] = 10
 
     timestep = 60
     # Simulate
@@ -72,6 +72,6 @@ def test_heat_pump():
     my_heat_pump.i_simulate(timestep, stsv, False)
 
     # Check if there is a signal to heat up the house
-    assert 1 == stsv.values[my_heat_pump_controller.stateC.GlobalIndex]
+    assert 1 == stsv.values[my_heat_pump_controller.stateC.global_index]
     # Check if the delivered heat is indeed that corresponded to the heat pump model
-    assert heat_pump_power == stsv.values[my_heat_pump.thermal_energy_deliveredC.GlobalIndex]
+    assert heat_pump_power == stsv.values[my_heat_pump.thermal_energy_deliveredC.global_index]

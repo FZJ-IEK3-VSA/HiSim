@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Owned
+from typing import List, Any, Tuple
 from hisim.simulationparameters import SimulationParameters
 
 from dataclasses import dataclass
@@ -36,7 +37,8 @@ class HydrogenStorageConfig:
     energy_for_charge: float # [kWh/kg]
     energy_for_discharge: float # [kWh/kg]
     loss_factor_per_day: float # [lost_%/day]
-    
+
+    # todo: discuss with Johanna
     def init( self, name : str,
                     source_weight : int,
                     min_capacity : float,
@@ -46,7 +48,7 @@ class HydrogenStorageConfig:
                     max_discharging_rate_hour : float,
                     energy_for_charge : float,
                     energy_for_discharge : float,
-                    loss_factor_per_day : float):
+                    loss_factor_per_day : float) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_capacity = min_capacity
@@ -63,10 +65,10 @@ class HydrogenStorageState:
     This data class saves the state of the electrolyzer.
     """
 
-    def __init__( self, fill : float = 0 ):
+    def __init__( self, fill : float = 0 ) -> None:
         self.fill = fill
         
-    def clone( self ):
+    def clone( self ) -> Any:
         return HydrogenStorageState( fill = self.fill )
 
     
@@ -80,23 +82,23 @@ class HydrogenStorage( cp.Component ):
     HydrogenSOC = "HydrogenSOC"          # kg/s
 
     def __init__( self, my_simulation_parameters : SimulationParameters,
-                        config : HydrogenStorageConfig ):
+                        config : HydrogenStorageConfig ) -> None:
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         
         self.build( config )
         
-        self.HydrogenInputC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.HydrogenInputC : cp.ComponentInput = self.add_input(self.component_name,
                                                                  self.HydrogenInput,
                                                                  lt.LoadTypes.HYDROGEN,
                                                                  lt.Units.KG_PER_SEC,
                                                                  True)
-        self.HydrogenOutputC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.HydrogenOutputC : cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.HydrogenOutput,
                                                                   lt.LoadTypes.HYDROGEN,
                                                                   lt.Units.KG_PER_SEC,
                                                                   True)
 
-        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                  self.HydrogenSOC,
                                                                  lt.LoadTypes.HYDROGEN,
                                                                  lt.Units.PERCENT)
@@ -105,7 +107,7 @@ class HydrogenStorage( cp.Component ):
         self.add_default_connections( generic_CHP.GCHP, self.get_fuelcell_default_connections( ) )
 
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> HydrogenStorageConfig:
         config = HydrogenStorageConfig( name = "HydrogenStorage",
                                         source_weight = 1,
                                         min_capacity = 0,
@@ -118,21 +120,21 @@ class HydrogenStorage( cp.Component ):
                                         loss_factor_per_day = 0)
         return config
     
-    def get_fuelcell_default_connections( self ):
+    def get_fuelcell_default_connections( self )-> List[cp.ComponentConnection]:
         log.information("setting fuel cell default connections in generic H2 storage" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         chp_classname = generic_CHP.GCHP.get_classname( )
         connections.append( cp.ComponentConnection( HydrogenStorage.HydrogenOutput, chp_classname, generic_CHP.GCHP.FuelDelivered ) )
         return connections
     
-    def get_electrolyzer_default_connections( self ):
+    def get_electrolyzer_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting electrolyzer default connections in generic H2 storage" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         electrolyzer_classname = generic_electrolyzer.Electrolyzer.get_classname( )
         connections.append( cp.ComponentConnection( HydrogenStorage.HydrogenInput, electrolyzer_classname, generic_electrolyzer.Electrolyzer.HydrogenOutput ) )
         return connections
     
-    def store( self, charging_rate : float ):
+    def store( self, charging_rate : float ) -> Tuple[float, float, float]:
 
         #limitation of charging rate
         delta_not_stored : float = 0
@@ -161,7 +163,7 @@ class HydrogenStorage( cp.Component ):
         power_demand = charging_rate * self.energy_for_charge * 3.6e3
         return charging_rate, power_demand, delta_not_stored
      
-    def withdraw( self, discharging_rate : float ):
+    def withdraw( self, discharging_rate : float ) -> Tuple[float, float, float]:
         
         #limitations of discharging rate
         delta_not_released : float = 0
@@ -189,10 +191,10 @@ class HydrogenStorage( cp.Component ):
         power_demand = discharging_rate * self.energy_for_discharge * 3.6e3
         return discharging_rate, power_demand, delta_not_released
     
-    def storage_losses( self ):
+    def storage_losses( self ) -> None:
         self.state.fill -= self.state.fill * self.loss_factor
     
-    def build( self, config ):
+    def build( self, config: HydrogenStorageConfig ) -> None:
         self.name = config.name
         self.source_weight = config.source_weight
         self.min_capacity = config.min_capacity
@@ -206,13 +208,13 @@ class HydrogenStorage( cp.Component ):
         self.state = HydrogenStorageState( )
         self.previous_state = HydrogenStorageState( )
     
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         
         # get input values
         charging_rate = stsv.get_input_value( self.HydrogenInputC )
@@ -240,19 +242,19 @@ class HydrogenStorage( cp.Component ):
         if discharging_rate > 0:
             discharging_rate, power_demand, delta_not_released = self.withdraw( discharging_rate )
             
-        self.storage_losses( )
+        self.storage_losses()
         
         #delta not released and delta not stored is not used so far -> must be taken into account later
         percent_fill = 100 * self.state.fill / self.max_capacity
 
         stsv.set_output_value( self.HydrogenSOCC, percent_fill )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
-        lines.append("Hydrogen Storage: " + self.ComponentName )
+        lines.append("Hydrogen Storage: " + self.component_name)
         return lines
 

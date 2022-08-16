@@ -11,6 +11,8 @@ from typing import Optional
 
 from dataclasses import dataclass
 from functools import lru_cache
+
+from hisim import sim_repository
 from hisim.simulationparameters import SimulationParameters
 # Owned
 from hisim import component as cp
@@ -237,7 +239,7 @@ class PVSystem( cp.Component ):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: PVSystemConfig,
-                 my_simulation_repository : Optional[ cp.SimRepository ] = None
+                 my_simulation_repository : Optional[sim_repository.SimRepository] = None
                  ):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig=config
@@ -246,56 +248,56 @@ class PVSystem( cp.Component ):
 
         self.build( self.pvconfig.load_module_data, my_simulation_repository, self.pvconfig.source_weight )
 
-        self.t_outC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_outC : cp.ComponentInput = self.add_input(self.component_name,
                                                          self.TemperatureOutside,
                                                          lt.LoadTypes.TEMPERATURE,
                                                          lt.Units.CELSIUS,
                                                          True)
 
-        self.DNIC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DNIC : cp.ComponentInput = self.add_input(self.component_name,
                                                        self.DirectNormalIrradiance,
                                                        lt.LoadTypes.IRRADIANCE,
                                                        lt.Units.WATT_PER_SQUARE_METER,
                                                        True)
 
-        self.DNIextraC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DNIextraC : cp.ComponentInput = self.add_input(self.component_name,
                                                             self.DirectNormalIrradianceExtra,
                                                             lt.LoadTypes.IRRADIANCE,
                                                             lt.Units.WATT_PER_SQUARE_METER,
                                                             True)
 
-        self.DHIC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DHIC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.DiffuseHorizontalIrradiance,
                                                       lt.LoadTypes.IRRADIANCE,
                                                       lt.Units.WATT_PER_SQUARE_METER,
                                                       True)
 
-        self.GHIC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.GHIC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.GlobalHorizontalIrradiance,
                                                       lt.LoadTypes.IRRADIANCE,
                                                       lt.Units.WATT_PER_SQUARE_METER,
                                                       True)
 
-        self.azimuthC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.azimuthC : cp.ComponentInput = self.add_input(self.component_name,
                                                            self.Azimuth,
                                                            lt.LoadTypes.ANY,
                                                            lt.Units.DEGREES,
                                                            True)
 
-        self.apparent_zenithC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.apparent_zenithC : cp.ComponentInput = self.add_input(self.component_name,
                                                                    self.ApparentZenith,
                                                                    lt.LoadTypes.ANY,
                                                                    lt.Units.DEGREES,
                                                                    True)
 
-        self.wind_speedC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.wind_speedC: cp.ComponentInput = self.add_input(self.component_name,
                                                              self.WindSpeed,
                                                              lt.LoadTypes.SPEED,
                                                              lt.Units.METER_PER_SECOND,
                                                              True)
 
 
-        self.electricity_outputC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                         PVSystem.ElectricityOutput,
                                                                         lt.LoadTypes.ELECTRICITY,
                                                                         lt.Units.WATT,
@@ -336,7 +338,7 @@ class PVSystem( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.ComponentName))
+        lines.append("Name: {}".format(self.component_name))
         lines.append("Power: {:3.0f} kWp".format(self.pvconfig.power*1E-3))
         lines.append("Module: {}".format(self.pvconfig.module_name))
         lines.append("Inverter: {}".format(self.pvconfig.inverter_name))
@@ -450,7 +452,7 @@ class PVSystem( cp.Component ):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
         pass
 
-    def build( self, load_module_data : bool, my_simulation_repository : Optional[ cp.SimRepository ], source_weight : int ):
+    def build(self, load_module_data : bool, my_simulation_repository : Optional[sim_repository.SimRepository], source_weight : int):
         
         self.source_weight = source_weight
         

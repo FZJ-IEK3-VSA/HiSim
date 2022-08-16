@@ -144,7 +144,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
 
     def write_to_report(self):
         lines = []
-        lines.append("L3 Controller Heat Pump: " + self.ComponentName )
+        lines.append("L3 Controller Heat Pump: " + self.component_name)
         return lines
 
     def i_save_state( self ):

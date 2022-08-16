@@ -1,3 +1,4 @@
+# type: ignore
 
 import math
 import unittest

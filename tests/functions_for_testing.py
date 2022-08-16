@@ -16,14 +16,14 @@ def add_global_index_of_real_components(list_of_components:list,number_of_fake_i
         o=component.__dict__
         for objects in component.__dict__:
             if isinstance(o[objects], ComponentOutput):
-                getattr(component,objects).GlobalIndex = counter
+                getattr(component,objects).global_index = counter
                 counter = counter + 1
 
 def add_global_index_of_fake_components(list_of_components:list):
     number_of_fake_inputs=len(list_of_components)
     counter=0
     for component in list_of_components:
-        component.GlobalIndex = counter
+        component.global_index = counter
         counter=counter+1
     return number_of_fake_inputs
 

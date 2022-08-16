@@ -679,43 +679,43 @@ class WarmWaterStorage(Component):
         super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
         # Input
-        self.chp_charging_side_input_mass: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.CHP_ChargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.chp_charging_side_input_temperature: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.CHP_ChargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
-        self.heating_discharging_side_input_mass: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.Heating_DischargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.heating_discharging_side_input_temperature: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.Heating_DischargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.chp_charging_side_input_mass: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.CHP_ChargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.chp_charging_side_input_temperature: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.CHP_ChargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.heating_discharging_side_input_mass: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.Heating_DischargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.heating_discharging_side_input_temperature: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.Heating_DischargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
         # gas --> ?not mandatory?
-        self.gas_charging_side_input_mass: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.Gas_ChargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.gas_charging_side_input_temperature: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.Gas_ChargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.gas_charging_side_input_mass: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.Gas_ChargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.gas_charging_side_input_temperature: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.Gas_ChargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
         # warm water
-        self.ww_discharging_side_input_mass: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.WW_DischargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.ww_discharging_side_input_temperature: ComponentInput = self.add_input(self.ComponentName, WarmWaterStorage.WW_DischargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.ww_discharging_side_input_mass: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.WW_DischargingSideInput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.ww_discharging_side_input_temperature: ComponentInput = self.add_input(self.component_name, WarmWaterStorage.WW_DischargingSideInput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
 
         # Output
-        self.chp_charging_side_output_mass: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.CHP_ChargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.chp_charging_side_output_temperature: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.CHP_ChargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.heating_discharging_side_output_mass: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Heating_DischargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.heating_discharging_side_output_temperature: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Heating_DischargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.chp_charging_side_output_mass: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.CHP_ChargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.chp_charging_side_output_temperature: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.CHP_ChargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.heating_discharging_side_output_mass: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Heating_DischargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.heating_discharging_side_output_temperature: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Heating_DischargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
         # gas
-        self.gas_charging_side_output_mass: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Gas_ChargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.gas_charging_side_output_temperature: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Gas_ChargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.gas_charging_side_output_mass: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Gas_ChargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.gas_charging_side_output_temperature: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Gas_ChargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
         # warm water
-        self.ww_discharging_side_output_mass: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.WW_DischargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.ww_discharging_side_output_temperature: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.WW_DischargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.ww_discharging_side_output_mass: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.WW_DischargingSideOutput_mass, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.ww_discharging_side_output_temperature: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.WW_DischargingSideOutput_temperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
 
         # temperatures
-        self.temperature_0_percent: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Temperature0Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.temperature_20_percent: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Temperature20Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.temperature_40_percent: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Temperature40Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.temperature_60_percent: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Temperature60Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.temperature_80_percent: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Temperature80Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.temperature_100_percent: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.Temperature100Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.temperature_0_percent: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Temperature0Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.temperature_20_percent: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Temperature20Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.temperature_40_percent: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Temperature40Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.temperature_60_percent: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Temperature60Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.temperature_80_percent: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Temperature80Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.temperature_100_percent: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.Temperature100Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
 
         # Outputs for information
-        self.tank_enthalpy: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.TankEnthalpy, lt.LoadTypes.WARM_WATER, lt.Units.KWH)
-        self.tank_mean_temperature: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.TankMeanTemperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
-        self.amount_of_slices: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.AmountOfSlices, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
-        self.heat_losses: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.HeatLosses, lt.LoadTypes.WARM_WATER, lt.Units.WATT)
-        self.tank_mass: ComponentOutput = self.add_output(self.ComponentName, WarmWaterStorage.TankMass, lt.LoadTypes.WARM_WATER, lt.Units.KG)
+        self.tank_enthalpy: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.TankEnthalpy, lt.LoadTypes.WARM_WATER, lt.Units.KWH)
+        self.tank_mean_temperature: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.TankMeanTemperature, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.amount_of_slices: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.AmountOfSlices, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
+        self.heat_losses: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.HeatLosses, lt.LoadTypes.WARM_WATER, lt.Units.WATT)
+        self.tank_mass: ComponentOutput = self.add_output(self.component_name, WarmWaterStorage.TankMass, lt.LoadTypes.WARM_WATER, lt.Units.KG)
 
         self.wws = WarmWaterStorageSimulation(config)
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep

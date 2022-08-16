@@ -81,70 +81,70 @@ class HeatStorage(Component):
         self.state = HeatStorageState(config.T_sp_ww, config.T_sp_hw)
         self.previous_state = self.state.clone( )
 
-        self.thermal_demand_heating_water: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_demand_heating_water: ComponentInput = self.add_input(self.component_name,
                                                                            self.ThermalDemandHeatingWater,
                                                                            lt.LoadTypes.WARM_WATER,
                                                                            lt.Units.WATT,
                                                                            False)
 
-        self.thermal_demand_warm_water: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_demand_warm_water: ComponentInput = self.add_input(self.component_name,
                                                                         self.ThermalDemandWarmWater,
                                                                         lt.LoadTypes.WARM_WATER,
                                                                         lt.Units.WATT,
                                                                         False)
-        self.control_signal_choose_storage: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.control_signal_choose_storage: cp.ComponentInput = self.add_input(self.component_name,
                                                                                self.ControlSignalChooseStorage,
                                                                                lt.LoadTypes.ANY,
                                                                                lt.Units.ANY,
                                                                                False)
-        self.building_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.building_temperature: cp.ComponentInput = self.add_input(self.component_name,
                                                                       self.BuildingTemperature,
                                                                       lt.LoadTypes.TEMPERATURE,
                                                                       lt.Units.CELSIUS,
                                                                       False)
-        self.thermal_input_power1: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_input_power1: ComponentInput = self.add_input(self.component_name,
                                                                    self.ThermalInputPower1,
                                                                    lt.LoadTypes.HEATING,
                                                                    lt.Units.WATT,
                                                                    False)
-        self.thermal_input_power2: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_input_power2: ComponentInput = self.add_input(self.component_name,
                                                                    self.ThermalInputPower2,
                                                                    lt.LoadTypes.HEATING,
                                                                    lt.Units.WATT,
                                                                    False)
-        self.thermal_input_power3: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_input_power3: ComponentInput = self.add_input(self.component_name,
                                                                    self.ThermalInputPower3,
                                                                    lt.LoadTypes.HEATING,
                                                                    lt.Units.WATT,
                                                                    False)
-        self.thermal_input_power4: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_input_power4: ComponentInput = self.add_input(self.component_name,
                                                                    self.ThermalInputPower4,
                                                                    lt.LoadTypes.HEATING,
                                                                    lt.Units.WATT,
                                                                    False)
-        self.thermal_input_power5: ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_input_power5: ComponentInput = self.add_input(self.component_name,
                                                                    self.ThermalInputPower5,
                                                                    lt.LoadTypes.HEATING,
                                                                    lt.Units.WATT,
                                                                    False)
 
-        self.T_sp_C_hw: ComponentOutput = self.add_output(self.ComponentName,
+        self.T_sp_C_hw: ComponentOutput = self.add_output(self.component_name,
                                                           self.WaterOutputTemperatureHeatingWater,
                                                           lt.LoadTypes.TEMPERATURE,
                                                           lt.Units.CELSIUS)
-        self.T_sp_C_ww: ComponentOutput = self.add_output(self.ComponentName,
+        self.T_sp_C_ww: ComponentOutput = self.add_output(self.component_name,
                                                           self.WaterOutputTemperatureWarmWater,
                                                           lt.LoadTypes.TEMPERATURE,
                                                           lt.Units.CELSIUS)
-        self.UA_SP_C: ComponentOutput = self.add_output(self.ComponentName,
+        self.UA_SP_C: ComponentOutput = self.add_output(self.component_name,
                                                         self.StorageEnergyLoss,
                                                         lt.LoadTypes.ANY,
                                                         lt.Units.WATT)
-        self.T_sp_C: ComponentOutput = self.add_output(self.ComponentName,
+        self.T_sp_C: ComponentOutput = self.add_output(self.component_name,
                                                        self.WaterOutputStorageforHeaters,
                                                        lt.LoadTypes.TEMPERATURE,
                                                        lt.Units.CELSIUS)
-        self.real_heat_for_building: ComponentOutput = self.add_output(self.ComponentName,
+        self.real_heat_for_building: ComponentOutput = self.add_output(self.component_name,
                                                                        self.RealHeatForBuilding,
                                                                        lt.LoadTypes.HEATING,
                                                                        lt.Units.WATT)
@@ -174,19 +174,19 @@ class HeatStorage(Component):
         production = 0
         # function to add all possible mass flows
 
-        if self.thermal_input_power1.SourceOutput is not None:
+        if self.thermal_input_power1.source_output is not None:
             production = stsv.get_input_value(self.thermal_input_power1) + production
 
-        if self.thermal_input_power2.SourceOutput is not None:
+        if self.thermal_input_power2.source_output is not None:
             production = stsv.get_input_value(self.thermal_input_power2) + production
 
-        if self.thermal_input_power3.SourceOutput is not None:
+        if self.thermal_input_power3.source_output is not None:
             production = stsv.get_input_value(self.thermal_input_power3) + production
 
-        if self.thermal_input_power4.SourceOutput is not None:
+        if self.thermal_input_power4.source_output is not None:
             production = stsv.get_input_value(self.thermal_input_power4) + production
 
-        if self.thermal_input_power5.SourceOutput is not None:
+        if self.thermal_input_power5.source_output is not None:
             production = stsv.get_input_value(self.thermal_input_power5) + production
 
         return production
@@ -292,28 +292,28 @@ class HeatStorageController(cp.Component):
         self.initial_temperature_building = config.initial_temperature_building
         # ===================================================================================================================
         # Inputs
-        self.ref_max_thermal_build_demand: ComponentInput = self.add_input(self.ComponentName,
+        self.ref_max_thermal_build_demand: ComponentInput = self.add_input(self.component_name,
                                                                            self.ReferenceMaxHeatBuildingDemand,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT,
                                                                            False)
-        self.heating_storage_temperature: ComponentInput = self.add_input(self.ComponentName,
+        self.heating_storage_temperature: ComponentInput = self.add_input(self.component_name,
                                                                           self.TemperatureHeatingStorage,
                                                                           lt.LoadTypes.TEMPERATURE,
                                                                           lt.Units.CELSIUS,
                                                                           False)
-        self.building_temperature: ComponentInput = self.add_input(self.ComponentName,
+        self.building_temperature: ComponentInput = self.add_input(self.component_name,
                                                                    self.BuildingTemperature,
                                                                    lt.LoadTypes.TEMPERATURE,
                                                                    lt.Units.CELSIUS,
                                                                    False)
-        self.real_thermal_demand_building = self.add_input(self.ComponentName,
+        self.real_thermal_demand_building = self.add_input(self.component_name,
                                                            self.RealHeatBuildingDemand,
                                                            lt.LoadTypes.HEATING,
                                                            lt.Units.WATT,
                                                            False)
         # Outputs
-        self.real_thermal_demand_heating_water: ComponentOutput = self.add_output(self.ComponentName,
+        self.real_thermal_demand_heating_water: ComponentOutput = self.add_output(self.component_name,
                                                                                   self.RealThermalDemandHeatingWater,
                                                                                   lt.LoadTypes.HEATING,
                                                                                   lt.Units.WATT)

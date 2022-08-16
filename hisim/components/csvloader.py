@@ -69,12 +69,12 @@ class CSVLoader(cp.Component):
         )
 
         self.output1: cp.ComponentOutput = self.add_output(
-            self.ComponentName,
+            self.component_name,
             self.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
         )
-        self.output1.DisplayName = self.csvconfig.column_name
+        self.output1.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
 
         # ? self.column = column

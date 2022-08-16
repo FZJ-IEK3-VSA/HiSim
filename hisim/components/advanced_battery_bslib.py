@@ -77,24 +77,24 @@ class Battery(Component):
                                 e_bat_custom=self.e_bat_custom)
 
         # Define component inputs
-        self.p_set: ComponentInput = self.add_input(object_name=self.ComponentName,
+        self.p_set: ComponentInput = self.add_input(object_name=self.component_name,
                                                     field_name=self.LoadingPowerInput,
                                                     load_type=LoadTypes.ELECTRICITY,
                                                     unit=Units.WATT,
                                                     mandatory=True)
 
         # Define component outputs
-        self.p_bs: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.AcBatteryPower,
                                                      load_type=LoadTypes.ELECTRICITY,
                                                      unit=Units.WATT)
         
-        self.p_bat: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
                                                       load_type=LoadTypes.ELECTRICITY,
                                                       unit=Units.WATT)
 
-        self.soc: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.soc: ComponentOutput = self.add_output(object_name=self.component_name,
                                                     field_name=self.StateOfCharge,
                                                     load_type=LoadTypes.ANY,
                                                     unit=Units.ANY)
@@ -143,7 +143,7 @@ class Battery(Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Advanced Battery bslib: " + self.ComponentName )
+        lines.append("Advanced Battery bslib: " + self.component_name)
         return lines
 
 

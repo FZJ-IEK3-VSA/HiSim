@@ -121,7 +121,7 @@ Let `my_home_electricity_grid` and `my_appliance` be Component objects used in t
 
 ```python
 my_home_electricity_grid.connect_input(input_fieldname=my_home_electricity_grid.ELECTRICITY_INPUT,
-                                       src_object_name=my_appliance.ComponentName,
+                                       src_object_name=my_appliance.component_name,
                                        src_field_name=my_appliance.ELECTRICITY_OUTPUT)
 ```
 

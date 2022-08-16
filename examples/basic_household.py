@@ -118,28 +118,28 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
 
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.TemperatureOutside)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.DirectNormalIrradiance)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradianceExtra,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.DirectNormalIrradianceExtra)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DiffuseHorizontalIrradiance,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.DiffuseHorizontalIrradiance)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.GlobalHorizontalIrradiance,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.GlobalHorizontalIrradiance)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.Azimuth,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.Azimuth)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.ApparentZenith,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.ApparentZenith)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.WindSpeed,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.WindSpeed)
     my_sim.add_component(my_photovoltaic_system)
 
@@ -151,31 +151,31 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
     my_building = building.Building(config=my_building_config,
                                         my_simulation_parameters=my_simulation_parameters)
     my_building.connect_input(my_building.Altitude,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.Altitude)
     my_building.connect_input(my_building.Azimuth,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.Azimuth)
     my_building.connect_input(my_building.DirectNormalIrradiance,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.DirectNormalIrradiance)
     my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.DiffuseHorizontalIrradiance)
     my_building.connect_input(my_building.GlobalHorizontalIrradiance,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.GlobalHorizontalIrradiance)
     my_building.connect_input(my_building.DirectNormalIrradianceExtra,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.DirectNormalIrradianceExtra)
     my_building.connect_input(my_building.ApparentZenith,
-                             my_weather.ComponentName,
-                             my_building.ApparentZenith)
+                              my_weather.component_name,
+                              my_building.ApparentZenith)
     my_building.connect_input(my_building.TemperatureOutside,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_weather.TemperatureOutside)
     my_building.connect_input(my_building.HeatingByResidents,
-                              my_occupancy.ComponentName,
+                              my_occupancy.component_name,
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
 
@@ -185,10 +185,10 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                                            mode=hp_mode,
                                                            my_simulation_parameters=my_simulation_parameters)
     my_heat_pump_controller.connect_input(my_heat_pump_controller.TemperatureMean,
-                                          my_building.ComponentName,
+                                          my_building.component_name,
                                           my_building.TemperatureMean)
     my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
-                                          my_base_electricity_load_profile.ComponentName,
+                                          my_base_electricity_load_profile.component_name,
                                           my_base_electricity_load_profile.ElectricityOutput)
     my_sim.add_component(my_heat_pump_controller)
 
@@ -198,16 +198,16 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
                                           min_idle_time=hp_min_idle_time,
                                       my_simulation_parameters=my_simulation_parameters)
     my_heat_pump.connect_input(my_heat_pump.State,
-                               my_heat_pump_controller.ComponentName,
+                               my_heat_pump_controller.component_name,
                                my_heat_pump_controller.State)
     my_heat_pump.connect_input(my_heat_pump.TemperatureOutside,
-                               my_weather.ComponentName,
+                               my_weather.component_name,
                                my_weather.TemperatureOutside)
 
     my_sim.add_component(my_heat_pump)
 
     my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_heat_pump.ComponentName,
+                              my_heat_pump.component_name,
                               my_heat_pump.ThermalEnergyDelivered)
 
 
@@ -333,7 +333,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     
     #depending on previous loads, hard to define default connections
     my_heat_pump_controller.connect_input(my_heat_pump_controller.ElectricityInput,
-                                          my_base_electricity_load_profile.ComponentName,
+                                          my_base_electricity_load_profile.component_name,
                                           my_base_electricity_load_profile.ElectricityOutput)
     my_sim.add_component(my_heat_pump_controller)
 
@@ -348,7 +348,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
 
     #depending on type of heating device, hard to define default connections
     my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_heat_pump.ComponentName,
+                              my_heat_pump.component_name,
                               my_heat_pump.ThermalEnergyDelivered)
 
 

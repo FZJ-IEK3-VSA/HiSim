@@ -1,3 +1,4 @@
+from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.simulationparameters import SimulationParameters
@@ -6,7 +7,7 @@ from tests import functions_for_testing as fft
 def test_weather():
     mysim:  SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=60)
-    repo = component.SimRepository()
+    repo = sim_repository.SimRepository()
     my_weather_config=weather.Weather.get_default_config()
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
 
@@ -21,6 +22,6 @@ def test_weather():
     DNI = []
     for i in range(60*24*365):
         my_weather.i_simulate(i, stsv, False)
-        DNI.append(stsv.values[my_weather.DNIC.GlobalIndex])
+        DNI.append(stsv.values[my_weather.DNIC.global_index])
 
     assert sum(DNI) > 950

@@ -1,3 +1,4 @@
+# type: ignore
 # Owned
 from hisim.component import Component, ComponentOutput, ComponentInput, SingleTimeStepValues
 from hisim import loadtypes as lt
@@ -34,14 +35,14 @@ class HouseholdHeatDemand(Component):
 
     def __init__(self, component_name, my_simulation_parameters: SimulationParameters ):
         super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
-        self.heat_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdHeatDemand.HeatDemand, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True)
-        self.mass_input: ComponentInput = self.add_input(self.ComponentName, HouseholdHeatDemand.MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.temperature_input: ComponentInput = self.add_input(self.ComponentName, HouseholdHeatDemand.TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.heat_demand: ComponentInput = self.add_input(self.component_name, HouseholdHeatDemand.HeatDemand, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True)
+        self.mass_input: ComponentInput = self.add_input(self.component_name, HouseholdHeatDemand.MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.temperature_input: ComponentInput = self.add_input(self.component_name, HouseholdHeatDemand.TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
 
-        self.mass_output: ComponentOutput = self.add_output(self.ComponentName, HouseholdHeatDemand.MassOutput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.temperature_output: ComponentOutput = self.add_output(self.ComponentName, HouseholdHeatDemand.TemperatureOutput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.mass_output: ComponentOutput = self.add_output(self.component_name, HouseholdHeatDemand.MassOutput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.temperature_output: ComponentOutput = self.add_output(self.component_name, HouseholdHeatDemand.TemperatureOutput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
 
-        self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdHeatDemand.DemandSatisfied, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
+        self.demand_satisfied: ComponentOutput = self.add_output(self.component_name, HouseholdHeatDemand.DemandSatisfied, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
 
         self.state:List = []
         self.previous_state = self.state
@@ -146,13 +147,13 @@ class ElectricityDistributor(Component):
     def __init__(self, component_name:str, my_simulation_parameters: SimulationParameters ):
         super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
         # input
-        self.power_PV: ComponentInput = self.add_input(self.ComponentName, ElectricityDistributor.PowerPV, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
-        self.power_CHP: ComponentInput = self.add_input(self.ComponentName, ElectricityDistributor.PowerCHP, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
-        self.demand_household: ComponentInput = self.add_input(self.ComponentName, ElectricityDistributor.DemandHousehold, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+        self.power_PV: ComponentInput = self.add_input(self.component_name, ElectricityDistributor.PowerPV, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+        self.power_CHP: ComponentInput = self.add_input(self.component_name, ElectricityDistributor.PowerCHP, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+        self.demand_household: ComponentInput = self.add_input(self.component_name, ElectricityDistributor.DemandHousehold, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
 
         # output
-        self.power_to_electrolyzer: ComponentOutput = self.add_output(self.ComponentName, ElectricityDistributor.PowerToElectrolyzer, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
-        self.power_from_to_grid: ComponentOutput = self.add_output(self.ComponentName, ElectricityDistributor.PowerToFromGrid, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.power_to_electrolyzer: ComponentOutput = self.add_output(self.component_name, ElectricityDistributor.PowerToElectrolyzer, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.power_from_to_grid: ComponentOutput = self.add_output(self.component_name, ElectricityDistributor.PowerToFromGrid, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
 
     def i_save_state(self):
@@ -228,16 +229,16 @@ class HouseholdWarmWaterDemandWatt(Component):
     def __init__(self, component_name:str, my_simulation_parameters: SimulationParameters):
         super().__init__(component_name, my_simulation_parameters)
         # input
-        self.ww_energy_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_EnergyDemand, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True)
-        self.ww_mass_input: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.ww_temperature_input: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.ww_energy_demand: ComponentInput = self.add_input(self.component_name, HouseholdWarmWaterDemandWatt.WW_EnergyDemand, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True)
+        self.ww_mass_input: ComponentInput = self.add_input(self.component_name, HouseholdWarmWaterDemandWatt.WW_MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.ww_temperature_input: ComponentInput = self.add_input(self.component_name, HouseholdWarmWaterDemandWatt.WW_TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
 
         # output
-        self.ww_mass_output: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_MassOutput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.ww_temperature_output: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.WW_TemperatureOutput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.ww_mass_output: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemandWatt.WW_MassOutput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.ww_temperature_output: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemandWatt.WW_TemperatureOutput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
 
-        self.energy_discharged: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.EnergyDischarged, lt.LoadTypes.WARM_WATER, lt.Units.WATT)
-        self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemandWatt.DemandSatisfied, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
+        self.energy_discharged: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemandWatt.EnergyDischarged, lt.LoadTypes.WARM_WATER, lt.Units.WATT)
+        self.demand_satisfied: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemandWatt.DemandSatisfied, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
 
 
     def i_save_state(self):
@@ -337,21 +338,21 @@ class HouseholdWarmWaterDemand(Component):
     def __init__(self, component_name:str,my_simulation_parameters: SimulationParameters ):
         super().__init__(name=component_name,my_simulation_parameters=my_simulation_parameters )
         # input
-        self.ww_volume_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemand.WW_VolumeDemand, lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP, True)
+        self.ww_volume_demand: ComponentInput = self.add_input(self.component_name, HouseholdWarmWaterDemand.WW_VolumeDemand, lt.LoadTypes.WARM_WATER, lt.Units.LITER_PER_TIMESTEP, True)
         # self.ww_temperature_demand: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemand.WW_TemperatureDemand, LoadTypes.WarmWater, lt.Units.Celsius, True)
-        self.ww_mass_input: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemand.WW_MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
-        self.ww_temperature_input: ComponentInput = self.add_input(self.ComponentName, HouseholdWarmWaterDemand.WW_TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.ww_mass_input: ComponentInput = self.add_input(self.component_name, HouseholdWarmWaterDemand.WW_MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, True)
+        self.ww_temperature_input: ComponentInput = self.add_input(self.component_name, HouseholdWarmWaterDemand.WW_TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
 
         # output
-        self.ww_mass_output: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.WW_MassOutput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
-        self.ww_temperature_output: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.WW_TemperatureOutput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
+        self.ww_mass_output: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemand.WW_MassOutput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC)
+        self.ww_temperature_output: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemand.WW_TemperatureOutput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS)
 
         # these are exactly the demand values  --> kick out?!
         # self.ww_mass_supply: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.WW_MassSupply, LoadTypes.WarmWater, lt.Units.kg_per_sec)
         # self.ww_temperature_supply: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.WW_TemperatureSupply, LoadTypes.WarmWater, lt.Units.Celsius)
 
-        self.energy_demand: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.EnergyDemand, lt.LoadTypes.WARM_WATER, lt.Units.WATT)
-        self.demand_satisfied: ComponentOutput = self.add_output(self.ComponentName, HouseholdWarmWaterDemand.DemandSatisfied, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
+        self.energy_demand: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemand.EnergyDemand, lt.LoadTypes.WARM_WATER, lt.Units.WATT)
+        self.demand_satisfied: ComponentOutput = self.add_output(self.component_name, HouseholdWarmWaterDemand.DemandSatisfied, lt.LoadTypes.WARM_WATER, lt.Units.ANY)
 
     def i_save_state(self):
         pass

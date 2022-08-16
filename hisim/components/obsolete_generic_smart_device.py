@@ -119,18 +119,18 @@ class Controllable(Component):
         self.ProfilesLen = self.flexibilities[self.i_xtask].ProfilesLen
         self.HasExec = self.flexibilities[self.i_xtask].HasExec
 
-        self.ApplianceRun: ComponentInput = self.add_input(self.ComponentName,
+        self.ApplianceRun: ComponentInput = self.add_input(self.component_name,
                                                            self.State,
                                                            lt.LoadTypes.ANY,
                                                            lt.Units.ANY,
                                                            True)
 
-        self.electricity_outputC: ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC: ComponentOutput = self.add_output(self.component_name,
                                                                     self.ElectricityOutput,
                                                                     lt.LoadTypes.ELECTRICITY,
                                                                     lt.Units.WATT)
 
-        self.taskC: ComponentOutput = self.add_output(self.ComponentName,
+        self.taskC: ComponentOutput = self.add_output(self.component_name,
                                                       self.Task,
                                                       lt.LoadTypes.ANY,
                                                       lt.Units.ANY)
@@ -164,7 +164,7 @@ class Controllable(Component):
     def is_flex_in_database(self):
         flex_found = False
         for i_flex in range(len(self.flexibilities)):
-            if self.ComponentName.split()[0] in self.flexibilities[i_flex].name:
+            if self.component_name.split()[0] in self.flexibilities[i_flex].name:
                 self.i_xtask = i_flex
                 flex_found = True
         if flex_found is False:
@@ -217,7 +217,7 @@ class Controllable(Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.ComponentName))
+        lines.append("Name: {}".format(self.component_name))
         lines.append("Number of flexibility of the simulation timeline: {}".format(self.number_of_flexibilities))
         lines.append("Number of unexecuted flexibility: {}".format(len(list(dict.fromkeys(self.itask)))-1))
         lines.append("Non executed flexibility: {}".format(list(dict.fromkeys(self.itask))[1:]))

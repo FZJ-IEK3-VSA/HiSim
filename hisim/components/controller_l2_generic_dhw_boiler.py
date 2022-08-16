@@ -2,7 +2,7 @@
 
 # Generic/Built-in
 import numpy as np
-
+from typing import Any, List
 # Owned
 import hisim.utils as utils
 from hisim import component as cp
@@ -24,6 +24,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+
 @dataclass_json
 @dataclass
 class L2Config:
@@ -32,37 +33,39 @@ class L2Config:
     """
     name: str
     source_weight: int
-    T_min : float       
-    T_max : float
-    T_tolerance : float
+    T_min: float
+    T_max: float
+    T_tolerance: float
 
-    def __init__( self,
-                  name : str,
-                  source_weight : int,
-                  T_min : float,       
-                  T_max : float,
-                  T_tolerance : float ):
+    def __init__(self,
+                 name: str,
+                 source_weight: int,
+                 T_min: float,
+                 T_max: float,
+                 T_tolerance: float):
         self.name = name
         self.source_weight = source_weight
         self.T_min = T_min
         self.T_max = T_max
         self.T_tolerance = T_tolerance
 
+
 class L2_ControllerState:
     """
     This data class saves the state of the heat pump.
     """
 
-    def __init__( self, timestep_actual : int = -1, state : int = 0, compulsory : int = 0, count : int = 0 ):
+    def __init__(self, timestep_actual: int = -1, state: int = 0, compulsory: int = 0, count: int = 0):
         self.timestep_actual = timestep_actual
         self.state = state
         self.compulsory = compulsory
         self.count = count
-        
-    def clone( self ):
-        return L2_ControllerState( timestep_actual = self.timestep_actual, state = self.state, compulsory = self.compulsory, count = self.count )
-    
-    def is_first_iteration( self, timestep ):
+
+    def clone(self) -> Any:
+        return L2_ControllerState(timestep_actual=self.timestep_actual, state=self.state, compulsory=self.compulsory,
+                                  count=self.count)
+
+    def is_first_iteration(self, timestep: int) -> bool:
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
             self.compulsory = 0
@@ -70,25 +73,25 @@ class L2_ControllerState:
             return True
         else:
             return False
-        
-    def is_compulsory( self ):
+
+    def is_compulsory(self) -> None:
         if self.count <= 1:
             self.compulsory = 0
         else:
             self.compulsory = 1
 
-    def activate( self ):
+    def activate(self) -> None:
         self.state = 1
         self.compulsory = 1
         self.count += 1
-        
-    def deactivate( self ):
+
+    def deactivate(self) -> None:
         self.state = 0
         self.compulsory = 1
         self.count += 1
 
-class L2_Controller( cp.Component ):
-    
+
+class L2_Controller(cp.Component):
     """ L2 heat pump controller. Processes signals ensuring comfort temperature of building
 
     Parameters
@@ -108,139 +111,140 @@ class L2_Controller( cp.Component ):
 
     # Outputs
     l2_DeviceSignal = "l2_DeviceSignal"
-    
+
     # #Forecasts
     # HeatPumpLoadForecast = "HeatPumpLoadForecast"
 
     # Similar components to connect to:
     # 1. Building
     # 2. HeatPump
-    
-    @utils.measure_execution_time
-    def __init__( self, my_simulation_parameters : SimulationParameters, config : L2Config ):
-        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.build( config )
 
-        #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+    @utils.measure_execution_time
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: L2Config):
+        super().__init__(config.name + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+        self.build(config)
+
+        # Component Inputs
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ReferenceTemperature,
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,
-                                                                       mandatory = True)
-        self.add_default_connections( Boiler, self.get_boiler_default_connections( ) )
-        
-        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+                                                                       mandatory=True)
+        self.add_default_connections(Boiler, self.get_boiler_default_connections())
+
+        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l3_DeviceSignal,
                                                                   LoadTypes.ON_OFF,
                                                                   Units.BINARY,
-                                                                  mandatory = False)
-        
-        #Component outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                  mandatory=False)
+
+        # Component outputs
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
-        
-    def get_boiler_default_connections( self ):
+
+    def get_boiler_default_connections(self) -> List[cp.ComponentConnection]:
         log.information("setting boiler default connections in L2 Controller")
-        connections = [ ]
-        boiler_classname = Boiler.get_classname( )
-        connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, Boiler.TemperatureMean ) )
+        connections: List[cp.ComponentConnection] = []
+        boiler_classname = Boiler.get_classname()
+        connections.append(
+            cp.ComponentConnection(L2_Controller.ReferenceTemperature, boiler_classname, Boiler.TemperatureMean))
         return connections
-    
+
     @staticmethod
-    def get_default_config():
-        config = L2Config( name = 'L2Boiler',
-                           source_weight =  1,
-                           T_min = 45.0,
-                           T_max = 60.0,
-                           T_tolerance = 10.0 )
+    def get_default_config() -> L2Config:
+        config = L2Config(name='L2Boiler',
+                          source_weight=1,
+                          T_min=45.0,
+                          T_max=60.0,
+                          T_tolerance=10.0)
         return config
 
-    def build( self, config ):
+    def build(self, config: L2Config) -> None:
         self.name = config.name
         self.source_weight = config.source_weight
         self.T_min = config.T_min
         self.T_max = config.T_max
         self.T_tolerance = config.T_tolerance
-        self.state = L2_ControllerState( )
-        self.previous_state = L2_ControllerState( )
+        self.state = L2_ControllerState()
+        self.previous_state = L2_ControllerState()
 
-    def i_save_state(self):
-        self.previous_state = self.state.clone( )
+    def i_save_state(self) -> None:
+        self.previous_state = self.state.clone()
 
-    def i_restore_state(self):
-        self.state = self.previous_state.clone( )
+    def i_restore_state(self) -> None:
+        self.state = self.previous_state.clone()
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
-            T_control = stsv.get_input_value( self.ReferenceTemperatureC )
-            if T_control < ( self.T_max + self.T_min ) / 2 :
-                stsv.set_output_value( self.l2_DeviceSignalC, 1 )
+            T_control = stsv.get_input_value(self.ReferenceTemperatureC)
+            if T_control < (self.T_max + self.T_min) / 2:
+                stsv.set_output_value(self.l2_DeviceSignalC, 1)
             else:
-                stsv.set_output_value( self.l2_DeviceSignalC, 0 )
-        
-        #get temperature of building
-        T_control = stsv.get_input_value( self.ReferenceTemperatureC )
+                stsv.set_output_value(self.l2_DeviceSignalC, 0)
 
-        #get l3 recommendation if available
+        # get temperature of building
+        T_control = stsv.get_input_value(self.ReferenceTemperatureC)
+
+        # get l3 recommendation if available
         l3state = 0
-        if self.l3_DeviceSignalC.SourceOutput is not None:
-            l3state = stsv.get_input_value( self.l3_DeviceSignalC )
-        
-            #reset temperature limits if recommended from l3
-            if l3state == 1 :
+        if self.l3_DeviceSignalC.source_output is not None:
+            l3state = stsv.get_input_value(self.l3_DeviceSignalC)
+
+            # reset temperature limits if recommended from l3
+            if l3state == 1:
                 T_max = self.T_max + self.T_tolerance
                 T_min = self.T_min
-                self.state.is_compulsory( )
-                self.previous_state.is_compulsory( )
+                self.state.is_compulsory()
+                self.previous_state.is_compulsory()
             elif l3state == 0:
                 T_max = self.T_max
                 T_min = self.T_min - self.T_tolerance
-                self.state.is_compulsory( )
-                self.previous_state.is_compulsory( )
-        
+                self.state.is_compulsory()
+                self.previous_state.is_compulsory()
+
         else:
             T_max = self.T_max
             T_min = self.T_min
 
-        #check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
-        if self.state.is_first_iteration( timestep ):
-            self.previous_state.is_first_iteration( timestep )
-        
-        #check out
+        # check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
+        if self.state.is_first_iteration(timestep):
+            self.previous_state.is_first_iteration(timestep)
+
+        # check out
         if T_control > T_max:
-            #stop heating if temperature exceeds upper limit
-            self.state.deactivate( )
-            self.previous_state.deactivate( )
+            # stop heating if temperature exceeds upper limit
+            self.state.deactivate()
+            self.previous_state.deactivate()
 
         elif T_control < T_min:
-            #start heating if temperature goes below lower limit
-            self.state.activate( )
-            self.previous_state.activate( )
+            # start heating if temperature goes below lower limit
+            self.state.activate()
+            self.previous_state.activate()
         else:
             if self.state.compulsory == 1:
-                #use previous state if it compulsory
+                # use previous state if it compulsory
                 pass
-            elif self.l3_DeviceSignalC.SourceOutput is not None:
-                #use recommendation from l3 if available and not compulsory
+            elif self.l3_DeviceSignalC.source_output is not None:
+                # use recommendation from l3 if available and not compulsory
                 self.state.state = l3state
             else:
-                #use revious state if l3 was not available
-                self.state = self.previous_state.clone( )
+                # use revious state if l3 was not available
+                self.state = self.previous_state.clone()
 
-        stsv.set_output_value( self.l2_DeviceSignalC, self.state.state )
+        stsv.set_output_value(self.l2_DeviceSignalC, self.state.state)
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m: int, state: L2_ControllerState) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
 
-    def write_to_report(self):
-        lines = []
-        lines.append("Generic Controller L2: " + self.ComponentName )
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
+        lines.append("Generic Controller L2: " + self.component_name)
         return lines

@@ -52,15 +52,15 @@ class SimpleStorage(Component):
 
     def __init__(self, component_name,my_simulation_parameters: SimulationParameters , loadtype: lt.LoadTypes, unit: lt.Units, capacity: float):
         super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
-        self.charging_input: ComponentInput = self.add_input(self.ComponentName, SimpleStorage.ChargingAmount,
+        self.charging_input: ComponentInput = self.add_input(self.component_name, SimpleStorage.ChargingAmount,
                                                              loadtype, unit, True)
-        self.discharging_input: ComponentInput = self.add_input(self.ComponentName, SimpleStorage.DischargingAmount,
+        self.discharging_input: ComponentInput = self.add_input(self.component_name, SimpleStorage.DischargingAmount,
                                                                 loadtype, unit, True)
-        self.actual_delta: ComponentOutput = self.add_output(self.ComponentName, SimpleStorage.ActualStorageDelta,
+        self.actual_delta: ComponentOutput = self.add_output(self.component_name, SimpleStorage.ActualStorageDelta,
                                                              loadtype, unit)
-        self.current_fill: ComponentOutput = self.add_output(self.ComponentName, SimpleStorage.CurrentFillLevel,
+        self.current_fill: ComponentOutput = self.add_output(self.component_name, SimpleStorage.CurrentFillLevel,
                                                              loadtype, unit)
-        self.current_fill_percent: ComponentOutput = self.add_output(self.ComponentName, SimpleStorage.CurrentFillLevelPercent,
+        self.current_fill_percent: ComponentOutput = self.add_output(self.component_name, SimpleStorage.CurrentFillLevelPercent,
                                                                      loadtype, lt.Units.PERCENT)
         self.state = SimpleStorageState(0, capacity)
         self.capacity = capacity

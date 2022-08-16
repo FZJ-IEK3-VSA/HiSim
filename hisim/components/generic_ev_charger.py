@@ -115,7 +115,7 @@ class VehiclePure(cp.Component):
 
         self.capacity = capacity
 
-        cache_file_exists, cache_filepath = utils.get_cache_file(self.ComponentName,  self.evconfig, self.my_simulation_parameters)
+        cache_file_exists, cache_filepath = utils.get_cache_file(self.component_name, self.evconfig, self.my_simulation_parameters)
         if cache_filepath is not None:
             self.car_in_charging_station = pd.read_csv(cache_filepath, sep=',', decimal='.')[
                 'CarInChargingStation'].tolist()
@@ -258,19 +258,19 @@ class Vehicle(cp.Component):
 
         self.build(manufacturer=manufacturer, model=model, soc=soc)
 
-        self.before_capacityC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.before_capacityC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.BeforeCapacity,
                                                                   lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
 
-        self.after_capacityC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.after_capacityC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                    self.AfterCapacity,
                                                                    lt.LoadTypes.ANY,
                                                                    lt.Units.WATT)
-        self.max_capacityC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.max_capacityC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                  self.MaxCapacity,
                                                                  lt.LoadTypes.ANY,
                                                                  lt.Units.WATT)
-        self.dischargeC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.dischargeC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                self.Discharge,
                                                                lt.LoadTypes.ELECTRICITY,
                                                                lt.Units.WATT)
@@ -461,44 +461,44 @@ class EVCharger(cp.Component):
 
         self.previous_state = copy.deepcopy(self.state)
 
-        self.charging_inputC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.charging_inputC : cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.ElectricityInput,
                                                                   lt.LoadTypes.ELECTRICITY,
                                                                   lt.Units.WATT,
                                                                   True)
-        self.stateC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.stateC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.EVChargerState,
                                                         lt.LoadTypes.ANY,
                                                         lt.Units.ANY,
                                                         True)
-        self.modeC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.modeC: cp.ComponentInput = self.add_input(self.component_name,
                                                        self.EVChargerMode,
                                                        lt.LoadTypes.ANY,
                                                        lt.Units.ANY,
                                                        True)
-        self.min_socC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.min_socC: cp.ComponentInput = self.add_input(self.component_name,
                                                           self.MinimumStateOfCharge,
                                                           lt.LoadTypes.ANY,
                                                           lt.Units.ANY,
                                                           True)
 
-        self.socC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.socC: cp.ComponentOutput = self.add_output(self.component_name,
                                                         self.StateOfCharge,
                                                         lt.LoadTypes.ANY,
                                                         lt.Units.ANY)
-        self.after_capacityC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.after_capacityC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                    self.AfterStoredEnergy,
                                                                    lt.LoadTypes.ANY,
                                                                    lt.Units.ANY)
-        self.drivingC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.drivingC : cp.ComponentOutput = self.add_output(self.component_name,
                                                              self.Driving,
                                                              lt.LoadTypes.ANY,
                                                              lt.Units.ANY)
-        self.at_charging_stationC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.at_charging_stationC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                          self.AtChargingStation,
                                                                          lt.LoadTypes.ANY,
                                                                          lt.Units.ANY)
-        self.electricity_outputC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                         self.ElectricityOutput,
                                                                         lt.LoadTypes.ELECTRICITY,
                                                                         lt.Units.WATT,
@@ -527,7 +527,7 @@ class EVCharger(cp.Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.ComponentName))
+        lines.append("Name: {}".format(self.component_name))
         lines.append("Manufacturer: {}".format(self.manufacturer))
         lines.append("Model: {}".format(self.name))
         lines.append("Charging Power: {} kW".format(self.charging_power_original))
@@ -682,27 +682,27 @@ class EVChargerController(cp.Component):
             self.mode_extended_description = "WRITE MODE EXTENDED DESCRIPTION HERE!"
 
         # Inputs
-        self.charging_inputC: cp.ComponentInput        = self.add_input(self.ComponentName,
+        self.charging_inputC: cp.ComponentInput        = self.add_input(self.component_name,
                                                                         self.ElectricityInput,
                                                                         lt.LoadTypes.ELECTRICITY,
                                                                         lt.Units.WATT,
                                                                         True)
-        self.socC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.socC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.StateOfCharge,
                                                       lt.LoadTypes.ANY,
                                                       lt.Units.ANY,
                                                       True)
 
 
-        self.stateC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.stateC: cp.ComponentOutput = self.add_output(self.component_name,
                                                           self.EVChargerState,
                                                           lt.LoadTypes.ANY,
                                                           lt.Units.ANY)
-        self.modeC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.modeC: cp.ComponentOutput = self.add_output(self.component_name,
                                                          self.EVChargerMode,
                                                          lt.LoadTypes.ANY,
                                                          lt.Units.ANY)
-        self.min_socC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.min_socC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.MinimumStateOfCharge,
                                                             lt.LoadTypes.ANY,
                                                             lt.Units.ANY)

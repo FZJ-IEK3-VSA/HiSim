@@ -21,7 +21,7 @@ import hisim.postprocessing.report as report
 from hisim import component
 from hisim.simulationparameters import SimulationParameters
 import warnings
-
+from hisim.component import ComponentOutput
 #import cfg_automator
 
 class PostProcessingDataTransfer:
@@ -78,14 +78,14 @@ class PostProcessor:
                                            directorypath=self.ppdt.directory_path,
                                            time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot()
-        if any(component_output.ObjectName == "HeatPump" for component_output in self.ppdt.all_outputs):
+        if any(component_output.component_name == "HeatPump" for component_output in self.ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="HeatPump",
                                            data=self.ppdt.all_outputs,
                                            units=lt.Units.ANY,
                                            directorypath=self.ppdt.directory_path,
                                            time_correction_factor=self.ppdt.time_correction_factor)
             my_sankey.plot_heat_pump()
-        if any(component_output.ObjectName == "Building" for component_output in self.ppdt.all_outputs):
+        if any(component_output.component_name == "Building" for component_output in self.ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="Building",
                                            data=self.ppdt.all_outputs,
                                            units=lt.Units.ANY,
@@ -101,38 +101,40 @@ class PostProcessor:
 
         days={"month":0,
               "day":0}
+        output: ComponentOutput
+        index: int
         for index, output in enumerate(self.ppdt.all_outputs):
             if PostProcessingOptions.PLOT_LINE in  self.ppdt.postProcessingOptions:
-                my_line = charts.Line(output=output.FullName,
-                               data=self.ppdt.results.iloc[:, index],
-                               units=output.Unit,
-                               directorypath=self.ppdt.directory_path,
-                               time_correction_factor=self.ppdt .time_correction_factor)
+                my_line = charts.Line(output=output.full_name,
+                                      data=self.ppdt.results.iloc[:, index],
+                                      units=output.unit,
+                                      directorypath=self.ppdt.directory_path,
+                                      time_correction_factor=self.ppdt .time_correction_factor)
                 my_line.plot()
             if PostProcessingOptions.PLOT_CARPET in self.ppdt.postProcessingOptions:
                 #log.information("Making carpet plots")
-                my_carpet = charts.Carpet(output=output.FullName,
-                                   data=self.ppdt.results.iloc[:, index],
-                                   units=output.Unit,
-                                   directorypath=self.ppdt.directory_path,
-                                   time_correction_factor=self.ppdt.time_correction_factor)
+                my_carpet = charts.Carpet(output=output.full_name,
+                                          data=self.ppdt.results.iloc[:, index],
+                                          units=output.unit,
+                                          directorypath=self.ppdt.directory_path,
+                                          time_correction_factor=self.ppdt.time_correction_factor)
                 my_carpet.plot( xdims = int( ( self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date ).days ) )
 
             if PostProcessingOptions.PLOT_SINGLE_DAYS in self.ppdt.postProcessingOptions:
-                    my_days = ChartSingleDay(output=output.FullName,
-                                   data=self.ppdt.results.iloc[:, index],
-                                   units=output.Unit,
-                                   directorypath=self.ppdt.directory_path,
-                                   time_correction_factor=self.ppdt.time_correction_factor,
-                                   day=days["day"],
-                                   month=days["month"])
+                    my_days = ChartSingleDay(output=output.full_name,
+                                             data=self.ppdt.results.iloc[:, index],
+                                             units=output.unit,
+                                             directorypath=self.ppdt.directory_path,
+                                             time_correction_factor=self.ppdt.time_correction_factor,
+                                             day=days["day"],
+                                             month=days["month"])
                     my_days.plot()
             if PostProcessingOptions.PLOT_BAR_CHARTS in self.ppdt.postProcessingOptions:
-                my_bar = charts.Bar(output=output.FullName,
-                             data=self.ppdt.results_monthly.iloc[:, index],
-                             units=output.Unit,
-                             dirpath=self.ppdt.directory_path,
-                             time_correction_factor=self.ppdt.time_correction_factor)
+                my_bar = charts.Bar(output=output.full_name,
+                                    data=self.ppdt.results_monthly.iloc[:, index],
+                                    units=output.unit,
+                                    dirpath=self.ppdt.directory_path,
+                                    time_correction_factor=self.ppdt.time_correction_factor)
                 my_bar.plot()
 
 
@@ -164,23 +166,23 @@ class PostProcessor:
         # only a single day has been calculated. This gets special charts for debugging.
         if len(self.ppdt.results) == 1440:
             for index, output in enumerate(self.ppdt.all_outputs):
-                if output.FullName == "Dummy # Residence Temperature":
-                    my_days = ChartSingleDay(output=output.FullName,
-                                   data=self.ppdt.results.iloc[:, index],
-                                   units=output.Unit,
-                                   directorypath=self.ppdt.directory_path,
-                                   time_correction_factor=self.ppdt.time_correction_factor,
-                                   day=0,
-                                   month=0,
-                                   output2=self.ppdt.results.iloc[:, 11])
+                if output.full_name == "Dummy # Residence Temperature":
+                    my_days = ChartSingleDay(output=output.full_name,
+                                             data=self.ppdt.results.iloc[:, index],
+                                             units=output.unit,
+                                             directorypath=self.ppdt.directory_path,
+                                             time_correction_factor=self.ppdt.time_correction_factor,
+                                             day=0,
+                                             month=0,
+                                             output2=self.ppdt.results.iloc[:, 11])
                 else:
-                    my_days = ChartSingleDay(output=output.FullName,
-                                   data=self.ppdt   .results.iloc[:, index],
-                                   units=output.Unit,
-                                   directorypath=self.ppdt.directory_path,
-                                   time_correction_factor=self.ppdt.time_correction_factor,
-                                   day=0,
-                                   month=0)
+                    my_days = ChartSingleDay(output=output.full_name,
+                                             data=self.ppdt   .results.iloc[:, index],
+                                             units=output.unit,
+                                             directorypath=self.ppdt.directory_path,
+                                             time_correction_factor=self.ppdt.time_correction_factor,
+                                             day=0,
+                                             month=0)
                 my_days.plot()
                 my_days.close()
 
@@ -211,13 +213,15 @@ class PostProcessor:
         self.ppdt.results[ 'consumption' ] = 0
         self.ppdt.results[ 'production' ] = 0
         self.ppdt.results[ 'storage' ] = 0
+        index: int
+        output: ComponentOutput
         for index, output in enumerate(self.ppdt.all_outputs):
-            if 'ElectricityOutput' in output.FullName:
-                if ( 'PVSystem' in output.FullName ) or ( 'CHP' in output.FullName ) :
+            if 'ElectricityOutput' in output.full_name:
+                if ( 'PVSystem' in output.full_name) or ('CHP' in output.full_name) :
                     self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
                 else:
                     self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
-            elif 'AcBatteryPower' in output.FullName:
+            elif 'AcBatteryPower' in output.full_name:
                 self.ppdt.results[ 'storage' ] = self.ppdt.results[ 'storage' ] + self.ppdt.results.iloc[:, index]
             else:
                 continue
@@ -343,8 +347,9 @@ class PostProcessor:
                     component_content = [component_content]
             self.report.write(component_content)
         all_output_names = []
+        output: ComponentOutput
         for output in self.ppdt.all_outputs:
-            all_output_names.append(output.FullName + " [" + output.Unit + "]")
+            all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.report.write(["### All Outputs"])
         self.report.write(all_output_names)
         #   def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,

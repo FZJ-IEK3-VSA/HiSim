@@ -9,6 +9,9 @@ import os
 import sys
 from openpyxl import Workbook  # type: ignore
 
+# todo: check for print commands in all files and fail
+# todo: check for duplicate class names and fail if different components have the same class name
+
 __authors__ = "Noah Pflugradt, Maximilian Hillen"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3"
 __license__ = "MIT"

@@ -64,22 +64,22 @@ class AirConditioner(cp.Component):
         super().__init__("AirConditioner", my_simulation_parameters=my_simulation_parameters)
         self.build(manufacturer, name, min_operation_time, min_idle_time)
         
-        self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_outC: cp.ComponentInput = self.add_input(self.component_name,
                                                      self.TemperatureOutside,
                                                      LoadTypes.TEMPERATURE,
                                                      Units.CELSIUS,
                                                      True)
-        self.stateC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.stateC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.State,
                                                         LoadTypes.ANY,
                                                         Units.ANY,
                                                         False)
         
-        self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                          self.ThermalEnergyDelivered,
                                                          LoadTypes.HEATING,
                                                          Units.WATT)
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                         self.ElectricityOutput,
                                                         LoadTypes.ELECTRICITY,
                                                         Units.WATT)
@@ -276,17 +276,17 @@ class AirConditionercontroller(cp.Component):
         super().__init__("AirConditionercontroller", my_simulation_parameters=my_simulation_parameters)
         self.build(t_air_cooling=t_air_cooling,t_air_heating=t_air_heating,offset=offset)
 
-        self.t_mC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
                                                     self.TemperatureMean,
                                                     LoadTypes.TEMPERATURE,
                                                     Units.CELSIUS,
                                                     True)
-        self.electricity_inputC : cp.ComponentInput= self.add_input(self.ComponentName,
+        self.electricity_inputC : cp.ComponentInput= self.add_input(self.component_name,
                                                                     self.ElectricityInput,
                                                                     LoadTypes.ELECTRICITY,
                                                                     Units.WATT,
                                                                     False)
-        self.stateC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.stateC: cp.ComponentOutput = self.add_output(self.component_name,
                                       self.State,
                                       LoadTypes.ANY,
                                       Units.ANY)

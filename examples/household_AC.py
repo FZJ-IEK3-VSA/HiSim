@@ -126,28 +126,28 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
 
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.TemperatureOutside)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.DirectNormalIrradiance)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradianceExtra,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.DirectNormalIrradianceExtra)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DiffuseHorizontalIrradiance,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.DiffuseHorizontalIrradiance)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.GlobalHorizontalIrradiance,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.GlobalHorizontalIrradiance)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.Azimuth,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.Azimuth)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.ApparentZenith,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.ApparentZenith)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.WindSpeed,
-                                         my_weather.ComponentName,
+                                         my_weather.component_name,
                                          my_weather.WindSpeed)
     my_sim.add_component(my_photovoltaic_system)
 
@@ -159,31 +159,31 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
     my_building = building.Building(config=my_building_config,
                                         my_simulation_parameters=my_simulation_parameters)
     my_building.connect_input(my_building.Altitude,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.Altitude)
     my_building.connect_input(my_building.Azimuth,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.Azimuth)
     my_building.connect_input(my_building.DirectNormalIrradiance,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.DirectNormalIrradiance)
     my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.DiffuseHorizontalIrradiance)
     my_building.connect_input(my_building.GlobalHorizontalIrradiance,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.GlobalHorizontalIrradiance)
     my_building.connect_input(my_building.DirectNormalIrradianceExtra,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_building.DirectNormalIrradianceExtra)
     my_building.connect_input(my_building.ApparentZenith,
-                             my_weather.ComponentName,
+                             my_weather.component_name,
                              my_building.ApparentZenith)
     my_building.connect_input(my_building.TemperatureOutside,
-                              my_weather.ComponentName,
+                              my_weather.component_name,
                               my_weather.TemperatureOutside)
     my_building.connect_input(my_building.HeatingByResidents,
-                              my_occupancy.ComponentName,
+                              my_occupancy.component_name,
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
     
@@ -193,7 +193,7 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
                                                                 offset=offset,
                                                                 my_simulation_parameters=my_simulation_parameters)
         my_air_conditioner_controller.connect_input(my_air_conditioner_controller.TemperatureMean,
-                                              my_building.ComponentName,
+                                              my_building.component_name,
                                               my_building.TemperatureMean)
 
     my_air_conditioner = air_conditioner.AirConditioner(manufacturer=ac_manufacturer,
@@ -203,12 +203,12 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
                                           control=control,
                                           my_simulation_parameters=my_simulation_parameters)
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureOutside,
-                                my_weather.ComponentName,
+                                my_weather.component_name,
                                 my_weather.TemperatureOutside)
     
     if control=="on_off":
         my_air_conditioner.connect_input(my_air_conditioner.State,
-                                my_air_conditioner_controller.ComponentName,
+                                my_air_conditioner_controller.component_name,
                                 my_air_conditioner_controller.State)
 
         my_sim.add_component(my_air_conditioner_controller)
@@ -217,7 +217,7 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
 
         
     my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_air_conditioner.ComponentName,
+                              my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
     
 

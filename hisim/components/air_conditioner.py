@@ -13,7 +13,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
-# from hisim.components.PIDcontroller import PIDController
 import hisim.utils as utils
 
 
@@ -50,7 +49,7 @@ class AirConditioner(cp.Component):
     #inputs
     State = "State"
     TemperatureOutside = "TemperatureOutside"
-    ElectricityOutputPID="ElectricityOutputPID"
+
     
     #outputs
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
@@ -75,11 +74,6 @@ class AirConditioner(cp.Component):
                                                         LoadTypes.ANY,
                                                         Units.ANY,
                                                         False)
-        self.electric_power: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                  self.ElectricityOutputPID,
-                                                                  LoadTypes.ELECTRICITY,
-                                                                  Units.WATT,
-                                                                  False)
         
         self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
                                                          self.ThermalEnergyDelivered,
@@ -206,7 +200,7 @@ class AirConditioner(cp.Component):
             #Heating Season:
             cop=self.cal_cop(t_out)
             heating_power=self.cal_heating_capacity(t_out)
-            # log.information("heating_power {}".format(heating_power))
+
             
             #Cooling Season: 
             eer=self.cal_eer(t_out)
@@ -247,24 +241,6 @@ class AirConditioner(cp.Component):
             stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
             stsv.set_output_value(self.electricity_outputC, electricity_output)
                 
-        if self.control == "PID":
-            Electric_Power = stsv.get_input_value(self.electric_power)
-            if Electric_Power > 0:
-                cop=self.cal_cop(t_out)
-                thermal_energy_delivered=Electric_Power*cop
-            elif Electric_Power < 0: 
-                eer=self.cal_eer(t_out)
-                thermal_energy_delivered=Electric_Power*eer
-            else:
-                thermal_energy_delivered=0
-            #log.information("heating_power {}".format(Electric_Power))
-            stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
-            
-            # self.state = AirConditionerState(thermal_energy_delivered = thermal_energy_delivered)
-            # stsv.set_output_value(self.copC, cop)
-            
-
-            
 class AirConditionercontroller(cp.Component):
     """
     Air Conditioner Controller. It takes data from other
@@ -347,8 +323,9 @@ class AirConditionercontroller(cp.Component):
     def write_to_report(self):
         lines = []
         lines.append("Air Conditioner Controller")
-        # todo: add more useful stuff here
-        lines.append("tbd")
+        lines.append("Control algorith of the Air conditioner is: on-off control\n")
+        lines.append("Controller heating set temperature is {} Deg C \n".format(self.t_set_heating))
+        lines.append("Controller cooling set temperature is {} Deg C \n".format(self.t_set_cooling))
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
@@ -363,12 +340,6 @@ class AirConditionercontroller(cp.Component):
             self.conditions(t_m_old)
 
 
-            # if (t_m_old > self.t_set_heating) and (t_m_old < self.t_set_cooling):  # 23 16.5 and 23.5
-            #     state=0     
-            # elif t_m_old < self.t_set_heating:  # 21 16
-            #     state=1
-            # elif t_m_old > self.t_set_cooling :  # 26 24
-            #     state=-1
         if self.controller_ACmode == 'heating':
             state = 1
         if self.controller_ACmode == 'cooling':

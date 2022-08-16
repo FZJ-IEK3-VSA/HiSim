@@ -14,6 +14,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components import generic_heat_pump_modular
+from hisim.components import generic_heat_source
 from hisim.components import controller_l1_generic_runtime
 import hisim.log as log
 seaborn.set(style='ticks')
@@ -158,6 +159,7 @@ class Boiler( cp.Component ):
             
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         self.add_default_connections( generic_heat_pump_modular.HeatPump, self.get_heatpump_default_connections( ) )
+        self.add_default_connections( generic_heat_source.HeatSource, self.get_heatpump_default_connections( ) )
         
     def get_occupancy_default_connections( self ):
         log.information("setting occupancy default connections in dhw boiler" )
@@ -170,7 +172,14 @@ class Boiler( cp.Component ):
         log.information("setting heat pump default connections in dhw boiler" )
         connections = [ ]
         heatpump_classname = generic_heat_pump_modular.HeatPump.get_classname( )
-        connections.append( cp.ComponentConnection( Boiler.ThermalPowerDelivered, heatpump_classname, generic_heat_pump_modular.HeatPump.ThermalEnergyDelivered ) )
+        connections.append( cp.ComponentConnection( Boiler.ThermalPowerDelivered, heatpump_classname, generic_heat_pump_modular.HeatPump.ThermalPowerDelivered ) )
+        return connections
+    
+    def get_heatsource_default_connections( self ):
+        log.information("setting heat source default connections in dhw boiler" )
+        connections = [ ]
+        heatsource_classname = generic_heat_source.HeatSource.get_classname( )
+        connections.append( cp.ComponentConnection( Boiler.ThermalPowerDelivered, heatsource_classname, generic_heat_source.HeatSource.ThermalPowerDelivered ) )
         return connections
     
     @staticmethod
@@ -196,7 +205,7 @@ class Boiler( cp.Component ):
         self.T_warmwater = config.T_warmwater
         
         #initialize Boiler State
-        self.state = BoilerState( volume_in_l = config.volume, temperature_in_K = 273 + 50 )
+        self.state = BoilerState( volume_in_l = config.volume, temperature_in_K = 273 + 60 )
         self.previous_state = self.state.clone()
             
         self.write_to_report( )

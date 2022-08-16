@@ -281,6 +281,7 @@ class Occupancy(cp.Component):
                                                    'water_consumption'])
             database.to_csv(cache_filepath)
             #utils.save_cache("Occupancy", parameters, database)
+        self.max_hot_water_demand = max( self.water_consumption )
 
     def write_to_report(self):
         lines = []

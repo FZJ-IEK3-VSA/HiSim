@@ -543,9 +543,11 @@ class ControllerElectricity(cp.Component):
 
 class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     """
-    Controlls energy flows for electricity.
-    Electricity storages can be ruled in 4 different strategies.
-    Component can be added generically
+    Surplus electricity controller - time step based. 
+    Iteratively goes through hierachy of devices given by
+    source weights of components and passes available surplus
+    electricity to each device. Needs to be configured with 
+    dynamic In- and Outputs.
     """
     # Inputs
     my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []

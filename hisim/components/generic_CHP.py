@@ -116,6 +116,7 @@ class GCHP( cp.Component ):
     def build( self, config: GCHPConfig ) -> None:
         self.state = CHPState( )
         self.previous_state = CHPState( )
+        self.name = config.name
         self.source_weight = config.source_weight
         self.p_th = config.p_th
         self.p_el = config.p_el
@@ -148,6 +149,13 @@ class GCHP( cp.Component ):
         controller_classname = L1_Controller.get_classname( )
         connections.append( cp.ComponentConnection( GCHP.l1_DeviceSignal, controller_classname, L1_Controller.l1_DeviceSignal ) )
         return connections
+    
+    def write_to_report(self):
+        lines = []
+        lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append( "P_el {:4.0f} kW".format( self.p_el ) )
+        lines.append( "P_th {:4.0f} kW".format( self.p_th ) )
+        return lines
         
 @dataclass_json
 @dataclass
@@ -319,6 +327,13 @@ class L1_Controller( cp.Component ):
         #return device off if minimum idle time is not fulfilled and device was off in previous state
         elif ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):
             self.state.state = 0
+                #catch cases where hydrogen storage is close to maximum level and signals oscillate -> just turn off electrolyzer
+        elif force_convergence:
+            if self.state0.state == 0:
+                self.state.state = 0
+            else:
+                self.state.deactivation( timestep )
+            electricity_target = 0
         #check signal from l2 and turn on or off if it is necesary
         else:
             if ( ( l2_devicesignal == 0 ) or ( electricity_target <= 0 ) or ( H2_SOC < self.SOCmin ) ) and self.state0.state == 1:
@@ -346,4 +361,3 @@ class L1_Controller( cp.Component ):
         lines: List[str] = []
         lines.append("Generic CHP L1 Controller: " + self.component_name)
         return lines
-

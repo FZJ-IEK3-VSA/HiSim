@@ -144,7 +144,7 @@ class L1_Controller( cp.Component ):
     def get_default_config_heatpump():
         config = L1Config( name = 'L1Controller',
                            source_weight =  1,
-                           min_operation_time = 3600 * 4,
+                           min_operation_time = 3600 * 3,
                            min_idle_time = 3600 ) 
         return config
 
@@ -180,9 +180,9 @@ class L1_Controller( cp.Component ):
             
             if self.my_simulation_parameters.system_config.predictive == True:
                 if self.state0.state == 1:
-                    runtime = max( 1, self.on_time - timestep + self.state0.timestep_of_last_action )
+                    runtime = max( 0, self.on_time - timestep + self.state0.timestep_of_last_action )
                 else:
-                    runtime = self.on_time
+                    runtime = 0
                 stsv.set_output_value( self.l1_RunTimeSignalC, runtime )
         
         #return device on if minimum operation time is not fulfilled and device was on in previous state

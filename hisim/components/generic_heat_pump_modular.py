@@ -106,7 +106,7 @@ class HeatPump(cp.Component):
     l1_RunTimeSignal = 'l1_RunTimeSignal'
 
     # Outputs
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ThermalPowerDelivered = "ThermalPowerDelivered"
     ElectricityOutput = "ElectricityOutput"
 
     # Similar components to connect to:
@@ -140,8 +140,8 @@ class HeatPump(cp.Component):
                                                                    mandatory = False)
         
         #Outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                           self.ThermalEnergyDelivered,
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+                                                                           self.ThermalPowerDelivered,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT)
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
@@ -190,10 +190,36 @@ class HeatPump(cp.Component):
                                  heating_season_begin = None,
                                  heating_season_end = None )
         return config
+    
+    @staticmethod
+    def get_default_config_heating_electric():
+        config = HeatPumpConfig( name = 'HeatingRod',
+                                 source_weight = 1,
+                                 manufacturer = "dummy",
+                                 device_name ="HeatingRod",
+                                 power_th = 6200,
+                                 cooling_considered = False,
+                                 heating_season_begin = None,
+                                 heating_season_end = None )
+        return config
+    
+    @staticmethod
+    def get_default_config_waterheating_electric():
+        config = HeatPumpConfig( name = 'HeatingRod',
+                                 source_weight = 1,
+                                 manufacturer = "dummy",
+                                 device_name ="HeatingRod",
+                                 power_th = 3000,
+                                 cooling_considered = False,
+                                 heating_season_begin = None,
+                                 heating_season_end = None )
+        return config
 
     def build( self, config ):
-        
+        self.name = config.name
         self.source_weight = config.source_weight
+        self.manufacturer = config.manufacturer
+        self.devicename = config.device_name
 
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
@@ -240,7 +266,8 @@ class HeatPump(cp.Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format("Heat Pump"))
+        lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append( "Manufacturer: {}".format( self.name ) )
         lines.append("Max power: {:4.0f} kW".format((self.power_th)*1E-3))
         return lines
 
@@ -257,12 +284,12 @@ class HeatPump(cp.Component):
         #cooling season
         if self.cooling_considered:
             if timestep < self.heating_season_begin and timestep > self.heating_season_end:
-                stsv.set_output_value( self.ThermalEnergyDeliveredC, - self.state.state * self.power_th )
+                stsv.set_output_value( self.ThermalPowerDeliveredC, - self.state.state * self.power_th )
             #heating season
             else:
-                stsv.set_output_value( self.ThermalEnergyDeliveredC, self.state.state * self.power_th )
+                stsv.set_output_value( self.ThermalPowerDeliveredC, self.state.state * self.power_th )
         else:
-            stsv.set_output_value( self.ThermalEnergyDeliveredC, self.state.state * self.power_th )
+            stsv.set_output_value( self.ThermalPowerDeliveredC, self.state.state * self.power_th )
             
         stsv.set_output_value( self.ElectricityOutputC, self.state.state * self.power_th / cop )
                

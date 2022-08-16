@@ -131,6 +131,7 @@ class Electrolyzer( cp.Component ):
         self.state = ElectrolyzerState( )
         self.previous_state = ElectrolyzerState( )
         
+        self.name = config.name
         self.source_weight = config.source_weight
         self.min_power = config.min_power
         self.max_power = config.max_power
@@ -173,6 +174,13 @@ class Electrolyzer( cp.Component ):
         self.state.hydrogen = ( hydrogen_output_liter / 1000 ) * PhysicsConfig.hydrogen_density
         stsv.set_output_value( self.HydrogenOutputC, self.state.hydrogen  )
         stsv.set_output_value( self.ElectricityOutputC, self.state.electricity )
+        
+    def write_to_report( self ):
+        lines = []
+        lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append( "electrical power: {:4.0f} kW".format( self.max_power ) )
+        lines.append( "hydrogen production rate: {:4.0f} kg / s".format( self.max_hydrogen_production_rate ) )
+        return lines
         
 @dataclass_json
 @dataclass
@@ -366,6 +374,9 @@ class L1_Controller( cp.Component ):
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
+        
+    def write_to_report( self ):
+        pass
 
     def write_to_report(self) -> List[str]:
         lines: List[str] = []

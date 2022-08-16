@@ -208,3 +208,4 @@ class L2_Controller(cp.Component):
         lines = []
         lines.append("Generic Controller L2: " + self.component_name)
         return lines
+

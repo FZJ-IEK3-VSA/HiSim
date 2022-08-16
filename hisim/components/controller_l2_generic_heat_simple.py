@@ -10,8 +10,8 @@ from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
-from hisim.components.building import Building
 from hisim.components import generic_dhw_boiler_without_heating
+from hisim.components.building import Building
 from hisim import log
 
 from dataclasses import dataclass
@@ -37,37 +37,16 @@ class L2Config:
     source_weight : int
     T_min_heating : float
     T_max_heating : float
-    T_tolerance : float
-    P_threshold : float
-    cooling_considered : bool
-    T_min_cooling : Optional[float]
-    T_max_cooling : Optional[float]
-    heating_season_begin : Optional[int]
-    heating_season_end : Optional[int]
 
     def __init__( self,
                   name : str,
                   source_weight : int,
                   T_min_heating : float,
-                  T_max_heating : float,
-                  T_tolerance : float,
-                  P_threshold : float,
-                  cooling_considered : bool,
-                  T_min_cooling : Optional[float],
-                  T_max_cooling : Optional[float],
-                  heating_season_begin : Optional[int],
-                  heating_season_end : Optional[int] ):
+                  T_max_heating : float ):
         self.name = name
         self.source_weight = source_weight
         self.T_min_heating = T_min_heating
         self.T_max_heating = T_max_heating
-        self.T_tolerance = T_tolerance
-        self.P_threshold = P_threshold
-        self.cooling_considered = cooling_considered
-        self.T_min_cooling = T_min_cooling
-        self.T_max_cooling = T_max_cooling
-        self.heating_season_begin = heating_season_begin
-        self.heating_season_end = heating_season_end
 
 class L2_ControllerState:
     """
@@ -126,21 +105,9 @@ class L2_Controller( cp.Component ):
         Maximum comfortable temperature for residents during heating period, in °C. The default is 23 °C.
     T_tolerance : float, optional
         Temperature difference the building may go below or exceed the comfort temperature band with, because of recommendations from L3. The default is 1 °C.
-    P_threshold : float, optional
-        Estimated power to drive heat source. The defauls is 1500 W.
-    T_min_cooling: float, optional
-        Minimum comfortable temperature for residents during cooling period, in °C. The default is 23 °C.
-    T_max_cooling: float, optional
-        Maximum comfortable temperature for residents during cooling period, in °C. The default is 26 °C.
-    heating_season_begin : int, optional
-        Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
-    heating_season_end : int, optional
-        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150.
     """
     # Inputs
     ReferenceTemperature = "ReferenceTemperature"
-    ElectricityTarget = "ElectricityTarget"
-    l1_RunTimeSignal = "l1_RunTimeSignal"
 
     # Outputs
     l2_DeviceSignal = "l2_DeviceSignal"
@@ -170,21 +137,9 @@ class L2_Controller( cp.Component ):
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,
                                                                        mandatory = True)
-        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                                   self.l1_RunTimeSignal,
-                                                                   LoadTypes.ANY,
-                                                                   Units.ANY,
-                                                                   mandatory = False)
         
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         self.add_default_connections( generic_dhw_boiler_without_heating.Boiler, self.get_boiler_default_connections( ) )
-        self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_default_connections( ) )
-        
-        self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.ComponentName,
-                                                                      self.ElectricityTarget,
-                                                                      LoadTypes.ELECTRICITY,
-                                                                      Units.WATT,
-                                                                      mandatory = True )
 
     def get_building_default_connections( self ):
         log.information("setting building default connections in L2 Controller")
@@ -199,26 +154,13 @@ class L2_Controller( cp.Component ):
         boiler_classname = generic_dhw_boiler_without_heating.Boiler.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, generic_dhw_boiler_without_heating.Boiler.TemperatureMean ) )
         return connections
-    def get_l1_default_connections( self ):
-        log.information("setting L1 default connections in L2 Controller")
-        connections = [ ]
-        l1_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L2_Controller.l1_RunTimeSignal, l1_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
-        return connections
     
     @staticmethod
     def get_default_config_heating():
         config = L2Config( name = 'L2HeatPump',
                            source_weight =  1,
                            T_min_heating = 20.0,
-                           T_max_heating = 22.0,
-                           T_tolerance = 1.0,
-                           P_threshold = 1500,
-                           cooling_considered = True,
-                           T_min_cooling = 23.0,
-                           T_max_cooling = 25.0,
-                           heating_season_begin = 270,
-                           heating_season_end = 150 ) 
+                           T_max_heating = 22.0 ) 
         return config
     
     @staticmethod
@@ -226,14 +168,7 @@ class L2_Controller( cp.Component ):
         config = L2Config( name = 'L2HeatPump',
                            source_weight =  1,
                            T_min_heating = 50.0,
-                           T_max_heating = 80.0,
-                           T_tolerance = 5.0,
-                           P_threshold = 1500,
-                           cooling_considered = False,
-                           T_min_cooling = None,
-                           T_max_cooling = None,
-                           heating_season_begin = None,
-                           heating_season_end = None ) 
+                           T_max_heating = 80.0 ) 
         return config
 
     def build( self, config ): 
@@ -241,40 +176,10 @@ class L2_Controller( cp.Component ):
         self.source_weight = config.source_weight   
         self.T_min_heating = config.T_min_heating
         self.T_max_heating = config.T_max_heating
-        self.T_tolerance = config.T_tolerance
-        self.P_threshold = config.P_threshold
-        self.cooling_considered = config.cooling_considered
-        if self.cooling_considered:
-            self.T_min_cooling = config.T_min_cooling
-            self.T_max_cooling = config.T_max_cooling
-            self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state = L2_ControllerState( )
         self.previous_state = L2_ControllerState( )
-        
-    def control_cooling( self, T_control, T_min_cooling, T_max_cooling, l3state ):
-        if T_control > T_max_cooling:
-            #start cooling if temperature exceeds upper limit
-            self.state.activate( )
-            self.previous_state.activate( )
-
-        elif T_control < T_min_cooling:
-            #stop cooling if temperature goes below lower limit
-            self.state.deactivate( )
-            self.previous_state.deactivate( )
-
-        else:
-            if self.state.compulsory == 1:
-                #use previous state if it is compulsory
-                pass
-            elif self.ElectricityTargetC.SourceOutput is not None:
-                #use recommendation from l3 if available and not compulsory
-                self.state.state = l3state
-            else:
-                #use previous state if l3 was not available
-                self.state = self.previous_state.clone( )
                 
-    def control_heating( self, T_control, T_min_heating, T_max_heating, l3state ):
+    def control_heating( self, T_control, T_min_heating, T_max_heating ):
         if T_control > T_max_heating:
             #stop heating if temperature exceeds upper limit
             self.state.deactivate( )
@@ -288,11 +193,8 @@ class L2_Controller( cp.Component ):
             if self.state.compulsory == 1:
                 #use previous state if it compulsory
                 pass
-            elif self.ElectricityTargetC.SourceOutput is not None:
-                #use recommendation from l3 if available and not compulsory
-                self.state.state = l3state
             else:
-                #use revious state if l3 was not available
+                #use previous state if temperature is in given limit
                 self.state = self.previous_state.clone( )
 
     def i_save_state(self):
@@ -307,10 +209,6 @@ class L2_Controller( cp.Component ):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )  
-        if self.my_simulation_parameters.system_config.predictive == True:
-            RunTimeSignal = stsv.get_input_value( self.l1_RunTimeSignalC )
-        else:
-            RunTimeSignal = 0
         if force_convergence:
             pass
             # if self.cooling_considered:
@@ -331,69 +229,19 @@ class L2_Controller( cp.Component ):
             #     else:
             #         stsv.set_output_value( self.l2_DeviceSignalC, 0 )
         
-        else:
-            #get l3 recommendation if available
-            if self.ElectricityTargetC.SourceOutput is not None:
-                electricity_target = stsv.get_input_value( self.ElectricityTargetC )
-                if electricity_target >= self.P_threshold:
-                    l3state = 1
-                else:
-                    l3state = 0
-            
-                #reset temperature limits if recommended from l3
-                if self.cooling_considered:  
-                    if l3state == 1 :
-                        if RunTimeSignal > 0:
-                            T_min_cooling = self.T_min_cooling - self.T_tolerance
-                        else:
-                            T_min_cooling = ( self.T_min_cooling + self.T_max_cooling ) / 2
-                        T_max_cooling = self.T_max_cooling
-                    elif l3state == 0:
-                        T_max_cooling = self.T_max_cooling + self.T_tolerance
-                        T_min_cooling = self.T_min_cooling 
-                        
-                if l3state == 1:
-                    if RunTimeSignal > 0:
-                        T_max_heating = self.T_max_heating + self.T_tolerance
-                    else:
-                        T_max_heating = ( self.T_min_heating + self.T_max_heating ) / 2
-                    T_min_heating = self.T_min_heating
-                    self.state.is_compulsory( )
-                    self.previous_state.is_compulsory( )
-                elif l3state == 0:
-                     T_max_heating = self.T_max_heating 
-                     T_min_heating = self.T_min_heating - self.T_tolerance
-                     self.state.is_compulsory( )
-                     self.previous_state.is_compulsory( )
-            else:
-                T_max_heating = self.T_max_heating 
-                T_min_heating = self.T_min_heating
-                T_max_cooling = self.T_max_cooling
-                T_min_cooling = self.T_min_cooling 
+        else:                     
     
             #check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
             if self.state.is_first_iteration( timestep ):
                 self.previous_state.is_first_iteration( timestep )
-            
-            if self.cooling_considered:
-                #check out during cooling season
-                if timestep < self.heating_season_begin and timestep > self.heating_season_end:
-                    self.control_cooling( T_control = T_control, T_min_cooling = T_min_cooling, T_max_cooling = T_max_cooling, l3state = l3state )
-                #check out during heating season
-                else:
-                    self.control_heating( T_control = T_control, T_min_heating = T_min_heating, T_max_heating = T_max_heating, l3state = l3state )
-                        
-            #check out during heating season
-            else:
-                self.control_heating( T_control = T_control, T_min_heating = T_min_heating, T_max_heating = T_max_heating, l3state = l3state )
+            self.control_heating( T_control = T_control, T_min_heating = self.T_min_heating, T_max_heating = self.T_max_heating )
             stsv.set_output_value( self.l2_DeviceSignalC, self.state.state )
         
     def write_to_report( self ):
         lines = []
         lines.append("Name: {}".format(self.name + str( self.source_weight ) ) )
-        lines.append("upper set temperature: {:4.0f} °C".format( ( self.T_max_heating ) ) )
-        lines.append( "lower set temperature: {:4.0f} °C".format( self.T_min_heating ) )
-        lines.append( "tolerance: {:4.0f} °C".format( self.T_tolerance))
+        lines.append("upper set temperature: {:4.0f} °C".format( self.T_max_heating ) )
+        lines.append( "lower set temperature: {:4.0f} °C".format( self.T_min_heating ) ) 
         return lines
 
     def prin1t_outpu1t(self, t_m, state):

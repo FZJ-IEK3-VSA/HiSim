@@ -158,7 +158,7 @@ class DynamicComponent(Component):
             if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
                 print(element.source_tags)
                 print(element.source_component_class)
-                stsv.set_output_value(getattribute(self, element.source_component_class), output_value)
+                stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:
                 continue
 

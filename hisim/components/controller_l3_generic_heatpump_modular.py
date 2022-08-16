@@ -130,8 +130,8 @@ class L3_Controller(dynamic_component.DynamicComponent):
         self.components_sorted : list[ lt.ComponentType ] = [ ]
         
     def sort_source_weights_and_components( self ):
-        SourceTags = [ elem.SourceTags[ 0 ] for elem in self.my_component_inputs ]
-        SourceWeights = [ elem.SourceWeight for elem in self.my_component_inputs ]
+        SourceTags = [elem.source_tags[ 0] for elem in self.my_component_inputs]
+        SourceWeights = [elem.source_weight for elem in self.my_component_inputs]
         sortindex = sorted( range( len( SourceWeights) ), key = lambda k: SourceWeights[ k ] )
         self.source_weights_sorted = [ SourceWeights[ i ] for i in sortindex ]
         self.components_sorted = [ SourceTags[ i ] for i in sortindex ]

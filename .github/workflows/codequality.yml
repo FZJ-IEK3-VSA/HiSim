@@ -39,6 +39,7 @@ jobs:
         prospector hisim/loadtypes.py
         prospector hisim/hisim_with_profiler.py
         prospector hisim/hisim_main.py
+        prospector hisim/dynamic_component.py
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150

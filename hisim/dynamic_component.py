@@ -1,3 +1,6 @@
+
+""" Dynamic components are able to have an arbitrary number of inputs and outputs. """
+
 from dataclasses import dataclass
 from typing import List, Union, Any
 
@@ -7,22 +10,28 @@ from hisim.component import Component, ComponentInput, SingleTimeStepValues, Com
 
 @dataclass
 class DynamicConnectionInput:
-    SourceComponentClass: str
-    SourceComponentOutput: str
-    SourceLoadType: lt.LoadTypes
-    SourceUnit: lt.Units
-    SourceTags: list
-    SourceWeight: int
+
+    """ Class for describing a single component input. """
+
+    source_component_class: str
+    source_component_output: str
+    source_load_type: lt.LoadTypes
+    source_unit: lt.Units
+    source_tags: list
+    source_weight: int
 
 
 @dataclass
 class DynamicConnectionOutput:
-    SourceComponentClass: str
-    SourceOutputName: str
-    SourceTags: list
-    SourceWeight: int
-    SourceLoadType: lt.LoadTypes
-    SourceUnit: lt.Units  # noqa
+
+    """ Describes a single component output for dynamic component. """
+
+    source_component_class: str
+    source_output_name: str
+    source_tags: list
+    source_weight: int
+    source_load_type: lt.LoadTypes
+    source_unit: lt.Units  # noqa
 
 
 class DynamicComponent(Component):
@@ -62,12 +71,12 @@ class DynamicComponent(Component):
                 self.connect_input(label,
                                    source_component_class.ComponentName,
                                    output_var.FieldName)
-                self.my_component_inputs.append(DynamicConnectionInput(SourceComponentClass=label,
-                                                                       SourceComponentOutput=source_component_output,
-                                                                       SourceLoadType=source_load_type,
-                                                                       SourceUnit=source_unit,
-                                                                       SourceTags=source_tags,
-                                                                       SourceWeight=source_weight))
+                self.my_component_inputs.append(DynamicConnectionInput(source_component_class=label,
+                                                                       source_component_output=source_component_output,
+                                                                       source_load_type=source_load_type,
+                                                                       source_unit=source_unit,
+                                                                       source_tags=source_tags,
+                                                                       source_weight=source_weight))
 
     def add_component_inputs_and_connect(self,
                                          source_component_classes: List[Component],
@@ -105,12 +114,12 @@ class DynamicComponent(Component):
                     self.connect_input(label,
                                        component.ComponentName,
                                        output_var.FieldName)
-                    self.my_component_inputs.append(DynamicConnectionInput(SourceComponentClass=label,
-                                                                           SourceComponentOutput=source_component_output,
-                                                                           SourceLoadType=source_load_type,
-                                                                           SourceUnit=source_unit,
-                                                                           SourceTags=source_tags,
-                                                                           SourceWeight=source_weight))
+                    self.my_component_inputs.append(DynamicConnectionInput(source_component_class=label,
+                                                                           source_component_output=source_component_output,
+                                                                           source_load_type=source_load_type,
+                                                                           source_unit=source_unit,
+                                                                           source_tags=source_tags,
+                                                                           source_weight=source_weight))
 
     def get_dynamic_input(self, stsv: SingleTimeStepValues,
                           tags: List[Union[lt.ComponentType, lt.InandOutputType]],
@@ -120,8 +129,8 @@ class DynamicComponent(Component):
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if all(tag in element.SourceTags for tag in tags) and weight_counter == element.SourceWeight:
-                inputvalue = stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+            if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
+                inputvalue = stsv.get_input_value(self.__getattribute__(element.source_component_class))
                 break
         return inputvalue
 
@@ -132,8 +141,8 @@ class DynamicComponent(Component):
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if all(tag in element.SourceTags for tag in tags):
-                inputvalues.append(stsv.get_input_value(self.__getattribute__(element.SourceComponentClass)))
+            if all(tag in element.source_tags for tag in tags):
+                inputvalues.append(stsv.get_input_value(self.__getattribute__(element.source_component_class)))
             else:
                 continue
         return inputvalues
@@ -146,10 +155,10 @@ class DynamicComponent(Component):
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
-            if all(tag in element.SourceTags for tag in tags) and weight_counter == element.SourceWeight:
-                print(element.SourceTags)
-                print(element.SourceComponentClass)
-                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), output_value)
+            if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
+                print(element.source_tags)
+                print(element.source_component_class)
+                stsv.set_output_value(self.__getattribute__(element.source_component_class), output_value)
             else:
                 continue
 
@@ -171,10 +180,10 @@ class DynamicComponent(Component):
         self.__setattr__(label, myoutput)
 
         # Define Output as DynamicConnectionInput
-        self.my_component_outputs.append(DynamicConnectionOutput(SourceComponentClass=label,
-                                                                 SourceOutputName=source_output_name + label,
-                                                                 SourceTags=source_tags,
-                                                                 SourceLoadType=source_load_type,
-                                                                 SourceUnit=source_unit,
-                                                                 SourceWeight=source_weight))
+        self.my_component_outputs.append(DynamicConnectionOutput(source_component_class=label,
+                                                                 source_output_name=source_output_name + label,
+                                                                 source_tags=source_tags,
+                                                                 source_load_type=source_load_type,
+                                                                 source_unit=source_unit,
+                                                                 source_weight=source_weight))
         return myoutput

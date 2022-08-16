@@ -37,7 +37,7 @@ def test_smart_device():
     #assign outputs correctly
     number_of_outputs = 1
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
-    my_smart_device.ElectricityOutputC.GlobalIndex = 0
+    my_smart_device.ElectricityOutputC.global_index = 0
     
     # Simulate and check that (a) device is activated at latest possible starting point, (b) device runs with the defined power profile
     my_smart_device.i_restore_state()

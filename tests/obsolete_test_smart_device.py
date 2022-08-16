@@ -46,12 +46,12 @@ def test_smart_device():
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Connect inputs and outputs
-    my_flexible_controller.electricity_inputC.SourceOutput = available_electricity_outputC
-    my_controllable.ApplianceRun.SourceOutput = my_flexible_controller.stateC
+    my_flexible_controller.electricity_inputC.source_output = available_electricity_outputC
+    my_controllable.ApplianceRun.source_output = my_flexible_controller.stateC
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([available_electricity_outputC,my_flexible_controller,my_controllable])
-    stsv.values[available_electricity_outputC.GlobalIndex] = available_electricity
+    stsv.values[available_electricity_outputC.global_index] = available_electricity
 
     #Simulate
     timestep = 2149
@@ -59,11 +59,11 @@ def test_smart_device():
     my_controllable.i_restore_state()
     my_flexible_controller.i_simulate(timestep, stsv,  False)
     my_controllable.i_simulate(timestep, stsv, False)
-    log.information("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[my_flexible_controller.stateC.GlobalIndex],
-                                                                   stsv.values[my_controllable.electricity_outputC.GlobalIndex],
-                                                                   stsv.values[my_controllable.taskC.GlobalIndex]))
+    log.information("Signal: {}, Electricity: {}, Task: {}".format(stsv.values[my_flexible_controller.stateC.global_index],
+                                                                   stsv.values[my_controllable.electricity_outputC.global_index],
+                                                                   stsv.values[my_controllable.taskC.global_index]))
 
     # Signal
-    assert 1.0 == stsv.values[my_flexible_controller.stateC.GlobalIndex]
+    assert 1.0 == stsv.values[my_flexible_controller.stateC.global_index]
     # Electricity Load for flexibility
-    assert 0.20805582786885163 == stsv.values[my_controllable.electricity_outputC.GlobalIndex]
+    assert 0.20805582786885163 == stsv.values[my_controllable.electricity_outputC.global_index]

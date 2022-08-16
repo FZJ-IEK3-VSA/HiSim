@@ -3,86 +3,103 @@
 The component class is the base class for all other components.
 """
 
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Dict
 import typing
 import dataclasses as dc
 from dataclasses import dataclass
 
 # Package
+from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
+from hisim.sim_repository import SimRepository
 
 
 @dataclass
 class ComponentConnection:
+
     """ Used in the component class for defining a connection. """
-    TargetInputName: str
-    SourceClassName: str
-    SourceOutputName: str
-    SourceInstanceName: Optional[str] = None
+
+    target_input_name: str
+    source_class_name: str
+    source_output_name: str
+    source_instance_name: Optional[str] = None
 
 
-class ComponentOutput:
+class ComponentOutput:  # noqa: too-few-public-methods
+
     """ Used in the component class for defining an output. """
+
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                  sankey_flow_direction: Optional[bool] = None):
-        self.FullName: str = object_name + " # " + field_name
-        self.ObjectName: str = object_name  # ComponentName
-        self.FieldName: str = field_name
-        self.DisplayName: str = field_name
-        self.LoadType: lt.LoadTypes = load_type
-        self.Unit: lt.Units = unit
-        self.GlobalIndex: int = -1
-        self.SankeyFlowDirection: Optional[bool] = sankey_flow_direction
+        """ Defines a component output. """
+        self.full_name: str = object_name + " # " + field_name
+        self.component_name: str = object_name  # ComponentName
+        self.field_name: str = field_name
+        self.display_name: str = field_name
+        self.load_type: lt.LoadTypes = load_type
+        self.unit: lt.Units = unit
+        self.global_index: int = -1
+        self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
 
     def get_pretty_name(self):
-        return self.ObjectName + " - " + self.DisplayName + " [" + self.LoadType + " - " + self.Unit + "]"
+        """ Gets a pretty name for a component output. """
+        return self.component_name + " - " + self.display_name + " [" + self.load_type + " - " + self.unit + "]"
 
 
-class ComponentInput:
+class ComponentInput:  # noqa: too-few-public-methods
+
     """ Used in the component class for defining an input. """
+
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units, mandatory: bool):
-        self.FullName: str = object_name + " # " + field_name
-        self.ObjectName: str = object_name
-        self.FieldName: str = field_name
-        self.LoadType: lt.LoadTypes = load_type
-        self.Unit: lt.Units = unit
-        self.GlobalIndex: int = -1
+        """ Initializes a component input. """
+        self.fullname: str = object_name + " # " + field_name
+        self.component_name: str = object_name
+        self.field_name: str = field_name
+        self.loadtype: lt.LoadTypes = load_type
+        self.unit: lt.Units = unit
+        self.global_index: int = -1
         self.src_object_name: Optional[str] = None
         self.src_field_name: Optional[str] = None
-        self.SourceOutput: Optional[ComponentOutput] = None
-        self.Mandatory = mandatory
+        self.source_output: Optional[ComponentOutput] = None
+        self.is_mandatory = mandatory
 
 
 class SingleTimeStepValues:
+
     """ Contains the values for a single time step. """
+
     def __init__(self, number_of_values: int):
-        self.values = [0.0] * number_of_values  # np.ndarray([number_of_values], dtype=float)
-        # self.dict = {}
+        """ Initializes a new single time step values class. """
+        self.values = [0.0] * number_of_values
 
     def copy_values_from_other(self, other):
-        self.values = other.values[:]  # [x for x in other.values]
+        """ Copy all values from a single time step values. """
+        self.values = other.values[:]
 
     def get_input_value(self, component_input: ComponentInput):
-        if component_input.SourceOutput is None:
+        """ Gets a value for an input from the single time step values. """
+        if component_input.source_output is None:
             return 0
         # commented for performance reasons: this is called hundreds of millions of times and even
         # this small check for better error messages is taking seconds
         # if component_input.SourceOutput.GlobalIndex < 0:
         #    raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
-        return self.values[component_input.SourceOutput.GlobalIndex]
+        return self.values[component_input.source_output.global_index]
 
     def set_output_value(self, output: ComponentOutput, value: float):
+        """ Sets a single output value in the single time step values array. """
         # commented for performance reasons: this is called hundreds of millions of times and
         # even this small check for better error messages is taking seconds
         # if(output.GlobalIndex < 0):
         #     raise Exception("Output Index was not set correctly for " + output.FullName + ". GlobalIndex was " +str(output.GlobalIndex))
         # if(output.GlobalIndex > len(self.values)-1):
         #    raise Exception("Output Index was not set correctly for " + output.FullName)
-        self.values[output.GlobalIndex] = value
+        self.values[output.global_index] = value
 
     def is_close_enough_to_previous(self, previous_values):
+        """ Checks if the values are sufficiently similar to another array. """
         count = len(self.values)
         for i in range(count):
             if abs(previous_values.values[i] - self.values[i]) > 0.0001:
@@ -90,6 +107,7 @@ class SingleTimeStepValues:
         return True
 
     def get_differences_for_error_msg(self, previous_values, outputs: List[ComponentOutput]):
+        """ Gets a pretty error message for the differences between two time steps. """
         count = len(self.values)
         error_msg = ""
         for i in range(count):
@@ -98,62 +116,19 @@ class SingleTimeStepValues:
                     previous_values.values[i]) + " currently: " + str(self.values[i])
         return error_msg
 
-    # def prin1t(self):
-    #   prin1t()
-    #  prin1t(*self.values, sep=", ")
-
-
-class SimRepository:
-    def __init__(self):
-        self.my_dict: dict[str, Any] = {}
-        self.my_dynamic_dict: dict[lt.ComponentType, dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
-
-    def set_entry(self, key: str, entry: Any):
-        """ Sets an entry in the SimRepository. """
-        self.my_dict[key] = entry
-
-    def get_entry(self, key: str) -> Any:
-        """ Gets an entry from the SimRepository. """
-        return self.my_dict[key]
-
-    def exist_entry(self, key: str) -> bool:
-        """ Checks if an entry exists. """
-        if key in self.my_dict:
-            return True
-        return False
-
-    def delete_entry(self, key: str):
-        """ Deletes an existing entry. """
-        self.my_dict.pop(key)
-
-    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry):
-        """ Sets a dynamic entry. """
-        self.my_dynamic_dict[component_type][source_weight] = entry
-
-    def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
-        """ Gets a dynmaic entry. """
-        component = self.my_dynamic_dict.get(component_type, None)
-        if component is None:
-            return None
-        value = component.get(source_weight, None)
-        return value
-
-    def get_dynamic_component_weights(self, component_type: lt.ComponentType) -> list:
-        """ Gets weights for dynamic components. """
-        return list(self.my_dynamic_dict[component_type].keys())
-
-    def delete_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
-        """ Deletes a dynamic component entry. """
-        self.my_dynamic_dict[component_type].pop(source_weight)
-
 
 class Component:
+
+    """ Base class for all components. """
+
     @classmethod
     def get_classname(cls):
+        """ Gets the class name. Helper function for default connections. """
         return cls.__name__
 
     def __init__(self, name: str, my_simulation_parameters: SimulationParameters):
-        self.ComponentName: str = name
+        """ Initializes the component class. """
+        self.component_name: str = name
         self.inputs: List[ComponentInput] = []
         self.outputs: List[ComponentOutput] = []
         self.outputs_initialized: bool = False
@@ -165,68 +140,73 @@ class Component:
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
     def add_default_connections(self, component, connections: List[ComponentConnection]):
+        """ Adds a default connection list definition. """
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
         log.trace("added connections: " + str(self.default_connections))
 
     def set_sim_repo(self, simulation_repository: SimRepository):
-        """ """
+        """ Sets the SimRepository. """
         if simulation_repository is None:
             raise ValueError("simulation repository was none")
         self.simulation_repository = simulation_repository
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:
+        """ Adds an input definition. """
         myinput = ComponentInput(object_name, field_name, load_type, unit, mandatory)
         self.inputs.append(myinput)
         return myinput
 
     def add_output(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                    sankey_flow_direction: bool = None) -> ComponentOutput:
+        """ Adds an output definition. """
         log.debug("adding output: " + field_name + " to component " + object_name)
         outp = ComponentOutput(object_name, field_name, load_type, unit, sankey_flow_direction)
         self.outputs.append(outp)
         return outp
 
     def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str):
+        """ Connecting an input to an output. """
         if len(self.inputs) == 0:
-            raise ValueError("The component " + self.ComponentName + " has no inputs.")
+            raise ValueError("The component " + self.component_name + " has no inputs.")
         component_input: ComponentInput
         input_to_set = None
         for component_input in self.inputs:
-            if component_input.FieldName == input_fieldname:
+            if component_input.field_name == input_fieldname:
                 if input_to_set is not None:
                     raise ValueError(
-                        "The input " + input_fieldname + " of the component " + self.ComponentName + " was already set.")
+                        "The input " + input_fieldname + " of the component " + self.component_name + " was already set.")
                 input_to_set = component_input
         if input_to_set is None:
-            raise ValueError("The component " + self.ComponentName + " has no input with the name " + input_fieldname)
+            raise ValueError("The component " + self.component_name + " has no input with the name " + input_fieldname)
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
 
     def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput):
-        src_object_name = src_object.ObjectName
-        src_field_name = src_object.FieldName
-        self.connect_input(input_fieldname=input_fieldname,
-                           src_object_name=src_object_name,
-                           src_field_name=src_field_name)
+        """ For connecting an input to a dynamic output. """
+        src_object_name = src_object.component_name
+        src_field_name = src_object.field_name
+        self.connect_input(input_fieldname=input_fieldname, src_object_name=src_object_name, src_field_name=src_field_name)
 
     # added variable input length and loop to be able to set default connections in one line in examples
     def connect_only_predefined_connections(self, *source_components):
+        """ Wrapper for default connections and connect with connections list. """
         for source_component in source_components:
             connections = self.get_default_connections(source_component)
             self.connect_with_connections_list(connections)
 
     def connect_with_connections_list(self, connections: List[ComponentConnection]):
+        """ Connect all inputs based on a connections list. """
         for connection in connections:
-            src_name: str = typing.cast(str, connection.SourceInstanceName)
-            self.connect_input(connection.TargetInputName, src_name, connection.SourceOutputName)
+            src_name: str = typing.cast(str, connection.source_instance_name)
+            self.connect_input(connection.target_input_name, src_name, connection.source_output_name)
 
     def get_default_connections(self, source_component) -> List[ComponentConnection]:
-
+        """ Gets the default connections for this component. """
         source_classname: str = source_component.get_classname()
         target_classname: str = self.get_classname()
-        if not source_classname in self.default_connections:
+        if source_classname not in self.default_connections:
             raise ValueError(
                 "No default connections for " + source_classname + " in the connections for " + target_classname + ". content:\n" + str(
                     self.default_connections))
@@ -234,22 +214,26 @@ class Component:
         new_connections: List[ComponentConnection] = []
         for connection in connections:
             connection_copy = dc.replace(connection)
-            connection_copy.SourceInstanceName = source_component.ComponentName
+            connection_copy.source_instance_name = source_component.component_name
             new_connections.append(connection_copy)
         return new_connections
 
+    @utils.deprecated("connect_similar_inputs is deprecated. witch to using default connections.")
     def connect_electricity(self, component):
+        """ Connect electricity outputs and inputs. """
         if isinstance(component, Component) is False:
             raise Exception("Input has to be a component!")
-        elif hasattr(component, "ElectricityOutput") is False:
+        if hasattr(component, "ElectricityOutput") is False:
             raise Exception("Input Component does not have Electricity Output!")
-        elif hasattr(self, "ElectricityInput") is False:
+        if hasattr(self, "ElectricityInput") is False:
             raise Exception("This self Component does not have Electricity Input!")
-        self.connect_input(self.ElectricityInput, component.ComponentName, component.ElectricityOutput)  # type: ignore
+        self.connect_input(self.ElectricityInput, component.component_name, component.ElectricityOutput)  # type: ignore
 
+    @utils.deprecated("connect_similar_inputs is deprecated. witch to using default connections.")
     def connect_similar_inputs(self, components):
+        """ Connects all inputs with identical names. """
         if len(self.inputs) == 0:
-            raise Exception("The component " + self.ComponentName + " has no inputs.")
+            raise Exception("The component " + self.component_name + " has no inputs.")
 
         if isinstance(components, list) is False:
             components = [components]
@@ -260,22 +244,21 @@ class Component:
             has_not_been_connected = True
             for cinput in self.inputs:
                 for output in component.outputs:
-                    if cinput.FieldName == output.FieldName:
+                    if cinput.field_name == output.field_name:
                         has_not_been_connected = False
-                        self.connect_input(cinput.FieldName, component.ComponentName, output.FieldName)
+                        self.connect_input(cinput.field_name, component.component_name, output.field_name)
             if has_not_been_connected:
                 raise Exception(
-                    "No similar inputs from {} are compatible with the outputs of {}!".format(self.ComponentName,
-                                                                                              component.ComponentName))
+                    f"No similar inputs from {self.component_name} are compatible with the outputs of {component.component_name}!")
 
     def get_input_definitions(self) -> List[ComponentInput]:
-        """ delivers a list of inputs """
+        """ Gets the input definitions. """
         return self.inputs
 
     def get_outputs(self) -> List[ComponentOutput]:
-        # delivers a list of outputs
+        """ Delivers a list of outputs. """
         if len(self.outputs) == 0:
-            raise Exception("Error: Component " + self.ComponentName + " has no outputs defined")
+            raise Exception("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
     def i_save_state(self):

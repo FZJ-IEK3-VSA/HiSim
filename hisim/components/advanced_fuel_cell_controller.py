@@ -230,24 +230,24 @@ class ExtendedController(Component):
     def __init__(self, component_name:str, config: ExtendedControllerConfig, my_simulation_parameters: SimulationParameters ):
         super().__init__(name=component_name,  my_simulation_parameters=my_simulation_parameters)
         # Input
-        self.electricity_demand_household: ComponentInput = self.add_input(self.ComponentName, ExtendedController.ElectricityDemand, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
-        self.pv_production: ComponentInput = self.add_input(self.ComponentName, ExtendedController.PV_Production, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+        self.electricity_demand_household: ComponentInput = self.add_input(self.component_name, ExtendedController.ElectricityDemand, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+        self.pv_production: ComponentInput = self.add_input(self.component_name, ExtendedController.PV_Production, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
 
-        self.temperature_0_percent: ComponentInput = self.add_input(self.ComponentName, ExtendedController.Temperature0Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
-        self.temperature_20_percent: ComponentInput = self.add_input(self.ComponentName, ExtendedController.Temperature20Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
-        self.temperature_40_percent: ComponentInput = self.add_input(self.ComponentName, ExtendedController.Temperature40Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
-        self.temperature_60_percent: ComponentInput = self.add_input(self.ComponentName, ExtendedController.Temperature60Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
-        self.temperature_80_percent: ComponentInput = self.add_input(self.ComponentName, ExtendedController.Temperature80Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
-        self.temperature_100_percent: ComponentInput = self.add_input(self.ComponentName, ExtendedController.Temperature100Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.temperature_0_percent: ComponentInput = self.add_input(self.component_name, ExtendedController.Temperature0Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.temperature_20_percent: ComponentInput = self.add_input(self.component_name, ExtendedController.Temperature20Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.temperature_40_percent: ComponentInput = self.add_input(self.component_name, ExtendedController.Temperature40Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.temperature_60_percent: ComponentInput = self.add_input(self.component_name, ExtendedController.Temperature60Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.temperature_80_percent: ComponentInput = self.add_input(self.component_name, ExtendedController.Temperature80Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
+        self.temperature_100_percent: ComponentInput = self.add_input(self.component_name, ExtendedController.Temperature100Percent, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, True)
 
         # Output
-        self.controller_chp: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.ControllerCHP, lt.LoadTypes.ANY, lt.Units.PERCENT)
-        self.controller_gas_heater: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.ControllerGasHeater, lt.LoadTypes.ANY, lt.Units.PERCENT)
-        self.power_to_electrolyzer: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.PowerToElectrolyzer, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
-        self.power_from_or_to_grid: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.PowerFromOrToGrid, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.controller_chp: ComponentOutput = self.add_output(self.component_name, ExtendedController.ControllerCHP, lt.LoadTypes.ANY, lt.Units.PERCENT)
+        self.controller_gas_heater: ComponentOutput = self.add_output(self.component_name, ExtendedController.ControllerGasHeater, lt.LoadTypes.ANY, lt.Units.PERCENT)
+        self.power_to_electrolyzer: ComponentOutput = self.add_output(self.component_name, ExtendedController.PowerToElectrolyzer, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.power_from_or_to_grid: ComponentOutput = self.add_output(self.component_name, ExtendedController.PowerFromOrToGrid, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
-        self.runtime_counter_chp: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.RuntimeCounterCHP, lt.LoadTypes.ANY, lt.Units.ANY)
-        self.runtime_counter_gas_heater: ComponentOutput = self.add_output(self.ComponentName, ExtendedController.RuntimeCounterGasHeater, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.runtime_counter_chp: ComponentOutput = self.add_output(self.component_name, ExtendedController.RuntimeCounterCHP, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.runtime_counter_gas_heater: ComponentOutput = self.add_output(self.component_name, ExtendedController.RuntimeCounterGasHeater, lt.LoadTypes.ANY, lt.Units.ANY)
 
         self.extended_controller = ExtendedControllerSimulation(config)
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep

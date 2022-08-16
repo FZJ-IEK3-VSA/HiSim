@@ -11,10 +11,10 @@ class Transformer(Component):
 
     def __init__(self, name: str, my_simulation_parameters: SimulationParameters ):
         super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
-        self.input1: ComponentInput = self.add_input(self.ComponentName, Transformer.TransformerInput, lt.LoadTypes.ANY, lt.Units.ANY, True)
-        self.input2: ComponentInput = self.add_input(self.ComponentName, Transformer.TransformerInput2, lt.LoadTypes.ANY, lt.Units.ANY, False)
-        self.output1: ComponentOutput = self.add_output(self.ComponentName, Transformer.TransformerOutput, lt.LoadTypes.ANY, lt.Units.ANY)
-        self.output2: ComponentOutput = self.add_output(self.ComponentName, Transformer.TransformerOutput2, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.input1: ComponentInput = self.add_input(self.component_name, Transformer.TransformerInput, lt.LoadTypes.ANY, lt.Units.ANY, True)
+        self.input2: ComponentInput = self.add_input(self.component_name, Transformer.TransformerInput2, lt.LoadTypes.ANY, lt.Units.ANY, False)
+        self.output1: ComponentOutput = self.add_output(self.component_name, Transformer.TransformerOutput, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.output2: ComponentOutput = self.add_output(self.component_name, Transformer.TransformerOutput2, lt.LoadTypes.ANY, lt.Units.ANY)
 
     def i_save_state(self):
         pass
@@ -32,6 +32,6 @@ class Transformer(Component):
         stsv.set_output_value(self.output2, startval_2 * 1000)
     def write_to_report(self):
         lines = []
-        lines.append("Transformer: " + self.ComponentName )
+        lines.append("Transformer: " + self.component_name)
         return lines
 

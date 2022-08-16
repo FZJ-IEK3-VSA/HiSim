@@ -60,18 +60,18 @@ class ComponentName(Component):
         self.state = ComponentNameState()
         self.previous_state = deepcopy(self.state)
 
-        self.input_from_other_component: ComponentInput = self.add_input(object_name=self.ComponentName,
+        self.input_from_other_component: ComponentInput = self.add_input(object_name=self.component_name,
                                                                          field_name=self.InputFromOtherComponent,
                                                                          load_type=LoadTypes.ELECTRICITY,
                                                                          unit=Units.WATT,
                                                                          mandatory=True)
 
-        self.output_with_state: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.output_with_state: ComponentOutput = self.add_output(object_name=self.component_name,
                                                                   field_name=self.OutputWithState,
                                                                   load_type=LoadTypes.ELECTRICITY,
                                                                   unit=Units.WATT_HOUR)
 
-        self.output_without_state: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.output_without_state: ComponentOutput = self.add_output(object_name=self.component_name,
                                                                      field_name=self.OutputWithoutState,
                                                                      load_type=LoadTypes.ELECTRICITY,
                                                                      unit=Units.WATT)

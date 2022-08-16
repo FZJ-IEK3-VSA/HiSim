@@ -64,22 +64,22 @@ class Dummy(Component):
                    capacity=capacity,
                    initial_temperature=initial_temperature)
 
-        self.thermal_energy_deliveredC : ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_energy_deliveredC : ComponentInput = self.add_input(self.component_name,
                                                                          self.ThermalEnergyDelivered,
                                                                          lt.LoadTypes.HEATING,
                                                                          lt.Units.WATT,
                                                                          False)
 
-        self.t_mC : ComponentOutput = self.add_output(self.ComponentName,
+        self.t_mC : ComponentOutput = self.add_output(self.component_name,
                                                       self.TemperatureMean,
                                                       lt.LoadTypes.TEMPERATURE,
                                                       lt.Units.CELSIUS)
 
-        self.electricity_outputC: ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC: ComponentOutput = self.add_output(self.component_name,
                                                                     self.ElectricityOutput,
                                                                     lt.LoadTypes.ELECTRICITY,
                                                                     lt.Units.WATT)
-        self.stored_energyC: ComponentOutput = self.add_output(self.ComponentName,
+        self.stored_energyC: ComponentOutput = self.add_output(self.component_name,
                                                                self.StoredEnergy,
                                                                lt.LoadTypes.HEATING,
                                                                lt.Units.WATT)

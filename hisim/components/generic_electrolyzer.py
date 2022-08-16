@@ -89,16 +89,16 @@ class Electrolyzer( cp.Component ):
                               my_simulation_parameters = my_simulation_parameters )
         self.build( config )
         
-        self.ElectricityTargetC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ElectricityTargetC: cp.ComponentInput = self.add_input(self.component_name,
                                                                     Electrolyzer.ElectricityTarget,
                                                                     lt.LoadTypes.ELECTRICITY,
                                                                     lt.Units.WATT,
                                                                     True)
-        self.HydrogenOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.HydrogenOutputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                    Electrolyzer.HydrogenOutput,
                                                                    lt.LoadTypes.HYDROGEN,
                                                                    lt.Units.KG_PER_SEC)
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       Electrolyzer.ElectricityOutput,
                                                                       lt.LoadTypes.ELECTRICITY,
                                                                       lt.Units.WATT)
@@ -117,7 +117,7 @@ class Electrolyzer( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Generic Electrolyzer: " + self.ComponentName )
+        lines.append("Generic Electrolyzer: " + self.component_name)
         return lines
     def get_l1_controller_default_connections( self ):
         log.information("setting l1 default connections in generic electrolyzer" )
@@ -262,18 +262,18 @@ class L1_Controller( cp.Component ):
         self.build( config )
         
         #add inputs
-        self.l2_ElectricityTargetC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l2_ElectricityTargetC : cp.ComponentInput = self.add_input(self.component_name,
                                                                         self.l2_ElectricityTarget,
                                                                         lt.LoadTypes.ELECTRICITY,
                                                                         lt.Units.WATT,
                                                                         mandatory = True)
-        self.HydrogenSOCC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.HydrogenSOCC : cp.ComponentInput = self.add_input(self.component_name,
                                                                self.HydrogenSOC,
                                                                lt.LoadTypes.HYDROGEN,
                                                                lt.Units.PERCENT,
                                                                mandatory = True)
         #add outputs
-        self.ElectricityTargetC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ElectricityTargetC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.ElectricityTarget,
                                                                       lt.LoadTypes.ELECTRICITY,
                                                                       lt.Units.WATT)
@@ -370,5 +370,5 @@ class L1_Controller( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("L1 Controller Electrolyzer: " + self.ComponentName )
+        lines.append("L1 Controller Electrolyzer: " + self.component_name)
         return lines

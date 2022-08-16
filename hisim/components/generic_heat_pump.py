@@ -124,28 +124,28 @@ class HeatPump(cp.Component):
 
 
         # Inputs - Mandatories
-        self.stateC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.stateC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.State,
                                                         LoadTypes.ANY,
                                                         Units.ANY,
                                                         True)
-        self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_outC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.TemperatureOutside,
                                                         LoadTypes.ANY,
                                                         Units.CELSIUS,
                                                         True)
         # Inputs - Not Mandatories
-        self.water_loadC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.water_loadC: cp.ComponentInput = self.add_input(self.component_name,
                                                              self.WaterConsumption,
                                                              LoadTypes.VOLUME,
                                                              Units.LITER,
                                                              False)
-        self.water_input_mass: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.water_input_mass: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.WaterInput_mass,
                                                                   LoadTypes.WARM_WATER,
                                                                   Units.KG_PER_SEC,
                                                                   False)
-        self.water_input_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.water_input_temperature: cp.ComponentInput = self.add_input(self.component_name,
                                                                          self.WaterInput_temperature,
                                                                          LoadTypes.WARM_WATER,
                                                                          Units.CELSIUS,
@@ -167,27 +167,27 @@ class HeatPump(cp.Component):
         #                                                                      LoadTypes.WarmWater,
         #                                                                      Units.Watt)
 
-        self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.ThermalEnergyDelivered,
                                                                              LoadTypes.HEATING,
                                                                              Units.WATT)
 
-        self.heatingC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.heatingC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.Heating,
                                                             LoadTypes.HEATING,
                                                             Units.WATT)
 
-        self.coolingC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.coolingC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.Cooling,
                                                             LoadTypes.COOLING,
                                                             Units.WATT)
 
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.ElectricityOutput,
                                                                        LoadTypes.ELECTRICITY,
                                                                        Units.WATT)
 
-        self.number_of_cyclesC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.number_of_cyclesC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.NumberOfCycles,
                                                                       LoadTypes.ANY,
                                                                       Units.ANY)
@@ -444,17 +444,17 @@ class HeatPumpController(cp.Component):
                    offset=offset,
                    mode=mode)
 
-        self.t_mC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.TemperatureMean,
                                                       LoadTypes.TEMPERATURE,
                                                       Units.CELSIUS,
                                                       True)
-        self.electricity_inputC : cp.ComponentInput= self.add_input(self.ComponentName,
+        self.electricity_inputC : cp.ComponentInput= self.add_input(self.component_name,
                                                                     self.ElectricityInput,
                                                                     LoadTypes.ELECTRICITY,
                                                                     Units.WATT,
                                                                     False)
-        self.stateC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.stateC: cp.ComponentOutput = self.add_output(self.component_name,
                                                           self.State,
                                                           LoadTypes.ANY,
                                                           Units.ANY)

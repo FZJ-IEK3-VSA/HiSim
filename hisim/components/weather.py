@@ -9,7 +9,8 @@ from dataclasses_json import dataclass_json
 from dataclasses import dataclass
 from typing import  List, Optional
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, SimRepository
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.utils import HISIMPATH
@@ -102,47 +103,47 @@ class Weather(Component):
         self.parameter_string = my_simulation_parameters.get_unique_key()
         self.build( self.weatherConfig.location, my_simulation_parameters, my_simulation_repository )
 
-        self.t_outC : ComponentOutput = self.add_output(self.ComponentName,
+        self.t_outC : ComponentOutput = self.add_output(self.component_name,
                                                         self.TemperatureOutside,
                                                         lt.LoadTypes.TEMPERATURE,
                                                         lt.Units.CELSIUS)
 
-        self.DNIC : ComponentOutput = self.add_output(self.ComponentName,
+        self.DNIC : ComponentOutput = self.add_output(self.component_name,
                                                       self.DirectNormalIrradiance,
                                                       lt.LoadTypes.IRRADIANCE,
                                                       lt.Units.WATT_PER_SQUARE_METER)
 
-        self.DNIextraC : ComponentOutput = self.add_output(self.ComponentName,
+        self.DNIextraC : ComponentOutput = self.add_output(self.component_name,
                                                            self.DirectNormalIrradianceExtra,
                                                            lt.LoadTypes.IRRADIANCE,
                                                            lt.Units.WATT_PER_SQUARE_METER)
 
-        self.DHIC: ComponentOutput = self.add_output(self.ComponentName,
+        self.DHIC: ComponentOutput = self.add_output(self.component_name,
                                                      self.DiffuseHorizontalIrradiance,
                                                      lt.LoadTypes.IRRADIANCE,
                                                      lt.Units.WATT_PER_SQUARE_METER)
 
-        self.GHIC: ComponentOutput = self.add_output(self.ComponentName,
+        self.GHIC: ComponentOutput = self.add_output(self.component_name,
                                                      self.GlobalHorizontalIrradiance,
                                                      lt.LoadTypes.IRRADIANCE,
                                                      lt.Units.WATT_PER_SQUARE_METER)
 
-        self.altitudeC : ComponentOutput = self.add_output(self.ComponentName,
+        self.altitudeC : ComponentOutput = self.add_output(self.component_name,
                                                            self.Altitude,
                                                            lt.LoadTypes.ANY,
                                                            lt.Units.DEGREES)
 
-        self.azimuthC : ComponentOutput = self.add_output(self.ComponentName,
+        self.azimuthC : ComponentOutput = self.add_output(self.component_name,
                                                           self.Azimuth,
                                                           lt.LoadTypes.ANY,
                                                           lt.Units.DEGREES)
 
-        self.apparent_zenithC : ComponentOutput = self.add_output(self.ComponentName,
+        self.apparent_zenithC : ComponentOutput = self.add_output(self.component_name,
                                                                   self.ApparentZenith,
                                                                   lt.LoadTypes.ANY,
                                                                   lt.Units.DEGREES)
 
-        self.wind_speedC: ComponentOutput = self.add_output(self.ComponentName,
+        self.wind_speedC: ComponentOutput = self.add_output(self.component_name,
                                                             self.WindSpeed,
                                                             lt.LoadTypes.SPEED,
                                                             lt.Units.METER_PER_SECOND)

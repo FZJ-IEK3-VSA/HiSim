@@ -122,21 +122,21 @@ class L2_Controller( cp.Component ):
         self.build( config )
 
         #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ReferenceTemperature,
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,
                                                                        mandatory = True)
         self.add_default_connections( Boiler, self.get_boiler_default_connections( ) )
         
-        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l3_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l3_DeviceSignal,
                                                                   LoadTypes.ON_OFF,
                                                                   Units.BINARY,
                                                                   mandatory = False)
         
         #Component outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
@@ -189,7 +189,7 @@ class L2_Controller( cp.Component ):
 
         #get l3 recommendation if available
         l3state = 0
-        if self.l3_DeviceSignalC.SourceOutput is not None:
+        if self.l3_DeviceSignalC.source_output is not None:
             l3state = stsv.get_input_value( self.l3_DeviceSignalC )
         
             #reset temperature limits if recommended from l3
@@ -226,7 +226,7 @@ class L2_Controller( cp.Component ):
             if self.state.compulsory == 1:
                 #use previous state if it compulsory
                 pass
-            elif self.l3_DeviceSignalC.SourceOutput is not None:
+            elif self.l3_DeviceSignalC.source_output is not None:
                 #use recommendation from l3 if available and not compulsory
                 self.state.state = l3state
             else:
@@ -242,5 +242,5 @@ class L2_Controller( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Generic Controller L2: " + self.ComponentName )
+        lines.append("Generic Controller L2: " + self.component_name)
         return lines

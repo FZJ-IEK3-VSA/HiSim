@@ -17,16 +17,16 @@ class CalculateOperation(cp.Component):
         self.operations: List[str] = []
         self.loadtype = loadtype
         self.unit = unit
-        self.output1: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                        self.Output,
-                                                        loadtype,
-                                                        unit)
+        self.output1: cp.ComponentOutput = self.add_output(self.component_name,
+                                                           self.Output,
+                                                           loadtype,
+                                                           unit)
 
     def add_numbered_input(self) -> cp.ComponentInput:
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)
         vars(self)[label] = label
-        myinput = cp.ComponentInput(self.ComponentName, label, self.loadtype, self.unit, True)
+        myinput = cp.ComponentInput(self.component_name, label, self.loadtype, self.unit, True)
         self.inputs.append(myinput)
         return myinput
 
@@ -91,7 +91,7 @@ class ElectricityGrid(Component):
         if grid is not None:
             self.connect_all(grid)
 
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.ElectricityOutput,
                                                                        lt.LoadTypes.ELECTRICITY,
                                                                        lt.Units.WATT)
@@ -99,16 +99,16 @@ class ElectricityGrid(Component):
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)
         vars(self)[label] = label
-        myinput = cp.ComponentInput(self.ComponentName, label, self.loadtype, self.unit, True)
+        myinput = cp.ComponentInput(self.component_name, label, self.loadtype, self.unit, True)
         self.inputs.append(myinput)
         return myinput
 
     def __add__(self, other_electricity_grid):
-        return ElectricityGrid(name="{}Sum{}".format(self.ComponentName, other_electricity_grid.ComponentName), my_simulation_parameters=self.my_simulation_parameters,
+        return ElectricityGrid(name="{}Sum{}".format(self.component_name, other_electricity_grid.component_name), my_simulation_parameters=self.my_simulation_parameters,
                                grid=[self, "Sum", other_electricity_grid])
 
     def __sub__(self, other_electricity_grid):
-        return ElectricityGrid(name="{}Subtract{}".format(self.ComponentName, other_electricity_grid.ComponentName),
+        return ElectricityGrid(name="{}Subtract{}".format(self.component_name, other_electricity_grid.component_name),
                                grid=[self, "Subtract", other_electricity_grid], my_simulation_parameters=self.my_simulation_parameters)
 
     def write_to_report(self):
@@ -122,7 +122,7 @@ class ElectricityGrid(Component):
         if hasattr(component, 'ElectricityOutput') is False:
             raise Exception("Component does not contain electricity output.")
         next_input = self.add_numbered_input()
-        next_input.src_object_name = component.ComponentName
+        next_input.src_object_name = component.component_name
         next_input.src_field_name = component.ElectricityOutput # type: ignore
 
     def add_operation(self, operation: str):
@@ -187,20 +187,20 @@ class SumBuilderForTwoInputs(Component):
 
     def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units, my_simulation_parameters: SimulationParameters ):
         super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
-        self.input1: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                     SumBuilderForTwoInputs.SumInput1,
-                                                     loadtype,
-                                                     unit,
-                                                     True)
-        self.input2: cp.ComponentInput = self.add_input(self.ComponentName,
-                                                     SumBuilderForTwoInputs.SumInput2,
-                                                     loadtype,
-                                                     unit,
-                                                     False)
-        self.output1: cp.ComponentOutput = self.add_output(self.ComponentName,
-                                                        SumBuilderForTwoInputs.SumOutput,
+        self.input1: cp.ComponentInput = self.add_input(self.component_name,
+                                                        SumBuilderForTwoInputs.SumInput1,
                                                         loadtype,
-                                                        unit)
+                                                        unit,
+                                                        True)
+        self.input2: cp.ComponentInput = self.add_input(self.component_name,
+                                                        SumBuilderForTwoInputs.SumInput2,
+                                                        loadtype,
+                                                        unit,
+                                                        False)
+        self.output1: cp.ComponentOutput = self.add_output(self.component_name,
+                                                           SumBuilderForTwoInputs.SumOutput,
+                                                           loadtype,
+                                                           unit)
 
     def i_save_state(self):
         pass
@@ -218,9 +218,9 @@ class SumBuilderForTwoInputs(Component):
     
     def write_to_report(self):
         lines =[]
-        lines.append("Sumbuilder for two inputs: {}".format(self.ComponentName))
-        lines.append("Input 1: {}".format(self.input1.FullName))
-        lines.append("Input 2: {}".format(self.input2.FullName))
+        lines.append("Sumbuilder for two inputs: {}".format(self.component_name))
+        lines.append("Input 1: {}".format(self.input1.fullname))
+        lines.append("Input 2: {}".format(self.input2.fullname))
         return lines
 
 class SumBuilderForThreeInputs(Component):
@@ -231,14 +231,14 @@ class SumBuilderForThreeInputs(Component):
 
     def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units,my_simulation_parameters: SimulationParameters ):
         super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
-        self.input1: cp.ComponentInput = self.add_input(self.ComponentName, SumBuilderForThreeInputs.SumInput1,
-                                                     loadtype, unit, True)
-        self.input2: cp.ComponentInput = self.add_input(self.ComponentName, SumBuilderForThreeInputs.SumInput2,
-                                                     loadtype, unit, False)
-        self.input3: cp.ComponentInput = self.add_input(self.ComponentName, SumBuilderForThreeInputs.SumInput3,
-                                                     loadtype, unit, False)
-        self.output1: cp.ComponentOutput = self.add_output(self.ComponentName, SumBuilderForThreeInputs.SumOutput,
-                                                        loadtype, unit)
+        self.input1: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForThreeInputs.SumInput1,
+                                                        loadtype, unit, True)
+        self.input2: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForThreeInputs.SumInput2,
+                                                        loadtype, unit, False)
+        self.input3: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForThreeInputs.SumInput3,
+                                                        loadtype, unit, False)
+        self.output1: cp.ComponentOutput = self.add_output(self.component_name, SumBuilderForThreeInputs.SumOutput,
+                                                           loadtype, unit)
 
         self.state = 0
         self.previous_state = 0

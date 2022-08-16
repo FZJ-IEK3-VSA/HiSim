@@ -165,11 +165,11 @@ class SankeyHISIM(Chart):
         components = {}
         common_unit = []
         for index, output_result in enumerate(self.data):
-            if self.output == output_result.DisplayName:
-                if output_result.SankeyFlowDirection is True:
-                    components[output_result.ObjectName] = round(sum(output_result.Results) * 1E-3)
-                elif output_result.SankeyFlowDirection is False:
-                    components[output_result.ObjectName] = - round(sum(output_result.Results) * 1E-3)
+            if self.output == output_result.display_name:
+                if output_result.sankey_flow_direction is True:
+                    components[output_result.component_name] = round(sum(output_result.Results) * 1E-3)
+                elif output_result.sankey_flow_direction is False:
+                    components[output_result.component_name] = - round(sum(output_result.Results) * 1E-3)
 
         if components:
             flows = []
@@ -216,12 +216,12 @@ class SankeyHISIM(Chart):
         electricity_consumption = 0
 
         for index, output_result in enumerate(self.data):
-            if output_result.ObjectName == "HeatPump":
-                if "ElectricityOutput" == output_result.DisplayName:
+            if output_result.component_name == "HeatPump":
+                if "ElectricityOutput" == output_result.display_name:
                     electricity_consumption = sum(output_result.Results)
-                if "Heating" == output_result.DisplayName:
+                if "Heating" == output_result.display_name:
                     heating = sum(output_result.Results)
-                if "Cooling" == output_result.DisplayName:
+                if "Cooling" == output_result.display_name:
                     cooling = sum(output_result.Results)
         if cooling < 0:
             cooling = abs(cooling)
@@ -262,24 +262,24 @@ class SankeyHISIM(Chart):
         solar_gain_through_windows = 0
 
         for index, output_result in enumerate(self.data):
-            if output_result.ObjectName == "Occupancy":
-                if "HeatingByResidents" == output_result.DisplayName:
+            if output_result.component_name == "Occupancy":
+                if "HeatingByResidents" == output_result.display_name:
                     heating_by_residents = sum(output_result.Results)
-            if output_result.ObjectName == "HeatPump":
-                if "ThermalEnergyDelivered" == output_result.DisplayName:
+            if output_result.component_name == "HeatPump":
+                if "ThermalEnergyDelivered" == output_result.display_name:
                     thermal_energy_delivered = sum(output_result.Results)
-            if output_result.ObjectName == "Building":
-                if "TotalEnergyToResidence" == output_result.DisplayName:
+            if output_result.component_name == "Building":
+                if "TotalEnergyToResidence" == output_result.display_name:
                     total_energy_to_residence = sum(output_result.Results)
-                if "SolarGainThroughWindows" == output_result.DisplayName:
+                if "SolarGainThroughWindows" == output_result.display_name:
                     solar_gain_through_windows = sum(output_result.Results)
-                if "InternalLoss" == output_result.DisplayName:
+                if "InternalLoss" == output_result.display_name:
                     internal_loss = sum(output_result.Results)
-                if "StoredEnergyVariation" == output_result.DisplayName:
+                if "StoredEnergyVariation" == output_result.display_name:
                     stored_energy_variation = sum(output_result.Results)
-                if "OldStoredEnergy" == output_result.DisplayName:
+                if "OldStoredEnergy" == output_result.display_name:
                     stored_energy_initial = sum(output_result.Results)
-                if "TemperatureMean" == output_result.DisplayName:
+                if "TemperatureMean" == output_result.display_name:
                     current_mean_temperature = sum(output_result.Results)
 
         if heating_by_residents == 0 or total_energy_to_residence == 0 or solar_gain_through_windows == 0:

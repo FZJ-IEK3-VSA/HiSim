@@ -150,37 +150,37 @@ class Boiler( cp.Component ):
         self.build( config )
         
         #inputs
-        self.WaterConsumptionC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.WaterConsumptionC : cp.ComponentInput = self.add_input(self.component_name,
                                                                     self.WaterConsumption,
                                                                     lt.LoadTypes.WARM_WATER,
                                                                     lt.Units.LITER,
                                                                     mandatory = True)
         
-        self.l1_DeviceSignalC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_DeviceSignalC : cp.ComponentInput = self.add_input(self.component_name,
                                                                    self.l1_DeviceSignal,
                                                                    lt.LoadTypes.ON_OFF,
                                                                    lt.Units.BINARY,
                                                                    mandatory = True)
-        self.l1_RunTimeSignalC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_RunTimeSignalC : cp.ComponentInput = self.add_input(self.component_name,
                                                                     self.l1_RunTimeSignal,
                                                                     lt.LoadTypes.ANY,
                                                                     lt.Units.ANY,
                                                                     mandatory = False)
         
         #Outputs
-        self.TemperatureMeanC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.TemperatureMeanC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                      self.TemperatureMean,
                                                                      lt.LoadTypes.TEMPERATURE,
                                                                      lt.Units.CELSIUS)
         
         if self.fuel == 'electricity':
-            self.ElectricityOutputC = self.add_output(self.ComponentName,
+            self.ElectricityOutputC = self.add_output(self.component_name,
                                                       self.ElectricityOutput,
                                                       lt.LoadTypes.ELECTRICITY,
                                                       lt.Units.WATT)
         
         elif self.fuel == 'hydrogen':
-            self.hydrogen_output_c = self.add_output(self.ComponentName,
+            self.hydrogen_output_c = self.add_output(self.component_name,
                                                      self.HydrogenOutput,
                                                      lt.LoadTypes.HYDROGEN,
                                                      lt.Units.KG_PER_SEC)

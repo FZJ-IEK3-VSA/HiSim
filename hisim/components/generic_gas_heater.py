@@ -47,14 +47,14 @@ class GasHeater(Component):
 
     def __init__(self,my_simulation_parameters: SimulationParameters , config : GasHeaterConfig):
         super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
-        self.control_signal: ComponentInput = self.add_input(self.ComponentName, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
+        self.control_signal: ComponentInput = self.add_input(self.component_name, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
+        self.mass_inp_temp: ComponentInput = self.add_input(self.component_name, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
 
 
-        self.mass_out: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
-        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, GasHeater.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
-        self.gas_demand: ComponentOutput = self.add_output(self.ComponentName, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH)
-        self.p_th: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.mass_out: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
+        self.mass_out_temp: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
+        self.gas_demand: ComponentOutput = self.add_output(self.component_name, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH)
+        self.p_th: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.ThermalOutputPower,
                                                      load_type=lt.LoadTypes.HEATING,
                                                      unit=lt.Units.WATT)

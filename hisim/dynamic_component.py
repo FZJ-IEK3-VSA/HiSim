@@ -57,20 +57,20 @@ class DynamicComponent(Component):
         num_inputs = len(self.inputs)
         label = f"Input{num_inputs}"
         vars(self)[label] = label
-        print("Added component input and connect: " + source_component_class.ComponentName + " - " + source_component_output)
+        print("Added component input and connect: " + source_component_class.component_name + " - " + source_component_output)
         # Define Input as Component Input and add it to inputs
-        myinput = ComponentInput(self.ComponentName, label, source_load_type, source_unit, True)
+        myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
-        myinput.src_object_name = source_component_class.ComponentName
+        myinput.src_object_name = source_component_class.component_name
         myinput.src_field_name = str(source_component_output)
         self.__setattr__(label, myinput)
 
         # Connect Input and define it as DynamicConnectionInput
         for output_var in source_component_class.outputs:
-            if output_var.DisplayName == source_component_output:
+            if output_var.display_name == source_component_output:
                 self.connect_input(label,
-                                   source_component_class.ComponentName,
-                                   output_var.FieldName)
+                                   source_component_class.component_name,
+                                   output_var.field_name)
                 self.my_component_inputs.append(DynamicConnectionInput(source_component_class=label,
                                                                        source_component_output=source_component_output,
                                                                        source_load_type=source_load_type,
@@ -97,23 +97,23 @@ class DynamicComponent(Component):
         # Connect Input and define it as DynamicConnectionInput
         for component in source_component_classes:
             for output_var in component.outputs:
-                if outputstring in output_var.DisplayName:
-                    source_component_output = output_var.DisplayName
+                if outputstring in output_var.display_name:
+                    source_component_output = output_var.display_name
 
                     label = f"Input{num_inputs}"
                     vars(self)[label] = label
 
                     # Define Input as Component Input and add it to inputs
-                    myinput = ComponentInput(self.ComponentName, label, source_load_type, source_unit, True)
+                    myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
                     self.inputs.append(myinput)
-                    myinput.src_object_name = component.ComponentName
+                    myinput.src_object_name = component.component_name
                     myinput.src_field_name = str(source_component_output)
                     self.__setattr__(label, myinput)
                     num_inputs += 1
                     print("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
                     self.connect_input(label,
-                                       component.ComponentName,
-                                       output_var.FieldName)
+                                       component.component_name,
+                                       output_var.field_name)
                     self.my_component_inputs.append(DynamicConnectionInput(source_component_class=label,
                                                                            source_component_output=source_component_output,
                                                                            source_load_type=source_load_type,
@@ -166,7 +166,7 @@ class DynamicComponent(Component):
                              source_tags: list,
                              source_load_type: lt.LoadTypes,
                              source_unit: lt.Units,
-                             source_weight: int):
+                             source_weight: int) -> ComponentOutput:
         """ Adds an output channel to a component. """
         # Label Output and generate variable
         num_inputs = len(self.outputs)
@@ -174,7 +174,7 @@ class DynamicComponent(Component):
         vars(self)[label] = label
 
         # Define Output as Component Input and add it to inputs
-        myoutput = ComponentOutput(self.ComponentName, source_output_name + label, source_load_type, source_unit,
+        myoutput = ComponentOutput(self.component_name, source_output_name + label, source_load_type, source_unit,
                                    True)
         self.outputs.append(myoutput)
         self.__setattr__(label, myoutput)

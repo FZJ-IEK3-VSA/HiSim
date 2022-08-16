@@ -51,18 +51,18 @@ def test_heat_pump_modular():
                               lt.Units.WATT)
     
     #connection of in- and outputs
-    my_heat_pump_controller_l2.ReferenceTemperatureC.SourceOutput = t_mC
-    my_heat_pump.TemperatureOutsideC.SourceOutput = t_air_outdoorC
-    my_heat_pump.l1_DeviceSignalC.SourceOutput = my_heat_pump_controller_l1.l1_DeviceSignalC
-    my_heat_pump_controller_l1.l2_DeviceSignalC.SourceOutput = my_heat_pump_controller_l2.l2_DeviceSignalC
+    my_heat_pump_controller_l2.ReferenceTemperatureC.source_output = t_mC
+    my_heat_pump.TemperatureOutsideC.source_output = t_air_outdoorC
+    my_heat_pump.l1_DeviceSignalC.source_output = my_heat_pump_controller_l1.l1_DeviceSignalC
+    my_heat_pump_controller_l1.l2_DeviceSignalC.source_output = my_heat_pump_controller_l2.l2_DeviceSignalC
 
     # indexing of in- and outputs
-    t_mC.GlobalIndex = 0
-    t_air_outdoorC.GlobalIndex = 1
-    my_heat_pump_controller_l1.l1_DeviceSignalC.GlobalIndex = 3  
-    my_heat_pump_controller_l2.l2_DeviceSignalC.GlobalIndex = 4
-    my_heat_pump.ThermalEnergyDeliveredC.GlobalIndex = 5
-    my_heat_pump.ElectricityOutputC.GlobalIndex = 6
+    t_mC.global_index = 0
+    t_air_outdoorC.global_index = 1
+    my_heat_pump_controller_l1.l1_DeviceSignalC.global_index = 3
+    my_heat_pump_controller_l2.l2_DeviceSignalC.global_index = 4
+    my_heat_pump.ThermalEnergyDeliveredC.global_index = 5
+    my_heat_pump.ElectricityOutputC.global_index = 6
     
     #test: after one hour temperature in building is 10 °C 
     stsv.values[ 0 ] = 10

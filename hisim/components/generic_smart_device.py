@@ -100,26 +100,26 @@ class SmartDevice( cp.Component ):
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
         #mandatory Output
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.ElectricityOutput,
                                                                       lt.LoadTypes.ELECTRICITY,
                                                                       lt.Units.WATT)
-        self.l3_DeviceActivationC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l3_DeviceActivationC: cp.ComponentInput = self.add_input(self.component_name,
                                                                       self.l3_DeviceActivation,
                                                                       lt.LoadTypes.ACTIVATION,
                                                                       lt.Units.TIMESTEPS,
                                                                       mandatory = False)
         
         if self.predictive:    
-            self.LastActivationC: cp.ComponentOutput = self.add_output(object_name = self.ComponentName,
+            self.LastActivationC: cp.ComponentOutput = self.add_output(object_name = self.component_name,
                                                                        field_name = self.LastActivation,
                                                                        load_type = lt.LoadTypes.ACTIVATION,
                                                                        unit = lt.Units.TIMESTEPS)
-            self.EarliestActivationC: cp.ComponentOutput = self.add_output(object_name = self.ComponentName,
+            self.EarliestActivationC: cp.ComponentOutput = self.add_output(object_name = self.component_name,
                                                                            field_name = self.EarliestActivation,
                                                                            load_type = lt.LoadTypes.ACTIVATION,
                                                                            unit = lt.Units.TIMESTEPS)
-            self.LatestActivationC: cp.ComponentOutput = self.add_output(object_name = self.ComponentName,
+            self.LatestActivationC: cp.ComponentOutput = self.add_output(object_name = self.component_name,
                                                                          field_name = self.LatestActivation,
                                                                          load_type = lt.LoadTypes.ACTIVATION,
                                                                          unit = lt.Units.TIMESTEPS)
@@ -246,6 +246,6 @@ class SmartDevice( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("DeviceName: {}".format( self.ComponentName ) )
+        lines.append("DeviceName: {}".format(self.component_name))
         return lines
         

@@ -152,21 +152,21 @@ class CHP(Component):
         self.delta_T=config.delta_T
 
         #Inputs
-        self.control_signal: ComponentInput = self.add_input(self.ComponentName, CHP.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, False)
+        self.control_signal: ComponentInput = self.add_input(self.component_name, CHP.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, False)
         #self.operating_mode_signal: ComponentInput = self.add_input(self.ComponentName, CHP.OperatingModelSignal, lt.LoadTypes.Gas, lt.Units.Percent, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.ComponentName, CHP.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, False)
-        self.electricity_target: ComponentInput = self.add_input(self.ComponentName, CHP.ElectricityFromCHPTarget, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, False)
-        self.hydrogen_not_released: ComponentInput = self.add_input(self.ComponentName, CHP.HydrogenNotReleased, lt.LoadTypes.GAS, lt.Units.KG, False)
+        self.mass_inp_temp: ComponentInput = self.add_input(self.component_name, CHP.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, False)
+        self.electricity_target: ComponentInput = self.add_input(self.component_name, CHP.ElectricityFromCHPTarget, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, False)
+        self.hydrogen_not_released: ComponentInput = self.add_input(self.component_name, CHP.HydrogenNotReleased, lt.LoadTypes.GAS, lt.Units.KG, False)
 
 
         #Outputs
-        self.mass_out: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
-        self.mass_out_temp: ComponentOutput = self.add_output(self.ComponentName, CHP.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
-        self.gas_demand_target: ComponentOutput = self.add_output(self.ComponentName, CHP.GasDemandTarget, lt.LoadTypes.GAS, lt.Units.KG_PER_SEC)
-        self.el_power: ComponentOutput = self.add_output(self.ComponentName, CHP.ElectricityOutput, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
-        self.number_of_cyclesC: ComponentOutput = self.add_output(self.ComponentName, CHP.NumberofCycles, lt.LoadTypes.ANY, lt.Units.ANY)
-        self.th_power: ComponentOutput = self.add_output(self.ComponentName, CHP.ThermalOutputPower, lt.LoadTypes.HEATING, lt.Units.WATT)
-        self.gas_demand_real_used: ComponentOutput = self.add_output(self.ComponentName, CHP.GasDemandReal, lt.LoadTypes.GAS, lt.Units.KG_PER_SEC)
+        self.mass_out: ComponentOutput = self.add_output(self.component_name, CHP.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
+        self.mass_out_temp: ComponentOutput = self.add_output(self.component_name, CHP.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
+        self.gas_demand_target: ComponentOutput = self.add_output(self.component_name, CHP.GasDemandTarget, lt.LoadTypes.GAS, lt.Units.KG_PER_SEC)
+        self.el_power: ComponentOutput = self.add_output(self.component_name, CHP.ElectricityOutput, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.number_of_cyclesC: ComponentOutput = self.add_output(self.component_name, CHP.NumberofCycles, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.th_power: ComponentOutput = self.add_output(self.component_name, CHP.ThermalOutputPower, lt.LoadTypes.HEATING, lt.Units.WATT)
+        self.gas_demand_real_used: ComponentOutput = self.add_output(self.component_name, CHP.GasDemandReal, lt.LoadTypes.GAS, lt.Units.KG_PER_SEC)
 
 
 

@@ -85,18 +85,18 @@ class HydrogenStorage( cp.Component ):
         
         self.build( config )
         
-        self.HydrogenInputC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.HydrogenInputC : cp.ComponentInput = self.add_input(self.component_name,
                                                                  self.HydrogenInput,
                                                                  lt.LoadTypes.HYDROGEN,
                                                                  lt.Units.KG_PER_SEC,
                                                                  True)
-        self.HydrogenOutputC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.HydrogenOutputC : cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.HydrogenOutput,
                                                                   lt.LoadTypes.HYDROGEN,
                                                                   lt.Units.KG_PER_SEC,
                                                                   True)
 
-        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                  self.HydrogenSOC,
                                                                  lt.LoadTypes.HYDROGEN,
                                                                  lt.Units.PERCENT)
@@ -253,6 +253,6 @@ class HydrogenStorage( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Hydrogen Storage: " + self.ComponentName )
+        lines.append("Hydrogen Storage: " + self.component_name)
         return lines
 

@@ -37,49 +37,49 @@ def test_chp_system():
     number_of_outputs = fft.get_number_of_outputs( [ my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc ] )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues( number_of_outputs )
 
-    my_electrolyzer_controller.l2_ElectricityTargetC.SourceOutput = electricity_target
-    my_electrolyzer_controller.HydrogenSOCC.SourceOutput = hydrogensoc
-    my_electrolyzer.ElectricityTargetC.SourceOutput = my_electrolyzer_controller.ElectricityTargetC
+    my_electrolyzer_controller.l2_ElectricityTargetC.source_output = electricity_target
+    my_electrolyzer_controller.HydrogenSOCC.source_output = hydrogensoc
+    my_electrolyzer.ElectricityTargetC.source_output = my_electrolyzer_controller.ElectricityTargetC
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components( [ my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc ] )
 
     #test if electrolyzer runs when hydrogen in storage and electricty available
-    stsv.values[ electricity_target.GlobalIndex ] = 1.8e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
+    stsv.values[ electricity_target.global_index] = 1.8e3
+    stsv.values[ hydrogensoc.global_index] = 50
     
     for t in range( int( ( my_electrolyzer_controller_config.min_idle_time / seconds_per_timestep ) + 2 ) ):
         my_electrolyzer_controller.i_simulate( t, stsv,  False )
         my_electrolyzer.i_simulate( t, stsv, False )
 
-    assert stsv.values[ my_electrolyzer.ElectricityOutputC.GlobalIndex ] == 1.8e3
-    assert stsv.values[ my_electrolyzer.HydrogenOutputC.GlobalIndex ] > 5e-5
+    assert stsv.values[ my_electrolyzer.ElectricityOutputC.global_index] == 1.8e3
+    assert stsv.values[ my_electrolyzer.HydrogenOutputC.global_index] > 5e-5
     
     #test if electrolyzer shuts down when too much hydrogen in storage and electricty available
-    stsv.values[ electricity_target.GlobalIndex ] = 1.8e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 99
+    stsv.values[ electricity_target.global_index] = 1.8e3
+    stsv.values[ hydrogensoc.global_index] = 99
     
     for tt in range( t, t + int( ( my_electrolyzer_controller_config.min_operation_time / seconds_per_timestep ) + 2 ) ):
         my_electrolyzer_controller.i_simulate( tt, stsv,  False )
         my_electrolyzer.i_simulate( tt, stsv, False )
 
-    assert stsv.values[ my_electrolyzer.ElectricityOutputC.GlobalIndex ] == 0
-    assert stsv.values[ my_electrolyzer.HydrogenOutputC.GlobalIndex ] == 0
+    assert stsv.values[ my_electrolyzer.ElectricityOutputC.global_index] == 0
+    assert stsv.values[ my_electrolyzer.HydrogenOutputC.global_index] == 0
     
     #test if electrolyzer shuts down when hydrogen is ok, but no electricity available
-    stsv.values[ electricity_target.GlobalIndex ] = 1.8e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
+    stsv.values[ electricity_target.global_index] = 1.8e3
+    stsv.values[ hydrogensoc.global_index] = 50
     
     for ttt in range( tt, tt + int( ( my_electrolyzer_controller_config.min_idle_time / seconds_per_timestep ) + 2 ) ):
         my_electrolyzer_controller.i_simulate( ttt, stsv,  False )
         my_electrolyzer.i_simulate( ttt, stsv, False )
         
-    stsv.values[ electricity_target.GlobalIndex ] = 0
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
+    stsv.values[ electricity_target.global_index] = 0
+    stsv.values[ hydrogensoc.global_index] = 50
     
     for it in range( ttt, ttt + int( ( my_electrolyzer_controller_config.min_operation_time / seconds_per_timestep ) + 2 ) ):
         my_electrolyzer_controller.i_simulate( it, stsv,  False )
         my_electrolyzer.i_simulate( it, stsv, False )
 
-    assert stsv.values[ my_electrolyzer.ElectricityOutputC.GlobalIndex ] == 0
-    assert stsv.values[ my_electrolyzer.HydrogenOutputC.GlobalIndex ] == 0
+    assert stsv.values[ my_electrolyzer.ElectricityOutputC.global_index] == 0
+    assert stsv.values[ my_electrolyzer.HydrogenOutputC.global_index] == 0

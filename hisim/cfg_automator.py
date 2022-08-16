@@ -618,7 +618,7 @@ class SetupFunction:
     def add_connection(self, connection):
 
         for component in self._components:
-            component_name = component.ComponentName
+            component_name = component.component_name
             if hasattr(component, "source_weight"):
                 if len(str(component.source_weight)) == 0:
                     pass
@@ -639,7 +639,7 @@ class SetupFunction:
                     input_fieldname=getattr(
                         second_component, connection["Second Component Input"]
                     ),
-                    src_object_name=first_component.ComponentName,
+                    src_object_name=first_component.component_name,
                     src_field_name=getattr(
                         first_component, connection["First Component Output"]
                     ),

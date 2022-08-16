@@ -118,39 +118,39 @@ class ControllerHeat(cp.Component):
         self.previous_state = self.state.clone()
 
         ###Inputs
-        self.temperature_storage_warm_water: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_storage_warm_water: cp.ComponentInput = self.add_input(self.component_name,
                                                                                 self.StorageTemperatureWarmWater,
                                                                                 lt.LoadTypes.WATER,
                                                                                 lt.Units.CELSIUS,
                                                                                 False)
-        self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.component_name,
                                                                                    self.StorageTemperatureHeatingWater,
                                                                                    lt.LoadTypes.WATER,
                                                                                    lt.Units.CELSIUS,
                                                                                    False)
-        self.temperature_residence: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_residence: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ResidenceTemperature,
                                                                        lt.LoadTypes.TEMPERATURE,
                                                                        lt.Units.CELSIUS,
                                                                        False)
 
         # Outputs
-        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.ControlSignalGasHeater,
                                                                              lt.LoadTypes.ANY,
                                                                              lt.Units.PERCENT,
                                                                              False)
-        self.control_signal_chp: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_chp: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.ControlSignalChp,
                                                                       lt.LoadTypes.ANY,
                                                                       lt.Units.PERCENT,
                                                                       False)
-        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.component_name,
                                                                             self.ControlSignalHeatPump,
                                                                             lt.LoadTypes.ANY,
                                                                             lt.Units.PERCENT,
                                                                             False)
-        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                  self.ControlSignalChooseStorage,
                                                                                  lt.LoadTypes.ANY,
                                                                                  lt.Units.ANY,
@@ -323,33 +323,33 @@ class ControllerElectricity(cp.Component):
         self.limit_to_shave = config.limit_to_shave
 
         ###Inputs
-        self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_consumption_building: cp.ComponentInput = self.add_input(self.component_name,
                                                                                   self.ElectricityConsumptionBuilding,
                                                                                   lt.LoadTypes.ELECTRICITY,
                                                                                   lt.Units.WATT,
                                                                                   False)
-        self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_output_pvs: cp.ComponentInput = self.add_input(self.component_name,
                                                                         self.ElectricityOutputPvs,
                                                                         lt.LoadTypes.ELECTRICITY,
                                                                         lt.Units.WATT,
                                                                         False)
 
-        self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_to_or_from_battery_real: cp.ComponentInput = self.add_input(self.component_name,
                                                                                      self.ElectricityToOrFromBatteryReal,
                                                                                      lt.LoadTypes.ELECTRICITY,
                                                                                      lt.Units.WATT,
                                                                                      False)
-        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.component_name,
                                                                                     self.ElectricityToElectrolyzerUnused,
                                                                                     lt.LoadTypes.ELECTRICITY,
                                                                                     lt.Units.WATT,
                                                                                     False)
-        self.electricity_from_chp_real: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_from_chp_real: cp.ComponentInput = self.add_input(self.component_name,
                                                                            self.ElectricityFromCHPReal,
                                                                            lt.LoadTypes.ELECTRICITY,
                                                                            lt.Units.WATT,
                                                                            False)
-        self.electricity_demand_heat_pump: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_demand_heat_pump: cp.ComponentInput = self.add_input(self.component_name,
                                                                               self.ElectricityDemandHeatPump,
                                                                               lt.LoadTypes.ELECTRICITY,
                                                                               lt.Units.WATT,
@@ -357,22 +357,22 @@ class ControllerElectricity(cp.Component):
 
         # Outputs
 
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                self.ElectricityToOrFromGrid,
                                                                                lt.LoadTypes.ELECTRICITY,
                                                                                lt.Units.WATT,
                                                                                False)
-        self.electricity_from_chp_target: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_from_chp_target: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                self.ElectricityFromCHPTarget,
                                                                                lt.LoadTypes.ELECTRICITY,
                                                                                lt.Units.WATT,
                                                                                False)
-        self.electricity_to_electrolyzer_target: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_to_electrolyzer_target: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                       self.ElectricityToElectrolyzerTarget,
                                                                                       lt.LoadTypes.ELECTRICITY,
                                                                                       lt.Units.WATT,
                                                                                       False)
-        self.electricity_to_or_from_battery_target: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_to_or_from_battery_target: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                          self.ElectricityToOrFromBatteryTarget,
                                                                                          lt.LoadTypes.ELECTRICITY,
                                                                                          lt.Units.WATT,
@@ -400,7 +400,7 @@ class ControllerElectricity(cp.Component):
         electricity_to_or_from_grid: float = 0
 
         # Check if Battery is Component of Simulation
-        if self.electricity_to_or_from_battery_real.SourceOutput is not None:
+        if self.electricity_to_or_from_battery_real.source_output is not None:
             electricity_to_or_from_battery_target = delta_demand
 
         # electricity_not_used_battery of Charge or Discharge
@@ -413,7 +413,7 @@ class ControllerElectricity(cp.Component):
 
         # less electricity than needed
         elif delta_demand < 0:
-            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.SourceOutput is not None:
+            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.source_output is not None:
                 electricity_from_chp_target = -delta_demand + stsv.get_input_value(
                     self.electricity_to_or_from_battery_real)
 
@@ -435,7 +435,7 @@ class ControllerElectricity(cp.Component):
         electricity_to_electrolyzer_target: float = 0
 
         # Check if Battery is Component of Simulation
-        if self.electricity_to_or_from_battery_real.SourceOutput is not None:
+        if self.electricity_to_or_from_battery_real.source_output is not None:
             electricity_to_or_from_battery_target = delta_demand
 
         # electricity_not_used_battery of Charge or Discharge
@@ -444,7 +444,7 @@ class ControllerElectricity(cp.Component):
         # more electricity than needed
         if delta_demand > 0:
             # Check if enough electricity is there to charge CHP (finds real solution after 2 Iteration-Steps)
-            if self.electricity_to_electrolyzer_unused.SourceOutput is not None:
+            if self.electricity_to_electrolyzer_unused.source_output is not None:
                 # possibility to  produce H2
                 electricity_to_electrolyzer_target = delta_demand - stsv.get_input_value(
                     self.electricity_to_or_from_battery_real)
@@ -459,7 +459,7 @@ class ControllerElectricity(cp.Component):
         # less electricity than needed
         elif delta_demand < 0:
 
-            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.SourceOutput is not None:
+            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.source_output is not None:
                 electricity_from_chp_target = -delta_demand + stsv.get_input_value(
                     self.electricity_to_or_from_battery_real)
 
@@ -571,20 +571,20 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
 
         self.strategy = strategy
         self.limit_to_shave = limit_to_shave
-        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.component_name,
                                                                                     self.ElectricityToElectrolyzerUnused,
                                                                                     lt.LoadTypes.ELECTRICITY,
                                                                                     lt.Units.WATT,
                                                                                     False)
 
         # Outputs
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                self.ElectricityToOrFromGrid,
                                                                                lt.LoadTypes.ELECTRICITY,
                                                                                lt.Units.WATT,
                                                                                False)
 
-        self.check_peak_shaving: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.check_peak_shaving: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.CheckPeakShaving,
                                                                       lt.LoadTypes.ANY,
                                                                       lt.Units.ANY,
@@ -957,39 +957,39 @@ class ControllerHeatGeneric(dynamic_component.DynamicComponent):
                                      timestep_of_hysteresis_hw=0)
         self.previous_state = self.state.clone()
         ###Inputs
-        self.temperature_storage_warm_water: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_storage_warm_water: cp.ComponentInput = self.add_input(self.component_name,
                                                                                 self.StorageTemperatureWarmWater,
                                                                                 lt.LoadTypes.WATER,
                                                                                 lt.Units.CELSIUS,
                                                                                 False)
-        self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_storage_heating_water: cp.ComponentInput = self.add_input(self.component_name,
                                                                                    self.StorageTemperatureHeatingWater,
                                                                                    lt.LoadTypes.WATER,
                                                                                    lt.Units.CELSIUS,
                                                                                    False)
-        self.temperature_residence: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_residence: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ResidenceTemperature,
                                                                        lt.LoadTypes.TEMPERATURE,
                                                                        lt.Units.CELSIUS,
                                                                        False)
 
         # Outputs
-        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.ControlSignalGasHeater,
                                                                              lt.LoadTypes.ANY,
                                                                              lt.Units.PERCENT,
                                                                              False)
-        self.control_signal_chp: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_chp: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.ControlSignalChp,
                                                                       lt.LoadTypes.ANY,
                                                                       lt.Units.PERCENT,
                                                                       False)
-        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.component_name,
                                                                             self.ControlSignalHeatPump,
                                                                             lt.LoadTypes.ANY,
                                                                             lt.Units.PERCENT,
                                                                             False)
-        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                  self.ControlSignalChooseStorage,
                                                                                  lt.LoadTypes.ANY,
                                                                                  lt.Units.ANY,
@@ -1159,7 +1159,7 @@ class ControllerHeatGeneric(dynamic_component.DynamicComponent):
             control_signal_choose_storage = 1
 
         # Heats up storage
-        if self.temperature_storage_heating_water.SourceOutput is None:
+        if self.temperature_storage_heating_water.source_output is None:
             control_signal_choose_storage = 0
         if control_signal_choose_storage == 1:
             self.state.temperature_storage_target_ww_C, self.state.timestep_of_hysteresis_ww = self.simulate_storage(

@@ -48,80 +48,80 @@ def test_chp_system():
     number_of_outputs = fft.get_number_of_outputs( [ my_chp, my_chp_controller, electricity_target, hydrogensoc, l2_devicesignal ] )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues( number_of_outputs )
 
-    my_chp_controller.ElectricityTargetC.SourceOutput = electricity_target
-    my_chp_controller.HydrogenSOCC.SourceOutput = hydrogensoc
-    my_chp_controller.l2_DeviceSignalC.SourceOutput = l2_devicesignal
-    my_chp.l1_DeviceSignalC.SourceOutput = my_chp_controller.l1_DeviceSignalC
+    my_chp_controller.ElectricityTargetC.source_output = electricity_target
+    my_chp_controller.HydrogenSOCC.source_output = hydrogensoc
+    my_chp_controller.l2_DeviceSignalC.source_output = l2_devicesignal
+    my_chp.l1_DeviceSignalC.source_output = my_chp_controller.l1_DeviceSignalC
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components( [ my_chp, my_chp_controller, electricity_target, hydrogensoc, l2_devicesignal ] )
 
     #test if chp runs when hydrogen in storage and heat as well as electricity needed
-    stsv.values[ electricity_target.GlobalIndex ] = 2.5e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
-    stsv.values[ l2_devicesignal.GlobalIndex ] = 1
+    stsv.values[ electricity_target.global_index] = 2.5e3
+    stsv.values[ hydrogensoc.global_index] = 50
+    stsv.values[ l2_devicesignal.global_index] = 1
     
     for t in range( int( ( my_chp_controller_config.min_idle_time / seconds_per_timestep ) + 2 ) ):
         my_chp_controller.i_simulate( t, stsv,  False )
         my_chp.i_simulate( t, stsv, False )
         
-    print( stsv.values[ my_chp.ThermalEnergyDeliveredC.GlobalIndex ], stsv.values[my_chp.ElectricityOutputC.GlobalIndex ], stsv.values[ my_chp.FuelDeliveredC.GlobalIndex ])
+    print(stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index], stsv.values[my_chp.ElectricityOutputC.global_index], stsv.values[ my_chp.FuelDeliveredC.global_index])
         
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.GlobalIndex ] == 3000
-    assert stsv.values[my_chp.ElectricityOutputC.GlobalIndex ] == 2000
-    assert stsv.values[ my_chp.FuelDeliveredC.GlobalIndex ] > 4e-5
+    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 3000
+    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 2000
+    assert stsv.values[ my_chp.FuelDeliveredC.global_index] > 4e-5
     
     # #test if chp shuts down when too little hydrogen in storage and electricty as well as heat needed
-    stsv.values[ electricity_target.GlobalIndex ] == 2.5e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 0
-    stsv.values[ l2_devicesignal.GlobalIndex ] = 1
+    stsv.values[ electricity_target.global_index] == 2.5e3
+    stsv.values[ hydrogensoc.global_index] = 0
+    stsv.values[ l2_devicesignal.global_index] = 1
     
     for tt in range( t, t + int( ( my_chp_controller_config.min_operation_time / seconds_per_timestep ) + 2 ) ):
         my_chp_controller.i_simulate( tt, stsv,  False )
         my_chp.i_simulate( tt, stsv, False )
 
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.GlobalIndex ] == 0
-    assert stsv.values[my_chp.ElectricityOutputC.GlobalIndex ] == 0
-    assert stsv.values[ my_chp.FuelDeliveredC.GlobalIndex ] == 0
+    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 0
+    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
+    assert stsv.values[ my_chp.FuelDeliveredC.global_index] == 0
     
     #test if chp shuts down when hydrogen is ok, electricity is needed, but heat not
-    stsv.values[ electricity_target.GlobalIndex ] = 2.5e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
-    stsv.values[ l2_devicesignal.GlobalIndex ] = 1
+    stsv.values[ electricity_target.global_index] = 2.5e3
+    stsv.values[ hydrogensoc.global_index] = 50
+    stsv.values[ l2_devicesignal.global_index] = 1
     
     for ttt in range( tt, tt + int( ( my_chp_controller_config.min_idle_time / seconds_per_timestep ) + 2 ) ):
         my_chp_controller.i_simulate( ttt, stsv,  False )
         my_chp.i_simulate( ttt, stsv, False )
         
-    stsv.values[ electricity_target.GlobalIndex ] = 2.5e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
-    stsv.values[ l2_devicesignal.GlobalIndex ] = 0
+    stsv.values[ electricity_target.global_index] = 2.5e3
+    stsv.values[ hydrogensoc.global_index] = 50
+    stsv.values[ l2_devicesignal.global_index] = 0
     
     for it in range( ttt, ttt + int( ( my_chp_controller_config.min_operation_time / seconds_per_timestep ) + 2 ) ):
         my_chp_controller.i_simulate( it, stsv,  False )
         my_chp.i_simulate( it, stsv, False )
 
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.GlobalIndex ] == 0
-    assert stsv.values[my_chp.ElectricityOutputC.GlobalIndex ] == 0
-    assert stsv.values[ my_chp.FuelDeliveredC.GlobalIndex ] == 0
+    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 0
+    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
+    assert stsv.values[ my_chp.FuelDeliveredC.global_index] == 0
     
     #test if chp shuts down when hydrogen is ok, heat is needed, but electricity not
-    stsv.values[ electricity_target.GlobalIndex ] = 2.5e3
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
-    stsv.values[ l2_devicesignal.GlobalIndex ] = 1
+    stsv.values[ electricity_target.global_index] = 2.5e3
+    stsv.values[ hydrogensoc.global_index] = 50
+    stsv.values[ l2_devicesignal.global_index] = 1
     
     for t in range( it, it + int( ( my_chp_controller_config.min_idle_time / seconds_per_timestep ) + 2 ) ):
         my_chp_controller.i_simulate( t, stsv,  False )
         my_chp.i_simulate( t, stsv, False )
         
-    stsv.values[ electricity_target.GlobalIndex ] = 0
-    stsv.values[ hydrogensoc.GlobalIndex ] = 50
-    stsv.values[ l2_devicesignal.GlobalIndex ] = 1
+    stsv.values[ electricity_target.global_index] = 0
+    stsv.values[ hydrogensoc.global_index] = 50
+    stsv.values[ l2_devicesignal.global_index] = 1
     
     for tt in range( t, t + int( ( my_chp_controller_config.min_operation_time / seconds_per_timestep ) + 2 ) ):
         my_chp_controller.i_simulate( tt, stsv,  False )
         my_chp.i_simulate( tt, stsv, False )
 
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.GlobalIndex ] == 0
-    assert stsv.values[my_chp.ElectricityOutputC.GlobalIndex ] == 0
-    assert stsv.values[ my_chp.FuelDeliveredC.GlobalIndex ] == 0
+    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 0
+    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
+    assert stsv.values[ my_chp.FuelDeliveredC.global_index] == 0

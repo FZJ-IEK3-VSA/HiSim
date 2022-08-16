@@ -203,7 +203,7 @@ class Building(dynamic_component.DynamicComponent):
                          my_simulation_parameters=my_simulation_parameters)
         # variable typing init for mypy
         self.buildingConfig = config
-        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.ComponentName, self.buildingConfig,
+        self.is_in_cache, self.cache_file_path = utils.get_cache_file(self.component_name, self.buildingConfig,
                                                                       self.my_simulation_parameters)
 
         self.c_m: float = 0
@@ -233,83 +233,83 @@ class Building(dynamic_component.DynamicComponent):
 
         # ===================================================================================================================
         # the name might be misleading, usually energy is given in Wh or Joule and power is given in W, here it is power actually
-        self.thermal_energy_deliveredC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.thermal_energy_deliveredC: cp.ComponentInput = self.add_input(self.component_name,
                                                                            self.ThermalEnergyDelivered,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT,
                                                                            False)
-        self.mass_inputC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.mass_inputC: cp.ComponentInput = self.add_input(self.component_name,
                                                              self.MassInput,
                                                              lt.LoadTypes.WARM_WATER,
                                                              lt.Units.KG_PER_SEC,
                                                              False)
-        self.temperature_inputC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.temperature_inputC: cp.ComponentInput = self.add_input(self.component_name,
                                                                     self.TemperatureInput,
                                                                     lt.LoadTypes.WARM_WATER,
                                                                     lt.Units.CELSIUS,
                                                                     False)
 
-        self.altitudeC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.altitudeC: cp.ComponentInput = self.add_input(self.component_name,
                                                            self.Altitude,
                                                            lt.LoadTypes.ANY,
                                                            lt.Units.DEGREES,
                                                            True)
-        self.azimuthC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.azimuthC: cp.ComponentInput = self.add_input(self.component_name,
                                                           self.Azimuth,
                                                           lt.LoadTypes.ANY,
                                                           lt.Units.DEGREES,
                                                           True)
-        self.apparent_zenithC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.apparent_zenithC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.ApparentZenith,
                                                                   lt.LoadTypes.ANY,
                                                                   lt.Units.DEGREES,
                                                                   True)
-        self.DNIC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DNIC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.DirectNormalIrradiance,
                                                       lt.LoadTypes.IRRADIANCE,
                                                       lt.Units.WATT_PER_SQUARE_METER,
                                                       True)
-        self.DNIextraC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DNIextraC: cp.ComponentInput = self.add_input(self.component_name,
                                                            self.DirectNormalIrradianceExtra,
                                                            lt.LoadTypes.IRRADIANCE,
                                                            lt.Units.WATT_PER_SQUARE_METER,
                                                            True)
-        self.DHIC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DHIC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.DiffuseHorizontalIrradiance,
                                                       lt.LoadTypes.IRRADIANCE,
                                                       lt.Units.WATT_PER_SQUARE_METER,
                                                       True)
-        self.GHIC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.GHIC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.GlobalHorizontalIrradiance,
                                                       lt.LoadTypes.IRRADIANCE,
                                                       lt.Units.WATT_PER_SQUARE_METER,
                                                       True)
 
-        self.t_outC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_outC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.TemperatureOutside,
                                                         lt.LoadTypes.TEMPERATURE,
                                                         lt.Units.CELSIUS,
                                                         True)
 
-        self.occupancy_heat_gainC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.occupancy_heat_gainC: cp.ComponentInput = self.add_input(self.component_name,
                                                                       self.HeatingByResidents,
                                                                       lt.LoadTypes.HEATING,
                                                                       lt.Units.WATT,
                                                                       True)
 
-        self.t_mC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.t_mC: cp.ComponentOutput = self.add_output(self.component_name,
                                                         self.TemperatureMean,
                                                         lt.LoadTypes.TEMPERATURE,
                                                         lt.Units.CELSIUS)
-        self.total_power_to_residenceC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.total_power_to_residenceC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.TotalEnergyToResidence,
                                                                              lt.LoadTypes.HEATING,
                                                                              lt.Units.WATT)
-        self.solar_gain_through_windowsC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.solar_gain_through_windowsC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                self.SolarGainThroughWindows,
                                                                                lt.LoadTypes.HEATING,
                                                                                lt.Units.WATT)
-        self.var_max_thermal_building_demand: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.var_max_thermal_building_demand: cp.ComponentOutput = self.add_output(self.component_name,
                                                                                    self.ReferenceMaxHeatBuildingDemand,
                                                                                    lt.LoadTypes.HEATING,
                                                                                    lt.Units.WATT)
@@ -402,7 +402,7 @@ class Building(dynamic_component.DynamicComponent):
         t_out = stsv.get_input_value(self.t_outC)
 
         # With TES [In Development]
-        if self.mass_inputC.SourceOutput is not None:
+        if self.mass_inputC.source_output is not None:
             if force_convergence:
                 return
 
@@ -454,7 +454,7 @@ class Building(dynamic_component.DynamicComponent):
             # stsv.set_output_value(self.temperature_output, temperature_new)
 
         # Only with HeatPump
-        elif self.thermal_energy_deliveredC.SourceOutput is not None:
+        elif self.thermal_energy_deliveredC.source_output is not None:
             # the name thermal_energy_delivered might be misleading, because it is actually power in W
             thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
         else:
@@ -588,7 +588,7 @@ class Building(dynamic_component.DynamicComponent):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.ComponentName))
+        lines.append("Name: {}".format(self.component_name))
         lines.append("Code: {}".format(self.buildingcode))
 
         lines.append("")
@@ -1170,21 +1170,21 @@ class BuildingController(cp.Component):
         self.previous_state = self.state.clone()
 
         # ===================================================================================================================
-        self.ref_max_thermal_build_demand: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ref_max_thermal_build_demand: cp.ComponentInput = self.add_input(self.component_name,
                                                                               self.ReferenceMaxHeatBuildingDemand,
                                                                               lt.LoadTypes.HEATING,
                                                                               lt.Units.WATT,
                                                                               True)
-        self.residence_temperature: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.residence_temperature: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ResidenceTemperature,
                                                                        lt.LoadTypes.TEMPERATURE,
                                                                        lt.Units.CELSIUS,
                                                                        True)
-        self.real_heat_building_demand: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.real_heat_building_demand: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.RealHeatBuildingDemand,
                                                                              lt.LoadTypes.HEATING,
                                                                              lt.Units.WATT)
-        self.level_of_utilization: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.level_of_utilization: cp.ComponentOutput = self.add_output(self.component_name,
                                                                         self.LevelOfUtilization,
                                                                         lt.LoadTypes.ANY,
                                                                         lt.Units.PERCENT)

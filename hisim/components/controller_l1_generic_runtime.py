@@ -105,7 +105,7 @@ class L1_Controller( cp.Component ):
         self.build( config )
         
         #add inputs
-        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l2_DeviceSignal,
                                                                   LoadTypes.ON_OFF,
                                                                   Units.BINARY,
@@ -114,12 +114,12 @@ class L1_Controller( cp.Component ):
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l1_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
         if self.my_simulation_parameters.system_config.predictive == True:
-            self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+            self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                          self.l1_RunTimeSignal,
                                                                          LoadTypes.ANY,
                                                                          Units.ANY)
@@ -198,6 +198,6 @@ class L1_Controller( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Generic Controller L1: " + self.ComponentName )
+        lines.append("Generic Controller L1: " + self.component_name)
         return lines
 

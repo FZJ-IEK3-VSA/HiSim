@@ -115,29 +115,29 @@ class HeatPump(cp.Component):
         self.build( config )
 
         # Inputs - Mandatories
-        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(self.component_name,
                                                                      self.TemperatureOutside,
                                                                      lt.LoadTypes.ANY,
                                                                      lt.Units.CELSIUS,
                                                                      mandatory = True)
         
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l1_DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
-        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                    self.l1_RunTimeSignal,
                                                                    lt.LoadTypes.ANY,
                                                                    lt.Units.ANY,
                                                                    mandatory = False)
         
         #Outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                            self.ThermalEnergyDelivered,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT)
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.ElectricityOutput,
                                                                       lt.LoadTypes.ELECTRICITY,
                                                                       lt.Units.WATT)

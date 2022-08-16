@@ -65,13 +65,13 @@ def test_building():
 
 
     assert 1 == 1
-    my_residence.t_outC.SourceOutput = my_weather.t_outC
-    my_residence.altitudeC.SourceOutput = my_weather.altitudeC
-    my_residence.azimuthC.SourceOutput = my_weather.azimuthC
-    my_residence.DNIC.SourceOutput = my_weather.DNIC
-    my_residence.DHIC.SourceOutput = my_weather.DHIC
-    my_residence.occupancy_heat_gainC.SourceOutput = my_occupancy.heating_by_residentsC
-    my_residence.thermal_energy_deliveredC.SourceOutput = thermal_energy_delivered_output
+    my_residence.t_outC.source_output = my_weather.t_outC
+    my_residence.altitudeC.source_output = my_weather.altitudeC
+    my_residence.azimuthC.source_output = my_weather.azimuthC
+    my_residence.DNIC.source_output = my_weather.DNIC
+    my_residence.DHIC.source_output = my_weather.DHIC
+    my_residence.occupancy_heat_gainC.source_output = my_occupancy.heating_by_residentsC
+    my_residence.thermal_energy_deliveredC.source_output = thermal_energy_delivered_output
 
     fft.add_global_index_of_components([my_occupancy,my_weather,my_residence,thermal_energy_delivered_output])
 
@@ -87,7 +87,7 @@ def test_building():
         my_residence.seconds_per_timestep = seconds_per_timestep
         
         # Simulates
-        stsv.values[my_residence.t_mC.GlobalIndex] = 23
+        stsv.values[my_residence.t_mC.global_index] = 23
         #log.information(str(stsv.values))
         my_weather.i_simulate(0, stsv, False)
         log.information(str(stsv.values))
@@ -102,7 +102,7 @@ def test_building():
 
         log.information(str(stsv.values[11]))
         # todo: this needs to be corrected
-        assert (stsv.values[my_residence.t_mC.GlobalIndex] - 23.0 ) < - 0.01 * ( seconds_per_timestep / 60 )
+        assert (stsv.values[my_residence.t_mC.global_index] - 23.0) < - 0.01 * (seconds_per_timestep / 60)
     t7 = time.perf_counter()
     log.profile("T2: " + str(t7 - t6))
     log.profile("T2: " + str(t7 - t6))

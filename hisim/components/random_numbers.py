@@ -18,7 +18,7 @@ class RandomNumbers(Component):
         for x in range(timesteps):
             number = minimum + random.random() * number_range
             self.values.append(number)
-        self.output1 = self.add_output(self.ComponentName,
+        self.output1 = self.add_output(self.component_name,
                                        RandomNumbers.RandomOutput,
                                        lt.LoadTypes.ANY,
                                        lt.Units.ANY)
@@ -38,7 +38,7 @@ class RandomNumbers(Component):
 
     def write_to_report(self):
         lines =[]
-        lines.append("Random number Generator: {}".format(self.ComponentName))
+        lines.append("Random number Generator: {}".format(self.component_name))
         lines.append("Minimum number: {}".format(self.minimum))
         lines.append("Maximum number: {}".format(self.maximum))
         return lines

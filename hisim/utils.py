@@ -468,3 +468,12 @@ def measure_execution_time(my_function):  # noqa
         return result
 
     return function_wrapper_for_measuring_execution_time
+
+
+def deprecated(message):
+  def deprecated_decorator(func):
+      def deprecated_func(*args, **kwargs):
+          log.warning(f"{func.__name__} is a deprecated function. {message}")
+          return func(*args, **kwargs)
+      return deprecated_func
+  return deprecated_decorator

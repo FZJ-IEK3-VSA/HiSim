@@ -73,7 +73,7 @@ class GCHP( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("CHP operation with constant electical and thermal power: " + self.ComponentName )
+        lines.append("CHP operation with constant electical and thermal power: " + self.component_name)
         return lines
 
 
@@ -83,22 +83,22 @@ class GCHP( cp.Component ):
         self.build( config )
 
         #Inputs
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l1_DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
         
         #Component outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                            self.ThermalEnergyDelivered,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT)
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                       self.ElectricityOutput,
                                                                       lt.LoadTypes.ELECTRICITY,
                                                                       lt.Units.WATT)
-        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                   self.FuelDelivered,
                                                                   lt.LoadTypes.HYDROGEN,
                                                                   lt.Units.KG_PER_SEC)
@@ -238,18 +238,18 @@ class L1_Controller( cp.Component ):
         self.build( config )
         
         #add inputs
-        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l2_DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
-        self.ElectricityTargetC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ElectricityTargetC : cp.ComponentInput = self.add_input(self.component_name,
                                                                      self.ElectricityTarget,
                                                                      lt.LoadTypes.ELECTRICITY,
                                                                      lt.Units.WATT,
                                                                      mandatory = True)
         
-        self.HydrogenSOCC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.HydrogenSOCC : cp.ComponentInput = self.add_input(self.component_name,
                                                                self.HydrogenSOC,
                                                                lt.LoadTypes.HYDROGEN,
                                                                lt.Units.PERCENT,
@@ -260,7 +260,7 @@ class L1_Controller( cp.Component ):
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l1_DeviceSignal,
                                                                     lt.LoadTypes.ON_OFF,
                                                                     lt.Units.BINARY)
@@ -345,6 +345,6 @@ class L1_Controller( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Generic CHP L1 Controller: " + self.ComponentName )
+        lines.append("Generic CHP L1 Controller: " + self.component_name)
         return lines
 

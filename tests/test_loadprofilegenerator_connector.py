@@ -30,10 +30,10 @@ def test_occupancy():
     water_consumption = []
     for i in range(24 * 60 * 365):
         my_occupancy.i_simulate(i, stsv,  False)
-        number_of_residents.append(stsv.values[my_occupancy.number_of_residentsC.GlobalIndex])
-        heating_by_residents.append(stsv.values[my_occupancy.heating_by_residentsC.GlobalIndex])
-        electricity_consumption.append(stsv.values[my_occupancy.electricity_outputC.GlobalIndex])
-        water_consumption.append(stsv.values[my_occupancy.water_consumptionC.GlobalIndex])
+        number_of_residents.append(stsv.values[my_occupancy.number_of_residentsC.global_index])
+        heating_by_residents.append(stsv.values[my_occupancy.heating_by_residentsC.global_index])
+        electricity_consumption.append(stsv.values[my_occupancy.electricity_outputC.global_index])
+        water_consumption.append(stsv.values[my_occupancy.water_consumptionC.global_index])
 
     year_heating_by_occupancy = sum(heating_by_residents) / (seconds_per_timestep * 1E3)
     assert year_heating_by_occupancy == 1719.355

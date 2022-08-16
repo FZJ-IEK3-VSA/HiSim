@@ -48,19 +48,19 @@ class DistrictHeating( cp.Component ):
         self.build( P_on = P_on, efficiency = efficiency )
         
         # Inputs - Mandatories
-        self.DistrictHeatingControllerStateC : cp.ComponentInput = self.add_input(self.ComponentName,
+        self.DistrictHeatingControllerStateC : cp.ComponentInput = self.add_input(self.component_name,
                                                                                   self.DistrictHeatingControllerState,
                                                                                   lt.LoadTypes.ANY,
                                                                                   lt.Units.ANY,
                                                                                   mandatory = True)
         
         # Outputs 
-        self.thermal_energy_delivered : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.thermal_energy_delivered : cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.ThermalEnergyDelivered,
                                                                              lt.LoadTypes.HEATING,
                                                                              lt.Units.WATT)
         
-        self.PowerDistrictHeatingOutput: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.PowerDistrictHeatingOutput: cp.ComponentOutput = self.add_output(self.component_name,
                                                                               self.PowerDistrictHeating,
                                                                               lt.LoadTypes.HEATING,
                                                                               lt.Units.WATT)
@@ -189,14 +189,14 @@ class DistrictHeatingController( cp.Component ):
                     heating_season_end = heating_season_end )
 
         #inputs
-        self.t_mC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.TemperatureMean,
                                                       lt.LoadTypes.TEMPERATURE,
                                                       lt.Units.CELSIUS,
                                                       True)
         
         #outputs
-        self.DistrictHeatingControllerStateC = self.add_output(self.ComponentName,
+        self.DistrictHeatingControllerStateC = self.add_output(self.component_name,
                                                                self.DistrictHeatingControllerState,
                                                                lt.LoadTypes.ANY,
                                                                lt.Units.ANY)

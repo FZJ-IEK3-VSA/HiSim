@@ -78,12 +78,12 @@ class Occupancy(cp.Component):
         self.build()
 
         # Inputs - Not Mandatories
-        self.ww_mass_input: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ww_mass_input: cp.ComponentInput = self.add_input(self.component_name,
                                                                self.WW_MassInput,
                                                                lt.LoadTypes.WARM_WATER,
                                                                lt.Units.KG_PER_SEC,
                                                                False)
-        self.ww_temperature_input: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ww_temperature_input: cp.ComponentInput = self.add_input(self.component_name,
                                                                       self.WW_TemperatureInput,
                                                                       lt.LoadTypes.WARM_WATER,
                                                                       lt.Units.CELSIUS,
@@ -101,21 +101,21 @@ class Occupancy(cp.Component):
         #self.energy_discharged: cp.ComponentOutput = self.add_output(self.ComponentName, self.EnergyDischarged, lt.LoadTypes.WarmWater, lt.Units.Watt)
         #self.demand_satisfied: cp.ComponentOutput = self.add_output(self.ComponentName, self.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
-        self.number_of_residentsC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.number_of_residentsC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                         self.NumberByResidents,
                                                                         lt.LoadTypes.ANY,
                                                                         lt.Units.ANY)
-        self.heating_by_residentsC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.heating_by_residentsC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                          self.HeatingByResidents,
                                                                          lt.LoadTypes.HEATING,
                                                                          lt.Units.WATT)
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.ElectricityOutput,
                                                                        lt.LoadTypes.ELECTRICITY,
                                                                        lt.Units.WATT,
                                                                        True)
 
-        self.water_consumptionC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.water_consumptionC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.WaterConsumption,
                                                                        lt.LoadTypes.WARM_WATER,
                                                                        lt.Units.LITER)
@@ -133,7 +133,7 @@ class Occupancy(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool):
-        if self.ww_mass_input.SourceOutput is not None:
+        if self.ww_mass_input.source_output is not None:
             # ww demand
             ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
 
@@ -203,7 +203,7 @@ class Occupancy(cp.Component):
             self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
 
     def build( self):
-        file_exists, cache_filepath = utils.get_cache_file(component_key=self.ComponentName, parameter_class=self.occupancyConfig, my_simulation_parameters=self.my_simulation_parameters)
+        file_exists, cache_filepath = utils.get_cache_file(component_key=self.component_name, parameter_class=self.occupancyConfig, my_simulation_parameters=self.my_simulation_parameters)
         if file_exists:
             dataframe = pd.read_csv(cache_filepath, sep=',', decimal='.', encoding = "cp1252")
             self.number_of_residents = dataframe['number_of_residents'].tolist()
@@ -284,6 +284,6 @@ class Occupancy(cp.Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.ComponentName))
+        lines.append("Name: {}".format(self.component_name))
         lines.append("Profile: {}".format(self.profile_name))
         return lines

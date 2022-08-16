@@ -28,7 +28,7 @@ class SmartController(Component):
 
     def connect_similar_inputs(self, components):
         if len(self.inputs) == 0:
-            raise Exception("The component " + self.ComponentName + " has no inputs.")
+            raise Exception("The component " + self.component_name + " has no inputs.")
 
         if isinstance(components, list) is False:
             components = [components]
@@ -40,11 +40,11 @@ class SmartController(Component):
             for index, controller in enumerate(self.WrappedControllers):
                 for input in self.WrappedControllers[index].inputs:
                         for output in component.outputs:
-                            if input.FieldName == output.FieldName:
+                            if input.field_name == output.field_name:
                                 has_not_been_connected = False
-                                self.WrappedControllers[index].connect_input(self.WrappedControllers[index].FieldName, component.ComponentName, output.FieldName)
+                                self.WrappedControllers[index].connect_input(self.WrappedControllers[index].field_name, component.component_name, output.field_name)
             if has_not_been_connected:
-                raise Exception("No similar inputs from {} are compatible with the outputs of {}!".format(self.WrappedControllers[index].ComponentName, component.ComponentName) )
+                raise Exception("No similar inputs from {} are compatible with the outputs of {}!".format(self.WrappedControllers[index].component_name, component.component_name))
 
     def add_io(self):
         for controller in self.WrappedControllers:
@@ -75,5 +75,5 @@ class SmartController(Component):
                     raise Exception("Input has to be a component!")
                 elif hasattr(component, "ElectricityOutput") is False:
                     raise Exception("Input Component does not have Electricity Output!")
-                self.connect_input(self.WrappedControllers[index].ELECTRICITY_INPUT, component.ComponentName, component.ElectricityOutput)
+                self.connect_input(self.WrappedControllers[index].ELECTRICITY_INPUT, component.component_name, component.ElectricityOutput)
 

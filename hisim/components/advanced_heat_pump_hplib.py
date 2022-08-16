@@ -93,62 +93,62 @@ class HeatPumpHplib(Component):
                                              self.t_in, self.t_out_val, self.p_th_set)
 
         # Define component inputs
-        self.on_off_switch: ComponentInput = self.add_input(object_name=self.ComponentName,
+        self.on_off_switch: ComponentInput = self.add_input(object_name=self.component_name,
                                                             field_name=self.OnOffSwitch,
                                                             load_type=LoadTypes.ANY,
                                                             unit=Units.ANY,
                                                             mandatory=True)
 
-        self.t_in_primary: ComponentInput = self.add_input(object_name=self.ComponentName,
+        self.t_in_primary: ComponentInput = self.add_input(object_name=self.component_name,
                                                            field_name=self.TemperatureInputPrimary,
                                                            load_type=LoadTypes.TEMPERATURE,
                                                            unit=Units.CELSIUS,
                                                            mandatory=True)
         
-        self.t_in_secondary: ComponentInput = self.add_input(object_name=self.ComponentName,
+        self.t_in_secondary: ComponentInput = self.add_input(object_name=self.component_name,
                                                              field_name=self.TemperatureInputSecondary,
                                                              load_type=LoadTypes.TEMPERATURE,
                                                              unit=Units.CELSIUS,
                                                              mandatory=True)
         
-        self.t_amb: ComponentInput = self.add_input(object_name=self.ComponentName,
+        self.t_amb: ComponentInput = self.add_input(object_name=self.component_name,
                                                     field_name=self.TemperatureAmbient,
                                                     load_type=LoadTypes.TEMPERATURE,
                                                     unit=Units.CELSIUS,
                                                     mandatory=True)
 
         # Define component outputs
-        self.p_th: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.p_th: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.ThermalOutputPower,
                                                      load_type=LoadTypes.HEATING,
                                                      unit=Units.WATT)
         
-        self.p_el: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.p_el: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.ElectricalInputPower,
                                                      load_type=LoadTypes.ELECTRICITY,
                                                      unit=Units.WATT)
 
-        self.cop: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.cop: ComponentOutput = self.add_output(object_name=self.component_name,
                                                     field_name=self.COP,
                                                     load_type=LoadTypes.ANY,
                                                     unit=Units.ANY)
 
-        self.t_out: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.t_out: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.TemperatureOutput,
                                                       load_type=LoadTypes.HEATING,
                                                       unit=Units.CELSIUS)
 
-        self.m_dot: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.m_dot: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.MassFlowOutput,
                                                       load_type=LoadTypes.VOLUME,
                                                       unit=Units.KG_PER_SEC)
         
-        self.time_on: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.time_on: ComponentOutput = self.add_output(object_name=self.component_name,
                                                         field_name=self.TimeOn,
                                                         load_type=LoadTypes.TIME,
                                                         unit=Units.SECONDS)
         
-        self.time_off: ComponentOutput = self.add_output(object_name=self.ComponentName,
+        self.time_off: ComponentOutput = self.add_output(object_name=self.component_name,
                                                          field_name=self.TimeOff,
                                                          load_type=LoadTypes.TIME,
                                                          unit=Units.SECONDS)

@@ -113,7 +113,7 @@ class L2_Controller( cp.Component ):
         self.build( config )
 
         #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ReferenceTemperature,
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,
@@ -121,7 +121,7 @@ class L2_Controller( cp.Component ):
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
         #Component outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
@@ -202,6 +202,6 @@ class L2_Controller( cp.Component ):
 
     def write_to_report(self):
         lines = []
-        lines.append("Generic Controller L2: " + self.ComponentName )
+        lines.append("Generic Controller L2: " + self.component_name)
         return lines
 

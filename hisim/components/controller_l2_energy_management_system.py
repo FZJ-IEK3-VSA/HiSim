@@ -591,8 +591,8 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                                                                       False)
 
     def sort_source_weights_and_components(self):
-        SourceTags = [elem.SourceTags[0] for elem in self.my_component_inputs]
-        SourceWeights = [elem.SourceWeight for elem in self.my_component_outputs]
+        SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs]
+        SourceWeights = [elem.source_weight for elem in self.my_component_outputs]
         sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
         self.source_weights_sorted = [SourceWeights[i] for i in sortindex]
         self.components_sorted = [SourceTags[i] for i in sortindex]
@@ -628,31 +628,31 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                                       output_type: lt.InandOutputType):
         # to do: add that to much chp-electricty is charged in Battery and doesnt go in to grid
         for index, element in enumerate(my_component_outputs):
-            for tags in element.SourceTags:
+            for tags in element.source_tags:
                 if tags.__class__ == lt.ComponentType and tags in component_type:
-                    if element.SourceWeight == weight_counter:
+                    if element.source_weight == weight_counter:
                         # more electricity than needed
                         if tags == lt.ComponentType.BATTERY:
-                            stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), demand)
+                            stsv.set_output_value(self.__getattribute__(element.source_component_class), demand)
                             break
                         elif tags == lt.ComponentType.FUEL_CELL:
                             if demand < 0:
-                                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), -demand)
+                                stsv.set_output_value(self.__getattribute__(element.source_component_class), -demand)
                             else:
-                                stsv.set_output_value(self.__getattribute__(element.SourceComponentClass), 0)
+                                stsv.set_output_value(self.__getattribute__(element.source_component_class), 0)
                             break
             else:
                 continue
             break
         for index, element in enumerate(my_component_inputs):
-            for tags in element.SourceTags:
+            for tags in element.source_tags:
                 if tags.__class__ == lt.ComponentType and tags in component_type:
-                    if element.SourceWeight == weight_counter:
+                    if element.source_weight == weight_counter:
                         if tags == lt.ComponentType.BATTERY:
-                            demand = demand - stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+                            demand = demand - stsv.get_input_value(self.__getattribute__(element.source_component_class))
                             break
                         elif tags == lt.ComponentType.FUEL_CELL:
-                            demand = demand + stsv.get_input_value(self.__getattribute__(element.SourceComponentClass))
+                            demand = demand + stsv.get_input_value(self.__getattribute__(element.source_component_class))
                             break
             else:
                 continue

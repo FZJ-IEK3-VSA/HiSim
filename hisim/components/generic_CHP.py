@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Any
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.configuration import PhysicsConfig
@@ -13,7 +13,6 @@ import pandas as pd
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
 import math
 
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
@@ -57,7 +56,7 @@ class CHPState:
     def __init__( self, state : int = 0 ) -> None:
         self.state = state
         
-    def clone( self ) -> CHPState:
+    def clone( self ) -> Any:
         return CHPState( state = self.state )
             
 class GCHP( cp.Component ):
@@ -184,7 +183,7 @@ class L1_ControllerState:
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
         
-    def clone( self ) -> L1_ControllerState:
+    def clone( self ) -> Any:
         return L1_ControllerState( timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action )
     
     def is_first_iteration( self, timestep: int ) -> bool:

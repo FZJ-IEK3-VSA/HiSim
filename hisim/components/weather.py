@@ -392,7 +392,7 @@ class Weather(Component):
     def calc_sun_position2(self, hoy):
         return self.altitude_list[hoy], self.azimuth_list[hoy]
 
-def readTRY(location="Seville", year=2015):
+def readTRY(location="Aachen", year=2015):
     """
     Reads a test reference year file and gets the GHI, DHI and DNI from it.
 

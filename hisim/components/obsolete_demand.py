@@ -1,3 +1,4 @@
+# type: ignore
 # Owned
 from hisim.component import Component, ComponentOutput, ComponentInput, SingleTimeStepValues
 from hisim import loadtypes as lt

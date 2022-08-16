@@ -8,7 +8,7 @@ from inspect import isclass
 from pkgutil import iter_modules
 from pathlib import Path as gg
 from importlib import import_module
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple, Union, Optional
 import logging
 
 from hisim import dynamic_component
@@ -16,7 +16,10 @@ import hisim.component as component
 import hisim.simulator as sim
 import hisim.hisim_main
 import hisim.log
+from hisim.simulator import Simulator
 from hisim.utils import HISIMPATH
+from hisim.simulationparameters import SimulationParameters
+
 import hisim.simulator
 from os.path import dirname, basename, isfile, join
 import glob
@@ -53,16 +56,17 @@ for (_idx1, module_name, _idx2) in iter_modules([package_dir]):
 class ComponentsConnection:
     def __init__(
         self,
-        first_component,
-        second_component,
-        method=None,
-        first_component_output=None,
-        second_component_input=None,
-    ):
+        first_component: str,
+        second_component: str,
+        method: str=None,
+        first_component_output: Optional[str]=None,
+        second_component_input: Optional[str]=None,
+    ) -> None:
         self.first_component = first_component
         self.second_component = second_component
         self.first_component_output = first_component_output
         self.second_component_input = second_component_input
+        self.configuration: Dict[Any, Any]
         if method == "Automatic" or method is None:
             self.method = "Automatic"
             self.run_automatic()
@@ -70,33 +74,33 @@ class ComponentsConnection:
             self.method = method
             self.run_manual()
 
-    def run_automatic(self):
+    def run_automatic(self) -> None:
         self.configuration = {
             "First Component": self.first_component,
             "Second Component": self.second_component,
             "Method": self.method,
         }
 
-    def run_manual(self):
+    def run_manual(self)-> None:
         self.configuration = {
             "First Component": self.first_component,
             "Second Component": self.second_component,
             "Method": self.method,
-            "First Component Output": self.first_component_output,
-            "Second Component Input": self.second_component_input,
+            "First Component Output": self.first_component_output,  # noqa
+            "Second Component Input": self.second_component_input,  # noqa
         }
 
 
 class ComponentsGrouping:
     def __init__(
         self,
-        component_name,
-        operation,
-        first_component,
-        second_component,
-        first_component_output,
-        second_component_output,
-    ):
+        component_name: str,
+        operation: str,
+        first_component: str,
+        second_component: str,
+        first_component_output: str,
+        second_component_output: str,
+    ) -> None:
         self.component_name = component_name
         self.operation = operation
         self.first_component = first_component
@@ -105,7 +109,7 @@ class ComponentsGrouping:
         self.second_component_output = second_component_output
         self.run()
 
-    def run(self):
+    def run(self)-> None:
         self.configuration = {
             "Component Name": self.component_name,
             "Operation": self.operation,
@@ -156,18 +160,18 @@ class ConfigurationGenerator:
         provided a dictionary with the range of the parameters.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.load_component_modules()
-        self._simulation_parameters = {}
-        self._components = {}
-        self._groupings = {}
-        self._connections = {}
-        self._parameters_range_studies = {}
+        self._simulation_parameters: Dict[str, Any] = {}
+        self._components: Dict[Any, Any] = {}
+        self._groupings: Dict[Any, Any]  = {}
+        self._connections: Dict[Any, Any]  = {}
+        self._parameters_range_studies: Dict[Any, Any]  = {}
 
-    def set_name(self, name_to_set):
+    def set_name(self, name_to_set: Any) -> Any:
         return name_to_set.__module__ + "." + name_to_set.__name__
 
-    def load_component_modules(self):
+    def load_component_modules(self) -> None:
         """
         Load dynamically all classes implemented under the
         'components' directory. With that said, the user
@@ -177,7 +181,7 @@ class ConfigurationGenerator:
         """
         self.preloaded_components = {}
 
-        def get_default_parameters_from_constructor(class_component):
+        def get_default_parameters_from_constructor(class_component: Any) -> Dict[Any, Any]:
             """
             Get the default arguments of either a function or
             a class
@@ -216,7 +220,7 @@ class ConfigurationGenerator:
             # Save every component in the dictionary attribute
             self.preloaded_components[component_class] = default_args
 
-    def add_simulation_parameters(self, my_simulation_parameters=None):
+    def add_simulation_parameters(self, my_simulation_parameters: Union[None,Dict[str, Any]]= {}) -> None:
         """
         Add the simulation parameters to the configuration JSON file list.
 
@@ -231,7 +235,7 @@ class ConfigurationGenerator:
             self._simulation_parameters = my_simulation_parameters
             # logging.info("Simulation parameters have been added to the configuration JSON file.")
 
-    def add_component(self, user_components_name):
+    def add_component(self, user_components_name: Any) -> None:
         """
         Add the component to the configuration JSON file list. It can read three types of arguments:
 
@@ -285,7 +289,7 @@ class ConfigurationGenerator:
             # self._components[user_components_name] = self.preloaded_components[user_components_name]
             # logging.info("Component {} has been added to configuration JSON file.".format(user_components_name))
 
-    def add_grouping(self, grouping_components: ComponentsGrouping):
+    def add_grouping(self, grouping_components: ComponentsGrouping) -> None:
         """
         Add component grouping created out of the combination of previously created components. The Grouping component
         yields either a sum, subtraction or another operation combining multiple outputs of the previously
@@ -311,7 +315,7 @@ class ConfigurationGenerator:
         ] = grouping_components.configuration
         # logging.info("Component Grouping {} has been created.".format(grouping_components.component_name))
 
-    def add_connection(self, connection_components):
+    def add_connection(self, connection_components: Any)  -> None:
         """
         Add connections among the previously assigned components. Connections can be performed manually or
         automatically.
@@ -335,23 +339,23 @@ class ConfigurationGenerator:
         self._connections[connection_name] = connection_components.configuration
         # logging.info("{} and {} have been connected ")
 
-    def add_paramater_range(self, parameter_range):
+    def add_paramater_range(self, parameter_range: Any)  -> None:
         self._parameters_range_studies.update(parameter_range)
 
-    def reset(self):
+    def reset(self) -> None:
         self._simulation_parameters = {}
         self._components = {}
         self._groupings = {}
         self._connections = {}
         self._parameters_range_studies = {}
 
-    def print_components(self):
+    def print_components(self)  -> None:
         print(json.dumps(self._components, sort_keys=True, indent=4))
 
-    def print_component(self, name):
+    def print_component(self, name: str) -> None:
         print(json.dumps(self._components[name], sort_keys=True, indent=4))
 
-    def dump(self):
+    def dump(self) -> None:
 
         self.data = {
             "SimulationParameters": self._simulation_parameters,
@@ -362,11 +366,11 @@ class ConfigurationGenerator:
         with open("" + HISIMPATH["cfg"], "w") as f:
             json.dump(self.data, f, indent=4)
 
-    def run(self):
+    def run(self) -> None:
         pass
         # hisim.main("cfg_automator", "basic_household_implicit")
 
-    def run_parameter_studies(self):
+    def run_parameter_studies(self) -> None:
         for (
             component_class,
             parameter_name_and_range,
@@ -384,12 +388,12 @@ class ConfigurationGenerator:
                 self.dump()
                 self.run()
 
-    def run_cross_parameter_studies(self):
+    def run_cross_parameter_studies(self) -> None:
         pass
 
 
 class SetupFunction:
-    def __init__(self):
+    def __init__(self) -> None:
         file_path = str(HISIMPATH["cfg"])
         if os.path.isfile(file_path):
             with open(file_path) as file:
@@ -398,16 +402,16 @@ class SetupFunction:
         else:
             raise RuntimeError(f"File does not exist: {file_path}")
         self.cfg_raw = copy.deepcopy(self.cfg)
-        self._components = []
-        self._connections = []
-        self._groupings = []
+        self._components:List[Any] = []
+        self._connections: List[ComponentsConnection] = []
+        self._groupings:List[ComponentsGrouping] = []
         # self.electricity_grids : List[ElectricityGrid] = []
         # self.electricity_grid_consumption : List[ElectricityGrid] = []
-        self.component_class_children = []
-        self.component_file_children = []
-        self.component_module_list = []
+        self.component_class_children:List[str] = []
+        self.component_file_children:List[str] = []
+        self.component_module_list:List[str] = []
 
-    def build(self, my_sim):
+    def build(self, my_sim: Simulator) -> None:
         self.add_simulation_parameters(my_sim)
         (
             self.component_class_children,
@@ -426,12 +430,13 @@ class SetupFunction:
             if comp in self.component_class_children:
                 self.add_component(comp, my_sim, number_of_comp)
         for grouping_key, grouping_value in self.cfg["Groupings"].items():
-            self.add_grouping(grouping_value, my_sim)
+            self.add_grouping(grouping_value)
+
         for connection_key, connection_value in self.cfg["Connections"].items():
             self.add_connection(connection_value)
         self.add_configuration(my_sim)
 
-    def add_simulation_parameters(self, my_sim):
+    def add_simulation_parameters(self, my_sim: Simulator) -> Any:
         # Timeline configuration
         method = self.cfg["SimulationParameters"]["method"]
         self.cfg["SimulationParameters"].pop("method", None)
@@ -448,16 +453,16 @@ class SetupFunction:
             )
         my_sim.set_simulation_parameters(self._simulation_parameters)
 
-    def find_all_component_class_children(self):
+    def find_all_component_class_children(self) -> Tuple[List[Any], List[str], List[str]]:
         classname = component.Component
-        component_file_children = []
-        component_module = []
+        component_file_children: List[str] = []
+        component_module: List[str] = []
         component_class_children = [
             cls.__module__ + "." + cls.__name__
             for cls in classname.__subclasses__()
             if cls != dynamic_component.DynamicComponent
         ]
-        component_class_children_list = [
+        component_class_children_list: List[type[component.Component]] = [
             cls
             for cls in classname.__subclasses__()
             if cls != dynamic_component.DynamicComponent
@@ -471,12 +476,13 @@ class SetupFunction:
         # return component_class_children, component_file_children
         return component_class_children, component_file_children, component_module
 
-    def get_path(self, class_with_path):
-        return class_with_path.__module__ + "." + class_with_path.__name__
+    def get_path(self, class_with_path: Any) -> str:
+        mypath: str = class_with_path.__module__ + "." + class_with_path.__name__
+        return mypath
 
     def add_component(
-        self, full_class_path, my_sim, number_of_comp, electricity_output=None
-    ):
+        self, full_class_path: str, my_sim: Simulator, number_of_comp: str, electricity_output: Any=None
+    ) -> None:
         # Save parameters of class
         # Retrieve class signature
         """
@@ -491,7 +497,7 @@ class SetupFunction:
             stripped_list_of_all_components.append(stripped)
         """
 
-        clsmembers = None
+        clsmembers: List[Any] = []
         full_instance_path = full_class_path + number_of_comp
         for component_to_check in self.component_class_children:
             try:
@@ -597,7 +603,7 @@ class SetupFunction:
             pass
             # ToDo: Implement electricity sum here.
 
-    def add_grouping(self, grouping, my_sim):
+    def add_grouping(self, grouping: Dict[Any, Any]) -> None:
         for component in self._components:
             if type(component).__name__ == grouping["Second Component"]:
                 second_component = component
@@ -615,7 +621,7 @@ class SetupFunction:
 
         """
 
-    def add_connection(self, connection):
+    def add_connection(self, connection: Dict[Any, Any]) -> None:
 
         for component in self._components:
             component_name = component.component_name
@@ -648,7 +654,7 @@ class SetupFunction:
                 print(e)
                 print("Incorrect Connection")
 
-    def add_configuration(self, my_sim: sim.Simulator):
+    def add_configuration(self, my_sim: sim.Simulator) -> None:
         # my_sim.add_configuration(self.cfg_raw)
         pass
 
@@ -681,6 +687,6 @@ class SetupFunction:
     """
 
 
-def basic_household_implicit(my_sim: sim.Simulator):
+def basic_household_implicit(my_sim: sim.Simulator) -> None:
     my_setup_function = SetupFunction()
     my_setup_function.build(my_sim)

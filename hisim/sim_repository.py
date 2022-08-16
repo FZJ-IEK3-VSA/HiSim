@@ -6,12 +6,12 @@ class SimRepository:
 
     """ Class for exchanging information across all components. """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """ Initializes the SimRepository. """
         self.my_dict: dict[str, Any] = {}
         self.my_dynamic_dict: dict[lt.ComponentType, dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
 
-    def set_entry(self, key: str, entry: Any):
+    def set_entry(self, key: str, entry: Any) -> None:
         """ Sets an entry in the SimRepository. """
         self.my_dict[key] = entry
 
@@ -25,11 +25,11 @@ class SimRepository:
             return True
         return False
 
-    def delete_entry(self, key: str):
+    def delete_entry(self, key: str) -> None:
         """ Deletes an existing entry. """
         self.my_dict.pop(key)
 
-    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry):
+    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry) -> None:
         """ Sets a dynamic entry. """
         self.my_dynamic_dict[component_type][source_weight] = entry
 

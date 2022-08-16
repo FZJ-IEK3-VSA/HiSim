@@ -17,38 +17,38 @@ class LogPrio(IntEnum):
     TRACE = 6
 
 
-def error(message: str):
+def error(message: str) -> None:
     """ Log an error message. """
     log(LogPrio.ERROR, message)
 
 
-def warning(message: str):
+def warning(message: str) -> None:
     """ Log a warning message. """
     log(LogPrio.WARNING, message)
 
 
-def information(message: str):
+def information(message: str) -> None:
     """ Log a information message. """
     log(LogPrio.INFORMATION, message)
 
 
-def trace(message: str):
+def trace(message: str) -> None:
     """ Log a trace message. """
     log(LogPrio.TRACE, message)
 
 
-def debug(message: str):
+def debug(message: str) -> None:
     """ Log a debug message. """
     log(LogPrio.DEBUG, message)
 
 
-def profile(message: str):
+def profile(message: str) -> None:
     """ Log a profile message. """
     log(LogPrio.PROFILE, message)
     log_profile_file(message)
 
 
-def log(prio: int, message: str):
+def log(prio: int, message: str) -> None:
     """ Write and print a log message. """
     # if(prio < LogPrio.Debug):
     prio_string: str
@@ -72,7 +72,7 @@ def log(prio: int, message: str):
         filestream.write(message + "\n")
 
 
-def log_profile_file(message: str):
+def log_profile_file(message: str) -> None:
     """ Write log message to logfile. """
     with open('profiling_timeuse.log', 'a', encoding="utf-8") as filestream:
         filestream.write(message + "\n")

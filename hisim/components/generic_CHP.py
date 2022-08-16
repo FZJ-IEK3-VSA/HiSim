@@ -1,3 +1,4 @@
+from typing import List
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components.configuration import PhysicsConfig
@@ -53,10 +54,10 @@ class CHPState:
     This data class saves the state of the CHP.
     """
 
-    def __init__( self, state : int = 0 ):
+    def __init__( self, state : int = 0 ) -> None:
         self.state = state
         
-    def clone( self ):
+    def clone( self ) -> CHPState:
         return CHPState( state = self.state )
             
 class GCHP( cp.Component ):
@@ -71,14 +72,14 @@ class GCHP( cp.Component ):
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("CHP operation with constant electical and thermal power: " + self.component_name)
         return lines
 
 
     
-    def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ):
+    def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ) -> None:
         super().__init__( name = config.name + str( config.source_weight ), my_simulation_parameters=my_simulation_parameters )
         self.build( config )
 
@@ -105,7 +106,7 @@ class GCHP( cp.Component ):
         self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
 
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> GCHPConfig:
         config=GCHPConfig( name = 'CHP',
                           source_weight =  1,
                           p_el = 2000,
@@ -113,7 +114,7 @@ class GCHP( cp.Component ):
                           p_fuel = 6000 ) 
         return config
     
-    def build( self, config ):
+    def build( self, config: GCHPConfig ) -> None:
         self.state = CHPState( )
         self.previous_state = CHPState( )
         self.source_weight = config.source_weight
@@ -121,16 +122,16 @@ class GCHP( cp.Component ):
         self.p_el = config.p_el
         self.p_fuel = config.p_fuel * 1e-8 / 1.41 #converted to kg / s
     
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
          pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
 
         # Inputs
         self.state.state = stsv.get_input_value( self.l1_DeviceSignalC )
@@ -142,9 +143,9 @@ class GCHP( cp.Component ):
         #heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
         stsv.set_output_value( self.FuelDeliveredC, self.state.state * self.p_fuel )
         
-    def get_l1_controller_default_connections( self ):
+    def get_l1_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic CHP" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         controller_classname = L1_Controller.get_classname( )
         connections.append( cp.ComponentConnection( GCHP.l1_DeviceSignal, controller_classname, L1_Controller.l1_DeviceSignal ) )
         return connections
@@ -166,7 +167,7 @@ class L1CHPConfig:
                   source_weight : int,
                   min_operation_time : int,
                   min_idle_time : int,
-                  min_h2_soc : float ):
+                  min_h2_soc : float ) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
@@ -178,26 +179,26 @@ class L1_ControllerState:
     This data class saves the state of the controller.
     """
 
-    def __init__( self, timestep_actual : int = -1, state : int = 0, timestep_of_last_action : int = 0 ):
+    def __init__( self, timestep_actual : int = -1, state : int = 0, timestep_of_last_action : int = 0 ) -> None:
         self.timestep_actual = timestep_actual
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
         
-    def clone( self ):
+    def clone( self ) -> L1_ControllerState:
         return L1_ControllerState( timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action )
     
-    def is_first_iteration( self, timestep ):
+    def is_first_iteration( self, timestep: int ) -> bool:
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
             return True
         else:
             return False
         
-    def activation( self, timestep ):
+    def activation( self, timestep: int ) -> None:
         self.state = 1
         self.timestep_of_last_action = timestep
         
-    def deactivation( self, timestep ):
+    def deactivation( self, timestep: int ) -> None:
         self.state = 0
         self.timestep_of_last_action = timestep 
 
@@ -265,22 +266,21 @@ class L1_Controller( cp.Component ):
                                                                     lt.LoadTypes.ON_OFF,
                                                                     lt.Units.BINARY)
         
-    def get_l2_controller_default_connections( self ):
+    def get_l2_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l2 default connections in l1")
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         controller_classname = controller_l2_generic_chp.L2_Controller.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_chp.L2_Controller.l2_DeviceSignal ) )
         return connections
     
-    def get_hydrogen_storage_default_connections( self ):
+    def get_hydrogen_storage_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting generic H2 storage default connections in L1 of generic CHP" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         h2storage_classname = generic_hydrogen_storage.HydrogenStorage.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.HydrogenSOC, h2storage_classname, generic_hydrogen_storage.HydrogenStorage.HydrogenSOC ) )
         return connections
 
-    def build( self, config ):
-        
+    def build( self, config: L1CHPConfig ) -> None:
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
         #print( config )
@@ -292,16 +292,16 @@ class L1_Controller( cp.Component ):
         self.state = L1_ControllerState( )
         self.previous_state = L1_ControllerState( )
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -330,7 +330,7 @@ class L1_Controller( cp.Component ):
         stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )
         
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> L1CHPConfig:
         config = L1CHPConfig( name = 'L1CHP',
                               source_weight =  1,
                               min_operation_time = 14400,
@@ -338,13 +338,13 @@ class L1_Controller( cp.Component ):
                               min_h2_soc = 5 )
         return config
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m: float, state: L1_ControllerState) -> None:
         log.information("==========================================")
-        log.information("T m: {}".format(t_m))
-        log.information("State: {}".format(state))
+        log.information(f"T m: {t_m}")
+        log.information(f"State: {state}")
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("Generic CHP L1 Controller: " + self.component_name)
         return lines
 

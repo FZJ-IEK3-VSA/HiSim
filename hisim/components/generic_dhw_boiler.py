@@ -7,7 +7,7 @@ from math import pi
 from typing import Union, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+from typing import Any
 # Owned
 import hisim.component as cp
 from hisim import loadtypes as lt
@@ -88,7 +88,7 @@ class BoilerState:
         self.temperature_in_K = temperature_in_K
         self.volume_in_l = volume_in_l
 
-    def clone(self):
+    def clone(self) -> Any:
         return BoilerState( self.timestep, self.volume_in_l, self.temperature_in_K)
 
     def energy_from_temperature( self ) -> float:
@@ -98,7 +98,7 @@ class BoilerState:
         return self.temperature_in_K * self.volume_in_l * 0.977 * 4.182 #energy given in kJ
 
 
-    def set_temperature_from_energy( self, energy_in_kJ):
+    def set_temperature_from_energy( self, energy_in_kJ: float) -> None:
         "converts energy contained in storage (kJ) into temperature (K)"
         #0.977 is the density of water in kg/l
         #4.182 is the specific heat of water in kJ / ( K * kg )
@@ -143,7 +143,7 @@ class Boiler( cp.Component ):
     ElectricityOutput = "ElectricityOutput"
     HydrogenOutput = "HydrogenOutput"
     
-    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ):
+    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ) -> None:
 
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         
@@ -190,23 +190,23 @@ class Boiler( cp.Component ):
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
         
-    def get_occupancy_default_connections( self ):
+    def get_occupancy_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting occupancy default connections in dhw boiler" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         occupancy_classname = Occupancy.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, Occupancy.WaterConsumption ) )
         return connections
     
-    def get_l1_controller_default_connections( self ):
+    def get_l1_controller_default_connections( self )-> List[cp.ComponentConnection]:
         log.information( "setting l1 default connections in dhw boiler"  )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
         connections.append( cp.ComponentConnection( Boiler.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
     
     @staticmethod
-    def get_default_config():
+    def get_default_config()-> BoilerConfig:
         config = BoilerConfig( name = 'Boiler',
                                source_weight = 1, 
                                volume = 200,
@@ -219,7 +219,7 @@ class Boiler( cp.Component ):
                                fuel  = 'electricity' )
         return config
     
-    def build( self, config : BoilerConfig ):
+    def build( self, config : BoilerConfig )-> None:
         
         self.source_weight = config.source_weight
         self.power = config.power
@@ -238,23 +238,23 @@ class Boiler( cp.Component ):
             
         self.write_to_report( )
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines:List[str] = []
         lines.append("Name: {}".format("electric Boiler"))
         lines.append("Power: {:4.0f} kW".format( ( self.power ) * 1E-3 ) )
         lines.append( "Volume: {:4.0f} l".format( self.volume ) )
         return lines
 
-    def i_save_state( self ):
+    def i_save_state( self ) -> None:
         self.previous_state = self.state.clone()
 
-    def i_restore_state( self ):
+    def i_restore_state( self )  -> None:
         self.state = self.previous_state.clone()
 
-    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
+    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues )  -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
         
         # Retrieves inputs
         WW_consumption = stsv.get_input_value( self.WaterConsumptionC )

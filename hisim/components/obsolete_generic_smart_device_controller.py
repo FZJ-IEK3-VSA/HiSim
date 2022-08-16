@@ -1,3 +1,4 @@
+# type: ignore
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters

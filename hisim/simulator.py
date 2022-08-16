@@ -55,7 +55,7 @@ class ComponentWrapper:
             log.information("Registered output " + col.full_name)
             self.component_outputs.append(col)
 
-    def register_component_inputs(self, global_column_dict: Dict[str, Any]):
+    def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
         """ Gets the inputs for the current component from the global column dict and puts them into component_inputs. """
         log.information("Registering component inputs for " + self.my_component.component_name)
         # look up input columns and cache, so we only have the correct columns saved
@@ -64,7 +64,7 @@ class ComponentWrapper:
             global_column_entry = global_column_dict[col.fullname]
             self.component_inputs.append(global_column_entry)
 
-    def save_state(self):
+    def save_state(self) -> None:
         """ Saves the state.
 
         This gets called at the beginning of a timestep and wraps the i_save_state
@@ -72,7 +72,7 @@ class ComponentWrapper:
         """
         self.my_component.i_save_state()
 
-    def doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """  Wrapper for i_doublecheck.
 
         Doublecheck is completely optional call that can be used while debugging to
@@ -80,18 +80,18 @@ class ComponentWrapper:
         """
         self.my_component.i_doublecheck(timestep, stsv)
 
-    def restore_state(self):
+    def restore_state(self) -> None:
         """ Wrapper for i_restore_state.
 
         Gets called at the beginning of every iteration to return to the state at the beginning of the iteration.
         """
         self.my_component.i_restore_state()
 
-    def calculate_component(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def calculate_component(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Wrapper for the core simulation function in each component. """
         self.my_component.i_simulate(timestep, stsv, force_convergence)
 
-    def connect_inputs(self, all_outputs):
+    def connect_inputs(self, all_outputs: List[cp.ComponentOutput] ) -> None:
         """ Connects cp.ComponentOutputs to ComponentInputs of WrapperComponent. """
         # Returns a List of ComponentInputs
         self.my_component.get_input_definitions()
@@ -142,7 +142,7 @@ class Simulator:
     """ Core class of HiSim: Runs the main loop. """
 
     @utils.measure_execution_time
-    def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters):
+    def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters) -> None:
         """ Initializes the simulator class and creates the result directory. """
         if setup_function is None:
             raise Exception("No setup function was set")
@@ -165,13 +165,13 @@ class Simulator:
         # Creates and write result report
         self.report = pp.report.Report(dirpath=self.dirpath)
 
-    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters):
+    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
-    def add_component(self, component: cp.Component, is_cachable: bool = False):
+    def add_component(self, component: cp.Component, is_cachable: bool = False) -> None:
         """ Adds component to simulator and wraps it up the output in the register. """
         if self._simulation_parameters is None:
             raise Exception("Simulation Parameters were not initialized")
@@ -184,7 +184,7 @@ class Simulator:
         self.wrapped_components.append(wrap)
 
     @utils.measure_execution_time
-    def connect_all_components(self):
+    def connect_all_components(self) -> None:
         """ Connects the inputs from every component to the corresponding outputs. """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
@@ -252,7 +252,7 @@ class Simulator:
         return (stsv, iterative_tries)
 
     @utils.measure_execution_time
-    def run_all_timesteps(self):
+    def run_all_timesteps(self) -> None:
         """ Performs all the timesteps of the simulation and saves the results in the attribute results. """
         # Error Tests
         # Test if all parameters were initialized

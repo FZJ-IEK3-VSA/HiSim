@@ -6,6 +6,7 @@ Created on Tue Jul  5 12:39:29 2022
 """
 
 # Owned
+from typing import List, Any
 from hisim.simulationparameters import SimulationParameters
 
 from dataclasses import dataclass
@@ -42,7 +43,7 @@ class ElectrolyzerConfig:
                     min_power : float,
                     max_power : float,
                     min_hydrogen_production_rate_hour : float,
-                    max_hydrogen_production_rate_hour : float ):
+                    max_hydrogen_production_rate_hour : float ) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_power = min_power
@@ -59,7 +60,7 @@ class ElectrolyzerState:
         self.hydrogen = hydrogen
         self.electricity = electricity
         
-    def clone( self ):
+    def clone( self ) -> Any:
         return ElectrolyzerState( hydrogen = self.hydrogen, electricity = self.electricity )
         
     
@@ -88,7 +89,7 @@ class Electrolyzer( cp.Component ):
         super().__init__( name = config.name + str( config.source_weight ), 
                               my_simulation_parameters = my_simulation_parameters )
         self.build( config )
-        
+        self.min_hydrogen_production_rate: float
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(self.component_name,
                                                                     Electrolyzer.ElectricityTarget,
                                                                     lt.LoadTypes.ELECTRICITY,
@@ -105,7 +106,7 @@ class Electrolyzer( cp.Component ):
         self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
         
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> ElectrolyzerConfig:
         config = ElectrolyzerConfig( name = "Electrolyzer",
                                      source_weight = 1,
                                      min_power = 1200,  # [W]
@@ -115,18 +116,18 @@ class Electrolyzer( cp.Component ):
                                      )
         return config
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("Generic Electrolyzer: " + self.component_name)
         return lines
-    def get_l1_controller_default_connections( self ):
+    def get_l1_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic electrolyzer" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         controller_classname = L1_Controller.get_classname( )
         connections.append( cp.ComponentConnection( Electrolyzer.ElectricityTarget, controller_classname, L1_Controller.ElectricityTarget ) )
         return connections
     
-    def build( self, config ):
+    def build( self, config: ElectrolyzerConfig ) -> None:
         self.state = ElectrolyzerState( )
         self.previous_state = ElectrolyzerState( )
         
@@ -136,16 +137,16 @@ class Electrolyzer( cp.Component ):
         self.min_hydrogen_production_rate = config.min_hydrogen_production_rate_hour / 3600
         self.max_hydrogen_production_rate = config.max_hydrogen_production_rate_hour / 3600
         
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
         
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
     
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool )  -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -162,11 +163,13 @@ class Electrolyzer( cp.Component ):
 
         #interpolation between points
         # Nl / s
+        hydrogen_output_liter: float
         if electricity_target == 0:
             hydrogen_output_liter = 0
         else:
-            hydrogen_output_liter = self.min_hydrogen_production_rate + ( ( self.max_hydrogen_production_rate - self.min_hydrogen_production_rate ) * \
-                                                                          ( self.state.electricity - self.min_power ) / ( self.max_power - self.min_power ) )
+            hydrogen_output_liter = self.min_hydrogen_production_rate \
+                                    + ( ( self.max_hydrogen_production_rate - self.min_hydrogen_production_rate )
+                                        *  ( self.state.electricity - self.min_power ) / ( self.max_power - self.min_power ) )
         self.state.hydrogen = ( hydrogen_output_liter / 1000 ) * PhysicsConfig.hydrogen_density
         stsv.set_output_value( self.HydrogenOutputC, self.state.hydrogen  )
         stsv.set_output_value( self.ElectricityOutputC, self.state.electricity )
@@ -190,7 +193,7 @@ class L1ElectrolyzerConfig:
                   min_operation_time : int,
                   min_idle_time : int,
                   P_min_electrolyzer : float,
-                  SOC_max_H2 : float ):
+                  SOC_max_H2 : float )  -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
@@ -203,26 +206,26 @@ class L1_ControllerState:
     This data class saves the state of the controller.
     """
 
-    def __init__( self, timestep_actual : int = -1, state : int = 0, timestep_of_last_action : int = 0 ):
+    def __init__( self, timestep_actual : int = -1, state : int = 0, timestep_of_last_action : int = 0 ) -> None:
         self.timestep_actual = timestep_actual
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
         
-    def clone( self ):
+    def clone( self )  -> Any:
         return L1_ControllerState( timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action )
     
-    def is_first_iteration( self, timestep ):
+    def is_first_iteration( self, timestep: int ) -> bool:
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
             return True
         else:
             return False
         
-    def activation( self, timestep ):
+    def activation( self, timestep: int ) -> None:
         self.state = 1
         self.timestep_of_last_action = timestep
         
-    def deactivation( self, timestep ):
+    def deactivation( self, timestep: int ) -> None:
         self.state = 0
         self.timestep_of_last_action = timestep 
 
@@ -254,7 +257,7 @@ class L1_Controller( cp.Component ):
     @utils.measure_execution_time
     def __init__( self, 
                   my_simulation_parameters : SimulationParameters,
-                  config : L1ElectrolyzerConfig ):
+                  config : L1ElectrolyzerConfig ) -> None:
         
         super().__init__( name = config.name + str( config.source_weight ), 
                           my_simulation_parameters = my_simulation_parameters )
@@ -280,14 +283,14 @@ class L1_Controller( cp.Component ):
         
         self.add_default_connections( generic_hydrogen_storage.HydrogenStorage, self.get_hydrogenstorage_default_connections( ) )
         
-    def get_hydrogenstorage_default_connections( self ):
+    def get_hydrogenstorage_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting generic H2 storage default connections in L1 of generic electrolyzer" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         h2storage_classname = generic_hydrogen_storage.HydrogenStorage.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.HydrogenSOC, h2storage_classname, generic_hydrogen_storage.HydrogenStorage.HydrogenSOC ) )
         return connections
 
-    def build( self, config ):
+    def build( self, config: L1ElectrolyzerConfig ) -> None:
         
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
@@ -300,16 +303,16 @@ class L1_Controller( cp.Component ):
         self.state = L1_ControllerState( )
         self.previous_state = L1_ControllerState( )
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
         
         l2_electricity_target = stsv.get_input_value( self.l2_ElectricityTargetC )
         H2_SOC = stsv.get_input_value( self.HydrogenSOCC )
@@ -354,7 +357,7 @@ class L1_Controller( cp.Component ):
         print( l2_electricity_target, self.Pmin, self.state.state )
         
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> L1ElectrolyzerConfig :
         config = L1ElectrolyzerConfig( name = 'L1Electrolyzer',
                                        source_weight =  1,
                                        min_operation_time = 14400,
@@ -363,12 +366,12 @@ class L1_Controller( cp.Component ):
                                        SOC_max_H2 = 96 )
         return config
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m: float, state: L1_ControllerState) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("L1 Controller Electrolyzer: " + self.component_name)
         return lines

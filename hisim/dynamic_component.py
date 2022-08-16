@@ -63,7 +63,7 @@ class DynamicComponent(Component):
         self.inputs.append(myinput)
         myinput.src_object_name = source_component_class.component_name
         myinput.src_field_name = str(source_component_output)
-        self.__setattr__(label, myinput)
+        setattr(self, label, myinput)
 
         # Connect Input and define it as DynamicConnectionInput
         for output_var in source_component_class.outputs:
@@ -108,7 +108,7 @@ class DynamicComponent(Component):
                     self.inputs.append(myinput)
                     myinput.src_object_name = component.component_name
                     myinput.src_field_name = str(source_component_output)
-                    self.__setattr__(label, myinput)
+                    setattr(self, label, myinput)
                     num_inputs += 1
                     print("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
                     self.connect_input(label,
@@ -130,7 +130,7 @@ class DynamicComponent(Component):
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
             if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
-                inputvalue = stsv.get_input_value(self.__getattribute__(element.source_component_class))
+                inputvalue = stsv.get_input_value(getattr(self, element.source_component_class))
                 break
         return inputvalue
 
@@ -142,7 +142,7 @@ class DynamicComponent(Component):
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
             if all(tag in element.source_tags for tag in tags):
-                inputvalues.append(stsv.get_input_value(self.__getattribute__(element.source_component_class)))
+                inputvalues.append(stsv.get_input_value(getattr(self, element.source_component_class)))
             else:
                 continue
         return inputvalues
@@ -158,7 +158,7 @@ class DynamicComponent(Component):
             if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
                 print(element.source_tags)
                 print(element.source_component_class)
-                stsv.set_output_value(self.__getattribute__(element.source_component_class), output_value)
+                stsv.set_output_value(getattribute(self, element.source_component_class), output_value)
             else:
                 continue
 
@@ -177,7 +177,7 @@ class DynamicComponent(Component):
         myoutput = ComponentOutput(self.component_name, source_output_name + label, source_load_type, source_unit,
                                    True)
         self.outputs.append(myoutput)
-        self.__setattr__(label, myoutput)
+        setattr(self, label, myoutput)
 
         # Define Output as DynamicConnectionInput
         self.my_component_outputs.append(DynamicConnectionOutput(source_component_class=label,

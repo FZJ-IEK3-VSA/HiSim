@@ -52,7 +52,7 @@ class DynamicComponent(Component):
                                         source_load_type: lt.LoadTypes,
                                         source_unit: lt.Units,
                                         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-                                        source_weight: int)-> None:
+                                        source_weight: int) -> None:
         """ Adds a component input and connects it at once. """
         # Label Input and generate variable
         num_inputs = len(self.inputs)
@@ -85,7 +85,7 @@ class DynamicComponent(Component):
                                          source_load_type: lt.LoadTypes,
                                          source_unit: lt.Units,
                                          source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-                                         source_weight: int)-> None:
+                                         source_weight: int) -> None:
         """ Adds and connects inputs.
 
         Finds all outputs of listed components containing outputstring in outputname,
@@ -151,7 +151,7 @@ class DynamicComponent(Component):
     def set_dynamic_output(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]],
                            weight_counter: int,
-                           output_value: float)-> None:
+                           output_value: float) -> None:
         """ Sets all output values with given component type and weight. """
 
         # check if component of component type is available

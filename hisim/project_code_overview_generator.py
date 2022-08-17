@@ -1,4 +1,5 @@
 """ Makes an overview of all the components and collects important information for each module. """
+from types import ModuleType
 from typing import List, Any, Optional
 from pathlib import Path as Pathlibpath
 import importlib
@@ -200,8 +201,8 @@ class OverviewGenerator:
             row = row + 1
         return row
 
-    def process_one_file(self, filename):  # noqa      
-        """  Import the module and iterate through its attributes.  """
+    def process_one_file(self, filename):  # noqa
+        """ Import the module and iterate through its attributes. """
         myfi: FileInformation = FileInformation()
 
         myfi.file_name = filename
@@ -254,10 +255,10 @@ class OverviewGenerator:
         """ Tries to load a file as python module. Returns None if it couldn't be loaded. """
         try:
             spec = importlib.util.spec_from_file_location(myfi.module_name, myfi.file_name)
-            module: Optional[Module] = importlib.util.module_from_spec(spec)  # type: ignore
+            module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
-        except:  # noqa
+        except NameError:  # noqa
             module = None
         return module
 

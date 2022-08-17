@@ -159,18 +159,18 @@ class L2_Controller( cp.Component ):
         self.build( config )
         
         #Component Outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
 
         #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ReferenceTemperature,
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,
                                                                        mandatory = True)
-        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                    self.l1_RunTimeSignal,
                                                                    LoadTypes.ANY,
                                                                    Units.ANY,
@@ -180,7 +180,7 @@ class L2_Controller( cp.Component ):
         self.add_default_connections( generic_dhw_boiler_without_heating.Boiler, self.get_boiler_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_default_connections( ) )
         
-        self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.ComponentName,
+        self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.component_name,
                                                                       self.ElectricityTarget,
                                                                       LoadTypes.ELECTRICITY,
                                                                       Units.WATT,
@@ -267,7 +267,7 @@ class L2_Controller( cp.Component ):
             if self.state.compulsory == 1:
                 #use previous state if it is compulsory
                 pass
-            elif self.ElectricityTargetC.SourceOutput is not None:
+            elif self.ElectricityTargetC.source_output is not None:
                 #use recommendation from l3 if available and not compulsory
                 self.state.state = l3state
             else:
@@ -288,7 +288,7 @@ class L2_Controller( cp.Component ):
             if self.state.compulsory == 1:
                 #use previous state if it compulsory
                 pass
-            elif self.ElectricityTargetC.SourceOutput is not None:
+            elif self.ElectricityTargetC.source_output is not None:
                 #use recommendation from l3 if available and not compulsory
                 self.state.state = l3state
             else:
@@ -333,44 +333,38 @@ class L2_Controller( cp.Component ):
         
         else:
             #get l3 recommendation if available
-            if self.ElectricityTargetC.SourceOutput is not None:
-                electricity_target = stsv.get_input_value( self.ElectricityTargetC )
-                if electricity_target >= self.P_threshold:
-                    l3state = 1
-                else:
-                    l3state = 0
-            
-                #reset temperature limits if recommended from l3
-                if self.cooling_considered:  
-                    if l3state == 1 :
-                        if RunTimeSignal > 0:
-                            T_min_cooling = self.T_min_cooling - self.T_tolerance
-                        else:
-                            T_min_cooling = ( self.T_min_cooling + self.T_max_cooling ) / 2
-                        T_max_cooling = self.T_max_cooling
-                    elif l3state == 0:
-                        T_max_cooling = self.T_max_cooling + self.T_tolerance
-                        T_min_cooling = self.T_min_cooling 
-                        
-                if l3state == 1:
-                    if RunTimeSignal > 0:
-                        T_max_heating = self.T_max_heating + self.T_tolerance
-                    else:
-                        T_max_heating = ( self.T_min_heating + self.T_max_heating ) / 2
-                    T_min_heating = self.T_min_heating
-                    self.state.is_compulsory( )
-                    self.previous_state.is_compulsory( )
-                elif l3state == 0:
-                     T_max_heating = self.T_max_heating 
-                     T_min_heating = self.T_min_heating - self.T_tolerance
-                     self.state.is_compulsory( )
-                     self.previous_state.is_compulsory( )
+            electricity_target = stsv.get_input_value( self.ElectricityTargetC )
+            if electricity_target >= self.P_threshold:
+                l3state = 1
             else:
-                T_max_heating = self.T_max_heating 
+                l3state = 0
+        
+            #reset temperature limits if recommended from l3
+            if self.cooling_considered:  
+                if l3state == 1 :
+                    if RunTimeSignal > 0:
+                        T_min_cooling = self.T_min_cooling - self.T_tolerance
+                    else:
+                        T_min_cooling = ( self.T_min_cooling + self.T_max_cooling ) / 2
+                    T_max_cooling = self.T_max_cooling
+                elif l3state == 0:
+                    T_max_cooling = self.T_max_cooling + self.T_tolerance
+                    T_min_cooling = self.T_min_cooling 
+                    
+            if l3state == 1:
+                if RunTimeSignal > 0:
+                    T_max_heating = self.T_max_heating + self.T_tolerance
+                else:
+                    T_max_heating = ( self.T_min_heating + self.T_max_heating ) / 2
                 T_min_heating = self.T_min_heating
-                T_max_cooling = self.T_max_cooling
-                T_min_cooling = self.T_min_cooling 
-    
+                self.state.is_compulsory( )
+                self.previous_state.is_compulsory( )
+            elif l3state == 0:
+                 T_max_heating = self.T_max_heating 
+                 T_min_heating = self.T_min_heating - self.T_tolerance
+                 self.state.is_compulsory( )
+                 self.previous_state.is_compulsory( )
+
             #check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
             if self.state.is_first_iteration( timestep ):
                 self.previous_state.is_first_iteration( timestep )

@@ -254,7 +254,7 @@ class OverviewGenerator:
         """ Tries to load a file as python module. Returns None if it couldn't be loaded. """
         try:
             spec = importlib.util.spec_from_file_location(myfi.module_name, myfi.file_name)
-            module = importlib.util.module_from_spec(spec)  # type: ignore
+            module : Optional[ Module ] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
         except:  # noqa

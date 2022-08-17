@@ -139,20 +139,20 @@ class Boiler( cp.Component ):
         self.build( config )
         
         #inputs
-        self.WaterConsumptionC : cp.ComponentInput = self.add_input( self.ComponentName,
+        self.WaterConsumptionC : cp.ComponentInput = self.add_input( self.component_name,
                                                                      self.WaterConsumption,
                                                                      lt.LoadTypes.WARM_WATER,
                                                                      lt.Units.LITER,
                                                                      mandatory = True)
         
-        self.ThermalPowerDeliveredC : cp.ComponentInput = self.add_input( self.ComponentName,
+        self.ThermalPowerDeliveredC : cp.ComponentInput = self.add_input( self.component_name,
                                                                           self.ThermalPowerDelivered,
                                                                           lt.LoadTypes.HEATING,
                                                                           lt.Units.WATT,
                                                                           mandatory = True )
         
         #Outputs
-        self.TemperatureMeanC : cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.TemperatureMeanC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                      self.TemperatureMean,
                                                                      lt.LoadTypes.TEMPERATURE,
                                                                      lt.Units.CELSIUS)

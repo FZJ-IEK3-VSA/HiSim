@@ -83,26 +83,26 @@ class HeatSource( cp.Component ):
         self.build( config )
         
         # Inputs - Mandatories
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l1_DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
         
         # Outputs 
-        self.ThermalPowerDeliveredC : cp.ComponentOutput = self.add_output( self.ComponentName,
+        self.ThermalPowerDeliveredC : cp.ComponentOutput = self.add_output( self.component_name,
                                                                             self.ThermalPowerDelivered,
                                                                             lt.LoadTypes.HEATING,
                                                                             lt.Units.WATT )
-        self.FuelDeliveredC: cp.ComponentOutput = self.add_output( self.ComponentName,
+        self.FuelDeliveredC: cp.ComponentOutput = self.add_output( self.component_name,
                                                                   self.FuelDelivered,
                                                                   self.fuel,
                                                                   lt.Units.ANY )
         
         if config.fuel == lt.LoadTypes.OIL:
-            self.FuelDeliveredC.Unit = lt.Units.LITER        
+            self.FuelDeliveredC.unit = lt.Units.LITER        
         else:
-            self.FuelDeliveredC.Unit = lt.Units.WATT_HOUR
+            self.FuelDeliveredC.unit = lt.Units.WATT_HOUR
         
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
         

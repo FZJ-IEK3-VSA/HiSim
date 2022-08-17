@@ -15,7 +15,7 @@ from hisim.components import generic_heat_source
 from hisim.components import controller_l1_generic_runtime
 from hisim.components import controller_l2_generic_heat_clever_simple
 from hisim.components import controller_l2_generic_heat_simple
-from hisim.components import controller_l3_generic_heatpump_modular
+from hisim.components import controller_l3_smart_devices
 from hisim.components import generic_dhw_boiler_without_heating
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_smart_device
@@ -498,7 +498,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if smart_devices_included and predictive == True:
         
         #construct predictive controller
-        my_controller_l3 = controller_l3_generic_heatpump_modular.L3_Controller( my_simulation_parameters = my_simulation_parameters )
+        my_controller_l3 = controller_l3_smart_devices.L3_Controller( my_simulation_parameters = my_simulation_parameters )
             
         for elem in my_smart_devices:
             l3_ActivationSignal = my_controller_l3.add_component_output(source_output_name = lt.InandOutputType.RECOMMENDED_ACTIVATION,

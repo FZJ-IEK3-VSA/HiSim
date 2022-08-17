@@ -280,8 +280,4 @@ class L3_Controller(dynamic_component.DynamicComponent):
                     
                 ind = advance( component_type, ind ) 
                 self.signal = ControllerSignal( signal = signal )
-                
-    def write_to_report( self ):
-        pass
-            
        

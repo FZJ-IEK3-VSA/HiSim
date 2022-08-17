@@ -57,31 +57,38 @@ def test_heat_pump_modular():
                                              lt.Units.WATT )
     
     #connection of in- and outputs
-    my_heat_pump_controller_l2.ReferenceTemperatureC.SourceOutput = t_mC
-    my_heat_pump_controller_l2.ElectricityTargetC.SourceOutput = ElectricityTargetC
-    my_heat_pump.TemperatureOutsideC.SourceOutput = t_air_outdoorC
-    my_heat_pump.l1_DeviceSignalC.SourceOutput = my_heat_pump_controller_l1.l1_DeviceSignalC
-    my_heat_pump_controller_l1.l2_DeviceSignalC.SourceOutput = my_heat_pump_controller_l2.l2_DeviceSignalC
+    my_heat_pump_controller_l2.ReferenceTemperatureC.source_output = t_mC
+    my_heat_pump_controller_l2.ElectricityTargetC.source_output = ElectricityTargetC
+    my_heat_pump.TemperatureOutsideC.source_output = t_air_outdoorC
+    my_heat_pump.l1_DeviceSignalC.source_output = my_heat_pump_controller_l1.l1_DeviceSignalC
+    my_heat_pump_controller_l1.l2_DeviceSignalC.source_output = my_heat_pump_controller_l2.l2_DeviceSignalC
 
     # indexing of in- and outputs
-    t_mC.GlobalIndex = 0
-    ElectricityTargetC.GlobalIndex = 1
-    t_air_outdoorC.GlobalIndex = 2
-    my_heat_pump_controller_l1.l1_DeviceSignalC.GlobalIndex = 3  
-    my_heat_pump_controller_l2.l2_DeviceSignalC.GlobalIndex = 4
-    my_heat_pump.ThermalPowerDeliveredC.GlobalIndex = 5
-    my_heat_pump.ElectricityOutputC.GlobalIndex = 6
+    t_mC.global_index = 0
+    ElectricityTargetC.global_index = 1
+    t_air_outdoorC.global_index = 2
+    my_heat_pump_controller_l1.l1_DeviceSignalC.global_index = 3  
+    my_heat_pump_controller_l2.l2_DeviceSignalC.global_index = 4
+    my_heat_pump.ThermalPowerDeliveredC.global_index = 5
+    my_heat_pump.ElectricityOutputC.global_index = 6
     
     #test: after five hour temperature in building is 10 °C 
     stsv.values[ 0 ] = 10
+    stsv.values[ 1 ] = 0
     j = 60 * 5 
     
+    
+    print( stsv.values[ 4 ], stsv.values[ 3 ] )
     # Simulate
     my_heat_pump_controller_l2.i_restore_state()
     my_heat_pump_controller_l2.i_simulate(j, stsv,  False)
     
+    print( stsv.values[ 4 ], stsv.values[ 3 ] )
+    
     my_heat_pump_controller_l1.i_restore_state()
     my_heat_pump_controller_l1.i_simulate(j, stsv,  False)
+    
+    print( stsv.values[ 4 ], stsv.values[ 3 ] )
    
     my_heat_pump.i_restore_state()
     my_heat_pump.i_simulate(j, stsv, False)

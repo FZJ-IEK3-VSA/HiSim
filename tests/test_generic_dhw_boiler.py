@@ -41,19 +41,19 @@ def test_simple_bucket_boiler_state():
     
     #connection of in- and outputs
 
-    my_boiler_controller_l2.ReferenceTemperatureC.SourceOutput = my_boiler.TemperatureMeanC
-    my_boiler.WaterConsumptionC.SourceOutput = WW_use
-    my_boiler.ThermalPowerDeliveredC.SourceOutput = my_heater.ThermalPowerDeliveredC
-    my_heater.l1_DeviceSignalC.SourceOutput = my_boiler_controller_l1.l1_DeviceSignalC
-    my_boiler_controller_l1.l2_DeviceSignalC.SourceOutput = my_boiler_controller_l2.l2_DeviceSignalC
+    my_boiler_controller_l2.ReferenceTemperatureC.source_output = my_boiler.TemperatureMeanC
+    my_boiler.WaterConsumptionC.source_output = WW_use
+    my_boiler.ThermalPowerDeliveredC.source_output = my_heater.ThermalPowerDeliveredC
+    my_heater.l1_DeviceSignalC.source_output = my_boiler_controller_l1.l1_DeviceSignalC
+    my_boiler_controller_l1.l2_DeviceSignalC.source_output = my_boiler_controller_l2.l2_DeviceSignalC
     
     # indexing of in- and outputs
-    WW_use.GlobalIndex = 0
-    my_boiler.TemperatureMeanC.GlobalIndex = 1
-    my_heater.ThermalPowerDeliveredC.GlobalIndex = 2
-    my_boiler_controller_l1.l1_DeviceSignalC.GlobalIndex = 3  
-    my_boiler_controller_l2.l2_DeviceSignalC.GlobalIndex = 4
-    my_heater.FuelDeliveredC.GlobalIndex = 5
+    WW_use.global_index = 0
+    my_boiler.TemperatureMeanC.global_index = 1
+    my_heater.ThermalPowerDeliveredC.global_index = 2
+    my_boiler_controller_l1.l1_DeviceSignalC.global_index = 3  
+    my_boiler_controller_l2.l2_DeviceSignalC.global_index = 4
+    my_heater.FuelDeliveredC.global_index = 5
     
     
     j = 60

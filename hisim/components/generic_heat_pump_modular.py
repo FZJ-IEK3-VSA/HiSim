@@ -140,7 +140,7 @@ class HeatPump(cp.Component):
                                                                    mandatory = False)
         
         #Outputs
-        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                            self.ThermalPowerDelivered,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT)

@@ -70,13 +70,6 @@ class GCHP( cp.Component ):
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
-
-    def write_to_report(self) -> List[str]:
-        lines: List[str] = []
-        lines.append("CHP operation with constant electical and thermal power: " + self.component_name)
-        return lines
-
-
     
     def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ) -> None:
         super().__init__( name = config.name + str( config.source_weight ), my_simulation_parameters=my_simulation_parameters )
@@ -152,7 +145,7 @@ class GCHP( cp.Component ):
     
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append("CHP operation with constant electical and thermal power: {}".format( self.name + str( self.source_weight ) ) )
         lines.append( "P_el {:4.0f} kW".format( self.p_el ) )
         lines.append( "P_th {:4.0f} kW".format( self.p_th ) )
         return lines

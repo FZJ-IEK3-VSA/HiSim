@@ -126,13 +126,13 @@ class L2_Controller( cp.Component ):
         self.build( config )
         
         #Component Outputs
-        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.ComponentName,
+        self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
 
         #Component Inputs
-        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.ComponentName,
+        self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.component_name,
                                                                        self.ReferenceTemperature,
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,

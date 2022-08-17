@@ -1,13 +1,13 @@
-Ort 	          : Aachen Innenstadt
-Breitengrad       : 40.45
-Längengrad	  : -3.7
-Hoehenlage        : 716 Meter ueber NN
-
-
-Art des TRY       : mittleres Jahr
-Bezugszeitraum    : 1995-2012
-Datenbasis        : Beobachtungsdaten Zeitraum 1995-2012
-
+"Ort 	          : Madrid",,,,,,,,,,,,
+Breitengrad       : 40.45,,,,,,,,,,,,
+"Längengrad	  : -3.7",,,,,,,,,,,,
+Hoehenlage        : 657 Meter ueber NN,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+Art des TMY       : mittleres Jahr,,,,,,,,,,,,
+Bezugszeitraum    : 2017-2019,,,,,,,,,,,,
+Datenbasis        : National solar radiation database ,,,,,,,,,,,,
+,,,,,,,,,,,,
 NSRDB,232500,-,-,-,40.45,-3.7,0,716,1,w/m2,w/m2,w/m2
 Year,MM,DD,HH,Minute,Temperature,DHI,GHI,DNI,Surface Albedo,Wind Direction,Wind Speed,Pressure
 2019,1,1,1,30,3.3,0,0,0,0.16,18,1.4,940

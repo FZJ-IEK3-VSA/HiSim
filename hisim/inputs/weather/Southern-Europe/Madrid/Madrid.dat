@@ -4,9 +4,9 @@ Längengrad	  : -3.7
 Hoehenlage        : 716 Meter ueber NN
 
 
-Art des TRY       : mittleres Jahr
-Bezugszeitraum    : 1995-2012
-Datenbasis        : Beobachtungsdaten Zeitraum 1995-2012
+Art des TMY       : mittleres Jahr
+Bezugszeitraum    : 2017-2019
+Datenbasis        : National solar radiation database 
 
 NSRDB,232500,-,-,-,40.45,-3.7,0,716,1,w/m2,w/m2,w/m2
 Year,MM,DD,HH,Minute,Temperature,DHI,GHI,DNI,Surface Albedo,Wind Direction,Wind Speed,Pressure

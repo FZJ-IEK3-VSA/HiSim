@@ -339,6 +339,7 @@ class PostProcessor:
         """
         self.report.open()
         for wc in self.ppdt.wrapped_components:
+            print( wc.my_component )
             # if hasattr(wc.my_component, "write_to_report"):
             component_content = wc.my_component.write_to_report()
             if isinstance(component_content, list) is False:

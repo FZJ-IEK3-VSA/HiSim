@@ -204,6 +204,20 @@
               "Heating Power A-7/35":4.28,
               "Nominal Heating Power A2/35":5.57,
               "Price":"7725.21 EUR"
+            },
+	    {
+              "Manufacturer":"dummy",
+              "Name":"HeatingRod",
+              "Source":"not given",
+              "COP":[
+                    {"A-7/W35":1},
+                    {"A-2/W35":1},
+                    {"A7/W35":1},
+                    {"A10/W35":1}
+              ],
+              "Heating Power A-7/35":1.0,
+              "Nominal Heating Power A2/35":1.0,
+              "Price":"200.00 EUR"
             }
   ],
   "Battery":[

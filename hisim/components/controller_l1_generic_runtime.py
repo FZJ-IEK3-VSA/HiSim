@@ -5,7 +5,7 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import controller_l2_generic_heatpump_modular
+from hisim.components import controller_l2_generic_heat_clever_simple
 from hisim import log
 
 from dataclasses import dataclass
@@ -73,6 +73,7 @@ class L1_Controller( cp.Component ):
     
     """
     L1 Heat Pump Controller. It takes care of the operation of the heat pump only in terms of running times.
+    It gets inputs from an L2-heat controller
 
     Parameters
     --------------
@@ -110,7 +111,7 @@ class L1_Controller( cp.Component ):
                                                                   LoadTypes.ON_OFF,
                                                                   Units.BINARY,
                                                                   mandatory = True)
-        self.add_default_connections( controller_l2_generic_heatpump_modular.L2_Controller, self.get_l2_controller_default_connections( ) )
+        self.add_default_connections( controller_l2_generic_heat_clever_simple.L2_Controller, self.get_l2_controller_default_connections( ) )
         
         
         #add outputs
@@ -127,8 +128,8 @@ class L1_Controller( cp.Component ):
     def get_l2_controller_default_connections( self ):
         log.information("setting l2 default connections in l1")
         connections = [ ]
-        controller_classname = controller_l2_generic_heatpump_modular.L2_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heatpump_modular.L2_Controller.l2_DeviceSignal ) )
+        controller_classname = controller_l2_generic_heat_clever_simple.L2_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heat_clever_simple.L2_Controller.l2_DeviceSignal ) )
         return connections
     
     @staticmethod
@@ -137,6 +138,14 @@ class L1_Controller( cp.Component ):
                            source_weight =  1,
                            min_operation_time = 3600,
                            min_idle_time = 900 ) 
+        return config
+    
+    @staticmethod
+    def get_default_config_heatpump():
+        config = L1Config( name = 'L1Controller',
+                           source_weight =  1,
+                           min_operation_time = 3600 * 3,
+                           min_idle_time = 3600 ) 
         return config
 
     def build( self, config ):
@@ -171,9 +180,9 @@ class L1_Controller( cp.Component ):
             
             if self.my_simulation_parameters.system_config.predictive == True:
                 if self.state0.state == 1:
-                    runtime = max( 1, self.on_time - timestep + self.state0.timestep_of_last_action )
+                    runtime = max( 0, self.on_time - timestep + self.state0.timestep_of_last_action )
                 else:
-                    runtime = self.on_time
+                    runtime = 0
                 stsv.set_output_value( self.l1_RunTimeSignalC, runtime )
         
         #return device on if minimum operation time is not fulfilled and device was on in previous state

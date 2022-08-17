@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from typing import List, Union, Any
+from hisim import log
 
 import hisim.loadtypes as lt
 from hisim.component import Component, ComponentInput, SingleTimeStepValues, ComponentOutput
@@ -57,7 +58,7 @@ class DynamicComponent(Component):
         num_inputs = len(self.inputs)
         label = f"Input{num_inputs}"
         vars(self)[label] = label
-        print("Added component input and connect: " + source_component_class.component_name + " - " + source_component_output)
+        log.trace("Added component input and connect: " + source_component_class.component_name + " - " + source_component_output)
         # Define Input as Component Input and add it to inputs
         myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
@@ -110,7 +111,7 @@ class DynamicComponent(Component):
                     myinput.src_field_name = str(source_component_output)
                     setattr(self, label, myinput)
                     num_inputs += 1
-                    print("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
+                    log.trace("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
                     self.connect_input(label,
                                        component.component_name,
                                        output_var.field_name)
@@ -156,8 +157,6 @@ class DynamicComponent(Component):
         # check if component of component type is available
         for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
             if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
-                print(element.source_tags)
-                print(element.source_component_class)
                 stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:
                 continue

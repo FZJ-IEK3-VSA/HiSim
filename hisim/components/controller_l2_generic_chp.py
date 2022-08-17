@@ -8,7 +8,6 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import controller_l3_generic_heatpump_modular
 from hisim.components.building import Building
 from hisim import log
 
@@ -208,3 +207,4 @@ class L2_Controller(cp.Component):
         lines = []
         lines.append("Generic Controller L2: " + self.component_name)
         return lines
+

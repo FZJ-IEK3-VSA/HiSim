@@ -115,11 +115,7 @@ class Electrolyzer( cp.Component ):
                                      max_hydrogen_production_rate_hour = 5000  # [Nl/h]
                                      )
         return config
-
-    def write_to_report(self) -> List[str]:
-        lines: List[str] = []
-        lines.append("Generic Electrolyzer: " + self.component_name)
-        return lines
+    
     def get_l1_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic electrolyzer" )
         connections: List[cp.ComponentConnection] = [ ]
@@ -131,6 +127,7 @@ class Electrolyzer( cp.Component ):
         self.state = ElectrolyzerState( )
         self.previous_state = ElectrolyzerState( )
         
+        self.name = config.name
         self.source_weight = config.source_weight
         self.min_power = config.min_power
         self.max_power = config.max_power
@@ -173,6 +170,13 @@ class Electrolyzer( cp.Component ):
         self.state.hydrogen = ( hydrogen_output_liter / 1000 ) * PhysicsConfig.hydrogen_density
         stsv.set_output_value( self.HydrogenOutputC, self.state.hydrogen  )
         stsv.set_output_value( self.ElectricityOutputC, self.state.electricity )
+        
+    def write_to_report( self ):
+        lines = []
+        lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append( "electrical power: {:4.0f} kW".format( self.max_power ) )
+        lines.append( "hydrogen production rate: {:4.0f} kg / s".format( self.max_hydrogen_production_rate ) )
+        return lines
         
 @dataclass_json
 @dataclass
@@ -329,7 +333,6 @@ class L1_Controller( cp.Component ):
         elif ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):
             self.state.state = 0
             l2_electricity_target = 0
-            print( 'this problem')
         
         #catch cases where hydrogen storage is close to maximum level and signals oscillate -> just turn off electrolyzer
         elif force_convergence:
@@ -345,16 +348,13 @@ class L1_Controller( cp.Component ):
             #if target electricity is too low or hydrogen storage too full: turn off
             if ( ( l2_electricity_target < self.Pmin ) or ( H2_SOC > self.SOCmax ) ) and self.state0.state == 1:
                 self.state.deactivation( timestep )
-                print( 'that problem' )
             #turns on if electricity is high enough and there is still space in storage, only works if being off is not compulsory
             elif ( ( l2_electricity_target >= self.Pmin ) and ( H2_SOC <= self.SOCmax ) ) and self.state0.state == 0:
                 self.state.activation( timestep )
-                print( 'no problem' )
             else:
                 pass
                 
         stsv.set_output_value( self.ElectricityTargetC, self.state.state * l2_electricity_target )
-        print( l2_electricity_target, self.Pmin, self.state.state )
         
     @staticmethod
     def get_default_config() -> L1ElectrolyzerConfig :

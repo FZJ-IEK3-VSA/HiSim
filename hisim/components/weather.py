@@ -290,7 +290,6 @@ class Weather(Component):
              
         #write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
-            print( 'attention, attention:', len( self.temperature_list ))
             my_simulation_repository.set_entry( self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list )
             my_simulation_repository.set_entry( self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list )
             my_simulation_repository.set_entry( self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list )

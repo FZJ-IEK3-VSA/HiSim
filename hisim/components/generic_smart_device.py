@@ -9,7 +9,7 @@ from typing import Optional
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components import controller_l3_generic_heatpump_modular
+from hisim.components import controller_l3_smart_devices
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
 #from hisim.components import controller_l3_predictive

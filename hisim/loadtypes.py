@@ -47,6 +47,9 @@ class LoadTypes(str, enum.Enum):
     WATER = "Water"
     WARM_WATER = "WarmWater"
 
+    OIL = 'Oil'
+    DISTRICTHEATING = 'DistrictHeating'
+
     PRICE = "Price"
 
     # Controllers:

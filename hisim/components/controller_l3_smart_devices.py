@@ -18,8 +18,6 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
 from hisim.components import generic_smart_device
-# from hisim.components import generic_dhw_boiler
-from hisim.components import generic_district_heating
 from hisim.components import controller_l1_generic_runtime
 from hisim.components import generic_heat_pump_modular
 from hisim.simulationparameters import SimulationParameters, SystemConfig
@@ -264,9 +262,6 @@ class L3_Controller(dynamic_component.DynamicComponent):
                                 activation = timestep + possibility
                                 profile = [ * shiftableload ]
                                 continue
-                        # if self.threshold_price < 25:
-                        #     self.threshold_price = price
-                        #print( timestep, price, activation  )
                     
                     #compute new load
                     totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]
@@ -282,5 +277,4 @@ class L3_Controller(dynamic_component.DynamicComponent):
                     
                 ind = advance( component_type, ind ) 
                 self.signal = ControllerSignal( signal = signal )
-            
        

@@ -8,8 +8,7 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import controller_l3_generic_heatpump_modular
-from hisim.components.generic_dhw_boiler import Boiler
+from hisim.components.obsolete_generic_dhw_boiler_with_heating import Boiler
 from hisim import log
 
 from dataclasses import dataclass

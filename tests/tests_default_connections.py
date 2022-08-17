@@ -11,4 +11,3 @@ def test_basic_household_with_default_connections():
     func = "basic_household_with_default_connections"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func,mysimpar )
-    print(os.getcwd())

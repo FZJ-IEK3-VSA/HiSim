@@ -9,7 +9,6 @@ from pkgutil import iter_modules
 from pathlib import Path as gg
 from importlib import import_module
 from typing import Any, Dict, List, Tuple, Union, Optional
-import logging
 
 from hisim import dynamic_component
 import hisim.component as component
@@ -32,8 +31,6 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
-
-# logging.basicConfig(level=#logging.INFO)
 
 # IMPORT ALL COMPONENT CLASSES DYNAMICALLY
 # DIRTY CODE. GIVE ME BETTER SUGGESTIONS
@@ -230,10 +227,9 @@ class ConfigurationGenerator:
         timeline.
         """
         if my_simulation_parameters is None:
-            print("no simulation Parameters are added")
+            hisim.log.debug("no simulation Parameters are added")
         else:
             self._simulation_parameters = my_simulation_parameters
-            # logging.info("Simulation parameters have been added to the configuration JSON file.")
 
     def add_component(self, user_components_name: Any) -> None:
         """
@@ -258,7 +254,6 @@ class ConfigurationGenerator:
                 self._components[user_component_name] = self.preloaded_components[
                     user_component_name
                 ]
-                # logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
         elif isinstance(user_components_name, dict):
             for user_component_name, parameters in user_components_name.items():
                 if parameters.__class__ == dict:
@@ -281,13 +276,11 @@ class ConfigurationGenerator:
                     else:
                         self._components[str(user_component_name)] = parameters.__dict__
                     # self._components[user_component_name.__module__ +"."+ user_component_name.__name__] = parameters.__dict__
-                # logging.info("Component {} has been added to the configuration JSON file.".format(user_component_name))
         else:
             self._components[
                 user_components_name.__module__
             ] = user_components_name.__doc__
             # self._components[user_components_name] = self.preloaded_components[user_components_name]
-            # logging.info("Component {} has been added to configuration JSON file.".format(user_components_name))
 
     def add_grouping(self, grouping_components: ComponentsGrouping) -> None:
         """
@@ -313,7 +306,6 @@ class ConfigurationGenerator:
         self._groupings[
             grouping_components.component_name
         ] = grouping_components.configuration
-        # logging.info("Component Grouping {} has been created.".format(grouping_components.component_name))
 
     def add_connection(self, connection_components: Any)  -> None:
         """
@@ -337,7 +329,6 @@ class ConfigurationGenerator:
             connection_components.second_component,
         )
         self._connections[connection_name] = connection_components.configuration
-        # logging.info("{} and {} have been connected ")
 
     def add_paramater_range(self, parameter_range: Any)  -> None:
         self._parameters_range_studies.update(parameter_range)
@@ -350,10 +341,10 @@ class ConfigurationGenerator:
         self._parameters_range_studies = {}
 
     def print_components(self)  -> None:
-        print(json.dumps(self._components, sort_keys=True, indent=4))
+        hisim.log.trace(json.dumps(self._components, sort_keys=True, indent=4))
 
     def print_component(self, name: str) -> None:
-        print(json.dumps(self._components[name], sort_keys=True, indent=4))
+        hisim.log.trace(json.dumps(self._components[name], sort_keys=True, indent=4))
 
     def dump(self) -> None:
 
@@ -375,7 +366,6 @@ class ConfigurationGenerator:
             component_class,
             parameter_name_and_range,
         ) in self._parameters_range_studies.items():
-            # logging.info("Performing parameter study of component {}".format(component))
             parameters_range_studies_entry = copy.deepcopy(
                 self._parameters_range_studies
             )
@@ -581,7 +571,6 @@ class SetupFunction:
             config_class = component_class_config_to_add.from_dict(
                 self.cfg["Components"][full_instance_path]
             )
-            print(str(config_class))
             self._components.append(
                 component_class_to_add(
                     config=config_class,
@@ -590,12 +579,12 @@ class SetupFunction:
             )
 
         except Exception as e:
-            print(
+            hisim.log.debug(
                 "Adding Component {} resulted in a failure".format(full_instance_path)
             )
-            print("Might be Missing :   {} ".format(component_class_to_add))
-            print("Please, investigate implementation mistakes in this Component.")
-            print(e)
+            hisim.log.debug("Might be Missing :   {} ".format(component_class_to_add))
+            hisim.log.debug("Please, investigate implementation mistakes in this Component.")
+            hisim.log.error(str(e))
             sys.exit(1)
         # Add last listed component to Simulator object
         my_sim.add_component(self._components[-1])
@@ -651,8 +640,8 @@ class SetupFunction:
                     ),
                 )
             except Exception as e:
-                print(e)
-                print("Incorrect Connection")
+                hisim.log.error(str(e))
+                hisim.log.debug("Incorrect Connection")
 
     def add_configuration(self, my_sim: sim.Simulator) -> None:
         # my_sim.add_configuration(self.cfg_raw)

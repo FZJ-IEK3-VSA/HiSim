@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import pvlib
 from dataclasses_json import dataclass_json
-from typing import Optional
+from typing import Optional, Any
 
 from dataclasses import dataclass
 from functools import lru_cache
@@ -46,16 +46,16 @@ temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_g
 
 @lru_cache(maxsize=16)
 def simPhotovoltaicFast(
-    dni_extra=None,
-    DNI=None,
-    DHI=None,
-    GHI=None,
-    azimuth=None,
-    apparent_zenith=None,
-    temperature=None,
-    wind_speed=None,
+    dni_extra: Any=None,
+    DNI: Any=None,
+    DHI: Any=None,
+    GHI: Any=None,
+    azimuth: Any=None,
+    apparent_zenith: Any=None,
+    temperature: Any=None,
+    wind_speed: Any=None,
     surface_azimuth : float = 180,
-    surface_tilt : float = 30 ):
+    surface_tilt : float = 30 )-> Any:
     
     """
     Simulates a defined PV array with the Sandia PV Array Performance Model.
@@ -240,10 +240,10 @@ class PVSystem( cp.Component ):
                  my_simulation_parameters: SimulationParameters,
                  config: PVSystemConfig,
                  my_simulation_repository : Optional[sim_repository.SimRepository] = None
-                 ):
+                 )-> None:
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig=config
-
+        self.data: Any
         super().__init__( self.pvconfig.name + str( self.pvconfig.source_weight ), my_simulation_parameters = my_simulation_parameters )
 
         self.build( self.pvconfig.load_module_data, my_simulation_repository, self.pvconfig.source_weight )
@@ -304,6 +304,7 @@ class PVSystem( cp.Component ):
                                                                         False)
 
         self.add_default_connections(Weather, self.get_weather_default_connections())
+
     @staticmethod
     def get_default_config():
         config= PVSystemConfig(
@@ -344,7 +345,7 @@ class PVSystem( cp.Component ):
         lines.append("Inverter: {}".format(self.pvconfig.inverter_name))
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
 
         if hasattr(self, "output"):
             #if(len(self.output) < timestep)
@@ -446,13 +447,13 @@ class PVSystem( cp.Component ):
             "{}-01-01 00:00:00".format(year), periods=60*24*365, freq="T", tz="Europe/Berlin"
         )
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def build(self, load_module_data : bool, my_simulation_repository : Optional[sim_repository.SimRepository], source_weight : int):
+    def build(self, load_module_data : bool, my_simulation_repository : Optional[sim_repository.SimRepository], source_weight : int) -> None:
         
         self.source_weight = source_weight
         
@@ -528,7 +529,7 @@ class PVSystem( cp.Component ):
         #self.integrateInverter = integrateInverter
         #self.simPhotovoltaicSimpleJit = simPhotovoltaicSimple
 
-    def plot(self):
+    def plot(self) -> None:
         # Plots ac_power. One day is represented by 1440 steps.
         #self.ac_power.iloc[0:7200].plot()
         plt.plot(self.data)
@@ -536,7 +537,7 @@ class PVSystem( cp.Component ):
         plt.xlabel("Time")
         plt.show()
 
-    def interpolate(self,pd_database,year):
+    def interpolate(self,pd_database: Any,year: Any) -> Any:
         firstday = pd.Series([0.0], index=[
             pd.to_datetime(datetime.datetime(year-1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
         lastday = pd.Series(pd_database[-1], index=[

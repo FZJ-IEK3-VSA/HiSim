@@ -2,7 +2,7 @@
 
 # Generic/Built-in
 import numpy as np
-from typing import Optional
+from typing import Optional, Any
 
 # Owned
 import hisim.utils as utils
@@ -153,7 +153,7 @@ class L2_Controller( cp.Component ):
     # 2. HeatPump
     
     @utils.measure_execution_time
-    def __init__( self, my_simulation_parameters : SimulationParameters, config = L2Config ):
+    def __init__( self, my_simulation_parameters : SimulationParameters, config: L2Config ) -> None:
                   
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( config )
@@ -252,7 +252,7 @@ class L2_Controller( cp.Component ):
         self.state = L2_ControllerState( )
         self.previous_state = L2_ControllerState( )
         
-    def control_cooling( self, T_control, T_min_cooling, T_max_cooling, l3state ):
+    def control_cooling( self, T_control: float, T_min_cooling: float, T_max_cooling: float, l3state: Any) -> None:
         if T_control > T_max_cooling:
             #start cooling if temperature exceeds upper limit
             self.state.activate( )
@@ -301,10 +301,10 @@ class L2_Controller( cp.Component ):
     def i_restore_state(self):
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )  
         if self.my_simulation_parameters.system_config.predictive == True:

@@ -1,3 +1,4 @@
+from typing import Any
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 
@@ -13,7 +14,7 @@ class ExtendedControllerSimulation:
     def __init__(self, config: ExtendedControllerConfig):
         pass
 
-    def regulate_chp_mode_power(self, state_chp, runtime_chp, power_supply_pv, electricity_demand_household, seconds_per_timestep):
+    def regulate_chp_mode_power(self, state_chp :Any, runtime_chp: Any, power_supply_pv: Any, electricity_demand_household: Any, seconds_per_timestep: Any) -> Any:
         """
         :param power_supply_pv:
         :param electricity_demand_household:
@@ -140,7 +141,7 @@ class ExtendedControllerSimulation:
 
         return state_chp, runtime_chp, power_from_or_to_grid
 
-    def regulate_gas_heater(self, temperatures_in_tank, previous_state, runtime_counter, seconds_per_timestep):
+    def regulate_gas_heater(self, temperatures_in_tank: Any, previous_state: float, runtime_counter: int, seconds_per_timestep: int) -> Any:
         # the gas_heater model has no modulation because there is a buffer (warm water storage)
         # ToDo: future --> make modulating possible if the waste energy is to high? reduce power, increase mass_flow
 
@@ -182,7 +183,7 @@ class ExtendedControllerSimulation:
 
         return state_gas_heater, runtime_counter
 
-    def power_distribution_to_electrolyzer(self, power_from_or_to_grid):
+    def power_distribution_to_electrolyzer(self, power_from_or_to_grid: Any) -> Any:
         """
         Hydrogen storage must be able to store the produced massflow of hydrogen.
         Otherwise the dimensioning of the system is incorrect --> is checked in hydrogen_storage
@@ -227,7 +228,7 @@ class ExtendedController(Component):
     RuntimeCounterCHP = "RuntimeCounterCHP"
     RuntimeCounterGasHeater = "RuntimeCounterGasHeater"
 
-    def __init__(self, component_name:str, config: ExtendedControllerConfig, my_simulation_parameters: SimulationParameters ):
+    def __init__(self, component_name:str, config: ExtendedControllerConfig, my_simulation_parameters: SimulationParameters ) -> None:
         super().__init__(name=component_name,  my_simulation_parameters=my_simulation_parameters)
         # Input
         self.electricity_demand_household: ComponentInput = self.add_input(self.component_name, ExtendedController.ElectricityDemand, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
@@ -264,33 +265,33 @@ class ExtendedController(Component):
         self.previous_state_gas_heater1 = self.state_gas_heater1
         self.previous_runtime_gas_heater1 = self.runtime_gas_heater1
 
-        self.test_pv = 0
-        self.test_grid = 0
-        self.test_electrolyzer = 0
-        self.test_demand = 0
-        self.test_state = 0
+        self.test_pv: float = 0
+        self.test_grid: float = 0
+        self.test_electrolyzer: float = 0
+        self.test_demand: float = 0
+        self.test_state:float = 0
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         # self.previous_state = self.extended_controller.begin_new_timestep()
         self.previous_state_chp1 = deepcopy(self.state_chp1)
         self.previous_runtime_chp1 = deepcopy(self.runtime_chp1)
         self.previous_state_gas_heater1 = deepcopy(self.state_gas_heater1)
         self.previous_runtime_gas_heater1 = deepcopy(self.runtime_gas_heater1)
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         # self.extended_controller.reset_to_last_timestep(self.previous_state)
         self.state_chp1 = deepcopy(self.previous_state_chp1)
         self.runtime_chp1 = deepcopy(self.previous_runtime_chp1)
         self.state_gas_heater1 = deepcopy(self.previous_state_gas_heater1)
         self.runtime_gas_heater1 = deepcopy(self.previous_runtime_gas_heater1)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         if force_convergence:
             return
 
         # Inputs
         electricity_demand_household = stsv.get_input_value(self.electricity_demand_household)
-        pv_production = stsv.get_input_value(self.pv_production)
+        pv_production: float = stsv.get_input_value(self.pv_production)
 
         # not needed for power
         if ExtendedControllerConfig.chp_mode == "heat" or ExtendedControllerConfig.gas_heater:
@@ -358,7 +359,7 @@ class ExtendedController(Component):
 
         # self.test_state = self.extended_controller.state_chp
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         # check the electricity balance
         if chp.CHPConfig.is_modulating:
             if self.test_state > 0:

@@ -4,7 +4,7 @@ import inspect
 import hashlib
 import json
 
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 from functools import wraps
 from timeit import default_timer as timer
 
@@ -223,7 +223,7 @@ def load_smart_appliance(name):  # noqa
     return data[name]
 
 
-def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters: SimulationParameters):  # noqa
+def get_cache_file(component_key: str, parameter_class: Any, my_simulation_parameters: SimulationParameters) -> Tuple[bool, str]:  # noqa
     """ Gets a cache path for a given parameter set.
 
     This will generate a file path based on any dataclass_json.

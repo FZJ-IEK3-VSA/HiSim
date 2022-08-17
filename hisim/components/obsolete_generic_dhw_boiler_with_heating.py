@@ -288,8 +288,9 @@ class Boiler( cp.Component ):
                 if self.state.timestep + 1 == timestep:
                     self.state.timestep += 1
                     self.previous_state.timestep += 1
-                    runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-                    self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.ELECTRIC_BOILER, source_weight = self.source_weight, entry =[self.power] * runtime)
+                    runtime:float = stsv.get_input_value( self.l1_RunTimeSignalC )
+                    self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.ELECTRIC_BOILER,
+                                                                 source_weight = self.source_weight, entry =self.power * runtime)
         else:
             #heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
             stsv.set_output_value( self.hydrogen_output_c, ( self.power * signal / 1.418 ) * 1e-8 )

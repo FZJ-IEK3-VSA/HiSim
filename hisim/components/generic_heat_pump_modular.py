@@ -6,7 +6,7 @@ import seaborn
 from math import pi
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Optional
+from typing import Optional, List
 
 # Owned
 import hisim.utils as utils
@@ -68,8 +68,8 @@ class HeatPumpState:
     This data class saves the state of the heat pump.
     """
 
-    def __init__( self, state : int = 0, timestep : int = -1 ):
-        self.state = state
+    def __init__( self, state : float = 0, timestep : int = -1 ):
+        self.state: float= state
         self.timestep = timestep
         
     def clone( self ):
@@ -252,30 +252,31 @@ class HeatPump(cp.Component):
         # Writes info to report
         self.write_to_report()
 
-    def cal_cop( self, t_out ):
-        return self.cop_coef[0] * t_out + self.cop_coef[1]
+    def cal_cop( self, t_out:float ) -> float:
+        val:float = self.cop_coef[0] * t_out + self.cop_coef[1]
+        return  val
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
         lines.append( "Manufacturer: {}".format( self.name ) )
         lines.append("Max power: {:4.0f} kW".format((self.power_th)*1E-3))
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         
         # Inputs
         self.state.state = stsv.get_input_value( self.l1_DeviceSignalC )
-        T_out = stsv.get_input_value( self.TemperatureOutsideC )
+        T_out:float = stsv.get_input_value( self.TemperatureOutsideC )
           
         #cop
         cop = self.cal_cop( T_out )
@@ -304,7 +305,7 @@ class HeatPump(cp.Component):
         #         self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.HEAT_PUMP, source_weight = self.source_weight, entry =[self.power_th / cop] * runtime)
 
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m :float, state: HeatPumpState) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))

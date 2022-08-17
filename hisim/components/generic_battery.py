@@ -64,10 +64,10 @@ class Battery(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 manufacturer="sonnen",
-                 model="sonnenBatterie 10 - 11,5 kWh",
-                 soc=10/15,
-                 base=False):
+                 manufacturer:str="sonnen",
+                 model:str="sonnenBatterie 10 - 11,5 kWh",
+                 soc:float=10/15,
+                 base:bool=False)->None:
         super().__init__("Battery", my_simulation_parameters)
 
         self.build(manufacturer=manufacturer, model=model, base=base)
@@ -140,16 +140,16 @@ class Battery(cp.Component):
 
     #def i_restore_state(self):
     #    self.state = copy.copy(self.previous_state)
-    def i_save_state(self):
+    def i_save_state(self)-> None:
         self.previous_state = copy.deepcopy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self)-> None:
         self.state = copy.deepcopy(self.previous_state)
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         load = stsv.get_input_value(self.inputC)
         state = stsv.get_input_value(self.stateC)
 
@@ -181,7 +181,7 @@ class BatteryController(cp.Component):
     ElectricityInput = "ElectricityInput"
     State = "State"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters ):
+    def __init__(self, my_simulation_parameters: SimulationParameters )-> None:
         super().__init__(name="BatteryController", my_simulation_parameters=my_simulation_parameters)
 
         self.inputC : cp.ComponentInput = self.add_input(self.component_name,
@@ -194,16 +194,16 @@ class BatteryController(cp.Component):
                                                            lt.LoadTypes.ANY,
                                                            lt.Units.ANY)
 
-    def i_save_state(self):
+    def i_save_state(self)-> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self)-> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)-> None:
         load = stsv.get_input_value(self.inputC)
         state:float = 0
         if load < 0.0:

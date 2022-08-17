@@ -167,16 +167,16 @@ class Weather(Component):
     def get_default_config():
         config= WeatherConfig(location="Aachen")
         return config
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self)-> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_conversion: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_conversion: bool)-> None:
 
         stsv.set_output_value(self.t_outC, self.temperature_list[timestep])
         stsv.set_output_value(self.DNIC, self.DNI_list[timestep])
@@ -201,7 +201,7 @@ class Weather(Component):
     def build( self, 
                location : str, 
                my_simulation_parameters : SimulationParameters, 
-               my_simulation_repository : Optional[ SimRepository ] ):
+               my_simulation_repository : Optional[ SimRepository ] )-> None:
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep
         parameters = [ location ]
         log.information(self.weatherConfig.location)

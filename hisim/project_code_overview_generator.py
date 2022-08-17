@@ -113,7 +113,7 @@ class OverviewGenerator:
 
     """ Generates an overview of all modules. """
 
-    def add_to_cell(self, column: int, row: int, value: Any, worksheet):
+    def add_to_cell(self, column: int, row: int, value: Any, worksheet: Workbook) -> int:
         """ Write data to the Excel sheet. """
         worksheet.cell(column=column, row=row, value=value)
         column = column + 1

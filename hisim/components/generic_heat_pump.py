@@ -4,7 +4,7 @@ import copy
 import matplotlib
 import seaborn
 from math import pi
-
+from typing import List, Any, Optional
 # Owned
 import hisim.utils as utils
 from hisim.components.weather import Weather
@@ -36,23 +36,23 @@ __status__ = "development"
 class HeatPumpState:
 
     def __init__(self,
-                 start_timestep=None,
-                 thermal_energy_delivered = 0.0,
-                 cop = 1,
-                 cycle_number=None):
+                 start_timestep: int=0,
+                 thermal_energy_delivered: float = 0.0,
+                 cop:float = 1.0,
+                 cycle_number:Optional[int]=None) -> None:
         self.start_timestep=start_timestep
         self.thermal_energy_delivered = thermal_energy_delivered
         self.cycle_number = cycle_number
         if thermal_energy_delivered == 0.0:
             self.activation = 0
-            self.heating = 0
-            self.cooling = 0
-            self.cop = 1
+            self.heating = 0.0
+            self.cooling = 0.0
+            self.cop = 1.0
             self.electricity_in = abs(self.thermal_energy_delivered / self.cop)
         elif self.thermal_energy_delivered > 0.0:
             self.activation = -1
             self.heating = self.thermal_energy_delivered
-            self.cooling = 0
+            self.cooling = 0.0
             self.cop = cop
             self.electricity_in = abs(self.thermal_energy_delivered / self.cop)
         elif self.thermal_energy_delivered < 0.0:
@@ -64,7 +64,7 @@ class HeatPumpState:
         else:
             raise Exception("Impossible Heat Pump State.")
             
-    def clone(self):
+    def clone(self) -> Any:
         return HeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
 
 class HeatPump(cp.Component):
@@ -111,7 +111,7 @@ class HeatPump(cp.Component):
                  manufacturer : str = "Viessmann Werke GmbH & Co KG",
                  name : str ="Vitocal 300-A AWO-AC 301.B07",
                  min_operation_time : int = 60 * 60,
-                 min_idle_time : int = 15 * 60):
+                 min_idle_time : int = 15 * 60) -> None:
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
 
         self.build(manufacturer, name, min_operation_time, min_idle_time)
@@ -195,21 +195,21 @@ class HeatPump(cp.Component):
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( HeatPumpController, self.get_controller_default_connections( ) )
         
-    def get_weather_default_connections( self ):
+    def get_weather_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting weather default connections in HeatPump")
         connections = [ ]
         weather_classname = Weather.get_classname( )
         connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
         return connections
     
-    def get_controller_default_connections( self ):
+    def get_controller_default_connections( self )  -> List[cp.ComponentConnection]:
         log.information("setting controller default connections in HeatPump")
         connections = [ ]
         controller_classname = HeatPumpController.get_classname( )
         connections.append( cp.ComponentConnection( HeatPump.State, controller_classname, HeatPumpController.State ) )
         return connections
 
-    def build( self, manufacturer, name, min_operation_time, min_idle_time ):
+    def build( self, manufacturer: str, name: str, min_operation_time: float, min_idle_time:float )  -> None:
         # Simulation parameters
 
         # Retrieves heat pump from database - BEGIN
@@ -254,7 +254,7 @@ class HeatPump(cp.Component):
         self.set_time_correction()
         #self.set_time_correction(self.time_correction_factor)
 
-    def set_time_correction(self, factor=1):
+    def set_time_correction(self, factor: float = 1) -> None:
         if factor == 1:
             self.HasBeenConverted = False
         if self.HasBeenConverted is True:
@@ -267,22 +267,23 @@ class HeatPump(cp.Component):
             self.HasBeenConverted = True
 
 
-    def cal_cop(self, t_out):
-        return self.cop_coef[0] * t_out + self.cop_coef[1]
+    def cal_cop(self, t_out:float) -> float:
+        val:float = self.cop_coef[0] * t_out + self.cop_coef[1]
+        return val
 
-    def i_save_state(self):
+    def i_save_state(self)->None:
         self.previous_state = self.state.clone()
         self.number_of_cycles_previous = self.number_of_cycles
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone() # copy.deepcopy(self.previous_state)
         self.number_of_cycles = self.number_of_cycles_previous
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("Name: {}".format("Heat Pump"))
         lines.append("Max power: {:4.0f} kW".format((self.max_heating_power)*1E-3))
         lines.append("Max power var: {:4.0f}".format(self.max_heating_power_var))
@@ -292,7 +293,7 @@ class HeatPump(cp.Component):
         #lines.append(["Max power var:","{:4.2f}".format(self.max_heating_power_var)])
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # Inputs
         stateC = stsv.get_input_value(self.stateC)
         t_out = stsv.get_input_value(self.t_outC)
@@ -381,7 +382,7 @@ class HeatPump(cp.Component):
         stsv.set_output_value(self.electricity_outputC, self.state.electricity_in)
         stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
 
-    def process_thermal(self, ws_in):
+    def process_thermal(self, ws_in: float) -> None:
         pass
         #temperature_max = 55
         #heat_capacity = PhysicsConfig.water_specific_heat_capacity
@@ -437,7 +438,7 @@ class HeatPumpController(cp.Component):
                  t_air_heating: float = 18.0,
                  t_air_cooling: float = 26.0,
                  offset: float = 0.0,
-                 mode=1):
+                 mode:int=1) -> None:
         super().__init__("HeatPumpController", my_simulation_parameters=my_simulation_parameters)
         self.build(t_air_cooling=t_air_cooling,
                    t_air_heating=t_air_heating,
@@ -461,14 +462,14 @@ class HeatPumpController(cp.Component):
         
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         
-    def get_building_default_connections( self ):
+    def get_building_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting building default connections in Heatpumpcontroller")
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( HeatPumpController.TemperatureMean, building_classname, Building.TemperatureMean ) )
         return connections
 
-    def build(self, t_air_heating, t_air_cooling, offset, mode):
+    def build(self, t_air_heating:float, t_air_cooling:float, offset:float, mode: float) -> None:
         # Sth
         self.controller_heatpumpmode = "off"
         self.previous_heatpump_mode = self.controller_heatpumpmode
@@ -480,21 +481,21 @@ class HeatPumpController(cp.Component):
 
         self.mode = mode
 
-    def i_save_state(self):
+    def i_save_state(self ) -> None:
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.controller_heatpumpmode = self.previous_heatpump_mode
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Heat Pump Controller")
         # todo: add more useful stuff here
         lines.append("tbd")
         return lines
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -516,7 +517,7 @@ class HeatPumpController(cp.Component):
             state = 0
         stsv.set_output_value(self.stateC, state)
 
-    def conditions(self, set_temp):
+    def conditions(self, set_temp: float) -> None:
         maximum_heating_set_temp = self.t_set_heating + self.offset
         minimum_heating_set_temp = self.t_set_heating
         minimum_cooling_set_temp = self.t_set_cooling - self.offset
@@ -539,7 +540,7 @@ class HeatPumpController(cp.Component):
                 self.controller_heatpumpmode = 'cooling'
                 return
 
-    def smart_conditions(self, set_temp, electricity_input):
+    def smart_conditions(self, set_temp: float, electricity_input: float) -> None:
         smart_offset_upper = 3
         smart_offset_lower = 0.5
         maximum_heating_set_temp = self.t_set_heating + self.offset
@@ -575,7 +576,7 @@ class HeatPumpController(cp.Component):
 
         #log.information("Final state: {}\n".format(state))
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m:float, state: Any) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))

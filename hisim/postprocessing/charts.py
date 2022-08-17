@@ -1,4 +1,4 @@
-
+from typing import Any
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 #from matplotlib.sankey import Sankey
@@ -17,14 +17,14 @@ warnings.filterwarnings("ignore")
 mpl.rcParams['agg.path.chunksize'] = 10000
 
 class Carpet(Chart):
-    def __init__(self, output, data, units, directorypath, time_correction_factor):
+    def __init__(self, output: Any, data: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
         super().__init__(output=output,
                          data=data,
                          type="Carpet",
                          units=units,
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
-    def plot( self, xdims : int ):
+    def plot( self, xdims : int )-> None:
         #log.information("starting carpet plots")
         ydims = int( len( self.data ) / xdims ) #number of calculated timesteps per day
         y_steps_per_hour = int( ydims / 24 )

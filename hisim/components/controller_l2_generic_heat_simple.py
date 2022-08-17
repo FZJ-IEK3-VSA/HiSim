@@ -5,6 +5,7 @@ import numpy as np
 from typing import Optional
 
 # Owned
+from typing import List
 import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
@@ -120,7 +121,7 @@ class L2_Controller( cp.Component ):
     # 2. HeatPump
     
     @utils.measure_execution_time
-    def __init__( self, my_simulation_parameters : SimulationParameters, config = L2Config ):
+    def __init__( self, my_simulation_parameters : SimulationParameters, config:L2Config) -> None:
                   
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( config )
@@ -179,7 +180,7 @@ class L2_Controller( cp.Component ):
         self.state = L2_ControllerState( )
         self.previous_state = L2_ControllerState( )
                 
-    def control_heating( self, T_control, T_min_heating, T_max_heating ):
+    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float ) -> None:
         if T_control > T_max_heating:
             #stop heating if temperature exceeds upper limit
             self.state.deactivate( )
@@ -197,16 +198,16 @@ class L2_Controller( cp.Component ):
                 #use previous state if temperature is in given limit
                 self.state = self.previous_state.clone( )
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)  -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )  
         if force_convergence:
@@ -237,8 +238,8 @@ class L2_Controller( cp.Component ):
             self.control_heating( T_control = T_control, T_min_heating = self.T_min_heating, T_max_heating = self.T_max_heating )
             stsv.set_output_value( self.l2_DeviceSignalC, self.state.state )
         
-    def write_to_report( self ):
-        lines = []
+    def write_to_report( self ) -> List[str]:
+        lines:  List[str] = []
         lines.append("Name: {}".format(self.name + str( self.source_weight ) ) )
         lines.append("upper set temperature: {:4.0f} °C".format( self.T_max_heating ) )
         lines.append( "lower set temperature: {:4.0f} °C".format( self.T_min_heating ) ) 

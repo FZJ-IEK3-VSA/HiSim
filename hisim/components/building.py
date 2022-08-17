@@ -7,7 +7,7 @@ import copy
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import List
+from typing import List, Any
 # Owned
 from hisim import utils
 from hisim import component as cp
@@ -382,7 +382,7 @@ class Building(dynamic_component.DynamicComponent):
             cp.ComponentConnection(Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents))
         return connections
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         # if timestep >=10392 and force_convergence:
         #    log.information("Stop herj!")
         # if force_convergence:
@@ -512,13 +512,13 @@ class Building(dynamic_component.DynamicComponent):
                 database = pd.DataFrame(self.cache, columns=["solar_gain_through_windows"])
                 database.to_csv(self.cache_file_path, sep=",", decimal=".", index=False)
 
-    def i_save_state(self):
+    def i_save_state(self)-> None:
         self.previous_state = self.state.self_copy()
 
-    def i_restore_state(self):
+    def i_restore_state(self)-> None:
         self.state = self.previous_state.self_copy()
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 
     def build(self, bClass, buildingcode):
@@ -561,7 +561,7 @@ class Building(dynamic_component.DynamicComponent):
     def calculate_max_thermal_building_demand(self,
                                               building_code: str,
                                               initial_temperature: float,
-                                              heating_reference_temperature: float):
+                                              heating_reference_temperature: float) -> Any:
 
         df = pd.read_csv(utils.HISIMPATH["housing"],
                          decimal=",",
@@ -1208,17 +1208,17 @@ class BuildingController(cp.Component):
     def i_restore_state(self):
         self.state = self.previous_state.clone()
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         building_temperature = stsv.get_input_value(self.residence_temperature)
         minimal_building_temperature = self.minimal_building_temperature
         delta_temp_for_lvl_of_util = 0.4  # delta_temperature_for_level_of_utilization
 
         # Building is warm enough
         if building_temperature > minimal_building_temperature:
-            level_of_utilization = 0
+            level_of_utilization:float = 0
         # Building get heated up, when temperature is underneath target temperature
         elif building_temperature < minimal_building_temperature - delta_temp_for_lvl_of_util:
             level_of_utilization = 1

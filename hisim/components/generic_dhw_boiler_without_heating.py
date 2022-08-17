@@ -94,7 +94,7 @@ class BoilerState:
         return self.temperature_in_K * self.volume_in_l * 0.977 * 4.182 #energy given in kJ
 
 
-    def set_temperature_from_energy( self, energy_in_kJ):
+    def set_temperature_from_energy( self, energy_in_kJ:float) -> None:
         "converts energy contained in storage (kJ) into temperature (K)"
         #0.977 is the density of water in kg/l
         #4.182 is the specific heat of water in kJ / ( K * kg )
@@ -132,7 +132,7 @@ class Boiler( cp.Component ):
     # obligatory Outputs
     TemperatureMean = "TemperatureMean"
     
-    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ):
+    def __init__( self, my_simulation_parameters: SimulationParameters, config : BoilerConfig ) -> None:
 
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         
@@ -161,29 +161,29 @@ class Boiler( cp.Component ):
         self.add_default_connections( generic_heat_pump_modular.HeatPump, self.get_heatpump_default_connections( ) )
         self.add_default_connections( generic_heat_source.HeatSource, self.get_heatpump_default_connections( ) )
         
-    def get_occupancy_default_connections( self ):
+    def get_occupancy_default_connections( self )  -> List[cp.ComponentConnection]:
         log.information("setting occupancy default connections in dhw boiler" )
         connections = [ ]
         occupancy_classname = Occupancy.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, Occupancy.WaterConsumption ) )
         return connections
     
-    def get_heatpump_default_connections( self ):
+    def get_heatpump_default_connections( self )  -> List[cp.ComponentConnection]:
         log.information("setting heat pump default connections in dhw boiler" )
         connections = [ ]
         heatpump_classname = generic_heat_pump_modular.HeatPump.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.ThermalPowerDelivered, heatpump_classname, generic_heat_pump_modular.HeatPump.ThermalPowerDelivered ) )
         return connections
     
-    def get_heatsource_default_connections( self ):
+    def get_heatsource_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting heat source default connections in dhw boiler" )
-        connections = [ ]
+        connections: List[cp.ComponentConnection] = [ ]
         heatsource_classname = generic_heat_source.HeatSource.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.ThermalPowerDelivered, heatsource_classname, generic_heat_source.HeatSource.ThermalPowerDelivered ) )
         return connections
     
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> BoilerConfig:
         config = BoilerConfig( name = 'Boiler',
                                source_weight = 1, 
                                volume = 200,
@@ -194,7 +194,7 @@ class Boiler( cp.Component ):
                                efficiency = 1 )
         return config
     
-    def build( self, config : BoilerConfig ):
+    def build( self, config : BoilerConfig )-> None:
         
         self.source_weight = config.source_weight
         self.volume = config.volume
@@ -210,22 +210,22 @@ class Boiler( cp.Component ):
             
         self.write_to_report( )
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Name: {}".format("electric Boiler"))
         lines.append( "Volume: {:4.0f} l".format( self.volume ) )
         return lines
 
-    def i_save_state( self ):
+    def i_save_state( self ) -> None:
         self.previous_state = self.state.clone()
 
-    def i_restore_state( self ):
+    def i_restore_state( self )  -> None:
         self.state = self.previous_state.clone()
 
-    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues ):
+    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues )  -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool )  -> None:
         
         # Retrieves inputs
         WW_consumption = stsv.get_input_value( self.WaterConsumptionC )

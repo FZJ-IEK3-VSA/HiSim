@@ -140,7 +140,7 @@ class Occupancy(cp.Component):
             # From Thermal Energy Storage
             ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)            # kg/s
             #ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
-            ww_mass_input = ww_mass_input_per_sec
+            ww_mass_input:float = ww_mass_input_per_sec
             ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)      # °C
 
             # Information import
@@ -175,7 +175,7 @@ class Occupancy(cp.Component):
             if ww_energy_demand > 0:
                 # heating up the freshwater. The mass is consistent
                 energy_discharged = ww_energy_demand + energy_losses
-                ww_temperature_output = freshwater_temperature + temperature_difference_cold
+                ww_temperature_output:float = freshwater_temperature + temperature_difference_cold
                 ww_mass_input = energy_discharged / (PhysicsConfig.water_specific_heat_capacity * (ww_temperature_input - ww_temperature_output))
             else:
                 ww_temperature_output = ww_temperature_input

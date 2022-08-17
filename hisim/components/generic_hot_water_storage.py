@@ -173,7 +173,7 @@ class HeatStorage(Component):
         pass
 
     def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w: float):
-        production = 0
+        production:float = 0
         # function to add all possible mass flows
 
         if self.thermal_input_power1.source_output is not None:

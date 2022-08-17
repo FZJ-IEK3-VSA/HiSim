@@ -29,7 +29,7 @@ class SimRepository:
         """ Deletes an existing entry. """
         self.my_dict.pop(key)
 
-    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry) -> None:
+    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry: Any) -> None:
         """ Sets a dynamic entry. """
         self.my_dynamic_dict[component_type][source_weight] = entry
 

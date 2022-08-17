@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Owned
+from typing import Any, List
 import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
@@ -35,7 +36,7 @@ class L1Config:
                   name : str,
                   source_weight : int,
                   min_operation_time : int,
-                  min_idle_time : int ):
+                  min_idle_time : int ) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
@@ -46,26 +47,26 @@ class L1_ControllerState:
     This data class saves the state of the controller.
     """
 
-    def __init__( self, timestep_actual : int = -1, state : int = 0, timestep_of_last_action : int = 0 ):
+    def __init__( self, timestep_actual : int = -1, state : int = 0, timestep_of_last_action : int = 0 ) -> None:
         self.timestep_actual = timestep_actual
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
         
-    def clone( self ):
+    def clone( self ) -> Any:
         return L1_ControllerState( timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action )
     
-    def is_first_iteration( self, timestep ):
+    def is_first_iteration( self, timestep: int )-> bool:
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
             return True
         else:
             return False
         
-    def activation( self, timestep ):
+    def activation( self, timestep:int ) ->None:
         self.state = 1
         self.timestep_of_last_action = timestep
         
-    def deactivation( self, timestep ):
+    def deactivation( self, timestep: int )->None:
         self.state = 0
         self.timestep_of_last_action = timestep 
 
@@ -100,7 +101,7 @@ class L1_Controller( cp.Component ):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__( self, my_simulation_parameters : SimulationParameters, config = L1Config ):
+    def __init__( self, my_simulation_parameters : SimulationParameters, config: L1Config ) -> None:
         
         super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         self.build( config )
@@ -125,7 +126,7 @@ class L1_Controller( cp.Component ):
                                                                          LoadTypes.ANY,
                                                                          Units.ANY)
         
-    def get_l2_controller_default_connections( self ):
+    def get_l2_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l2 default connections in l1")
         connections = [ ]
         controller_classname = controller_l2_generic_heat_clever_simple.L2_Controller.get_classname( )
@@ -133,7 +134,7 @@ class L1_Controller( cp.Component ):
         return connections
     
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> L1Config:
         config = L1Config( name = 'L1Controller',
                            source_weight =  1,
                            min_operation_time = 3600,
@@ -141,14 +142,14 @@ class L1_Controller( cp.Component ):
         return config
     
     @staticmethod
-    def get_default_config_heatpump():
+    def get_default_config_heatpump()  -> L1Config:
         config = L1Config( name = 'L1Controller',
                            source_weight =  1,
                            min_operation_time = 3600 * 3,
                            min_idle_time = 3600 ) 
         return config
 
-    def build( self, config ):
+    def build( self, config: L1Config ) -> None:
         self.name = config.name
         self.source_weight = config.source_weight
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
@@ -158,16 +159,16 @@ class L1_Controller( cp.Component ):
         self.state = L1_ControllerState( )
         self.previous_state = L1_ControllerState( )
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)  -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -200,13 +201,13 @@ class L1_Controller( cp.Component ):
         
         stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines:List[str] = []
         lines.append("Generic Controller L1: " + self.component_name)
         return lines
 

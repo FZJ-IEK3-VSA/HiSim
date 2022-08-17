@@ -53,8 +53,8 @@ class CHPState:
     This data class saves the state of the CHP.
     """
 
-    def __init__( self, state : int = 0 ) -> None:
-        self.state = state
+    def __init__( self, state : float = 0 ) -> None:
+        self.state:float = state
         
     def clone( self ) -> Any:
         return CHPState( state = self.state )

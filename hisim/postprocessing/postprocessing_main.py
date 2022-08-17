@@ -3,7 +3,7 @@ import pandas as pd
 import sys
 import inspect
 import subprocess
-
+from typing import Any
 import tkinter.filedialog as filedialog
 from enum import Enum
 
@@ -26,17 +26,17 @@ from hisim.component import ComponentOutput
 
 class PostProcessingDataTransfer:
     def __init__(self,
-                  directory_path,
-                  results,
-                  all_outputs,
+                  directory_path: str,
+                  results: Any,
+                  all_outputs: Any,
                   simulation_parameters: SimulationParameters,
-                  wrapped_components,
-                  story,
-                  mode,
-                  setup_function,
-                  execution_time,
-                  results_monthly,
-                  ):
+                  wrapped_components: Any,
+                  story: Any,
+                  mode: Any,
+                  setup_function: Any,
+                  execution_time: Any,
+                  results_monthly: Any,
+                  ) -> None:
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
         self.time_correction_factor =  simulation_parameters.seconds_per_timestep / 3600
         self.directory_path = directory_path

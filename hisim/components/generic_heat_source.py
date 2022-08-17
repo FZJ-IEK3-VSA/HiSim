@@ -2,7 +2,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+from typing import List
 # Import modules from HiSim
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -36,7 +36,7 @@ class HeatSourceConfig:
                   source_weight : int,
                   fuel : lt.LoadTypes,
                   power_th : float,
-                  efficiency : float ):
+                  efficiency : float ) -> None:
         self.name = name
         self.source_weight = source_weight
         self.fuel = fuel
@@ -67,7 +67,7 @@ class HeatSource( cp.Component ):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     FuelDelivered =         "FuelDelivered"
 
-    def __init__( self, my_simulation_parameters: SimulationParameters , config : HeatSourceConfig ):
+    def __init__( self, my_simulation_parameters: SimulationParameters , config : HeatSourceConfig ) -> None:
         """
         Parameters
         ----------
@@ -106,7 +106,7 @@ class HeatSource( cp.Component ):
         
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
         
-    def get_l1_controller_default_connections( self ):
+    def get_l1_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
         controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
@@ -114,7 +114,7 @@ class HeatSource( cp.Component ):
         return connections
     
     @staticmethod
-    def get_default_config_heating():
+    def get_default_config_heating() -> HeatSourceConfig:
         config = HeatSourceConfig( name = 'HeatSource',
                                    source_weight =  1,
                                    fuel = lt.LoadTypes.ELECTRICITY,
@@ -123,7 +123,7 @@ class HeatSource( cp.Component ):
         return config
     
     @staticmethod
-    def get_default_config_waterheating():
+    def get_default_config_waterheating() -> HeatSourceConfig:
         config = HeatSourceConfig( name = 'HeatSource',
                                    source_weight =  1,
                                    fuel = lt.LoadTypes.DISTRICTHEATING,
@@ -131,7 +131,7 @@ class HeatSource( cp.Component ):
                                    efficiency = 0.9 ) 
         return config
 
-    def build( self, config : HeatSourceConfig ):
+    def build( self, config : HeatSourceConfig ) -> None:
         """
         Assigns parameters of oil heater to class, and writes them to the report
         """
@@ -144,7 +144,7 @@ class HeatSource( cp.Component ):
         self.previous_state = HeatSourceState( )
     
 
-    def write_to_report( self ):
+    def write_to_report( self ) -> List[str]:
         """
         Returns
         -------
@@ -159,16 +159,16 @@ class HeatSource( cp.Component ):
         lines.append( 'Efficiency : {:4.0f} %'.format( ( self.efficiency ) * 100 ) )
         return lines
     
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues ):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues )  -> None:
         pass
     
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool )  -> None:
         """
         Performs the simulation of the district heating model.
         """ 

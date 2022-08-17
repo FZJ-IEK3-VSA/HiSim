@@ -65,8 +65,6 @@ def test_chp_system():
         my_chp_controller.i_simulate( t, stsv,  False )
         my_chp.i_simulate( t, stsv, False )
         
-    print(stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index], stsv.values[my_chp.ElectricityOutputC.global_index], stsv.values[ my_chp.FuelDeliveredC.global_index])
-        
     assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 3000
     assert stsv.values[my_chp.ElectricityOutputC.global_index] == 2000
     assert stsv.values[ my_chp.FuelDeliveredC.global_index] > 4e-5

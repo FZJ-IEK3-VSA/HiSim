@@ -231,7 +231,6 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     if water_heating_system_installed == 'HeatPump':
         waterheater_config = generic_heat_pump_modular.HeatPump.get_default_config_waterheating( ) 
         waterheater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 * ( boiler_config.T_warmwater - boiler_config.T_drainwater ) * 0.977 * 4.182 / 3.6
-        print( my_occupancy.max_hot_water_demand, waterheater_config.power_th )
         waterheater_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config_heatpump( )
         waterheater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_waterheating( )
         waterheater_l2_config.P_threshold = waterheater_config.power_th / 3

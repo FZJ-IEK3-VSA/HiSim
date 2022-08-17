@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Tuple, Union, Optional
 import logging
 
 from hisim import dynamic_component
+from hisim import log
 import hisim.component as component
 import hisim.simulator as sim
 import hisim.hisim_main
@@ -230,7 +231,7 @@ class ConfigurationGenerator:
         timeline.
         """
         if my_simulation_parameters is None:
-            print("no simulation Parameters are added")
+            log.debug("no simulation Parameters are added")
         else:
             self._simulation_parameters = my_simulation_parameters
             # logging.info("Simulation parameters have been added to the configuration JSON file.")
@@ -350,10 +351,10 @@ class ConfigurationGenerator:
         self._parameters_range_studies = {}
 
     def print_components(self)  -> None:
-        print(json.dumps(self._components, sort_keys=True, indent=4))
+        log.trace(json.dumps(self._components, sort_keys=True, indent=4))
 
     def print_component(self, name: str) -> None:
-        print(json.dumps(self._components[name], sort_keys=True, indent=4))
+        log.trace(json.dumps(self._components[name], sort_keys=True, indent=4))
 
     def dump(self) -> None:
 
@@ -581,7 +582,6 @@ class SetupFunction:
             config_class = component_class_config_to_add.from_dict(
                 self.cfg["Components"][full_instance_path]
             )
-            print(str(config_class))
             self._components.append(
                 component_class_to_add(
                     config=config_class,
@@ -590,12 +590,12 @@ class SetupFunction:
             )
 
         except Exception as e:
-            print(
+            log.debug(
                 "Adding Component {} resulted in a failure".format(full_instance_path)
             )
-            print("Might be Missing :   {} ".format(component_class_to_add))
-            print("Please, investigate implementation mistakes in this Component.")
-            print(e)
+            log.debug("Might be Missing :   {} ".format(component_class_to_add))
+            log.debug("Please, investigate implementation mistakes in this Component.")
+            log.debug(e)
             sys.exit(1)
         # Add last listed component to Simulator object
         my_sim.add_component(self._components[-1])
@@ -651,8 +651,8 @@ class SetupFunction:
                     ),
                 )
             except Exception as e:
-                print(e)
-                print("Incorrect Connection")
+                log.debug(e)
+                log.debug("Incorrect Connection")
 
     def add_configuration(self, my_sim: sim.Simulator) -> None:
         # my_sim.add_configuration(self.cfg_raw)

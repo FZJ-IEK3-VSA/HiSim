@@ -262,9 +262,6 @@ class L3_Controller(dynamic_component.DynamicComponent):
                                 activation = timestep + possibility
                                 profile = [ * shiftableload ]
                                 continue
-                        # if self.threshold_price < 25:
-                        #     self.threshold_price = price
-                        #print( timestep, price, activation  )
                     
                     #compute new load
                     totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]

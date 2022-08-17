@@ -77,19 +77,13 @@ def test_heat_pump_modular():
     stsv.values[ 1 ] = 0
     j = 60 * 5 
     
-    
-    print( stsv.values[ 4 ], stsv.values[ 3 ] )
     # Simulate
     my_heat_pump_controller_l2.i_restore_state()
     my_heat_pump_controller_l2.i_simulate(j, stsv,  False)
-    
-    print( stsv.values[ 4 ], stsv.values[ 3 ] )
-    
+
     my_heat_pump_controller_l1.i_restore_state()
     my_heat_pump_controller_l1.i_simulate(j, stsv,  False)
-    
-    print( stsv.values[ 4 ], stsv.values[ 3 ] )
-   
+
     my_heat_pump.i_restore_state()
     my_heat_pump.i_simulate(j, stsv, False)
 

@@ -283,7 +283,6 @@ class L1_Controller( cp.Component ):
     def build( self, config: L1CHPConfig ) -> None:
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
-        #print( config )
         self.SOCmin = config.min_h2_soc
         self.name = config.name
         self.source_weight = config.source_weight

@@ -173,7 +173,6 @@ class L1_Controller( cp.Component ):
             pass
         
         l2_devicesignal = stsv.get_input_value( self.l2_DeviceSignalC )
-        print( l2_devicesignal )
         
         #save reference state state0 in first iteration
         if self.state.is_first_iteration( timestep ):
@@ -194,7 +193,6 @@ class L1_Controller( cp.Component ):
             self.state.state = 0
         #check signal from l2 and turn on or off if it is necesary
         else:
-            print( 30, l2_devicesignal, self.state0.state )
             if l2_devicesignal == 0 and self.state0.state == 1:
                 self.state.deactivation( timestep )
             elif l2_devicesignal == 1 and self.state0.state == 0:

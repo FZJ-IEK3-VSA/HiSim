@@ -258,7 +258,7 @@ class OverviewGenerator:
             module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
-        except NameError:  # noqa
+        except:  # noqa
             module = None
         return module
 

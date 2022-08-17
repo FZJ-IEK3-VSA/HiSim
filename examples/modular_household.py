@@ -105,15 +105,15 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     except:
         # file does not exist or could not be parsed - use default config
         my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True,
-                                                      WaterHeatingSystemInstalled = 'HeatPump', HeatingSystemInstalled = 'HeatPump', battery_included = True, chp_included = True )  
+                                                      water_heating_system_installed = 'HeatPump', heating_system_installed = 'HeatPump', battery_included = True, chp_included = True )  
     my_sim.set_simulation_parameters(my_simulation_parameters)
     
     #get system configuration
     predictive = my_simulation_parameters.system_config.predictive #True or False
     pv_included = my_simulation_parameters.system_config.pv_included #True or False
     smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
-    WaterHeatingSystemInstalled = my_simulation_parameters.system_config.WaterHeatingSystemInstalled #Electricity, Hydrogen or False
-    HeatingSystemInstalled = my_simulation_parameters.system_config.HeatingSystemInstalled 
+    water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed #Electricity, Hydrogen or False
+    heating_system_installed = my_simulation_parameters.system_config.heating_system_installed 
     battery_included = my_simulation_parameters.system_config.battery_included
     chp_included = my_simulation_parameters.system_config.chp_included
 
@@ -210,7 +210,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
             count += 1
     
     """SURPLUS CONTROLLER"""
-    if battery_included or chp_included or HeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ] or WaterHeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if battery_included or chp_included or heating_system_installed in [ 'HeatPump', 'ElectricHeating' ] or water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_electricity_controller = controller_l2_energy_management_system.ControllerElectricityGeneric( my_simulation_parameters = my_simulation_parameters )
 
         my_electricity_controller.add_component_inputs_and_connect(source_component_classes = consumption,
@@ -228,29 +228,29 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         
     """WATERHEATING"""    
     boiler_config = generic_dhw_boiler_without_heating.Boiler.get_default_config( )    
-    if WaterHeatingSystemInstalled == 'HeatPump':
+    if water_heating_system_installed == 'HeatPump':
         waterheater_config = generic_heat_pump_modular.HeatPump.get_default_config_waterheating( ) 
         waterheater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 * ( boiler_config.T_warmwater - boiler_config.T_drainwater ) * 0.977 * 4.182 / 3.6
         print( my_occupancy.max_hot_water_demand, waterheater_config.power_th )
         waterheater_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config_heatpump( )
         waterheater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_waterheating( )
         waterheater_l2_config.P_threshold = waterheater_config.power_th / 3
-    elif WaterHeatingSystemInstalled == 'ElectricHeating':
+    elif water_heating_system_installed == 'ElectricHeating':
         waterheater_config = generic_heat_pump_modular.HeatPump.get_default_config_waterheating_electric( )
         waterheater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 * ( boiler_config.T_warmwater - boiler_config.T_drainwater ) * 0.977 * 4.182 / 3.6
         waterheater_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
         waterheater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_waterheating( )
         waterheater_l2_config.P_threshold = waterheater_config.power_th
-    elif WaterHeatingSystemInstalled in [ 'GasHeating', 'OilHeating', 'DistrictHeating' ]:
+    elif water_heating_system_installed in [ 'GasHeating', 'OilHeating', 'DistrictHeating' ]:
         waterheater_config = generic_heat_source.HeatSource.get_default_config_waterheating( ) 
         waterheater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 * ( boiler_config.T_warmwater - boiler_config.T_drainwater ) * 0.977 * 4.182 / 3.6
         waterheater_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
         waterheater_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_waterheating( )
-        if WaterHeatingSystemInstalled == 'GasHeating':
+        if water_heating_system_installed == 'GasHeating':
             waterheater_config.fuel = lt.LoadTypes.GAS
-        elif WaterHeatingSystemInstalled == 'OilHeating':
+        elif water_heating_system_installed == 'OilHeating':
              waterheater_config.fuel = lt.LoadTypes.OIL
-        elif WaterHeatingSystemInstalled == 'DistrictHeating':
+        elif water_heating_system_installed == 'DistrictHeating':
              waterheater_config.fuel = lt.LoadTypes.DISTRICTHEATING
             
     waterheater_config.source_weight = count
@@ -263,7 +263,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_boiler.connect_only_predefined_connections( my_occupancy )
     my_sim.add_component( my_boiler )
     
-    if WaterHeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_waterheater_controller_l2 = controller_l2_generic_heat_clever_simple.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = waterheater_l2_config )
     else:
         my_waterheater_controller_l2 = controller_l2_generic_heat_simple.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = waterheater_l2_config ) 
@@ -274,7 +274,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_waterheater_controller_l1.connect_only_predefined_connections( my_waterheater_controller_l2 )
     my_sim.add_component( my_waterheater_controller_l1 )
     
-    if WaterHeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_waterheater = generic_heat_pump_modular.HeatPump( config = waterheater_config, my_simulation_parameters = my_simulation_parameters )
         my_waterheater_controller_l2.connect_only_predefined_connections( my_waterheater_controller_l1 )
         my_waterheater.connect_only_predefined_connections( my_weather ) 
@@ -285,7 +285,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_boiler.connect_only_predefined_connections( my_waterheater )
     
     """HEATING"""
-    if WaterHeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_electricity_controller.add_component_input_and_connect(  source_component_class = my_waterheater,
                                                                     source_component_output = my_waterheater.ElectricityOutput,
                                                                     source_load_type = lt.LoadTypes.ELECTRICITY,
@@ -303,35 +303,35 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                          src_object = electricity_to_waterheater )
         consumption.append( my_waterheater )
  
-    if HeatingSystemInstalled == 'HeatPump':
+    if heating_system_installed == 'HeatPump':
         heatpump_config = generic_heat_pump_modular.HeatPump.get_default_config_heating( ) 
         heatpump_config.power_th = my_building.max_thermal_building_demand
         l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config_heatpump( )     
         l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_heating( ) 
         l2_config.P_threshold = heatpump_config.power_th / 3
-    elif HeatingSystemInstalled == 'ElectricHeating':
+    elif heating_system_installed == 'ElectricHeating':
         heatpump_config = generic_heat_pump_modular.HeatPump.get_default_config_heating_electric( )
         heatpump_config.power_th = my_building.max_thermal_building_demand
         l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
         l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_heating( )
         l2_config.P_threshold = heatpump_config.power_th
-    elif HeatingSystemInstalled in [ 'GasHeating', 'OilHeating', 'DistrictHeating' ]:
+    elif heating_system_installed in [ 'GasHeating', 'OilHeating', 'DistrictHeating' ]:
         heatpump_config = generic_heat_source.HeatSource.get_default_config_heating( ) 
         heatpump_config.power_th = my_building.max_thermal_building_demand
         l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config( )
         l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating( )
-        if HeatingSystemInstalled == 'GasHeating':
+        if heating_system_installed == 'GasHeating':
             heatpump_config.fuel = lt.LoadTypes.GAS
-        elif HeatingSystemInstalled == 'OilHeating':
+        elif heating_system_installed == 'OilHeating':
             heatpump_config.fuel = lt.LoadTypes.OIL
-        elif HeatingSystemInstalled == 'DistrictHeating':
+        elif heating_system_installed == 'DistrictHeating':
             heatpump_config.fuel = lt.LoadTypes.DISTRICTHEATING
     heatpump_config.source_weight = count
     l1_config.source_weight = count
     l2_config.source_weight = count
     count += 1
     
-    if HeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_heatpump_controller_l2 = controller_l2_generic_heat_clever_simple.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = l2_config )
     else:
         my_heatpump_controller_l2 = controller_l2_generic_heat_simple.L2_Controller( my_simulation_parameters = my_simulation_parameters, config = l2_config )
@@ -343,7 +343,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_sim.add_component( my_heatpump_controller_l1 )
     my_heatpump_controller_l2.connect_only_predefined_connections( my_heatpump_controller_l1 )
     
-    if HeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_heatpump = generic_heat_pump_modular.HeatPump( config = heatpump_config, my_simulation_parameters = my_simulation_parameters )
         my_heatpump.connect_only_predefined_connections( my_weather )
     else:
@@ -351,7 +351,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     my_heatpump.connect_only_predefined_connections( my_heatpump_controller_l1 )
     my_sim.add_component( my_heatpump )
     
-    if HeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_electricity_controller.add_component_input_and_connect(  source_component_class = my_heatpump,
                                                                 source_component_output = my_heatpump.ElectricityOutput,
                                                                 source_load_type = lt.LoadTypes.ELECTRICITY,
@@ -491,7 +491,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                  source_tags = [lt.InandOutputType.HEAT_TO_BUILDING],
                                                  source_weight = 999)
         
-    if battery_included or chp_included or HeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ] or WaterHeatingSystemInstalled in [ 'HeatPump', 'ElectricHeating' ]:
+    if battery_included or chp_included or heating_system_installed in [ 'HeatPump', 'ElectricHeating' ] or water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_sim.add_component( my_electricity_controller )
      
     """PREDICTIVE CONTROLLER FOR SMART DEVICES"""    

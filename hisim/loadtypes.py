@@ -56,6 +56,7 @@ class LoadTypes(str, enum.Enum):
     ON_OFF = "OnOff"  # encoding: 0 means off and 1 means on
     ACTIVATION = 'Activation'
 
+
 @enum.unique
 class Units(str, enum.Enum):
 

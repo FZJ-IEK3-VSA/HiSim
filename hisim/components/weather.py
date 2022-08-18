@@ -408,7 +408,8 @@ def readTRY(location="Aachen", year=2015):
     """
     # get the correct file path
     filepath = os.path.join(HISIMPATH["weather"][location])
-
+    filepath2 = os.path.join(HISIMPATH["weather"])
+    log.information("filepath {}".format(filepath2))    
     SouhternEurope=["Madrid","Seville","Bilbao"]
     LocationisSouthernEurope= location in SouhternEurope
     if LocationisSouthernEurope:

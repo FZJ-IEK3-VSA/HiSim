@@ -408,8 +408,6 @@ def readTRY(location="Aachen", year=2015):
     # get the correct file path
     filepath = os.path.join(HISIMPATH["weather"][location])
     
-    # SouhternEurope=["Madrid","Seville","Bilbao"]
-    # LocationisSouthernEurope= location in SouhternEurope
     if filepath == os.path.join(hisim_abs_path, "inputs","weather","NSRDB",location):
         # get the geoposition
         with open(filepath + ".dat", encoding="utf-8") as fp:

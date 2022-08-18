@@ -3,13 +3,13 @@ import pandas as pd
 import json
 import numpy as np
 import math as ma
-from typing import Optional
+from typing import Optional, List
 
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components import controller_l3_generic_heatpump_modular
+from hisim.components import controller_l3_smart_devices
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
 #from hisim.components import controller_l3_predictive
@@ -50,7 +50,7 @@ class SmartDeviceState:
     def clone( self ):
         return SmartDeviceState( self.actual_power, self.timestep_of_activation, self.time_to_go, self.position ) 
         
-    def run( self, timestep : int, electricity_profile : list ):
+    def run( self, timestep : int, electricity_profile : List[float] )-> None:
         
         #device activation
         if timestep > self.timestep_of_activation + self.time_to_go:
@@ -124,16 +124,16 @@ class SmartDevice( cp.Component ):
                                                                          load_type = lt.LoadTypes.ACTIVATION,
                                                                          unit = lt.Units.TIMESTEPS)
             
-    def i_save_state( self ):
+    def i_save_state( self ) -> None:
         self.previous_state : SmartDeviceState = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.state : SmartDeviceState = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool )  -> None:
         
         #initialize power
         self.state.actual_power = 0
@@ -147,7 +147,7 @@ class SmartDevice( cp.Component ):
         if timestep > self.state.timestep_of_activation + self.state.time_to_go:
             if timestep > self.earliest_start[ self.state.position ]: #needs to be switched off
                 #initialize next activation
-                activation = timestep + 10 
+                activation:float = timestep + 10
                 #when predictive read in best activation
                 if self.predictive:
                     activation = stsv.get_input_value( self.l3_DeviceActivationC )
@@ -178,7 +178,7 @@ class SmartDevice( cp.Component ):
             stsv.set_output_value( self.EarliestActivationC, self.earliest_start[ self.state.position ] )
             stsv.set_output_value( self.LatestActivationC, self.latest_start[ self.state.position ] )
         
-    def build( self, identifier, source_weight, seconds_per_timestep : int = 60 ):
+    def build( self, identifier: str, source_weight: int, seconds_per_timestep : int = 60 ) -> None:
 
         #load smart device profile
         smart_device_profile = [ ]
@@ -244,8 +244,8 @@ class SmartDevice( cp.Component ):
         self.previous_state = SmartDeviceState( )
         self.predictive = self.my_simulation_parameters.system_config.predictive
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
         lines.append("DeviceName: {}".format(self.component_name))
         return lines
         

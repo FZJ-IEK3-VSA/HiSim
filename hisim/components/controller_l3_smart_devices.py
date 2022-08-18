@@ -18,8 +18,6 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
 from hisim.components import generic_smart_device
-# from hisim.components import generic_dhw_boiler
-from hisim.components import generic_district_heating
 from hisim.components import controller_l1_generic_runtime
 from hisim.components import generic_heat_pump_modular
 from hisim.simulationparameters import SimulationParameters, SystemConfig
@@ -112,7 +110,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
                         threshold_price : float = 25,
-                        threshold_peak : Optional[ float ] = None ):
+                        threshold_peak : Optional[ float ] = None )-> None:
         
         super( ).__init__(  my_component_inputs = self.my_component_inputs,
                             my_component_outputs = self.my_component_outputs,
@@ -121,7 +119,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
         
         self.build( threshold_price, threshold_peak )
 
-    def build( self, threshold_price : float, threshold_peak : Optional[ float ] ):
+    def build( self, threshold_price : float, threshold_peak : Optional[ float ] ) -> None:
         self.threshold_peak = threshold_peak
         self.threshold_price = threshold_price
         self.signal = ControllerSignal( )
@@ -129,7 +127,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
         self.source_weights_sorted : list = [ ]
         self.components_sorted : list[ lt.ComponentType ] = [ ]
         
-    def sort_source_weights_and_components( self ):
+    def sort_source_weights_and_components( self ) -> None:
         SourceTags = [elem.source_tags[ 0] for elem in self.my_component_inputs]
         SourceWeights = [elem.source_weight for elem in self.my_component_inputs]
         sortindex = sorted( range( len( SourceWeights) ), key = lambda k: SourceWeights[ k ] )
@@ -142,21 +140,21 @@ class L3_Controller(dynamic_component.DynamicComponent):
         else:
             return 0
 
-    def write_to_report(self):
-        lines = []
+    def write_to_report(self) -> List[str]:
+        lines:List[str] = []
         lines.append("L3 Controller Heat Pump: " + self.component_name)
         return lines
 
-    def i_save_state( self ):
+    def i_save_state( self ) -> None:
         self.previous_signal = self.signal.clone( )
 
-    def i_restore_state( self ):
+    def i_restore_state( self )-> None:
         self.signal= self.previous_signal.clone( )
 
-    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck( self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
         
         if timestep == 0:
             self.sort_source_weights_and_components( )
@@ -264,9 +262,6 @@ class L3_Controller(dynamic_component.DynamicComponent):
                                 activation = timestep + possibility
                                 profile = [ * shiftableload ]
                                 continue
-                        # if self.threshold_price < 25:
-                        #     self.threshold_price = price
-                        #print( timestep, price, activation  )
                     
                     #compute new load
                     totalload = [ a + b for ( a, b ) in zip( totalload, profile ) ]
@@ -282,5 +277,4 @@ class L3_Controller(dynamic_component.DynamicComponent):
                     
                 ind = advance( component_type, ind ) 
                 self.signal = ControllerSignal( signal = signal )
-            
        

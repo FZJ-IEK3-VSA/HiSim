@@ -113,4 +113,4 @@ class ComponentNameState:
     output_with_state : int
         Stores the state of the output_with_state value from :py:class:`~hisim.component.ComponentName`.
     """
-    output_with_state: int = 0
+    output_with_state: float = 0

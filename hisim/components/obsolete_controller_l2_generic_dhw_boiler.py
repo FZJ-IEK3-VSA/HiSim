@@ -8,8 +8,7 @@ import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import controller_l3_generic_heatpump_modular
-from hisim.components.generic_dhw_boiler import Boiler
+from hisim.components.obsolete_generic_dhw_boiler_with_heating import Boiler
 from hisim import log
 
 from dataclasses import dataclass
@@ -55,9 +54,9 @@ class L2_ControllerState:
     This data class saves the state of the heat pump.
     """
 
-    def __init__(self, timestep_actual: int = -1, state: int = 0, compulsory: int = 0, count: int = 0):
+    def __init__(self, timestep_actual: int = -1, state: float = 0, compulsory: int = 0, count: int = 0):
         self.timestep_actual = timestep_actual
-        self.state = state
+        self.state: float = state
         self.compulsory = compulsory
         self.count = count
 
@@ -192,7 +191,7 @@ class L2_Controller(cp.Component):
         T_control = stsv.get_input_value(self.ReferenceTemperatureC)
 
         # get l3 recommendation if available
-        l3state = 0
+        l3state:float = 0.0
         if self.l3_DeviceSignalC.source_output is not None:
             l3state = stsv.get_input_value(self.l3_DeviceSignalC)
 

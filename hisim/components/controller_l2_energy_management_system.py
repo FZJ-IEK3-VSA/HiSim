@@ -1,5 +1,5 @@
 # Generic/Built-in
-
+from typing import Any
 # Owned
 import copy
 import numpy as np
@@ -58,7 +58,7 @@ class ControllerState:
                  temperature_storage_target_ww_C: float,
                  temperature_storage_target_hw_C: float,
                  timestep_of_hysteresis_ww: int,
-                 timestep_of_hysteresis_hw: int):
+                 timestep_of_hysteresis_hw: int) -> None:
         self.control_signal_gas_heater: float = control_signal_gas_heater
         self.control_signal_chp: float = control_signal_chp
         self.control_signal_heat_pump: float = control_signal_heat_pump
@@ -67,7 +67,7 @@ class ControllerState:
         self.timestep_of_hysteresis_ww: int = timestep_of_hysteresis_ww
         self.timestep_of_hysteresis_hw: int = timestep_of_hysteresis_hw
 
-    def clone(self):
+    def clone(self) -> "ControllerState":
         return ControllerState(control_signal_gas_heater=self.control_signal_gas_heater,
                                control_signal_chp=self.control_signal_chp,
                                control_signal_heat_pump=self.control_signal_heat_pump,
@@ -100,7 +100,7 @@ class ControllerHeat(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 config: ControllerHeatConfig):
+                 config: ControllerHeatConfig) -> None:
         super().__init__(name="ControllerHeat", my_simulation_parameters=my_simulation_parameters)
 
         self.temperature_storage_target_warm_water = config.temperature_storage_target_warm_water
@@ -157,26 +157,26 @@ class ControllerHeat(cp.Component):
                                                                                  False)
 
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> ControllerHeatConfig:
         config = ControllerHeatConfig(temperature_storage_target_warm_water=50,
                                       temperature_storage_target_heating_water=35,
                                       temperature_storage_target_hysteresis_ww=45,
                                       temperature_storage_target_hysteresis_hw=35)
         return config
 
-    def build(self, mode):
+    def build(self, mode: Any) -> None :
         self.mode = mode
 
-    def write_to_report(self):
+    def write_to_report(self) -> None:
         pass
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone()
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone()
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
     # Simulates and defines the control signals to heat up storages
@@ -185,7 +185,7 @@ class ControllerHeat(cp.Component):
                          stsv: cp.SingleTimeStepValues,
                          timestep: int, temperature_storage: float,
                          temperature_storage_target: float, temperature_storage_target_hysteresis: float,
-                         temperature_storage_target_C: float, timestep_of_hysteresis: int):
+                         temperature_storage_target_C: float, timestep_of_hysteresis: int) -> Any:
         control_signal_chp: float = 0
         control_signal_gas_heater: float = 0
         control_signal_heat_pump: float = 0
@@ -232,7 +232,7 @@ class ControllerHeat(cp.Component):
         return temperature_storage_target_C, \
                timestep_of_hysteresis
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         if force_convergence:
             return
         #######HEAT########
@@ -316,7 +316,7 @@ class ControllerElectricity(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 config: ControllerElectricityConfig):
+                 config: ControllerElectricityConfig) -> None:
         super().__init__(name="ControllerElectricity", my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = config.strategy
@@ -378,22 +378,22 @@ class ControllerElectricity(cp.Component):
                                                                                          lt.Units.WATT,
                                                                                          False)
 
-    def build(self, mode):
+    def build(self, mode:Any) -> None:
         self.mode = mode
 
-    def write_to_report(self):
+    def write_to_report(self) -> None:
         pass
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
 
-    def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
+    def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues)  -> None:
 
         electricity_to_or_from_battery_target: float = 0
         electricity_from_chp_target: float = 0
@@ -427,7 +427,7 @@ class ControllerElectricity(cp.Component):
 
     # seasonal storaging is almost the same as own_consumption, but a electrolyzer is added
     # follows strategy to first charge battery than produce H2
-    def seasonal_storage(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
+    def seasonal_storage(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
 
         electricity_to_or_from_battery_target: float = 0
         electricity_from_chp_target: float = 0
@@ -475,7 +475,7 @@ class ControllerElectricity(cp.Component):
     # peak-shaving from grid tries to reduce/shave electricity from grid to an defined boarder
     # just used for industry, trade and service
     # so far no chp is added. But produces elect. has to be addded to delta demand
-    def peak_shaving_from_grid(self, delta_demand: float, limit_to_shave: float, stsv: cp.SingleTimeStepValues):
+    def peak_shaving_from_grid(self, delta_demand: float, limit_to_shave: float, stsv: cp.SingleTimeStepValues) -> None:
         electricity_to_or_from_battery_target: float = 0
         check_peak_shaving: float = 0
 
@@ -497,7 +497,7 @@ class ControllerElectricity(cp.Component):
 
     # peak-shaving from grid tries to reduce/shave electricity into grid to an defined boarder
     # so far no chp is added. But produces elect. has to be addded to delta demand
-    def peak_shaving_into_grid(self, delta_demand: float, limit_to_shave: float, stsv: cp.SingleTimeStepValues):
+    def peak_shaving_into_grid(self, delta_demand: float, limit_to_shave: float, stsv: cp.SingleTimeStepValues)-> None:
         # Hier delta Demand noch die Leistung aus CHP hinzufügen
         electricity_to_or_from_battery_target: float = 0
         check_peak_shaving: float = 0
@@ -519,7 +519,7 @@ class ControllerElectricity(cp.Component):
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
         stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         if force_convergence:
             return
 
@@ -543,9 +543,11 @@ class ControllerElectricity(cp.Component):
 
 class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     """
-    Controlls energy flows for electricity.
-    Electricity storages can be ruled in 4 different strategies.
-    Component can be added generically
+    Surplus electricity controller - time step based. 
+    Iteratively goes through hierachy of devices given by
+    source weights of components and passes available surplus
+    electricity to each device. Needs to be configured with 
+    dynamic In- and Outputs.
     """
     # Inputs
     my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
@@ -590,32 +592,32 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                                                                       lt.Units.ANY,
                                                                       False)
 
-    def sort_source_weights_and_components(self):
+    def sort_source_weights_and_components(self)->None:
         SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs]
         SourceWeights = [elem.source_weight for elem in self.my_component_outputs]
         sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
         self.source_weights_sorted = [SourceWeights[i] for i in sortindex]
         self.components_sorted = [SourceTags[i] for i in sortindex]
 
-    def get_entries_of_type(self, component_type: lt.ComponentType):
+    def get_entries_of_type(self, component_type: lt.ComponentType)->Any:
         return self.components_sorted.index(component_type)
 
-    def build(self, mode):
+    def build(self, mode: Any)->None:
         self.mode = mode
 
-    def write_to_report(self):
+    def write_to_report(self)->None:
         pass
 
-    def i_save_state(self):
+    def i_save_state(self)->None:
         # abändern, siehe Storage
         pass
         # self.previous_state = self.state
 
-    def i_restore_state(self):
+    def i_restore_state(self)->None:
         pass
         # self.state = self.previous_state
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 
     def control_electricity_component(self, demand: float,
@@ -625,7 +627,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                                       weight_counter: int,
                                       component_type: list,
                                       input_type: lt.InandOutputType,
-                                      output_type: lt.InandOutputType):
+                                      output_type: lt.InandOutputType) -> Any:
         # to do: add that to much chp-electricty is charged in Battery and doesnt go in to grid
         for index, element in enumerate(my_component_outputs):
             for tags in element.source_tags:
@@ -662,7 +664,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     def control_electricity_component_iterative(self, deltademand: float,
                                                 stsv: cp.SingleTimeStepValues,
                                                 weight_counter: int,
-                                                component_type: lt.ComponentType):
+                                                component_type: lt.ComponentType)-> Any:
         is_battery = None
         # get previous signal and substract from total balance
         previous_signal = self.get_dynamic_input(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_REAL],
@@ -685,7 +687,8 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=0)
 
-        elif component_type == lt.ComponentType.ELECTROLYZER:
+        elif component_type in [ lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP ]:
+
             if deltademand > 0:
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=deltademand)
@@ -698,7 +701,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
 
     def postprocess_battery(self, deltademand: float,
                             stsv: cp.SingleTimeStepValues,
-                            ind: int):
+                            ind: int) -> Any:
         previous_signal = self.get_dynamic_input(stsv=stsv, tags=[self.components_sorted[ind]],
                                                  weight_counter=self.source_weights_sorted[ind])
         self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
@@ -706,7 +709,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                                 output_value=deltademand + previous_signal)
         return deltademand - previous_signal
 
-    def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
+    def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
         electricity_to_or_from_grid: float = 0
         my_component_inputs = self.my_component_inputs
         my_component_outputs = self.my_component_outputs
@@ -733,17 +736,17 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
 
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
 
-    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
+    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
         skip_CHP = False
-        for ind in range(len(self.source_weights_sorted)):
-            component_type = self.components_sorted[ind]
-            source_weight = self.source_weights_sorted[ind]
-            if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER]:
-                if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER]:
-                    delta_demand, is_battery = self.control_electricity_component_iterative(deltademand=delta_demand,
-                                                                                            stsv=stsv,
-                                                                                            weight_counter=source_weight,
-                                                                                            component_type=component_type)
+        for ind in range( len( self.source_weights_sorted ) ): 
+            component_type = self.components_sorted[ ind ]
+            source_weight = self.source_weights_sorted[ ind ]
+            if component_type in [ lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP ]:
+                if not skip_CHP or component_type in [ lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP ]: 
+                    delta_demand, is_battery = self.control_electricity_component_iterative( deltademand = delta_demand,
+                                                                                             stsv = stsv,
+                                                                                             weight_counter = source_weight,
+                                                                                             component_type = component_type )
                 else:
                     self.set_dynamic_output(stsv=stsv,
                                             tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_TARGET],
@@ -855,7 +858,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     # Simulates waterstorages and defines the control signals to heat up storages
     # work as a 2-point Ruler with Hysteresis
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         if force_convergence:
             return
 
@@ -995,19 +998,19 @@ class ControllerHeatGeneric(dynamic_component.DynamicComponent):
                                                                                  lt.Units.ANY,
                                                                                  False)
 
-    def build(self, mode):
+    def build(self, mode: Any) -> None:
         self.mode = mode
 
-    def write_to_report(self):
+    def write_to_report(self) -> None :
         pass
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone()
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone()
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
     '''
@@ -1059,7 +1062,7 @@ class ControllerHeatGeneric(dynamic_component.DynamicComponent):
                          stsv: cp.SingleTimeStepValues,
                          timestep: int, temperature_storage: float,
                          temperature_storage_target: float, temperature_storage_target_hysteresis: float,
-                         temperature_storage_target_C: float, timestep_of_hysteresis: int):
+                         temperature_storage_target_C: float, timestep_of_hysteresis: int) -> Any:
         control_signal_chp: float = 0
         control_signal_gas_heater: float = 0
         control_signal_heat_pump: float = 0
@@ -1112,7 +1115,7 @@ class ControllerHeatGeneric(dynamic_component.DynamicComponent):
         return temperature_storage_target_C, \
                timestep_of_hysteresis
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         if force_convergence:
             return
         #######HEAT########

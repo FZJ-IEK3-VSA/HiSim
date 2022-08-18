@@ -253,8 +253,8 @@ class HydrogenStorage( cp.Component ):
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report( self ):
         lines = []
-        lines.append("Hydrogen Storage: " + self.component_name)
+        lines.append("Name: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append( "capacity: {:4.0f} kg hydrogen".format( self.max_capacity ) )
         return lines
-

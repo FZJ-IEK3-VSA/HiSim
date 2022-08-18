@@ -3,6 +3,7 @@
 
 from dataclasses import dataclass
 from typing import List, Union, Any
+from hisim import log
 
 import hisim.loadtypes as lt
 from hisim.component import Component, ComponentInput, SingleTimeStepValues, ComponentOutput
@@ -51,13 +52,13 @@ class DynamicComponent(Component):
                                         source_load_type: lt.LoadTypes,
                                         source_unit: lt.Units,
                                         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-                                        source_weight: int):
+                                        source_weight: int) -> None:
         """ Adds a component input and connects it at once. """
         # Label Input and generate variable
         num_inputs = len(self.inputs)
         label = f"Input{num_inputs}"
         vars(self)[label] = label
-        print("Added component input and connect: " + source_component_class.component_name + " - " + source_component_output)
+        log.trace("Added component input and connect: " + source_component_class.component_name + " - " + source_component_output)
         # Define Input as Component Input and add it to inputs
         myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
@@ -84,7 +85,7 @@ class DynamicComponent(Component):
                                          source_load_type: lt.LoadTypes,
                                          source_unit: lt.Units,
                                          source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-                                         source_weight: int):
+                                         source_weight: int) -> None:
         """ Adds and connects inputs.
 
         Finds all outputs of listed components containing outputstring in outputname,
@@ -110,7 +111,7 @@ class DynamicComponent(Component):
                     myinput.src_field_name = str(source_component_output)
                     setattr(self, label, myinput)
                     num_inputs += 1
-                    print("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
+                    log.trace("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
                     self.connect_input(label,
                                        component.component_name,
                                        output_var.field_name)
@@ -150,14 +151,12 @@ class DynamicComponent(Component):
     def set_dynamic_output(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]],
                            weight_counter: int,
-                           output_value: float):
+                           output_value: float) -> None:
         """ Sets all output values with given component type and weight. """
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
             if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
-                print(element.source_tags)
-                print(element.source_component_class)
                 stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:
                 continue

@@ -59,7 +59,7 @@ class CalculateOperation(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
-        total = 0
+        total:float = 0
         for index, input in enumerate(self.inputs):
             val1 = stsv.get_input_value(input)
             if index == 0:
@@ -161,7 +161,7 @@ class ElectricityGrid(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
-        total = 0
+        total:float = 0
         for index, input in enumerate(self.inputs):
             val1 = stsv.get_input_value(input)
             if index == 0:

@@ -44,8 +44,10 @@ class HeatStorageState:
 
 class HeatStorage(Component):
     """
-    In this class is WarmWater and HeatingWater Storage,
-    gets demand as Input and calculates new storage temperature
+    This is a combined storage: buffer storage for heating, and hot water storage for hot water demand.
+    It needs, hot water demand, heating demand, building temperature and a control signal choosing which of the twos storages to heat as inputs.
+    In addition it relies on Outside Temperature, and ThermalInputs of up to 5 heat sources.
+    Based on this it evaluates the temperature in the storages based on the energy balance.
     """
     # Inputs
     ThermalDemandHeatingWater = "ThermalDemandHeatingWater"  # Heating Water to regulate room Temperature
@@ -171,7 +173,7 @@ class HeatStorage(Component):
         pass
 
     def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w: float):
-        production = 0
+        production:float = 0
         # function to add all possible mass flows
 
         if self.thermal_input_power1.source_output is not None:

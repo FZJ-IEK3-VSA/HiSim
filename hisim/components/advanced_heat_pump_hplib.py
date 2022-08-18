@@ -175,7 +175,7 @@ class HeatPumpHplib(Component):
         time_off_min = time_on_min
         
         # Load input values
-        on_off = stsv.get_input_value(self.on_off_switch)
+        on_off:float = stsv.get_input_value(self.on_off_switch)
         t_in_primary = stsv.get_input_value(self.t_in_primary)
         t_in_secondary = stsv.get_input_value(self.t_in_secondary)
         t_amb = stsv.get_input_value(self.t_amb)
@@ -228,5 +228,5 @@ class HeatPumpHplib(Component):
 class HeatPumpState:
     time_on: int = 0
     time_off: int = 0
-    on_off_previous: int = 0
+    on_off_previous: float = 0
     

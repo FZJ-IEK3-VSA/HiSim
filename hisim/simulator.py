@@ -338,7 +338,7 @@ class Simulator:
         )
         return ppdt
 
-    def show_progress(self, lastmessage: datetime.datetime, starttime: datetime.datetime, step: int, total_iteration_tries: int):
+    def show_progress(self, lastmessage: datetime.datetime, starttime: datetime.datetime, step: int, total_iteration_tries: int) -> datetime.datetime:
         """ ;akes the pretty progress messages with time estimate. """
         lastmessage = datetime.datetime.now()
         # calculates elapsed time

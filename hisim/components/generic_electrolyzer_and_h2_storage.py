@@ -198,7 +198,7 @@ class Electrolyzer(Component):
         self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.component_name, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.ANY, lt.Units.ANY)
         self.power_level: ComponentOutput = self.add_output(self.component_name, Electrolyzer.PowerLevel, lt.LoadTypes.ANY, lt.Units.PERCENT)
 
-        self.max_power = config.max_power
+        self.max_power:float = config.max_power
         self.min_power = config.min_power
         self.waste_energy = config.waste_energy
         min_hydrogen_production_rate = config.min_hydrogen_production_rate_hour / 3600  # [Nl/s]
@@ -241,7 +241,7 @@ class Electrolyzer(Component):
         self.electrolyzer.state = self.previous_state
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
-        electricity_input = stsv.get_input_value( self.electricity_input )
+        electricity_input:float = stsv.get_input_value( self.electricity_input )
         hydrogen_input = stsv.get_input_value( self.hydrogen_not_stored )
 
         if electricity_input < 0:
@@ -252,7 +252,7 @@ class Electrolyzer(Component):
         hydrogen_output = 0
         oxygen_output = 0
         losses_this_timestep:float = 0
-        unused_power = 0
+        unused_power: float = 0
         power_level = 0
         # the following is already regulated in the electricity distributor
 
@@ -517,7 +517,7 @@ class HydrogenStorage(Component):
         hydrogen_output = 0
         charging_energy_demand = 0
         discharging_energy_demand = 0
-        hydrogen_not_stored = 0
+        hydrogen_not_stored:float = 0
         hydrogen_not_released = 0
 
         if charging_amount > 0 and discharging_amount > 0:

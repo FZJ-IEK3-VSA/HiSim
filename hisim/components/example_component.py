@@ -134,7 +134,7 @@ class Dummy(Component):
         stsv.set_output_value(self.electricity_outputC, electricity_output)
 
         if timestep <= 60*12:
-            thermal_delivered_energy = 0
+            thermal_delivered_energy:float = 0
             temperature:float = self.initial_temperature
             current_stored_energy = ( self.initial_temperature + 273.15) * self.capacity
         else:

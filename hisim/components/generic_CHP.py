@@ -53,8 +53,8 @@ class CHPState:
     This data class saves the state of the CHP.
     """
 
-    def __init__( self, state : int = 0 ) -> None:
-        self.state = state
+    def __init__( self, state : float = 0 ) -> None:
+        self.state:float = state
         
     def clone( self ) -> Any:
         return CHPState( state = self.state )
@@ -70,13 +70,6 @@ class GCHP( cp.Component ):
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
-
-    def write_to_report(self) -> List[str]:
-        lines: List[str] = []
-        lines.append("CHP operation with constant electical and thermal power: " + self.component_name)
-        return lines
-
-
     
     def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ) -> None:
         super().__init__( name = config.name + str( config.source_weight ), my_simulation_parameters=my_simulation_parameters )
@@ -116,6 +109,7 @@ class GCHP( cp.Component ):
     def build( self, config: GCHPConfig ) -> None:
         self.state = CHPState( )
         self.previous_state = CHPState( )
+        self.name = config.name
         self.source_weight = config.source_weight
         self.p_th = config.p_th
         self.p_el = config.p_el
@@ -148,6 +142,13 @@ class GCHP( cp.Component ):
         controller_classname = L1_Controller.get_classname( )
         connections.append( cp.ComponentConnection( GCHP.l1_DeviceSignal, controller_classname, L1_Controller.l1_DeviceSignal ) )
         return connections
+    
+    def write_to_report(self):
+        lines = []
+        lines.append("CHP operation with constant electical and thermal power: {}".format( self.name + str( self.source_weight ) ) )
+        lines.append( "P_el {:4.0f} kW".format( self.p_el ) )
+        lines.append( "P_th {:4.0f} kW".format( self.p_th ) )
+        return lines
         
 @dataclass_json
 @dataclass
@@ -282,7 +283,6 @@ class L1_Controller( cp.Component ):
     def build( self, config: L1CHPConfig ) -> None:
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
-        #print( config )
         self.SOCmin = config.min_h2_soc
         self.name = config.name
         self.source_weight = config.source_weight
@@ -319,6 +319,13 @@ class L1_Controller( cp.Component ):
         #return device off if minimum idle time is not fulfilled and device was off in previous state
         elif ( self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep ):
             self.state.state = 0
+                #catch cases where hydrogen storage is close to maximum level and signals oscillate -> just turn off electrolyzer
+        elif force_convergence:
+            if self.state0.state == 0:
+                self.state.state = 0
+            else:
+                self.state.deactivation( timestep )
+            electricity_target = 0
         #check signal from l2 and turn on or off if it is necesary
         else:
             if ( ( l2_devicesignal == 0 ) or ( electricity_target <= 0 ) or ( H2_SOC < self.SOCmin ) ) and self.state0.state == 1:
@@ -346,4 +353,3 @@ class L1_Controller( cp.Component ):
         lines: List[str] = []
         lines.append("Generic CHP L1 Controller: " + self.component_name)
         return lines
-

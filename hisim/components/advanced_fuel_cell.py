@@ -393,7 +393,7 @@ class CHP(Component):
                 return x2
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
-        control_signal = -1
+        control_signal:float = -1
         if self.operating_mode=="heat":
             control_signal = stsv.get_input_value(self.control_signal)
         elif self.operating_mode=="electricity":

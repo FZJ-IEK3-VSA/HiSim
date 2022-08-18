@@ -3,7 +3,7 @@
 The component class is the base class for all other components.
 """
 
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import typing
 import dataclasses as dc
 from dataclasses import dataclass
@@ -78,7 +78,7 @@ class SingleTimeStepValues:
         """ Copy all values from a single time step values. """
         self.values = other.values[:]
 
-    def get_input_value(self, component_input: ComponentInput):
+    def get_input_value(self, component_input: ComponentInput) -> float:
         """ Gets a value for an input from the single time step values. """
         if component_input.source_output is None:
             return 0
@@ -88,7 +88,7 @@ class SingleTimeStepValues:
         #    raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
         return self.values[component_input.source_output.global_index]
 
-    def set_output_value(self, output: ComponentOutput, value: float):
+    def set_output_value(self, output: ComponentOutput, value: float) -> None:
         """ Sets a single output value in the single time step values array. """
         # commented for performance reasons: this is called hundreds of millions of times and
         # even this small check for better error messages is taking seconds
@@ -98,7 +98,7 @@ class SingleTimeStepValues:
         #    raise Exception("Output Index was not set correctly for " + output.FullName)
         self.values[output.global_index] = value
 
-    def is_close_enough_to_previous(self, previous_values):
+    def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues")-> bool:
         """ Checks if the values are sufficiently similar to another array. """
         count = len(self.values)
         for i in range(count):
@@ -106,7 +106,7 @@ class SingleTimeStepValues:
                 return False
         return True
 
-    def get_differences_for_error_msg(self, previous_values, outputs: List[ComponentOutput]):
+    def get_differences_for_error_msg(self, previous_values: Any, outputs: List[ComponentOutput]) -> str:
         """ Gets a pretty error message for the differences between two time steps. """
         count = len(self.values)
         error_msg = ""
@@ -126,7 +126,7 @@ class Component:
         """ Gets the class name. Helper function for default connections. """
         return cls.__name__
 
-    def __init__(self, name: str, my_simulation_parameters: SimulationParameters):
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters) -> None:
         """ Initializes the component class. """
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
@@ -139,13 +139,13 @@ class Component:
         self.simulation_repository: SimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
-    def add_default_connections(self, component, connections: List[ComponentConnection]):
+    def add_default_connections(self, component, connections: List[ComponentConnection])-> None:
         """ Adds a default connection list definition. """
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
         log.trace("added connections: " + str(self.default_connections))
 
-    def set_sim_repo(self, simulation_repository: SimRepository):
+    def set_sim_repo(self, simulation_repository: SimRepository) -> None:
         """ Sets the SimRepository. """
         if simulation_repository is None:
             raise ValueError("simulation repository was none")

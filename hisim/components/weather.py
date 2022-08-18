@@ -13,7 +13,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
-from hisim.utils import HISIMPATH
+from hisim.utils import HISIMPATH,hisim_abs_path
 from hisim import utils
 from hisim import log
 import json
@@ -407,11 +407,10 @@ def readTRY(location="Aachen", year=2015):
     """
     # get the correct file path
     filepath = os.path.join(HISIMPATH["weather"][location])
-    filepath2 = os.path.join(HISIMPATH["weather"])
-    log.information("filepath {}".format(filepath2))    
-    SouhternEurope=["Madrid","Seville","Bilbao"]
-    LocationisSouthernEurope= location in SouhternEurope
-    if LocationisSouthernEurope:
+    
+    # SouhternEurope=["Madrid","Seville","Bilbao"]
+    # LocationisSouthernEurope= location in SouhternEurope
+    if filepath == os.path.join(hisim_abs_path, "inputs","weather","NSRDB",location):
         # get the geoposition
         with open(filepath + ".dat", encoding="utf-8") as fp:
             lines = fp.readlines()

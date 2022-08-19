@@ -49,6 +49,8 @@ jobs:
         prospector hisim/postprocessing/charts.py
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
+	prospector hisim/components/generic_hot_water_storage_modular.py
+
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150
 #        # pycodestyle hisim/simulator.py --max-line-length 150

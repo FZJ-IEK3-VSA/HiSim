@@ -11,7 +11,7 @@ from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
-from hisim.components import generic_dhw_boiler_without_heating
+from hisim.components import generic_hot_water_storage_modular
 from hisim.components.building import Building
 from hisim import log
 
@@ -140,7 +140,7 @@ class L2_Controller( cp.Component ):
                                                                        mandatory = True)
         
         self.add_default_connections( Building, self.get_building_default_connections( ) )
-        self.add_default_connections( generic_dhw_boiler_without_heating.Boiler, self.get_boiler_default_connections( ) )
+        self.add_default_connections( generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections( ) )
 
     def get_building_default_connections( self ):
         log.information("setting building default connections in L2 Controller")
@@ -152,8 +152,8 @@ class L2_Controller( cp.Component ):
     def get_boiler_default_connections( self ):
         log.information("setting boiler default connections in L2 Controller")
         connections = [ ]
-        boiler_classname = generic_dhw_boiler_without_heating.Boiler.get_classname( )
-        connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, generic_dhw_boiler_without_heating.Boiler.TemperatureMean ) )
+        boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname( )
+        connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean ) )
         return connections
     
     @staticmethod

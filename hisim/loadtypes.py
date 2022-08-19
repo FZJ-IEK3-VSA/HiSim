@@ -121,10 +121,11 @@ class ComponentType(str, enum.Enum):
     SMART_DEVICE = "SmartDevice"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
-    ELECTRIC_BOILER = "Boiler"
     BATTERY = "Battery"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
+    BOILER = "Boiler"
+    BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
 
 

@@ -68,10 +68,10 @@ class JsonExecutor:
         ) = self.find_all_component_class_children()
         for comp in self.cfg["Components"]:
             number_of_comp = ""
-            if comp.__contains__("_number"):
+            if "_number" in comp:
                 # quick annd dirty solution. checks if maximum of 10 components of the same are added
                 for number in range(1, 9):
-                    if comp.__contains__("_number" + str(number)):
+                    if "_number" + str(number) in comp:
                         comp = comp.replace("_number" + str(number), "")
                         number_of_comp = "_number" + str(number)
 

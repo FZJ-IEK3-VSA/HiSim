@@ -23,11 +23,11 @@ from hisim.components import advanced_fuel_cell
 from hisim.components import generic_electrolyzer_and_h2_storage
 import hisim.simulator as sim
 from hisim.cfg_automator import (
-    ConfigurationGenerator,
-    SetupFunction,
     ComponentsConnection,
     ComponentsGrouping,
 )
+from json_executor import JsonExecutor
+from json_generator import ConfigurationGenerator
 import hisim.loadtypes as loadtypes
 from typing import Dict, Any
 __authors__ = "Maximilian Hillen"
@@ -53,7 +53,7 @@ def basic_household_implicit(
 
     """
 
-    my_setup_function = SetupFunction()
+    my_setup_function = JsonExecutor()
     my_setup_function.build(my_sim)
 
 

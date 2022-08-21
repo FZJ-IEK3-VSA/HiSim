@@ -1,6 +1,8 @@
+""" Class for the simulation repository. """
 from typing import Any
 
 from hisim import loadtypes as lt
+
 
 class SimRepository:
 

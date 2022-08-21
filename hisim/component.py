@@ -98,7 +98,7 @@ class SingleTimeStepValues:
         #    raise Exception("Output Index was not set correctly for " + output.FullName)
         self.values[output.global_index] = value
 
-    def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues")-> bool:
+    def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:
         """ Checks if the values are sufficiently similar to another array. """
         count = len(self.values)
         for i in range(count):
@@ -139,7 +139,7 @@ class Component:
         self.simulation_repository: SimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
-    def add_default_connections(self, component, connections: List[ComponentConnection])-> None:
+    def add_default_connections(self, component, connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """
         classname: str = component.get_classname()
         self.default_connections[classname] = connections

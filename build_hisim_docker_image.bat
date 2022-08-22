@@ -7,6 +7,9 @@ if %errorlevel% neq 0 exit /b %errorlevel%
 @REM Save the image to a tar file
 docker save -o hisim-%hisimVersion%.tar hisim:%hisimVersion%
 
+set /p testImage="Test the newly created image (Y/[N])?"
+if /I "%testImage%" neq "y" exit /b 0
+
 @REM Test the newly built image
 @REM Create a container and save its ID
 for /f %%i in ('docker create hisim:%hisimVersion%') do set "ID=%%i"

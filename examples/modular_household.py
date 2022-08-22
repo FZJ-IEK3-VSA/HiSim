@@ -90,8 +90,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_simulation_parameters.system_config = system_config
     except:
         # file does not exist or could not be parsed - use default config
-        my_simulation_parameters.reset_system_config( predictive = True, prediction_horizon = 24 * 3600, pv_included = True, smart_devices_included = True,
-                                                      water_heating_system_installed = 'HeatPump', heating_system_installed = 'HeatPump', battery_included = True, chp_included = True )  
+        my_simulation_parameters.reset_system_config( predictive=True, prediction_horizon=24 * 3600, pv_included=True, smart_devices_included=True,
+                                                      water_heating_system_installed='HeatPump', heating_system_installed='HeatPump', buffer_volume=500, battery_included=True, chp_included=True )  
     my_sim.set_simulation_parameters(my_simulation_parameters)
     
     #get system configuration
@@ -99,7 +99,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     pv_included = my_simulation_parameters.system_config.pv_included #True or False
     smart_devices_included = my_simulation_parameters.system_config.smart_devices_included #True or False
     water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed #Electricity, Hydrogen or False
-    heating_system_installed = my_simulation_parameters.system_config.heating_system_installed 
+    heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
+    buffer_volume = my_simulation_parameters.system_config.buffer_volume
     battery_included = my_simulation_parameters.system_config.battery_included
     chp_included = my_simulation_parameters.system_config.chp_included
 
@@ -218,9 +219,14 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                            water_heating_system_installed=water_heating_system_installed, consumption=consumption, count=count)
     
     """HEATING"""
-    my_heater, consumption, count = configure_heating(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
-                                                      my_electricity_controller=my_electricity_controller, my_weather=my_weather,
-                                                      heating_system_installed=heating_system_installed, consumption=consumption, count=count)
+    if buffer_volume > 80:
+        my_heater, my_buffer, consumption, count = configure_heating_with_buffer(
+            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building, my_electricity_controller=my_electricity_controller,
+            my_weather=my_weather, heating_system_installed=heating_system_installed, buffer_volume=buffer_volume, consumption=consumption, count=count)
+    else:
+        my_heater, consumption, count = configure_heating(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
+                                                          my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+                                                          heating_system_installed=heating_system_installed, consumption=consumption, count=count)
     
     heater.append( my_heater )
     
@@ -337,12 +343,14 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_electrolyzer_controller_l1.connect_only_predefined_connections( my_h2storage )
         my_chp_controller_l1.connect_only_predefined_connections( my_h2storage )
         
-    my_building.add_component_inputs_and_connect(source_component_classes = heater,
-                                                 outputstring = 'ThermalPowerDelivered',
-                                                 source_load_type = lt.LoadTypes.HEATING,
-                                                 source_unit = lt.Units.WATT,
-                                                 source_tags = [lt.InandOutputType.HEAT_TO_BUILDING],
-                                                 source_weight = 999)
+    if buffer_volume > 80:
+        my_buffer.add_component_inputs_and_connect(source_component_classes=heater, outputstring='ThermalPowerDelivered',
+                                                   source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
+                                                   source_tags=[lt.InandOutputType.HEAT_TO_BUFFER], source_weight=999)
+    else:   
+        my_building.add_component_inputs_and_connect(source_component_classes=heater, outputstring='ThermalPowerDelivered',
+                                                     source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
+                                                     source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
         
     if battery_included or chp_included or heating_system_installed in [ 'HeatPump', 'ElectricHeating' ] or water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
         my_sim.add_component( my_electricity_controller )

@@ -222,6 +222,21 @@ class L2_Controller( cp.Component ):
         return config
     
     @staticmethod
+    def get_default_config_buffer_heating():
+        config = L2Config( name = 'L2HeatPump',
+                           source_weight =  1,
+                           T_min_heating = 30.0,
+                           T_max_heating = 50.0,
+                           T_tolerance = 10.0,
+                           P_threshold = 1500,
+                           cooling_considered = True,
+                           T_min_cooling = 5.0,
+                           T_max_cooling = 15.0,
+                           heating_season_begin = 270,
+                           heating_season_end = 150 ) 
+        return config
+    
+    @staticmethod
     def get_default_config_waterheating():
         config = L2Config( name = 'L2HeatPump',
                            source_weight =  1,

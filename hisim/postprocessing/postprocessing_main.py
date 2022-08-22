@@ -367,8 +367,10 @@ class PostProcessor:
         if sys.platform == "win32":
             os.startfile(os.path.realpath(self.ppdt.directory_path))
         else:
-            opener = "open" if sys.platform == "darwin" else "xdg-open"
-            subprocess.call([opener, os.path.realpath(self.ppdt.directory_path)])
+            log.information("Not on Windows. Can't open explorer.")
+        #else:
+        #    opener = "open" if sys.platform == "darwin" else "xdg-open"
+        #    subprocess.call([opener, os.path.realpath(self.ppdt.directory_path)])
 
     def export_sankeys(self):
         """

@@ -66,8 +66,7 @@ class PostProcessor:
         self.report_m: Any
         if ppdt is None:
             raise Exception("PPDT was none")
-        self.report = reportgenerator.ReportGenerator(setup_function=self.ppdt.setup_function,
-                                                      dirpath=self.ppdt.directory_path)
+        self.report = reportgenerator.ReportGenerator(dirpath=self.ppdt.directory_path)
 
     def set_dir_results(self, dirname):
         """ Sets the results directory. """

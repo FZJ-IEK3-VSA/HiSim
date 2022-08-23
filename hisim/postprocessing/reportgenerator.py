@@ -17,8 +17,10 @@ class ReportGenerator:
 
     """ Class for generating reports. """
 
-    def __init__(self, dirpath: str=None) -> None:
+    def __init__(self, dirpath: str) -> None:
         """ Initializes the pdf report. """
+        if dirpath is None:
+            raise ValueError("Result path for the report was none.")
         self.story: Any
         self.filepath = os.path.join(dirpath, "report.pdf")
         self.open()

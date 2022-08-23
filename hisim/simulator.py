@@ -163,7 +163,7 @@ class Simulator:
         os.mkdir(self.dirpath)
 
         # Creates and write result report
-        self.report = pp.reportgenerator.ReportGenerator(dirpath=self.dirpath)
+        self.report = pp.reportgenerator.ReportGenerator(dirpath=self.dirpath, setup_function=setup_function)
 
     def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """

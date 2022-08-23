@@ -111,4 +111,4 @@ class ChartSingleDay(Chart):
         #  plt.title("{}".format(self.plot_title), fontsize=20)
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         if close:
-            self.close(self.axis)
+            self.close()

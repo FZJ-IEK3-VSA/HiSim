@@ -1,44 +1,41 @@
-import os
-import pandas as pd
-import sys
-import inspect
-import subprocess
-from typing import Any
-import tkinter.filedialog as filedialog
-from enum import Enum
+""" Main postprocessing module that starts all other modules. """
 
-# Owned
-import hisim.log as log
+import os
+import sys
+from typing import Any
+
+import pandas as pd
+
+from hisim.postprocessing import reportgenerator
+from hisim.postprocessing import charts
+from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-import pickle
-#from . import charts
-#from . import report
-import hisim.postprocessing.charts as charts
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-import hisim.postprocessing.report as report
-from hisim import component
 from hisim.simulationparameters import SimulationParameters
-import warnings
 from hisim.component import ComponentOutput
-#import cfg_automator
 
-class PostProcessingDataTransfer:
+
+class PostProcessingDataTransfer:  # noqa: too-few-public-methods
+
+    """ Data class for transfering the result data to this class. """
+
     def __init__(self,
-                  directory_path: str,
-                  results: Any,
-                  all_outputs: Any,
-                  simulation_parameters: SimulationParameters,
-                  wrapped_components: Any,
-                  story: Any,
-                  mode: Any,
-                  setup_function: Any,
-                  execution_time: Any,
-                  results_monthly: Any,
-                  ) -> None:
+                 directory_path: str,
+                 results: Any,
+                 all_outputs: Any,
+                 simulation_parameters: SimulationParameters,
+                 wrapped_components: Any,
+                 story: Any,
+                 mode: Any,
+                 setup_function: Any,
+                 execution_time: Any,
+                 results_monthly: Any,
+                 ) -> None:
+        """ Initializes the values. """
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
-        self.time_correction_factor =  simulation_parameters.seconds_per_timestep / 3600
+        self.time_correction_factor = simulation_parameters.seconds_per_timestep / 3600
         self.directory_path = directory_path
         self.results = results
         self.all_outputs = all_outputs
@@ -49,28 +46,38 @@ class PostProcessingDataTransfer:
         self.setup_function = setup_function
         self.execution_time = execution_time
         self.results_monthly = results_monthly
-        self.postProcessingOptions = simulation_parameters.post_processing_options
-        log.information("selected " + str(len(self.postProcessingOptions)) + " options")
-        for option in self.postProcessingOptions:
-            log.information("selected: " + str(option))
-
+        self.post_processing_options = simulation_parameters.post_processing_options
+        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
+        for option in self.post_processing_options:
+            log.information("Selected post processing option: " + str(option))
 
 
 class PostProcessor:
+
+    """ Core Post processor class. """
+
     @utils.measure_execution_time
     def __init__(self, ppdt: PostProcessingDataTransfer):
+        """ Initializes the post processing. """
+
+        self.result_m: Any
+        self.dirname: str
         self.ppdt = ppdt
+        self.report_m: Any
         if ppdt is None:
             raise Exception("PPDT was none")
-        self.report = report.Report(setup_function=self.ppdt.setup_function, dirpath=self.ppdt.directory_path)
+        self.report = reportgenerator.ReportGenerator(setup_function=self.ppdt.setup_function,
+                                                      dirpath=self.ppdt.directory_path)
 
-    def set_dir_results(self, dirname=None):
+    def set_dir_results(self, dirname):
+        """ Sets the results directory. """
         if dirname is None:
-            dirname = filedialog.askdirectory(initialdir=utils.HISIMPATH["results"])
+            raise ValueError("No results directory name was defined.")
         self.dirname = dirname
 
     @utils.measure_execution_time
     def plot_sankeys(self):
+        """ For plotting the sankeys. """
         for i_display_name in [name for name, display_name in lt.DisplayNames.__members__.items()]:
             my_sankey = charts.SankeyHISIM(name=i_display_name,
                                            data=self.ppdt.all_outputs,
@@ -94,176 +101,193 @@ class PostProcessor:
             my_sankey.plot_building()
 
     @utils.measure_execution_time
-    def run(self):
+    def run(self):  # noqa: MC0001
+        """ Runs the main post processing. """
         # Define the directory name
-        ##
-        warnings.filterwarnings("ignore")
 
-        days={"month":0,
-              "day":0}
-        output: ComponentOutput
-        index: int
-        for index, output in enumerate(self.ppdt.all_outputs):
-            if PostProcessingOptions.PLOT_LINE in  self.ppdt.postProcessingOptions:
-                my_line = charts.Line(output=output.full_name,
-                                      data=self.ppdt.results.iloc[:, index],
-                                      units=output.unit,
-                                      directorypath=self.ppdt.directory_path,
-                                      time_correction_factor=self.ppdt .time_correction_factor)
-                my_line.plot()
-            if PostProcessingOptions.PLOT_CARPET in self.ppdt.postProcessingOptions:
-                #log.information("Making carpet plots")
-                my_carpet = charts.Carpet(output=output.full_name,
-                                          data=self.ppdt.results.iloc[:, index],
-                                          units=output.unit,
-                                          directorypath=self.ppdt.directory_path,
-                                          time_correction_factor=self.ppdt.time_correction_factor)
-                my_carpet.plot( xdims = int( ( self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date ).days ) )
-
-            if PostProcessingOptions.PLOT_SINGLE_DAYS in self.ppdt.postProcessingOptions:
-                    my_days = ChartSingleDay(output=output.full_name,
-                                             data=self.ppdt.results.iloc[:, index],
-                                             units=output.unit,
-                                             directorypath=self.ppdt.directory_path,
-                                             time_correction_factor=self.ppdt.time_correction_factor,
-                                             day=days["day"],
-                                             month=days["month"])
-                    my_days.plot()
-            if PostProcessingOptions.PLOT_BAR_CHARTS in self.ppdt.postProcessingOptions:
-                my_bar = charts.Bar(output=output.full_name,
-                                    data=self.ppdt.results_monthly.iloc[:, index],
-                                    units=output.unit,
-                                    dirpath=self.ppdt.directory_path,
-                                    time_correction_factor=self.ppdt.time_correction_factor)
-                my_bar.plot()
-
-
+        days = {"month": 0, "day": 0}
+        if PostProcessingOptions.PLOT_LINE in self.ppdt.post_processing_options:
+            self.make_line_plots()
+        if PostProcessingOptions.PLOT_CARPET in self.ppdt.post_processing_options:
+            self.make_carpet_plots()
+        if PostProcessingOptions.PLOT_SINGLE_DAYS in self.ppdt.post_processing_options:
+            self.make_single_day_plots(days)
+        if PostProcessingOptions.PLOT_BAR_CHARTS in self.ppdt.post_processing_options:
+            self.make_bar_charts()
         # Plot sankey
-        if PostProcessingOptions.PLOT_SANKEY in self.ppdt.postProcessingOptions:
-            log.information("plotting sankeys")
-        #    self.plot_sankeys()
-        else:
-            for option in self.ppdt.postProcessingOptions:
-                log.information("in sankey: selected: " + str(option))
-            log.information("not plotting sankeys")
-
+        if PostProcessingOptions.PLOT_SANKEY in self.ppdt.post_processing_options:
+            self.make_sankey_plots()
         # Export all results to CSV
-        if PostProcessingOptions.EXPORT_TO_CSV in self.ppdt.postProcessingOptions:
-            log.information("exporting to csv")
-            self.export_results_to_csv()
-        else:
-            log.information("not exporting to CSV")
-        if PostProcessingOptions.GENERATE_PDF_REPORT in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.EXPORT_TO_CSV in self.ppdt.post_processing_options:
+            self.make_csv_export()
+        if PostProcessingOptions.GENERATE_PDF_REPORT in self.ppdt.post_processing_options:
             self.write_components_to_report()
-
-         # Export all results to CSV
-        if PostProcessingOptions.COMPUTE_KPI in self.ppdt.postProcessingOptions:
+        # Export all results to CSV
+        if PostProcessingOptions.COMPUTE_KPI in self.ppdt.post_processing_options:
             log.information("Computing KPIs")
-            self.compute_KPIs( )
+            self.compute_kpis()
         else:
             log.information("not exporting to CSV")
 
         # only a single day has been calculated. This gets special charts for debugging.
         if len(self.ppdt.results) == 1440:
-            for index, output in enumerate(self.ppdt.all_outputs):
-                if output.full_name == "Dummy # Residence Temperature":
-                    my_days = ChartSingleDay(output=output.full_name,
-                                             data=self.ppdt.results.iloc[:, index],
-                                             units=output.unit,
-                                             directorypath=self.ppdt.directory_path,
-                                             time_correction_factor=self.ppdt.time_correction_factor,
-                                             day=0,
-                                             month=0,
-                                             output2=self.ppdt.results.iloc[:, 11])
-                else:
-                    my_days = ChartSingleDay(output=output.full_name,
-                                             data=self.ppdt   .results.iloc[:, index],
-                                             units=output.unit,
-                                             directorypath=self.ppdt.directory_path,
-                                             time_correction_factor=self.ppdt.time_correction_factor,
-                                             day=0,
-                                             month=0)
-                my_days.plot()
-                my_days.close()
+            self.make_special_one_day_debugging_plots()
 
         # Open file explorer
-        if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in self.ppdt.postProcessingOptions:
+        if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in self.ppdt.post_processing_options:
             self.open_dir_in_file_explorer()
+
+    def make_special_one_day_debugging_plots(self):
+        """ Makes special plots for debugging if only a single day was calculated."""
+        for index, output in enumerate(self.ppdt.all_outputs):
+            if output.full_name == "Dummy # Residence Temperature":
+                my_days = ChartSingleDay(output=output.full_name,
+                                         data=self.ppdt.results.iloc[:, index],
+                                         units=output.unit,
+                                         directorypath=self.ppdt.directory_path,
+                                         time_correction_factor=self.ppdt.time_correction_factor,
+                                         day=0,
+                                         month=0,
+                                         output2=self.ppdt.results.iloc[:, 11])
+            else:
+                my_days = ChartSingleDay(output=output.full_name,
+                                         data=self.ppdt.results.iloc[:, index],
+                                         units=output.unit,
+                                         directorypath=self.ppdt.directory_path,
+                                         time_correction_factor=self.ppdt.time_correction_factor,
+                                         day=0,
+                                         month=0)
+            my_days.plot()
+            my_days.close()
+
+    def make_csv_export(self):
+        """ Exports all data to CSV. """
+        log.information("exporting to csv")
+        self.export_results_to_csv()
+
+    def make_sankey_plots(self):
+        """ Makes Sankey plots. Needs work. """
+        log.information("plotting sankeys")
+        #    self.plot_sankeys()
+
+    def make_bar_charts(self):
+        """ Make bar charts. """
+        for index, output in enumerate(self.ppdt.all_outputs):
+            my_bar = charts.Bar(output=output.full_name,
+                                data=self.ppdt.results_monthly.iloc[:, index],
+                                units=output.unit,
+                                dirpath=self.ppdt.directory_path,
+                                time_correction_factor=self.ppdt.time_correction_factor)
+            my_bar.plot()
+
+    def make_single_day_plots(self, days):
+        """ Makes plots for selected days. """
+        for index, output in enumerate(self.ppdt.all_outputs):
+            my_days = ChartSingleDay(output=output.full_name,
+                                     data=self.ppdt.results.iloc[:, index],
+                                     units=output.unit,
+                                     directorypath=self.ppdt.directory_path,
+                                     time_correction_factor=self.ppdt.time_correction_factor,
+                                     day=days["day"],
+                                     month=days["month"])
+            my_days.plot()
+
+    def make_carpet_plots(self):
+        """ Make carpet plots. """
+        for index, output in enumerate(self.ppdt.all_outputs):
+            # log.information("Making carpet plots")
+            my_carpet = charts.Carpet(output=output.full_name,
+                                      data=self.ppdt.results.iloc[:, index],
+                                      units=output.unit,
+                                      directorypath=self.ppdt.directory_path,
+                                      time_correction_factor=self.ppdt.time_correction_factor)
+            my_carpet.plot(xdims=int(
+                (self.ppdt.simulation_parameters.end_date - self.ppdt.simulation_parameters.start_date).days))
+
+    def make_line_plots(self):
+        """ Makes the line plots."""
+        for index, output in enumerate(self.ppdt.all_outputs):
+            my_line = charts.Line(output=output.full_name,
+                                  data=self.ppdt.results.iloc[:, index],
+                                  units=output.unit,
+                                  directorypath=self.ppdt.directory_path,
+                                  time_correction_factor=self.ppdt.time_correction_factor)
+            my_line.plot()
 
     @utils.measure_execution_time
     def export_results_to_csv(self):
+        """ Exports the results to a CSV file. """
         for column in self.ppdt.results:
             self.ppdt.results[column].to_csv(os.path.join(self.ppdt.directory_path,
-                                                     "{}_{}.csv".format(column.split(' ', 3)[2],
-                                                                        column.split(' ', 3)[0])),
-                                        sep=",", decimal=".")
+                                                          f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv"), sep=",", decimal=".")
         for column in self.ppdt.results_monthly:
-            self.ppdt.results_monthly[column].to_csv( os.path.join(self.ppdt.directory_path,
-                                                       "{}_{}_monthly.csv".format(column.split(' ', 3)[2],
-                                                                                  column.split(' ', 3)[0])),
-                                          sep=",", decimal=".", header = [ "{} - monthly [{}".format(column.split('[', 1)[0],column.split('[', 1)[1] ) ] )
+            csvfilename = os.path.join(self.ppdt.directory_path, f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv")
+            header = [f"{column.split('[', 1)[0]} - monthly ["f"{column.split('[', 1)[1]}"]
+            self.ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
 
     def write_to_report(self, text):
+        """ Writes a single line to the report. """
         self.report.open()
         self.report.write(text)
         self.report.close()
-        
-    def compute_KPIs( self ):
-        #sum consumption and production of individual components
-        self.ppdt.results[ 'consumption' ] = 0
-        self.ppdt.results[ 'production' ] = 0
-        self.ppdt.results[ 'storage' ] = 0
+
+    def compute_kpis(self):
+        """ KPI Calculator function. """
+        # sum consumption and production of individual components
+        self.ppdt.results['consumption'] = 0
+        self.ppdt.results['production'] = 0
+        self.ppdt.results['storage'] = 0
         index: int
         output: ComponentOutput
         for index, output in enumerate(self.ppdt.all_outputs):
             if 'ElectricityOutput' in output.full_name:
-                if ( 'PVSystem' in output.full_name) or ('CHP' in output.full_name) :
-                    self.ppdt.results[ 'production' ] = self.ppdt.results[ 'production' ] + self.ppdt.results.iloc[:, index]
+                if ('PVSystem' in output.full_name) or ('CHP' in output.full_name):
+                    self.ppdt.results['production'] = self.ppdt.results['production'] + self.ppdt.results.iloc[:, index]
                 else:
-                    self.ppdt.results[ 'consumption' ] = self.ppdt.results[ 'consumption' ] + self.ppdt.results.iloc[:, index]
+                    self.ppdt.results['consumption'] = self.ppdt.results['consumption'] + self.ppdt.results.iloc[:, index]
             elif 'AcBatteryPower' in output.full_name:
-                self.ppdt.results[ 'storage' ] = self.ppdt.results[ 'storage' ] + self.ppdt.results.iloc[:, index]
+                self.ppdt.results['storage'] = self.ppdt.results['storage'] + self.ppdt.results.iloc[:, index]
             else:
                 continue
-            
-        #initilize lines for report
-        lines = [ ]
-         
-        #sum over time and write to report
-        consumption_sum = self.ppdt.results[ 'consumption' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-        lines.append( "Consumption: {:4.0f} kWh".format( consumption_sum ) )
-        
-        production_sum = self.ppdt.results[ 'production' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-        lines.append( "Production: {:4.0f} kWh".format( production_sum ) )
-        
+
+        # initilize lines for report
+        lines = []
+
+        # sum over time and write to report
+        consumption_sum = self.ppdt.results['consumption'].sum() * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+        lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
+
+        production_sum = self.ppdt.results['production'].sum() * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+        lines.append(f"Production: {production_sum:4.0f} kWh")
+
         if production_sum > 0:
-            #evaluate injection, sum over time and wite to 
-            injection = ( self.ppdt.results[ 'production' ] - self.ppdt.results[ 'storage' ] - self.ppdt.results[ 'consumption' ] ) 
-            injection_sum = injection[ injection > 0 ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            lines.append( "Injection: {:4.0f} kWh".format( injection_sum ) )
-            
-            batterylosses = self.ppdt.results[ 'storage' ].sum( ) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            print( batterylosses )
-            
-            #evaluate self consumption rate and autarky rate:
-            lines.append( "Autarky Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum - batterylosses ) / consumption_sum ) )
-            lines.append( "Self Consumption Rate: {:3.1f} %".format( 100 * ( production_sum - injection_sum ) / production_sum ) )
-            
-            #evaluate electricity price
+            # evaluate injection, sum over time and wite to
+            injection = (self.ppdt.results['production'] - self.ppdt.results['storage'] - self.ppdt.results['consumption'])
+            injection_sum = injection[injection > 0].sum() * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+            lines.append(f"Injection: {injection_sum:4.0f} kWh")
+
+            batterylosses = self.ppdt.results['storage'].sum() * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+            print(batterylosses)
+
+            # evaluate self consumption rate and autarky rate:
+            lines.append(f"Autarky Rate: {100 * (production_sum - injection_sum - batterylosses) / consumption_sum:3.1f} %")
+            lines.append(f"Self Consumption Rate: {100 * (production_sum - injection_sum) / production_sum:3.1f} %")
+
+            # evaluate electricity price
             if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
-                price = - ( ( injection[ injection < 0 ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ injection < 0 ] ).sum( ) \
-                        + ( injection[ injection > 0 ] * self.ppdt.results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
-                        * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                        
-                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
-        
+                price = - ((injection[injection < 0] * self.ppdt.results['PriceSignal - PricePurchase [Price - Cents per kWh]'][injection < 0]).
+                           sum() + (injection[injection > 0] * self.ppdt.results['PriceSignal - PriceInjection [Price - Cents per kWh]']
+                                    [injection > 0]).sum()) * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
+
+                lines.append(f"Price paid for electricity: {price * 1e-2:3.0f} EUR")
+
         else:
             if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in self.ppdt.results:
-                price = ( self.ppdt.results[ 'consumption' ] * self.ppdt.results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
+                price = (self.ppdt.results['consumption'] * self.ppdt.results[
+                    'PriceSignal - PricePurchase [Price - Cents per kWh]']).sum() \
                     * self.ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
-            
-        self.write_to_report( lines )
+                lines.append(f"Price paid for electricity: {price * 1e-2:3.0f} EUR")
+        self.write_to_report(lines)
 
     #
     # def cal_pos_sim(self):
@@ -316,7 +340,8 @@ class PostProcessor:
     #         self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
     #         self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
     #         self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
-    #         self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
+    #         self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)
+    #                                                                                               /heat_pump_electricity_output )])
     #         if building_area is not None:
     #             self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
     #
@@ -333,19 +358,16 @@ class PostProcessor:
     #             self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
 
     def write_components_to_report(self):
-        """
-        Writes information about the components used in the simulation
-        to the simulation report.
-        """
+        """ Writes information about the components used in the simulation to the simulation report. """
         self.report.open()
-        for wc in self.ppdt.wrapped_components:
-            print( wc.my_component )
+        for wrapped_component in self.ppdt.wrapped_components:
+            # print( wc.my_component )
             # if hasattr(wc.my_component, "write_to_report"):
-            component_content = wc.my_component.write_to_report()
+            component_content = wrapped_component.my_component.write_to_report()
             if isinstance(component_content, list) is False:
                 component_content = [component_content]
             if isinstance(component_content, str) is True:
-                    component_content = [component_content]
+                component_content = [component_content]
             self.report.write(component_content)
         all_output_names = []
         output: ComponentOutput
@@ -358,52 +380,52 @@ class PostProcessor:
         self.report.close()
 
     def open_dir_in_file_explorer(self):
-        """
-        Opens files in given path.
+        """ Opens files in given path.
+
         The keyword darwin is used for supporting macOS,
         xdg-open will be available on any unix client running X.
-
         """
         if sys.platform == "win32":
-            os.startfile(os.path.realpath(self.ppdt.directory_path))
+            os.startfile(os.path.realpath(self.ppdt.directory_path))  # noqa: B606
         else:
             log.information("Not on Windows. Can't open explorer.")
-        #else:
+        # else:
         #    opener = "open" if sys.platform == "darwin" else "xdg-open"
         #    subprocess.call([opener, os.path.realpath(self.ppdt.directory_path)])
 
     def export_sankeys(self):
-        """
-        Exports Sankeys plots.
-        ToDo: To be substitute by SankeyHISIM and cal_pos_sim
+        """ Exports Sankeys plots.
 
+        ToDo: implement
         """
+        pass  # noqa: unnecessary-pass
 
     def get_std_results(self):
-        """:key
+        """ Reshapes the results for bar charts.
+
         ToDo: to be redefined and recoded in monthly bar plots in Bar Class
-
-
         """
         pd_timeline = pd.date_range(start=self.ppdt.simulation_parameters.start_date,
                                     end=self.ppdt.simulation_parameters.end_date,
-                                    freq='{}S'.format(self.ppdt.simulation_parameters.seconds_per_timestep))[:-1]
+                                    freq=f'{self.ppdt.simulation_parameters.seconds_per_timestep}S')[:-1]
         n_columns = self.ppdt.results.shape[1]
-        df = pd.DataFrame()
+        my_data_frame = pd.DataFrame()
         for i_column in range(n_columns):
-            temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline, columns=[self.ppdt.results.columns[i_column]])
+            temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline,
+                                   columns=[self.ppdt.results.columns[i_column]])
             if 'Temperature' in self.ppdt.results.columns[i_column] or 'Percent' in self.ppdt.results.columns[i_column]:
                 temp_df = temp_df.resample('H').interpolate(method='linear')
             else:
                 temp_df = temp_df.resample('H').sum()
-            df[temp_df.columns[0]] = temp_df.values[:, 0]
-            df.index = temp_df.index
+            my_data_frame[temp_df.columns[0]] = temp_df.values[:, 0]
+            my_data_frame.index = temp_df.index
 
         self.ppdt.results.index = pd_timeline
 
         dfm = pd.DataFrame()
         for i_column in range(n_columns):
-            temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline, columns=[self.ppdt.results.columns[i_column]])
+            temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline,
+                                   columns=[self.ppdt.results.columns[i_column]])
             if 'Temperature' in self.ppdt.results.columns[i_column] or 'Percent' in self.ppdt.results.columns[i_column]:
                 temp_df = temp_df.resample('M').interpolate(method='linear')
             else:
@@ -412,4 +434,3 @@ class PostProcessor:
             dfm.index = temp_df.index
 
         self.result_m = dfm
-

@@ -1,124 +1,133 @@
+""" Contains all the chart classes. """
 from typing import Any
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-#from matplotlib.sankey import Sankey
 import matplotlib as mpl
-from matplotlib.dates import DateFormatter
-import matplotlib
-import seaborn
+import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
-from hisim import log
-import warnings
 
+from hisim import log
 from hisim.postprocessing.chartbase import Chart
-from hisim import utils
-warnings.filterwarnings("ignore")
+
 mpl.rcParams['agg.path.chunksize'] = 10000
 
-class Carpet(Chart):
+
+class Carpet(Chart):  # noqa: too-few-public-methods
+
+    """ Class for carpet plots. """
+
     def __init__(self, output: Any, data: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
+        """ Initalizes a carpot plot. """
         super().__init__(output=output,
                          data=data,
-                         type="Carpet",
+                         chart_type="Carpet",
                          units=units,
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
-    def plot( self, xdims : int )-> None:
-        #log.information("starting carpet plots")
-        ydims = int( len( self.data ) / xdims ) #number of calculated timesteps per day
-        y_steps_per_hour = int( ydims / 24 )
+
+    def plot(self, xdims: int) -> None:
+        """ Makes a carpet plot. """
+        # log.information("starting carpet plots")
+        ydims = int(len(self.data) / xdims)  # number of calculated timesteps per day
+        y_steps_per_hour = int(ydims / 24)
         try:
-            database = self.data.values.reshape( xdims, ydims )
+            database = self.data.values.reshape(xdims, ydims)
         except ValueError:
-           log.error("Carpet plot can only deal with data containing entire days" )
-           return
+            log.error("Carpet plot can only deal with data containing entire days")
+            return
         if np.max(np.abs(self.data.values)) > 1.5E3:
             database = database * 1E-3
-            self.units = "k{}".format(self.units)
+            self.units = f"k{self.units}"
         plot_data = np.flip(database.transpose(), axis=0)
         # plot_data = database
 
         # sns.set(font_scale=float(1.5))
         fig = plt.figure(figsize=(10, 5), dpi=500)
 
-        ax = fig.add_subplot(111)
+        axis = fig.add_subplot(111)
         mycolors = 'viridis'
-        cm = plt.cm.get_cmap(mycolors)
+        color_map = plt.cm.get_cmap(mycolors)
 
-        plot = ax.pcolormesh(plot_data, cmap=cm)
+        plot = axis.pcolormesh(plot_data, cmap=color_map)
         plt.colorbar(plot).set_label(self.units)
 
-        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour ).tolist()
+        y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
         # y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
-        ax.set_yticks(y_ticks)
+        axis.set_yticks(y_ticks)
         y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
-        ax.set_yticklabels([str(i) for i in y_ticks_labels])
+        axis.set_yticklabels([str(i) for i in y_ticks_labels])
 
         if xdims == 365:
             x_ticks = np.arange(15, 346, 30).tolist()
-            ax.set_xticks(x_ticks)
-            ax.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
+            axis.set_xticks(x_ticks)
+            axis.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
 
         # optimizing fonts
         fig.autofmt_xdate(rotation=45)
         # setting axis of the plot
-        ax.set_ylabel('Daytime [h]')
-        ax.set_xlabel('Month of the year')
-        #plt.title(self.title)
+        axis.set_ylabel('Daytime [h]')
+        axis.set_xlabel('Month of the year')
+        # plt.title(self.title)
         # ax.set_ylabel('Daytime [h]', fontdict={'size': 14})
         # ax.set_xlabel('Month of the year', fontsize=14)
 
         # plt.show()
-#        log.information("finished carpet plot: " + self.filepath)
+        #        log.information("finished carpet plot: " + self.filepath)
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
-        
 
-class Line(Chart):
-    def __init__(self, output, data , units, directorypath, time_correction_factor):
+
+class Line(Chart):  # noqa: too-few-public-methods
+
+    """ Makes a line chart. """
+
+    def __init__(self, output, data, units, directorypath, time_correction_factor):
+        """ Initializes a line chart. """
         super().__init__(output, data, "line", units, directorypath, time_correction_factor)
 
-
     def plot(self):
+        """ Makes a line plot. """
         all_font_size = 40
         size_1 = 20
         size_2 = 18
 
         font = {'family': 'normal',
                 'weight': 'normal',
-                'size': '{}'.format(all_font_size)}
-        matplotlib.rc('font', **font)
+                'size': f'{all_font_size}'}
+        mpl.rc('font', **font)
 
         ylabel = self.units
-        fig, ax = plt.subplots(figsize=(size_1, size_2))
-        xo = self.data.index
+        _fig, axis = plt.subplots(figsize=(size_1, size_2))
+        x_zero = self.data.index
         plt.xticks(fontsize=35, rotation=20)
         plt.yticks(fontsize=35)
 
         # Rescale values in case they are too high
         if max(abs(self.data)) > 1.5E3 and self.units != "-":
             self.data = self.data * 1E-3
-            self.units = "k{}".format(self.units)
+            self.units = f"k{self.units}"
 
-        plt.plot(xo, self.data, color="green", linewidth=6.0)
+        plt.plot(x_zero, self.data, color="green", linewidth=6.0)
         plt.ylabel(ylabel, fontsize=all_font_size)
-        plt.ylabel("[{}]".format(self.units), fontsize=40)
+        plt.ylabel(f"[{self.units}]", fontsize=40)
         plt.xlabel("Time", fontsize=all_font_size)
         plt.grid()
-        ax.set_xlim(xmin=xo[0])
+        axis.set_xlim(xmin=x_zero[0])
         plt.savefig(self.filepath)
         plt.close()
 
 
-class Bar(Chart):
+class Bar(Chart):  # noqa: too-few-public-methods
+
+    """ Makes Bar charts. """
+
     original = [385.66, 484.01, 981.05, 1096.7, 1157, 1299.9, 1415.3, 1266.1, 1075.8, 714.44, 422.51, 366.83]
 
-    def __init__(self, output, data , units, dirpath, time_correction_factor):
+    def __init__(self, output, data, units, dirpath, time_correction_factor):
+        """ Initializes the classes. """
         super().__init__(output, data, "Bar", units, dirpath, time_correction_factor)
-        self.filename = "montly_{}.png".format(self.output)
+        self.filename = f"monthly_{self.output}.png"
 
     def plot(self):
+        """ Plots the bar chart. """
         width = 0.35
         # Specify the values of blue bars (height)
 
@@ -130,13 +139,14 @@ class Bar(Chart):
         # Width of a bar
         width = 0.4
 
-        fig, ax = plt.subplots()
+        # fig, ax = \
+        plt.subplots()
         plt.bar(ind, self.data * 1E-3, width, label="HiSim")
-        plt.bar(ind+width, self.original, width, label="PVSOL")
+        plt.bar(ind + width, self.original, width, label="PVSOL")
 
         plt.xticks(ind + width / 2)
 
-        plt.title("{} Monthly".format(self.title))
+        plt.title(f"{self.title} Monthly")
         plt.grid()
         # seaborn.despine(ax=ax, offset=0)  # the important part here
         # autolabel(rect)
@@ -146,76 +156,87 @@ class Bar(Chart):
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
 
+
 class SankeyHISIM(Chart):
+
+    """ Class for sankey charts. """
+
     def __init__(self,
                  name,
                  data,
                  units,
                  directorypath,
                  time_correction_factor):
+        """ Initializes the Sankey chart. """
         super().__init__(output=name,
                          data=data,
-                         type="Sankey",
+                         chart_type="Sankey",
                          units=units,
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
-        self.filename = "{}.png".format(self.output)
+        self.filename = f"{self.output}.png"
 
     def plot(self):
+        """ Executes the plot. """
         components = {}
-        common_unit = []
-        for index, output_result in enumerate(self.data):
+        #  common_unit = []
+        for _index, output_result in enumerate(self.data):
             if self.output == output_result.display_name:
                 if output_result.sankey_flow_direction is True:
                     components[output_result.component_name] = round(sum(output_result.Results) * 1E-3)
                 elif output_result.sankey_flow_direction is False:
                     components[output_result.component_name] = - round(sum(output_result.Results) * 1E-3)
 
-        if components:
-            flows = []
-            flows_labels = []
-            for key in components:
-                if isinstance(components[key], bool) is False:
-                    flows.append(components[key])
-                    flows_labels.append("{} kWh".format(key))
+        # if components:
+        flows = []
+        flows_labels = []
+        for key in components.items():
+            if isinstance(components[key], bool) is False:
+                flows.append(components[key])
+                flows_labels.append(f"{key} kWh")
 
-            i_positive = 0
-            i_negative = 0
-            indices = [0, 1, -1]
-            orientations = []
-            for index, flow in enumerate(flows):
-                if flow > 0:
-                    orientations.append(indices[i_positive])
-                    i_positive = i_positive + 1
-                else:
-                    orientations.append(indices[i_negative])
-                    i_negative = i_negative + 1
-                if i_positive >= 3:
-                    i_positive = 0
-                if i_negative >= 3:
-                    i_negative = 0
+        orientations = self.make_orientations(flows)
 
-            pathlengths = 0.4
-            #plt.rcParams['font.size'] = 12
-            fig = plt.figure(figsize=[10, 10])
-            ax = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
+        pathlengths = 0.4
+        # plt.rcParams['font.size'] = 12
+        fig = plt.figure(figsize=[10, 10])
+        axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
-            sankey = matplotlib.sankey.Sankey(ax=ax, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
-            sankey.add(flows=flows,
-                       labels=flows_labels,
-                       orientations=orientations,
-                       pathlengths=pathlengths)
-            sankey.finish()
-            plt.title(self.title, fontsize=18)
-            plt.axis("off")
-            plt.savefig(self.filepath)
-            plt.close()
+        sankey = mpl.sankey.Sankey(ax=axis, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
+        sankey.add(flows=flows,
+                   labels=flows_labels,
+                   orientations=orientations,
+                   pathlengths=pathlengths)
+        sankey.finish()
+        plt.title(self.title, fontsize=18)
+        plt.axis("off")
+        plt.savefig(self.filepath)
+        plt.close()
+
+    def make_orientations(self, flows):
+        """ Counts the orientations. """
+        i_positive = 0
+        i_negative = 0
+        indices = [0, 1, -1]
+        orientations = []
+        for _index, flow in enumerate(flows):
+            if flow > 0:
+                orientations.append(indices[i_positive])
+                i_positive = i_positive + 1
+            else:
+                orientations.append(indices[i_negative])
+                i_negative = i_negative + 1
+            if i_positive >= 3:
+                i_positive = 0
+            if i_negative >= 3:
+                i_negative = 0
+        return orientations
 
     def plot_heat_pump(self):
-        # Heat Pump
+        """ Plots a sankey for the Heat Pump. """
         electricity_consumption = 0
 
-        for index, output_result in enumerate(self.data):
+        for _index, output_result in enumerate(self.data):
             if output_result.component_name == "HeatPump":
                 if "ElectricityOutput" == output_result.display_name:
                     electricity_consumption = sum(output_result.Results)
@@ -228,10 +249,9 @@ class SankeyHISIM(Chart):
         thermal_energy_delivered = heating + cooling
         thermal_energy_extracted = thermal_energy_delivered - electricity_consumption
 
-
-        flows = [electricity_consumption*1E-3,
-                 thermal_energy_extracted*1E-3,
-                 -thermal_energy_delivered*1E-3]
+        flows = [electricity_consumption * 1E-3,
+                 thermal_energy_extracted * 1E-3,
+                 -thermal_energy_delivered * 1E-3]
         flows = [round(i) for i in flows]
         flows_labels = ['Electricity\nConsumption',
                         'Thermal Energy\nExtracted',
@@ -239,15 +259,14 @@ class SankeyHISIM(Chart):
         orientations = [1, -1, 0]
         pathlengths = 0.25
 
+        # plt.rcParams['font.size'] = 12
+        fig = plt.figure(figsize=[10, 10])
+        axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
-        #plt.rcParams['font.size'] = 12
-        fig = plt.figure(figsize=[10,10])
-        ax = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
-
-        sankey = matplotlib.sankey.Sankey(ax=ax, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
+        sankey = mpl.sankey.Sankey(ax=axis, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
         sankey.add(flows=flows,
                    labels=flows_labels,
-                   orientations= orientations,
+                   orientations=orientations,
                    pathlengths=pathlengths)
         sankey.finish()
         plt.title("Heap Pump Energy Equilibrium", fontsize=18)
@@ -256,37 +275,12 @@ class SankeyHISIM(Chart):
         plt.close()
 
     def plot_building(self):
-        # Sankey of Thermal Equilibrium from Residence
-        heating_by_residents = 0
-        total_energy_to_residence = 0
-        solar_gain_through_windows = 0
-
-        for index, output_result in enumerate(self.data):
-            if output_result.component_name == "Occupancy":
-                if "HeatingByResidents" == output_result.display_name:
-                    heating_by_residents = sum(output_result.Results)
-            if output_result.component_name == "HeatPump":
-                if "ThermalEnergyDelivered" == output_result.display_name:
-                    thermal_energy_delivered = sum(output_result.Results)
-            if output_result.component_name == "Building":
-                if "TotalEnergyToResidence" == output_result.display_name:
-                    total_energy_to_residence = sum(output_result.Results)
-                if "SolarGainThroughWindows" == output_result.display_name:
-                    solar_gain_through_windows = sum(output_result.Results)
-                if "InternalLoss" == output_result.display_name:
-                    internal_loss = sum(output_result.Results)
-                if "StoredEnergyVariation" == output_result.display_name:
-                    stored_energy_variation = sum(output_result.Results)
-                if "OldStoredEnergy" == output_result.display_name:
-                    stored_energy_initial = sum(output_result.Results)
-                if "TemperatureMean" == output_result.display_name:
-                    current_mean_temperature = sum(output_result.Results)
-
-        if heating_by_residents == 0 or total_energy_to_residence == 0 or solar_gain_through_windows == 0:
-            raise Exception("Sum of outputs has not been calculated.")
+        """ Sankey of Thermal Equilibrium from Residence. """
+        heating_by_residents, internal_loss, solar_gain_through_windows, \
+            stored_energy_variation, thermal_energy_delivered, total_energy_to_residence = self.calculate_metrics()
 
         # If the
-        if abs(stored_energy_variation) < 100*1E3:
+        if abs(stored_energy_variation) < 100 * 1E3:
             flows = [heating_by_residents * 1E-3,
                      solar_gain_through_windows * 1E-3,
                      thermal_energy_delivered * 1E-3,
@@ -299,15 +293,15 @@ class SankeyHISIM(Chart):
             orientations = [1, 0, -1, 0]
         else:
 
-            flows = [heating_by_residents*1E-3,
-                     solar_gain_through_windows*1E-3,
-                     thermal_energy_delivered*1E-3,
-                     -stored_energy_variation*1E-3,
-                     -internal_loss*1E-3
+            flows = [heating_by_residents * 1E-3,
+                     solar_gain_through_windows * 1E-3,
+                     thermal_energy_delivered * 1E-3,
+                     -stored_energy_variation * 1E-3,
+                     -internal_loss * 1E-3
                      ]
             flows = [round(i) for i in flows]
-            residence_flows = flows
-            #if stored_energy_variation < 1000:
+            # residence_flows = flows
+            #  if stored_energy_variation < 1000:
             #    stored_energy_variation = 0
             flows_labels = ['Heating\nby Residents',
                             'Solar\nGain',
@@ -318,11 +312,11 @@ class SankeyHISIM(Chart):
             orientations = [1, 0, -1, -1, 1]
         pathlengths = 0.4
 
-        #plt.rcParams['font.size'] = 12
-        fig = plt.figure(figsize=[10,10])
-        ax = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
+        # plt.rcParams['font.size'] = 12
+        fig = plt.figure(figsize=[10, 10])
+        axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
-        sankey = matplotlib.sankey.Sankey(ax=ax, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
+        sankey = mpl.sankey.Sankey(ax=axis, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
         sankey.add(flows=flows,
                    labels=flows_labels,
                    orientations=orientations,
@@ -340,3 +334,31 @@ class SankeyHISIM(Chart):
                  internal_loss * 1E-3,
                  total_energy_to_residence * 1E-3
                  ]
+
+    def calculate_metrics(self):
+        """ Calculates the metrics for the sankey chart. """
+        heating_by_residents = 0
+        total_energy_to_residence = 0
+        solar_gain_through_windows = 0
+        for _index, output_result in enumerate(self.data):
+            if output_result.component_name == "Occupancy" and "HeatingByResidents" == output_result.display_name:
+                heating_by_residents = sum(output_result.Results)
+            if output_result.component_name == "HeatPump" and "ThermalEnergyDelivered" == output_result.display_name:
+                thermal_energy_delivered = sum(output_result.Results)
+            if output_result.component_name == "Building":
+                if "TotalEnergyToResidence" == output_result.display_name:
+                    total_energy_to_residence = sum(output_result.Results)
+                if "SolarGainThroughWindows" == output_result.display_name:
+                    solar_gain_through_windows = sum(output_result.Results)
+                if "InternalLoss" == output_result.display_name:
+                    internal_loss = sum(output_result.Results)
+                if "StoredEnergyVariation" == output_result.display_name:
+                    stored_energy_variation = sum(output_result.Results)
+        #                if "OldStoredEnergy" == output_result.display_name:
+        #                    stored_energy_initial = sum(output_result.Results)
+        #                if "TemperatureMean" == output_result.display_name:
+        #                    current_mean_temperature = sum(output_result.Results)
+        if heating_by_residents == 0 or total_energy_to_residence == 0 or solar_gain_through_windows == 0:
+            raise Exception("Sum of outputs has not been calculated.")
+        return heating_by_residents, internal_loss, solar_gain_through_windows, \
+            stored_energy_variation, thermal_energy_delivered, total_energy_to_residence

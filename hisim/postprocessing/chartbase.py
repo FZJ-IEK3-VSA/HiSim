@@ -1,19 +1,21 @@
+""" Contains the base class for the charts. """
 import os
 import re
 
 
+class Chart:  # noqa: too-few-public-methods
 
-class Chart:
-    """
-    Parent class for plots to be exported.
-    """
+    """ Parent class for plots to be exported. """
+
     months_abbrev_uppercase = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEZ']
-    label_months_lowercase = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    label_months_lowercase = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+                              'August', 'September', 'October', 'November', 'December']
 
-    def __init__(self, output, data, type, units, directorypath, time_correction_factor, output2=None):
+    def __init__(self, output, data, chart_type, units, directorypath, time_correction_factor, output2=None):
+        """ Initializes the base class. """
         self.output = output
         self.data = data
-        self.type = type
+        self.type = chart_type
         if hasattr(units, "value"):
             self.units = units.value
             self.ylabel = units.value
@@ -22,36 +24,32 @@ class Chart:
             self.ylabel = units
         self.time_correction_factor = time_correction_factor
 
-        self.title:str = ""
+        self.title: str = ""
         matches = re.finditer('.+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)', self.output)
-        matches = [m.group(0) for m in matches] # type: ignore
+        matches = [m.group(0) for m in matches]  # type: ignore
         pass_sign = False
-        property = ""
-        object = ""
-        for m in matches:
+        chart_property = ""
+        chart_object = ""
+        for single_match in matches:
             if pass_sign:
-                property = "{} {}".format(property,m)
+                chart_property = f"{chart_property} {single_match}"
             else:
-                object = "{}{}".format(object,m)
+                chart_object = f"{chart_object}{single_match}"
 
-            if m.find("#"):  # type: ignore
+            if single_match.find("#"):  # type: ignore
                 pass_sign = True
 
             if len(self.title) == 0:
-                self.title = str(m)
+                self.title = str(single_match)
             else:
-                self.title = "{} {}".format(self.title, m)
+                self.title = f"{self.title} {single_match}"
         self.directorypath = directorypath
 
         self.object_name = " "
-        self.property = property
+        self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            self.filename = "{}_{}_{}double.png".format(self.type.lower(),
-                                                        self.output.split(' # ', 2)[1],
-                                                        self.output.split(' # ', 2)[0])
+            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}double.png"
         else:
-            self.filename = "{}_{}_{}.png".format(self.type.lower(),
-                                                  self.output.split(' # ', 2)[1],
-                                                  self.output.split(' # ', 2)[0])
+            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}.png"
         self.filepath = os.path.join(self.directorypath, self.filename)

@@ -2,9 +2,9 @@
 
 The component class is the base class for all other components.
 """
-
-from typing import List, Optional, Dict, Any, Type
 from __future__ import annotations
+from typing import List, Optional, Dict, Any, Type
+
 import typing
 import dataclasses as dc
 from dataclasses import dataclass

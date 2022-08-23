@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import math
-
+from typing import Any
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -117,7 +117,7 @@ class CHP(Component):
     NumberofCycles = "NumberofCycles"
     ThermalOutputPower = "ThermalOutputPower"
     GasDemandReal="GasDemandReal"
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: CHPConfig):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: CHPConfig)  -> None:
         super().__init__(name=config.name, my_simulation_parameters=my_simulation_parameters)
         self.min_operation_time = config.min_operation_time
         self.min_idle_time = config.min_idle_time
@@ -173,7 +173,7 @@ class CHP(Component):
 
 
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> CHPConfig:
         config=CHPConfig(
                         name = "CHP",
                         min_operation_time = 60,
@@ -194,18 +194,18 @@ class CHP(Component):
                         temperature_max = 80,
                         delta_T = 10)
         return config
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = copy.deepcopy(self.state)
         self.number_of_cycles_previous = self.number_of_cycles
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = copy.deepcopy(self.previous_state)
         self.number_of_cycles = self.number_of_cycles_previous
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
          pass
 
-    def simulate_chp(self,control_signal:float,stsv: SingleTimeStepValues,timestep:int):
+    def simulate_chp(self,control_signal:float,stsv: SingleTimeStepValues,timestep:int)  -> Any:
 
         cw = 4182
         ## Calculation.Electric Energy deliverd
@@ -362,7 +362,7 @@ class CHP(Component):
 
         return el_power, th_power, eff_el_real, eff_th_real
 
-    def calculate_control_signal(self,stsv):
+    def calculate_control_signal(self,stsv: SingleTimeStepValues)  -> float:
         if (stsv.get_input_value(self.electricity_target))<30:
             control_signal:float = 0
             return control_signal
@@ -392,7 +392,7 @@ class CHP(Component):
             else:
                 return x2
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         control_signal:float = -1
         if self.operating_mode=="heat":
             control_signal = stsv.get_input_value(self.control_signal)

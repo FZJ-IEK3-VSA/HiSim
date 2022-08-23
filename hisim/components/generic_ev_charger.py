@@ -13,7 +13,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from dataclasses import dataclass
 from  dataclasses_json import dataclass_json
-
+from typing import Any, List, Optional
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -37,7 +37,7 @@ class EVConfig:
                  manufacturer: str,
                  model: str,
                  soc: float,
-                 profile_name: str):
+                 profile_name: str) -> None:
         self.parameter_string = my_simulation_parameters.get_unique_key()
         self.profile_name = profile_name
         manufacturer = manufacturer
@@ -65,10 +65,10 @@ class VehiclePure(cp.Component):
     """
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 manufacturer="Tesla",
-                 model="Model 3 v3",
-                 soc=1.0,
-                 profile="CH01"):
+                 manufacturer:str="Tesla",
+                 model:str="Model 3 v3",
+                 soc:float=1.0,
+                 profile:str="CH01") -> None:
         super().__init__(name="EV_charger", my_simulation_parameters=my_simulation_parameters)
         self.evconfig = EVConfig(my_simulation_parameters=my_simulation_parameters,
                                  manufacturer= manufacturer,
@@ -77,7 +77,7 @@ class VehiclePure(cp.Component):
                                  profile_name=profile)
         self.build()
 
-    def build(self):
+    def build(self) -> None:
         """:key
 
         Defines ...
@@ -164,7 +164,7 @@ class VehiclePure(cp.Component):
             soc = []
             load_stats = []
             car_in_charging_station = []
-            car_state = []
+            #car_state = []
             discharge_stats = [0]
             # Gets transportation stats
             transportation_devices_stats = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDeviceStates")
@@ -215,16 +215,16 @@ class VehiclePure(cp.Component):
             database.to_csv(cache_filepath)
             #utils.save_cache("Vehicle", [self.evconfig.profile_name], database)
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)  -> None:
         pass
 
 class Vehicle(cp.Component):
@@ -251,9 +251,9 @@ class Vehicle(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 manufacturer="Renault",
-                 model="Zoe v3",
-                 soc=0.8):
+                 manufacturer:str="Renault",
+                 model:str="Zoe v3",
+                 soc:float=0.8) -> None:
         super().__init__(name="ElectricVehicle", my_simulation_parameters=my_simulation_parameters)
 
         self.build(manufacturer=manufacturer, model=model, soc=soc)
@@ -275,7 +275,7 @@ class Vehicle(cp.Component):
                                                                lt.LoadTypes.ELECTRICITY,
                                                                lt.Units.WATT)
 
-    def build(self, manufacturer, model, soc):
+    def build(self, manufacturer: str, model:str, soc:float) -> None:
         if soc > 1 or soc < 0:
             raise Exception("Invalid State Of Charge.")
 
@@ -303,16 +303,16 @@ class Vehicle(cp.Component):
 
         self.capacity = capacity
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         if timestep == 0:
             capacity = self.capacity
         else:
@@ -346,16 +346,16 @@ class SimpleStorageState:
     def __init__(self,
                  max_var_val: float,
                  min_var_val: float,
-                 stored_energy=None,
-                 time_correction_factor=None,
-                 seconds_per_timestep=None):
+                 stored_energy: float= 0.0,
+                 time_correction_factor:Optional[float]=None,
+                 seconds_per_timestep:Optional[int] =None) -> None:
         self.max_var_val = max_var_val
         self.min_var_val = min_var_val
         self.stored_energy = stored_energy
         self.time_correction_factor = time_correction_factor
         self.seconds_per_timestep = seconds_per_timestep
 
-    def store(self, max_capacity: float, current_capacity: float, val: float, efficiency: float = 1.0):
+    def store(self, max_capacity: float, current_capacity: float, val: float, efficiency: float = 1.0) -> Any:
         if val < max_capacity - current_capacity:
             amount = val
         else:
@@ -375,7 +375,7 @@ class SimpleStorageState:
         self.stored_energy = current_capacity
         return amount, current_capacity
 
-    def force_store(self, max_capacity: float, current_capacity: float):
+    def force_store(self, max_capacity: float, current_capacity: float) -> Any:
         amount = self.max_var_val
         if amount > max_capacity - current_capacity:
             amount = max_capacity - current_capacity
@@ -388,7 +388,7 @@ class SimpleStorageState:
         self.stored_energy = current_capacity
         return amount, current_capacity
 
-    def withdraw(self, min_capacity: float, current_capacity: float, val: float, efficiency: float = 1.0):
+    def withdraw(self, min_capacity: float, current_capacity: float, val: float, efficiency: float = 1.0) -> Any:
         val = abs(val)
         if current_capacity - min_capacity > val:
             amount = -val
@@ -407,7 +407,7 @@ class SimpleStorageState:
         self.stored_energy = current_capacity
         return amount, current_capacity
 
-    def keep_state(self, capacity):
+    def keep_state(self, capacity: float) -> Any:
         charging_delta = 0
         after_capacity = capacity
         return charging_delta, capacity
@@ -444,13 +444,12 @@ class EVCharger(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 manufacturer="myenergi",
-                 name="Wallbox ZAPPI 222TW",
-                 electric_vehicle=None,
-                 sim_params=None):
+                 manufacturer:str="myenergi",
+                 name:str="Wallbox ZAPPI 222TW",
+                 electric_vehicle:Any=None ) -> None:
         super().__init__(name="EVCharger", my_simulation_parameters=my_simulation_parameters)
 
-        self.build(manufacturer=manufacturer, name=name, electric_vehicle=electric_vehicle, sim_params=sim_params)
+        self.build(manufacturer=manufacturer, name=name, electric_vehicle=electric_vehicle, sim_params=my_simulation_parameters)
 
         self.state = SimpleStorageState(max_var_val=self.charging_power,
                                         min_var_val=-self.charging_power,
@@ -504,7 +503,7 @@ class EVCharger(cp.Component):
                                                                         lt.Units.WATT,
                                                                         True)
 
-    def build(self, manufacturer, name, electric_vehicle, sim_params):
+    def build(self, manufacturer: str, name:str, electric_vehicle: Any, sim_params:SimulationParameters) -> None:
         self.time_correction_factor = 1 / sim_params.seconds_per_timestep
         self.seconds_per_timestep = sim_params.seconds_per_timestep
 
@@ -525,7 +524,7 @@ class EVCharger(cp.Component):
         self.charging_power = charging_power * self.time_correction_factor
         self.electric_vehicle = electric_vehicle
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Name: {}".format(self.component_name))
         lines.append("Manufacturer: {}".format(self.manufacturer))
@@ -535,16 +534,16 @@ class EVCharger(cp.Component):
         lines.append("Vehicle: {}".format(self.electric_vehicle.model))
         return lines
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = copy.deepcopy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = copy.deepcopy(self.previous_state)
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         if force_convergence:
             return
 
@@ -612,7 +611,7 @@ class EVCharger(cp.Component):
             charging_delta, after_capacity = self.state.keep_state(capacity=capacity)
         return charging_delta, after_capacity
 
-    def operate_on_vehicle_to_grid(self, to_be_charged, max_capacity, min_capacity, capacity):
+    def operate_on_vehicle_to_grid(self, to_be_charged: float, max_capacity: float, min_capacity: float, capacity: float) -> Any:
         if to_be_charged >= 0:
             charging_delta, after_capacity = self.state.store(max_capacity=max_capacity,
                                                               current_capacity=capacity,
@@ -648,7 +647,7 @@ class EVChargerController(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 mode=1):
+                 mode:int=1) -> None:
         super().__init__(name="EVChargerController", my_simulation_parameters=my_simulation_parameters)
         self.mode = mode
 
@@ -707,16 +706,16 @@ class EVChargerController(cp.Component):
                                                             lt.LoadTypes.ANY,
                                                             lt.Units.ANY)
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         # Gets inputs
         charging = stsv.get_input_value(self.charging_inputC)
         state_of_charge = stsv.get_input_value(self.socC)

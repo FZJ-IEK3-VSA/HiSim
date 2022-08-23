@@ -71,7 +71,7 @@ class Occupancy(cp.Component):
     @utils.measure_execution_time
     def __init__( self,
                   my_simulation_parameters: SimulationParameters,
-                  config: OccupancyConfig):
+                  config: OccupancyConfig) -> None:
         super().__init__(name="Occupancy", my_simulation_parameters=my_simulation_parameters)
         self.profile_name = config.profile_name
         self.occupancyConfig = config
@@ -120,19 +120,19 @@ class Occupancy(cp.Component):
                                                                        lt.LoadTypes.WARM_WATER,
                                                                        lt.Units.LITER)
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> OccupancyConfig:
         config= OccupancyConfig(profile_name = "CH01")
         return config
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool) -> None:
         if self.ww_mass_input.source_output is not None:
             # ww demand
             ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand

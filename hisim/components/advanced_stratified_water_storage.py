@@ -1,6 +1,6 @@
 from copy import deepcopy
 from math import pi
-from typing import List
+from typing import List, Any
 import math
 
 # Owned
@@ -104,7 +104,7 @@ class WaterSlice:
         # ToDo: Idea: self.enthalpy = self.enthalpy + other_slice.enthalpy -> should work
         self.enthalpy = self.mass * self.specific_heat_capacity * self.temperature
 
-    def heat_losses_horizontal(self, u_value_tank, seconds_per_timestep: float = 1, ambient_temperature: float = 20):
+    def heat_losses_horizontal(self, u_value_tank: Any, seconds_per_timestep: float = 1, ambient_temperature: float = 20)-> Any:
         """
         All slices in the tank must be considered
         ->  this function is callable by the WarmWaterStorage class to apply it on all the slices in the tank
@@ -124,7 +124,7 @@ class WaterSlice:
         self.temperature = self.enthalpy / (self.mass * self.specific_heat_capacity)
         return energy_losses    # one slice is loosing this amount
 
-    def heat_losses_vertical_top_or_bottom(self, u_value_tank: float, seconds_per_timestep: float = 1, ambient_temperature: float = 20):
+    def heat_losses_vertical_top_or_bottom(self, u_value_tank: float, seconds_per_timestep: float = 1, ambient_temperature: float = 20) -> float:
         """
         Heat losses through top OR bottom of the tank. Function has to be called twice (one each)
         Temperature and enthalpy of the corresponding slice will be changed
@@ -141,7 +141,7 @@ class WaterSlice:
         self.temperature = self.enthalpy / (self.mass * self.specific_heat_capacity)
         return energy_losses
 
-    def change_slice_parameters(self, new_temperature: float = -12345.67, new_enthalpy: float = -12345.67, new_mass: float = -12345.67):
+    def change_slice_parameters(self, new_temperature: float = -12345.67, new_enthalpy: float = -12345.67, new_mass: float = -12345.67) -> None:
         """
         ToDo: Wie kann man nur eine einzelne Zeile ausführen --> Zweck: wenn anderen werte nicht eingegeben werden / geändert werden sollen
         # Gibt es einen Besseren Ansatz als diesen?
@@ -165,7 +165,7 @@ class WarmWaterStorageSimulation:
 
     The storage is defined by its diameter, height and temperature. Inside there are water slices represented by my_slices
     """
-    def __init__(self, config: WarmWaterStorageConfig):
+    def __init__(self, config: WarmWaterStorageConfig) -> None:
         # Initialises a starting tank and adds one slice with the tanks height and the starting temperature
         self.diameter = config.tank_diameter
         self.height_storage = config.tank_height
@@ -194,7 +194,7 @@ class WarmWaterStorageSimulation:
         if self.start_temperature >= 100:
             raise ValueError  # -> Boiling Water
 
-    def begin_new_timestep_alternative(self):
+    def begin_new_timestep_alternative(self) -> None:
         """ try to write an alternative to deepcopy"""
         slices_to_save = len(self.my_slices)
         save_slices_step = []
@@ -202,13 +202,13 @@ class WarmWaterStorageSimulation:
             save_slices_step.append(WaterSlice.init_from_another_slice(self.my_slices[i]))
             # Todo: auf restore anwenden
 
-    def reset_to_last_timestep_alternative(self, save_values_step_1):
+    def reset_to_last_timestep_alternative(self, save_values_step_1:Any) -> None:
         """ try to write an alternative to deepcopy"""
         amount_of_saved_slices = len(save_values_step_1)
         for i in range(amount_of_saved_slices):
             self.my_slices[i] = save_values_step_1[i]
 
-    def begin_new_timestep(self):
+    def begin_new_timestep(self) -> Any:
         """
         Deep copy of my_slices
         -> relevant for framework. This allows to reset to the previous state
@@ -216,7 +216,7 @@ class WarmWaterStorageSimulation:
         save_values_step_1 = deepcopy(self.my_slices)
         return save_values_step_1
 
-    def reset_to_last_timestep(self, save_values_step_1):
+    def reset_to_last_timestep(self, save_values_step_1: Any) -> Any:
         """
         Get back the step before
         Use together with def begin_new_timestep
@@ -224,7 +224,7 @@ class WarmWaterStorageSimulation:
         self.my_slices = deepcopy(save_values_step_1)
         return
 
-    def create_water_slice(self, slice_temperature_input: float, slice_mass_input: float):
+    def create_water_slice(self, slice_temperature_input: float, slice_mass_input: float) -> Any:
         """
         Creation of one water slice.
         The height has to be calculated fom the input mass.
@@ -238,7 +238,7 @@ class WarmWaterStorageSimulation:
         ws = WaterSlice(self.diameter, height, temperature)
         return ws
 
-    def insert_slice(self, ws, is_from_top):
+    def insert_slice(self, ws: Any, is_from_top: Any) -> Any:
         """
         Insert the created water slice into the tank. The variable is_from_top decides about where to input the slice.
         If True then its added on top, otherwise ist added at the bottom.
@@ -294,7 +294,7 @@ class WarmWaterStorageSimulation:
                         self.my_slices.remove(self.my_slices[-1])
 
     # def push_slices(self, ws_height, is_from_top: bool):
-    def push_slices(self, ws_height, is_from_top: bool):
+    def push_slices(self, ws_height: Any, is_from_top: bool) -> Any:
         """
         While the current top or bottom slice has a height of zero it is not existing and has to be deleted.
 
@@ -355,7 +355,7 @@ class WarmWaterStorageSimulation:
                             self.my_slices[0].add_another_slice(slice_to_push)
         return pushed_out_slice
 
-    def check_slice_temperature_order(self):
+    def check_slice_temperature_order(self) -> None:
         """
         Heat losses on top and bottom lead to a decrease of these slices.
         Especially if there are no changes in the tank (in-/output) this can lead to higher changes in the temperature of the top/bottom slice
@@ -381,7 +381,9 @@ class WarmWaterStorageSimulation:
                 if len(self.my_slices) == 1:
                     break
 
-    def simulate_one_timestep(self, seconds_per_timestep, slice_temperature_input_upper: float, slice_mass_input_upper: float, is_from_top_upper: bool, slice_temperature_input_bottom: float, slice_mass_input_bottom: float, is_from_top_bottom: bool):
+    def simulate_one_timestep(self, seconds_per_timestep: int, slice_temperature_input_upper: float,
+                              slice_mass_input_upper: float, is_from_top_upper: bool,
+                              slice_temperature_input_bottom: float, slice_mass_input_bottom: float, is_from_top_bottom: bool) -> Any:
         """
         This is the combination of the previous functions.
         One timestep will be simulated. This includes 5 steps:
@@ -451,7 +453,7 @@ class WarmWaterStorageSimulation:
 
         return output_top, output_bottom, heat_losses
 
-    def get_temperature_level_at_specific_height(self, height_of_interest):
+    def get_temperature_level_at_specific_height(self, height_of_interest: float) -> Any:
         """
         Get the temperature at a specific height in the tank. Height is measured from top to bottom.
         The height of the slices in the tank will be added to collected_height if larger than height_of_interest.
@@ -477,7 +479,7 @@ class WarmWaterStorageSimulation:
 
         return temperature_of_interest
 
-    def get_load_percentage(self, minimum_temperature):
+    def get_load_percentage(self, minimum_temperature: float) -> Any:
         """
         --> not used
         How big is the part of the tank which is above a certain temperature.
@@ -494,7 +496,7 @@ class WarmWaterStorageSimulation:
 
         return usable_percentage_of_tank, usable_height
 
-    def calculate_tanks_enthalpy(self):
+    def calculate_tanks_enthalpy(self) -> Any:
         """
         To get the enthalpy of all slices combined
         No changes of values
@@ -508,7 +510,7 @@ class WarmWaterStorageSimulation:
         enthalpy_tank = enthalpy_tank / 3600 / 1000
         return enthalpy_tank
 
-    def calculate_tanks_mean_temperature(self):
+    def calculate_tanks_mean_temperature(self) -> Any:
         """
         Get the average temperature of tank
         specific_heat_capacity can be neglected because its constant for all slices
@@ -523,19 +525,19 @@ class WarmWaterStorageSimulation:
         average_temperature:float = total_energy / (self.volume * average_density)
         return average_temperature
 
-    def calculate_tanks_mass(self):
+    def calculate_tanks_mass(self) -> Any:
         total_mass:float = 0
         for i in range(len(self.my_slices)):
             total_mass += self.my_slices[i].mass
         return total_mass
 
-    def energy_losses_in_one_timestep(self, u_value_tank, seconds_per_timestep: int = 1, ambient_temperature: float = 20):
+    def energy_losses_in_one_timestep(self, u_value_tank: Any, seconds_per_timestep: int = 1, ambient_temperature: float = 20.0) -> Any:
         """
         Energy losses for all the slices in the tank
         The called function 'heat_losses_to_ambient' & 'heat_losses_top_bottom' sets a new enthalpy and temperature for slices
         :return losses_this_timestep [Ws]    Sum of all heat losses to the ambient in this timestep
         """
-        losses_this_timestep = 0
+        losses_this_timestep = 0.0
         # Losses at top and bottom
         losses_this_timestep += self.my_slices[0].heat_losses_vertical_top_or_bottom(u_value_tank, seconds_per_timestep, ambient_temperature)
         losses_this_timestep += self.my_slices[-1].heat_losses_vertical_top_or_bottom(u_value_tank, seconds_per_timestep, ambient_temperature)
@@ -545,7 +547,7 @@ class WarmWaterStorageSimulation:
             losses_this_timestep += self.my_slices[i].heat_losses_horizontal(u_value_tank, seconds_per_timestep, ambient_temperature)
         return losses_this_timestep
 
-    def energy_exchange_between_slices(self, lambda_water_water: float = 0.6, seconds_per_timestep: int = 1):
+    def energy_exchange_between_slices(self, lambda_water_water: float = 0.6, seconds_per_timestep: int = 1) -> None:
         """
         Internal heat exchange between the slices
         The transferred heat is defined by the temperature difference and the distance between the segments middle.
@@ -589,7 +591,7 @@ class WarmWaterStorageSimulation:
             # log.information(self.my_slices[i].temperature)
             assert abs(previous - self.my_slices[i].temperature) > 0
 
-    def energy_exchange_between_slices_differential_equation(self, lambda_water_water: float = 0.06, seconds_per_timestep: int = 1):
+    def energy_exchange_between_slices_differential_equation(self, lambda_water_water: float = 0.06, seconds_per_timestep: int = 1) -> None:
         """
         A differential equation can be used to solve this.
         Most complex part of the whole simulation.. is this even useful?
@@ -675,7 +677,7 @@ class WarmWaterStorage(Component):
     HeatLosses = "Heat Losses"                                              # W
     TankMass = "Tank Mass"                                                  # kg
 
-    def __init__(self, component_name: str,my_simulation_parameters: SimulationParameters,  config: WarmWaterStorageConfig):
+    def __init__(self, component_name: str,my_simulation_parameters: SimulationParameters,  config: WarmWaterStorageConfig) -> None:
         super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
         # Input
@@ -722,13 +724,13 @@ class WarmWaterStorage(Component):
 
         self.previous_state = 0
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.wws.begin_new_timestep()
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.wws.reset_to_last_timestep(self.previous_state)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
 
         # temperature of the tank at different heights
         # 0 = top, 100 = bottom
@@ -835,6 +837,6 @@ class WarmWaterStorage(Component):
         stsv.set_output_value(self.heat_losses, heat_losses_watt)
         stsv.set_output_value(self.tank_mass, tank_mass)
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass

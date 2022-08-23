@@ -51,11 +51,11 @@ class Dummy(Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                electricity=None,
-                 heat=None,
-                 capacity=None,
-                 initial_temperature=None,
-                 ):
+                electricity:Optional[float]=None,
+                 heat:float=0.0,
+                 capacity:Optional[float]=None,
+                 initial_temperature:Optional[float]=None,
+                 ) -> None:
         super().__init__(name="Dummy", my_simulation_parameters=my_simulation_parameters)
         self.capacity:float
         self.initial_temperature:float
@@ -86,7 +86,7 @@ class Dummy(Component):
         self.temperature:float = -300
 
 
-    def build(self, electricity:Optional[float], heat:float, capacity:Optional[float], initial_temperature:Optional[float]):
+    def build(self, electricity:Optional[float], heat:float, capacity:Optional[float], initial_temperature:Optional[float])  -> None:
         self.time_correction_factor:float = 1 / self.my_simulation_parameters.seconds_per_timestep
         self.seconds_per_timestep:float = self.my_simulation_parameters.seconds_per_timestep
 
@@ -110,21 +110,21 @@ class Dummy(Component):
         self.previous_temperature = self.temperature
 
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines:List =[]
         return lines
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_temperature = self.temperature
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.temperature = self.previous_temperature
 
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         electricity_output:float = 0
         if timestep >= 60*6 and timestep < 60*9:
             electricity_output = self.electricity_output

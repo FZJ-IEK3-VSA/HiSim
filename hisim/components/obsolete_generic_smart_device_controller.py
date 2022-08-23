@@ -1,12 +1,12 @@
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-
+from typing import Any
 class GenericSurplusController(cp.Component):
     ElectricityInput = "ElectricityInput"
     State = "State"
 
-    def __init__(self,my_simulation_parameters: SimulationParameters , mode=1):
+    def __init__(self,my_simulation_parameters: SimulationParameters , mode:Any=1)-> None:
         super().__init__("FlexibleController", my_simulation_parameters=my_simulation_parameters)
 
         self.build(mode)
@@ -23,21 +23,21 @@ class GenericSurplusController(cp.Component):
                                                           lt.LoadTypes.ANY,
                                                           lt.Units.ANY)
 
-    def build(self, mode):
+    def build(self, mode: Any)-> None:
         self.mode = mode
 
-    def i_save_state(self):
+    def i_save_state(self)-> None:
         pass
         #self.previous_state = self.state
 
-    def i_restore_state(self):
+    def i_restore_state(self)-> None:
         pass
         #self.state = self.previous_state
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         if force_convergence:
             return
         val1 = stsv.get_input_value(self.electricity_inputC)

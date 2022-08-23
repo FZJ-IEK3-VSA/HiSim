@@ -9,7 +9,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+from typing import Any
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -35,10 +35,10 @@ class HeatStorageControllerConfig:
     initial_temperature_heating_storage : float
 
 class HeatStorageState:
-    def __init__(self, T_sp_ww: float, T_sp_hw: float):
+    def __init__(self, T_sp_ww: float, T_sp_hw: float) -> None:
         self.T_sp_ww = T_sp_ww
         self.T_sp_hw = T_sp_hw
-    def clone( self ):
+    def clone( self ) -> Any:
         return HeatStorageState( T_sp_ww = self.T_sp_ww,
                                  T_sp_hw = self.T_sp_hw )
 
@@ -72,7 +72,7 @@ class HeatStorage(Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 config: HeatStorageConfig):
+                 config: HeatStorageConfig) -> None:
         super().__init__(name="HeatStorage", my_simulation_parameters=my_simulation_parameters)
         self.V_SP_heating_water = config.V_SP_heating_water
         self.V_SP_warm_water = config.V_SP_warm_water
@@ -160,19 +160,19 @@ class HeatStorage(Component):
                 T_sp_ww=40,
                 T_sp_hw=40)
         return config
-    def write_to_report(self):
+    def write_to_report(self) -> None:
         pass
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w: float):
+    def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w: float) -> Any:
         production:float = 0
         # function to add all possible mass flows
 
@@ -194,7 +194,7 @@ class HeatStorage(Component):
         return production
 
     def calculate_new_storage_temperature(self, seconds_per_timestep: int, T_sp: float, production: float, last: float,
-                                          c_w: float, V_SP: float):
+                                          c_w: float, V_SP: float) -> Any:
 
         T_ext_SP = self.ambient_temperature
 
@@ -216,7 +216,7 @@ class HeatStorage(Component):
 
     # def regarding_heating_water_storage (self, T_sp: int):
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
 
         T_sp_var_ww = self.state.T_sp_ww  # Start-Temp-Storage
         T_sp_var_hw = self.state.T_sp_hw  # Start-Temp-Storage
@@ -288,7 +288,7 @@ class HeatStorageController(cp.Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: HeatStorageControllerConfig
-                 ):
+                 ) -> None:
         super().__init__(name="HeatStorageController", my_simulation_parameters=my_simulation_parameters)
         self.initial_temperature_heating_storage = config.initial_temperature_heating_storage
         self.initial_temperature_building = config.initial_temperature_building
@@ -320,7 +320,7 @@ class HeatStorageController(cp.Component):
                                                                                   lt.LoadTypes.HEATING,
                                                                                   lt.Units.WATT)
     @staticmethod
-    def get_default_config():
+    def get_default_config() -> HeatStorageControllerConfig:
         config=HeatStorageControllerConfig(
                 initial_temperature_building = 20,
                 initial_temperature_heating_storage = 35)
@@ -328,19 +328,19 @@ class HeatStorageController(cp.Component):
     def build(self):
         pass
 
-    def write_to_report(self):
+    def write_to_report(self) -> None:
         pass
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         T_sp_var_hw = stsv.get_input_value(self.heating_storage_temperature)  # Start-Temp-Storage
         last_var_hw = stsv.get_input_value(self.real_thermal_demand_building)
         max_mass_flow_heat_storage = stsv.get_input_value(self.ref_max_thermal_build_demand) / (

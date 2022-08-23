@@ -14,7 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
 from hisim.components.building import Building
 import hisim.utils as utils
-
+from typing import List, Any
 
 class AirConditionerState:
     """
@@ -26,21 +26,21 @@ class AirConditionerState:
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
         
-    def clone( self ):
+    def clone( self ) -> Any:
         return AirConditionerState( timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action )
     
-    def is_first_iteration( self, timestep ):
+    def is_first_iteration( self, timestep: int ) -> bool:
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
             return True
         else:
             return False
         
-    def activation( self, timestep ):
+    def activation( self, timestep: int ) -> None:
         self.state = 1
         self.timestep_of_last_action = timestep
         
-    def deactivation( self, timestep ):
+    def deactivation( self, timestep: int ) -> None:
         self.state = 0
         self.timestep_of_last_action = timestep 
         
@@ -60,7 +60,7 @@ class AirConditioner(cp.Component):
                  name : str ="CS-RE18JKE/CU-RE18JKE",
                  min_operation_time : int = 60 * 60,
                  min_idle_time : int = 15 * 60,
-                 control: str= "on_off"):
+                 control: str= "on_off") -> None:
         super().__init__("AirConditioner", my_simulation_parameters=my_simulation_parameters)
         self.build(manufacturer, name, min_operation_time, min_idle_time)
         
@@ -90,20 +90,20 @@ class AirConditioner(cp.Component):
         self.control=control
 
         
-    def get_weather_default_connections( self ):
+    def get_weather_default_connections( self ) -> Any:
         print("setting weather default connections")
         connections = [ ]
         weather_classname = Weather.get_classname( )
         connections.append( cp.ComponentConnection( AirConditioner.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
         return connections
-    def get_controller_default_connections( self ):
+    def get_controller_default_connections( self )  -> Any:
         log.information("setting controller default connections in AirConditioner")
         connections = [ ]
         controller_classname = AirConditionercontroller.get_classname( )
         connections.append( cp.ComponentConnection( AirConditioner.State, controller_classname, AirConditionercontroller.State ) )
         return connections
         
-    def build( self, manufacturer, name, min_operation_time, min_idle_time ):
+    def build( self, manufacturer: str, name:str, min_operation_time: int, min_idle_time:int )  -> Any:
         # Simulation parameters
 
         # Retrieves air conditioner from database - BEGIN
@@ -163,35 +163,35 @@ class AirConditioner(cp.Component):
         self.state = AirConditionerState( )
         self.previous_state = AirConditionerState( )
             
-    def cal_eer(self, t_out):
+    def cal_eer(self, t_out:float) -> Any:
         return np.polyval(self.eer_coef,t_out)
     
-    def cal_cooling_capacity(self,t_out):
+    def cal_cooling_capacity(self,t_out:float) -> Any:
         return np.polyval(self.cooling_capacity_coef,t_out)
     
-    def cal_cop(self, t_out):
+    def cal_cop(self, t_out:float) -> Any:
         return np.polyval(self.cop_coef,t_out)
     
-    def cal_heating_capacity(self,t_out):
+    def cal_heating_capacity(self,t_out: float) -> Any:
         return np.polyval(self.heating_capacity_coef,t_out)
     
-    def i_save_state(self):
+    def i_save_state(self)  -> None:
         self.previous_state = self.state.clone( )
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone( )
-        pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Air conditioner")
         lines.append("Air conditioner manufacturer {}".format(self.manufacturer))
         lines.append("Air conditioner model {}".format(self.model))
         return lines
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         # Inputs
         t_out = stsv.get_input_value(self.t_outC)
         on_off_state = stsv.get_input_value(self.stateC)
@@ -312,15 +312,15 @@ class AirConditionercontroller(cp.Component):
         self.offset = offset
         
 
-    def i_save_state(self):
+    def i_save_state(self)-> None:
         self.previous_AC_mode = self.controller_ACmode
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.controller_ACmode = self.previous_AC_mode
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
@@ -328,7 +328,7 @@ class AirConditionercontroller(cp.Component):
         lines.append("Controller cooling set temperature is {} Deg C \n".format(self.t_set_cooling))
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)-> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -350,7 +350,7 @@ class AirConditionercontroller(cp.Component):
                 
         stsv.set_output_value(self.stateC, state)
             # log.information("state {}".format(state))
-    def conditions(self, set_temp):
+    def conditions(self, set_temp: float) -> None:
         maximum_heating_set_temp = self.t_set_heating + self.offset
         minimum_heating_set_temp = self.t_set_heating
         minimum_cooling_set_temp = self.t_set_cooling - self.offset
@@ -376,7 +376,7 @@ class AirConditionercontroller(cp.Component):
 
 
 
-    def prin1t_outpu1t(self, t_m, state):
+    def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))

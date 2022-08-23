@@ -3,7 +3,8 @@
 The component class is the base class for all other components.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Type
+from __future__ import annotations
 import typing
 import dataclasses as dc
 from dataclasses import dataclass
@@ -139,7 +140,7 @@ class Component:
         self.simulation_repository: SimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
-    def add_default_connections(self, component, connections: List[ComponentConnection]) -> None:
+    def add_default_connections(self, component: Type[Component], connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
@@ -166,7 +167,7 @@ class Component:
         self.outputs.append(outp)
         return outp
 
-    def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str):
+    def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """ Connecting an input to an output. """
         if len(self.inputs) == 0:
             raise ValueError("The component " + self.component_name + " has no inputs.")
@@ -183,7 +184,7 @@ class Component:
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
 
-    def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput):
+    def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput) -> None:
         """ For connecting an input to a dynamic output. """
         src_object_name = src_object.component_name
         src_field_name = src_object.field_name
@@ -196,13 +197,13 @@ class Component:
             connections = self.get_default_connections(source_component)
             self.connect_with_connections_list(connections)
 
-    def connect_with_connections_list(self, connections: List[ComponentConnection]):
+    def connect_with_connections_list(self, connections: List[ComponentConnection]) -> None:
         """ Connect all inputs based on a connections list. """
         for connection in connections:
             src_name: str = typing.cast(str, connection.source_instance_name)
             self.connect_input(connection.target_input_name, src_name, connection.source_output_name)
 
-    def get_default_connections(self, source_component) -> List[ComponentConnection]:
+    def get_default_connections(self, source_component: Type[Component]) -> List[ComponentConnection]:
         """ Gets the default connections for this component. """
         source_classname: str = source_component.get_classname()
         target_classname: str = self.get_classname()
@@ -261,18 +262,18 @@ class Component:
             raise Exception("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         """ Abstract. Gets called at the beginning of a timestep to save the state. """
         raise NotImplementedError()
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         """ Abstract. Restores the state of the component. Can be called many times while iterating. """
         raise NotImplementedError()
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """ Performs the actual calculation. """
         raise NotImplementedError()
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """ Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes. """
         pass  # noqa

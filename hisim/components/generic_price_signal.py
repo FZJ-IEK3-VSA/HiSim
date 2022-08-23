@@ -1,4 +1,5 @@
 # Owned
+from typing import  List
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 
@@ -41,7 +42,7 @@ class PriceSignal(cp.Component):
     PriceInjection = 'PriceInjection'
 
     def __init__( self,
-                  my_simulation_parameters: SimulationParameters ):
+                  my_simulation_parameters: SimulationParameters ) -> None:
         super( ).__init__( name = "PriceSignal", my_simulation_parameters = my_simulation_parameters )
 
         self.build_dummy( start = int( 10 * 3600 / my_simulation_parameters.seconds_per_timestep ), 
@@ -57,16 +58,16 @@ class PriceSignal(cp.Component):
                                                                    lt.LoadTypes.PRICE,
                                                                    lt.Units.CENTS_PER_KWH)
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ):
+    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ) -> None:
         priceinjectionforecast = [ 10  ] * int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
         pricepurchaseforecast = [ 50  ] * int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
         # pricepurchaseforecast = [ ]
@@ -82,11 +83,11 @@ class PriceSignal(cp.Component):
         stsv.set_output_value( self.PricePurchaseC, pricepurchaseforecast[ 0 ] )
         stsv.set_output_value( self.PriceInjectionC, priceinjectionforecast[ 0 ] )
 
-    def build_dummy( self, start : int, end: int ):
+    def build_dummy( self, start : int, end: int ) -> None:
         self.start = start
         self.end = end
         
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append( "Price signal: {}".format( "dummy" ) )
         return lines

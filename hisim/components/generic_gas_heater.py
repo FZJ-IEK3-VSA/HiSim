@@ -4,7 +4,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+from typing import List
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -45,7 +45,7 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"
 
-    def __init__(self,my_simulation_parameters: SimulationParameters , config : GasHeaterConfig):
+    def __init__(self,my_simulation_parameters: SimulationParameters , config : GasHeaterConfig) -> None:
         super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
         self.control_signal: ComponentInput = self.add_input(self.component_name, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
         self.mass_inp_temp: ComponentInput = self.add_input(self.component_name, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
@@ -81,19 +81,19 @@ class GasHeater(Component):
                     temperature_max = 80  # [°C])
                     )
         return config
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         pass
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         control_signal = stsv.get_input_value(self.control_signal)
         if control_signal > 1:
             raise Exception("Expected a control signal between 0 and 1")

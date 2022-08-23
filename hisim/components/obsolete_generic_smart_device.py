@@ -11,7 +11,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.utils import HISIMPATH
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-
+from typing import List
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -69,7 +69,7 @@ class Controllable(Component):
     ElectricityOutput = "ElectricityOutput"
     Task="Task"
 
-    def __init__(self, name, my_simulation_parameters: SimulationParameters ):
+    def __init__(self, name:str, my_simulation_parameters: SimulationParameters ) -> None:
         super().__init__(name, my_simulation_parameters=my_simulation_parameters)
         self.values: List[float] = []
 
@@ -185,16 +185,16 @@ class Controllable(Component):
         self.sum_total_load = sum_total_load
 
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = copy.copy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = copy.copy(self.previous_state)
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         stsv.set_output_value(self.taskC, self.itask[timestep])
         #log.information(self.itask[timestep])
         #log.information(self.flexibilities[0].InitialStep)
@@ -215,7 +215,7 @@ class Controllable(Component):
             self.state = ControllableState(timestep, self.ElecProfiles[int(self.itask[timestep]-1)], toRun=True)
             return stsv.set_output_value(self.electricity_outputC, self.state.profile[0])
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Name: {}".format(self.component_name))
         lines.append("Number of flexibility of the simulation timeline: {}".format(self.number_of_flexibilities))

@@ -102,18 +102,18 @@ class CSVLoader(cp.Component):
         self.column = dfcolumn.to_numpy(dtype=float)
         self.values: List[float] = []
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ):
+    ) -> None:
         stsv.set_output_value(
             self.output1, float(self.column[timestep]) * self.multiplier
         )
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         pass
 
-    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass

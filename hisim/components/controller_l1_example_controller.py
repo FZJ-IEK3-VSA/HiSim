@@ -18,20 +18,20 @@ class SimpleController(Component):
     StorageFillLevel = "Fill Level Percent"
     GasHeaterPowerPercent = "Gas Heater Power Level"
 
-    def __init__(self, name: str, my_simulation_parameters: SimulationParameters ):
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters ) -> None:
         super().__init__(name, my_simulation_parameters=my_simulation_parameters)
         self.input1: ComponentInput = self.add_input(self.component_name, SimpleController.StorageFillLevel, lt.LoadTypes.ELECTRICITY, lt.Units.KWH, True)
         self.output1: ComponentOutput = self.add_output(self.component_name, SimpleController.GasHeaterPowerPercent, lt.LoadTypes.GAS, lt.Units.PERCENT)
         self.state = 0
         self.previous_state = self.state
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = self.state
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = self.previous_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         if force_convergence:
             return
         percent = stsv.get_input_value(self.input1)

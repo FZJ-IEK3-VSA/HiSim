@@ -9,6 +9,7 @@ from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
 from hisim import log
+from typing import List, Any
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -240,7 +241,7 @@ class Electrolyzer(Component):
     def i_restore_state(self):
         self.electrolyzer.state = self.previous_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool)->None:
         electricity_input:float = stsv.get_input_value( self.electricity_input )
         hydrogen_input = stsv.get_input_value( self.hydrogen_not_stored )
 
@@ -293,7 +294,7 @@ class Electrolyzer(Component):
         stsv.set_output_value( self.electrolyzer_efficiency, electrolyzer_efficiency )
         stsv.set_output_value( self.power_level, power_level )
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues)->None:
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
@@ -330,7 +331,7 @@ class HydrogenStorageSimulation:
         #assert self.max_charging_rate > (ElectrolyzerConfig.max_hydrogen_production_rate / 1000 * PhysicsConfig.hydrogen_density)
         #assert self.max_discharging_rate > chp.CHPConfig.P_total_max / PhysicsConfig.hydrogen_specific_fuel_value_per_kg
 
-    def store(self, hydrogen_input: float, seconds_per_timestep):
+    def store(self, hydrogen_input: float, seconds_per_timestep: int)->Any:
         """
         Notice: Write return statement and the function goes back to to the caller method immediately
         Storage function:
@@ -379,7 +380,7 @@ class HydrogenStorageSimulation:
             return amount_stored, energy_demand, delta_not_stored
         raise Exception("forgotten case")
 
-    def withdraw(self, hydrogen_output: float, seconds_per_timestep):
+    def withdraw(self, hydrogen_output: float, seconds_per_timestep: int) -> Any:
         """
         Discharging function. Functionality its the reverse of the store function.
         :param      hydrogen_output:        Demand on hydrogen [kg_H2]
@@ -500,7 +501,7 @@ class HydrogenStorage(Component):
     def i_restore_state(self):
         self.hydrogenstorage.fill = self.previous_state
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         # Setting up the internal values
         charging_amount_sec = stsv.get_input_value(self.charging_hydrogen)
         charging_amount = charging_amount_sec * self.seconds_per_timestep
@@ -559,11 +560,11 @@ class HydrogenStorage(Component):
         stsv.set_output_value(self.current_fill, self.hydrogenstorage.fill)
         stsv.set_output_value(self.current_fill_percent, percent_fill)
 
-    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Hydrogen Storage: " + self.component_name)
         return lines

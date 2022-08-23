@@ -53,7 +53,7 @@ class ComponentName(Component):
     OutputWithState = "OutputWithState"
     OutputWithoutState = "OutputWithoutState"
 
-    def __init__(self, component_name: str, my_simulation_parameters: SimulationParameters):
+    def __init__(self, component_name: str, my_simulation_parameters: SimulationParameters) -> None:
         super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
         # If a component requires states, this can be implemented here.
@@ -77,16 +77,16 @@ class ComponentName(Component):
                                                                      unit=Units.WATT)
         self.factor = 1.0
 
-    def i_save_state(self):
+    def i_save_state(self)  -> None:
         self.previous_state = deepcopy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.state = deepcopy(self.previous_state)
 
-    def i_doublecheck(self):
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         # define local variables
         input_1 = stsv.get_input_value(self.input_from_other_component)
         input_2 = self.state.output_with_state

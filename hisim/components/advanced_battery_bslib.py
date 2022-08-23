@@ -1,4 +1,5 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
+from typing import List
 from copy import deepcopy
 from dataclasses import dataclass
 from bslib import bslib as bsl
@@ -107,16 +108,16 @@ class Battery(Component):
             name= "Battery",
             source_weight = 1 )
         return config
-    def i_save_state(self):
+    def i_save_state(self)  -> None:
         self.previous_state = deepcopy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self)  -> None:
         self.state = deepcopy(self.previous_state)
 
-    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool)  -> None:
         
         # Parameters
         dt = self.my_simulation_parameters.seconds_per_timestep
@@ -141,7 +142,7 @@ class Battery(Component):
         # write values to state
         self.state.soc = soc
 
-    def write_to_report(self):
+    def write_to_report(self) -> List[str]:
         lines = []
         lines.append("Advanced Battery bslib: " + self.component_name)
         return lines

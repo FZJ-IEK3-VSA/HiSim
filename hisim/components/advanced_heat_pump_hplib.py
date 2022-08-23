@@ -160,16 +160,16 @@ class HeatPumpHplib(Component):
                                     t_out_val= -300,
                                     p_th_set= -30)
         return config
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = deepcopy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = deepcopy(self.previous_state)
 
-    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues):
+    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         # Parameter
         time_on_min = 600 # [s]
         time_off_min = time_on_min

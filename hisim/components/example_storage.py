@@ -7,7 +7,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 
 class SimpleStorageState:
-    def __init__(self, min_val: float, max_val: float):
+    def __init__(self, min_val: float, max_val: float) -> None:
         self.fill:float = 0
         self.max_val:float = max_val
         self.min_val:float = min_val
@@ -50,7 +50,7 @@ class SimpleStorage(Component):
     CurrentFillLevel = "Current Fill Level Absolute"
     CurrentFillLevelPercent = "Current Fill Level Percent"
 
-    def __init__(self, component_name,my_simulation_parameters: SimulationParameters , loadtype: lt.LoadTypes, unit: lt.Units, capacity: float):
+    def __init__(self, component_name: str,my_simulation_parameters: SimulationParameters , loadtype: lt.LoadTypes, unit: lt.Units, capacity: float) -> None:
         super().__init__(component_name, my_simulation_parameters=my_simulation_parameters)
         self.charging_input: ComponentInput = self.add_input(self.component_name, SimpleStorage.ChargingAmount,
                                                              loadtype, unit, True)
@@ -66,13 +66,13 @@ class SimpleStorage(Component):
         self.capacity = capacity
         self.previous_state = copy.copy(self.state)
 
-    def i_save_state(self):
+    def i_save_state(self) -> None:
         self.previous_state = copy.copy(self.state)
 
-    def i_restore_state(self):
+    def i_restore_state(self) -> None:
         self.state = copy.copy(self.previous_state)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         charging = stsv.get_input_value(self.charging_input)
         discharging = stsv.get_input_value(self.discharging_input)
         if charging < 0:

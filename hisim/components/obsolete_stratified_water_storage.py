@@ -337,7 +337,7 @@ class WaterSlice:
         # The new enthalpy is based in the new parameters
         self.enthalpy = self.mass * self.specific_heat_capacity * self.temperature
 
-    def heat_losses_to_ambient(self, u_value_tank, stepsize: float = 1, ambient_temperature: float = 20):
+    def heat_losses_to_ambient(self, u_value_tank, stepsize: float = 1, ambient_temperature: float = 20) -> float:
         """
         All slices in the tank must be considered
             ->  this function is callable by the WWS class to apply it on all the slices in the tank
@@ -355,7 +355,7 @@ class WaterSlice:
         self.temperature = self.enthalpy / (self.mass * self.specific_heat_capacity)
         return energy_losses    # one slice is loosing this amount
 
-    def heat_losses_top_bottom(self, u_value_tank, stepsize: float = 1, ambient_temperature: float = 20):
+    def heat_losses_top_bottom(self, u_value_tank, stepsize: float = 1, ambient_temperature: float = 20) -> float:
         """
         Heat losses through top OR bottom of the tank. Function has to be called twice (one each)
         """

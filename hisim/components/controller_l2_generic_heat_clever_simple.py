@@ -214,7 +214,7 @@ class L2_Controller( cp.Component ):
                            T_max_heating = 22.0,
                            T_tolerance = 1.0,
                            P_threshold = 1500,
-                           cooling_considered = True,
+                           cooling_considered = False,
                            T_min_cooling = 23.0,
                            T_max_cooling = 25.0,
                            heating_season_begin = 270,
@@ -229,7 +229,7 @@ class L2_Controller( cp.Component ):
                            T_max_heating = 50.0,
                            T_tolerance = 10.0,
                            P_threshold = 1500,
-                           cooling_considered = True,
+                           cooling_considered = False,
                            T_min_cooling = 5.0,
                            T_max_cooling = 15.0,
                            heating_season_begin = 270,
@@ -289,7 +289,7 @@ class L2_Controller( cp.Component ):
                 #use previous state if l3 was not available
                 self.state = self.previous_state.clone( )
                 
-    def control_heating( self, T_control, T_min_heating, T_max_heating, l3state ):
+    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> None:
         if T_control > T_max_heating:
             #stop heating if temperature exceeds upper limit
             self.state.deactivate( )

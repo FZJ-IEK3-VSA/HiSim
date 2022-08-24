@@ -8,14 +8,12 @@ import dataclasses_json
 from utspclient import client, result_file_filters  # type: ignore
 from utspclient.datastructures import CalculationStatus, TimeSeriesRequest  # type: ignore
 
-# Define URL and API key
-URL = "http://192.168.178.21:443/api/v1/profilerequest"
-API_KEY = ""
-
 
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass
 class BuildingSizerRequest:
+    url: str
+    api_key: str = ""
     remaining_iterations: int = 3
     requisite_requests: List[TimeSeriesRequest] = dataclasses.field(
         default_factory=list
@@ -23,7 +21,7 @@ class BuildingSizerRequest:
 
 
 def send_hisim_requests(
-    hisim_configs: List[str],
+    hisim_configs: List[str], url: str, api_key: str = ""
 ) -> List[TimeSeriesRequest]:
     """
     Creates and sends one time series request to the utsp for every passed hisim configuration
@@ -41,9 +39,7 @@ def send_hisim_requests(
     ]
     # Send the requests
     for request in requests:
-        print("--- Sending hisim requests")
-        print(request)
-        reply = client.send_request(URL, request, API_KEY)
+        reply = client.send_request(url, request, api_key)
         assert reply.status not in [
             CalculationStatus.CALCULATIONFAILED,
             CalculationStatus.UNKNOWN,
@@ -57,25 +53,23 @@ def send_building_sizer_request(
     """
     Sends the request for the next building_sizer iteration to the UTSP, including the previously sent hisim requests
     """
-    subsequent_config = BuildingSizerRequest(
-        request.remaining_iterations - 1, hisim_requests
+    subsequent_request_config = BuildingSizerRequest(
+        request.url, request.api_key, request.remaining_iterations - 1, hisim_requests
     )
-    building_sizer_config_json: str = subsequent_config.to_json()  # type: ignore
-    next_request = TimeSeriesRequest(building_sizer_config_json, "building_sizer")
-    print("--- Sending next building sizer request")
-    print(next_request)
-    client.send_request(URL, next_request, API_KEY)
-    return building_sizer_config_json
+    config_json: str = subsequent_request_config.to_json()  # type: ignore
+    next_request = TimeSeriesRequest(config_json, "building_sizer")
+    client.send_request(request.url, next_request, request.api_key)
+    return config_json
 
 
-def get_results_from_requisite_requests(reqisite_requests: List[TimeSeriesRequest]):
+def get_results_from_requisite_requests(
+    reqisite_requests: List[TimeSeriesRequest], url: str, api_key: str = ""
+):
     """
     Collects the results from the HiSim requests sent in the previous iteration
     """
-    print("--- Requesting hisim results")
-    print(type(reqisite_requests[0]))
     return [
-        client.request_time_series_and_wait_for_delivery(URL, request, API_KEY)
+        client.request_time_series_and_wait_for_delivery(url, request, api_key)
         for request in reqisite_requests
     ]
 
@@ -92,7 +86,7 @@ def trigger_next_iteration(
     :rtype: str
     """
     # Send the new requests to the UTSP
-    hisim_requests = send_hisim_requests(hisim_configs)
+    hisim_requests = send_hisim_requests(hisim_configs, request.url, request.api_key)
     # Send a new building_sizer request to trigger the next building sizer iteration. This must be done after sending the
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
@@ -101,7 +95,9 @@ def trigger_next_iteration(
 def building_sizer_iteration(
     request: BuildingSizerRequest,
 ) -> Tuple[Optional[str], Any]:
-    results = get_results_from_requisite_requests(request.requisite_requests)
+    results = get_results_from_requisite_requests(
+        request.requisite_requests, request.url, request.api_key
+    )
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:

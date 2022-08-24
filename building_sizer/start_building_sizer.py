@@ -6,12 +6,20 @@ import string
 from utspclient import client
 from utspclient.datastructures import TimeSeriesRequest
 
+from building_sizer import BuildingSizerRequest
+
 # Define URL and API key for the UTSP server
 URL = "http://192.168.178.21:443/api/v1/profilerequest"
 API_KEY = ""
 
 # Create a simulation configuration
-building_sizer_config = "{}"
+initial_request = BuildingSizerRequest(URL, API_KEY, 4)
+building_sizer_config = f"""{{
+    "url": {URL},
+    "api_key": {API_KEY}
+}}"""
+
+building_sizer_config = initial_request.to_json()
 
 
 # For testing: create a random id to enforce recalculation for each request

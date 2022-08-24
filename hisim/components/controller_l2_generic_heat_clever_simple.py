@@ -33,30 +33,30 @@ class L2Config:
     """
     L2 Config
     """
-    name : str
-    source_weight : int
-    T_min_heating : float
-    T_max_heating : float
-    T_tolerance : float
-    P_threshold : float
-    cooling_considered : bool
-    T_min_cooling : Optional[float]
-    T_max_cooling : Optional[float]
-    heating_season_begin : Optional[int]
-    heating_season_end : Optional[int]
+    name: str
+    source_weight: int
+    T_min_heating: float
+    T_max_heating: float
+    T_tolerance: float
+    P_threshold: float
+    cooling_considered: bool
+    T_min_cooling: Optional[float]
+    T_max_cooling: Optional[float]
+    heating_season_begin: Optional[int]
+    heating_season_end: Optional[int]
 
     def __init__( self,
-                  name : str,
-                  source_weight : int,
-                  T_min_heating : float,
-                  T_max_heating : float,
-                  T_tolerance : float,
-                  P_threshold : float,
-                  cooling_considered : bool,
-                  T_min_cooling : Optional[float],
-                  T_max_cooling : Optional[float],
-                  heating_season_begin : Optional[int],
-                  heating_season_end : Optional[int] ):
+                  name: str,
+                  source_weight: int,
+                  T_min_heating: float,
+                  T_max_heating: float,
+                  T_tolerance: float,
+                  P_threshold: float,
+                  cooling_considered: bool,
+                  T_min_cooling: Optional[float],
+                  T_max_cooling: Optional[float],
+                  heating_season_begin: Optional[int],
+                  heating_season_end: Optional[int] ):
         self.name = name
         self.source_weight = source_weight
         self.T_min_heating = T_min_heating

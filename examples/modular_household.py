@@ -37,9 +37,9 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     system_config_filename = "system_config.json"
 
     count = 1  # initialize source_weight with one 
-    production = []  # initialize list of components involved in production
-    consumption = []# initialize list of components involved in consumption
-    heater = [] # initialize list of components used for heating
+    production: List = []  # initialize list of components involved in production
+    consumption: List = []# initialize list of components involved in consumption
+    heater: List = [] # initialize list of components used for heating
     
     # Build system parameters
     if my_simulation_parameters is None:

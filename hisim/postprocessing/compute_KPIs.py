@@ -59,14 +59,17 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
             price = - ( ( injection[ injection < 0 ] * results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ][ injection < 0 ] ).sum( ) \
                     + ( injection[ injection > 0 ] * results[ 'PriceSignal - PriceInjection [Price - Cents per kWh]' ][ injection > 0 ]).sum( ) ) \
                     * simulation_parameters.seconds_per_timestep / 3.6e6
+        else:
+            price = 0
     else:
         if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in results:
             price = ( results[ 'consumption' ] * results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
                 * simulation_parameters.seconds_per_timestep / 3.6e6
-            lines.append( "Price paid for electricity: {:3.0f} EUR".format( price *1e-2 ) )
+        else:
+            price = 0
     
     #initilize lines for report
-    lines = []
+    lines: List = []
     lines.append("Consumption: {:4.0f} kWh".format(consumption_sum))
     lines.append("Production: {:4.0f} kWh".format(production_sum))
     lines.append("Self-Consumption: {:4.0f} kWh".format(self_consumption_sum))

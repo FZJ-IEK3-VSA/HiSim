@@ -20,7 +20,7 @@ class SystemConfig:
     location: Locations = Locations.AACHEN
     occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01
     building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_Gen_ReEx_001_002
-    predictive: bool = True
+    predictive: bool = False
     prediction_horizon: int = 24 * 3600
     pv_included: bool = True
     smart_devices_included: bool = True

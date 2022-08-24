@@ -135,26 +135,26 @@ class ControllerHeat(cp.Component):
                                                                        False)
 
         # Outputs
-        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                             self.ControlSignalGasHeater,
-                                                                             lt.LoadTypes.ANY,
-                                                                             lt.Units.PERCENT,
-                                                                             False)
-        self.control_signal_chp: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      self.ControlSignalChp,
-                                                                      lt.LoadTypes.ANY,
-                                                                      lt.Units.PERCENT,
-                                                                      False)
-        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                            self.ControlSignalHeatPump,
-                                                                            lt.LoadTypes.ANY,
-                                                                            lt.Units.PERCENT,
-                                                                            False)
-        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                                 self.ControlSignalChooseStorage,
-                                                                                 lt.LoadTypes.ANY,
-                                                                                 lt.Units.ANY,
-                                                                                 False)
+        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                             field_name=self.ControlSignalGasHeater,
+                                                                             load_type=lt.LoadTypes.ANY,
+                                                                             unit=lt.Units.PERCENT,
+                                                                             sankey_flow_direction=False)
+        self.control_signal_chp: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                      field_name=self.ControlSignalChp,
+                                                                      load_type=lt.LoadTypes.ANY,
+                                                                      unit=lt.Units.PERCENT,
+                                                                      sankey_flow_direction=False)
+        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                            field_name=self.ControlSignalHeatPump,
+                                                                            load_type=lt.LoadTypes.ANY,
+                                                                            unit=lt.Units.PERCENT,
+                                                                            sankey_flow_direction=False)
+        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                                 field_name=self.ControlSignalChooseStorage,
+                                                                                 load_type=lt.LoadTypes.ANY,
+                                                                                 unit=lt.Units.ANY,
+                                                                                 sankey_flow_direction=False)
 
     @staticmethod
     def get_default_config() -> ControllerHeatConfig:
@@ -357,26 +357,26 @@ class ControllerElectricity(cp.Component):
 
         # Outputs
 
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                               self.ElectricityToOrFromGrid,
-                                                                               lt.LoadTypes.ELECTRICITY,
-                                                                               lt.Units.WATT,
-                                                                               False)
-        self.electricity_from_chp_target: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                               self.ElectricityFromCHPTarget,
-                                                                               lt.LoadTypes.ELECTRICITY,
-                                                                               lt.Units.WATT,
-                                                                               False)
-        self.electricity_to_electrolyzer_target: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                                      self.ElectricityToElectrolyzerTarget,
-                                                                                      lt.LoadTypes.ELECTRICITY,
-                                                                                      lt.Units.WATT,
-                                                                                      False)
-        self.electricity_to_or_from_battery_target: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                                         self.ElectricityToOrFromBatteryTarget,
-                                                                                         lt.LoadTypes.ELECTRICITY,
-                                                                                         lt.Units.WATT,
-                                                                                         False)
+        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                               field_name=self.ElectricityToOrFromGrid,
+                                                                               load_type=lt.LoadTypes.ELECTRICITY,
+                                                                               unit=lt.Units.WATT,
+                                                                               sankey_flow_direction=False)
+        self.electricity_from_chp_target: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                               field_name=self.ElectricityFromCHPTarget,
+                                                                               load_type=lt.LoadTypes.ELECTRICITY,
+                                                                               unit=lt.Units.WATT,
+                                                                               sankey_flow_direction=False)
+        self.electricity_to_electrolyzer_target: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                                      field_name=self.ElectricityToElectrolyzerTarget,
+                                                                                      load_type=lt.LoadTypes.ELECTRICITY,
+                                                                                      unit=lt.Units.WATT,
+                                                                                      sankey_flow_direction=False)
+        self.electricity_to_or_from_battery_target: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                                         field_name=self.ElectricityToOrFromBatteryTarget,
+                                                                                         load_type=lt.LoadTypes.ELECTRICITY,
+                                                                                         unit=lt.Units.WATT,
+                                                                                         sankey_flow_direction=False)
 
     def build(self, mode:Any) -> None:
         self.mode = mode
@@ -573,24 +573,24 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
 
         self.strategy = strategy
         self.limit_to_shave = limit_to_shave
-        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(self.component_name,
-                                                                                    self.ElectricityToElectrolyzerUnused,
-                                                                                    lt.LoadTypes.ELECTRICITY,
-                                                                                    lt.Units.WATT,
-                                                                                    False)
+        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,
+                                                                                    field_name=self.ElectricityToElectrolyzerUnused,
+                                                                                    load_type=lt.LoadTypes.ELECTRICITY,
+                                                                                    unit=lt.Units.WATT,
+                                                                                    mandatory=False)
 
         # Outputs
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                               self.ElectricityToOrFromGrid,
-                                                                               lt.LoadTypes.ELECTRICITY,
-                                                                               lt.Units.WATT,
-                                                                               False)
+        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                               field_name=self.ElectricityToOrFromGrid,
+                                                                               load_type=lt.LoadTypes.ELECTRICITY,
+                                                                               unit=lt.Units.WATT,
+                                                                               sankey_flow_direction=False)
 
-        self.check_peak_shaving: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      self.CheckPeakShaving,
-                                                                      lt.LoadTypes.ANY,
-                                                                      lt.Units.ANY,
-                                                                      False)
+        self.check_peak_shaving: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                      field_name=self.CheckPeakShaving,
+                                                                      load_type=lt.LoadTypes.ANY,
+                                                                      unit=lt.Units.ANY,
+                                                                      sankey_flow_direction=False)
 
     def sort_source_weights_and_components(self)->None:
         SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs]
@@ -977,26 +977,26 @@ class ControllerHeatGeneric(dynamic_component.DynamicComponent):
                                                                        False)
 
         # Outputs
-        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                             self.ControlSignalGasHeater,
-                                                                             lt.LoadTypes.ANY,
-                                                                             lt.Units.PERCENT,
-                                                                             False)
-        self.control_signal_chp: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      self.ControlSignalChp,
-                                                                      lt.LoadTypes.ANY,
-                                                                      lt.Units.PERCENT,
-                                                                      False)
-        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                            self.ControlSignalHeatPump,
-                                                                            lt.LoadTypes.ANY,
-                                                                            lt.Units.PERCENT,
-                                                                            False)
-        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                                 self.ControlSignalChooseStorage,
-                                                                                 lt.LoadTypes.ANY,
-                                                                                 lt.Units.ANY,
-                                                                                 False)
+        self.control_signal_gas_heater: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                             field_name=self.ControlSignalGasHeater,
+                                                                             load_type=lt.LoadTypes.ANY,
+                                                                             unit=lt.Units.PERCENT,
+                                                                             sankey_flow_direction=False)
+        self.control_signal_chp: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                      field_name=self.ControlSignalChp,
+                                                                      load_type=lt.LoadTypes.ANY,
+                                                                      unit=lt.Units.PERCENT,
+                                                                      sankey_flow_direction=False)
+        self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                            field_name=self.ControlSignalHeatPump,
+                                                                            load_type=lt.LoadTypes.ANY,
+                                                                            unit=lt.Units.PERCENT,
+                                                                            sankey_flow_direction=False)
+        self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                                 field_name=self.ControlSignalChooseStorage,
+                                                                                 load_type=lt.LoadTypes.ANY,
+                                                                                 unit=lt.Units.ANY,
+                                                                                 sankey_flow_direction=False)
 
     def build(self, mode: Any) -> None:
         self.mode = mode

@@ -16,7 +16,10 @@ class SystemConfig:
 
     """ Defines the system config for the modular household. """
 
-    predictive: bool = False
+    location: str = 'Aachen'
+    occupancy_profile: str = 'CH01'
+    building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"
+    predictive: bool = True
     prediction_horizon: int = 24 * 3600
     pv_included: bool = True
     smart_devices_included: bool = True
@@ -90,13 +93,13 @@ class SimulationParameters:
         return str(self.start_date) + "###" + str(self.end_date) + "###" + str(self.seconds_per_timestep) + "###" + str(
             self.year) + "###" + str(self.timesteps)
 
-    def reset_system_config(self, predictive: bool = False, prediction_horizon: int = 0, pv_included: bool = True,
-                            smart_devices_included: bool = True, water_heating_system_installed: Optional[str] = 'HeatPump',
-                            heating_system_installed: Optional[str] = 'HeatPump', buffer_volume: float = 500,
-                            battery_included: bool = False, chp_included: bool = False) -> None:  # noqa
+    def reset_system_config(self, location: str = 'Aachen', occupancy_profile: str = 'CH01', building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002",
+                            predictive: bool = True, prediction_horizon: int = 0, pv_included: bool = True, smart_devices_included: bool = True,
+                            water_heating_system_installed: Optional[str] = 'HeatPump', heating_system_installed: Optional[str] = 'HeatPump',
+                            buffer_volume: float = 500, battery_included: bool = False, chp_included: bool = False) -> None:  # noqa
         """ Configures a system config. """
-        self.system_config = SystemConfig(predictive=predictive, prediction_horizon=prediction_horizon,
-                                          pv_included=pv_included, smart_devices_included=smart_devices_included,
+        self.system_config = SystemConfig(location=location, occupancy_profile=occupancy_profile, building_code=building_code, predictive=predictive,
+                                          prediction_horizon=prediction_horizon, pv_included=pv_included, smart_devices_included=smart_devices_included,
                                           water_heating_system_installed=water_heating_system_installed,
                                           heating_system_installed=heating_system_installed, buffer_volume=buffer_volume,
                                           battery_included=battery_included, chp_included=chp_included)

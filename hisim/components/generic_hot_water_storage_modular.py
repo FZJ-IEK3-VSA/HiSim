@@ -7,7 +7,7 @@ one output: the hot water storage temperature.
 """
 
 # Generic/Built-in
-from typing import List
+from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -56,9 +56,16 @@ class StorageConfig:
     warm_water_temperature: float
     drain_water_temperature: float
     efficiency: float
+    power: Optional[float]
+    cooling_considered: bool
+    heating_season_begin: Optional[int]
+    heating_season_end: Optional[int]
+    
 
     def __init__(self, name: str, use: lt.ComponentType, source_weight: int, volume: float, surface: float,
-                 u_value: float, warm_water_temperature: float, drain_water_temperature: float, efficiency: float):
+                 u_value: float, warm_water_temperature: float, drain_water_temperature: float, efficiency: float,
+                 power: Optional[float], cooling_considered: bool, heating_season_begin: Optional[int],
+                 heating_season_end: Optional[int]):
         """ Initializes Storage Config. """
         self.name = name
         self.use = use
@@ -69,6 +76,10 @@ class StorageConfig:
         self.warm_water_temperature = warm_water_temperature + 273.15
         self.drain_water_temperature = drain_water_temperature + 273.15
         self.efficiency = efficiency
+        self.power = power
+        self.cooling_considered = cooling_considered
+        self.heating_season_begin = heating_season_begin
+        self.heating_season_end = heating_season_end
 
 
 class StorageState:
@@ -107,6 +118,20 @@ class StorageState:
         # 0.977 is the density of water in kg/l
         # 4.182 is the specific heat of water in kJ / (K * kg)
         self.temperature_in_kelvin = energy_in_kilo_joule / (self.volume_in_l * 0.977 * 4.182)  # temperature given in K
+        # filter for boiling water
+        if self.temperature_in_kelvin > 95 + 273.15:
+            self.temperature_in_kelvin = 95 + 273.15
+        # filter for freezing water
+        elif self.temperature_in_kelvin < 2:
+            self.temperature_in_kelvin = 2
+        
+    def return_available_energy(self, heating: bool) -> float:
+        """ Returns available energy for heating up the building in case of buffer storages. 
+            Here 30°C is set as the lower limit for the temperature in the buffer storage."""
+        if heating:
+            return (self.temperature_in_kelvin - 273.15 - 30) * self.volume_in_l * 0.977 * 4.182
+        else:
+            return( self.temperature_in_kelvin - 273.15 - 20) * self.volume_in_l * 0.977 * 4.182
 
 
 class HotWaterStorage(dycp.DynamicComponent):
@@ -144,12 +169,15 @@ class HotWaterStorage(dycp.DynamicComponent):
     # Inputs
     ThermalPowerDelivered = "ThermalPowerDelivered"  # either thermal energy delivered
     WaterConsumption = "WaterConsumption"
-    HeatConsumption = "HeatConsumption"
+    l1_DeviceSignal = "l1_DeviceSignal"
     my_component_inputs: List[dycp.DynamicConnectionInput] = []
     my_component_outputs: List[dycp.DynamicConnectionOutput] = []
 
     # obligatory Outputs
     TemperatureMean = "TemperatureMean"
+    
+    # outputs for buffer storage
+    HeatToBuilding = "HeatToBuilding"
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: StorageConfig):
         """ Initializes instance of HotWaterStorage class. """
@@ -170,9 +198,9 @@ class HotWaterStorage(dycp.DynamicComponent):
                                                                          lt.Units.LITER, mandatory=True)
             self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
-            self.heat_consumption_c: cp.ComponentInput = self.add_input(self.component_name, self.HeatConsumption, lt.LoadTypes.HEATING,
-                                                                        lt.Units.WATT, mandatory=True)
-            self.add_default_connections(controller_l1_generic_runtime.L1_Controller, self.get_l1_power_default_connections())
+            self.l1_device_signal_c: cp.ComponentInput = self.add_input(self.component_name, self.l1_DeviceSignal, lt.LoadTypes.ON_OFF,
+                                                                        lt.Units.BINARY, mandatory=True)
+            self.add_default_connections(controller_l1_generic_runtime.L1_Controller, self.get_l1_default_connections())
         else:
             hisim.log.error('Type of hot water storage is not defined')
 
@@ -182,6 +210,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         # Outputs
         self.temperature_mean_c: cp.ComponentOutput = self.add_output(self.component_name, self.TemperatureMean,
                                                                       lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        # Outputs
+        self.heat_to_building_c: cp.ComponentOutput = self.add_output(self.component_name, self.HeatToBuilding,
+                                                                      lt.LoadTypes.HEATING, lt.Units.WATT)
 
         self.add_default_connections(generic_heat_pump_modular.HeatPump, self.get_heatpump_default_connections())
         self.add_default_connections(generic_heat_source.HeatSource, self.get_heatpump_default_connections())
@@ -195,12 +226,12 @@ class HotWaterStorage(dycp.DynamicComponent):
                                                   Occupancy.WaterConsumption))
         return connections
     
-    def get_l1_power_default_connections(self):
+    def get_l1_default_connections(self):
         """ Sets L1 power default connections in hot water storage. """
         hisim.log.information("setting L1 power default connections in hot water storage")
         connections = []
         l1_classname = controller_l1_generic_runtime.L1_Controller.get_classname()
-        connections.append(cp.ComponentConnection(HotWaterStorage.HeatConsumption, l1_classname,
+        connections.append(cp.ComponentConnection(HotWaterStorage.l1_DeviceSignal, l1_classname,
                                                   controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal))
         return connections
 
@@ -226,7 +257,9 @@ class HotWaterStorage(dycp.DynamicComponent):
     def get_default_config_boiler():
         """ Returns default configuration for boiler. """
         config = StorageConfig(name='Boiler', use=lt.ComponentType.BOILER, source_weight=1, volume=200,
-                               surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10, efficiency=1)
+                               surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
+                               efficiency=1, power=None, cooling_considered=False, heating_season_begin=None,
+                               heating_season_end=None)
         return config
 
     @staticmethod
@@ -234,7 +267,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Returns default configuration for buffer (radius:height = 1:4)"""
         r = ( volume * 1e-3 / ( 4 * np.pi ) )**( 1 / 3 )
         config = StorageConfig(name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=800,
-                               surface=6*r*r*np.pi, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10, efficiency=1)
+                               surface=6*r*r*np.pi, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
+                               efficiency=1, power=1500, cooling_considered=True, heating_season_begin=270,
+                               heating_season_end=150)
         return config
 
     def build(self, config: StorageConfig):
@@ -249,6 +284,11 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.efficiency = config.efficiency
         self.drain_water_temperature = config.drain_water_temperature
         self.warm_water_temperature = config.warm_water_temperature
+        self.power = config.power
+        self.cooling_considered = config.cooling_considered
+        if self.cooling_considered:
+            self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+            self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
 
     def write_to_report(self):
         """ Writes to report. """
@@ -267,8 +307,14 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
         """ Simulates iteration of hot water storage. """
+         
+        if self.thermal_power_delivered_c.source_output is not None:
+            thermal_power_delivered = stsv.get_input_value(self.thermal_power_delivered_c)\
+                * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
+        else:
+            thermal_power_delivered = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUFFER])) \
+                * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
 
-        # Retrieves inputs
         if self.use == lt.ComponentType.BOILER:
             # heat loss due to hot water consumption -> base on energy balance in kJ
             # 0.977 density of water in kg/l
@@ -276,15 +322,25 @@ class HotWaterStorage(dycp.DynamicComponent):
             heatconsumption = stsv.get_input_value(self.water_consumption_c) *\
                 (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
         elif self.use == lt.ComponentType.BUFFER:
-            heatconsumption = stsv.get_input_value(self.heat_consumption_c) *\
-                self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
+            heatconsumption = stsv.get_input_value(self.l1_device_signal_c) *\
+                        self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
+            if self.cooling_considered:
+                if timestep < self.heating_season_begin and timestep > self.heating_season_end:
+                    available_power = self.state.return_available_energy(heating=False) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
+                    heatconsumption = -heatconsumption
+                    if heatconsumption < available_power:
+                        print( timestep, heatconsumption, available_power, self.state.temperature_in_kelvin, thermal_power_delivered)
+                        heatconsumption = min(available_power, 0)
+                else:
+                    available_power = self.state.return_available_energy(heating=True) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
+                    if heatconsumption > available_power:
+                        heatconsumpotion = max(available_power, 0)
+            else:
+                available_power = self.state.return_available_energy(heating=True) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
+                if heatconsumption > available_power:
+                    heatconsumpotion = max(available_power, 0)
+            stsv.set_output_value(self.heat_to_building_c, heatconsumption)
                 
-        if self.thermal_power_delivered_c.source_output is not None:
-            thermal_power_delivered = stsv.get_input_value(self.thermal_power_delivered_c)\
-                * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
-        else:
-            thermal_power_delivered = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUFFER])) \
-                * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
         # constant heat loss of heat storage with the assumption that environment has 20°C = 293 K -> based on energy balance in kJ
         # heat gain due to heating of storage -> based on energy balance in kJ
         energy = self.state.energy_from_temperature()

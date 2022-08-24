@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Owned
-from typing import Any, List, Optional
+from typing import Any, List
 import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
@@ -31,17 +31,13 @@ class L1Config:
     source_weight: int
     min_operation_time: int      
     min_idle_time: int
-    to_power: bool
-    power: Optional[float]
 
     def __init__(self, name: str, source_weight: int, min_operation_time: int,
-                 min_idle_time: int, to_power: bool, power: Optional[float]) -> None:
+                 min_idle_time: int) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
-        self.to_power = to_power
-        self.power = power
 
 class L1_ControllerState:
     """
@@ -117,12 +113,9 @@ class L1_Controller( cp.Component ):
         
         
         #add outputs
-        if self.to_power:
-            self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.l1_DeviceSignal,
-                                                                        LoadTypes.HEATING, Units.WATT)
-        else:
-            self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.l1_DeviceSignal,
-                                                                        LoadTypes.ON_OFF, Units.BINARY)
+        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.l1_DeviceSignal,
+                                                                    LoadTypes.ON_OFF, Units.BINARY)
+
         if self.my_simulation_parameters.system_config.predictive == True:
             self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                          self.l1_RunTimeSignal,
@@ -139,13 +132,13 @@ class L1_Controller( cp.Component ):
     @staticmethod
     def get_default_config() -> L1Config:
         config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600,
-                          min_idle_time=900, to_power=False, power=None) 
+                          min_idle_time=900) 
         return config
     
     @staticmethod
     def get_default_config_heatpump()  -> L1Config:
         config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600 * 3,
-                          min_idle_time=3600, to_power=False, power=None) 
+                          min_idle_time=3600) 
         return config
 
     def build( self, config: L1Config ) -> None:
@@ -153,8 +146,6 @@ class L1_Controller( cp.Component ):
         self.source_weight = config.source_weight
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
-        self.to_power = config.to_power
-        self.power = config.power
         
         self.state0 = L1_ControllerState( )
         self.state = L1_ControllerState( )
@@ -199,10 +190,7 @@ class L1_Controller( cp.Component ):
                 self.state.deactivation( timestep )
             elif l2_devicesignal == 1 and self.state0.state == 0:
                 self.state.activation( timestep )
-        if self.to_power:
-            stsv.set_output_value(self.l1_DeviceSignalC, self.state.state * self.power)
-        else:
-            stsv.set_output_value(self.l1_DeviceSignalC, self.state.state)
+        stsv.set_output_value(self.l1_DeviceSignalC, self.state.state)
 
     def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
         log.information("==========================================")

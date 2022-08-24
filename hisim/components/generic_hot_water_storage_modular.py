@@ -122,16 +122,18 @@ class StorageState:
         if self.temperature_in_kelvin > 95 + 273.15:
             self.temperature_in_kelvin = 95 + 273.15
         # filter for freezing water
-        elif self.temperature_in_kelvin < 2:
-            self.temperature_in_kelvin = 2
+        elif self.temperature_in_kelvin < 2 + 273.15:
+            self.temperature_in_kelvin = 2 + 273.15
         
     def return_available_energy(self, heating: bool) -> float:
-        """ Returns available energy for heating up the building in case of buffer storages. 
-            Here 30°C is set as the lower limit for the temperature in the buffer storage."""
+        """ Returns available energy in (J) for heating up the building in case of buffer storages in winter,
+            and the available energy in (J) for cooling the building in summer. 
+            Here 30°C is set as the lower limit for the temperature in the buffer storage in winter and 20°C
+            is set as the upper limit for the temperature in buffer for cooling in summer."""
         if heating:
-            return (self.temperature_in_kelvin - 273.15 - 30) * self.volume_in_l * 0.977 * 4.182
+            return (self.temperature_in_kelvin - 273.15 - 30) * self.volume_in_l * 0.977 * 4.182 * 1e3
         else:
-            return( self.temperature_in_kelvin - 273.15 - 20) * self.volume_in_l * 0.977 * 4.182
+            return( self.temperature_in_kelvin - 273.15 - 20) * self.volume_in_l * 0.977 * 4.182 * 1e3
 
 
 class HotWaterStorage(dycp.DynamicComponent):
@@ -329,7 +331,6 @@ class HotWaterStorage(dycp.DynamicComponent):
                     available_power = self.state.return_available_energy(heating=False) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
                     heatconsumption = -heatconsumption
                     if heatconsumption < available_power:
-                        print( timestep, heatconsumption, available_power, self.state.temperature_in_kelvin, thermal_power_delivered)
                         heatconsumption = min(available_power, 0)
                 else:
                     available_power = self.state.return_available_energy(heating=True) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered

@@ -173,8 +173,8 @@ class DynamicComponent(Component):
         vars(self)[label] = label
 
         # Define Output as Component Input and add it to inputs
-        myoutput = ComponentOutput(self.component_name, source_output_name + label, source_load_type, source_unit,
-                                   True)
+        myoutput = ComponentOutput(object_name=self.component_name, field_name=source_output_name + label, load_type=source_load_type,
+                                   unit=source_unit, sankey_flow_direction=True)
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)
 

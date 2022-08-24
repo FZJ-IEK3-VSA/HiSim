@@ -35,25 +35,25 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig:
-    name : str
-    source_weight : int
+    name: str
+    source_weight: int
     parameter_string: str
     manufacturer: str
     device_name: str
-    power_th : float
-    cooling_considered : bool
-    heating_season_begin : Optional[int]
-    heating_season_end : Optional[int]
+    power_th: float
+    cooling_considered: bool
+    heating_season_begin: Optional[int]
+    heating_season_end: Optional[int]
 
     def __init__( self,
-                  name : str,
-                  source_weight : int,
+                  name: str,
+                  source_weight: int,
                   manufacturer: str,
                   device_name: str,
-                  power_th : float,
-                  cooling_considered : bool,
-                  heating_season_begin : Optional[ int ],
-                  heating_season_end : Optional[ int ] ) :
+                  power_th: float,
+                  cooling_considered: bool,
+                  heating_season_begin: Optional[int],
+                  heating_season_end: Optional[int] ) :
         self.name = name
         self.source_weight = source_weight
         self.manufacturer = manufacturer

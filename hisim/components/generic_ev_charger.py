@@ -501,7 +501,7 @@ class EVCharger(cp.Component):
                                                                         self.ElectricityOutput,
                                                                         lt.LoadTypes.ELECTRICITY,
                                                                         lt.Units.WATT,
-                                                                        True)
+                                                                        sankey_flow_direction=True)
 
     def build(self, manufacturer: str, name:str, electric_vehicle: Any, sim_params:SimulationParameters) -> None:
         self.time_correction_factor = 1 / sim_params.seconds_per_timestep

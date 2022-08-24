@@ -175,6 +175,7 @@ class ComponentType(str, enum.Enum):
     BATTERY = "Battery"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
+    ELECTRIC_BOILER = "ElectricBoiler"
     BOILER = "Boiler"
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]

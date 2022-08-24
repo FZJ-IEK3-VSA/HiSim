@@ -7,7 +7,7 @@ one output: the hot water storage temperature.
 """
 
 # Generic/Built-in
-from typing import List, Optional
+from typing import Optional, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -290,8 +290,11 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.power = config.power
         self.cooling_considered = config.cooling_considered
         if self.cooling_considered:
-            self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+            if type(config.heating_season_begin) == int and type(config.heating_season_end) == int:
+                self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+                self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+            else:
+                raise Exception( 'Heating season needs to be defined in config if cooling is considered')
 
     def write_to_report(self):
         """ Writes to report. """
@@ -325,8 +328,11 @@ class HotWaterStorage(dycp.DynamicComponent):
             heatconsumption = stsv.get_input_value(self.water_consumption_c) *\
                 (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
         elif self.use == lt.ComponentType.BUFFER:
-            heatconsumption = stsv.get_input_value(self.l1_device_signal_c) *\
+            if type(self.power) == float:
+                heatconsumption = stsv.get_input_value(self.l1_device_signal_c) *\
                         self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
+            else:
+                raise Exception( 'Power for heat transfer from buffer to building needs to be defined.')
             if self.cooling_considered:
                 if timestep < self.heating_season_begin and timestep > self.heating_season_end:
                     available_power = self.state.return_available_energy(heating=False) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered

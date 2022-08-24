@@ -80,7 +80,7 @@ class HeatSource( cp.Component ):
         super( ).__init__( name = 'HeatSource' + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
         
         #introduce parameters of district heating
-        self.build( config )
+        self.build(config)
         
         # Inputs - Mandatories
         self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
@@ -90,14 +90,12 @@ class HeatSource( cp.Component ):
                                                                   mandatory = True)
         
         # Outputs 
-        self.ThermalPowerDeliveredC : cp.ComponentOutput = self.add_output( self.component_name,
-                                                                            self.ThermalPowerDelivered,
-                                                                            lt.LoadTypes.HEATING,
-                                                                            lt.Units.WATT )
-        self.FuelDeliveredC: cp.ComponentOutput = self.add_output( self.component_name,
-                                                                  self.FuelDelivered,
-                                                                  self.fuel,
-                                                                  lt.Units.ANY )
+        self.ThermalPowerDeliveredC : cp.ComponentOutput = self.add_output( 
+            object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.PRODUCTION)
+        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.FuelDelivered, load_type=self.fuel,
+            unit=lt.Units.ANY, postprocessing_flag=lt.InandOutputType.PRODUCTION)
         
         if config.fuel == lt.LoadTypes.OIL:
             self.FuelDeliveredC.unit = lt.Units.LITER        

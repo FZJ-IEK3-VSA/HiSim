@@ -43,9 +43,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only( year = year,
-                                                                      seconds_per_timestep = seconds_per_timestep )
-        my_simulation_parameters.enable_all_options( )
+        my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters.enable_all_options()
 
     # try to read the system config from file
     try:

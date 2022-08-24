@@ -18,10 +18,13 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     output: ComponentOutput
     
     # replace that loop by searching for flags -> include also battery things and hydrogen things
-    # flags for Postprocessing: cp.ComponentOutput.postprocessing_flag
+    # flags for Postprocessing: cp.ComponentOutput.postprocessing_flag -> loadtpyes.InandOutputType : Consumption, Production, StorageContent, ChargeDischarge
+    # CHARGE_DISCHARGE from battery has + and - sign and is production and consumption both in one output
+    # heat production of heat pump has - sign in summer, either separate or take absolute value
     # flags for ComponentTypes: cp.ComponentOutput.component_type
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
+    
     for index, output in enumerate(all_outputs):
         if 'ElectricityOutput' in output.full_name:
             if ( 'PVSystem' in output.full_name) or ('CHP' in output.full_name) :

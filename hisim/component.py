@@ -163,10 +163,11 @@ class Component:
         return myinput
 
     def add_output(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
+                   component_type: Optional[lt.ComponentType] = None, postprocessing_flag: Optional[lt.InandOutputType] = None,
                    sankey_flow_direction: bool = None) -> ComponentOutput:
         """ Adds an output definition. """
         log.debug("adding output: " + field_name + " to component " + object_name)
-        outp = ComponentOutput(object_name, field_name, load_type, unit, sankey_flow_direction)
+        outp = ComponentOutput(object_name, field_name, load_type, unit, component_type, postprocessing_flag, sankey_flow_direction)
         self.outputs.append(outp)
         return outp
 

@@ -1,26 +1,38 @@
 """Sends a building sizer request to the UTSP and waits until the calculation is finished."""
 
 import json
+import random
+import string
 from utspclient import client
 from utspclient.datastructures import TimeSeriesRequest
 
 # Define URL and API key for the UTSP server
-URL = "http://localhost:443/api/v1/profilerequest"
+URL = "http://192.168.178.21:443/api/v1/profilerequest"
 API_KEY = ""
 
 # Create a simulation configuration
-building_sizer_config = """{
-}"""
+building_sizer_config = "{}"
 
+
+# For testing: create a random id to enforce recalculation for each request
+guid = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
+
+
+previous_iterations = {building_sizer_config}
 # Call time series request function
 finished = False
 while not finished:
-    request = TimeSeriesRequest(building_sizer_config, "hisim")
+    request = TimeSeriesRequest(building_sizer_config, "building_sizer", guid=guid)
     result = client.request_time_series_and_wait_for_delivery(URL, request, API_KEY)
     status_json = result.data["status.json"].decode()
     status = json.loads(status_json)
     finished = status["finished"]
     building_sizer_config = status["subsequent request"]
+    if building_sizer_config in previous_iterations:
+        raise RuntimeError(
+            f"Detected a loop: the following building sizer request has already been sent before.\n{building_sizer_config}"
+        )
+    previous_iterations.add(building_sizer_config)
     print(f"Interim results: {status['results']}")
 
 print("Finished")

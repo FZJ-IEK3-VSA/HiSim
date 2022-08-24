@@ -13,6 +13,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
+from hisim.postprocessing.compute_KPIs import compute_KPIs
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ComponentOutput
 
@@ -233,62 +234,8 @@ class PostProcessor:
         report.close()
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-        """ KPI Calculator function. """
-        # sum consumption and production of individual components
-        ppdt.results['consumption'] = 0
-        ppdt.results['production'] = 0
-        ppdt.results['storage'] = 0
-        index: int
-        output: ComponentOutput
-        for index, output in enumerate(ppdt.all_outputs):
-            if 'ElectricityOutput' in output.full_name:
-                if ('PVSystem' in output.full_name) or ('CHP' in output.full_name):
-                    ppdt.results['production'] = ppdt.results['production'] + ppdt.results.iloc[:, index]
-                else:
-                    ppdt.results['consumption'] = ppdt.results['consumption'] + ppdt.results.iloc[:, index]
-            elif 'AcBatteryPower' in output.full_name:
-                ppdt.results['storage'] = ppdt.results['storage'] + ppdt.results.iloc[:, index]
-            else:
-                continue
-
-        # initilize lines for report
-        lines = []
-
-        # sum over time and write to report
-        consumption_sum = ppdt.results['consumption'].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-        lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
-
-        production_sum = ppdt.results['production'].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-        lines.append(f"Production: {production_sum:4.0f} kWh")
-
-        if production_sum > 0:
-            # evaluate injection, sum over time and wite to
-            injection = (ppdt.results['production'] - ppdt.results['storage'] - ppdt.results['consumption'])
-            injection_sum = injection[injection > 0].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            lines.append(f"Injection: {injection_sum:4.0f} kWh")
-
-            batterylosses = ppdt.results['storage'].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            print(batterylosses)
-
-            # evaluate self consumption rate and autarky rate:
-            lines.append(f"Autarky Rate: {100 * (production_sum - injection_sum - batterylosses) / consumption_sum:3.1f} %")
-            lines.append(f"Self Consumption Rate: {100 * (production_sum - injection_sum) / production_sum:3.1f} %")
-
-            # evaluate electricity price
-            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in ppdt.results:
-                price = - ((injection[injection < 0] * ppdt.results['PriceSignal - PricePurchase [Price - Cents per kWh]'][injection < 0]).
-                           sum() + (injection[injection > 0] * ppdt.results['PriceSignal - PriceInjection [Price - Cents per kWh]']
-                                    [injection > 0]).sum()) * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-
-                lines.append(f"Price paid for electricity: {price * 1e-2:3.0f} EUR")
-
-        else:
-            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in ppdt.results:
-                price = (ppdt.results['consumption'] * ppdt.results[
-                    'PriceSignal - PricePurchase [Price - Cents per kWh]']).sum() \
-                    * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                lines.append(f"Price paid for electricity: {price * 1e-2:3.0f} EUR")
-        self.write_to_report(lines, report)
+        lines = compute_KPIs(results=ppdt.results, all_outputs=self.ppdt.all_outputs, simulation_parameters=self.ppdt.simulation_parameters)
+        self.write_to_report( lines )
 
     #
     # def cal_pos_sim(self):

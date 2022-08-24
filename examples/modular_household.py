@@ -43,7 +43,7 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
     
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year( year = year,
+        my_simulation_parameters = SimulationParameters.january_only( year = year,
                                                                       seconds_per_timestep = seconds_per_timestep )
         my_simulation_parameters.enable_all_options( )
 
@@ -55,9 +55,10 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
         my_simulation_parameters.system_config = system_config
     except:
         # file does not exist or could not be parsed - use default config
-        my_simulation_parameters.reset_system_config(prediction_horizon=24 * 3600, pv_included=True, smart_devices_included=True,
-                                                     water_heating_system_installed='HeatPump', heating_system_installed='HeatPump',
-                                                     buffer_volume=500, battery_included=True, chp_included=True)  
+        my_simulation_parameters.reset_system_config(
+            prediction_horizon=24 * 3600, pv_included=True, smart_devices_included=True, water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP,
+            heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_volume=500, battery_included=True, chp_included=True, current_mobility=lt.Cars.NO_CAR,
+            mobility_distance=lt.MobilityDistance.RURAL)  
     my_sim.set_simulation_parameters(my_simulation_parameters)
     
     #get system configuration
@@ -74,20 +75,20 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
 
     """BASICS"""  
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value)
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location=location)
+    my_weather_config = weather.WeatherConfig(location=location.value)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
                                  my_simulation_repository=my_sim.simulation_repository )
     my_sim.add_component(my_weather)
     
     # Build building
     my_building_config=building.Building.get_default_config()
-    my_building_config.building_code = building_code
+    my_building_config.building_code = building_code.value
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)   
     my_sim.add_component(my_building)
@@ -108,7 +109,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                                    consumption=consumption, count=count)
     
     """SURPLUS CONTROLLER"""
-    if battery_included or chp_included or heating_system_installed in [ 'HeatPump', 'ElectricHeating' ] or water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
+    if battery_included or chp_included or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
+        or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_electricity_controller = controller_l2_energy_management_system.ControllerElectricityGeneric( my_simulation_parameters = my_simulation_parameters )
 
         my_electricity_controller.add_component_inputs_and_connect(source_component_classes = consumption,
@@ -158,7 +160,8 @@ def modular_household_explicit( my_sim, my_simulation_parameters: Optional[Simul
                                                      source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
                                                      source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
         
-    if battery_included or chp_included or heating_system_installed in [ 'HeatPump', 'ElectricHeating' ] or water_heating_system_installed in [ 'HeatPump', 'ElectricHeating' ]:
+    if battery_included or chp_included or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
+        or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_sim.add_component(my_electricity_controller)
      
     """PREDICTIVE CONTROLLER FOR SMART DEVICES"""    

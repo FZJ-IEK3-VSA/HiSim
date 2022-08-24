@@ -122,6 +122,8 @@ class Occupancy(cp.Component):
     @staticmethod
     def get_default_config() -> OccupancyConfig:
         config= OccupancyConfig(profile_name = "CH01")
+    def get_default_config(profile_name: str = 'CH01') -> OccupancyConfig:
+        config= OccupancyConfig(profile_name = profile_name)
         return config
     def i_save_state(self) -> None:
         pass

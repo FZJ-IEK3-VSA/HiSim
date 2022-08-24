@@ -7,6 +7,7 @@ from dataclasses_json import dataclass_json
 
 
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.loadtypes import HeatingSystems, Locations, OccupancyProfiles, BuildingCodes, Cars, MobilityDistance
 
 
 @dataclass_json
@@ -15,18 +16,20 @@ class SystemConfig:
 
     """ Defines the system config for the modular household. """
 
-    location: str = 'Aachen'
-    occupancy_profile: str = 'CH01'
-    building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"
+    location: Locations = Locations.AACHEN
+    occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01
+    building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_Gen_ReEx_001_002
     predictive: bool = True
     prediction_horizon: int = 24 * 3600
     pv_included: bool = True
     smart_devices_included: bool = True
-    water_heating_system_installed: Optional[str] = "HeatPump"
-    heating_system_installed: Optional[str] = "HeatPump"
+    water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
+    heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     buffer_volume: float = 500
     battery_included: bool = False
     chp_included: bool = False
+    current_mobility: Cars = Cars.NO_CAR
+    mobility_distance: MobilityDistance = MobilityDistance.RURAL
 
 
 class SimulationParameters:
@@ -96,13 +99,14 @@ class SimulationParameters:
         return str(self.start_date) + "###" + str(self.end_date) + "###" + str(self.seconds_per_timestep) + "###" + str(
             self.year) + "###" + str(self.timesteps)
 
-    def reset_system_config(self, location: str = 'Aachen', occupancy_profile: str = 'CH01', building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002",
+    def reset_system_config(self, location: Locations = Locations.AACHEN, occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01, building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_Gen_ReEx_001_002,
                             predictive: bool = True, prediction_horizon: int = 0, pv_included: bool = True, smart_devices_included: bool = True,
-                            water_heating_system_installed: Optional[str] = 'HeatPump', heating_system_installed: Optional[str] = 'HeatPump',
-                            buffer_volume: float = 500, battery_included: bool = False, chp_included: bool = False) -> None:  # noqa
+                            water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP, heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
+                            buffer_volume: float = 500, battery_included: bool = False, chp_included: bool = False, current_mobility: Cars = Cars.NO_CAR,
+                            mobility_distance: MobilityDistance = MobilityDistance.RURAL) -> None:  # noqa
         """ Configures a system config. """
         self.system_config = SystemConfig(location=location, occupancy_profile=occupancy_profile, building_code=building_code, predictive=predictive,
                                           prediction_horizon=prediction_horizon, pv_included=pv_included, smart_devices_included=smart_devices_included,
-                                          water_heating_system_installed=water_heating_system_installed,
-                                          heating_system_installed=heating_system_installed, buffer_volume=buffer_volume,
-                                          battery_included=battery_included, chp_included=chp_included)
+                                          water_heating_system_installed=water_heating_system_installed, heating_system_installed=heating_system_installed,
+                                          buffer_volume=buffer_volume, battery_included=battery_included, chp_included=chp_included,
+                                          current_mobility=current_mobility, mobility_distance=mobility_distance)

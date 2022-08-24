@@ -98,10 +98,9 @@ class HydrogenStorage( cp.Component ):
                                                                   lt.Units.KG_PER_SEC,
                                                                   True)
 
-        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(self.component_name,
-                                                                 self.HydrogenSOC,
-                                                                 lt.LoadTypes.HYDROGEN,
-                                                                 lt.Units.PERCENT)
+        self.HydrogenSOCC : cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.HydrogenSOC, load_type=lt.LoadTypes.HYDROGEN,
+            unit=lt.Units.PERCENT, postprocessing_flag=lt.InandOutputType.STORAGE_CONTENT)
         
         self.add_default_connections( generic_electrolyzer.Electrolyzer, self.get_electrolyzer_default_connections( ) )
         self.add_default_connections( generic_CHP.GCHP, self.get_fuelcell_default_connections( ) )

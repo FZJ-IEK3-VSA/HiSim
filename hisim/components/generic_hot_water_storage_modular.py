@@ -210,8 +210,9 @@ class HotWaterStorage(dycp.DynamicComponent):
                                                                            lt.LoadTypes.HEATING, lt.Units.WATT, mandatory=False)
 
         # Outputs
-        self.temperature_mean_c: cp.ComponentOutput = self.add_output(self.component_name, self.TemperatureMean,
-                                                                      lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.temperature_mean_c: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.TemperatureMean, load_type=lt.LoadTypes.TEMPERATURE,
+            unit=lt.Units.CELSIUS, postprocessing_flag=lt.InandOutputType.STORAGE_CONTENT)
         # Outputs
         self.heat_to_building_c: cp.ComponentOutput = self.add_output(self.component_name, self.HeatToBuilding,
                                                                       lt.LoadTypes.HEATING, lt.Units.WATT)

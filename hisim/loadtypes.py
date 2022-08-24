@@ -196,9 +196,11 @@ class InandOutputType(str, enum.Enum):
     EARLIEST_ACTIVATION = "EarliestActivation"
     RECOMMENDED_ACTIVATION = "RecommendedActivation"
 
-    # Energy Management System
+    # Energy Management System / Postprocessing Options
     PRODUCTION = "Production"
     CONSUMPTION = "Consumption"
+    STORAGE_CONTENT = "StorageContent"
+    CHARGE_DISCHARGE = "ChargeDischarge"
 
     # Heating
     HEAT_TO_BUILDING = "HeatToBuilding"

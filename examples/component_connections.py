@@ -4,11 +4,12 @@ The functions are all called in modular_household.
 """
 
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import csv
 
 import hisim.loadtypes as lt
+from hisim.component import Component
 from hisim.simulator import SimulationParameters
 from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_source
@@ -32,7 +33,7 @@ from hisim import utils
 
 
 def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
-                        production: List, pv_peak_power: Optional[float], count: int):
+                        production: List, pv_peak_power: Optional[float], count: int) -> Tuple[List, int]:
     """ Sets PV System.
 
     Parameters
@@ -66,7 +67,8 @@ def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, 
     return production, count
 
 
-def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParameters, consumption: List, count: int):
+def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParameters, consumption: List, count: int) \
+        -> Tuple[List[generic_smart_device.SmartDevice], List, int]:
     """ Sets smart devices without controllers.
 
     Parameters
@@ -105,7 +107,7 @@ def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParamete
 
 
 def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameters: SimulationParameters,
-                                                 my_smart_devices: List[generic_smart_device.SmartDevice]):
+                                                 my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:
     """ Sets l3 controller for smart devices.
 
     Parameters
@@ -146,7 +148,7 @@ def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameter
 
 def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
                       my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
-                      battery_capacity: Optional[float], count: int):
+                      battery_capacity: Optional[float], count: int) -> int:
     """ Sets advanced battery system with surplus controller.
 
     Parameters
@@ -193,7 +195,7 @@ def configure_water_heating(
         my_occupancy: loadprofilegenerator_connector.Occupancy,
         my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
         my_weather: weather.Weather, water_heating_system_installed: lt.HeatingSystems,
-        count: int):
+        count: int) -> int:
     """ Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
     Parameters
@@ -292,7 +294,7 @@ def configure_water_heating(
 def configure_heating(my_sim, my_simulation_parameters: SimulationParameters,
                       my_building: building.Building,
                       my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
-                      my_weather: weather.Weather, heating_system_installed: str, count: int):
+                      my_weather: weather.Weather, heating_system_installed: str, count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -385,7 +387,8 @@ def configure_heating_with_buffer(my_sim,
                                   my_simulation_parameters: SimulationParameters,
                                   my_building: building.Building,
                                   my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
-                                  my_weather: weather.Weather, heating_system_installed: str, buffer_volume: Optional[float], count: int):
+                                  my_weather: weather.Weather, heating_system_installed: str, buffer_volume: Optional[float], count: int) \
+        -> Tuple[Component, generic_hot_water_storage_modular.HotWaterStorage, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -507,7 +510,7 @@ def configure_heating_with_buffer(my_sim,
 def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                                                my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                                                chp_power: Optional[float], h2_storage_size: Optional[float], electrolyzer_power: Optional[float],
-                                               count: int):
+                                               count: int) -> Tuple[generic_CHP.GCHP, int]:
     """ Sets electrolysis, H2-storage and chp system.
 
     Parameters

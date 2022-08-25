@@ -231,10 +231,10 @@ class PostProcessor:
         self.report.write(text)
         self.report.close()
 
-    def compute_KPIs(self):
+    def compute_kpis(self):
         """ KPI Calculator function. """
         lines = compute_KPIs(results=self.ppdt.results, all_outputs=self.ppdt.all_outputs, simulation_parameters=self.ppdt.simulation_parameters)
-        self.write_to_report( lines )
+        self.write_to_report(lines)
     #
     # def cal_pos_sim(self):
     #     self.write_components_to_report()

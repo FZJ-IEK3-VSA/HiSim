@@ -1,8 +1,6 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 from __future__ import annotations
 from typing import List, Optional
-import os
-import sys
 import datetime
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -33,7 +31,7 @@ class SimulationParameters:
 
     def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int,
                  result_directory: str = "",
-                 post_processing_options: List[int] = None ):
+                 post_processing_options: List[int] = None):
         """ Initializes the class. """
         self.start_date = start_date
         self.end_date = end_date
@@ -63,7 +61,7 @@ class SimulationParameters:
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a full year with all the post processing, primarily for unit testing. """
-        pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep,"")
+        pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep, "")
         pars.enable_all_options()
         return pars
 
@@ -85,7 +83,7 @@ class SimulationParameters:
     @classmethod
     def one_day_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
-        pars = cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep,"")
+        pars = cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep, "")
         pars.enable_all_options()
         return pars
 

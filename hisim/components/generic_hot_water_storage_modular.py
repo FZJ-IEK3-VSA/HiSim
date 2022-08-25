@@ -268,7 +268,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         return config
 
     @staticmethod
-    def get_default_config_buffer(volume: float):
+    def get_default_config_buffer(volume: float = 500):
         """ Returns default configuration for buffer (radius:height = 1:4). """
         radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
         config = StorageConfig(

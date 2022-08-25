@@ -92,7 +92,7 @@ class L1_Controller( cp.Component ):
     l2_DeviceSignal = "l2_DeviceSignal"
 
     # Outputs
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
     l1_RunTimeSignal = "l1_RunTimeSignal"
 
     # Similar components to connect to:
@@ -113,7 +113,7 @@ class L1_Controller( cp.Component ):
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.l1_DeviceSignal,
+        self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal,
                                                                     LoadTypes.ON_OFF, Units.BINARY)
 
         if self.my_simulation_parameters.system_config.predictive == True:
@@ -190,7 +190,7 @@ class L1_Controller( cp.Component ):
                 self.state.deactivation( timestep )
             elif l2_devicesignal == 1 and self.state0.state == 0:
                 self.state.activation( timestep )
-        stsv.set_output_value(self.l1_DeviceSignalC, self.state.state)
+        stsv.set_output_value(self.L1DeviceSignalC, self.state.state)
 
     def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
         log.information("==========================================")

@@ -51,7 +51,7 @@ def test_chp_system():
     my_chp_controller.ElectricityTargetC.source_output = electricity_target
     my_chp_controller.HydrogenSOCC.source_output = hydrogensoc
     my_chp_controller.l2_DeviceSignalC.source_output = l2_devicesignal
-    my_chp.l1_DeviceSignalC.source_output = my_chp_controller.l1_DeviceSignalC
+    my_chp.L1DeviceSignalC.source_output = my_chp_controller.L1DeviceSignalC
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components( [ my_chp, my_chp_controller, electricity_target, hydrogensoc, l2_devicesignal ] )

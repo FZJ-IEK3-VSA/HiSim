@@ -44,14 +44,14 @@ def test_simple_bucket_boiler_state():
     my_boiler_controller_l2.ReferenceTemperatureC.source_output = my_boiler.temperature_mean_c
     my_boiler.water_consumption_c.source_output = WW_use
     my_boiler.thermal_power_delivered_c.source_output = my_heater.ThermalPowerDeliveredC
-    my_heater.l1_DeviceSignalC.source_output = my_boiler_controller_l1.l1_DeviceSignalC
+    my_heater.L1DeviceSignalC.source_output = my_boiler_controller_l1.L1DeviceSignalC
     my_boiler_controller_l1.l2_DeviceSignalC.source_output = my_boiler_controller_l2.l2_DeviceSignalC
     
     # indexing of in- and outputs
     WW_use.global_index = 0
     my_boiler.temperature_mean_c.global_index = 1
     my_heater.ThermalPowerDeliveredC.global_index = 2
-    my_boiler_controller_l1.l1_DeviceSignalC.global_index = 3  
+    my_boiler_controller_l1.L1DeviceSignalC.global_index = 3  
     my_boiler_controller_l2.l2_DeviceSignalC.global_index = 4
     my_heater.FuelDeliveredC.global_index = 5
     

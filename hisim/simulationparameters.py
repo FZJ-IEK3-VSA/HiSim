@@ -48,36 +48,6 @@ class SimulationParameters:
         self.logging_level: int = 3  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = True
-        # normalized_path = os.path.normpath(path_to_model_module)
-        # path_in_list = normalized_path.split(os.sep)
-        # module_filename_with_suffix = path_in_list[-1]
-        # if len(path_in_list) >= 1:
-        #     model_module_directory = os.path.join(os.getcwd(), *path_in_list[:-1])
-        #     if os.path.isdir(model_module_directory):
-        #         #  Add current path to PYTHONPATH
-        #         sys.path.append(model_module_directory)
-        #     else:
-        #         raise ValueError(
-        #             f"Directory location of module location is nonexistent!\nDirectory entered: {model_module_directory}")
-        # # make it possible to put the filename with or without .py
-        # suffix = module_filename_with_suffix[-3:]
-        # if suffix != ".py":
-        #     module_full_filename = f"{module_filename_with_suffix}.py"
-        #
-        # self.module_filename_no_suffix = module_filename_with_suffix[:-3]
-        # filepath = os.path.join(model_module_directory, module_full_filename)
-        #
-        # if setup_function is None:
-        #     raise Exception("No setup function was set")
-        # self.setup_function = setup_function
-        # if result_directory is None:
-        #     # generate a result directory name
-        #     directoryname = f"{self.module_filename_no_suffix}_{setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        #     #if os.path.isdir(os.path.join(module_directory, "results")) is False:
-        #     #   os.mkdir(os.path.join(module_directory, "results"))
-        #     self.dirpath:str = os.path.join(model_module_directory, "results", directoryname)
-        # os.mkdir(self.dirpath)
-
         self.system_config = SystemConfig()  # noqa
 
     @classmethod

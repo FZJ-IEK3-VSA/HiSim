@@ -1,6 +1,7 @@
 """Example sets up a modular household according to json input file."""
 
 from typing import Optional, List
+from pathlib import Path
 
 import component_connections
 import hisim.log
@@ -14,7 +15,7 @@ from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
 
 
-def modular_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+def modular_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Setup function emulates an household including the basic components.
 
     The configuration of the household is read in via the json input file "system_config.json".
@@ -38,18 +39,19 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
         my_simulation_parameters.enable_all_options()
 
     # try to read the system config from file
-    with open(system_config_filename) as system_config_file:
-        system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
-    if not system_config:
+    if Path(system_config_filename).is_file():
+        with open(system_config_filename) as system_config_file:
+            system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
+        hisim.log.information(f"Read system config from {system_config_filename}")
+        my_simulation_parameters.system_config = system_config
+
+    else:
         my_simulation_parameters.reset_system_config(
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
             predictive=True, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=True,
             water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_included=True,
             buffer_volume=500, battery_included=True, battery_capacity=10e3, chp_included=True, chp_power=10e3, h2_storage_size=100,
             electrolyzer_power=5e3, current_mobility=lt.Cars.NO_CAR, mobility_distance=lt.MobilityDistance.RURAL)
-    else:
-        hisim.log.information(f"Read system config from {system_config_filename}")
-        my_simulation_parameters.system_config = system_config
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

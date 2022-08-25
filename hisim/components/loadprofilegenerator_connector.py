@@ -118,8 +118,6 @@ class Occupancy(cp.Component):
                                                                        lt.LoadTypes.WARM_WATER,
                                                                        lt.Units.LITER)
     @staticmethod
-    def get_default_config() -> OccupancyConfig:
-        config= OccupancyConfig(profile_name = "CH01")
     def get_default_config(profile_name: str = 'CH01') -> OccupancyConfig:
         config= OccupancyConfig(profile_name = profile_name)
         return config

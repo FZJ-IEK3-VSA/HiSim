@@ -268,7 +268,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         return config
 
     @staticmethod
-    def get_default_config_buffer(volume: float = 500):
+    def get_default_config_buffer(volume: float = 500) -> StorageConfig:
         """ Returns default configuration for buffer (radius:height = 1:4). """
         radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
         config = StorageConfig(
@@ -277,7 +277,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             heating_season_begin=270, heating_season_end=150)
         return config
 
-    def build(self, config: StorageConfig):
+    def build(self, config: StorageConfig) -> None:
         """ Initializes hot water storage instance. """
 
         self.name = config.name
@@ -313,7 +313,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Abstract. Restores the state of the component. Can be called many times while iterating. """
         self.state = self.previous_state.clone()
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool):
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         """ Simulates iteration of hot water storage. """
 
         if self.thermal_power_delivered_c.source_output is not None:

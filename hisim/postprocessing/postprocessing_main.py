@@ -234,8 +234,8 @@ class PostProcessor:
         report.close()
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-        lines = compute_KPIs(results=ppdt.results, all_outputs=self.ppdt.all_outputs, simulation_parameters=self.ppdt.simulation_parameters)
-        self.write_to_report( lines )
+        lines = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        self.write_to_report(lines)
 
     #
     # def cal_pos_sim(self):

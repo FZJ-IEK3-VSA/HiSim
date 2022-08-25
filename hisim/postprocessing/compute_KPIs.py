@@ -61,13 +61,16 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                     * simulation_parameters.seconds_per_timestep / 3.6e6
         else:
             price = 0
+        self_consumption_rate = 100 * (self_consumption_sum / production_sum)
+        autarky_rate = 100 * (self_consumption_sum / consumption_sum)
     else:
         if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in results:
             price = ( results[ 'consumption' ] * results[ 'PriceSignal - PricePurchase [Price - Cents per kWh]' ] ).sum( ) \
                 * simulation_parameters.seconds_per_timestep / 3.6e6
         else:
             price = 0
-    
+        self_consumption_rate = 0
+        autarky_rate = 0
     #initilize lines for report
     lines: List = []
     lines.append("Consumption: {:4.0f} kWh".format(consumption_sum))
@@ -78,8 +81,8 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Battery content: {:4.0f} kWh".format(0))
     lines.append("Hydrogen system losses: {:4.0f} kWh".format(h2_system_losses))
     lines.append("Hydrogen storage content: {:4.0f} kWh".format(0))
-    lines.append("Autarky Rate: {:3.1f} %".format( 100 * (self_consumption_sum / consumption_sum) ))
-    lines.append("Self Consumption Rate: {:3.1f} %".format( 100 * (self_consumption_sum / production_sum ) ))
+    lines.append("Autarky Rate: {:3.1f} %".format(autarky_rate))
+    lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
     lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2))
     
     return lines

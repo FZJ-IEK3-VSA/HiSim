@@ -94,7 +94,7 @@ class ChartSingleDay(Chart):
         plt.yticks(fontsize=18)
         plt.rcParams['font.size'] = '18'
         plt.rcParams['agg.path.chunksize'] = 10000
-        _fig, axis = plt.subplots(figsize=(13, 9))
+        _fig,self.axis = plt.subplots(figsize=(13, 9))
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
         #  plt.plot(self.data.index[firstindex:lastindex], self.data[firstindex:lastindex], color="green", linewidth=5.0)

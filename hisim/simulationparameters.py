@@ -1,7 +1,8 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 from __future__ import annotations
 from typing import List, Optional
-
+import os
+import sys
 import datetime
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -30,7 +31,9 @@ class SimulationParameters:
 
     """ Defines HOW the simulation is going to proceed: Time resolution, time span and all these things. """
 
-    def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int, post_processing_options: List[int] = None):
+    def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int,
+                 result_directory: str = "",
+                 post_processing_options: List[int] = None ):
         """ Initializes the class. """
         self.start_date = start_date
         self.end_date = end_date
@@ -43,12 +46,44 @@ class SimulationParameters:
             post_processing_options = []
         self.post_processing_options: List[int] = post_processing_options
         self.logging_level: int = 3  # Info # noqa
+        self.result_directory: str = result_directory
+        self.skip_finished_results: bool = True
+        # normalized_path = os.path.normpath(path_to_model_module)
+        # path_in_list = normalized_path.split(os.sep)
+        # module_filename_with_suffix = path_in_list[-1]
+        # if len(path_in_list) >= 1:
+        #     model_module_directory = os.path.join(os.getcwd(), *path_in_list[:-1])
+        #     if os.path.isdir(model_module_directory):
+        #         #  Add current path to PYTHONPATH
+        #         sys.path.append(model_module_directory)
+        #     else:
+        #         raise ValueError(
+        #             f"Directory location of module location is nonexistent!\nDirectory entered: {model_module_directory}")
+        # # make it possible to put the filename with or without .py
+        # suffix = module_filename_with_suffix[-3:]
+        # if suffix != ".py":
+        #     module_full_filename = f"{module_filename_with_suffix}.py"
+        #
+        # self.module_filename_no_suffix = module_filename_with_suffix[:-3]
+        # filepath = os.path.join(model_module_directory, module_full_filename)
+        #
+        # if setup_function is None:
+        #     raise Exception("No setup function was set")
+        # self.setup_function = setup_function
+        # if result_directory is None:
+        #     # generate a result directory name
+        #     directoryname = f"{self.module_filename_no_suffix}_{setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        #     #if os.path.isdir(os.path.join(module_directory, "results")) is False:
+        #     #   os.mkdir(os.path.join(module_directory, "results"))
+        #     self.dirpath:str = os.path.join(model_module_directory, "results", directoryname)
+        # os.mkdir(self.dirpath)
+
         self.system_config = SystemConfig()  # noqa
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a full year without any post processing, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
+        return cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep, "")
 
     def enable_all_options(self) -> None:
         """ Enables all the post processing options . """
@@ -58,29 +93,29 @@ class SimulationParameters:
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a full year with all the post processing, primarily for unit testing. """
-        pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep)
+        pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep,"")
         pars.enable_all_options()
         return pars
 
     @classmethod
     def january_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single january, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep)
+        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep, "")
 
     @classmethod
     def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single week, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 8), seconds_per_timestep)
+        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 8), seconds_per_timestep, "")
 
     @classmethod
     def one_day_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
+        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep, "")
 
     @classmethod
     def one_day_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
-        pars = cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep)
+        pars = cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep,"")
         pars.enable_all_options()
         return pars
 

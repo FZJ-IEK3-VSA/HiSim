@@ -1,8 +1,10 @@
 """ Contains various utility functions and utility classes. """
+import gc
 import os
 import inspect
 import hashlib
 import json
+import os, psutil
 
 from typing import Any, Dict, Tuple
 from functools import wraps
@@ -462,6 +464,7 @@ def load_export_load_profile_generator(target):  # noqa
 #     return extracted_pickle, dir_path
 
 
+
 def measure_execution_time(my_function):  # noqa
     """ Utility function that works as decorator for measuring execution time. """
     @wraps(my_function)
@@ -477,7 +480,41 @@ def measure_execution_time(my_function):  # noqa
 
     return function_wrapper_for_measuring_execution_time
 
+def measure_memory_leak(my_function):  # noqa
+    """ Utility function that works as decorator for measuring execution time. """
+    @wraps(my_function)
+    def function_wrapper_for_measuring_memory_leak(*args, **kwargs):
+        """ Inner function for the time measuring utility decorator. """
+        process = psutil.Process(os.getpid())
+        rss_by_psutil_start = process.memory_info().rss / (1024 * 1024 )
+        result = my_function(*args, **kwargs)
+        rss_by_psutil_end = process.memory_info().rss / (1024 * 1024)
+        gc.collect()
+        diff = rss_by_psutil_end - rss_by_psutil_start
+        log.trace(
+            "Executing " + my_function.__module__ + "." + my_function.__name__ + " leaked " + f"{diff:1.2f}" + " MB")
+        return result
 
+    return function_wrapper_for_measuring_memory_leak
+
+def measure_memory_leak_with_error(my_function):  # noqa
+    """ Utility function that works as decorator for measuring execution time. """
+    @wraps(my_function)
+    def function_wrapper_for_measuring_memory_leak(*args, **kwargs):
+        """ Inner function for the time measuring utility decorator. """
+        process = psutil.Process(os.getpid())
+        rss_by_psutil_start = process.memory_info().rss / (1024 * 1024 )
+        result = my_function(*args, **kwargs)
+        rss_by_psutil_end = process.memory_info().rss / (1024 * 1024)
+        gc.collect()
+        diff = rss_by_psutil_end - rss_by_psutil_start
+        log.information(
+            "Executing " + my_function.__module__ + "." + my_function.__name__ + " leaked " + f"{diff:1.2f}" + " MB")
+        if diff > 100:
+            raise ValueError("Lost over 100MB of memory during the function call")
+        return result
+
+    return function_wrapper_for_measuring_memory_leak
 def deprecated(message):
     """ Decorator for marking a function as deprecated. """
     def deprecated_decorator(func):

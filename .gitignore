@@ -141,3 +141,5 @@ examples/results
 tests\hisim_simulation.log
 hisim/components_information.xlsx
 tests/components_information.xlsx
+examples/ac_test
+examples/ac_results

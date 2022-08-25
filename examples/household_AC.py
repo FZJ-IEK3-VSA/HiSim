@@ -1,15 +1,24 @@
+import gc
+#import objgraph
+import numpy as np
 from typing import Optional
 from hisim.simulator import SimulationParameters
+from hisim.simulator import Simulator
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
-# from hisim.components import PIDcontroller
+from hisim.components import PIDcontroller
 from hisim.components import air_conditioner
 from hisim.components import sumbuilder
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim import log
 from hisim import utils
-
+from pympler import tracker
+from pympler import summary
+from pympler import muppy
 import os
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -20,7 +29,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None, ki= 1, kd = 1, kp = 1):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
@@ -84,14 +93,19 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
     Model ="AC120HBHFKH/SA - AC120HCAFKH/SA" #"CS-TZ71WKEW + CU-TZ71WKE"# 
     hp_min_operation_time = 900 #seconds 
     hp_min_idle_time = 300 #seconds 
-    control="on_off"
+    control="PID" #PID or on_off
 
     ##### Build Components #####
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
-                                                                                 seconds_per_timestep=seconds_per_timestep)
+        #my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        keystr = "ki_" + f"{ki:.3f}" + "_kp_" + f"{kp:.3f}" + "_kd_" + f"{kd:.3f}"
+        my_simulation_parameters.result_directory = os.path.join("ac_results", keystr)
+        #my_simulation_parameters.post_processing_options.clear()
+        #my_simulation_parameters.enable_all_options()
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
     my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
@@ -186,7 +200,27 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
                               my_occupancy.component_name,
                               my_occupancy.HeatingByResidents)
     my_sim.add_component(my_building)
+    if control=="PID":
     
+        pid_controller=PIDcontroller.PIDController(my_simulation_parameters=my_simulation_parameters,ki=ki, kp=kp, kd=kd)
+        pid_controller.connect_input(pid_controller.TemperatureMean,
+                                              my_building.component_name,
+                                              my_building.TemperatureMean)
+        # pid_controller.connect_input(pid_controller.TemperatureMeanPrev,
+        #                                       my_building.component_name,
+        #                                       my_building.TemperatureMeanPrev)
+        # pid_controller.connect_input(pid_controller.HeatingByResidents,
+        #                                       my_occupancy.component_name,
+        #                                       my_occupancy.HeatingByResidents)
+        # pid_controller.connect_input(pid_controller.SolarGainThroughWindows,
+        #                                       my_building.component_name,
+        #                                       my_building.SolarGainThroughWindows)
+        # pid_controller.connect_input(pid_controller.TemperatureOutside,
+        #                                       my_weather.component_name,
+        #                                       my_weather.TemperatureOutside)
+        # pid_controller.connect_input(pid_controller.TemperatureAir,
+        #                                       my_building.component_name,
+        #                                       my_building.TemperatureAir)
     if control=="on_off":
         my_air_conditioner_controller=air_conditioner.AirConditionercontroller(t_air_heating=t_air_heating,
                                                                 t_air_cooling=t_air_cooling,
@@ -212,10 +246,15 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
                                 my_air_conditioner_controller.State)
 
         my_sim.add_component(my_air_conditioner_controller)
-
-    my_sim.add_component(my_air_conditioner)
+    if control=="PID":
+        my_air_conditioner.connect_input(my_air_conditioner.ElectricityOutputPID,
+                                pid_controller.component_name,
+                                pid_controller.ElectricityOutputPID)
 
         
+        my_sim.add_component(pid_controller)
+    my_sim.add_component(my_air_conditioner)
+
     my_building.connect_input(my_building.ThermalEnergyDelivered,
                               my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
@@ -224,3 +263,37 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
 
 
 
+if __name__ == "__main__":
+    y = np.logspace(-2, 3, num=15)
+    # gc.set_debug(gc.DEBUG_LEAK)
+    kp = 1
+    kd = 1
+    #sum1 = summary.summarize(muppy.get_objects())
+    #summary.print_(sum1)
+    for ki in y:
+        #tr = tracker.SummaryTracker()
+        for kp in y:
+           for kd in y:
+                #keystr= "ki_" + f"{ki:.2f}" + "_kp_" + f"{kp:.2f}" + "_kd_" + f"{kd:.2f}"
+                my_sim: Simulator = Simulator(module_directory="ac_test",
+                                  setup_function="household_AC_explicit",
+                                  my_simulation_parameters=None )
+
+                household_AC_explicit(my_sim, ki=ki, kp = kp, kd = kd)
+
+                my_sim.run_all_timesteps()
+
+                del my_sim
+                gc.collect()
+                # sum2 = summary.summarize(muppy.get_objects())
+                # summary.print_(sum2)
+                # diff = summary.get_diff(sum1, sum2)
+                # summary.print_(diff)
+                #print(gc.get_count())
+                #objgraph.show_most_common_types(limit=30)
+                #obj = objgraph.by_type('dict')
+                #objgraph.show_backrefs([obj], max_depth=30)
+                #tr.print_diff()
+                #objgraph.show_backrefs([obj], max_depth=10)
+
+    #for kd = 0

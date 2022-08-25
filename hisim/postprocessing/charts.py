@@ -1,4 +1,5 @@
 """ Contains all the chart classes. """
+import gc
 from typing import Any
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -6,7 +7,7 @@ import numpy as np
 
 from hisim import log
 from hisim.postprocessing.chartbase import Chart
-
+from hisim import utils
 mpl.rcParams['agg.path.chunksize'] = 10000
 
 
@@ -14,26 +15,25 @@ class Carpet(Chart):  # noqa: too-few-public-methods
 
     """ Class for carpet plots. """
 
-    def __init__(self, output: Any, data: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
+    def __init__(self, output: Any,  units: Any, directorypath: str, time_correction_factor: float) -> None:
         """ Initalizes a carpot plot. """
         super().__init__(output=output,
-                         data=data,
                          chart_type="Carpet",
                          units=units,
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
 
-    def plot(self, xdims: int) -> None:
+    def plot(self, xdims: int, data: Any) -> None:
         """ Makes a carpet plot. """
         # log.information("starting carpet plots")
-        ydims = int(len(self.data) / xdims)  # number of calculated timesteps per day
+        ydims = int(len(data) / xdims)  # number of calculated timesteps per day
         y_steps_per_hour = int(ydims / 24)
         try:
-            database = self.data.values.reshape(xdims, ydims)
+            database = data.values.reshape(xdims, ydims)
         except ValueError:
             log.error("Carpet plot can only deal with data containing entire days")
             return
-        if np.max(np.abs(self.data.values)) > 1.5E3:
+        if np.max(np.abs(data.values)) > 1.5E3:
             database = database * 1E-3
             self.units = f"k{self.units}"
         plot_data = np.flip(database.transpose(), axis=0)
@@ -79,54 +79,58 @@ class Line(Chart):  # noqa: too-few-public-methods
 
     """ Makes a line chart. """
 
-    def __init__(self, output, data, units, directorypath, time_correction_factor):
+    #@utils.measure_memory_leak
+    def __init__(self, output,  units, directorypath, time_correction_factor):
         """ Initializes a line chart. """
-        super().__init__(output, data, "line", units, directorypath, time_correction_factor)
+        super().__init__(output,  "line", units, directorypath, time_correction_factor)
 
-    def plot(self):
+    @utils.measure_memory_leak
+    def plot(self, data, units):
         """ Makes a line plot. """
         all_font_size = 40
         size_1 = 20
         size_2 = 18
+        mpl.use('Agg')
+        #font = {'family': 'normal',               'weight': 'normal',                'size': f'{all_font_size}'}
+        #mpl.rc('font', **font)
 
-        font = {'family': 'normal',
-                'weight': 'normal',
-                'size': f'{all_font_size}'}
-        mpl.rc('font', **font)
-
-        ylabel = self.units
+        ylabel = units
         _fig, axis = plt.subplots(figsize=(size_1, size_2))
-        x_zero = self.data.index
+        x_zero = data.index
         plt.xticks(fontsize=35, rotation=20)
         plt.yticks(fontsize=35)
 
         # Rescale values in case they are too high
-        if max(abs(self.data)) > 1.5E3 and self.units != "-":
-            self.data = self.data * 1E-3
-            self.units = f"k{self.units}"
+        if max(abs(data)) > 1.5E3 and units != "-":
+            data = data * 1E-3
+            units = f"k{units}"
 
-        plt.plot(x_zero, self.data, color="green", linewidth=6.0)
+        plt.plot(x_zero, data, color="green", linewidth=6.0)
         plt.ylabel(ylabel, fontsize=all_font_size)
-        plt.ylabel(f"[{self.units}]", fontsize=40)
+        plt.ylabel(f"[{units}]", fontsize=40)
         plt.xlabel("Time", fontsize=all_font_size)
         plt.grid()
         axis.set_xlim(xmin=x_zero[0])
         plt.savefig(self.filepath)
-        plt.close()
+        plt.cla()
+        plt.clf()
+        plt.close("all")
+        del x_zero
+        gc.collect(2)
 
 
-class Bar(Chart):  # noqa: too-few-public-methods
+class BarChart(Chart):  # noqa: too-few-public-methods
 
     """ Makes Bar charts. """
 
     original = [385.66, 484.01, 981.05, 1096.7, 1157, 1299.9, 1415.3, 1266.1, 1075.8, 714.44, 422.51, 366.83]
 
-    def __init__(self, output, data, units, dirpath, time_correction_factor):
+    def __init__(self, output, units, dirpath, time_correction_factor):
         """ Initializes the classes. """
-        super().__init__(output, data, "Bar", units, dirpath, time_correction_factor)
+        super().__init__(output,  "Bar", units, dirpath, time_correction_factor)
         self.filename = f"monthly_{self.output}.png"
 
-    def plot(self):
+    def plot(self, data):
         """ Plots the bar chart. """
         width = 0.35
         # Specify the values of blue bars (height)
@@ -141,7 +145,7 @@ class Bar(Chart):  # noqa: too-few-public-methods
 
         # fig, ax = \
         plt.subplots()
-        plt.bar(ind, self.data * 1E-3, width, label="HiSim")
+        plt.bar(ind, data * 1E-3, width, label="HiSim")
         plt.bar(ind + width, self.original, width, label="PVSOL")
 
         plt.xticks(ind + width / 2)
@@ -155,7 +159,7 @@ class Bar(Chart):  # noqa: too-few-public-methods
         plt.legend(loc='best')
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
-
+        del plt
 
 class SankeyHISIM(Chart):
 
@@ -163,24 +167,22 @@ class SankeyHISIM(Chart):
 
     def __init__(self,
                  name,
-                 data,
                  units,
                  directorypath,
                  time_correction_factor):
         """ Initializes the Sankey chart. """
         super().__init__(output=name,
-                         data=data,
                          chart_type="Sankey",
                          units=units,
                          directorypath=directorypath,
                          time_correction_factor=time_correction_factor)
         self.filename = f"{self.output}.png"
 
-    def plot(self):
+    def plot(self, data):
         """ Executes the plot. """
         components = {}
         #  common_unit = []
-        for _index, output_result in enumerate(self.data):
+        for _index, output_result in enumerate(data):
             if self.output == output_result.display_name:
                 if output_result.sankey_flow_direction is True:
                     components[output_result.component_name] = round(sum(output_result.Results) * 1E-3)
@@ -232,11 +234,11 @@ class SankeyHISIM(Chart):
                 i_negative = 0
         return orientations
 
-    def plot_heat_pump(self):
+    def plot_heat_pump(self, data):
         """ Plots a sankey for the Heat Pump. """
         electricity_consumption = 0
 
-        for _index, output_result in enumerate(self.data):
+        for _index, output_result in enumerate(data):
             if output_result.component_name == "HeatPump":
                 if "ElectricityOutput" == output_result.display_name:
                     electricity_consumption = sum(output_result.Results)
@@ -274,10 +276,10 @@ class SankeyHISIM(Chart):
         plt.savefig(self.filepath)
         plt.close()
 
-    def plot_building(self):
+    def plot_building(self, data):
         """ Sankey of Thermal Equilibrium from Residence. """
         heating_by_residents, internal_loss, solar_gain_through_windows, \
-            stored_energy_variation, thermal_energy_delivered, total_energy_to_residence = self.calculate_metrics()
+            stored_energy_variation, thermal_energy_delivered, total_energy_to_residence = self.calculate_metrics(data)
 
         # If the
         if abs(stored_energy_variation) < 100 * 1E3:
@@ -335,12 +337,12 @@ class SankeyHISIM(Chart):
                  total_energy_to_residence * 1E-3
                  ]
 
-    def calculate_metrics(self):
+    def calculate_metrics(self, data):
         """ Calculates the metrics for the sankey chart. """
         heating_by_residents = 0
         total_energy_to_residence = 0
         solar_gain_through_windows = 0
-        for _index, output_result in enumerate(self.data):
+        for _index, output_result in enumerate(data):
             if output_result.component_name == "Occupancy" and "HeatingByResidents" == output_result.display_name:
                 heating_by_residents = sum(output_result.Results)
             if output_result.component_name == "HeatPump" and "ThermalEnergyDelivered" == output_result.display_name:

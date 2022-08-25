@@ -11,10 +11,9 @@ class Chart:  # noqa: too-few-public-methods
     label_months_lowercase = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                               'August', 'September', 'October', 'November', 'December']
 
-    def __init__(self, output, data, chart_type, units, directorypath, time_correction_factor, output2=None):
+    def __init__(self, output,  chart_type, units, directorypath, time_correction_factor, output2=None):
         """ Initializes the base class. """
         self.output = output
-        self.data = data
         self.type = chart_type
         if hasattr(units, "value"):
             self.units = units.value
@@ -49,7 +48,7 @@ class Chart:  # noqa: too-few-public-methods
         self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}double.png"
+            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
         else:
-            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}.png"
+            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
         self.filepath = os.path.join(self.directorypath, self.filename)

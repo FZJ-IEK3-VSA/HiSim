@@ -97,11 +97,11 @@ class GCHP( cp.Component ):
 
     @staticmethod
     def get_default_config() -> GCHPConfig:
-        config=GCHPConfig( name = 'CHP',
-                          source_weight =  1,
-                          p_el = 2000,
-                          p_th = 3000,
-                          p_fuel = 6000 ) 
+        config=GCHPConfig(name='CHP',
+                          source_weight=1,
+                          p_el=2000,
+                          p_th=3000,
+                          p_fuel=6000) 
         return config
     
     def build( self, config: GCHPConfig ) -> None:

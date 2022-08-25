@@ -31,7 +31,6 @@ class HydrogenStorageConfig:
     source_weight : int
     min_capacity: float # [kg_H2]
     max_capacity: float # [kg_H2]
-    starting_fill: float # [kg_H2]
     max_charging_rate_hour: float # [kg/h]
     max_discharging_rate_hour: float # [kg/h]
     energy_for_charge: float # [kWh/kg]
@@ -43,7 +42,6 @@ class HydrogenStorageConfig:
                     source_weight : int,
                     min_capacity : float,
                     max_capacity : float,
-                    starting_fill : float,
                     max_charging_rate_hour : float,
                     max_discharging_rate_hour : float,
                     energy_for_charge : float,
@@ -53,7 +51,6 @@ class HydrogenStorageConfig:
         self.source_weight = source_weight
         self.min_capacity = min_capacity
         self.max_capacity = max_capacity
-        self.starting_fill = starting_fill
         self.max_charging_rate_hour = max_charging_rate_hour
         self.max_discharging_rate_hour = max_discharging_rate_hour
         self.energy_for_charge = energy_for_charge
@@ -106,17 +103,17 @@ class HydrogenStorage( cp.Component ):
         self.add_default_connections( generic_CHP.GCHP, self.get_fuelcell_default_connections( ) )
 
     @staticmethod
-    def get_default_config() -> HydrogenStorageConfig:
-        config = HydrogenStorageConfig( name = "HydrogenStorage",
-                                        source_weight = 1,
-                                        min_capacity = 0,
-                                        max_capacity = 200,
-                                        starting_fill = 180,
-                                        max_charging_rate_hour = 2,
-                                        max_discharging_rate_hour = 2,
-                                        energy_for_charge = 0,
-                                        energy_for_discharge = 0,
-                                        loss_factor_per_day = 0)
+    def get_default_config(capacity: float = 200, max_charging_rate: float = 2, max_discharging_rate: float = 2,
+                           source_weight: int = 1) -> HydrogenStorageConfig:
+        config = HydrogenStorageConfig(name="HydrogenStorage",
+                                       source_weight=source_weight,
+                                       min_capacity=0,
+                                       max_capacity=capacity,
+                                       max_charging_rate_hour=max_charging_rate,
+                                       max_discharging_rate_hour=max_discharging_rate,
+                                       energy_for_charge=0,
+                                       energy_for_discharge=0,
+                                       loss_factor_per_day=0)
         return config
     
     def get_fuelcell_default_connections( self )-> List[cp.ComponentConnection]:

@@ -32,7 +32,7 @@ from hisim.components import controller_l3_smart_devices
 from hisim import utils
 
 def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
-                        production: List, count: int):
+                        production: List, pv_peak_power: float, count: int):
         """ Sets PV System.
 
         Parameters
@@ -45,12 +45,13 @@ def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, 
             The initialized Weather component.
         production: List
             List of Components with Parameter Production.
+        pv_peak_power: gloat
+            The peak power of the PV panel.
         count: int
             Integer tracking component hierachy for EMS.
 
         """
-        my_pv_system_config = generic_pv_system.PVSystem.get_default_config()
-        my_pv_system_config.source_weight = count
+        my_pv_system_config = generic_pv_system.PVSystem.get_default_config(power=pv_peak_power, source_weight=count)
         count += 1
         my_pv_system = generic_pv_system.PVSystem(my_simulation_parameters=my_simulation_parameters, my_simulation_repository=my_sim.simulation_repository,
                                                   config=my_pv_system_config)
@@ -134,7 +135,8 @@ def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameter
     my_sim.add_component(my_controller_l3)
 
 def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
-                      my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric, count: int):
+                      my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
+                      battery_capacity: float, count: int):
     """ Sets advanced battery system with surplus controller.
 
     Parameters
@@ -145,12 +147,14 @@ def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
         The simulation parameters.
     my_electricity_controller: ControllerElectricityGeneric
         The initialized electricity controller.
+    battery_capacity: float
+        Capacity of the battery in Wh.
     count: int
         Integer tracking component hierachy for EMS.
 
     """
-    my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config()
-    my_advanced_battery_config.source_weight = count
+    my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config(
+        e_bat_custom=battery_capacity, p_inv_custom=battery_capacity*0.5, source_weight=count)
     count += 1 
     my_advanced_battery = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config)
 
@@ -408,7 +412,7 @@ def configure_heating_with_buffer(my_sim,
     count += 1
     
     buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(volume=buffer_volume)
-    buffer_config.power = my_building.max_thermal_building_demand
+    buffer_config.power = float(my_building.max_thermal_building_demand)
     buffer_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config()
     buffer_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating()
     [buffer_config.source_weight, buffer_l1_config.source_weight, buffer_l2_config.source_weight] = [count] * 3
@@ -481,7 +485,7 @@ def configure_heating_with_buffer(my_sim,
 
 def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                                                my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
-                                               count: int):
+                                               chp_power: float, h2_storage_size: float, electrolyzer_power: float, count: int):
     """ Sets electrolysis, H2-storage and chp system.
 
     Parameters
@@ -494,6 +498,12 @@ def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters:
         The initialized building component.
     my_electricity_controller: ControllerElectricityGeneric
         The initialized electricity controller.
+    chp_power: float
+        Maximum power (thermal+electrical+loss) of CHP in Watt.
+    h2_storage_size: float
+        Maximum capacity of hydrogen storage in kg hydrogen.
+    electrolyzer_power: float
+        Maximum power of electrolyzer in Watt.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -503,8 +513,7 @@ def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters:
     l2_config.source_weight = count
     l1_config = generic_CHP.L1_Controller.get_default_config()
     l1_config.source_weight = count
-    chp_config = generic_CHP.GCHP.get_default_config()
-    chp_config.source_weight = count
+    chp_config = generic_CHP.GCHPConfig(name='CHP', source_weight=count,p_el=0.3*chp_power, p_th=0.5*chp_power, p_fuel=chp_power)
     count += 1
     
     # fuel cell
@@ -535,8 +544,9 @@ def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters:
     #electrolyzer default configuration
     l1_config = generic_electrolyzer.L1_Controller.get_default_config()
     l1_config.source_weight = count
-    electrolyzer_config = generic_electrolyzer.Electrolyzer.get_default_config()
-    electrolyzer_config.source_weight = count
+    electrolyzer_config = generic_electrolyzer.ElectrolyzerConfig(
+        name='Electrolyzer', source_weight=count, min_power=0.5*electrolyzer_power, max_power=electrolyzer_power,
+        min_hydrogen_production_rate_hour=0.125*electrolyzer_power, max_hydrogen_production_rate_hour=2*electrolyzer_power)
     count += 1
     
     #electrolyzer
@@ -557,7 +567,8 @@ def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters:
         source_weight=my_electrolyzer.source_weight, source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT)
     my_electrolyzer_controller_l1.connect_dynamic_input(input_fieldname=generic_electrolyzer.L1_Controller.l2_ElectricityTarget, src_object=electricity_to_electrolyzer_target)
     
-    h2storage_config = generic_hydrogen_storage.HydrogenStorage.get_default_config()
+    h2storage_config = generic_hydrogen_storage.HydrogenStorage.get_default_config(
+        capacity=h2_storage_size, max_charging_rate=h2_storage_size*1e-2, max_discharging_rate=h2_storage_size*1e-2, source_weight=count)
     my_h2storage = generic_hydrogen_storage.HydrogenStorage(my_simulation_parameters=my_simulation_parameters, config=h2storage_config)
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)
     my_h2storage.connect_only_predefined_connections(my_chp)

@@ -29,7 +29,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None, ki= 1, kd = 1, kp = 1):
+def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None, ki: float = 1, kd: float = 1, kp: float = 1) -> None:
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
@@ -264,7 +264,7 @@ def household_AC_explicit(my_sim, my_simulation_parameters: Optional[SimulationP
 
 
 if __name__ == "__main__":
-    y = np.logspace(-2, 3, num=15)
+    y = np.logspace(-2, 3, num=5)
     # gc.set_debug(gc.DEBUG_LEAK)
     kp = 1
     kd = 1
@@ -275,7 +275,7 @@ if __name__ == "__main__":
         for kp in y:
            for kd in y:
                 #keystr= "ki_" + f"{ki:.2f}" + "_kp_" + f"{kp:.2f}" + "_kd_" + f"{kd:.2f}"
-                my_sim: Simulator = Simulator(module_directory="ac_test",
+                my_sim: Simulator = Simulator(module_directory="ac_test_5",
                                   setup_function="household_AC_explicit",
                                   my_simulation_parameters=None )
 

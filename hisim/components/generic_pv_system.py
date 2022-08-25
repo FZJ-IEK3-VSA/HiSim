@@ -304,7 +304,7 @@ class PVSystem( cp.Component ):
         self.add_default_connections(Weather, self.get_weather_default_connections())
 
     @staticmethod
-    def get_default_config():
+    def get_default_config(power: float = 10E3, source_weight: int = 1):
         config= PVSystemConfig(
                         name= 'PVSystem',
                         time= 2019,
@@ -312,11 +312,11 @@ class PVSystem( cp.Component ):
                         module_name= "Hanwha_HSL60P6_PA_4_250T__2013_",
                         integrate_inverter= True,
                         inverter_name= "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-                        power= 10E3,
+                        power= power,
                         azimuth= 180,
                         tilt= 30,
                         load_module_data= False,
-                        source_weight= 1)
+                        source_weight=source_weight)
         return config
     def get_weather_default_connections(self):
         log.information("setting weather default connections")

@@ -13,6 +13,7 @@ Guidelines for enum classes:
 
 import enum
 
+
 @enum.unique
 class HeatingSystems(str, enum.Enum):
 
@@ -23,7 +24,8 @@ class HeatingSystems(str, enum.Enum):
     OIL_HEATING = "OilHeating"
     GAS_HEATING = "GasHeating"
     DISTRICT_HEATING = "DistrictHeating"
-    
+
+
 @enum.unique
 class Cars(str, enum.Enum):
 
@@ -32,7 +34,8 @@ class Cars(str, enum.Enum):
     ELECTRIC_CAR = "EV"
     FUEL_CAR = "FuelCar"
     NO_CAR = "NoCar"
-    
+
+
 @enum.unique
 class MobilityDistance(str, enum.Enum):
 
@@ -49,20 +52,21 @@ class Locations(str, enum.Enum):
     """ To parse locations for climate data. """
 
     AACHEN = "Aachen"
-    
+
+
 @enum.unique
 class OccupancyProfiles(str, enum.Enum):
 
     """ To parse LPG predefined household strings. """
 
     CH01 = "CH01"
-    
+
+
 class BuildingCodes(str, enum.Enum):
-    
-    """ To parse predefined house types from tabula """
 
-    DE_N_SFH_05_Gen_ReEx_001_002 = "DE.N.SFH.05.Gen.ReEx.001.002"
+    """ To parse predefined house types from tabula. """
 
+    DE_N_SFH_05_GEN_REEX_001_002 = "DE.N.SFH.05.Gen.ReEx.001.002"
 
 
 @enum.unique

@@ -102,7 +102,7 @@ class HeatPump(cp.Component):
     """
     # Inputs
     TemperatureOutside = "TemperatureOutside"
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
     l1_RunTimeSignal = 'l1_RunTimeSignal'
 
     # Outputs
@@ -128,8 +128,8 @@ class HeatPump(cp.Component):
                                                                      lt.Units.CELSIUS,
                                                                      mandatory = True)
         
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                  self.l1_DeviceSignal,
+        self.L1DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
+                                                                  self.L1DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
@@ -161,7 +161,7 @@ class HeatPump(cp.Component):
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
         controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
+        connections.append( cp.ComponentConnection( HeatPump.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.L1DeviceSignal ) )
         connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
     
@@ -273,7 +273,7 @@ class HeatPump(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         
         # Inputs
-        self.state.state = stsv.get_input_value( self.l1_DeviceSignalC )
+        self.state.state = stsv.get_input_value( self.L1DeviceSignalC )
         T_out:float = stsv.get_input_value( self.TemperatureOutsideC )
           
         #cop

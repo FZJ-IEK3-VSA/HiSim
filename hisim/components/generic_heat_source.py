@@ -61,7 +61,7 @@ class HeatSource( cp.Component ):
     """
     
     # Inputs
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
@@ -83,8 +83,8 @@ class HeatSource( cp.Component ):
         self.build(config)
         
         # Inputs - Mandatories
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                  self.l1_DeviceSignal,
+        self.L1DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
+                                                                  self.L1DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
@@ -108,16 +108,16 @@ class HeatSource( cp.Component ):
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
         controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatSource.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
+        connections.append( cp.ComponentConnection( HeatSource.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.L1DeviceSignal ) )
         return connections
     
     @staticmethod
     def get_default_config_heating() -> HeatSourceConfig:
         config = HeatSourceConfig( name = 'HeatSource',
-                                   source_weight =  1,
-                                   fuel = lt.LoadTypes.ELECTRICITY,
+                                   source_weight = 1,
+                                   fuel = lt.LoadTypes.DISTRICTHEATING,
                                    power_th = 6200,
-                                   efficiency = 0.9 ) 
+                                   efficiency = 1.0 ) 
         return config
     
     @staticmethod
@@ -126,7 +126,7 @@ class HeatSource( cp.Component ):
                                    source_weight =  1,
                                    fuel = lt.LoadTypes.DISTRICTHEATING,
                                    power_th = 3000,
-                                   efficiency = 0.9 ) 
+                                   efficiency = 1.0 ) 
         return config
 
     def build( self, config : HeatSourceConfig ) -> None:
@@ -172,7 +172,7 @@ class HeatSource( cp.Component ):
         """ 
         
         # Load control signal signalC value
-        signal = stsv.get_input_value( self.l1_DeviceSignalC )
+        signal = stsv.get_input_value( self.L1DeviceSignalC )
         
         if signal > 0:
             signal = 1

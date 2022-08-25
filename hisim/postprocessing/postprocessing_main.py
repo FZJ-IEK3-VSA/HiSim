@@ -117,7 +117,7 @@ class PostProcessor:
         # Export all results to CSV
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
             log.information("Making CSV exports.")
-            self.make_csv_export()
+            self.make_csv_export(ppdt)
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information("Making PDF report.")
             self.write_components_to_report(ppdt, report)
@@ -158,10 +158,10 @@ class PostProcessor:
                                          month=0)
             my_days.plot(data=ppdt.results.iloc[:, index],close=True)
 
-    def make_csv_export(self) -> None:
+    def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Exports all data to CSV. """
         log.information("exporting to csv")
-        self.export_results_to_csv()
+        self.export_results_to_csv(ppdt)
 
     def make_sankey_plots(self) -> None:
         """ Makes Sankey plots. Needs work. """

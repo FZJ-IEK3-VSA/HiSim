@@ -42,6 +42,7 @@ class ComponentWrapper:
         self.is_cachable = is_cachable
 
     def clear(self):
+        """ Clears properties to help with saving memory. """
         del self.my_component
         del self.component_inputs
         del self.component_outputs
@@ -161,7 +162,6 @@ class Simulator:
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
 
-
     def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """
         self._simulation_parameters = my_simulation_parameters
@@ -248,8 +248,8 @@ class Simulator:
 
         return (stsv, iterative_tries)
 
-
     def prepare_simulation_directory(self):
+        """ Prepares the simulation directory. Determines the filename if nothing is set. """
         if self._simulation_parameters.result_directory is None or len(self._simulation_parameters.result_directory) == 0:
             result_dirname = f"{self.setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
             self._simulation_parameters.result_directory = os.path.join(self.module_directory, "results", result_dirname)
@@ -258,7 +258,6 @@ class Simulator:
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
         log.information("Using result directory: " + self._simulation_parameters.result_directory)
         log.LOGGING_LEVEL = self._simulation_parameters.logging_level
-
 
     # @profile
     # @utils.measure_execution_time
@@ -274,7 +273,7 @@ class Simulator:
             raise Exception("Not a single component was defined. Quitting.")
 
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
-        if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile) :
+        if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
             log.warning("Found " + flagfile + ". This calculation seems finished. Quitting.")
             return
 
@@ -316,10 +315,11 @@ class Simulator:
         log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
             raise Exception("postprocessing_datatransfer was none")
-        for wrapped_component in self.wrapped_components:
-            wrapped_component.clear()
+
         my_post_processor = pp.PostProcessor()
         my_post_processor.run(ppdt=postprocessing_datatransfer)
+        for wrapped_component in self.wrapped_components:
+            wrapped_component.clear()
         del all_result_lines
         del postprocessing_datatransfer
         del my_post_processor
@@ -327,8 +327,10 @@ class Simulator:
         log.information("Finished postprocessing")
         with open(flagfile, 'a', encoding="utf-8") as filestream:
             filestream.write("finished")
+
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
+        """ Prepares the post processing. """
         log.information("Preparing post processing")
         """  Prepares the results from the simulation for the post processing. """
         if len(all_result_lines) != self._simulation_parameters.timesteps:
@@ -364,7 +366,7 @@ class Simulator:
         return ppdt
 
     def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int) -> datetime.datetime:
-        """ ;akes the pretty progress messages with time estimate. """
+        """ Makes the pretty progress messages with time estimate. """
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
         elapsed_minutes, elapsed_seconds = divmod(elapsed.seconds, 60)

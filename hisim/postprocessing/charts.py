@@ -159,7 +159,6 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         plt.legend(loc='best')
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
-        del plt
 
 class SankeyHISIM(Chart):
 

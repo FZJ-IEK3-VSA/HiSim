@@ -8,11 +8,13 @@ import hisim.log
 import hisim.loadtypes as lt
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
+
 
 
 def modular_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
@@ -36,7 +38,7 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
     # Build system parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.enable_all_options()
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     # try to read the system config from file
     if Path(system_config_filename).is_file():

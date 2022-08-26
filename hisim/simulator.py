@@ -3,7 +3,7 @@
 
 import os
 import datetime
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 import time
 
 import pandas as pd
@@ -41,6 +41,12 @@ class ComponentWrapper:
         # self.cachedict: = {}
         self.is_cachable = is_cachable
 
+    def clear(self):
+        """ Clears properties to help with saving memory. """
+        del self.my_component
+        del self.component_inputs
+        del self.component_outputs
+
     def register_component_outputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
         """ Registers component outputs in the global list of components. """
         log.information("Registering component outputs on " + self.my_component.component_name)
@@ -52,7 +58,7 @@ class ComponentWrapper:
                 if output.full_name == col.full_name:
                     raise Exception("trying to register the same key twice: " + col.full_name)
             all_outputs.append(col)
-            log.information("Registered output " + col.full_name)
+            log.debug("Registered output " + col.full_name)
             self.component_outputs.append(col)
 
     def register_component_inputs(self, global_column_dict: Dict[str, Any]) -> None:
@@ -142,29 +148,19 @@ class Simulator:
     """ Core class of HiSim: Runs the main loop. """
 
     @utils.measure_execution_time
-    def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: SimulationParameters) -> None:
+    def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: Optional[SimulationParameters]) -> None:
         """ Initializes the simulator class and creates the result directory. """
         if setup_function is None:
             raise Exception("No setup function was set")
         self.setup_function = setup_function
-
-        self._simulation_parameters: SimulationParameters = my_simulation_parameters
-        if self._simulation_parameters is not None:
+        self._simulation_parameters: SimulationParameters
+        if my_simulation_parameters is not None:
+            self._simulation_parameters = my_simulation_parameters
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
-
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
-
-        if os.path.isdir(os.path.join(module_directory, "results")) is False:
-            os.mkdir(os.path.join(module_directory, "results"))
-        directoryname = f"{setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        self.dirpath = os.path.join(module_directory, "results", directoryname)
+        self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
-        os.mkdir(self.dirpath)
-
-        # Creates and write result report
-        # todo: take out the reporting here and move to post processing
-        self.report = pp.reportgenerator.ReportGenerator(dirpath=self.dirpath)
 
     def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """
@@ -252,7 +248,19 @@ class Simulator:
 
         return (stsv, iterative_tries)
 
-    @utils.measure_execution_time
+    def prepare_simulation_directory(self):
+        """ Prepares the simulation directory. Determines the filename if nothing is set. """
+        if self._simulation_parameters.result_directory is None or len(self._simulation_parameters.result_directory) == 0:
+            result_dirname = f"{self.setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            self._simulation_parameters.result_directory = os.path.join(self.module_directory, "results", result_dirname)
+
+        if not os.path.isdir(self._simulation_parameters.result_directory):
+            os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
+        log.information("Using result directory: " + self._simulation_parameters.result_directory)
+        log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+
+    # @profile
+    # @utils.measure_execution_time
     def run_all_timesteps(self) -> None:
         """ Performs all the timesteps of the simulation and saves the results in the attribute results. """
         # Error Tests
@@ -263,6 +271,13 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise Exception("Not a single component was defined. Quitting.")
+
+        flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
+        if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
+            log.warning("Found " + flagfile + ". This calculation seems finished. Quitting.")
+            return
+
+        self.prepare_simulation_directory()
 
         # Starts time counter
         start_counter = time.perf_counter()
@@ -288,23 +303,35 @@ class Simulator:
 
             # Appends
             all_result_lines.append(resulting_stsv.values)
-
+            del resulting_stsv
             # Calculates time execution
             elapsed = datetime.datetime.now() - lastmessage
 
             # For simulation longer than 5 seconds
             if elapsed.total_seconds() > 5:
-                lastmessage = self.show_progress(lastmessage, starttime, step, total_iteration_tries)
+                lastmessage = self.show_progress(starttime, step, total_iteration_tries)
 
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
+        log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
-            raise Exception("PPDT was none")
+            raise Exception("postprocessing_datatransfer was none")
 
-        my_post_processor = pp.PostProcessor(ppdt=postprocessing_datatransfer)
-        my_post_processor.run()
+        my_post_processor = pp.PostProcessor()
+        my_post_processor.run(ppdt=postprocessing_datatransfer)
+        for wrapped_component in self.wrapped_components:
+            wrapped_component.clear()
+        del all_result_lines
+        del postprocessing_datatransfer
+        del my_post_processor
+        self.simulation_repository.clear()
+        log.information("Finished postprocessing")
+        with open(flagfile, 'a', encoding="utf-8") as filestream:
+            filestream.write("finished")
 
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
+        """ Prepares the post processing. """
+        log.information("Preparing post processing")
         """  Prepares the results from the simulation for the post processing. """
         if len(all_result_lines) != self._simulation_parameters.timesteps:
             raise Exception("not all lines were generated")
@@ -326,22 +353,20 @@ class Simulator:
         results_merged = self.get_std_results(results_data_frame)
 
         ppdt = pp.PostProcessingDataTransfer(
-            directory_path=self.dirpath,
             results=results_data_frame,
             all_outputs=self.all_outputs,
             simulation_parameters=self._simulation_parameters,
             wrapped_components=self.wrapped_components,
-            story=self.report.story,
             mode=1,
             setup_function=self.setup_function,
             execution_time=execution_time,
             results_monthly=results_merged,
         )
+        log.information("Finished preparing post processing")
         return ppdt
 
-    def show_progress(self, lastmessage: datetime.datetime, starttime: datetime.datetime, step: int, total_iteration_tries: int) -> datetime.datetime:
-        """ ;akes the pretty progress messages with time estimate. """
-        lastmessage = datetime.datetime.now()
+    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int) -> datetime.datetime:
+        """ Makes the pretty progress messages with time estimate. """
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
         elapsed_minutes, elapsed_seconds = divmod(elapsed.seconds, 60)
@@ -361,7 +386,7 @@ class Simulator:
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
         simulation_status += f"| Avg. iterations {average_iteration_tries:.1f}"
         log.information(simulation_status)
-        return lastmessage
+        return datetime.datetime.now()
 
     def get_std_results(self, results_data_frame: pd.DataFrame) -> pd.DataFrame:
         """ Converts results into a pretty dataframe for post processing. """

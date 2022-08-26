@@ -11,12 +11,12 @@ class ChartSingleDay(Chart):
 
     """ For making visualisations for a single day. """
 
-    def __init__(self, output, data, units, directorypath, time_correction_factor, day=None, month=None, output2=None):
+    def __init__(self, output,  units, directorypath, time_correction_factor, day=None, month=None, output2=None):
         """ Initializes the class. """
         if output2 is not None:
-            super().__init__(output, data, "days", units, directorypath, time_correction_factor, output2)
+            super().__init__(output,  "days", units, directorypath, time_correction_factor, output2)
         else:
-            super().__init__(output, data, "days", units, directorypath, time_correction_factor)
+            super().__init__(output,  "days", units, directorypath, time_correction_factor)
         self.axis: plt.axis
         self.ax2: plt.axis
         self.line2: plt.axis
@@ -25,9 +25,9 @@ class ChartSingleDay(Chart):
         self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m" \
                         f"{self.month}_d{self.day}.png"
         self.filepath = os.path.join(self.directorypath, self.filename)
-        self.get_day_data()
 
-    def get_day_data(self):
+
+    def get_day_data(self, data):
         """ Extracts data for a single day. """
         firstindex = (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
         lastindex = firstindex + 24 * int(1 / self.time_correction_factor)
@@ -43,16 +43,15 @@ class ChartSingleDay(Chart):
         date = f"{self.label_months_lowercase[self.month]} {day_number}{ordinal}"
         self.plot_title = f"{self.title} {date}"
 
-        if abs(lastindex - firstindex) < len(self.data):
-            data = self.data[firstindex:lastindex]
-            data_index = self.data.index[firstindex:lastindex]
-            self.data = data
-            self.data.index = data_index
+        if abs(lastindex - firstindex) < len(data):
+            data = data[firstindex:lastindex]
+            data_index = data.index[firstindex:lastindex]
+            data = data
+            data.index = data_index
 
-    def __add__(self, other):
+    def __add__(self, other, data):
         """ Adds another chart to this one. """
         my_double: ChartSingleDay = ChartSingleDay(self.output,
-                                                   self.data,
                                                    self.ylabel,
                                                    self.directorypath,
                                                    self.time_correction_factor,
@@ -61,12 +60,12 @@ class ChartSingleDay(Chart):
         my_double.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}" \
                              f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}.png"
         my_double.filepath = os.path.join(self.directorypath, my_double.filename)
-        my_double.plot(close=False)
+        my_double.plot(close=False, data=data )
 
         #  twin object for two different y-axis on the sample plot
         my_double.ax2 = my_double.axis.twinx()
         #  make a plot with different y-axis using second axis object
-        my_double.line2 = my_double.ax2.plot(my_double.data.index, other.data, label=other.property, linewidth=5)
+        my_double.line2 = my_double.ax2.plot(data.index, other.data, label=other.property, linewidth=5)
         my_double.ax2.set_ylabel(f"{other.property} [{other.ylabel}]", fontsize=18)
         #  seaborn.despine(ax=my_double.ax2, offset=0)  # the important part here
         my_double.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
@@ -88,21 +87,22 @@ class ChartSingleDay(Chart):
         plt.savefig(self.filepath)
         plt.close()
 
-    def plot(self, close=True):
+    def plot(self, data, close):
         """ Plots a chart. """
+        self.get_day_data(data)
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
         plt.rcParams['font.size'] = '18'
         plt.rcParams['agg.path.chunksize'] = 10000
-        _fig, self.axis = plt.subplots(figsize=(13, 9))
+        _fig,self.axis = plt.subplots(figsize=(13, 9))
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
         #  plt.plot(self.data.index[firstindex:lastindex], self.data[firstindex:lastindex], color="green", linewidth=5.0)
-        if abs(max(self.data)) > 1.5E3:
-            self.data = self.data * 1E-3
+        if abs(max(data)) > 1.5E3:
+            data = data * 1E-3
             self.ylabel = f"k{self.ylabel}"
         #  self.line1 =
-        plt.plot(self.data.index, self.data, color="green", linewidth=5.0, label=self.property)
+        plt.plot(data.index, data, color="green", linewidth=5.0, label=self.property)
         plt.grid(True)
         #  plt.xticks(fontsize=18)
         #  plt.yticks(fontsize=18)

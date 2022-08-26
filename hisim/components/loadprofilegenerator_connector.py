@@ -277,7 +277,10 @@ class Occupancy(cp.Component):
                                                    'heating_by_residents',
                                                    'electricity_consumption',
                                                    'water_consumption'])
+
             database.to_csv(cache_filepath)
+            del data
+            del database
             #utils.save_cache("Occupancy", parameters, database)
         self.max_hot_water_demand = max( self.water_consumption )
 

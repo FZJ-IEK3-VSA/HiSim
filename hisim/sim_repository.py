@@ -50,3 +50,9 @@ class SimRepository:
     def delete_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
         """ Deletes a dynamic component entry. """
         self.my_dynamic_dict[component_type].pop(source_weight)
+
+    def clear(self):
+        self.my_dict.clear()
+        del self.my_dict
+        self.my_dynamic_dict.clear()
+        del self.my_dynamic_dict

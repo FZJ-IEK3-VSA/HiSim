@@ -20,6 +20,14 @@ class BuildingSizerRequest:
     )
 
 
+@dataclasses_json.dataclass_json
+@dataclasses.dataclass
+class BuildingSizerResult:
+    finished: bool
+    subsequent_request: Optional[str] = None
+    result: Any = None
+
+
 def send_hisim_requests(
     hisim_configs: List[str], url: str, api_key: str = ""
 ) -> List[TimeSeriesRequest]:
@@ -117,10 +125,10 @@ def building_sizer_iteration(
     }"""
     ]
 
-    return (
-        trigger_next_iteration(request, hisim_configs),
-        f"my interim results ({request.remaining_iterations})",
-    )
+    # trigger the next iteration with the new hisim configurations
+    next_iteration_str = trigger_next_iteration(request, hisim_configs)
+    # return the building sizer config for the next iteration, and the result of this iteration
+    return next_iteration_str, f"my interim results ({request.remaining_iterations})"
 
 
 def main():
@@ -151,13 +159,12 @@ def main():
         result = "My first iteration result"
 
     # Create result file specifying whether a further iteration was triggered
-    building_sizer_status = {
-        "finished": next_iteration_str is None,
-        "subsequent request": next_iteration_str,
-        "results": result,
-    }
+    finished = next_iteration_str is None
+    building_sizer_result = BuildingSizerResult(finished, next_iteration_str, result)
+    building_sizer_result_json = building_sizer_result.to_json()  # type: ignore
+
     with open("/results/status.json", "w+") as result_file:
-        json.dump(building_sizer_status, result_file)
+        result_file.write(building_sizer_result_json)
 
 
 if __name__ == "__main__":

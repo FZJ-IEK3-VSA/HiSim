@@ -1,7 +1,6 @@
 """Requests a load profile that is generated using HiSim"""
 
 import dataclasses
-import json
 from typing import Any, List, Optional, Tuple
 
 import dataclasses_json
@@ -24,7 +23,7 @@ class BuildingSizerRequest:
 @dataclasses.dataclass
 class BuildingSizerResult:
     finished: bool
-    subsequent_request: Optional[str] = None
+    subsequent_request: Optional[TimeSeriesRequest] = None
     result: Any = None
 
 
@@ -57,7 +56,7 @@ def send_hisim_requests(
 
 def send_building_sizer_request(
     request: BuildingSizerRequest, hisim_requests: List[TimeSeriesRequest]
-) -> str:
+) -> TimeSeriesRequest:
     """
     Sends the request for the next building_sizer iteration to the UTSP, including the previously sent hisim requests
     """
@@ -67,7 +66,7 @@ def send_building_sizer_request(
     config_json: str = subsequent_request_config.to_json()  # type: ignore
     next_request = TimeSeriesRequest(config_json, "building_sizer")
     client.send_request(request.url, next_request, request.api_key)
-    return config_json
+    return next_request
 
 
 def get_results_from_requisite_requests(
@@ -84,14 +83,14 @@ def get_results_from_requisite_requests(
 
 def trigger_next_iteration(
     request: BuildingSizerRequest, hisim_configs: List[str]
-) -> str:
+) -> TimeSeriesRequest:
     """
     Sends the specified HiSim requests to the UTSP, and afterwards sends the request for the next building sizer iteration.
 
     :param hisim_configs: the requisite HiSim requests started by the last iteration
     :type hisim_configs: List[str]
-    :return: the building_sizer config for the next iteration, or None if the calculation is finished
-    :rtype: str
+    :return: the building sizer request for the next iteration
+    :rtype: TimeSeriesRequest
     """
     # Send the new requests to the UTSP
     hisim_requests = send_hisim_requests(hisim_configs, request.url, request.api_key)
@@ -126,9 +125,9 @@ def building_sizer_iteration(
     ]
 
     # trigger the next iteration with the new hisim configurations
-    next_iteration_str = trigger_next_iteration(request, hisim_configs)
-    # return the building sizer config for the next iteration, and the result of this iteration
-    return next_iteration_str, f"my interim results ({request.remaining_iterations})"
+    next_request = trigger_next_iteration(request, hisim_configs)
+    # return the building sizer request for the next iteration, and the result of this iteration
+    return next_request, f"my interim results ({request.remaining_iterations})"
 
 
 def main():
@@ -140,7 +139,7 @@ def main():
     # Check if there are hisim requests from previous iterations
     if request.requisite_requests:
         # Execute one building sizer iteration
-        next_iteration_str, result = building_sizer_iteration(request)
+        next_request, result = building_sizer_iteration(request)
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
         initial_hisim_configs = [
@@ -155,12 +154,12 @@ def main():
         "chp_included": false
     }"""
         ]
-        next_iteration_str = trigger_next_iteration(request, initial_hisim_configs)
+        next_request = trigger_next_iteration(request, initial_hisim_configs)
         result = "My first iteration result"
 
     # Create result file specifying whether a further iteration was triggered
-    finished = next_iteration_str is None
-    building_sizer_result = BuildingSizerResult(finished, next_iteration_str, result)
+    finished = next_request is None
+    building_sizer_result = BuildingSizerResult(finished, next_request, result)
     building_sizer_result_json = building_sizer_result.to_json()  # type: ignore
 
     with open("/results/status.json", "w+") as result_file:

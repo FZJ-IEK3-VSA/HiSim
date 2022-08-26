@@ -1,4 +1,12 @@
-"""Requests a load profile that is generated using HiSim"""
+"""
+Building Sizer for use as a provider in the UTSP.
+The Buildings Sizer works iteratively. In each iteration, the results of some HiSim calculations are processed. Depending on these the
+next HiSim configurations that need to be calculated are determined and sent as requests to the UTSP. Afterwards, a new Building Sizer request
+is sent to the UTSP for the next iteration. This Building Sizer request contains all previously sent HiSim requests so it can obtain the results 
+of these requests and work with them.
+To allow the client who sent the initial Building Sizer request to follow the separate Building Sizer iterations, each iteration returns the request
+for the next Building Sizer iteration as a result to the UTSP (and therey also to the client).
+"""
 
 import dataclasses
 from typing import Any, List, Optional, Tuple

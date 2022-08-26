@@ -2,8 +2,8 @@
 
 import random
 import string
-from utspclient import client
-from utspclient.datastructures import TimeSeriesRequest
+from utspclient import client  # type: ignore
+from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
 from building_sizer import BuildingSizerRequest, BuildingSizerResult
 

@@ -52,6 +52,7 @@ class SimRepository:
         self.my_dynamic_dict[component_type].pop(source_weight)
 
     def clear(self):
+        """ Clears all dictionaries at the end of the simulation to enable garbage collection and reduce memory consumption. """
         self.my_dict.clear()
         del self.my_dict
         self.my_dynamic_dict.clear()

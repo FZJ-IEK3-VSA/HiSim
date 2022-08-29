@@ -146,6 +146,7 @@ class PostProcessor:
                                          units=output.unit,
                                          directorypath=ppdt.simulation_parameters.result_directory,
                                          time_correction_factor=ppdt.time_correction_factor,
+                                         data=ppdt.results.iloc[:, index],
                                          day=0,
                                          month=0,
                                          output2=ppdt.results.iloc[:, 11])
@@ -154,9 +155,10 @@ class PostProcessor:
                                          units=output.unit,
                                          directorypath=ppdt.simulation_parameters.result_directory,
                                          time_correction_factor=ppdt.time_correction_factor,
+                                         data=ppdt.results.iloc[:, index],
                                          day=0,
                                          month=0)
-            my_days.plot(data=ppdt.results.iloc[:, index],close=True)
+            my_days.plot(close=True)
 
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Exports all data to CSV. """
@@ -186,8 +188,9 @@ class PostProcessor:
                                      directorypath=ppdt.simulation_parameters.result_directory,
                                      time_correction_factor=ppdt.time_correction_factor,
                                      day=days["day"],
-                                     month=days["month"])
-            my_days.plot(data=ppdt.results.iloc[:, index], close=True)
+                                     month=days["month"],
+                                     data=ppdt.results.iloc[:, index])
+            my_days.plot(close=True)
 
     def make_carpet_plots(self, ppdt:PostProcessingDataTransfer) -> None:
         """ Make carpet plots. """

@@ -79,7 +79,7 @@ class Line(Chart):  # noqa: too-few-public-methods
 
     """ Makes a line chart. """
 
-    #@utils.measure_memory_leak
+    # @utils.measure_memory_leak
     def __init__(self, output,  units, directorypath, time_correction_factor):
         """ Initializes a line chart. """
         super().__init__(output,  "line", units, directorypath, time_correction_factor)
@@ -91,8 +91,8 @@ class Line(Chart):  # noqa: too-few-public-methods
         size_1 = 20
         size_2 = 18
         mpl.use('Agg')
-        #font = {'family': 'normal',               'weight': 'normal',                'size': f'{all_font_size}'}
-        #mpl.rc('font', **font)
+        # font = {'family': 'normal',               'weight': 'normal',                'size': f'{all_font_size}'}
+        # mpl.rc('font', **font)
 
         ylabel = units
         _fig, axis = plt.subplots(figsize=(size_1, size_2))
@@ -159,6 +159,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         plt.legend(loc='best')
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
+
 
 class SankeyHISIM(Chart):
 

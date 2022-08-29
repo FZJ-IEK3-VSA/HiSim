@@ -69,7 +69,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         log.information("HiSim needs two arguments")
         sys.exit(1)
-    filename = sys.argv[1]
-    function_name = sys.argv[2]
-    log.information("calling " + function_name + " from " + filename)
-    main(filename, function_name)
+    FILE_NAME = sys.argv[1]
+    FUNCTION_NAME = sys.argv[2]
+    log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME)
+    main(FILE_NAME, FUNCTION_NAME)

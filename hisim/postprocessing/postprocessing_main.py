@@ -4,8 +4,6 @@ import os
 import sys
 from typing import Any
 
-#import pandas as pd
-
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
 from hisim import log
@@ -57,10 +55,6 @@ class PostProcessor:
     def __init__(self):
         """ Initializes the post processing. """
 
-
-        # self.result_m: Any
-
-
     def set_dir_results(self, dirname):
         """ Sets the results directory. """
         if dirname is None:
@@ -94,8 +88,6 @@ class PostProcessor:
     def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
         """ Runs the main post processing. """
         # Define the directory name
-        #self.dirname: str
-        #self.report_m: Any
         log.information("Main post processing function")
         report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
         days = {"month": 0, "day": 0}
@@ -107,7 +99,7 @@ class PostProcessor:
             self.make_carpet_plots(ppdt)
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
-            self.make_single_day_plots(days,ppdt)
+            self.make_single_day_plots(days, ppdt)
         if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
             log.information("Making bar charts.")
             self.make_bar_charts(ppdt)
@@ -193,7 +185,7 @@ class PostProcessor:
                                      data=ppdt.results.iloc[:, index])
             my_days.plot(close=True)
 
-    def make_carpet_plots(self, ppdt:PostProcessingDataTransfer) -> None:
+    def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Make carpet plots. """
         for index, output in enumerate(ppdt.all_outputs):
             # log.information("Making carpet plots")
@@ -221,9 +213,10 @@ class PostProcessor:
         """ Exports the results to a CSV file. """
         for column in ppdt.results:
             ppdt.results[column].to_csv(os.path.join(ppdt.simulation_parameters.result_directory,
-                                                          f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv"), sep=",", decimal=".")
+                                                     f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv"), sep=",", decimal=".")
         for column in ppdt.results_monthly:
-            csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv")
+            csvfilename = os.path.join(ppdt.simulation_parameters.result_directory,
+                                       f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv")
             header = [f"{column.split('[', 1)[0]} - monthly ["f"{column.split('[', 1)[1]}"]
             ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
 
@@ -234,8 +227,9 @@ class PostProcessor:
         report.close()
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
+        """ Computes KPI's and writes them to report. """
         lines = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
-        self.write_to_report(lines)
+        self.write_to_report(text=lines, report=report)
 
     #
     # def cal_pos_sim(self):

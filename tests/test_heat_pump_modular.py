@@ -13,9 +13,6 @@ def test_heat_pump_modular():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
-    #reference power
-    heat_pump_power = 7420.0
-    
     #default config
     my_hp_config = generic_heat_pump_modular.HeatPump.get_default_config_heating( )
     l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_heating( )
@@ -60,14 +57,14 @@ def test_heat_pump_modular():
     my_heat_pump_controller_l2.ReferenceTemperatureC.source_output = t_mC
     my_heat_pump_controller_l2.ElectricityTargetC.source_output = ElectricityTargetC
     my_heat_pump.TemperatureOutsideC.source_output = t_air_outdoorC
-    my_heat_pump.l1_DeviceSignalC.source_output = my_heat_pump_controller_l1.l1_DeviceSignalC
+    my_heat_pump.L1DeviceSignalC.source_output = my_heat_pump_controller_l1.L1DeviceSignalC
     my_heat_pump_controller_l1.l2_DeviceSignalC.source_output = my_heat_pump_controller_l2.l2_DeviceSignalC
 
     # indexing of in- and outputs
     t_mC.global_index = 0
     ElectricityTargetC.global_index = 1
     t_air_outdoorC.global_index = 2
-    my_heat_pump_controller_l1.l1_DeviceSignalC.global_index = 3  
+    my_heat_pump_controller_l1.L1DeviceSignalC.global_index = 3  
     my_heat_pump_controller_l2.l2_DeviceSignalC.global_index = 4
     my_heat_pump.ThermalPowerDeliveredC.global_index = 5
     my_heat_pump.ElectricityOutputC.global_index = 6

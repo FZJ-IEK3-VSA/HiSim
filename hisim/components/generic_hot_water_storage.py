@@ -45,7 +45,7 @@ class HeatStorageState:
 class HeatStorage(Component):
     """
     This is a combined storage: buffer storage for heating, and hot water storage for hot water demand.
-    It needs, hot water demand, heating demand, building temperature and a control signal choosing which of the twos storages to heat as inputs.
+    It needs, hot water demand, heating demand, building temperature and a control signal choosing which of the two storages to heat as inputs.
     In addition it relies on Outside Temperature, and ThermalInputs of up to 5 heat sources.
     Based on this it evaluates the temperature in the storages based on the energy balance.
     """

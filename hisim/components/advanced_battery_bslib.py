@@ -7,7 +7,7 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -53,9 +53,9 @@ class Battery(Component):
         system_id : str
             Name (system_id) of the battery storage from bslib database.
         p_inv_custom : numeric, default 0
-            AC power of battery inverter. Only for system_ids of type "Generic". [kW]
+            AC power of battery inverter. Only for system_ids of type "Generic". [W]
         e_bat_custom : numeric, default 0
-            Useable battery capacity. Only for system_ids of type "Generic". [kWh]
+            Useable battery capacity. Only for system_ids of type "Generic". [Wh]
         """
         self.battery_config = config
         super().__init__(name=self.battery_config.name + str( self.battery_config.source_weight ), my_simulation_parameters=my_simulation_parameters)
@@ -88,7 +88,8 @@ class Battery(Component):
         self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.AcBatteryPower,
                                                      load_type=LoadTypes.ELECTRICITY,
-                                                     unit=Units.WATT)
+                                                     unit=Units.WATT,
+                                                     postprocessing_flag=InandOutputType.CHARGE_DISCHARGE)
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
@@ -98,15 +99,16 @@ class Battery(Component):
         self.soc: ComponentOutput = self.add_output(object_name=self.component_name,
                                                     field_name=self.StateOfCharge,
                                                     load_type=LoadTypes.ANY,
-                                                    unit=Units.ANY)
+                                                    unit=Units.ANY,
+                                                    postprocessing_flag=InandOutputType.STORAGE_CONTENT)
     @staticmethod
-    def get_default_config():
+    def get_default_config(p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1):
         config=BatteryConfig(
-            system_id ='SG1',
-            p_inv_custom =5,
-            e_bat_custom = 10,
+            system_id='SG1',
+            p_inv_custom=p_inv_custom,
+            e_bat_custom=e_bat_custom,
             name= "Battery",
-            source_weight = 1 )
+            source_weight=source_weight)
         return config
     def i_save_state(self)  -> None:
         self.previous_state = deepcopy(self.state)

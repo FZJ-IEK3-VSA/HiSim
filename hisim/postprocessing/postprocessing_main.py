@@ -4,8 +4,6 @@ import os
 import sys
 from typing import Any
 
-#import pandas as pd
-
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
 from hisim import log
@@ -13,6 +11,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
+from hisim.postprocessing.compute_KPIs import compute_KPIs
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ComponentOutput
 
@@ -56,10 +55,6 @@ class PostProcessor:
     def __init__(self):
         """ Initializes the post processing. """
 
-
-        # self.result_m: Any
-
-
     def set_dir_results(self, dirname):
         """ Sets the results directory. """
         if dirname is None:
@@ -93,8 +88,6 @@ class PostProcessor:
     def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
         """ Runs the main post processing. """
         # Define the directory name
-        #self.dirname: str
-        #self.report_m: Any
         log.information("Main post processing function")
         report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
         days = {"month": 0, "day": 0}
@@ -106,7 +99,7 @@ class PostProcessor:
             self.make_carpet_plots(ppdt)
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
-            self.make_single_day_plots(days,ppdt)
+            self.make_single_day_plots(days, ppdt)
         if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
             log.information("Making bar charts.")
             self.make_bar_charts(ppdt)
@@ -192,7 +185,7 @@ class PostProcessor:
                                      data=ppdt.results.iloc[:, index])
             my_days.plot(close=True)
 
-    def make_carpet_plots(self, ppdt:PostProcessingDataTransfer) -> None:
+    def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Make carpet plots. """
         for index, output in enumerate(ppdt.all_outputs):
             # log.information("Making carpet plots")
@@ -220,9 +213,10 @@ class PostProcessor:
         """ Exports the results to a CSV file. """
         for column in ppdt.results:
             ppdt.results[column].to_csv(os.path.join(ppdt.simulation_parameters.result_directory,
-                                                          f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv"), sep=",", decimal=".")
+                                                     f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv"), sep=",", decimal=".")
         for column in ppdt.results_monthly:
-            csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv")
+            csvfilename = os.path.join(ppdt.simulation_parameters.result_directory,
+                                       f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv")
             header = [f"{column.split('[', 1)[0]} - monthly ["f"{column.split('[', 1)[1]}"]
             ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
 
@@ -233,62 +227,9 @@ class PostProcessor:
         report.close()
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-        """ KPI Calculator function. """
-        # sum consumption and production of individual components
-        ppdt.results['consumption'] = 0
-        ppdt.results['production'] = 0
-        ppdt.results['storage'] = 0
-        index: int
-        output: ComponentOutput
-        for index, output in enumerate(ppdt.all_outputs):
-            if 'ElectricityOutput' in output.full_name:
-                if ('PVSystem' in output.full_name) or ('CHP' in output.full_name):
-                    ppdt.results['production'] = ppdt.results['production'] + ppdt.results.iloc[:, index]
-                else:
-                    ppdt.results['consumption'] = ppdt.results['consumption'] + ppdt.results.iloc[:, index]
-            elif 'AcBatteryPower' in output.full_name:
-                ppdt.results['storage'] = ppdt.results['storage'] + ppdt.results.iloc[:, index]
-            else:
-                continue
-
-        # initilize lines for report
-        lines = []
-
-        # sum over time and write to report
-        consumption_sum = ppdt.results['consumption'].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-        lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
-
-        production_sum = ppdt.results['production'].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-        lines.append(f"Production: {production_sum:4.0f} kWh")
-
-        if production_sum > 0:
-            # evaluate injection, sum over time and wite to
-            injection = (ppdt.results['production'] - ppdt.results['storage'] - ppdt.results['consumption'])
-            injection_sum = injection[injection > 0].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            lines.append(f"Injection: {injection_sum:4.0f} kWh")
-
-            batterylosses = ppdt.results['storage'].sum() * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-            print(batterylosses)
-
-            # evaluate self consumption rate and autarky rate:
-            lines.append(f"Autarky Rate: {100 * (production_sum - injection_sum - batterylosses) / consumption_sum:3.1f} %")
-            lines.append(f"Self Consumption Rate: {100 * (production_sum - injection_sum) / production_sum:3.1f} %")
-
-            # evaluate electricity price
-            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in ppdt.results:
-                price = - ((injection[injection < 0] * ppdt.results['PriceSignal - PricePurchase [Price - Cents per kWh]'][injection < 0]).
-                           sum() + (injection[injection > 0] * ppdt.results['PriceSignal - PriceInjection [Price - Cents per kWh]']
-                                    [injection > 0]).sum()) * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-
-                lines.append(f"Price paid for electricity: {price * 1e-2:3.0f} EUR")
-
-        else:
-            if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in ppdt.results:
-                price = (ppdt.results['consumption'] * ppdt.results[
-                    'PriceSignal - PricePurchase [Price - Cents per kWh]']).sum() \
-                    * ppdt.simulation_parameters.seconds_per_timestep / 3.6e6
-                lines.append(f"Price paid for electricity: {price * 1e-2:3.0f} EUR")
-        self.write_to_report(lines, report)
+        """ Computes KPI's and writes them to report. """
+        lines = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        self.write_to_report(text=lines, report=report)
 
     #
     # def cal_pos_sim(self):

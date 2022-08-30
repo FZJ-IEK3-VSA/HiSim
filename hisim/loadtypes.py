@@ -15,6 +15,61 @@ import enum
 
 
 @enum.unique
+class HeatingSystems(str, enum.Enum):
+
+    """ To parse heating systems in simulation inputs. """
+
+    HEAT_PUMP = "HeatPump"
+    ELECTRIC_HEATING = "ELectricHeating"
+    OIL_HEATING = "OilHeating"
+    GAS_HEATING = "GasHeating"
+    DISTRICT_HEATING = "DistrictHeating"
+
+
+@enum.unique
+class Cars(str, enum.Enum):
+
+    """ To parse heating systems in simulation inputs. """
+
+    ELECTRIC_CAR = "EV"
+    FUEL_CAR = "FuelCar"
+    NO_CAR = "NoCar"
+
+
+@enum.unique
+class MobilityDistance(str, enum.Enum):
+
+    """ To parse heating systems in simulation inputs. """
+
+    CLOSE_URBAN = "CloseUrban"
+    FAR_URBAN = "FarUrban"
+    RURAL = "rural"
+
+
+@enum.unique
+class Locations(str, enum.Enum):
+
+    """ To parse locations for climate data. """
+
+    AACHEN = "Aachen"
+
+
+@enum.unique
+class OccupancyProfiles(str, enum.Enum):
+
+    """ To parse LPG predefined household strings. """
+
+    CH01 = "CH01"
+
+
+class BuildingCodes(str, enum.Enum):
+
+    """ To parse predefined house types from tabula. """
+
+    DE_N_SFH_05_GEN_REEX_001_002 = "DE.N.SFH.05.Gen.ReEx.001.002"
+
+
+@enum.unique
 class DisplayNames(str, enum.Enum):
 
     """ For the sankey plotting. """
@@ -121,10 +176,12 @@ class ComponentType(str, enum.Enum):
     SMART_DEVICE = "SmartDevice"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
-    ELECTRIC_BOILER = "Boiler"
     BATTERY = "Battery"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
+    ELECTRIC_BOILER = "ElectricBoiler"
+    BOILER = "Boiler"
+    BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
 
 
@@ -144,9 +201,11 @@ class InandOutputType(str, enum.Enum):
     EARLIEST_ACTIVATION = "EarliestActivation"
     RECOMMENDED_ACTIVATION = "RecommendedActivation"
 
-    # Energy Management System
+    # Energy Management System / Postprocessing Options
     PRODUCTION = "Production"
     CONSUMPTION = "Consumption"
+    STORAGE_CONTENT = "StorageContent"
+    CHARGE_DISCHARGE = "ChargeDischarge"
 
     # Heating
     HEAT_TO_BUILDING = "HeatToBuilding"

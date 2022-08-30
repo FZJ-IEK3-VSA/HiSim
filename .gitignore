@@ -145,4 +145,5 @@ examples/ac_test
 examples/ac_results
 examples/ac_results_5
 tests/finished.flag
+examples/finished.flag
 examples/ac_results_5b

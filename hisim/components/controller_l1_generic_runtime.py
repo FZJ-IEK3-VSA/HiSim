@@ -29,14 +29,11 @@ class L1Config:
     """
     name: str
     source_weight: int
-    min_operation_time : int      
-    min_idle_time : int
+    min_operation_time: int      
+    min_idle_time: int
 
-    def __init__( self,
-                  name : str,
-                  source_weight : int,
-                  min_operation_time : int,
-                  min_idle_time : int ) -> None:
+    def __init__(self, name: str, source_weight: int, min_operation_time: int,
+                 min_idle_time: int) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_operation_time = min_operation_time
@@ -95,7 +92,7 @@ class L1_Controller( cp.Component ):
     l2_DeviceSignal = "l2_DeviceSignal"
 
     # Outputs
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
     l1_RunTimeSignal = "l1_RunTimeSignal"
 
     # Similar components to connect to:
@@ -116,10 +113,9 @@ class L1_Controller( cp.Component ):
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                    self.l1_DeviceSignal,
-                                                                    LoadTypes.ON_OFF,
-                                                                    Units.BINARY)
+        self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal,
+                                                                    LoadTypes.ON_OFF, Units.BINARY)
+
         if self.my_simulation_parameters.system_config.predictive == True:
             self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                          self.l1_RunTimeSignal,
@@ -135,18 +131,14 @@ class L1_Controller( cp.Component ):
     
     @staticmethod
     def get_default_config() -> L1Config:
-        config = L1Config( name = 'L1Controller',
-                           source_weight =  1,
-                           min_operation_time = 3600,
-                           min_idle_time = 900 ) 
+        config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600,
+                          min_idle_time=900) 
         return config
     
     @staticmethod
     def get_default_config_heatpump()  -> L1Config:
-        config = L1Config( name = 'L1Controller',
-                           source_weight =  1,
-                           min_operation_time = 3600 * 3,
-                           min_idle_time = 3600 ) 
+        config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600 * 3,
+                          min_idle_time=3600) 
         return config
 
     def build( self, config: L1Config ) -> None:
@@ -198,8 +190,7 @@ class L1_Controller( cp.Component ):
                 self.state.deactivation( timestep )
             elif l2_devicesignal == 1 and self.state0.state == 0:
                 self.state.activation( timestep )
-        
-        stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )
+        stsv.set_output_value(self.L1DeviceSignalC, self.state.state)
 
     def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
         log.information("==========================================")

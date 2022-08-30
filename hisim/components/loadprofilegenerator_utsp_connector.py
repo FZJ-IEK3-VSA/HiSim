@@ -18,17 +18,19 @@ from hisim.components.configuration import PhysicsConfig
 
 from utspclient import client, datastructures, result_file_filters
 from utspclient.helpers import lpg_helper
-from utspclient.helpers.lpgpythonbindings import CalcOption
-from utspclient.helpers.lpgdata import LoadTypes
+from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
+from utspclient.helpers.lpgdata import LoadTypes, Households, HouseTypes
 
 
 @dataclass_json
 @dataclass
-class HouseholdDataConfig:
-    profile_name: str
+class UtspConnectorConfig:
+    url: str
+    api_key: str
+    household: JsonReference
 
 
-class HouseholdData(cp.Component):
+class UtspLpgConnector(cp.Component):
     """
     Class component that provides heating generated, the electricity consumed
     by the residents. Data provided or based on LPG exports.
@@ -58,13 +60,12 @@ class HouseholdData(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: HouseholdDataConfig,
+        config: UtspConnectorConfig,
     ) -> None:
         super().__init__(
             name="Occupancy", my_simulation_parameters=my_simulation_parameters
         )
-        self.profile_name = config.profile_name
-        self.occupancyConfig = config
+        self.utsp_config = config
         self.build()
 
         # Inputs - Not Mandatories
@@ -108,8 +109,11 @@ class HouseholdData(cp.Component):
         )
 
     @staticmethod
-    def get_default_config() -> HouseholdDataConfig:
-        config = HouseholdDataConfig(profile_name="CH01")
+    def get_default_config() -> UtspConnectorConfig:
+        REQUEST_URL = "http://134.94.131.167:443/api/v1/profilerequest"
+        API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
+        household = Households.CHR01_Couple_both_at_Work
+        config = UtspConnectorConfig(REQUEST_URL, API_KEY, household)
         return config
 
     def i_save_state(self) -> None:
@@ -237,29 +241,25 @@ class HouseholdData(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(self) -> Tuple[str]:
+    def get_profiles_from_utsp(self) -> Tuple[str, str, str, str]:
         """
         Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
         :return: electricity, warm water, high bodily activity and low bodily activity result file contents
         :rtype: Tuple[str]
         """
-        # Define connection parameters
-        # TODO: set these as parameters
-        REQUEST_URL = "http://134.94.131.167:443/api/v1/profilerequest"
-        API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
-
-        # Create a basic lpg configuration
-        simulation_config = lpg_helper.LPGExecutor.make_default_lpg_settings(2020, 1, 2)
+        # Create an LPG configuration and set the simulation parameters
+        start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
+        end_date = self.my_simulation_parameters.end_date.strftime("%Y-%m-%d")
+        simulation_config = lpg_helper.create_basic_lpg_config(
+            self.utsp_config.household,
+            HouseTypes.HT01_House_with_a_10kWh_Battery_and_a_fuel_cell_battery_charger_5_MWh_yearly_space_heating_gas_heating,
+            start_date,
+            end_date,
+            self.get_resolution(),
+        )
         # Set the simulation parameters
         simulation_config.Year = self.my_simulation_parameters.year
-        simulation_config.CalcSpec.StartDate = (
-            self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
-        )
-        simulation_config.CalcSpec.EndDate = (
-            self.my_simulation_parameters.end_date.strftime("%Y-%m-%d")
-        )
-        simulation_config.CalcSpec.ExternalTimeResolution = self.get_resolution()
         simulation_config.CalcSpec.CalcOptions = [
             CalcOption.SumProfileExternalIndividualHouseholdsAsJson,
             CalcOption.BodilyActivityStatistics,
@@ -294,7 +294,7 @@ class HouseholdData(cp.Component):
 
         # Request the time series
         result = client.request_time_series_and_wait_for_delivery(
-            REQUEST_URL, request, API_KEY
+            self.utsp_config.url, request, self.utsp_config.api_key
         )
 
         electricity = result.data[electricity_file].decode()
@@ -306,7 +306,7 @@ class HouseholdData(cp.Component):
     def build(self):
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.component_name,
-            parameter_class=self.occupancyConfig,
+            parameter_class=self.utsp_config,
             my_simulation_parameters=self.my_simulation_parameters,
         )
         if file_exists:
@@ -452,5 +452,5 @@ class HouseholdData(cp.Component):
     def write_to_report(self):
         lines = []
         lines.append("Name: {}".format(self.component_name))
-        lines.append("Profile: {}".format(self.profile_name))
+        # lines.append("Profile: {}".format(self.profile_name))
         return lines

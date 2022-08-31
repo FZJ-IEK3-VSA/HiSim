@@ -69,8 +69,8 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 results=results.drop(['neg_battery', 'pos_battery'], axis=1)
                     
         else:
-            continue     
-    
+
+            continue
 
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
@@ -124,6 +124,7 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Autarky Rate: {:3.1f} %".format(autarky_rate))
     lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
     lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2)) 
+
     
     #initialize list for the KPI.scv
     kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]

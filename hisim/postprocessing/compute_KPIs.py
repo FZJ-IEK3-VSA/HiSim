@@ -33,7 +33,6 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     # flags for ComponentTypes: cp.ComponentOutput.component_type
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
-
     for index, output in enumerate(all_outputs):
     
         if output.postprocessing_flag!=None:
@@ -71,6 +70,7 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         else:
 
             continue
+
 
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6

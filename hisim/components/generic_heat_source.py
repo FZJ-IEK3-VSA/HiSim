@@ -92,10 +92,10 @@ class HeatSource( cp.Component ):
         # Outputs 
         self.ThermalPowerDeliveredC : cp.ComponentOutput = self.add_output( 
             object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.PRODUCTION)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.FuelDelivered, load_type=self.fuel,
-            unit=lt.Units.ANY, postprocessing_flag=lt.InandOutputType.PRODUCTION)
+            unit=lt.Units.ANY, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
         
         if config.fuel == lt.LoadTypes.OIL:
             self.FuelDeliveredC.unit = lt.Units.LITER        

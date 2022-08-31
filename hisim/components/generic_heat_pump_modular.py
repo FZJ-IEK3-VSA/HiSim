@@ -142,10 +142,10 @@ class HeatPump(cp.Component):
         #Outputs
         self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.PRODUCTION)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION])
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )

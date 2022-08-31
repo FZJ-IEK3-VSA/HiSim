@@ -24,6 +24,9 @@ COPY examples/modular_household.py modular_household.py
 # Install hisim
 RUN pip install -e . 
 
+# Set an environment variable flag so HiSim can check whether it runs in a container or not
+ENV HISIM_IN_DOCKER_CONTAINER true
+
 # Create a folder for the input files
 RUN mkdir /input
 # Create a folder for the result files

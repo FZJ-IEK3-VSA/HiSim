@@ -39,36 +39,8 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
             if (InandOutputType.PRODUCTION in output.postprocessing_flag):
                 print("Ich werde an die Production results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
-                
-    
-            elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
-                print("I am appended to consumption column:",output.postprocessing_flag,output.full_name,"INDEX:",index )
-                
-                results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
-                
-            elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
-                results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
-                print("I am appended to storage column:",output.postprocessing_flag,output.full_name,"INDEX:",index)  
-                    
-            elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
-                print("I am a battery, when positiv added to consumption and negative to production column:",output.postprocessing_flag,output.full_name ,"INDEX:",index)
-                neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
-                pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
-              
-                results["pos_battery"]=results.iloc[:,index].tolist()
-                #Replace negative values with zero
-                results["pos_battery"].values[results["pos_battery"]<0]=0 
-                results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
-              
-                results["neg_battery"]=results.iloc[:,index].tolist()
-                #Replace positve values with zero
-                results["neg_battery"].values[results["neg_battery"]>0]=0 
-                results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
-                results=results.drop(['neg_battery', 'pos_battery'], axis=1)
-                    
-        else:
 
-            continue
+
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
     production_sum = results[ 'production' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6

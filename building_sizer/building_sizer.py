@@ -46,9 +46,7 @@ def send_hisim_requests(
         TimeSeriesRequest(
             sim_config,
             "hisim",
-            required_result_files={
-                result_file_filters.HiSimFilters.ELECTRICITY_SMART_1
-            },
+            required_result_files={"Residence_Building.csv"},
         )
         for sim_config in hisim_configs
     ]
@@ -113,6 +111,9 @@ def building_sizer_iteration(
     results = get_results_from_requisite_requests(
         request.requisite_requests, request.url, request.api_key
     )
+    # Get the relevant result files from all requisite requests
+    for result in results:
+        result_file = result.data["Residence_Building.csv"].decode()
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:
@@ -121,15 +122,27 @@ def building_sizer_iteration(
     # TODO: do something here to determine which hisim simulation configs should be calculated next
     hisim_configs = [
         """{
-        "predictive": false,
-        "prediction_horizon": 86400,
-        "pv_included": false,
-        "smart_devices_included": true,
-        "boiler_included": "electricity",
-        "heatpump_included": false,
-        "battery_included": false,
-        "chp_included": false
-    }"""
+    "location": "Aachen",
+    "occupancy_profile": "CH01",
+    "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+    "predictive": true,
+    "prediction_horizon": 86400,
+    "pv_included": true,
+    "pv_peak_power": 10000,
+    "smart_devices_included": true,
+    "water_heating_system_installed": "HeatPump",
+    "heating_system_installed": "HeatPump",
+    "buffer_included": true,
+    "buffer_volume": 500,
+    "battery_included": true,
+    "battery_capacity": 10000,
+    "chp_included": true,
+    "chp_power": 10000,
+    "h2_storage_size": 100,
+    "electrolyzer_power": 5000,
+    "current_mobility": "NoCar",
+    "mobility_distance": "rural"
+}"""
     ]
 
     # trigger the next iteration with the new hisim configurations
@@ -152,15 +165,27 @@ def main():
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
         initial_hisim_configs = [
             """{
-        "predictive": false,
-        "prediction_horizon": 86400,
-        "pv_included": false,
-        "smart_devices_included": true,
-        "boiler_included": "electricity",
-        "heatpump_included": false,
-        "battery_included": false,
-        "chp_included": false
-    }"""
+    "location": "Aachen",
+    "occupancy_profile": "CH01",
+    "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+    "predictive": true,
+    "prediction_horizon": 86400,
+    "pv_included": true,
+    "pv_peak_power": 10000,
+    "smart_devices_included": true,
+    "water_heating_system_installed": "HeatPump",
+    "heating_system_installed": "HeatPump",
+    "buffer_included": true,
+    "buffer_volume": 500,
+    "battery_included": true,
+    "battery_capacity": 10000,
+    "chp_included": true,
+    "chp_power": 10000,
+    "h2_storage_size": 100,
+    "electrolyzer_power": 5000,
+    "current_mobility": "NoCar",
+    "mobility_distance": "rural"
+}"""
         ]
         next_request = trigger_next_iteration(request, initial_hisim_configs)
         result = "My first iteration result"

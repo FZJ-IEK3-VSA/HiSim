@@ -3,8 +3,7 @@ FROM python
 WORKDIR /app
 
 # Install utsp-client
-COPY UTSP_client-0.1.0-py3-none-any.whl UTSP_client-0.1.0-py3-none-any.whl
-RUN pip install  UTSP_client-0.1.0-py3-none-any.whl
+RUN pip install git+https://github.com/FZJ-IEK3-VSA/UTSP_Client.git
 
 # Copy source code to image
 COPY building_sizer.py building_sizer.py

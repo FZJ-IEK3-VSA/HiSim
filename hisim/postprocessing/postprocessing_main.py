@@ -54,6 +54,7 @@ class PostProcessor:
     @utils.measure_execution_time
     def __init__(self):
         """ Initializes the post processing. """
+        self.dirname: str
 
     def set_dir_results(self, dirname):
         """ Sets the results directory. """

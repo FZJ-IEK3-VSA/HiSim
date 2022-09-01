@@ -2,9 +2,7 @@
 """
 This postprocessing option computes overoll consumption, production, self-consumption and injection
 as well as self consumption rate and autarky rate""" 
-
 import os
-
 import numpy as np
 from typing import List, Any
 import pandas as pd
@@ -33,6 +31,7 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     # flags for ComponentTypes: cp.ComponentOutput.component_type
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
+
     for index, output in enumerate(all_outputs):
     
         if output.postprocessing_flag!=None:
@@ -70,8 +69,6 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         else:
 
             continue
-
-
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
     production_sum = results[ 'production' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
@@ -110,7 +107,7 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
             price = 0
         self_consumption_rate = 0
         autarky_rate = 0
-       
+
     #initilize lines for report
     lines: List = []
     lines.append("Consumption: {:4.0f} kWh".format(consumption_sum))
@@ -125,7 +122,6 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
     lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2)) 
 
-    
     #initialize list for the KPI.scv
     kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
     kpis_values_list=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]

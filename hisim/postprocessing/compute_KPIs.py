@@ -2,7 +2,9 @@
 """
 This postprocessing option computes overoll consumption, production, self-consumption and injection
 as well as self consumption rate and autarky rate""" 
+
 import os
+
 import numpy as np
 from typing import List, Any
 import pandas as pd
@@ -40,6 +42,23 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 print("Ich werde an die Production results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
 
+            elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
+                print("Ich bin eine Batterie und werde wenn ich positiv bin an consumption angehängt:",output.postprocessing_flag,output.full_name )
+                
+                #results[ 'consumption' ] = results[ 'consumption' ] + results[results.iloc[:, index] < 0]
+                #print("Kleiner Null:",results[results.iloc[:, index] < 0])
+                #print("Größer Null:",results[results.iloc[:, index] > 0])
+                #print("Gleich Null:",results[results.iloc[:, index] == 0])
+                #print(results.iloc[:, index])alle
+                #results[ 'consumtion' ] = results[ 'consumption' ] + results.iloc[:, index] 
+            elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
+                print("Ich werde an die Consumption results Spalte angehängt:",output.postprocessing_flag,output.full_name )
+                results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
+            elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
+                    results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
+                    print("Ich werde an die Storage results Spalte angehängt:",output.postprocessing_flag,output.full_name )        
+        else:
+            continue     
 
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6

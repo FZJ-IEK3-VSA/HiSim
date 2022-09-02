@@ -100,10 +100,9 @@ class SmartDevice( cp.Component ):
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
         #mandatory Output
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      self.ElectricityOutput,
-                                                                      lt.LoadTypes.ELECTRICITY,
-                                                                      lt.Units.WATT)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
         self.l3_DeviceActivationC: cp.ComponentInput = self.add_input(self.component_name,
                                                                       self.l3_DeviceActivation,
                                                                       lt.LoadTypes.ACTIVATION,

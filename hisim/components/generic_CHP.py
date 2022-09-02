@@ -64,7 +64,7 @@ class GCHP( cp.Component ):
     Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
     """
     # Inputs
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
 
     # Outputs
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
@@ -76,21 +76,19 @@ class GCHP( cp.Component ):
         self.build( config )
 
         #Inputs
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                  self.l1_DeviceSignal,
+        self.L1DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
+                                                                  self.L1DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
         
         #Component outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                           self.ThermalEnergyDelivered,
-                                                                           lt.LoadTypes.HEATING,
-                                                                           lt.Units.WATT)
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      self.ElectricityOutput,
-                                                                      lt.LoadTypes.ELECTRICITY,
-                                                                      lt.Units.WATT)
+        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ThermalEnergyDelivered, load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.PRODUCTION)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT, component_type=lt.ComponentType.FUEL_CELL, postprocessing_flag=lt.InandOutputType.PRODUCTION)
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                   self.FuelDelivered,
                                                                   lt.LoadTypes.HYDROGEN,
@@ -99,11 +97,11 @@ class GCHP( cp.Component ):
 
     @staticmethod
     def get_default_config() -> GCHPConfig:
-        config=GCHPConfig( name = 'CHP',
-                          source_weight =  1,
-                          p_el = 2000,
-                          p_th = 3000,
-                          p_fuel = 6000 ) 
+        config=GCHPConfig(name='CHP',
+                          source_weight=1,
+                          p_el=2000,
+                          p_th=3000,
+                          p_fuel=6000) 
         return config
     
     def build( self, config: GCHPConfig ) -> None:
@@ -127,7 +125,7 @@ class GCHP( cp.Component ):
     def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool ) -> None:
 
         # Inputs
-        self.state.state = stsv.get_input_value( self.l1_DeviceSignalC )
+        self.state.state = stsv.get_input_value( self.L1DeviceSignalC )
        
         # Outputs
         stsv.set_output_value( self.ThermalEnergyDeliveredC, self.state.state * self.p_th )
@@ -140,7 +138,7 @@ class GCHP( cp.Component ):
         log.information("setting l1 default connections in generic CHP" )
         connections: List[cp.ComponentConnection] = [ ]
         controller_classname = L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( GCHP.l1_DeviceSignal, controller_classname, L1_Controller.l1_DeviceSignal ) )
+        connections.append( cp.ComponentConnection( GCHP.L1DeviceSignal, controller_classname, L1_Controller.L1DeviceSignal ) )
         return connections
     
     def write_to_report(self):
@@ -224,7 +222,7 @@ class L1_Controller( cp.Component ):
     HydrogenSOC = "HydrogenSOC"
 
     # Outputs
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
     
     # Similar components to connect to:
     # 1. Building
@@ -261,8 +259,8 @@ class L1_Controller( cp.Component ):
         
         
         #add outputs
-        self.l1_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                    self.l1_DeviceSignal,
+        self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
+                                                                    self.L1DeviceSignal,
                                                                     lt.LoadTypes.ON_OFF,
                                                                     lt.Units.BINARY)
         
@@ -333,7 +331,7 @@ class L1_Controller( cp.Component ):
             elif ( ( l2_devicesignal == 1 ) and ( electricity_target > 0 ) and ( H2_SOC >= self.SOCmin ) ) and self.state0.state == 0:
                 self.state.activation( timestep )
             
-        stsv.set_output_value( self.l1_DeviceSignalC, self.state.state )
+        stsv.set_output_value( self.L1DeviceSignalC, self.state.state )
         
     @staticmethod
     def get_default_config() -> L1CHPConfig:

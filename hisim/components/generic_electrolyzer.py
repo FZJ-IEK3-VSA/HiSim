@@ -32,18 +32,18 @@ __status__ = ""
 @dataclass
 class ElectrolyzerConfig:
     name: str
-    source_weight : int
+    source_weight: int
     min_power: float # [W]
     max_power: float # [W]
     min_hydrogen_production_rate_hour: float # [Nl/h]
     max_hydrogen_production_rate_hour: float # [Nl/h]
     
-    def init( self, name : str,
-                    source_weight : int,
-                    min_power : float,
-                    max_power : float,
-                    min_hydrogen_production_rate_hour : float,
-                    max_hydrogen_production_rate_hour : float ) -> None:
+    def init( self, name: str,
+                    source_weight: int,
+                    min_power: float,
+                    max_power: float,
+                    min_hydrogen_production_rate_hour: float,
+                    max_hydrogen_production_rate_hour: float ) -> None:
         self.name = name
         self.source_weight = source_weight
         self.min_power = min_power
@@ -99,10 +99,9 @@ class Electrolyzer( cp.Component ):
                                                                    Electrolyzer.HydrogenOutput,
                                                                    lt.LoadTypes.HYDROGEN,
                                                                    lt.Units.KG_PER_SEC)
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      Electrolyzer.ElectricityOutput,
-                                                                      lt.LoadTypes.ELECTRICITY,
-                                                                      lt.Units.WATT)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=Electrolyzer.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT, component_type=lt.ComponentType.ELECTROLYZER, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
         self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
         
     @staticmethod
@@ -153,6 +152,7 @@ class Electrolyzer( cp.Component ):
             raise ValueError( 'Target electricity needs to be positive in Electrolyzer' )
         elif 0 <= electricity_target < self.min_power:
             self.state.electricity = 0
+            electricity_target=0
         elif electricity_target > self.max_power:
             self.state.electricity = self.max_power
         else:

@@ -103,7 +103,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         keystr = "ki_" + f"{ki:.3f}" + "_kp_" + f"{kp:.3f}" + "_kd_" + f"{kd:.3f}"
-        my_simulation_parameters.result_directory = os.path.join("ac_results_5", keystr)
+        my_simulation_parameters.result_directory = os.path.join("ac_results_5b", keystr)
         #my_simulation_parameters.post_processing_options.clear()
         #my_simulation_parameters.enable_all_options()
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -264,7 +264,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
 
 if __name__ == "__main__":
-    y = np.logspace(-2, 3, num=5)
+    y = np.logspace(1, 3, num=7)
     # gc.set_debug(gc.DEBUG_LEAK)
     kp = 1
     kd = 1

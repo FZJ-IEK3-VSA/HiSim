@@ -109,19 +109,17 @@ class Occupancy(cp.Component):
                                                                          self.HeatingByResidents,
                                                                          lt.LoadTypes.HEATING,
                                                                          lt.Units.WATT)
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                       self.ElectricityOutput,
-                                                                       lt.LoadTypes.ELECTRICITY,
-                                                                       lt.Units.WATT,
-                                                                       True)
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
 
         self.water_consumptionC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.WaterConsumption,
                                                                        lt.LoadTypes.WARM_WATER,
                                                                        lt.Units.LITER)
     @staticmethod
-    def get_default_config() -> OccupancyConfig:
-        config= OccupancyConfig(profile_name = "CH01")
+    def get_default_config(profile_name: str = 'CH01') -> OccupancyConfig:
+        config= OccupancyConfig(profile_name = profile_name)
         return config
     def i_save_state(self) -> None:
         pass

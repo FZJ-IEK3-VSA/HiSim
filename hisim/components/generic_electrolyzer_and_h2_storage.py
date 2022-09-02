@@ -464,7 +464,9 @@ class HydrogenStorage(Component):
         self.hydrogen_not_released: ComponentOutput = self.add_output(self.component_name, HydrogenStorage.HydrogenNotReleased, lt.LoadTypes.HYDROGEN, lt.Units.KG)
         self.hydrogen_storage_energy_demand: ComponentOutput = self.add_output(self.component_name, HydrogenStorage.HydrogenStorageEnergyDemand, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
         self.hydrogen_losses: ComponentOutput = self.add_output(self.component_name, HydrogenStorage.HydrogenLosses, lt.LoadTypes.HYDROGEN, lt.Units.KG)
-        self.discharging_hydrogen_real: ComponentOutput = self.add_output(self.component_name, HydrogenStorage.DischargingHydrogenAmountReal, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC, False)
+        self.discharging_hydrogen_real: ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=HydrogenStorage.DischargingHydrogenAmountReal, load_type=lt.LoadTypes.HYDROGEN, 
+            unit=lt.Units.KG_PER_SEC, sankey_flow_direction=False)
 
         self.max_capacity=config.max_capacity
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep

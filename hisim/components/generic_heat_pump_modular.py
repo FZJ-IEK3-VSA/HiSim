@@ -35,25 +35,25 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig:
-    name : str
-    source_weight : int
+    name: str
+    source_weight: int
     parameter_string: str
     manufacturer: str
     device_name: str
-    power_th : float
-    cooling_considered : bool
-    heating_season_begin : Optional[int]
-    heating_season_end : Optional[int]
+    power_th: float
+    cooling_considered: bool
+    heating_season_begin: Optional[int]
+    heating_season_end: Optional[int]
 
     def __init__( self,
-                  name : str,
-                  source_weight : int,
+                  name: str,
+                  source_weight: int,
                   manufacturer: str,
                   device_name: str,
-                  power_th : float,
-                  cooling_considered : bool,
-                  heating_season_begin : Optional[ int ],
-                  heating_season_end : Optional[ int ] ) :
+                  power_th: float,
+                  cooling_considered: bool,
+                  heating_season_begin: Optional[int],
+                  heating_season_end: Optional[int] ) :
         self.name = name
         self.source_weight = source_weight
         self.manufacturer = manufacturer
@@ -102,7 +102,7 @@ class HeatPump(cp.Component):
     """
     # Inputs
     TemperatureOutside = "TemperatureOutside"
-    l1_DeviceSignal = "l1_DeviceSignal"
+    L1DeviceSignal = "L1DeviceSignal"
     l1_RunTimeSignal = 'l1_RunTimeSignal'
 
     # Outputs
@@ -128,8 +128,8 @@ class HeatPump(cp.Component):
                                                                      lt.Units.CELSIUS,
                                                                      mandatory = True)
         
-        self.l1_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                  self.l1_DeviceSignal,
+        self.L1DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
+                                                                  self.L1DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
                                                                   lt.Units.BINARY,
                                                                   mandatory = True)
@@ -140,14 +140,12 @@ class HeatPump(cp.Component):
                                                                    mandatory = False)
         
         #Outputs
-        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                           self.ThermalPowerDelivered,
-                                                                           lt.LoadTypes.HEATING,
-                                                                           lt.Units.WATT)
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                      self.ElectricityOutput,
-                                                                      lt.LoadTypes.ELECTRICITY,
-                                                                      lt.Units.WATT)
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.PRODUCTION)
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
@@ -163,7 +161,7 @@ class HeatPump(cp.Component):
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
         controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
+        connections.append( cp.ComponentConnection( HeatPump.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.L1DeviceSignal ) )
         connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
         return connections
     
@@ -275,7 +273,7 @@ class HeatPump(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         
         # Inputs
-        self.state.state = stsv.get_input_value( self.l1_DeviceSignalC )
+        self.state.state = stsv.get_input_value( self.L1DeviceSignalC )
         T_out:float = stsv.get_input_value( self.TemperatureOutsideC )
           
         #cop

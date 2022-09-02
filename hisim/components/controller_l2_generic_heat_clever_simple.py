@@ -11,7 +11,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
 from hisim.components.building import Building
-from hisim.components import generic_dhw_boiler_without_heating
+from hisim.components import generic_hot_water_storage_modular
 from hisim import log
 
 from dataclasses import dataclass
@@ -33,30 +33,30 @@ class L2Config:
     """
     L2 Config
     """
-    name : str
-    source_weight : int
-    T_min_heating : float
-    T_max_heating : float
-    T_tolerance : float
-    P_threshold : float
-    cooling_considered : bool
-    T_min_cooling : Optional[float]
-    T_max_cooling : Optional[float]
-    heating_season_begin : Optional[int]
-    heating_season_end : Optional[int]
+    name: str
+    source_weight: int
+    T_min_heating: float
+    T_max_heating: float
+    T_tolerance: float
+    P_threshold: float
+    cooling_considered: bool
+    T_min_cooling: Optional[float]
+    T_max_cooling: Optional[float]
+    heating_season_begin: Optional[int]
+    heating_season_end: Optional[int]
 
     def __init__( self,
-                  name : str,
-                  source_weight : int,
-                  T_min_heating : float,
-                  T_max_heating : float,
-                  T_tolerance : float,
-                  P_threshold : float,
-                  cooling_considered : bool,
-                  T_min_cooling : Optional[float],
-                  T_max_cooling : Optional[float],
-                  heating_season_begin : Optional[int],
-                  heating_season_end : Optional[int] ):
+                  name: str,
+                  source_weight: int,
+                  T_min_heating: float,
+                  T_max_heating: float,
+                  T_tolerance: float,
+                  P_threshold: float,
+                  cooling_considered: bool,
+                  T_min_cooling: Optional[float],
+                  T_max_cooling: Optional[float],
+                  heating_season_begin: Optional[int],
+                  heating_season_end: Optional[int] ):
         self.name = name
         self.source_weight = source_weight
         self.T_min_heating = T_min_heating
@@ -177,7 +177,7 @@ class L2_Controller( cp.Component ):
                                                                    mandatory = False)
         
         self.add_default_connections( Building, self.get_building_default_connections( ) )
-        self.add_default_connections( generic_dhw_boiler_without_heating.Boiler, self.get_boiler_default_connections( ) )
+        self.add_default_connections( generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_default_connections( ) )
         
         self.ElectricityTargetC : cp.ComponentInput = self.add_input( self.component_name,
@@ -196,8 +196,8 @@ class L2_Controller( cp.Component ):
     def get_boiler_default_connections( self ):
         log.information("setting boiler default connections in L2 Controller")
         connections = [ ]
-        boiler_classname = generic_dhw_boiler_without_heating.Boiler.get_classname( )
-        connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, generic_dhw_boiler_without_heating.Boiler.TemperatureMean ) )
+        boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname( )
+        connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean ) )
         return connections
     def get_l1_default_connections( self ):
         log.information("setting L1 default connections in L2 Controller")
@@ -214,9 +214,24 @@ class L2_Controller( cp.Component ):
                            T_max_heating = 22.0,
                            T_tolerance = 1.0,
                            P_threshold = 1500,
-                           cooling_considered = True,
+                           cooling_considered = False,
                            T_min_cooling = 23.0,
                            T_max_cooling = 25.0,
+                           heating_season_begin = 270,
+                           heating_season_end = 150 ) 
+        return config
+    
+    @staticmethod
+    def get_default_config_buffer_heating():
+        config = L2Config( name = 'L2HeatPump',
+                           source_weight =  1,
+                           T_min_heating = 30.0,
+                           T_max_heating = 50.0,
+                           T_tolerance = 10.0,
+                           P_threshold = 1500,
+                           cooling_considered = False,
+                           T_min_cooling = 5.0,
+                           T_max_cooling = 15.0,
                            heating_season_begin = 270,
                            heating_season_end = 150 ) 
         return config
@@ -274,7 +289,7 @@ class L2_Controller( cp.Component ):
                 #use previous state if l3 was not available
                 self.state = self.previous_state.clone( )
                 
-    def control_heating( self, T_control, T_min_heating, T_max_heating, l3state ):
+    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> None:
         if T_control > T_max_heating:
             #stop heating if temperature exceeds upper limit
             self.state.deactivate( )

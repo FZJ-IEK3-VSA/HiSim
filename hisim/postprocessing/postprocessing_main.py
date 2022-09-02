@@ -95,9 +95,9 @@ class PostProcessor:
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
         if docker_flag.lower() in ("true", "yes", "y", "1"):
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
-            ALLOWED_OPTIONS_FOR_DOCKER = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
+            allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
             # Of all specified options, select those that are allowed
-            valid_options = list(set(ppdt.post_processing_options) & ALLOWED_OPTIONS_FOR_DOCKER)
+            valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
             if len(valid_options) < len(ppdt.post_processing_options):
                 # At least one invalid option was set
                 ppdt.post_processing_options = valid_options

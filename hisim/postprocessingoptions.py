@@ -19,4 +19,3 @@ class PostProcessingOptions(IntEnum):
     GENERATE_PDF_REPORT = 9
     MAKE_NETWORK_CHARTS = 10
     PLOT_SPECIAL_TESTING_SINGLE_DAY = 11
-

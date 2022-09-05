@@ -29,14 +29,20 @@ class SystemChart:
                 #    continue
                 if input.src_object_name is None:
                     continue
+
+                # clumsy due to mypy check
+                source_field_name = ""
+                if not input.source_output is None:
+                    source_field_name = input.source_output.field_name
+
                 graph.add_edge(input.src_object_name, input.component_name)
                 #graph.add_edges_from([],label=input.unit, weight=10)
                 key = (input.component_name, input.src_object_name)
                 if not key in edge_label_dict:
-                    edge_label_dict[key] = input.source_output.field_name + " -> " + input.field_name + " in " + input.unit
+                    edge_label_dict[key] = source_field_name + " -> " + input.field_name + " in " + input.unit
                 else:
                     old_entry: str = edge_label_dict[key]
-                    edge_label_dict[key] = old_entry + "\n" + input.source_output.field_name + " -> " + input.field_name + " in " + input.unit
+                    edge_label_dict[key] = old_entry + "\n" + source_field_name + " -> " + input.field_name + " in " + input.unit
 
         pos = nx.spring_layout(graph, iterations=5)
         # plt.axis('off')

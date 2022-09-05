@@ -1,5 +1,5 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List
+from typing import List, Any
 from copy import deepcopy
 from dataclasses import dataclass
 from bslib import bslib as bsl
@@ -102,7 +102,7 @@ class Battery(Component):
                                                     unit=Units.ANY,
                                                     postprocessing_flag=InandOutputType.STORAGE_CONTENT)
     @staticmethod
-    def get_default_config(p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1):
+    def get_default_config(p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
         config=BatteryConfig(
             system_id='SG1',
             p_inv_custom=p_inv_custom,

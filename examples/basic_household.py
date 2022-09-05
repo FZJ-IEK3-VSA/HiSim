@@ -83,11 +83,11 @@ def basic_household_explicit(my_sim, my_simulation_parameters: Optional[Simulati
 
     # Build system parameters
     if my_simulation_parameters is None:
-        #my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
-        #                                                                         seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.skip_finished_results = False
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
+                                                                                 seconds_per_timestep=seconds_per_timestep)
+        #my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        #my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        #my_simulation_parameters.skip_finished_results = False
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
     my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")

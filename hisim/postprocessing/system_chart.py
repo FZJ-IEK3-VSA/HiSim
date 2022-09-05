@@ -33,22 +33,23 @@ class SystemChart:
                 #graph.add_edges_from([],label=input.unit, weight=10)
                 key = (input.component_name, input.src_object_name)
                 if not key in edge_label_dict:
-                    edge_label_dict[key] = input.loadtype + " in " + input.unit
+                    edge_label_dict[key] = input.source_output.field_name + " -> " + input.field_name + " in " + input.unit
                 else:
                     old_entry: str = edge_label_dict[key]
-                    edge_label_dict[key] = old_entry + "\n" + input.loadtype  + " in " + input.unit
+                    edge_label_dict[key] = old_entry + "\n" + input.source_output.field_name + " -> " + input.field_name + " in " + input.unit
 
         pos = nx.spring_layout(graph, iterations=5)
         # plt.axis('off')
-        fig, ax = plt.subplots(figsize=(12, 12))
-        nx.draw(graph, pos, with_labels=True, connectionstyle='arc3, rad = 0.1')
+        fig, ax = plt.subplots(figsize=(15, 15))
+        nx.draw(graph, pos, with_labels=True, connectionstyle='arc3, rad = 0.25')
         nx.draw_networkx_nodes(graph, pos, ax=ax)
         nx.draw_networkx_labels(graph, pos, ax=ax)
         nx.draw_networkx_edge_labels(
             graph, pos,
             edge_labels=edge_label_dict,
             font_color='red',
-            alpha=0.5
+            alpha=0.5,
+            font_size=8
         )
 
         fig.savefig("network_t1.png", bbox_inches='tight', pad_inches=0)

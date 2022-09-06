@@ -2,11 +2,8 @@ import os
 
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
-import shutil
-import random
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
-import matplotlib.pyplot as plt
 from hisim import utils
 
 
@@ -24,6 +21,16 @@ def test_basic_household():
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60)
+    hisim_main.main(path, func,mysimpar )
+    log.information(os.getcwd())
+
+
+@utils.measure_execution_time
+def test_basic_household_network_chart():
+    path = "../examples/basic_household.py"
+    func = "basic_household_explicit"
+    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func,mysimpar )
     log.information(os.getcwd())
 

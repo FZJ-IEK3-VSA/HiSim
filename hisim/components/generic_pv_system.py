@@ -304,7 +304,7 @@ class PVSystem( cp.Component ):
         self.add_default_connections(Weather, self.get_weather_default_connections())
 
     @staticmethod
-    def get_default_config(power: float = 10E3, source_weight: int = 1):
+    def get_default_config(power: float = 10E3, source_weight: int = 1)-> Any:
         config= PVSystemConfig(
                         name= 'PVSystem',
                         time= 2019,

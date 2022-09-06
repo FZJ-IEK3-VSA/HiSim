@@ -12,39 +12,9 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_KPIs import compute_KPIs
-from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
-
-
-class PostProcessingDataTransfer:  # noqa: too-few-public-methods
-
-    """ Data class for transfering the result data to this class. """
-
-    def __init__(self,
-                 results: Any,
-                 all_outputs: Any,
-                 simulation_parameters: SimulationParameters,
-                 wrapped_components: Any,
-                 mode: Any,
-                 setup_function: Any,
-                 execution_time: Any,
-                 results_monthly: Any,
-                 ) -> None:
-        """ Initializes the values. """
-        # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
-        self.time_correction_factor = simulation_parameters.seconds_per_timestep / 3600
-        self.results = results
-        self.all_outputs = all_outputs
-        self.simulation_parameters = simulation_parameters
-        self.wrapped_components = wrapped_components
-        self.mode = mode
-        self.setup_function = setup_function
-        self.execution_time = execution_time
-        self.results_monthly = results_monthly
-        self.post_processing_options = simulation_parameters.post_processing_options
-        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
-        for option in self.post_processing_options:
-            log.information("Selected post processing option: " + str(option))
+from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 
 
 class PostProcessor:
@@ -90,6 +60,19 @@ class PostProcessor:
         """ Runs the main post processing. """
         # Define the directory name
         log.information("Main post processing function")
+
+        # Check whether HiSim is running in a docker container
+        docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
+        if docker_flag.lower() in ("true", "yes", "y", "1"):
+            # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
+            allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
+            # Of all specified options, select those that are allowed
+            valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
+            if len(valid_options) < len(ppdt.post_processing_options):
+                # At least one invalid option was set
+                ppdt.post_processing_options = valid_options
+                log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
+
         report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
         days = {"month": 0, "day": 0}
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
@@ -117,13 +100,15 @@ class PostProcessor:
             self.write_components_to_report(ppdt, report)
         # Export all results to
         if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
-            log.information("Computing KPIs for the report.")
             log.information("Computing KPIs")
             self.compute_kpis(ppdt, report)
+        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
+            log.information("Computing Network Charts")
+            self.make_network_charts(ppdt)
 
         # only a single day has been calculated. This gets special charts for debugging.
-        if len(ppdt.results) == 1440:
-            log.information("Making sankey plots.")
+        if PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options and len(ppdt.results) == 1440:
+            log.information("Making special single day plots for a single day calculation for testing.")
             self.make_special_one_day_debugging_plots(ppdt)
 
         # Open file explorer
@@ -131,6 +116,11 @@ class PostProcessor:
             log.information("opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function")
+
+    def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
+        """ Generates the network charts that show the connection of the elements. """
+        systemchart = SystemChart(ppdt)
+        systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Makes special plots for debugging if only a single day was calculated."""

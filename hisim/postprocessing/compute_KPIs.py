@@ -2,7 +2,7 @@
 """
 This postprocessing option computes overoll consumption, production, self-consumption and injection
 as well as self consumption rate and autarky rate""" 
-
+from typing import Any
 from typing import List
 import pandas as pd
 
@@ -10,7 +10,7 @@ from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
 #sum consumption and production of individual components
-def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters):
+def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters)-> Any:
     results[ 'consumption' ] = 0
     results[ 'production' ] = 0
     results[ 'storage' ] = 0

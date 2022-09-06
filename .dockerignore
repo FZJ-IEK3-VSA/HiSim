@@ -1,0 +1,4 @@
+# unnecessary and potentially large directory
+examples/results/
+# the finished.flag can prevent the calculation
+examples/finished.flag

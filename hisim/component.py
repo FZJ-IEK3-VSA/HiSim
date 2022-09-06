@@ -278,6 +278,10 @@ class Component:
         """ Performs the actual calculation. """
         raise NotImplementedError()
 
+    def write_to_report(self) -> Any:
+        """ Performs the actual calculation. """
+        raise NotImplementedError()
+
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """ Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes. """
         pass  # noqa

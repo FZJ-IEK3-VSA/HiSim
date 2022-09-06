@@ -279,8 +279,8 @@ class Component:
         raise NotImplementedError()
 
     def write_to_report(self) -> Any:
-       """ Abstract function for writing the report entry for this component """
-       raise NotImplementedError("In " + self.component_name)
+        """ Abstract function for writing the report entry for this component. """
+        raise NotImplementedError("In " + self.component_name)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """ Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes. """

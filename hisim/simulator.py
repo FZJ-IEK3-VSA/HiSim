@@ -155,7 +155,7 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise Exception("Not a single component was defined. Quitting.")
-        #call again because it might not have gotten executed depending on how it's called.
+        # call again because it might not have gotten executed depending on how it's called.
         self.prepare_simulation_directory()
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
         if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):

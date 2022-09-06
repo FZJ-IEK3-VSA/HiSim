@@ -18,7 +18,7 @@ import os
 from hisim import utils
 
 
-def basic_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+def dynamic_components_demonstration(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
     """
     In this example a generic controller is added. The generic controller
     makes it possible to add component generically.

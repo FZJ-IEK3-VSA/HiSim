@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import math
-from typing import Any
+from typing import Any, List
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -456,3 +456,10 @@ class CHP(Component):
 
         stsv.set_output_value(self.gas_demand_target, gas_demand_target) #CHP runs with
         stsv.set_output_value(self.gas_demand_real_used, gas_demand_real_used)  # ThermalPowerOutput
+
+    def write_to_report(self) -> List[str]:
+        lines = []
+        lines.append("CHP")
+        # todo: add more useful stuff here
+        lines.append("tbd")
+        return lines

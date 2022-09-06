@@ -50,6 +50,7 @@ jobs:
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/components/generic_hot_water_storage_modular.py
+        prospector hisim/postprocessing/system_chart.py
 #        prospector examples/component_connections.py
 #        prospector examples/modular_household.py
 

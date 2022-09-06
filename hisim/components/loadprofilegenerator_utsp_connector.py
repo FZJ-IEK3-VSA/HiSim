@@ -1,7 +1,7 @@
 # Generic/Built-in
 import datetime
 import io
-from typing import Iterable, Tuple
+from typing import Tuple
 import pandas as pd
 import json
 import numpy as np
@@ -11,6 +11,7 @@ from dataclasses_json import dataclass_json
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
+from hisim import log
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
@@ -94,11 +95,11 @@ class UtspLpgConnector(cp.Component):
             lt.Units.WATT,
         )
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.ElectricityOutput,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
-            True,
+            object_name=self.component_name,
+            field_name=self.ElectricityOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            postprocessing_flag=lt.InandOutputType.CONSUMPTION,
         )
 
         self.water_consumptionC: cp.ComponentOutput = self.add_output(
@@ -250,48 +251,41 @@ class UtspLpgConnector(cp.Component):
         """
         # Create an LPG configuration and set the simulation parameters
         start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
-        end_date = self.my_simulation_parameters.end_date.strftime("%Y-%m-%d")
+        # Unlike HiSim the LPG includes the specified end day in the simulation --> subtract one day
+        last_day = self.my_simulation_parameters.end_date - datetime.timedelta(days=1)
+        end_date = last_day.strftime("%Y-%m-%d")
         simulation_config = lpg_helper.create_basic_lpg_config(
             self.utsp_config.household,
             HouseTypes.HT01_House_with_a_10kWh_Battery_and_a_fuel_cell_battery_charger_5_MWh_yearly_space_heating_gas_heating,
             start_date,
             end_date,
             self.get_resolution(),
+            calc_options=[
+                CalcOption.HouseholdSumProfilesFromDetailedDats,
+                CalcOption.BodilyActivityStatistics,
+            ],
         )
-        # Set the simulation parameters
-        simulation_config.Year = self.my_simulation_parameters.year
-        simulation_config.CalcSpec.CalcOptions = [
-            CalcOption.SumProfileExternalIndividualHouseholdsAsJson,
-            CalcOption.BodilyActivityStatistics,
-            CalcOption.JsonHouseholdSumFiles,
-        ]
 
         # Define required result files
-        seconds = self.my_simulation_parameters.seconds_per_timestep
-        electricity_file = (
-            result_file_filters.LPGFilters.sum_hh1_ext_res(
-                LoadTypes.Electricity, seconds
-            ),
+        electricity_file = result_file_filters.LPGFilters.sum_hh1(LoadTypes.Electricity)
+        warm_water_file = result_file_filters.LPGFilters.sum_hh1(LoadTypes.Warm_Water)
+        high_activity_file = result_file_filters.LPGFilters.BodilyActivity.HIGH
+        low_activity_file = result_file_filters.LPGFilters.BodilyActivity.LOW
+        result_files = dict.fromkeys(
+            [
+                electricity_file,
+                warm_water_file,
+                high_activity_file,
+                low_activity_file,
+            ]
         )
-        warm_water_file = (
-            result_file_filters.LPGFilters.sum_hh1_ext_res(
-                LoadTypes.Warm_Water, seconds
-            ),
-        )
-        high_activity_file = (result_file_filters.LPGFilters.BodilyActivity.HIGH,)
-        low_activity_file = (result_file_filters.LPGFilters.BodilyActivity.LOW,)
-        result_files = {
-            electricity_file,
-            warm_water_file,
-            high_activity_file,
-            low_activity_file,
-        }
 
         # Prepare the time series request
         request = datastructures.TimeSeriesRequest(
             simulation_config.to_json(), "LPG", required_result_files=result_files
         )
 
+        log.information("Requesting LPG profiles from the UTSP.")
         # Request the time series
         result = client.request_time_series_and_wait_for_delivery(
             self.utsp_config.url, request, self.utsp_config.api_key
@@ -356,14 +350,14 @@ class UtspLpgConnector(cp.Component):
             pre_electricity_consumption = pd.read_csv(
                 electricity_data,
                 sep=";",
-                decimal=",",
+                decimal=".",
                 encoding="cp1252",
             )
             water_data = io.StringIO(warm_water)
             pre_water_consumption = pd.read_csv(
                 water_data,
                 sep=";",
-                decimal=",",
+                decimal=".",
                 encoding="cp1252",
             )
 

@@ -23,7 +23,7 @@ __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
 
-def basic_household_only_heat(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+def basic_household_only_heating(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
     """
     This setup function emulates an household including
     the basic components. Here the residents have their

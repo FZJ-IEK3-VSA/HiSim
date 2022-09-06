@@ -295,8 +295,10 @@ class PostProcessor:
         report.open()
         for wrapped_component in ppdt.wrapped_components:
             # print( wc.my_component )
-            # if hasattr(wc.my_component, "write_to_report"):
-            component_content = wrapped_component.my_component.write_to_report()
+            if hasattr(wrapped_component.my_component, "write_to_report"):
+                component_content = wrapped_component.my_component.write_to_report()
+            else:
+                raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
             if isinstance(component_content, list) is False:
                 component_content = [component_content]
             if isinstance(component_content, str) is True:

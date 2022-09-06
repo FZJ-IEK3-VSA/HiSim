@@ -14,6 +14,8 @@ from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 #from hisim.postprocessing.postprocessing_main import PostProcessingDataTransfer
 
+
+
 #sum consumption and production of individual components
 
 def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters)-> Any:
@@ -59,26 +61,26 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                        
                         #results[ 'consumption' ] = results[ 'consumption' ] + results[results.iloc[:, index] < 0]
                     #print("Kleiner Null:",results[results.iloc[:, index] < 0])
-                    neudf=results[results.iloc[:, index] < 0]
-                    print("Kleiner Null:",neudf)
-                    
+                    neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
+                    #neudf=neudf.iloc[:,index]
+                    pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
+                    #print("Negative Batteriewerte:",neg_battery)
+                    #print("Positive Batteriewerte:",pos_battery)
                     #print("Gleich Null:",results[results.iloc[:, index] == 0])
                     #print(results.iloc[:, index])alle
                     
-                    ls=results.iloc[:,index].tolist()
+                    results["pos_battery"]=results.iloc[:,index].tolist()
+                    #Replace negative values with zero
+                    results["pos_battery"].values[results["pos_battery"]<0]=0 
+                    results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
                     
-                    #print("Liste",ls)
-                    #print("Listenlänge:",len(ls))
-                    counter=0
-                    for it in ls:
-                        counter=counter+1
-                        listeneg=[]
-                        if it > 0:
-                            
-                            results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[counter, index] 
-                        elif it < 0:
-                            listeneg.append(it)
-                        print(listeneg)
+                    results["neg_battery"]=results.iloc[:,index].tolist()
+                    #Replace positve values with zero
+                    results["neg_battery"].values[results["neg_battery"]>0]=0 
+                    results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
+                   
+                    results.drop(['neg_battery', 'pos_battery'], axis=1)
+                   
                             
                     
         else:
@@ -137,13 +139,16 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
     lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2)) 
     
-    """Create csv
-    row1 =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
-    row2=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]
+    
+    #PostProcessor.export_results_to_csv()
+    """
+    #Create csv
+    kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
+    kpis_values_list=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]
    
     #Pfad so setzen, dass csv im richtigen Ordner landed
-   # dirpath=ppdt.SimulationParameters.result_directory   
-   # filepath = os.path.join(dirpath, "KPIs.csv")
+    dirpath=SimulationParameters.result_directory   
+    filepath = os.path.join(dirpath, "KPIs.csv")
 
 
     dirpath="C:\\Users\\Selina\\HiSim\\examples\\results"
@@ -152,7 +157,8 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         writer = csv.writer(csvfile)
         for value in range(len(row1)):
             writer.writerow([row1[value], row2[value]])
-    csvfile.close()
-    """
-    return lines
 
+    """        
+    #csvfile.close()
+    
+    return lines

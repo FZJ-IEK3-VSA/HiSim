@@ -37,8 +37,25 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
 
-    for index, output in enumerate(all_outputs):
+    #old method usig keywords to find according ouputs
+    #for index, output in enumerate(all_outputs):
+    #    #print(output.postprocessing_flag)
+    #    if 'ElectricityOutput' in output.full_name:
+    #        if ( 'PVSystem' in output.full_name) or ('CHP' in output.full_name) :
+    #            results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
+    #        else:
+    #            results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
+    #    elif 'AcBatteryPower' in output.full_name:
+    #        results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index]
+    #    else:
+    #        continue
+        
+        
+        
+     #new method using flags to find according outputs
 
+    for index, output in enumerate(all_outputs):
+    
         if output.postprocessing_flag!=None:
             #print(output.postprocessing_flag,output.full_name)    
             if (InandOutputType.PRODUCTION in output.postprocessing_flag):
@@ -46,41 +63,41 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
 
                 
-
+    
             elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
                 print("Ich werde an die Consumption results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index )
                 
                 results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
                 
             elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
-                    results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
-                    print("Ich werde an die Storage results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index)  
+                results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
+                print("Ich werde an die Storage results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index)  
                     
             elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
-                    print("Ich bin eine Batterie und werde wenn ich positiv bin an consumption angehängt:",output.postprocessing_flag,output.full_name ,"INDEX:",index)
-                       
-                        #results[ 'consumption' ] = results[ 'consumption' ] + results[results.iloc[:, index] < 0]
-                    #print("Kleiner Null:",results[results.iloc[:, index] < 0])
-                    neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
-                    #neudf=neudf.iloc[:,index]
-                    pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
-                    #print("Negative Batteriewerte:",neg_battery)
-                    #print("Positive Batteriewerte:",pos_battery)
-                    #print("Gleich Null:",results[results.iloc[:, index] == 0])
-                    #print(results.iloc[:, index])alle
-                    
-                    results["pos_battery"]=results.iloc[:,index].tolist()
-                    #Replace negative values with zero
-                    results["pos_battery"].values[results["pos_battery"]<0]=0 
-                    results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
-                    
-                    results["neg_battery"]=results.iloc[:,index].tolist()
-                    #Replace positve values with zero
-                    results["neg_battery"].values[results["neg_battery"]>0]=0 
-                    results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
+                print("Ich bin eine Batterie und werde wenn ich positiv bin an consumption angehängt:",output.postprocessing_flag,output.full_name ,"INDEX:",index)
                    
-                    results.drop(['neg_battery', 'pos_battery'], axis=1)
-                   
+                #results[ 'consumption' ] = results[ 'consumption' ] + results[results.iloc[:, index] < 0]
+                #print("Kleiner Null:",results[results.iloc[:, index] < 0])
+                neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
+                #neudf=neudf.iloc[:,index]
+                pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
+                #print("Negative Batteriewerte:",neg_battery)
+                #print("Positive Batteriewerte:",pos_battery)
+                #print("Gleich Null:",results[results.iloc[:, index] == 0])
+                #print(results.iloc[:, index])alle
+                
+                results["pos_battery"]=results.iloc[:,index].tolist()
+                #Replace negative values with zero
+                results["pos_battery"].values[results["pos_battery"]<0]=0 
+                results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
+                
+                results["neg_battery"]=results.iloc[:,index].tolist()
+                #Replace positve values with zero
+                results["neg_battery"].values[results["neg_battery"]>0]=0 
+                results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
+               
+                
+               
                             
                     
         else:
@@ -139,26 +156,14 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
     lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2)) 
     
-    
-    #PostProcessor.export_results_to_csv()
-    """
-    #Create csv
     kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
     kpis_values_list=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]
-   
-    #Pfad so setzen, dass csv im richtigen Ordner landed
-    dirpath=SimulationParameters.result_directory   
-    filepath = os.path.join(dirpath, "KPIs.csv")
 
-
-    dirpath="C:\\Users\\Selina\\HiSim\\examples\\results"
-    filepath=os.path.join(dirpath, "KPIs.csv")
-    with open(filepath, "w") as csvfile:
-        writer = csv.writer(csvfile)
-        for value in range(len(row1)):
-            writer.writerow([row1[value], row2[value]])
-
-    """        
-    #csvfile.close()
     
-    return lines
+    return lines, kpis_list,kpis_values_list
+
+#class KPIComputation(kpis_list,kpis_values_list):  # noqa: too-few-public-methods
+    #    """ Data class for transfering the result data to this class. """
+      #  kpis_list=kpis_list
+       # kpis_values_list=compute_KPIs.kpis_values_list
+        

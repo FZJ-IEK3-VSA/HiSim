@@ -217,17 +217,23 @@ class PostProcessor:
         report.open()
         report.write(text)
         report.close()
+                                   
+    def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
+        """ Computes KPI's and writes them to report and csv. """
+        kpi_compute_return = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        lines=kpi_compute_return[0]
+        self.write_to_report(text=lines, report=report)
         
-    def write_kpis_to_csv(self, ppdt: PostProcessingDataTransfer):
         csvfilename = os.path.join(ppdt.simulation_parameters.result_directory,"KPIs.csv")
-        kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
-        kpis_values_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
-        
+        kpis_list=kpi_compute_return[1]
+        kpis_values_list=kpi_compute_return[2]
+        #kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
+        #kpis_values_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
         with open(csvfilename, "w") as csvfile:
             writer = csv.writer(csvfile)
             for value in range(len(kpis_list)):
                 writer.writerow([kpis_list[value], kpis_values_list[value]])
-                                   
+
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
 
         """ Computes KPI's and writes them to report and csv. """

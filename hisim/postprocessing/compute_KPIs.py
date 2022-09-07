@@ -37,22 +37,6 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
 
-    #old method usig keywords to find according ouputs
-    #for index, output in enumerate(all_outputs):
-    #    #print(output.postprocessing_flag)
-    #    if 'ElectricityOutput' in output.full_name:
-    #        if ( 'PVSystem' in output.full_name) or ('CHP' in output.full_name) :
-    #            results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
-    #        else:
-    #            results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
-    #    elif 'AcBatteryPower' in output.full_name:
-    #        results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index]
-    #    else:
-    #        continue
-        
-        
-        
-     #new method using flags to find according outputs
 
     for index, output in enumerate(all_outputs):
     

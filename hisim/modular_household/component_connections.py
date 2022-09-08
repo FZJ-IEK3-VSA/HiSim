@@ -438,9 +438,8 @@ def configure_heating_with_buffer(my_sim,
     else:
         buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer()
     buffer_config.power = float(my_building.max_thermal_building_demand)
-    buffer_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config()
     buffer_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating()
-    [buffer_config.source_weight, buffer_l1_config.source_weight, buffer_l2_config.source_weight] = [count] * 3
+    [buffer_config.source_weight, buffer_l2_config.source_weight] = [count] * 2
     count += 1
 
     heater_config.power_th = my_building.max_thermal_building_demand
@@ -494,12 +493,9 @@ def configure_heating_with_buffer(my_sim,
                                                                               config=buffer_l2_config)
     my_buffer_controller_l2.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_buffer_controller_l2)
-    my_buffer_controller_l1 = controller_l1_generic_runtime.L1_Controller(my_simulation_parameters=my_simulation_parameters,
-                                                                          config=buffer_l1_config)
-    my_buffer_controller_l1.connect_only_predefined_connections(my_buffer_controller_l2)
-    my_sim.add_component(my_buffer_controller_l1)
-
-    my_buffer.connect_only_predefined_connections(my_buffer_controller_l1)
+    my_buffer.connect_input(my_buffer.L1DeviceSignal,
+                            my_buffer_controller_l2.component_name,
+                            my_buffer_controller_l2.l2_DeviceSignal)
 
     my_building.add_component_input_and_connect(source_component_class=my_buffer, source_component_output=my_buffer.HeatToBuilding,
                                                 source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,

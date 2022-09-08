@@ -659,12 +659,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     # Build system parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         my_simulation_parameters.skip_finished_results = False
-
 
     # try to read the system config from file
     if Path(system_config_filename).is_file():

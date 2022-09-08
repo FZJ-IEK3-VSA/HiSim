@@ -12,9 +12,6 @@ import pandas as pd
 from hisim.loadtypes import InandOutputType
 from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
-#from hisim.postprocessing.postprocessing_main import PostProcessingDataTransfer
-
-
 
 #sum consumption and production of individual components
 
@@ -49,43 +46,32 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 
     
             elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
-                print("Ich werde an die Consumption results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index )
+                print("I am appended to consumption column:",output.postprocessing_flag,output.full_name,"INDEX:",index )
                 
                 results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
                 
             elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
                 results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
-                print("Ich werde an die Storage results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index)  
+                print("I am appended to storage column:",output.postprocessing_flag,output.full_name,"INDEX:",index)  
                     
             elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
-                print("Ich bin eine Batterie und werde wenn ich positiv bin an consumption angehängt:",output.postprocessing_flag,output.full_name ,"INDEX:",index)
-                   
-                #results[ 'consumption' ] = results[ 'consumption' ] + results[results.iloc[:, index] < 0]
-                #print("Kleiner Null:",results[results.iloc[:, index] < 0])
+                print("I am a battery, when positiv added to consumption and negative to production column:",output.postprocessing_flag,output.full_name ,"INDEX:",index)
                 neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
-                #neudf=neudf.iloc[:,index]
                 pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
-                #print("Negative Batteriewerte:",neg_battery)
-                #print("Positive Batteriewerte:",pos_battery)
-                #print("Gleich Null:",results[results.iloc[:, index] == 0])
-                #print(results.iloc[:, index])alle
-                
+              
                 results["pos_battery"]=results.iloc[:,index].tolist()
                 #Replace negative values with zero
                 results["pos_battery"].values[results["pos_battery"]<0]=0 
                 results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
-                
+              
                 results["neg_battery"]=results.iloc[:,index].tolist()
                 #Replace positve values with zero
                 results["neg_battery"].values[results["neg_battery"]>0]=0 
                 results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
-               
-                
-               
-                            
                     
         else:
             continue     
+
 
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
@@ -140,14 +126,10 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
     lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2)) 
     
+    #initialize list for the KPI.scv
     kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
     kpis_values_list=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]
 
-    
     return lines, kpis_list,kpis_values_list
 
-#class KPIComputation(kpis_list,kpis_values_list):  # noqa: too-few-public-methods
-    #    """ Data class for transfering the result data to this class. """
-      #  kpis_list=kpis_list
-       # kpis_values_list=compute_KPIs.kpis_values_list
-        
+

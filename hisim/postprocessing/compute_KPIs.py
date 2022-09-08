@@ -73,6 +73,9 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
             continue     
 
 
+    results=results.drop(['neg_battery', 'pos_battery'], axis=1)
+
+
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
     production_sum = results[ 'production' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6

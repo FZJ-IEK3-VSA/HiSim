@@ -94,8 +94,8 @@ class SmartDevice( cp.Component ):
     def __init__( self,
                   identifier : str,
                   source_weight : int,
-                  my_simulation_parameters: SimulationParameters ):
-        super().__init__ ( name = 'SmartDevice' + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
+                  my_simulation_parameters: SimulationParameters):
+        super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         

@@ -167,7 +167,7 @@ class HeatPump(cp.Component):
     
     @staticmethod
     def get_default_config_heating():
-        config = HeatPumpConfig( name = 'HeatPump',
+        config = HeatPumpConfig( name = 'HeatingHeatPump',
                                  source_weight = 1,
                                  manufacturer = "Viessmann Werke GmbH & Co KG",
                                  device_name ="Vitocal 300-A AWO-AC 301.B07",
@@ -179,7 +179,7 @@ class HeatPump(cp.Component):
     
     @staticmethod
     def get_default_config_waterheating():
-        config = HeatPumpConfig( name = 'HeatPump',
+        config = HeatPumpConfig( name = 'DHWHeatPump',
                                  source_weight = 1,
                                  manufacturer = "Viessmann Werke GmbH & Co KG",
                                  device_name ="Vitocal 300-A AWO-AC 301.B07",
@@ -191,7 +191,7 @@ class HeatPump(cp.Component):
     
     @staticmethod
     def get_default_config_heating_electric():
-        config = HeatPumpConfig( name = 'HeatingRod',
+        config = HeatPumpConfig( name = 'HeatingHeatingRod',
                                  source_weight = 1,
                                  manufacturer = "dummy",
                                  device_name ="HeatingRod",
@@ -203,7 +203,7 @@ class HeatPump(cp.Component):
     
     @staticmethod
     def get_default_config_waterheating_electric():
-        config = HeatPumpConfig( name = 'HeatingRod',
+        config = HeatPumpConfig( name = 'DHWHeatingRod',
                                  source_weight = 1,
                                  manufacturer = "dummy",
                                  device_name ="HeatingRod",

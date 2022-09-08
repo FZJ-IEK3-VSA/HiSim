@@ -113,7 +113,7 @@ class HeatSource( cp.Component ):
     
     @staticmethod
     def get_default_config_heating() -> HeatSourceConfig:
-        config = HeatSourceConfig( name = 'HeatSource',
+        config = HeatSourceConfig( name = 'DHWHeatSource',
                                    source_weight = 1,
                                    fuel = lt.LoadTypes.DISTRICTHEATING,
                                    power_th = 6200,
@@ -122,7 +122,7 @@ class HeatSource( cp.Component ):
     
     @staticmethod
     def get_default_config_waterheating() -> HeatSourceConfig:
-        config = HeatSourceConfig( name = 'HeatSource',
+        config = HeatSourceConfig( name = 'HeatingHeatSource',
                                    source_weight =  1,
                                    fuel = lt.LoadTypes.DISTRICTHEATING,
                                    power_th = 3000,

@@ -168,21 +168,21 @@ class L2_Controller( cp.Component ):
         pass
     @staticmethod
     def get_default_config_heating():
-        config = L2Config(name='L2HeatPump', source_weight=1, T_min_heating=20.0, T_max_heating=22.0,
+        config = L2Config(name='HeatingTemperatureController', source_weight=1, T_min_heating=20.0, T_max_heating=22.0,
                           cooling_considered=False, T_min_cooling=23, T_max_cooling=25,
                           heating_season_begin=270, heating_season_end=150)
         return config
     
     @staticmethod
     def get_default_config_buffer_heating():
-        config = L2Config(name='L2HeatPump', source_weight=1, T_min_heating=30.0, T_max_heating=50.0,
+        config = L2Config(name='BufferTemperatureController', source_weight=1, T_min_heating=30.0, T_max_heating=50.0,
                           cooling_considered=False, T_min_cooling=None, T_max_cooling=None,
                           heating_season_begin=None, heating_season_end=None) 
         return config
     
     @staticmethod
     def get_default_config_waterheating():
-        config = L2Config(name='L2HeatPump', source_weight=1, T_min_heating=50.0, T_max_heating=80.0,
+        config = L2Config(name='DHWTemperatureController', source_weight=1, T_min_heating=50.0, T_max_heating=80.0,
                           cooling_considered=False, T_min_cooling=None, T_max_cooling=None,
                           heating_season_begin=None, heating_season_end=None)
         return config

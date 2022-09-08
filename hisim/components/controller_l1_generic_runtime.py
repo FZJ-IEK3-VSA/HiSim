@@ -134,7 +134,7 @@ class L1_Controller( cp.Component ):
     
     @staticmethod
     def get_default_config() -> L1Config:
-        config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600,
+        config = L1Config(name='RuntimeController', source_weight=1, min_operation_time=3600,
                           min_idle_time=900) 
         return config
     def i_prepare_simulation(self) -> None:
@@ -142,7 +142,7 @@ class L1_Controller( cp.Component ):
         pass
     @staticmethod
     def get_default_config_heatpump()  -> L1Config:
-        config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600 * 3,
+        config = L1Config(name='RuntimeController', source_weight=1, min_operation_time=3600 * 3,
                           min_idle_time=3600) 
         return config
 

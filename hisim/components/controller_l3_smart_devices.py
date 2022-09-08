@@ -114,7 +114,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
         
         super( ).__init__(  my_component_inputs = self.my_component_inputs,
                             my_component_outputs = self.my_component_outputs,
-                            name = "L3Controller", 
+                            name = "SmartDeviceController", 
                             my_simulation_parameters = my_simulation_parameters )
         
         self.build( threshold_price, threshold_peak )

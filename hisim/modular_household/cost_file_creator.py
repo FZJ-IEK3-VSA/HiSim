@@ -10,6 +10,7 @@ from dataclasses import dataclass, field, asdict
 from dataclasses_json import dataclass_json
 import json
 import hisim.loadtypes as lt
+from economic_parameters import EconomicParameters
 
 @dataclass_json
 @dataclass()
@@ -41,9 +42,11 @@ def create_componentcost_file(
         capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
     costfile = json.dumps(asdict(costfile))
     
-    with open('ComponentCost' + component.value + '.json', 'w') as outfile:
-        outfile.write(hey)
-
+# =============================================================================
+#     with open('ComponentCost' + component.value + '.json', 'w') as outfile:
+#         outfile.write(hey)
+# 
+# =============================================================================
 def write_batterycost_file():
     create_componentcost_file(
         component=lt.ComponentType.BATTERY, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
@@ -65,7 +68,7 @@ class FuelCost:
     
 def create_fuelcost_file(
         fuel: lt.LoadTypes, fuel_unit: lt.Units, price_per_unit_fuel: float,
-        co2_per_unit_fuel):
+        co2_per_unit_fuel:float):
     costfile= FuelCost(fuel=fuel, fuel_unit=fuel_unit, price_per_unit_fuel=price_per_unit_fuel,
                        co2_per_unit_fuel=co2_per_unit_fuel)
     costfile = json.dumps(asdict(costfile))
@@ -77,4 +80,63 @@ def write_electricitycost_file():
     create_fuelcost_file(
         fuel=lt.LoadTypes.ELECTRICITY, fuel_unit=lt.Units.WATT_HOUR,
         price_per_unit_fuel=2e-4, co2_per_unit_fuel=1.5e-4)
+
+def create_economicparameters_file(insulation_bought: bool,
+    insulation_threshold: float,
+    pv_bought: bool,
+    pv_threshold: float,
+    smart_devices_bought: bool,
+    smart_devices_threshold: float,
+    heatpump_bought: bool,
+    heatpump_threshold: float,
+    buffer_bought: bool,
+    buffer_threshold: float,
+    battery_bought: bool,
+    battery_threshold: float,
+    h2system_bought: bool,
+    h2system_threshold: float,
+    ev_bought: bool,
+    ev_threshold: float):
+
+    economic_parameters_file = EconomicParameters(
+        insulation_bought=insulation_bought,
+            insulation_threshold=insulation_threshold,
+            pv_bought=pv_bought,
+            pv_threshold=pv_threshold,
+            smart_devices_bought=smart_devices_bought,
+            smart_devices_threshold=smart_devices_threshold,
+            heatpump_bought=heatpump_bought,
+            heatpump_threshold=heatpump_threshold,
+            buffer_bought=buffer_bought,
+            buffer_threshold=buffer_threshold,
+            battery_bought=battery_bought,
+            battery_threshold=battery_threshold,
+            h2system_bought=h2system_bought,
+            h2system_threshold=h2system_threshold,
+            ev_bought=ev_bought,
+            ev_threshold=ev_threshold)
+    economic_parameters_file = json.dumps(asdict(economic_parameters_file))
     
+    with open('EconomicParameters.json', 'w') as outfile:
+        outfile.write(economic_parameters_file)
+        
+        
+def write_economicparameters_file():
+    create_economicparameters_file(
+        insulation_bought=True,
+            insulation_threshold=1e3,
+            pv_bought=True,
+            pv_threshold=1e3,
+            smart_devices_bought=True,
+            smart_devices_threshold=5e2,
+            heatpump_bought=False,
+            heatpump_threshold=1e4,
+            buffer_bought=True,
+            buffer_threshold=1e2,
+            battery_bought=True,
+            battery_threshold=1e3,
+            h2system_bought=False,
+            h2system_threshold=5e3,
+            ev_bought=True,
+            ev_threshold=2e4)
+write_economicparameters_file()

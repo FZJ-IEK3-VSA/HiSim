@@ -27,11 +27,11 @@ class PostProcessor:
         """ Initializes the post processing. """
         self.dirname: str
 
-    def set_dir_results(self, dirname):
-        """ Sets the results directory. """
-        if dirname is None:
-            raise ValueError("No results directory name was defined.")
-        self.dirname = dirname
+        def set_dir_results(self, dirname):
+            """ Sets the results directory. """
+            if dirname is None:
+                raise ValueError("No results directory name was defined.")
+            self.dirname = dirname
 
     @utils.measure_execution_time
     def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -217,29 +217,21 @@ class PostProcessor:
         report.open()
         report.write(text)
         report.close()
-                                   
+
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Computes KPI's and writes them to report and csv. """
         kpi_compute_return = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
-        lines=kpi_compute_return[0]
+        lines = kpi_compute_return[0]
         self.write_to_report(text=lines, report=report)
-        
-        csvfilename = os.path.join(ppdt.simulation_parameters.result_directory,"KPIs.csv")
-        kpis_list=kpi_compute_return[1]
-        kpis_values_list=kpi_compute_return[2]
-        #kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
-        #kpis_values_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
+
+        csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, "KPIs.csv")
+        kpis_list = kpi_compute_return[1]
+        kpis_values_list = kpi_compute_return[2]
         with open(csvfilename, "w") as csvfile:
             writer = csv.writer(csvfile)
             for value in range(len(kpis_list)):
                 writer.writerow([kpis_list[value], kpis_values_list[value]])
 
-    def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-
-        """ Computes KPI's and writes them to report and csv. """
-        lines = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
-        self.write_to_report(text=lines, report=report)
-        
     #
     # def cal_pos_sim(self):
     #     self.write_components_to_report()
@@ -307,7 +299,6 @@ class PostProcessor:
     #         self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
     #         if building_area is not None:
     #             self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
-
     def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """
         report.open()

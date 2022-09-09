@@ -313,7 +313,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Abstract. Restores the state of the component. Can be called many times while iterating. """
         self.state = self.previous_state.clone()
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Simulates iteration of hot water storage. """
 
         if self.thermal_power_delivered_c.source_output is not None:
@@ -337,7 +337,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         # save outputs
         stsv.set_output_value(self.temperature_mean_c, self.state.temperature_in_kelvin - 273.15)
 
-    def calculate_heat_consumption(self,  stsv, thermal_power_delivered, timestep):
+    def calculate_heat_consumption(self, stsv: cp.SingleTimeStepValues, thermal_power_delivered: float, timestep: int) -> float:
         """ Calculates the heat consumption. """
         if self.use == lt.ComponentType.BOILER:
             # heat loss due to hot water consumption -> base on energy balance in kJ

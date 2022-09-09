@@ -28,7 +28,6 @@ class ComponentEntry(JSONWizard):
     component_name: str
     configuration: Dict[Any, Any]
     config_full_classname: str
-    # config_class_module: str
     default_connections: List[str]
     manual_connections: List[ConnectionEntry]
 
@@ -57,10 +56,7 @@ class JsonConfigurationGenerator:
 
     def add_component(self, config: Type[ConfigBase]) -> ComponentEntry:
         """ Adds a component and returns a component entry. """
-        # component_type_str = config.get_configured_classname() #.__name__
         config_json_str = config.to_dict()
-        # config_class = config.__class__.__qualname__
-        # config_module = type(config).__module__
         component_entry = ComponentEntry(component_full_classname=config.get_main_classname(),
                                          component_name=config.name,
                                          configuration=config_json_str,

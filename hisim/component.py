@@ -63,7 +63,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.load_type: lt.LoadTypes = load_type
         self.unit: lt.Units = unit
         self.global_index: int = -1
-        self.component_type:  Optional[lt.ComponentType] = component_type
+        self.component_type: Optional[lt.ComponentType] = component_type
         self.postprocessing_flag: Optional[lt.InandOutputType] = postprocessing_flag
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
 
@@ -106,20 +106,10 @@ class SingleTimeStepValues:
         """ Gets a value for an input from the single time step values. """
         if component_input.source_output is None:
             return 0
-        # commented for performance reasons: this is called hundreds of millions of times and even
-        # this small check for better error messages is taking seconds
-        # if component_input.SourceOutput.GlobalIndex < 0:
-        #    raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
         return self.values[component_input.source_output.global_index]
 
     def set_output_value(self, output: ComponentOutput, value: float) -> None:
         """ Sets a single output value in the single time step values array. """
-        # commented for performance reasons: this is called hundreds of millions of times and
-        # even this small check for better error messages is taking seconds
-        # if(output.GlobalIndex < 0):
-        #     raise Exception("Output Index was not set correctly for " + output.FullName + ". GlobalIndex was " +str(output.GlobalIndex))
-        # if(output.GlobalIndex > len(self.values)-1):
-        #    raise Exception("Output Index was not set correctly for " + output.FullName)
         self.values[output.global_index] = value
 
     def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:

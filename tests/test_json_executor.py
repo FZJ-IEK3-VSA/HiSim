@@ -11,7 +11,7 @@ from hisim.json_generator import JsonConfigurationGenerator
 from hisim.json_executor import JsonExecutor
 from  . test_json_generator import ExampleConfig
 
-def test_json_generator():
+def test_json_executor():
     ex = ExampleConfig()
     ex.make_example_config()
 

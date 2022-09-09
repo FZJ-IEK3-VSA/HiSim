@@ -16,17 +16,17 @@ class Carpet(Chart):  # noqa: too-few-public-methods
 
     """ Class for carpet plots. """
 
-    def __init__(self, output: Any,  units: Any, directorypath: str, time_correction_factor: float) -> None:
+    def __init__(self, output: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
         """ Initalizes a carpot plot. """
         super().__init__(output=output,
                          chart_type="Carpet",
                          units=units,
-                         directorypath=directorypath,
+                         directory_path=directorypath,
                          time_correction_factor=time_correction_factor)
 
     def plot(self, xdims: int, data: Any) -> None:
         """ Makes a carpet plot. """
-        # log.information("starting carpet plots")
+        log.trace("starting carpet plots")
         ydims = int(len(data) / xdims)  # number of calculated timesteps per day
         y_steps_per_hour = int(ydims / 24)
         try:
@@ -38,9 +38,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
             database = database * 1E-3
             self.units = f"k{self.units}"
         plot_data = np.flip(database.transpose(), axis=0)
-        # plot_data = database
 
-        # sns.set(font_scale=float(1.5))
         fig = plt.figure(figsize=(10, 5), dpi=500)
 
         axis = fig.add_subplot(111)
@@ -51,7 +49,6 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         plt.colorbar(plot).set_label(self.units)
 
         y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
-        # y_ticks = np.arange(0, 25 * 60, 6 * 60).tolist()
         axis.set_yticks(y_ticks)
         y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
         axis.set_yticklabels([str(i) for i in y_ticks_labels])
@@ -66,12 +63,8 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         # setting axis of the plot
         axis.set_ylabel('Daytime [h]')
         axis.set_xlabel('Month of the year')
-        # plt.title(self.title)
-        # ax.set_ylabel('Daytime [h]', fontdict={'size': 14})
-        # ax.set_xlabel('Month of the year', fontsize=14)
 
-        # plt.show()
-        #        log.information("finished carpet plot: " + self.filepath)
+        log.trace("finished carpet plot: " + self.filepath)
         plt.savefig(self.filepath, bbox_inches='tight')
         plt.close()
 
@@ -81,9 +74,9 @@ class Line(Chart):  # noqa: too-few-public-methods
     """ Makes a line chart. """
 
     # @utils.measure_memory_leak
-    def __init__(self, output,  units, directorypath, time_correction_factor):
+    def __init__(self, output, units, directorypath, time_correction_factor):
         """ Initializes a line chart. """
-        super().__init__(output,  "line", units, directorypath, time_correction_factor)
+        super().__init__(output, "line", units, directorypath, time_correction_factor)
 
     @utils.measure_memory_leak
     def plot(self, data, units):
@@ -92,8 +85,6 @@ class Line(Chart):  # noqa: too-few-public-methods
         size_1 = 20
         size_2 = 18
         mpl.use('Agg')
-        # font = {'family': 'normal',               'weight': 'normal',                'size': f'{all_font_size}'}
-        # mpl.rc('font', **font)
 
         ylabel = units
         _fig, axis = plt.subplots(figsize=(size_1, size_2))
@@ -128,7 +119,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
 
     def __init__(self, output, units, dirpath, time_correction_factor):
         """ Initializes the classes. """
-        super().__init__(output,  "Bar", units, dirpath, time_correction_factor)
+        super().__init__(output, "Bar", units, dirpath, time_correction_factor)
         self.filename = f"monthly_{self.output}.png"
 
     def plot(self, data):
@@ -144,7 +135,6 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         # Width of a bar
         width = 0.4
 
-        # fig, ax = \
         plt.subplots()
         plt.bar(ind, data * 1E-3, width, label="HiSim")
         plt.bar(ind + width, self.original, width, label="PVSOL")
@@ -153,8 +143,6 @@ class BarChart(Chart):  # noqa: too-few-public-methods
 
         plt.title(f"{self.title} Monthly")
         plt.grid()
-        # seaborn.despine(ax=ax, offset=0)  # the important part here
-        # autolabel(rect)
         plt.tight_layout()
         plt.ylabel(self.units)
         plt.legend(loc='best')
@@ -175,14 +163,13 @@ class SankeyHISIM(Chart):
         super().__init__(output=name,
                          chart_type="Sankey",
                          units=units,
-                         directorypath=directorypath,
+                         directory_path=directorypath,
                          time_correction_factor=time_correction_factor)
         self.filename = f"{self.output}.png"
 
     def plot(self, data):
         """ Executes the plot. """
         components = {}
-        #  common_unit = []
         for _index, output_result in enumerate(data):
             if self.output == output_result.display_name:
                 if output_result.sankey_flow_direction is True:
@@ -201,7 +188,6 @@ class SankeyHISIM(Chart):
         orientations = self.make_orientations(flows)
 
         pathlengths = 0.4
-        # plt.rcParams['font.size'] = 12
         fig = plt.figure(figsize=[10, 10])
         axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
@@ -262,7 +248,6 @@ class SankeyHISIM(Chart):
         orientations = [1, -1, 0]
         pathlengths = 0.25
 
-        # plt.rcParams['font.size'] = 12
         fig = plt.figure(figsize=[10, 10])
         axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
@@ -303,9 +288,6 @@ class SankeyHISIM(Chart):
                      -internal_loss * 1E-3
                      ]
             flows = [round(i) for i in flows]
-            # residence_flows = flows
-            #  if stored_energy_variation < 1000:
-            #    stored_energy_variation = 0
             flows_labels = ['Heating\nby Residents',
                             'Solar\nGain',
                             'Heater',
@@ -315,7 +297,6 @@ class SankeyHISIM(Chart):
             orientations = [1, 0, -1, -1, 1]
         pathlengths = 0.4
 
-        # plt.rcParams['font.size'] = 12
         fig = plt.figure(figsize=[10, 10])
         axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
@@ -357,10 +338,6 @@ class SankeyHISIM(Chart):
                     internal_loss = sum(output_result.Results)
                 if "StoredEnergyVariation" == output_result.display_name:
                     stored_energy_variation = sum(output_result.Results)
-        #                if "OldStoredEnergy" == output_result.display_name:
-        #                    stored_energy_initial = sum(output_result.Results)
-        #                if "TemperatureMean" == output_result.display_name:
-        #                    current_mean_temperature = sum(output_result.Results)
         if heating_by_residents == 0 or total_energy_to_residence == 0 or solar_gain_through_windows == 0:
             raise Exception("Sum of outputs has not been calculated.")
         return heating_by_residents, internal_loss, solar_gain_through_windows, \

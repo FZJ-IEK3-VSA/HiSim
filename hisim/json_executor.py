@@ -49,9 +49,7 @@ class JsonExecutor:
             # import the module and iterate through its attributes
             module = import_module(f"hisim.components.{module_name}")
 
-            # members = inspect.getmembers(module)
             for attribute_name in dir(module):
-
                 attribute = getattr(module, attribute_name)
                 if not isclass(attribute):
                     continue

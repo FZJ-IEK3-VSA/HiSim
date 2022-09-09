@@ -45,7 +45,7 @@ class Simulator:
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
 
-    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters) -> None:
+    def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:

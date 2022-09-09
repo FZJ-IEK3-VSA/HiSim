@@ -78,8 +78,8 @@ class WeatherConfig(ConfigBase):
     @classmethod
     def get_default(cls, location_entry: Any) -> Any:
         """ Gets the default configuration for Aachen. """
-        path = os.path.join(utils.get_input_directory(), "weather", location_entry[1], location_entry[2], location_entry[3])
-        config = WeatherConfig(name="Weather_1", location=location_entry[0], source_path=path)
+        path = os.path.join(utils.get_input_directory(), "weather", location_entry.value[1], location_entry.value[2], location_entry.value[3])
+        config = WeatherConfig(name="Weather_1", location=location_entry.value[0], source_path=path)
         return config
 
 

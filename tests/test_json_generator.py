@@ -28,7 +28,7 @@ class ExampleConfig:
         occ_entry = jcg.add_component(config=my_occupancy_config)
 
         # Weather
-        my_weather_config = weather.WeatherConfig.get_default_for_aachen()
+        my_weather_config = weather.WeatherConfig.get_default(weather.LocationEnum.Aachen)
         weather_entry = jcg.add_component(config=my_weather_config)
 
         # Building

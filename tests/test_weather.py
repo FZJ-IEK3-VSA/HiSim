@@ -8,7 +8,7 @@ def test_weather():
     mysim:  SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=60)
     repo = sim_repository.SimRepository()
-    my_weather_config=weather.WeatherConfig.get_default_for_aachen()
+    my_weather_config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
 
     number_of_outputs = fft.get_number_of_outputs([my_weather])

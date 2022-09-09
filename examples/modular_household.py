@@ -702,13 +702,13 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
 
     """BASICS"""
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value, name="Occupancy")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location=location.value)
+    my_weather_config = weather.WeatherConfig(location=location.value, name="Weather")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
                                  my_simulation_repository=my_sim.simulation_repository)
     my_sim.add_component(my_weather)

@@ -92,6 +92,7 @@ class FileInformation:
     file_name: str = ""
     length: str = ""
     authors: str = ""
+    cleaned: bool = False
     copyright: str = ""
     credits: str = ""
     license: str = ""
@@ -147,6 +148,16 @@ class OverviewGenerator:
         # import the module and iterate through its attributes
         workbook.save(dest_filename)
 
+    def write_clean_files(self, fis: List[FileInformation]):
+        with open("flake8_calls.txt", "w", encoding="utf8") as flake8:
+        with open("prospector_calls.txt", "w", encoding="utf8") as prospector:
+            for myfi in fis:
+                if(myfi.cleaned):
+                    relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\").replace("\\","/")
+                    prospector.write("        prospector" + relative_name)
+                    flake8.write("        flake8 " + relative_name + " --count --select=E9,F63,F7,F82,E800 --show-source --statistics")
+
+
     def write_one_file_block(self, myfi, row, worksheet1):
         """ Writes the block for a single file to excel. """
         column: int = 1
@@ -155,6 +166,7 @@ class OverviewGenerator:
         column = self.add_to_cell(column=column, row=row, value=myfi.lines, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.python_module_loading_possible,
                                   worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.cleaned, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.authors, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.copyright, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.email, worksheet=worksheet1)
@@ -286,7 +298,10 @@ class OverviewGenerator:
         """ Analyze all the files and count the lines in each file. Could be expanded with more checks. """
         count = 0
         with open(filename, "r", encoding="utf8") as sourcefile:
-            for count, _line in enumerate(sourcefile):
+            for count, line in enumerate(sourcefile):
+                if line == "# clean":
+                    print("found clean tag " + myfi.file_name)
+                    myfi.cleaned = True
                 pass
         myfi.lines = count
 

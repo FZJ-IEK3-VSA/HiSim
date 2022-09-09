@@ -4,7 +4,6 @@ from typing import Any, Optional, List, Type, Dict
 from dataclasses import dataclass, field
 from dataclass_wizard import JSONWizard
 
-from hisim import utils
 from hisim import log
 from hisim.component import ConfigBase
 from hisim.simulationparameters import SimulationParameters
@@ -84,5 +83,5 @@ class JsonConfigurationGenerator:
     def save_to_json(self, filename: str) -> None:
         """ Saves a configuration to a json file. """
         with open(filename, "w", encoding="utf-8") as filestream:
-            mystr = self.config_file.to_json(indent=4) # , cls=utils.MyJsonEncoder
+            mystr = self.config_file.to_json(indent=4)
             filestream.write(mystr)

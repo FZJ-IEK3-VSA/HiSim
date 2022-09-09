@@ -45,9 +45,6 @@ class SimulationParameters(JSONWizard):
     start_date: datetime.date
     end_date: datetime.date
     seconds_per_timestep: int
-    # duration: datetime.timedelta
-    # timesteps: int
-    # year: int
     post_processing_options: List[int]
     logging_level: int
     result_directory: str

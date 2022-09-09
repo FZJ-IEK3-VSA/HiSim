@@ -714,7 +714,7 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
     my_sim.add_component(my_weather)
 
     # Build building
-    my_building_config = building.Building.get_default_config()
+    my_building_config = building.Building.get_default_german_single_family_home()
     my_building_config.building_code = building_code.value
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)

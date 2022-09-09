@@ -8,7 +8,8 @@ import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import List, Any
-# Owned
+from functools import lru_cache
+
 from hisim import utils
 from hisim import component as cp
 from hisim import dynamic_component
@@ -20,7 +21,7 @@ from hisim.components.configuration import LoadConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 from hisim.components.loadprofilegenerator_connector import Occupancy
-from functools import lru_cache
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -112,11 +113,23 @@ class BuildingControllerState:
 
 @dataclass_json
 @dataclass
-class BuildingConfig:
+class BuildingConfig(cp.ConfigBase):
+    def get_main_classname(self):
+        return Building.get_full_classname()
+
     heating_reference_temperature: float
     building_code: str
     bClass: str
     initial_temperature: float
+
+    @classmethod
+    def get_default_german_single_family_home(cls) -> Any:
+        config = BuildingConfig(name="Building_1",
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+            bClass="medium",
+            initial_temperature=23,
+            heating_reference_temperature=-14)
+        return config
 
 
 @dataclass_json
@@ -346,14 +359,7 @@ class Building(dynamic_component.DynamicComponent):
         #                                                           lt.LoadTypes.WarmWater,
         #                                                           lt.Units.Celsius)
 
-    @staticmethod
-    def get_default_config():
-        config = BuildingConfig(
-            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-            bClass="medium",
-            initial_temperature=23,
-            heating_reference_temperature=-14)
-        return config
+
 
     def get_weather_default_connections(self):
         log.information("setting weather default connections")

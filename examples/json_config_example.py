@@ -207,7 +207,7 @@ def generate_one_config():
     }
     my_cfg.add_component(my_h2_storage)
     # Bulding
-    my_bulding_config = building.Building.get_default_config()
+    my_bulding_config = building.Building.get_default_german_single_family_home()
     my_bulding = {my_cfg.set_name(building.Building): my_bulding_config}
     my_cfg.add_component(my_bulding)
     my_bulding_controller_config = (
@@ -221,7 +221,7 @@ def generate_one_config():
     my_cfg.add_component(my_bulding_controller)
     # Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.Occupancy.get_default_config()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     )
     my_occupancy = {
         my_cfg.set_name(

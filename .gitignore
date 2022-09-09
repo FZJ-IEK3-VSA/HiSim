@@ -149,3 +149,5 @@ examples/finished.flag
 examples/ac_results_5b
 examples/network_t1.png
 hisim/inputs/cfg.json
+tests/cfg.json
+tests/json/results

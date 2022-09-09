@@ -7,9 +7,9 @@ import pvlib
 import numpy as np
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass
-from typing import  List, Optional
+from typing import  List, Optional, Any
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -40,10 +40,17 @@ The implementation of the tsib project can be found under the following reposito
 https://github.com/FZJ-IEK3-VSA/tsib
 """
 
-@dataclass_json
-@dataclass()
-class WeatherConfig:
-    location: str="Aachen"
+@dataclass
+class WeatherConfig(ConfigBase):
+    def get_main_classname(self):
+        return Weather.get_full_classname()
+
+    @classmethod
+    def get_default_for_aachen(cls) -> Any:
+        config = WeatherConfig("Weather_1", "Aachen")
+        return config
+
+    location: str
 
 class Weather(Component):
     """
@@ -163,10 +170,6 @@ class Weather(Component):
         lines.append(self.weatherConfig.to_json())  # type: ignore
         return lines
 
-    @staticmethod
-    def get_default_config():
-        config= WeatherConfig(location="Aachen")
-        return config
     def i_save_state(self) -> None:
         pass
 

@@ -13,7 +13,7 @@ def test_occupancy():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    my_occupancy_config=loadprofilegenerator_connector.Occupancy.get_default_config()
+    my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy_config.profile_name=my_occupancy_profile
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 

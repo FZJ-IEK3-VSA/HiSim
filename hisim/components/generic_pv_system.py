@@ -20,6 +20,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.components.weather import Weather
+from hisim.component import ConfigBase
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -175,20 +176,41 @@ def simPhotovoltaicSimple(
 
 @dataclass_json
 @dataclass
-class PVSystemConfig:
+class PVSystemConfig(ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """ Returns the full class name of the base class. """
+        return PVSystem.get_full_classname()
+
     #parameter_string: str
     #my_simulation_parameters: SimulationParameters
-    name: str
     time: int
     location: str
     module_name: str
     integrate_inverter: bool
     inverter_name: str
     power: float
-    azimuth : float
-    tilt : float
+    azimuth: float
+    tilt: float
     load_module_data: bool
     source_weight: int
+
+    @classmethod
+    def get_default_PV_system(cls):
+        """ Gets a default PV system. """
+        return PVSystemConfig(
+            time = 2019,
+            power = 10E3,
+            load_module_data = False,
+            module_name = "Hanwha_HSL60P6_PA_4_250T__2013_",
+            integrate_inverter = True,
+            inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+            name = 'PVSystem',
+            azimuth = 180,
+            tilt = 30,
+            source_weight = 0,
+            location = "Aachen")
+
 
 class PVSystem( cp.Component ):
     """

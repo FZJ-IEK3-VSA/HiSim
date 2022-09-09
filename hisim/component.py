@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any, Type
 import typing
 import dataclasses as dc
 from dataclasses import dataclass
+from dataclass_wizard import JSONWizard
 
 # Package
 from hisim import utils
@@ -16,6 +17,18 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 
+@dataclass
+class ConfigBase(JSONWizard):
+    name: str
+
+    @classmethod
+    def get_main_classname(cls):
+        raise NotImplementedError("Missing a definition of the ")
+
+    @classmethod
+    def get_config_classname(cls):
+        """ Gets the class name. Helper function for default connections. """
+        return cls.__module__ + "." + cls.__name__
 
 @dataclass
 class ComponentConnection:
@@ -130,6 +143,11 @@ class Component:
         """ Gets the class name. Helper function for default connections. """
         return cls.__name__
 
+    @classmethod
+    def get_full_classname(cls):
+        """ Gets the class name. Helper function for default connections. """
+        return cls.__module__ + "." + cls.__name__
+
     def __init__(self, name: str, my_simulation_parameters: SimulationParameters) -> None:
         """ Initializes the component class. """
         self.component_name: str = name
@@ -222,39 +240,6 @@ class Component:
             connection_copy.source_instance_name = source_component.component_name
             new_connections.append(connection_copy)
         return new_connections
-
-    @utils.deprecated("connect_similar_inputs is deprecated. witch to using default connections.")
-    def connect_electricity(self, component):
-        """ Connect electricity outputs and inputs. """
-        if isinstance(component, Component) is False:
-            raise Exception("Input has to be a component!")
-        if hasattr(component, "ElectricityOutput") is False:
-            raise Exception("Input Component does not have Electricity Output!")
-        if hasattr(self, "ElectricityInput") is False:
-            raise Exception("This self Component does not have Electricity Input!")
-        self.connect_input(self.ElectricityInput, component.component_name, component.ElectricityOutput)  # type: ignore
-
-    @utils.deprecated("connect_similar_inputs is deprecated. witch to using default connections.")
-    def connect_similar_inputs(self, components):
-        """ Connects all inputs with identical names. """
-        if len(self.inputs) == 0:
-            raise Exception("The component " + self.component_name + " has no inputs.")
-
-        if isinstance(components, list) is False:
-            components = [components]
-
-        for component in components:
-            if isinstance(component, Component) is False:
-                raise Exception("Input variable is not a component")
-            has_not_been_connected = True
-            for cinput in self.inputs:
-                for output in component.outputs:
-                    if cinput.field_name == output.field_name:
-                        has_not_been_connected = False
-                        self.connect_input(cinput.field_name, component.component_name, output.field_name)
-            if has_not_been_connected:
-                raise Exception(
-                    f"No similar inputs from {self.component_name} are compatible with the outputs of {component.component_name}!")
 
     def get_input_definitions(self) -> List[ComponentInput]:
         """ Gets the input definitions. """

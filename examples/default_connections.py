@@ -84,13 +84,13 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
                                                                                  seconds_per_timestep=seconds_per_timestep)
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy1")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config,
                                                             my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location="Aachen")
+    my_weather_config = weather.WeatherConfig(location="Aachen", name="Weather 1")
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 
@@ -114,7 +114,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     my_building_config = building.BuildingConfig(building_code=building_code,
                                                  bClass=building_class,
                                                  initial_temperature=initial_temperature,
-                                                 heating_reference_temperature=heating_reference_temperature)
+                                                 heating_reference_temperature=heating_reference_temperature, name="Building")
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(name="BaseLoad",
                                                                       grid=[my_occupancy, "Subtract", my_photovoltaic_system ], my_simulation_parameters=my_simulation_parameters)

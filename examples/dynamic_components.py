@@ -78,10 +78,10 @@ def dynamic_components_demonstration(my_sim, my_simulation_parameters: Optional[
                                                       config=my_advanced_fuel_cell_config_2)
     my_cl2 = cl2.ControllerElectricityGeneric(my_simulation_parameters=my_simulation_parameters)
 
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy")
     my_occupancy = loadprofilegenerator_connector.Occupancy( config=my_occupancy_config, my_simulation_parameters = my_simulation_parameters )
 
-    my_weather_config = weather.WeatherConfig(location=location)
+    my_weather_config = weather.WeatherConfig(location=location, name="Weather")
     my_weather = weather.Weather( config=my_weather_config, my_simulation_parameters = my_simulation_parameters,
                                   my_simulation_repository = my_sim.simulation_repository )
 

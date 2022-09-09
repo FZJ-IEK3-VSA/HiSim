@@ -1,23 +1,24 @@
-# Generic/Built-in
+""" Handles all the weather data processing. """
+# clean
+
 import datetime
 import math
 import os
-import pandas as pd
-import pvlib
-import numpy as np
-from dataclasses_json import dataclass_json
 from dataclasses import dataclass
 from typing import List, Optional, Any
-# Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase
+
+import numpy as np
+import pandas as pd
+import pvlib
+
+from hisim import loadtypes as lt
+from hisim import log
+from hisim import utils
+
+from hisim.component import Component, SingleTimeStepValues, ComponentOutput, ConfigBase
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-from hisim import loadtypes as lt
 from hisim.utils import HISIMPATH, hisim_abs_path
-from hisim import utils
-from hisim import log
-import json
-from timeit import default_timer as timer
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -58,24 +59,6 @@ class WeatherConfig(ConfigBase):
 class Weather(Component):
     """
     Provide thermal and solar conditions of local weather
-
-    Parameters
-    -----------------------------------------------
-    location: string
-        place to retrieve weather conditions
-
-    ComponentInputs:
-    -----------------------------------------------
-       None
-
-    ComponentOutputs:
-    -----------------------------------------------
-       Outdoor Temperature: Celsius
-       Direct Normal Irradiance: kWh/m^2
-       Diffuse Normal Irradiance: kWh/m^2
-       Sun Altitude: Degrees
-       Sun Azimuth: Degrees
-       tmy_data["DryBulb"], tmy_data["Wspd"]
     """
     # Inputs
     # None
@@ -201,7 +184,7 @@ class Weather(Component):
             self.apparent_zenith_list = my_weather['apparent_zenith'].tolist()
             self.Wspd_list = my_weather['Wspd'].tolist()
         else:
-            tmy_data, location = readTRY(location=location, year=my_simulation_parameters.year)
+            tmy_data, location = read_test_reference_year_data(location=location, year=my_simulation_parameters.year)
             DNI = self.interpolate(tmy_data['DNI'], self.my_simulation_parameters.year)
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index)  # type: ignore
@@ -258,9 +241,9 @@ class Weather(Component):
             my_simulation_repository.set_entry(self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list)
             my_simulation_repository.set_entry(self.Weather_WindSpeed_yearly_forecast, self.Wspd_list)
 
-    def interpolate(self, pd_database, year: int):
-        firstday = pd.Series([0.0], index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
-        lastday = pd.Series(pd_database[-1], index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert("Europe/Berlin")])
+    def interpolate(self, pd_database: Any, year: int) -> Any:
+        firstday = pd.Series([0.0], index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")])
+        lastday = pd.Series(pd_database[-1], index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")])
         pd_database = pd_database.append(firstday)
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
@@ -346,9 +329,8 @@ class Weather(Component):
         return self.altitude_list[hoy], self.azimuth_list[hoy]
 
 
-def readTRY(location="Aachen", year=2015):
-    """
-    Reads a test reference year file and gets the GHI, DHI and DNI from it.
+def read_test_reference_year_data(location="Aachen", year=2015):
+    """ Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
 
@@ -409,8 +391,7 @@ def readTRY(location="Aachen", year=2015):
 
 
 def calculateDNI(directHI, lon, lat, zenith_tol=87.0):
-    """
-    Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
+    """ Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
 

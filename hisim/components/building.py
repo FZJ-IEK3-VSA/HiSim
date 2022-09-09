@@ -197,10 +197,6 @@ class Building(dynamic_component.DynamicComponent):
     TemperatureOutput = "TemperatureOutput"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
 
-    # dynamic
-    my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
-    my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
-
     # Similar components to connect to:
     # 1. Weather
     # 2. Occupancy
@@ -209,7 +205,9 @@ class Building(dynamic_component.DynamicComponent):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters, config: BuildingConfig):
-
+        # dynamic
+        self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
+        self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_outputs,
                          name="Building",

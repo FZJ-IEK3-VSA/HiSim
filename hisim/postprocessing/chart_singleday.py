@@ -8,6 +8,7 @@ from hisim.postprocessing.chartbase import Chart
 
 
 class ChartSingleDay(Chart):
+
     """ For making visualisations for a single day. """
 
     def __init__(self, output, units, directorypath, time_correction_factor, data, day=None, month=None, output2=None):

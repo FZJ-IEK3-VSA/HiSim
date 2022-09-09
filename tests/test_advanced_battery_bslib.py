@@ -1,3 +1,4 @@
+""" Test for the advanced battery lib. """
 # clean
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib
@@ -8,6 +9,7 @@ from tests import functions_for_testing as fft
 
 
 def test_advanced_battery_bslib():
+    """ Performs a basic test for a single calculation of the battery lib. """
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
@@ -42,6 +44,6 @@ def test_advanced_battery_bslib():
     log.information(str(stsv.values))
 
     # Check if set power is charged
-    assert stsv.values[my_advanced_battery.p_bs.global_index] == 4000
-    assert stsv.values[my_advanced_battery.p_bat.global_index] == 3807.546
-    assert stsv.values[my_advanced_battery.soc.global_index] == 0.006185227970066665
+    assert stsv.values[my_advanced_battery.p_bs.global_index] == 4000  # noqa B101
+    assert stsv.values[my_advanced_battery.p_bat.global_index] == 3807.546  # noqa B101
+    assert stsv.values[my_advanced_battery.soc.global_index] == 0.006185227970066665  # noqa B101

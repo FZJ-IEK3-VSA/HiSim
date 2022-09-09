@@ -5,7 +5,7 @@ The hot water storage simulates only storage and demand and needs to be connnect
 hot water demand or as  buffer with input ThermalPowerToBuilding. Both options need input signal for heating power and have
 one output: the hot water storage temperature.
 """
-
+# clean
 # Generic/Built-in
 from typing import Optional, List
 from dataclasses import dataclass

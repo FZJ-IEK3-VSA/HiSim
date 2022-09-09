@@ -9,7 +9,7 @@ import pandas as pd
 
 # Owned
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.componentwrapper import ComponentWrapper
+from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
 from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp

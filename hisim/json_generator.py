@@ -84,7 +84,5 @@ class JsonConfigurationGenerator:
     def save_to_json(self, filename: str) -> None:
         """ Saves a configuration to a json file. """
         with open(filename, "w", encoding="utf-8") as filestream:
-            mystr = self.config_file.to_json(indent=4, cls=utils.MyJsonEncoder)
-            print(mystr)
+            mystr = self.config_file.to_json(indent=4) # , cls=utils.MyJsonEncoder
             filestream.write(mystr)
-            # json.dump(self.config_file, filestream, indent=4)

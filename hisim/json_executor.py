@@ -63,7 +63,6 @@ class JsonExecutor:
                     # Add the class to this package's variables
                     globals()[attribute_name] = attribute
                     class_dict[full_class_name] = attribute
-                    print(attribute.__module__ + "." + attribute.__name__)
         return class_dict
 
     def execute_all(self) -> None:
@@ -92,11 +91,9 @@ class JsonExecutor:
         """ Processes a single component entry in the json. """
         my_class = class_dict[component_entry.component_full_classname]
         signature_component = inspect.signature(my_class)
-        print(signature_component)
         found_simulation_parameters = False
         found_config = False
         for parameter_name in signature_component.parameters:
-            print(parameter_name)
             if parameter_name == "my_simulation_parameters":
                 found_simulation_parameters = True
             elif parameter_name == "config":

@@ -4,7 +4,7 @@ import os
 import inspect
 import hashlib
 import json
-from json import JSONEncoder
+
 from timeit import default_timer as timer
 from typing import Any, Dict, Tuple
 from functools import wraps
@@ -13,7 +13,7 @@ import psutil
 
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-import datetime
+
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3 "
 __license__ = "MIT"
@@ -528,9 +528,11 @@ def deprecated(message):
         return deprecated_func
     return deprecated_decorator
 
-# subclass JSONEncoder
-class MyJsonEncoder(JSONEncoder):
-        #Override the default method
-        def default(self, obj):
-            if isinstance(obj, (datetime.date, datetime.datetime)):
-                return obj.isoformat()
+# # subclass JSONEncoder
+# class MyJsonEncoder(JSONEncoder):
+#     """ Class to  """"
+#
+#         #Override the default method
+#         def default(self, obj):
+#             if isinstance(obj, (datetime.date, datetime.datetime)):
+#                 return obj.isoformat()

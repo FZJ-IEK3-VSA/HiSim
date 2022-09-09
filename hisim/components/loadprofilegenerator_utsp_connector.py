@@ -1,7 +1,7 @@
 # Generic/Built-in
 import datetime
 import io
-from typing import Tuple
+from typing import Optional, Tuple
 import pandas as pd
 import json
 import numpy as np
@@ -20,7 +20,14 @@ from hisim.components.configuration import PhysicsConfig
 from utspclient import client, datastructures, result_file_filters
 from utspclient.helpers import lpg_helper
 from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
-from utspclient.helpers.lpgdata import LoadTypes, Households, HouseTypes
+from utspclient.helpers.lpgdata import (
+    LoadTypes,
+    Households,
+    HouseTypes,
+    TravelRouteSets,
+    TransportationDeviceSets,
+    ChargingStationSets,
+)
 
 
 @dataclass_json
@@ -29,6 +36,9 @@ class UtspConnectorConfig:
     url: str
     api_key: str
     household: JsonReference
+    travel_route_set: Optional[JsonReference]
+    transportation_device_set: Optional[JsonReference]
+    charging_station_set: Optional[JsonReference]
 
 
 class UtspLpgConnector(cp.Component):
@@ -111,10 +121,16 @@ class UtspLpgConnector(cp.Component):
 
     @staticmethod
     def get_default_config() -> UtspConnectorConfig:
-        REQUEST_URL = "http://134.94.131.167:443/api/v1/profilerequest"
+        REQUEST_URL = "http://localhost:443/api/v1/profilerequest"
         API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
-        household = Households.CHR01_Couple_both_at_Work
-        config = UtspConnectorConfig(REQUEST_URL, API_KEY, household)
+        config = UtspConnectorConfig(
+            REQUEST_URL,
+            API_KEY,
+            Households.CHR01_Couple_both_at_Work,
+            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
+            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
+            charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
+        )
         return config
 
     def i_save_state(self) -> None:
@@ -260,25 +276,42 @@ class UtspLpgConnector(cp.Component):
             start_date,
             end_date,
             self.get_resolution(),
+            travel_route_set=self.utsp_config.travel_route_set,
+            transportation_device_set=self.utsp_config.transportation_device_set,
+            charging_station_set=self.utsp_config.charging_station_set,
             calc_options=[
-                CalcOption.HouseholdSumProfilesFromDetailedDats,
+                CalcOption.HouseholdSumProfilesCsvNoFlex,
                 CalcOption.BodilyActivityStatistics,
+                CalcOption.TansportationDeviceJsons,
+                CalcOption.FlexibilityEvents,
             ],
         )
 
+        # Enable simulation of transportation and flexible devices
+        simulation_config.CalcSpec.EnableTransportation = True
+        simulation_config.CalcSpec.EnableFlexibility = True
+
         # Define required result files
-        electricity_file = result_file_filters.LPGFilters.sum_hh1(LoadTypes.Electricity)
-        warm_water_file = result_file_filters.LPGFilters.sum_hh1(LoadTypes.Warm_Water)
+        electricity_file = result_file_filters.LPGFilters.sum_hh1(
+            LoadTypes.Electricity, no_flex=True
+        )
+        warm_water_file = result_file_filters.LPGFilters.sum_hh1(
+            LoadTypes.Warm_Water, no_flex=True
+        )
         high_activity_file = result_file_filters.LPGFilters.BodilyActivity.HIGH
         low_activity_file = result_file_filters.LPGFilters.BodilyActivity.LOW
-        result_files = dict.fromkeys(
-            [
-                electricity_file,
-                warm_water_file,
-                high_activity_file,
-                low_activity_file,
-            ]
+        required_files = {
+            electricity_file: datastructures.ResultFileRequirement.REQUIRED,
+            warm_water_file: datastructures.ResultFileRequirement.REQUIRED,
+            high_activity_file: datastructures.ResultFileRequirement.REQUIRED,
+            low_activity_file: datastructures.ResultFileRequirement.REQUIRED,
+        }
+        # Define transportation result files
+        car_states = result_file_filters.LPGFilters.all_car_states_optional()
+        driving_distances = (
+            result_file_filters.LPGFilters.all_driving_distances_optional()
         )
+        result_files = {**required_files, **car_states, **driving_distances}
 
         # Prepare the time series request
         request = datastructures.TimeSeriesRequest(
@@ -295,6 +328,15 @@ class UtspLpgConnector(cp.Component):
         warm_water = result.data[warm_water_file].decode()
         high_activity = result.data[high_activity_file].decode()
         low_activity = result.data[low_activity_file].decode()
+
+        # Obtain and save transportation result files
+        car_state_files = [
+            result.data[n].decode() for n in car_states if n in result.data
+        ]
+        driving_distance_files = [
+            result.data[n].decode() for n in driving_distances if n in result.data
+        ]
+
         return electricity, warm_water, high_activity, low_activity
 
     def build(self):
@@ -336,8 +378,14 @@ class UtspLpgConnector(cp.Component):
 
             # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
             steps_original = len(occupancy_profile[0]["Values"])
+            simulation_time_span = (
+                self.my_simulation_parameters.end_date
+                - self.my_simulation_parameters.start_date
+            )
             steps_desired = int(
-                365 * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
+                simulation_time_span.days
+                * 24
+                * (3600 / self.my_simulation_parameters.seconds_per_timestep)
             )
             steps_ratio = int(steps_original / steps_desired)
 

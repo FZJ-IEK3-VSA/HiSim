@@ -22,6 +22,6 @@ def test_weather():
     DNI = []
     for i in range(60*24*365):
         my_weather.i_simulate(i, stsv, False)
-        DNI.append(stsv.values[my_weather.DNIC.global_index])
+        DNI.append(stsv.values[my_weather.DNI_output.global_index])
 
     assert sum(DNI) > 950

@@ -63,7 +63,7 @@ class SimulationParameters(JSONWizard):
         self.duration = end_date - start_date
         total_seconds = self.duration.total_seconds()
         self.timesteps: int = int(total_seconds / seconds_per_timestep)
-        self.year = start_date.year
+        self.year: int = int(start_date.year)
         if post_processing_options is None:
             post_processing_options = []
         self.post_processing_options: List[int] = post_processing_options

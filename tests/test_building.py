@@ -65,11 +65,11 @@ def test_building():
 
 
     assert 1 == 1
-    my_residence.t_outC.source_output = my_weather.t_outC
-    my_residence.altitudeC.source_output = my_weather.altitudeC
-    my_residence.azimuthC.source_output = my_weather.azimuthC
-    my_residence.DNIC.source_output = my_weather.DNIC
-    my_residence.DHIC.source_output = my_weather.DHIC
+    my_residence.t_outC.source_output = my_weather.air_temperature_output
+    my_residence.altitudeC.source_output = my_weather.altitude_output
+    my_residence.azimuthC.source_output = my_weather.azimuth_output
+    my_residence.DNIC.source_output = my_weather.DNI_output
+    my_residence.DHIC.source_output = my_weather.DHI_output
     my_residence.occupancy_heat_gainC.source_output = my_occupancy.heating_by_residentsC
     my_residence.thermal_energy_deliveredC.source_output = thermal_energy_delivered_output
 

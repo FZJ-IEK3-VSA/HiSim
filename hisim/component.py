@@ -36,6 +36,12 @@ class ConfigBase(JSONWizard):
         """ Gets the class name. Helper function for default connections. """
         return cls.__module__ + "." + cls.__name__
 
+    def get_string_dict(self)-> List[str]:
+        my_dict = self.to_dict
+        my_list = []
+        for entry in my_dict:
+            my_list.append(entry[0] + ": " + str(entry[1]))
+        return my_list
 
 @dataclass
 class ComponentConnection:

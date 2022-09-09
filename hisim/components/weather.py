@@ -6,7 +6,7 @@ import math
 import os
 from dataclasses import dataclass
 from typing import List, Optional, Any
-
+from enum import Enum
 import numpy as np
 import pandas as pd
 import pvlib
@@ -39,21 +39,47 @@ https://github.com/FZJ-IEK3-VSA/tsib
 """
 
 
+class LocationEnum(Enum):
+
+    """ contains all the locations and their corresponding directories. """
+
+    Aachen = ("Aachen", "test-reference-years_1995-2012_1-location", "data_processed", "aachen_center")  # noqa: invalid-name
+    Bremerhaven = ("01_Bremerhaven", "test-reference-years_2015-2045_15-locations", "data_processed",  "weather_region_01")  # noqa: invalid-name
+    Rostock = ("02_Rostock", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_02")  # noqa: invalid-name
+    Hamburg = ("03Hamburg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_03")  # noqa: invalid-name
+    Potsdam = ("04Potsdam", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_04")  # noqa: invalid-name
+    Essen = ("05Essen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_05")  # noqa: invalid-name
+    Bad_Marienburg = ("06Bad Marienburg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_06")  # noqa: invalid-name
+    Kassel = ("07Kassel", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_07")  # noqa: invalid-name
+    Braunlage = ("08Braunlage", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_08")  # noqa: invalid-name
+    Chemnitz = ("09Chemnitz", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_09")  # noqa: invalid-name
+    Hof = ("10Hof", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_10")  # noqa: invalid-name
+    Fichtelberg = ("11Fichtelberg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_11")  # noqa: invalid-name
+    Mannheim = ("12Mannheim", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_12")  # noqa: invalid-name
+    Muehldorf = ("13Muehldorf", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_13")  # noqa: invalid-name
+    Stoetten = ("14Stoetten", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_14")  # noqa: invalid-name
+    Garmisch_Partenkirchen = ("15Garmisch Partenkirchen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_15")  # noqa: invalid-name
+    Madrid = ("Madrid", "test-reference-years_2015-2045_15-locations", "NSRDB", "Madrid")  # noqa: invalid-name
+    Seville = ("Seville", "test-reference-years_2015-2045_15-locations", "NSRDB", "Seville")  # noqa: invalid-name
+
+
 @dataclass
 class WeatherConfig(ConfigBase):
 
     """ Configuration class for Weather. """
 
     location: str
+    source_path: str
 
     def get_main_classname(self):
         """ Get the name of the main class. """
         return Weather.get_full_classname()
 
     @classmethod
-    def get_default_for_aachen(cls) -> Any:
+    def get_default(cls, location_entry: Any) -> Any:
         """ Gets the default configuration for Aachen. """
-        config = WeatherConfig("Weather_1", "Aachen")
+        path = os.path.join(utils.get_input_directory(), "weather", location_entry[1], location_entry[2], location_entry[3])
+        config = WeatherConfig(name="Weather_1", location=location_entry[0], source_path=path)
         return config
 
 

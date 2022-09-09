@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -13,7 +13,7 @@ from typing import Optional
 from hisim.simulationparameters import SimulationParameters
 
 
-def basic_household_with_default_connections(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+def basic_household_with_default_connections(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
     """
     This setup function emulates an household including
     the basic components. Here the residents have their
@@ -90,7 +90,7 @@ def basic_household_with_default_connections(my_sim, my_simulation_parameters: O
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location="Aachen", name="Weather 1")
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 

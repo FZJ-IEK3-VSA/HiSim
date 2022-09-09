@@ -88,7 +88,7 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location="Aachen", name="Weather")
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 

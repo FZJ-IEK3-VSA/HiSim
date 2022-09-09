@@ -39,7 +39,7 @@ def test_building():
     log.profile("T2: " + str(t3 - t2))
 
     # Set Weather
-    my_weather_config=weather.WeatherConfig(location=weather_location, name="Weather-1")
+    my_weather_config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config,my_simulation_parameters=my_simulation_parameters)
     #my_weather.set_sim_repo(repo)
     t4 = time.perf_counter()

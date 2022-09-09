@@ -1,4 +1,4 @@
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Any
 import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
@@ -18,7 +18,7 @@ import os
 from hisim import utils
 
 
-def dynamic_components_demonstration(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
+def dynamic_components_demonstration(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """
     In this example a generic controller is added. The generic controller
     makes it possible to add component generically.
@@ -28,7 +28,7 @@ def dynamic_components_demonstration(my_sim, my_simulation_parameters: Optional[
     year = 2018
     seconds_per_timestep = 60 * 15
     # Set weather
-    location = "Aachen"
+
     # Set occupancy
     occupancy_profile = "CH01"
 
@@ -81,12 +81,12 @@ def dynamic_components_demonstration(my_sim, my_simulation_parameters: Optional[
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy")
     my_occupancy = loadprofilegenerator_connector.Occupancy( config=my_occupancy_config, my_simulation_parameters = my_simulation_parameters )
 
-    my_weather_config = weather.WeatherConfig(location=location, name="Weather")
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather( config=my_weather_config, my_simulation_parameters = my_simulation_parameters,
                                   my_simulation_repository = my_sim.simulation_repository )
 
     my_photovoltaic_system_config= generic_pv_system.PVSystemConfig(time=time,
-                                          location=location,
+                                          location="Aachen",
                                           power=power,
                                           load_module_data=load_module_data,
                                           module_name=module_name,

@@ -635,7 +635,7 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
     return my_chp, count
 
 
-def modular_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Setup function emulates an household including the basic components.
 
     The configuration of the household is read in via the json input file "system_config.json".
@@ -708,7 +708,8 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location=location.value, name="Weather")
+    # TODO: make the system parameters take a location enum value
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
                                  my_simulation_repository=my_sim.simulation_repository)
     my_sim.add_component(my_weather)

@@ -1,3 +1,4 @@
+# clean
 from hisim.component import ComponentOutput
 
 

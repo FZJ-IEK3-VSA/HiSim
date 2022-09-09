@@ -2,6 +2,7 @@
 
 The component class is the base class for all other components.
 """
+# clean
 from __future__ import annotations
 from typing import List, Optional, Dict, Any, Type
 
@@ -11,24 +12,30 @@ from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
 # Package
-from hisim import utils
+
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 
+
 @dataclass
 class ConfigBase(JSONWizard):
+
+    """ Base class for all configurations. """
+
     name: str
 
     @classmethod
     def get_main_classname(cls):
+        """ Returns the fully qualified class name for the class that is getting configured. Used for Json. """
         raise NotImplementedError("Missing a definition of the ")
 
     @classmethod
     def get_config_classname(cls):
         """ Gets the class name. Helper function for default connections. """
         return cls.__module__ + "." + cls.__name__
+
 
 @dataclass
 class ComponentConnection:

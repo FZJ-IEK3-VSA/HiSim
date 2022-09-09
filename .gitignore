@@ -153,3 +153,6 @@ tests/cfg.json
 tests/json/results
 hisim/json_generator.py
 hisim/~$components_information.xlsx
+flake8_calls.txt
+prospector_calls.txt
+prospector_mass_call.cmd

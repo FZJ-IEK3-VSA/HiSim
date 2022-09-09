@@ -1,8 +1,10 @@
+""" Wraps components for use in the simulator. """
+# clean
 from typing import List, Dict, Any
 
 import hisim.component as cp
 import hisim.loadtypes as lt
-import hisim.log as log
+from hisim import log
 
 
 class ComponentWrapper:

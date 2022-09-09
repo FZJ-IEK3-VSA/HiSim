@@ -1,3 +1,4 @@
+# clean
 from hisim import component as cp
 from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt

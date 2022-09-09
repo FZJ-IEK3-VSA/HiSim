@@ -1,4 +1,5 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
+# clean
 from __future__ import annotations
 from typing import List, Optional
 import datetime

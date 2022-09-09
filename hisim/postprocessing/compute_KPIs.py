@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 This postprocessing option computes overoll consumption, production, self-consumption and injection
-as well as self consumption rate and autarky rate""" 
+as well as self consumption rate and autarky rate"""
+# clean
 from typing import Any
 from typing import List
 import pandas as pd

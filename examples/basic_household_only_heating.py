@@ -1,4 +1,6 @@
-from typing import Optional
+""" Shows a single household with only heating. """
+# clean
+from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -7,24 +9,18 @@ from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_hot_water_storage
 from hisim.components import generic_gas_heater
 
-from hisim import utils
-from hisim import loadtypes as lt
-import os
-import numpy as np
-import pandas as pd
-
 __authors__ = "Maximilian Hillen"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
+__copyright__ = "Copyright 2021-2022, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
-__version__ = "0.1"
-__maintainer__ = "Maximilian Hillen"
-__email__ = "maximilian.hillen@rwth-aachen.de"
+__version__ = "1.0"
+__maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def basic_household_only_heating(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None):
-    """
+def basic_household_only_heating(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+    """ Gas heater + buffer storage.
+
     This setup function emulates an household including
     the basic components. Here the residents have their
     heating needs covered by a gas heater and a heating
@@ -40,112 +36,74 @@ def basic_household_only_heating(my_sim, my_simulation_parameters: Optional[Simu
         - Controller2EMS
     """
 
-    ##### System Parameters #####
+    # System Parameters #
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60*15
+    seconds_per_timestep = 60 * 15
 
-    # Set weather
-    location = "Aachen"
-
-    # Set occupancy
-    occupancy_profile = "CH01"
-
-    # Controller
-    initial_temperature=22
-    temperature_storage_target_heating_water=35
-
-    # Building
-    minimal_building_temperature=20
-
-    # Heat Storage
-    #initial_temperature=22
-    #initial_temperature_heating_storage = temperature_storage_target_heating_water
-
-    ##### Build Components #####
+    # Build Components #
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
-                                                                                 seconds_per_timestep=seconds_per_timestep)
-    my_sim.set_simulation_parameters (my_simulation_parameters)
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build occupancy
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(), my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
+                                                            my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
-    my_weather = weather.Weather(config=weather.WeatherConfig.get_default_for_aachen(), my_simulation_parameters= my_simulation_parameters)
+    my_weather = weather.Weather(config=weather.WeatherConfig.get_default_for_aachen(), my_simulation_parameters=my_simulation_parameters)
 
     # Build Gas Heater
-    my_gas_heater = generic_gas_heater.GasHeater(config=generic_gas_heater.GasHeater.get_default_config(),my_simulation_parameters=my_simulation_parameters)
+    my_gas_heater = generic_gas_heater.GasHeater(config=generic_gas_heater.GasHeater.get_default_config(),
+                                                 my_simulation_parameters=my_simulation_parameters)
 
     # Build Building
-    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),my_simulation_parameters= my_simulation_parameters)
-    my_building_controller = building.BuildingController( config=building.BuildingController.get_default_config(),
-                                                          my_simulation_parameters= my_simulation_parameters)
+    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
+                                    my_simulation_parameters=my_simulation_parameters)
+    my_building_controller = building.BuildingController(config=building.BuildingController.get_default_config(),
+                                                         my_simulation_parameters=my_simulation_parameters)
 
     # Build Storage
     my_storage = generic_hot_water_storage.HeatStorage(config=generic_hot_water_storage.HeatStorage.get_default_config(),
                                                        my_simulation_parameters=my_simulation_parameters)
 
-    my_storage_controller = generic_hot_water_storage.HeatStorageController(config=generic_hot_water_storage.HeatStorageController.get_default_config(),
-                                                                            my_simulation_parameters=my_simulation_parameters)
+    my_storage_controller = generic_hot_water_storage.HeatStorageController(
+        config=generic_hot_water_storage.HeatStorageController.get_default_config(), my_simulation_parameters=my_simulation_parameters)
 
     # Build Controller
-    my_controller_heat= controller_l2_energy_management_system.ControllerHeat(config= controller_l2_energy_management_system.ControllerHeat.get_default_config(),
-                                                                               my_simulation_parameters= my_simulation_parameters)
+    my_controller_heat = controller_l2_energy_management_system.ControllerHeat(
+        config=controller_l2_energy_management_system.ControllerHeat.get_default_config(), my_simulation_parameters=my_simulation_parameters)
 
-    my_building.connect_only_predefined_connections( my_weather, my_occupancy )
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 
-
-    my_storage.connect_input(my_storage.ThermalDemandHeatingWater,
-                             my_storage_controller.component_name,
+    my_storage.connect_input(my_storage.ThermalDemandHeatingWater, my_storage_controller.component_name,
                              my_storage_controller.RealThermalDemandHeatingWater)
-    my_storage.connect_input(my_storage.ControlSignalChooseStorage,
-                             my_controller_heat.component_name,
-                             my_controller_heat.ControlSignalChooseStorage)
+    my_storage.connect_input(my_storage.ControlSignalChooseStorage, my_controller_heat.component_name, my_controller_heat.ControlSignalChooseStorage)
 
-    my_storage_controller.connect_input(my_storage_controller.TemperatureHeatingStorage,
-                                        my_storage.component_name,
+    my_storage_controller.connect_input(my_storage_controller.TemperatureHeatingStorage, my_storage.component_name,
                                         my_storage.WaterOutputTemperatureHeatingWater)
-    my_storage_controller.connect_input(my_storage_controller.BuildingTemperature,
-                                        my_building.component_name,
-                                        my_building.TemperatureMean)
-    my_storage_controller.connect_input(my_storage_controller.ReferenceMaxHeatBuildingDemand,
-                                        my_building.component_name,
+    my_storage_controller.connect_input(my_storage_controller.BuildingTemperature, my_building.component_name, my_building.TemperatureMean)
+    my_storage_controller.connect_input(my_storage_controller.ReferenceMaxHeatBuildingDemand, my_building.component_name,
                                         my_building.ReferenceMaxHeatBuildingDemand)
-    my_storage_controller.connect_input(my_storage_controller.RealHeatBuildingDemand,
-                                        my_building_controller.component_name,
+    my_storage_controller.connect_input(my_storage_controller.RealHeatBuildingDemand, my_building_controller.component_name,
                                         my_building_controller.RealHeatBuildingDemand)
 
-    my_building_controller.connect_input(my_building_controller.ReferenceMaxHeatBuildingDemand,
-                                         my_building.component_name,
+    my_building_controller.connect_input(my_building_controller.ReferenceMaxHeatBuildingDemand, my_building.component_name,
                                          my_building.ReferenceMaxHeatBuildingDemand)
-    my_building_controller.connect_input(my_building_controller.ResidenceTemperature,
-                                         my_building.component_name,
-                                         my_building.TemperatureMean)
-    my_building.connect_input(my_building.ThermalEnergyDelivered,
-                              my_storage.component_name,
-                              my_storage.RealHeatForBuilding)
+    my_building_controller.connect_input(my_building_controller.ResidenceTemperature, my_building.component_name, my_building.TemperatureMean)
+    my_building.connect_input(my_building.ThermalEnergyDelivered, my_storage.component_name, my_storage.RealHeatForBuilding)
 
-    my_controller_heat.connect_input(my_controller_heat.StorageTemperatureHeatingWater,
-                                     my_storage.component_name,
+    my_controller_heat.connect_input(my_controller_heat.StorageTemperatureHeatingWater, my_storage.component_name,
                                      my_storage.WaterOutputTemperatureHeatingWater)
 
-    my_controller_heat.connect_input(my_controller_heat.ResidenceTemperature,
-                                     my_building.component_name,
-                                     my_building.TemperatureMean)
+    my_controller_heat.connect_input(my_controller_heat.ResidenceTemperature, my_building.component_name, my_building.TemperatureMean)
 
-    my_gas_heater.connect_input(my_gas_heater.ControlSignal,
-                                my_controller_heat.component_name,
-                                my_controller_heat.ControlSignalGasHeater)
-    my_gas_heater.connect_input(my_gas_heater.MassflowInputTemperature,
-                                my_storage.component_name,
-                                my_storage.WaterOutputStorageforHeaters)
-    my_storage.connect_input(my_storage.ThermalInputPower1,
-                             my_gas_heater.component_name,
-                             my_gas_heater.ThermalOutputPower)
+    my_gas_heater.connect_input(my_gas_heater.ControlSignal, my_controller_heat.component_name, my_controller_heat.ControlSignalGasHeater)
+    my_gas_heater.connect_input(my_gas_heater.MassflowInputTemperature, my_storage.component_name, my_storage.WaterOutputStorageforHeaters)
+    my_storage.connect_input(my_storage.ThermalInputPower1, my_gas_heater.component_name, my_gas_heater.ThermalOutputPower)
 
     my_sim.add_component(my_building_controller)
     my_sim.add_component(my_controller_heat)

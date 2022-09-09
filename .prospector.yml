@@ -20,6 +20,9 @@ pylint:
       - abstract-method
       - pointless-string-statement
       - no-self-use
+      - too-many-statements
+      - too-few-public-methods
+      - unnecessary-pass
 #    disable:
 #      - too-many-locals
 #      - arguments-differ

@@ -1,6 +1,5 @@
-
 """ Contains all the main simulator components. """
-
+# clean
 import os
 import datetime
 from typing import List, Tuple, Optional

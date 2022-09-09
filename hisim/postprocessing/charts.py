@@ -1,4 +1,5 @@
 """ Contains all the chart classes. """
+# clean
 import gc
 from typing import Any
 import matplotlib as mpl

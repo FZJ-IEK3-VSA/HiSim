@@ -18,7 +18,6 @@ from hisim import utils
 from hisim.component import Component, SingleTimeStepValues, ComponentOutput, ConfigBase
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-from hisim.utils import HISIMPATH, hisim_abs_path
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -39,28 +38,36 @@ https://github.com/FZJ-IEK3-VSA/tsib
 """
 
 
+class WeatherDataSourceEnum(Enum):
+
+    """ Describes where the weather data is from. Used to choose the correct reading function. """
+
+    DWD = 1
+    NSRDB = 2
+
+
 class LocationEnum(Enum):
 
     """ contains all the locations and their corresponding directories. """
 
-    Aachen = ("Aachen", "test-reference-years_1995-2012_1-location", "data_processed", "aachen_center")  # noqa: invalid-name
-    Bremerhaven = ("01_Bremerhaven", "test-reference-years_2015-2045_15-locations", "data_processed",  "weather_region_01")  # noqa: invalid-name
-    Rostock = ("02_Rostock", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_02")  # noqa: invalid-name
-    Hamburg = ("03Hamburg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_03")  # noqa: invalid-name
-    Potsdam = ("04Potsdam", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_04")  # noqa: invalid-name
-    Essen = ("05Essen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_05")  # noqa: invalid-name
-    Bad_Marienburg = ("06Bad Marienburg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_06")  # noqa: invalid-name
-    Kassel = ("07Kassel", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_07")  # noqa: invalid-name
-    Braunlage = ("08Braunlage", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_08")  # noqa: invalid-name
-    Chemnitz = ("09Chemnitz", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_09")  # noqa: invalid-name
-    Hof = ("10Hof", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_10")  # noqa: invalid-name
-    Fichtelberg = ("11Fichtelberg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_11")  # noqa: invalid-name
-    Mannheim = ("12Mannheim", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_12")  # noqa: invalid-name
-    Muehldorf = ("13Muehldorf", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_13")  # noqa: invalid-name
-    Stoetten = ("14Stoetten", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_14")  # noqa: invalid-name
-    Garmisch_Partenkirchen = ("15Garmisch Partenkirchen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_15")  # noqa: invalid-name
-    Madrid = ("Madrid", "test-reference-years_2015-2045_15-locations", "NSRDB", "Madrid")  # noqa: invalid-name
-    Seville = ("Seville", "test-reference-years_2015-2045_15-locations", "NSRDB", "Seville")  # noqa: invalid-name
+    Aachen = ("Aachen", "test-reference-years_1995-2012_1-location", "data_processed", "aachen_center", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Bremerhaven = ("01_Bremerhaven", "test-reference-years_2015-2045_15-locations", "data_processed",  "weather_region_01", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Rostock = ("02_Rostock", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_02", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Hamburg = ("03Hamburg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_03", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Potsdam = ("04Potsdam", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_04", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Essen = ("05Essen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_05", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Bad_Marienburg = ("06Bad Marienburg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_06", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Kassel = ("07Kassel", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_07", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Braunlage = ("08Braunlage", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_08", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Chemnitz = ("09Chemnitz", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_09", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Hof = ("10Hof", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_10", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Fichtelberg = ("11Fichtelberg", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_11", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Mannheim = ("12Mannheim", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_12", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Muehldorf = ("13Muehldorf", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_13", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Stoetten = ("14Stoetten", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_14", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Garmisch_Partenkirchen = ("15Garmisch Partenkirchen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_15", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
+    Madrid = ("Madrid", "test-reference-years_2015-2045_15-locations", "NSRDB", "Madrid", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Seville = ("Seville", "test-reference-years_2015-2045_15-locations", "NSRDB", "Seville", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
 
 
 @dataclass
@@ -70,6 +77,7 @@ class WeatherConfig(ConfigBase):
 
     location: str
     source_path: str
+    data_source: WeatherDataSourceEnum
 
     def get_main_classname(self):
         """ Get the name of the main class. """
@@ -79,7 +87,7 @@ class WeatherConfig(ConfigBase):
     def get_default(cls, location_entry: Any) -> Any:
         """ Gets the default configuration for Aachen. """
         path = os.path.join(utils.get_input_directory(), "weather", location_entry.value[1], location_entry.value[2], location_entry.value[3])
-        config = WeatherConfig(name="Weather_1", location=location_entry.value[0], source_path=path)
+        config = WeatherConfig(name="Weather_1", location=location_entry.value[0], source_path=path, data_source=location_entry.value[4])
         return config
 
 
@@ -121,7 +129,7 @@ class Weather(Component):
         self.last_timestep_with_update = -1
         self.weather_config = config
         self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.build(self.weather_config.location, my_simulation_parameters, my_simulation_repository)
+        self.build(my_simulation_parameters, my_simulation_repository)
 
         self.air_temperature_output: ComponentOutput = self.add_output(self.component_name, self.TemperatureOutside, lt.LoadTypes.TEMPERATURE,
                                                                        lt.Units.CELSIUS)
@@ -202,7 +210,7 @@ class Weather(Component):
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
         self.last_timestep_with_update = timestep
 
-    def build(self, location: str, my_simulation_parameters: SimulationParameters, my_simulation_repository: Optional[SimRepository]) -> None:
+    def build(self, my_simulation_parameters: SimulationParameters, my_simulation_repository: Optional[SimRepository]) -> None:
         """ Generates the lists to be used later. """
         seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         log.information(self.weather_config.location)
@@ -223,7 +231,7 @@ class Weather(Component):
             self.apparent_zenith_list = my_weather['apparent_zenith'].tolist()
             self.wind_speed_list = my_weather['Wspd'].tolist()
         else:
-            tmy_data, location = read_test_reference_year_data(location=location, year=my_simulation_parameters.year)
+            tmy_data, location = read_test_reference_year_data(weatherconfig=self.weather_config, year=my_simulation_parameters.year)
             DNI = self.interpolate(tmy_data['DNI'], self.my_simulation_parameters.year)
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index)  # type: ignore
@@ -350,65 +358,64 @@ class Weather(Component):
         return self.altitude_list[hoy], self.azimuth_list[hoy]
 
 
-def read_test_reference_year_data(location: str, year: int) -> Any:
+def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> Any:
     """ Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
-
-    Parameters
-    ----------
-    location: str
-        The region number of the test reference year.
-    year: int (default: 2010)
-        The year. Only data for 2010 and 2030 available
-
     """
     # get the correct file path
-    filepath = os.path.join(HISIMPATH["weather"][location])
+    filepath = os.path.join(weatherconfig.source_path)
+    if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
+        data, location_dict = read_nsrdb_data(filepath, year)
+    elif weatherconfig.data_source == WeatherDataSourceEnum.DWD:
+        data, location_dict = read_dwd_data(filepath, year)
 
-    if filepath == os.path.join(hisim_abs_path, "inputs", "weather", "NSRDB", location):
-        # get the geoposition
-        with open(filepath + ".dat", encoding="utf-8") as file_stream:
-            lines = file_stream.readlines()
-            location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
-            lat = float(lines[1][20:25])
-            lon = float(lines[2][15:20])
-        location_dict = {"name": location_name, "latitude": lat, "longitude": lon}
-        # get data
-        data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
-        data = data.drop(data.index[8761:8772])
-        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
-        # data["GHI"] = data["D"] + data["B"]
-        data = data.rename(
-            columns={"DHI": "DHI", "Temperature": "T", "Wind Speed": "Wspd", "MM": "Month", "DD": "Day", "HH": "Hour",
-                     "Pressure": "Pressure", "Wind Direction": "Wdir", "GHI": "GHI", "DNI": "DNI"})
-        # solar_pos = pvlib.solarposition.get_solarposition(data["GHI"].index, lat, lon)
+    return data, location_dict
+
+
+def read_dwd_data(filepath: str, year: int) -> Any:
+    """ Reads the DWD data. """
+    # get the geoposition
+    with open(filepath + ".dat", encoding="utf-8") as file_stream:
+        lines = file_stream.readlines()
+        location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
+        lat = float(lines[1][20:37])
+        lon = float(lines[2][15:30])
+    location_dict = {"name": location_name, "latitude": lat, "longitude": lon}
+    # check if time series data already exists as .csv with DNI
+    if os.path.isfile(filepath + ".csv"):
+        data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
+        data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
+    # else read from .dat and calculate DNI etc.
     else:
-        # get the geoposition
-        with open(filepath + ".dat", encoding="utf-8") as file_stream:
-            lines = file_stream.readlines()
-            location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
-            lat = float(lines[1][20:37])
-            lon = float(lines[2][15:30])
-        location_dict = {"name": location_name, "latitude": lat, "longitude": lon}
+        # get data
+        data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
+        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+        data["GHI"] = data["D"] + data["B"]
+        data = data.rename(columns={"D": "DHI", "t": "T", "WG": "Wspd", "MM": "Month", "DD": "Day", "HH": "Hour", "p": "Pressure", "WR": "Wdir"})
 
-        # check if time series data already exists as .csv with DNI
-        if os.path.isfile(filepath + ".csv"):
-            data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
-            data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
-        # else read from .dat and calculate DNI etc.
-        else:
-            # get data
-            data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-            data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
-            data["GHI"] = data["D"] + data["B"]
-            data = data.rename(columns={"D": "DHI", "t": "T", "WG": "Wspd", "MM": "Month", "DD": "Day", "HH": "Hour", "p": "Pressure", "WR": "Wdir"})
+        # calculate direct normal
+        data["DNI"] = calculate_direct_normal_radiation(data["B"], lon, lat)  # data["DNI"] = data["B"]
 
-            # calculate direct normal
-            data["DNI"] = calculate_direct_normal_radiation(data["B"], lon, lat)  # data["DNI"] = data["B"]
+        # save as .csv  # data.to_csv(filepath + ".csv",sep=";",decimal=",")
+    return data, location_dict
 
-            # save as .csv  # data.to_csv(filepath + ".csv",sep=";",decimal=",")
 
+def read_nsrdb_data(filepath, year):
+    """ Reads a set of NSRDB data. """
+    with open(filepath + ".dat", encoding="utf-8") as file_stream:
+        lines = file_stream.readlines()
+        location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
+        lat = float(lines[1][20:25])
+        lon = float(lines[2][15:20])
+    location_dict = {"name": location_name, "latitude": lat, "longitude": lon}
+    # get data
+    data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
+    data = data.drop(data.index[8761:8772])
+    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+    data = data.rename(
+        columns={"DHI": "DHI", "Temperature": "T", "Wind Speed": "Wspd", "MM": "Month", "DD": "Day", "HH": "Hour", "Pressure": "Pressure",
+                 "Wind Direction": "Wdir", "GHI": "GHI", "DNI": "DNI"})
     return data, location_dict
 
 

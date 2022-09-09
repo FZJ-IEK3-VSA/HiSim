@@ -23,8 +23,11 @@ __maintainer__ = "Noah Pflugradt"
 __email__ = "n.pflugradt@fz-juelich.de"
 __status__ = "development"
 
+
 def get_input_directory() -> str:
+    """ Gets the absolute path to the inputs directory. """
     return os.path.join(hisim_abs_path, "inputs")
+
 
 # Retrieves hisim directory absolute path
 hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))  # type: ignore

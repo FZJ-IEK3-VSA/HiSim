@@ -11,7 +11,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_KPIs import compute_KPIs
+from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -219,7 +219,7 @@ class PostProcessor:
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Computes KPI's and writes them to report. """
-        lines = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        lines = compute_kpis(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
         self.write_to_report(text=lines, report=report)
 
     #

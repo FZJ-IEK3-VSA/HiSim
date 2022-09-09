@@ -12,7 +12,8 @@ from hisim.simulator import Simulator
 from hisim import log
 from hisim.json_generator import ConfigFile, ComponentEntry
 from hisim.simulationparameters import SimulationParameters
-from hisim import  component as cp
+from hisim import component as cp
+
 
 @dataclass()
 class ClassEntry:

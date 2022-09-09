@@ -72,7 +72,7 @@ class SimulationParameters(JSONWizard):
         self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
-        self.system_config = system_config()  # noqa
+        self.system_config = system_config  # noqa
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

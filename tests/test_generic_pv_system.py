@@ -21,7 +21,7 @@ def test_photovoltaic():
     # PVS:  1 output
 
     # Sets Occupancy
-    my_weather_config=weather.WeatherConfig(location = weather_location)
+    my_weather_config=weather.WeatherConfig(location = weather_location, name="Weather")
     my_weather = weather.Weather( config = my_weather_config, my_simulation_parameters = mysim, my_simulation_repository = repo )
     my_weather.set_sim_repo(repo)
     my_pvs_config= generic_pv_system.PVSystem.get_default_config()

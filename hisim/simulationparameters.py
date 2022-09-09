@@ -2,8 +2,7 @@
 from __future__ import annotations
 from typing import List, Optional
 import datetime
-from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json, config
+from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
 from hisim import log
@@ -11,7 +10,6 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.loadtypes import HeatingSystems, Locations, OccupancyProfiles, BuildingCodes, Cars, MobilityDistance
 
 
-@dataclass_json
 @dataclass()
 class SystemConfig:
 
@@ -38,6 +36,7 @@ class SystemConfig:
     current_mobility: Cars = Cars.NO_CAR
     mobility_distance: MobilityDistance = MobilityDistance.RURAL
 
+
 @dataclass()
 class SimulationParameters(JSONWizard):
 
@@ -58,7 +57,7 @@ class SimulationParameters(JSONWizard):
     def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int,
                  result_directory: str = "",
                  post_processing_options: List[int] = None, logging_level: int = log.LogPrio.INFORMATION,
-                 skip_finished_results: bool = False, system_config: SystemConfig = None):
+                 skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
         """ Initializes the class. """
         self.start_date = start_date
         self.end_date = end_date
@@ -73,7 +72,7 @@ class SimulationParameters(JSONWizard):
         self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
-        self.system_config = SystemConfig()  # noqa
+        self.system_config = system_config()  # noqa
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

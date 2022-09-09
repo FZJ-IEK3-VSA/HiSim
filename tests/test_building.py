@@ -31,7 +31,7 @@ def test_building():
     t2 = time.perf_counter()
     log.profile("T2: " + str(t2-t1))
     # Set Occupancy
-    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name=my_occupancy_profile)
+    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name=my_occupancy_profile, name="Occupancy-1")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     #my_occupancy.set_sim_repo( repo )
 
@@ -39,7 +39,7 @@ def test_building():
     log.profile("T2: " + str(t3 - t2))
 
     # Set Weather
-    my_weather_config=weather.WeatherConfig(location=weather_location)
+    my_weather_config=weather.WeatherConfig(location=weather_location, name="Weather-1")
     my_weather = weather.Weather(config=my_weather_config,my_simulation_parameters=my_simulation_parameters)
     #my_weather.set_sim_repo(repo)
     t4 = time.perf_counter()

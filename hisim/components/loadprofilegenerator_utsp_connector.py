@@ -122,7 +122,7 @@ class UtspLpgConnector(cp.Component):
     @staticmethod
     def get_default_config() -> UtspConnectorConfig:
         REQUEST_URL = "http://localhost:443/api/v1/profilerequest"
-        API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
+        API_KEY = ""
         config = UtspConnectorConfig(
             REQUEST_URL,
             API_KEY,

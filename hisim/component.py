@@ -37,10 +37,11 @@ class ConfigBase(JSONWizard):
         return cls.__module__ + "." + cls.__name__
 
     def get_string_dict(self)-> List[str]:
-        my_dict = self.to_dict
+        my_dict = self.to_dict()
         my_list = []
-        for entry in my_dict:
-            my_list.append(entry[0] + ": " + str(entry[1]))
+        if len(my_dict) > 0:
+            for entry in my_dict.items():
+                my_list.append(entry[0] + ": " + str(entry[1]))
         return my_list
 
 @dataclass

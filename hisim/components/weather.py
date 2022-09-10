@@ -5,7 +5,7 @@ import datetime
 import math
 import os
 from dataclasses import dataclass
-from typing import List, Optional, Any
+from typing import List, Any
 from enum import Enum
 import numpy as np
 import pandas as pd
@@ -16,7 +16,6 @@ from hisim import log
 from hisim import utils
 
 from hisim.component import Component, SingleTimeStepValues, ComponentOutput, ConfigBase
-from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -160,6 +159,7 @@ class Weather(Component):
         self.GHI_list: List[float]
         self.apparent_zenith_list: List[float]
         self.DHI_list: List[float]
+        self.dry_bulb_list: List[float]
 
     def write_to_report(self):
         """ Write configuration to the report. """
@@ -213,7 +213,7 @@ class Weather(Component):
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         log.information(self.weather_config.location)
         log.information(self.weather_config.to_json())  # type: ignore
-        location_dict = get_coordinates(self.weather_config.source_path, self.my_simulation_parameters.year)
+        location_dict = get_coordinates(self.weather_config.source_path)
         self.simulation_repository.set_entry("weather_location", location_dict)
         cachefound, cache_filepath = utils.get_cache_file("Weather", self.weather_config, self.my_simulation_parameters)
         if cachefound:
@@ -355,30 +355,25 @@ class Weather(Component):
     def calc_sun_position2(self, hoy: Any) -> Any:
         """ Calculates the sun position. """
         return self.altitude_list[hoy], self.azimuth_list[hoy]
-def get_coordinates(filepath, year):
-    """
-    Reads a test reference year file and gets the GHI, DHI and DNI from it.
+
+
+def get_coordinates(filepath: str) -> Any:
+    """ Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
-
-    Parameters
-    -------
-    try_num: int (default: 4)
-        The region number of the test reference year.
-    year: int (default: 2010)
-        The year. Only data for 2010 and 2030 available
     """
     # get the correct file path
-    #filepath = os.path.join(utils.HISIMPATH["weather"][location])
+    # filepath = os.path.join(utils.HISIMPATH["weather"][location])
 
     # get the geoposition
-    with open(filepath + ".dat", encoding="utf-8") as fp:
-        lines = fp.readlines()
+    with open(filepath + ".dat", encoding="utf-8") as file_stream:
+        lines = file_stream.readlines()
         location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
         lat = float(lines[1][20:37])
         lon = float(lines[2][15:30])
     return {"name": location_name, "latitude": lat, "longitude": lon}
     # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
+
 
 def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> Any:
     """ Reads a test reference year file and gets the GHI, DHI and DNI from it.

@@ -36,7 +36,7 @@ class ConfigBase(JSONWizard):
         """ Gets the class name. Helper function for default connections. """
         return cls.__module__ + "." + cls.__name__
 
-    def get_string_dict(self)-> List[str]:
+    def get_string_dict(self) -> List[str]:
         """ Turns the config into a str list for the report. """
         my_dict = self.to_dict()
         my_list = []

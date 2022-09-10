@@ -54,7 +54,8 @@ def basic_household_only_heating(my_sim: Any, my_simulation_parameters: Optional
                                                             my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
-    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen), my_simulation_parameters=my_simulation_parameters)
+    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+                                 my_simulation_parameters=my_simulation_parameters)
 
     # Build Gas Heater
     my_gas_heater = generic_gas_heater.GasHeater(config=generic_gas_heater.GasHeater.get_default_config(),

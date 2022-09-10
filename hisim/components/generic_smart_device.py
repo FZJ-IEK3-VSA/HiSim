@@ -131,7 +131,9 @@ class SmartDevice( cp.Component ):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool )  -> None:
         
         #initialize power

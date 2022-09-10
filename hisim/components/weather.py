@@ -120,8 +120,7 @@ class Weather(Component):
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig,
-                 my_simulation_repository: Optional[SimRepository] = None):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig):
         """ Initializes the entire class. """
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)
         if my_simulation_parameters is None:
@@ -129,7 +128,6 @@ class Weather(Component):
         self.last_timestep_with_update = -1
         self.weather_config = config
         self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.build(my_simulation_parameters, my_simulation_repository)
 
         self.air_temperature_output: ComponentOutput = self.add_output(self.component_name, self.TemperatureOutside, lt.LoadTypes.TEMPERATURE,
                                                                        lt.Units.CELSIUS)
@@ -210,12 +208,13 @@ class Weather(Component):
             self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
         self.last_timestep_with_update = timestep
 
-    def build(self, my_simulation_parameters: SimulationParameters, my_simulation_repository: Optional[SimRepository]) -> None:
+    def i_prepare_simulation(self) -> None:
         """ Generates the lists to be used later. """
-        seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         log.information(self.weather_config.location)
         log.information(self.weather_config.to_json())  # type: ignore
-
+        location_dict = get_coordinates(self.weather_config.source_path, self.my_simulation_parameters.year)
+        self.simulation_repository.set_entry("weather_location", location_dict)
         cachefound, cache_filepath = utils.get_cache_file("Weather", self.weather_config, self.my_simulation_parameters)
         if cachefound:
             # read cached files
@@ -231,7 +230,7 @@ class Weather(Component):
             self.apparent_zenith_list = my_weather['apparent_zenith'].tolist()
             self.wind_speed_list = my_weather['Wspd'].tolist()
         else:
-            tmy_data, location = read_test_reference_year_data(weatherconfig=self.weather_config, year=my_simulation_parameters.year)
+            tmy_data, location = read_test_reference_year_data(weatherconfig=self.weather_config, year=self.my_simulation_parameters.year)
             DNI = self.interpolate(tmy_data['DNI'], self.my_simulation_parameters.year)
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index)  # type: ignore
@@ -277,15 +276,15 @@ class Weather(Component):
             database.to_csv(cache_filepath)
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
-        if self.my_simulation_parameters.system_config.predictive and my_simulation_repository is not None:
-            my_simulation_repository.set_entry(self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list)
-            my_simulation_repository.set_entry(self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list)
-            my_simulation_repository.set_entry(self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list)
-            my_simulation_repository.set_entry(self.Weather_DirectNormalIrradianceExtra_yearly_forecast, self.DNIextra_list)
-            my_simulation_repository.set_entry(self.Weather_GlobalHorizontalIrradiance_yearly_forecast, self.GHI_list)
-            my_simulation_repository.set_entry(self.Weather_Azimuth_yearly_forecast, self.azimuth_list)
-            my_simulation_repository.set_entry(self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list)
-            my_simulation_repository.set_entry(self.Weather_WindSpeed_yearly_forecast, self.wind_speed_list)
+        if self.my_simulation_parameters.system_config.predictive:
+            self.simulation_repository.set_entry(self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list)
+            self.simulation_repository.set_entry(self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list)
+            self.simulation_repository.set_entry(self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list)
+            self.simulation_repository.set_entry(self.Weather_DirectNormalIrradianceExtra_yearly_forecast, self.DNIextra_list)
+            self.simulation_repository.set_entry(self.Weather_GlobalHorizontalIrradiance_yearly_forecast, self.GHI_list)
+            self.simulation_repository.set_entry(self.Weather_Azimuth_yearly_forecast, self.azimuth_list)
+            self.simulation_repository.set_entry(self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list)
+            self.simulation_repository.set_entry(self.Weather_WindSpeed_yearly_forecast, self.wind_speed_list)
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """ Interpolates a time series. """
@@ -356,7 +355,30 @@ class Weather(Component):
     def calc_sun_position2(self, hoy: Any) -> Any:
         """ Calculates the sun position. """
         return self.altitude_list[hoy], self.azimuth_list[hoy]
+def get_coordinates(filepath, year):
+    """
+    Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
+    Based on the tsib project @[tsib-kotzur] (Check header)
+
+    Parameters
+    -------
+    try_num: int (default: 4)
+        The region number of the test reference year.
+    year: int (default: 2010)
+        The year. Only data for 2010 and 2030 available
+    """
+    # get the correct file path
+    #filepath = os.path.join(utils.HISIMPATH["weather"][location])
+
+    # get the geoposition
+    with open(filepath + ".dat", encoding="utf-8") as fp:
+        lines = fp.readlines()
+        location_name = lines[0].split(maxsplit=2)[2].replace('\n', '')
+        lat = float(lines[1][20:37])
+        lon = float(lines[2][15:30])
+    return {"name": location_name, "latitude": lat, "longitude": lon}
+    # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
 
 def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> Any:
     """ Reads a test reference year file and gets the GHI, DHI and DNI from it.

@@ -170,7 +170,9 @@ class CHP(Component):
 
 
 
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
 
     @staticmethod
     def get_default_config() -> CHPConfig:

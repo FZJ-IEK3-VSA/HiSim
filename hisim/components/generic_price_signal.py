@@ -86,7 +86,10 @@ class PriceSignal(cp.Component):
     def build_dummy( self, start : int, end: int ) -> None:
         self.start = start
         self.end = end
-        
+
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def write_to_report(self) -> List[str]:
         lines = []
         lines.append( "Price signal: {}".format( "dummy" ) )

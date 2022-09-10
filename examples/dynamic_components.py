@@ -82,8 +82,7 @@ def dynamic_components_demonstration(my_sim: Any, my_simulation_parameters: Opti
     my_occupancy = loadprofilegenerator_connector.Occupancy( config=my_occupancy_config, my_simulation_parameters = my_simulation_parameters )
 
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
-    my_weather = weather.Weather( config=my_weather_config, my_simulation_parameters = my_simulation_parameters,
-                                  my_simulation_repository = my_sim.simulation_repository )
+    my_weather = weather.Weather( config=my_weather_config, my_simulation_parameters = my_simulation_parameters)
 
     my_photovoltaic_system_config= generic_pv_system.PVSystemConfig(time=time,
                                           location="Aachen",

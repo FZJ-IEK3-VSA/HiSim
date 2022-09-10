@@ -112,7 +112,9 @@ class GCHP( cp.Component ):
         self.p_th = config.p_th
         self.p_el = config.p_el
         self.p_fuel = config.p_fuel * 1e-8 / 1.41 #converted to kg / s
-    
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
@@ -277,7 +279,9 @@ class L1_Controller( cp.Component ):
         h2storage_classname = generic_hydrogen_storage.HydrogenStorage.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.HydrogenSOC, h2storage_classname, generic_hydrogen_storage.HydrogenStorage.HydrogenSOC ) )
         return connections
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build( self, config: L1CHPConfig ) -> None:
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )

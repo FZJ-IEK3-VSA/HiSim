@@ -37,12 +37,14 @@ class ConfigBase(JSONWizard):
         return cls.__module__ + "." + cls.__name__
 
     def get_string_dict(self)-> List[str]:
+        """ Turns the config into a str list for the report. """
         my_dict = self.to_dict()
         my_list = []
         if len(my_dict) > 0:
             for entry in my_dict.items():
                 my_list.append(entry[0] + ": " + str(entry[1]))
         return my_list
+
 
 @dataclass
 class ComponentConnection:
@@ -170,6 +172,10 @@ class Component:
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
         log.trace("added connections: " + str(self.default_connections))
+
+    def i_prepare_simulation(self) -> None:
+        """ Gets called before the simulation to prepare the calculation. """
+        raise NotImplementedError("Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")")
 
     def set_sim_repo(self, simulation_repository: SimRepository) -> None:
         """ Sets the SimRepository. """

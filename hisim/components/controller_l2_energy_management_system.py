@@ -169,7 +169,9 @@ class ControllerHeat(cp.Component):
 
     def write_to_report(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone()
 
@@ -616,7 +618,9 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     def i_restore_state(self)->None:
         pass
         # self.state = self.previous_state
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 

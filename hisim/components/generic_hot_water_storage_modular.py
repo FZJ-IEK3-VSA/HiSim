@@ -240,6 +240,9 @@ class HotWaterStorage(dycp.DynamicComponent):
                                                   controller_l1_generic_runtime.L1_Controller.L1DeviceSignal))
         return connections
 
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def get_heatpump_default_connections(self):
         """ Sets heat pump default connections in hot water storage. """
         hisim.log.information("setting heat pump default connections in hot water storage")

@@ -78,6 +78,11 @@ class ComponentWrapper:
         """ Wrapper for the core simulation function in each component. """
         self.my_component.i_simulate(timestep, stsv, force_convergence)
 
+    def prepare_calculation(self):
+        """ Wrapper for i_prepare_calculation. """
+        log.information("Preparing " + self.my_component.component_name + " for simulation.")
+        self.my_component.i_prepare_simulation()
+
     def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
         """ Connects cp.ComponentOutputs to ComponentInputs of WrapperComponent. """
         # Returns a List of ComponentInputs

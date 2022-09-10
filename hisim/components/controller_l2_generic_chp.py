@@ -143,7 +143,9 @@ class L2_Controller(cp.Component):
         connections.append(
             cp.ComponentConnection(L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean))
         return connections
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build(self, config: L2CHPConfig) -> None:
 
         self.name = config.name

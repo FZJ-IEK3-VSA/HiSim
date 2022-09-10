@@ -22,13 +22,14 @@ def test_photovoltaic():
 
     # Sets Occupancy
     my_weather_config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
-    my_weather = weather.Weather( config = my_weather_config, my_simulation_parameters = mysim, my_simulation_repository = repo )
+    my_weather = weather.Weather( config = my_weather_config, my_simulation_parameters = mysim)
     my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
     my_pvs_config= generic_pv_system.PVSystem.get_default_config()
     my_pvs_config.power=power
-    my_pvs = generic_pv_system.PVSystem(config=my_pvs_config,my_simulation_parameters=mysim, my_simulation_repository = repo )
+    my_pvs = generic_pv_system.PVSystem(config=my_pvs_config,my_simulation_parameters=mysim)
     my_pvs.set_sim_repo(repo)
-
+    my_pvs.i_prepare_simulation()
     number_of_outputs = fft.get_number_of_outputs([my_weather,my_pvs])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
 

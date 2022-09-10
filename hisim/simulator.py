@@ -69,6 +69,12 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
 
+    @utils.measure_execution_time
+    def prepare_calculation(self) -> None:
+        """ Connects the inputs from every component to the corresponding outputs. """
+        for wrapped_component in self.wrapped_components:
+            wrapped_component.prepare_calculation()
+
     def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
         """ Executes one simulation timestep.
 
@@ -162,7 +168,7 @@ class Simulator:
             return
         # Starts time counter
         start_counter = time.perf_counter()
-
+        self.prepare_calculation()
         # Connects all components
         self.connect_all_components()
         log.information("finished connecting all components. A total of " + str(

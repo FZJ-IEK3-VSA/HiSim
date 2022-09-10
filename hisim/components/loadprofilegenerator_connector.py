@@ -132,7 +132,9 @@ class Occupancy(cp.Component):
 
     def i_restore_state(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 

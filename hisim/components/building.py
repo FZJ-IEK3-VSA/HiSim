@@ -518,7 +518,9 @@ class Building(dynamic_component.DynamicComponent):
 
     def i_save_state(self)-> None:
         self.previous_state = self.state.self_copy()
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_restore_state(self)-> None:
         self.state = self.previous_state.self_copy()
 
@@ -1213,6 +1215,10 @@ class BuildingController(cp.Component):
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        pass
+
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:

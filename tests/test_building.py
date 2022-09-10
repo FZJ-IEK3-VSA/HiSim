@@ -27,21 +27,22 @@ def test_building():
     my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
 
 
-    #repo = component.SimRepository()
+    repo = component.SimRepository()
     t2 = time.perf_counter()
     log.profile("T2: " + str(t2-t1))
     # Set Occupancy
     my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name=my_occupancy_profile, name="Occupancy-1")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-    #my_occupancy.set_sim_repo( repo )
-
+    my_occupancy.set_sim_repo( repo )
+    my_occupancy.i_prepare_simulation()
     t3 = time.perf_counter()
     log.profile("T2: " + str(t3 - t2))
 
     # Set Weather
     my_weather_config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config,my_simulation_parameters=my_simulation_parameters)
-    #my_weather.set_sim_repo(repo)
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
     t4 = time.perf_counter()
     log.profile("T2: " + str(t4 - t3))
 
@@ -51,7 +52,8 @@ def test_building():
     my_residence_config.bClass=bClass
 
     my_residence = building.Building(config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
-
+    my_residence.set_sim_repo(repo)
+    my_residence.i_prepare_simulation()
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",
                                                                 "ThermalDelivery",

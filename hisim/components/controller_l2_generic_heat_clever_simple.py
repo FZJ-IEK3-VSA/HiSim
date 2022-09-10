@@ -192,7 +192,9 @@ class L2_Controller( cp.Component ):
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean ) )
         return connections
-    
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def get_boiler_default_connections( self ):
         log.information("setting boiler default connections in L2 Controller")
         connections = [ ]

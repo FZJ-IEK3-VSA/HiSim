@@ -17,7 +17,7 @@ def test_weather():
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_weather])
     my_weather.set_sim_repo(repo)
-
+    my_weather.i_prepare_simulation()
     # Simulate
     DNI = []
     for i in range(60*24*365):

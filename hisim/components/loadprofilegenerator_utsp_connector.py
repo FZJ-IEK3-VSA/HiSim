@@ -1,6 +1,9 @@
 # Generic/Built-in
 import datetime
+import errno
 import io
+import itertools
+import os
 from typing import Optional, Tuple
 import pandas as pd
 import json
@@ -36,9 +39,26 @@ class UtspConnectorConfig:
     url: str
     api_key: str
     household: JsonReference
+    result_path: str
     travel_route_set: Optional[JsonReference]
     transportation_device_set: Optional[JsonReference]
     charging_station_set: Optional[JsonReference]
+
+    @staticmethod
+    def get_default_config(
+        url: str = "http://localhost:443/api/v1/profilerequest", api_key: str = ""
+    ) -> "UtspConnectorConfig":
+        result_path = os.path.join(utils.get_input_directory(), "lpg_profiles")
+        config = UtspConnectorConfig(
+            url,
+            api_key,
+            Households.CHR01_Couple_both_at_Work,
+            result_path,
+            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
+            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
+            charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
+        )
+        return config
 
 
 class UtspLpgConnector(cp.Component):
@@ -74,7 +94,8 @@ class UtspLpgConnector(cp.Component):
         config: UtspConnectorConfig,
     ) -> None:
         super().__init__(
-            name="Occupancy", my_simulation_parameters=my_simulation_parameters
+            name=UtspLpgConnector.__name__,
+            my_simulation_parameters=my_simulation_parameters,
         )
         self.utsp_config = config
         self.build()
@@ -119,24 +140,14 @@ class UtspLpgConnector(cp.Component):
             lt.Units.LITER,
         )
 
-    @staticmethod
-    def get_default_config() -> UtspConnectorConfig:
-        REQUEST_URL = "http://localhost:443/api/v1/profilerequest"
-        API_KEY = ""
-        config = UtspConnectorConfig(
-            REQUEST_URL,
-            API_KEY,
-            Households.CHR01_Couple_both_at_Work,
-            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
-        )
-        return config
-
     def i_save_state(self) -> None:
         pass
 
     def i_restore_state(self) -> None:
+        pass
+
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
@@ -272,7 +283,7 @@ class UtspLpgConnector(cp.Component):
         end_date = last_day.strftime("%Y-%m-%d")
         simulation_config = lpg_helper.create_basic_lpg_config(
             self.utsp_config.household,
-            HouseTypes.HT01_House_with_a_10kWh_Battery_and_a_fuel_cell_battery_charger_5_MWh_yearly_space_heating_gas_heating,
+            HouseTypes.HT23_No_Infrastructure_at_all,
             start_date,
             end_date,
             self.get_resolution(),
@@ -292,19 +303,24 @@ class UtspLpgConnector(cp.Component):
         simulation_config.CalcSpec.EnableFlexibility = True
 
         # Define required result files
-        electricity_file = result_file_filters.LPGFilters.sum_hh1(
+        electricity = result_file_filters.LPGFilters.sum_hh1(
             LoadTypes.Electricity, no_flex=True
         )
-        warm_water_file = result_file_filters.LPGFilters.sum_hh1(
+        warm_water = result_file_filters.LPGFilters.sum_hh1(
             LoadTypes.Warm_Water, no_flex=True
         )
-        high_activity_file = result_file_filters.LPGFilters.BodilyActivity.HIGH
-        low_activity_file = result_file_filters.LPGFilters.BodilyActivity.LOW
+        high_activity = result_file_filters.LPGFilters.BodilyActivity.HIGH
+        low_activity = result_file_filters.LPGFilters.BodilyActivity.LOW
+        flexibility = result_file_filters.LPGFilters.FLEXIBILITY_EVENTS
         required_files = {
-            electricity_file: datastructures.ResultFileRequirement.REQUIRED,
-            warm_water_file: datastructures.ResultFileRequirement.REQUIRED,
-            high_activity_file: datastructures.ResultFileRequirement.REQUIRED,
-            low_activity_file: datastructures.ResultFileRequirement.REQUIRED,
+            f: datastructures.ResultFileRequirement.REQUIRED
+            for f in [
+                electricity,
+                warm_water,
+                high_activity,
+                low_activity,
+                flexibility,
+            ]
         }
         # Define transportation result files
         car_states = result_file_filters.LPGFilters.all_car_states_optional()
@@ -324,20 +340,42 @@ class UtspLpgConnector(cp.Component):
             self.utsp_config.url, request, self.utsp_config.api_key
         )
 
-        electricity = result.data[electricity_file].decode()
-        warm_water = result.data[warm_water_file].decode()
-        high_activity = result.data[high_activity_file].decode()
-        low_activity = result.data[low_activity_file].decode()
+        electricity_file = result.data[electricity].decode()
+        warm_water_file = result.data[warm_water].decode()
+        high_activity_file = result.data[high_activity].decode()
+        low_activity_file = result.data[low_activity].decode()
+        flexibility_file = result.data[flexibility].decode()
 
-        # Obtain and save transportation result files
-        car_state_files = [
-            result.data[n].decode() for n in car_states if n in result.data
-        ]
-        driving_distance_files = [
-            result.data[n].decode() for n in driving_distances if n in result.data
-        ]
+        # Save flexibility and transportation files
+        self.save_result_file(flexibility, flexibility_file)
+        for filename in itertools.chain(car_states.keys(), driving_distances.keys()):
+            if filename in result.data:
+                self.save_result_file(filename, result.data[filename].decode())
 
-        return electricity, warm_water, high_activity, low_activity
+        return electricity_file, warm_water_file, high_activity_file, low_activity_file
+
+    def save_result_file(self, name: str, content: str) -> None:
+        """
+        Saves a result file in the folder specified in the config object
+
+        :param name: the name for the file
+        :type name: str
+        :param content: the content that will be written into the file
+        :type content: str
+        """
+        filepath = os.path.join(self.utsp_config.result_path, name)
+        dir = os.path.dirname(filepath)
+        # Create the directory if it does not exist
+        try:
+            os.makedirs(dir)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST and os.path.isdir(dir):
+                pass
+            else:
+                raise
+        # Create the result file
+        with open(filepath, "w") as f:
+            f.write(content)
 
     def build(self):
         file_exists, cache_filepath = utils.get_cache_file(

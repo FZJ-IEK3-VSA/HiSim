@@ -1,5 +1,5 @@
 # Generic
-import numpy as np
+from typing import Optional
 
 # Owned
 from hisim import log
@@ -11,7 +11,7 @@ from hisim.components.sumbuilder import SumBuilderForTwoInputs
 from hisim import loadtypes
 from hisim import utils
 
-def first_example(my_sim: Simulator, my_simulation_parameters):
+def first_example(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """
     In this first example, a series (my_rn1) of random numbers in a range between 100 and 200 is
     summed up with a series (my_rn2) of random numbers in a range between 10 and 20. The result is
@@ -52,7 +52,7 @@ def first_example(my_sim: Simulator, my_simulation_parameters):
                          src_field_name=my_rn2.RandomOutput)
     my_sim.add_component(my_sum)
 
-def second_example(my_sim: Simulator,my_simulation_parameters):
+def second_example(my_sim: Simulator,my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """
     In this second example, two series (my_rn1 and my_transformer) are summed up.
 

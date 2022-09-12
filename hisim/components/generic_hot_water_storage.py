@@ -162,7 +162,9 @@ class HeatStorage(Component):
         return config
     def write_to_report(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
 
@@ -325,6 +327,9 @@ class HeatStorageController(cp.Component):
                 initial_temperature_building = 20,
                 initial_temperature_heating_storage = 35)
         return config
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build(self):
         pass
 

@@ -118,7 +118,9 @@ class Battery(Component):
 
     def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool)  -> None:
         
         # Parameters

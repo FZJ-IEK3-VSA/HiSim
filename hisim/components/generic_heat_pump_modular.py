@@ -212,7 +212,9 @@ class HeatPump(cp.Component):
                                  heating_season_begin = None,
                                  heating_season_end = None )
         return config
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build( self, config ):
         self.name = config.name
         self.source_weight = config.source_weight

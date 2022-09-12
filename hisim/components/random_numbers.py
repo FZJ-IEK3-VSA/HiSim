@@ -36,7 +36,9 @@ class RandomNumbers(Component):
 
     def i_save_state(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def write_to_report(self) -> List[str]:
         lines =[]
         lines.append("Random number Generator: {}".format(self.component_name))

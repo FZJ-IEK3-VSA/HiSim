@@ -108,12 +108,12 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         #my_simulation_parameters.enable_all_options()
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
-    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01")
+    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location= "Seville")
+    my_weather_config = weather.WeatherConfig.get_default(location_entry= weather.LocationEnum.Seville)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters= my_simulation_parameters)
     my_sim.add_component(my_weather)
 
@@ -136,7 +136,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_building_config=building.BuildingConfig(building_code = building_code,
                                             bClass = building_class,
                                             initial_temperature = initial_temperature,
-                                            heating_reference_temperature = heating_reference_temperature )
+                                            heating_reference_temperature = heating_reference_temperature, name="Building1" )
 
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,

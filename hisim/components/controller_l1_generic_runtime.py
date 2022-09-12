@@ -58,7 +58,10 @@ class L1_ControllerState:
             return True
         else:
             return False
-        
+
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def activation( self, timestep:int ) ->None:
         self.state = 1
         self.timestep_of_last_action = timestep
@@ -134,7 +137,9 @@ class L1_Controller( cp.Component ):
         config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600,
                           min_idle_time=900) 
         return config
-    
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     @staticmethod
     def get_default_config_heatpump()  -> L1Config:
         config = L1Config(name='L1Controller', source_weight=1, min_operation_time=3600 * 3,

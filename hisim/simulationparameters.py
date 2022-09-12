@@ -1,16 +1,16 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
+# clean
 from __future__ import annotations
 from typing import List, Optional
 import datetime
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
+from dataclass_wizard import JSONWizard
 
-
+from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.loadtypes import HeatingSystems, Locations, OccupancyProfiles, BuildingCodes, Cars, MobilityDistance
 
 
-@dataclass_json
 @dataclass()
 class SystemConfig:
 
@@ -38,13 +38,24 @@ class SystemConfig:
     mobility_distance: MobilityDistance = MobilityDistance.RURAL
 
 
-class SimulationParameters:
+@dataclass()
+class SimulationParameters(JSONWizard):
 
     """ Defines HOW the simulation is going to proceed: Time resolution, time span and all these things. """
 
+    start_date: datetime.date
+    end_date: datetime.date
+    seconds_per_timestep: int
+    post_processing_options: List[int]
+    logging_level: int
+    result_directory: str
+    skip_finished_results: bool
+    system_config: SystemConfig
+
     def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int,
                  result_directory: str = "",
-                 post_processing_options: List[int] = None):
+                 post_processing_options: List[int] = None, logging_level: int = log.LogPrio.INFORMATION,
+                 skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
         """ Initializes the class. """
         self.start_date = start_date
         self.end_date = end_date
@@ -52,14 +63,14 @@ class SimulationParameters:
         self.duration = end_date - start_date
         total_seconds = self.duration.total_seconds()
         self.timesteps: int = int(total_seconds / seconds_per_timestep)
-        self.year = start_date.year
+        self.year: int = int(start_date.year)
         if post_processing_options is None:
             post_processing_options = []
         self.post_processing_options: List[int] = post_processing_options
-        self.logging_level: int = 3  # Info # noqa
+        self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
-        self.skip_finished_results: bool = True
-        self.system_config = SystemConfig()  # noqa
+        self.skip_finished_results: bool = skip_finished_results
+        self.system_config = system_config  # noqa
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

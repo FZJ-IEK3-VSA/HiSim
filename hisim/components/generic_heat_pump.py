@@ -208,7 +208,9 @@ class HeatPump(cp.Component):
         controller_classname = HeatPumpController.get_classname( )
         connections.append( cp.ComponentConnection( HeatPump.State, controller_classname, HeatPumpController.State ) )
         return connections
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build( self, manufacturer: str, name: str, min_operation_time: float, min_idle_time:float )  -> None:
         # Simulation parameters
 
@@ -480,7 +482,9 @@ class HeatPumpController(cp.Component):
         self.offset = offset
 
         self.mode = mode
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_save_state(self ) -> None:
         self.previous_heatpump_mode = self.controller_heatpumpmode
 

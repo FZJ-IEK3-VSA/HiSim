@@ -163,7 +163,9 @@ class L2_Controller( cp.Component ):
         boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, boiler_classname, generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean ) )
         return connections
-    
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     @staticmethod
     def get_default_config_heating():
         config = L2Config(name='L2HeatPump', source_weight=1, T_min_heating=20.0, T_max_heating=22.0,

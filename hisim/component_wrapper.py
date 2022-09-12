@@ -1,8 +1,10 @@
+""" Wraps components for use in the simulator. """
+# clean
 from typing import List, Dict, Any
 
 import hisim.component as cp
 import hisim.loadtypes as lt
-import hisim.log as log
+from hisim import log
 
 
 class ComponentWrapper:
@@ -75,6 +77,11 @@ class ComponentWrapper:
     def calculate_component(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Wrapper for the core simulation function in each component. """
         self.my_component.i_simulate(timestep, stsv, force_convergence)
+
+    def prepare_calculation(self):
+        """ Wrapper for i_prepare_calculation. """
+        log.information("Preparing " + self.my_component.component_name + " for simulation.")
+        self.my_component.i_prepare_simulation()
 
     def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
         """ Connects cp.ComponentOutputs to ComponentInputs of WrapperComponent. """

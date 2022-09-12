@@ -117,7 +117,9 @@ class ElectricityGrid(Component):
         # todo: add more useful stuff here
         lines.append("tbd")
         return lines
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def connect_electricity_input(self, component: Component) -> None:
         if hasattr(component, 'ElectricityOutput') is False:
             raise Exception("Component does not contain electricity output.")
@@ -210,7 +212,9 @@ class SumBuilderForTwoInputs(Component):
 
     def i_restore_state(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)

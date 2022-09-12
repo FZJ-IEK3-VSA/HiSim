@@ -38,18 +38,20 @@ jobs:
         prospector hisim/postprocessingoptions.py
         prospector hisim/log.py
         prospector hisim/loadtypes.py
+        prospector hisim/json_executor.py
+        prospector hisim/json_generator.py
         prospector hisim/hisim_with_profiler.py
         prospector hisim/hisim_main.py
         prospector hisim/dynamic_component.py
+        prospector hisim/component_wrapper.py
         prospector hisim/component.py
-        prospector hisim/json_executor.py
-        prospector hisim/json_generator.py
         prospector hisim/postprocessing/chart_singleday.py
         prospector hisim/postprocessing/chartbase.py
         prospector hisim/postprocessing/charts.py
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/components/generic_hot_water_storage_modular.py
+        prospector hisim/postprocessing/system_chart.py
 #        prospector examples/component_connections.py
 #        prospector examples/modular_household.py
 

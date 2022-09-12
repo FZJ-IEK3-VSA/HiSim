@@ -139,7 +139,9 @@ class L3_Controller(dynamic_component.DynamicComponent):
             return 1
         else:
             return 0
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def write_to_report(self) -> List[str]:
         lines:List[str] = []
         lines.append("L3 Controller Heat Pump: " + self.component_name)

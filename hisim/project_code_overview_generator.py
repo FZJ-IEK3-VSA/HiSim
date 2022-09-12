@@ -1,4 +1,5 @@
 """ Makes an overview of all the components and collects important information for each module. """
+# clean
 from types import ModuleType
 from typing import List, Any, Optional
 from pathlib import Path as Pathlibpath
@@ -92,6 +93,7 @@ class FileInformation:
     file_name: str = ""
     length: str = ""
     authors: str = ""
+    cleaned: bool = False
     copyright: str = ""
     credits: str = ""
     license: str = ""
@@ -146,6 +148,26 @@ class OverviewGenerator:
             row = row + 1
         # import the module and iterate through its attributes
         workbook.save(dest_filename)
+        self.write_clean_files(fis)
+
+    def write_clean_files(self, fis: List[FileInformation]) -> None:
+        """ Writes files for calling flak8e and prospector. """
+        with open("../flake8_calls.txt", "w", encoding="utf8") as flake8:
+            with open("../prospector_calls.txt", "w", encoding="utf8") as prospector:
+                with open("../prospector_mass_call.cmd", "w", encoding="utf8") as prospector_cmd:
+                    with open("../flake8_mass_call.cmd", "w", encoding="utf8") as flake8_cmd:
+                        for myfi in fis:
+                            if not myfi.cleaned:
+                                continue
+                            relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
+                            relative_name_slash = relative_name.replace("\\", "/")
+                            prospector.write("        prospector " + relative_name_slash + "\n")
+                            flake8.write("        flake8 " + relative_name_slash +
+                                         " --count --select=E9,F63,F7,F82,E800 --show-source --statistics\n")
+                            prospector_cmd.write("prospector " + relative_name + "\n")
+                            prospector_cmd.write("if %errorlevel% neq 0 exit /b\n")
+                            flake8_cmd.write("flake8 " + relative_name + " --ignore=E501 --show-source \n")
+                            flake8_cmd.write("if %errorlevel% neq 0 exit /b\n")
 
     def write_one_file_block(self, myfi, row, worksheet1):
         """ Writes the block for a single file to excel. """
@@ -155,6 +177,7 @@ class OverviewGenerator:
         column = self.add_to_cell(column=column, row=row, value=myfi.lines, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.python_module_loading_possible,
                                   worksheet=worksheet1)
+        column = self.add_to_cell(column=column, row=row, value=myfi.cleaned, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.authors, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.copyright, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.email, worksheet=worksheet1)
@@ -286,7 +309,10 @@ class OverviewGenerator:
         """ Analyze all the files and count the lines in each file. Could be expanded with more checks. """
         count = 0
         with open(filename, "r", encoding="utf8") as sourcefile:
-            for count, _line in enumerate(sourcefile):
+            for count, line in enumerate(sourcefile):
+                if line.startswith("# clean"):
+                    print("found clean tag " + myfi.file_name)
+                    myfi.cleaned = True
                 pass
         myfi.lines = count
 

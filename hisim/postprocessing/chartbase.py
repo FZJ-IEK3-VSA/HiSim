@@ -1,4 +1,5 @@
 """ Contains the base class for the charts. """
+# clean
 import os
 import re
 
@@ -11,7 +12,7 @@ class Chart:  # noqa: too-few-public-methods
     label_months_lowercase = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                               'August', 'September', 'October', 'November', 'December']
 
-    def __init__(self, output,  chart_type, units, directorypath, time_correction_factor, output2=None):
+    def __init__(self, output, chart_type, units, directory_path, time_correction_factor, output2=None):
         """ Initializes the base class. """
         self.output = output
         self.type = chart_type
@@ -42,7 +43,7 @@ class Chart:  # noqa: too-few-public-methods
                 self.title = str(single_match)
             else:
                 self.title = f"{self.title} {single_match}"
-        self.directorypath = directorypath
+        self.directorypath = directory_path
 
         self.object_name = " "
         self.property = chart_property

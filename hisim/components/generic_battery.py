@@ -142,7 +142,9 @@ class Battery(cp.Component):
     #    self.state = copy.copy(self.previous_state)
     def i_save_state(self)-> None:
         self.previous_state = copy.deepcopy(self.state)
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_restore_state(self)-> None:
         self.state = copy.deepcopy(self.previous_state)
 
@@ -199,7 +201,9 @@ class BatteryController(cp.Component):
 
     def i_restore_state(self)-> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 

@@ -1,6 +1,5 @@
-
 """ Contains all the main simulator components. """
-
+# clean
 import os
 import datetime
 from typing import List, Tuple, Optional
@@ -10,7 +9,7 @@ import pandas as pd
 
 # Owned
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.componentwrapper import ComponentWrapper
+from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
 from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
@@ -46,7 +45,7 @@ class Simulator:
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
 
-    def set_simulation_parameters(self,  my_simulation_parameters: SimulationParameters) -> None:
+    def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
@@ -69,6 +68,12 @@ class Simulator:
         """ Connects the inputs from every component to the corresponding outputs. """
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
+
+    @utils.measure_execution_time
+    def prepare_calculation(self) -> None:
+        """ Connects the inputs from every component to the corresponding outputs. """
+        for wrapped_component in self.wrapped_components:
+            wrapped_component.prepare_calculation()
 
     def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
         """ Executes one simulation timestep.
@@ -155,17 +160,15 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise Exception("Not a single component was defined. Quitting.")
-
+        # call again because it might not have gotten executed depending on how it's called.
+        self.prepare_simulation_directory()
         flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
         if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
             log.warning("Found " + flagfile + ". This calculation seems finished. Quitting.")
             return
-
-        self.prepare_simulation_directory()
-
         # Starts time counter
         start_counter = time.perf_counter()
-
+        self.prepare_calculation()
         # Connects all components
         self.connect_all_components()
         log.information("finished connecting all components. A total of " + str(

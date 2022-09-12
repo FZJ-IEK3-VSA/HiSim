@@ -2,19 +2,48 @@
 
 The component class is the base class for all other components.
 """
+# clean
 from __future__ import annotations
 from typing import List, Optional, Dict, Any, Type
 
 import typing
 import dataclasses as dc
 from dataclasses import dataclass
+from dataclass_wizard import JSONWizard
 
 # Package
-from hisim import utils
+
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
+
+
+@dataclass
+class ConfigBase(JSONWizard):
+
+    """ Base class for all configurations. """
+
+    name: str
+
+    @classmethod
+    def get_main_classname(cls):
+        """ Returns the fully qualified class name for the class that is getting configured. Used for Json. """
+        raise NotImplementedError("Missing a definition of the ")
+
+    @classmethod
+    def get_config_classname(cls):
+        """ Gets the class name. Helper function for default connections. """
+        return cls.__module__ + "." + cls.__name__
+
+    def get_string_dict(self) -> List[str]:
+        """ Turns the config into a str list for the report. """
+        my_dict = self.to_dict()
+        my_list = []
+        if len(my_dict) > 0:
+            for entry in my_dict.items():
+                my_list.append(entry[0] + ": " + str(entry[1]))
+        return my_list
 
 
 @dataclass
@@ -43,7 +72,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.load_type: lt.LoadTypes = load_type
         self.unit: lt.Units = unit
         self.global_index: int = -1
-        self.component_type:  Optional[lt.ComponentType] = component_type
+        self.component_type: Optional[lt.ComponentType] = component_type
         self.postprocessing_flag: Optional[lt.InandOutputType] = postprocessing_flag
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
 
@@ -86,20 +115,10 @@ class SingleTimeStepValues:
         """ Gets a value for an input from the single time step values. """
         if component_input.source_output is None:
             return 0
-        # commented for performance reasons: this is called hundreds of millions of times and even
-        # this small check for better error messages is taking seconds
-        # if component_input.SourceOutput.GlobalIndex < 0:
-        #    raise  Exception("Globalindex for input was -1: " + component_input.SourceOutput.FullName)
         return self.values[component_input.source_output.global_index]
 
     def set_output_value(self, output: ComponentOutput, value: float) -> None:
         """ Sets a single output value in the single time step values array. """
-        # commented for performance reasons: this is called hundreds of millions of times and
-        # even this small check for better error messages is taking seconds
-        # if(output.GlobalIndex < 0):
-        #     raise Exception("Output Index was not set correctly for " + output.FullName + ". GlobalIndex was " +str(output.GlobalIndex))
-        # if(output.GlobalIndex > len(self.values)-1):
-        #    raise Exception("Output Index was not set correctly for " + output.FullName)
         self.values[output.global_index] = value
 
     def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:
@@ -130,6 +149,11 @@ class Component:
         """ Gets the class name. Helper function for default connections. """
         return cls.__name__
 
+    @classmethod
+    def get_full_classname(cls):
+        """ Gets the class name. Helper function for default connections. """
+        return cls.__module__ + "." + cls.__name__
+
     def __init__(self, name: str, my_simulation_parameters: SimulationParameters) -> None:
         """ Initializes the component class. """
         self.component_name: str = name
@@ -148,6 +172,10 @@ class Component:
         classname: str = component.get_classname()
         self.default_connections[classname] = connections
         log.trace("added connections: " + str(self.default_connections))
+
+    def i_prepare_simulation(self) -> None:
+        """ Gets called before the simulation to prepare the calculation. """
+        raise NotImplementedError("Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")")
 
     def set_sim_repo(self, simulation_repository: SimRepository) -> None:
         """ Sets the SimRepository. """
@@ -223,39 +251,6 @@ class Component:
             new_connections.append(connection_copy)
         return new_connections
 
-    @utils.deprecated("connect_similar_inputs is deprecated. witch to using default connections.")
-    def connect_electricity(self, component):
-        """ Connect electricity outputs and inputs. """
-        if isinstance(component, Component) is False:
-            raise Exception("Input has to be a component!")
-        if hasattr(component, "ElectricityOutput") is False:
-            raise Exception("Input Component does not have Electricity Output!")
-        if hasattr(self, "ElectricityInput") is False:
-            raise Exception("This self Component does not have Electricity Input!")
-        self.connect_input(self.ElectricityInput, component.component_name, component.ElectricityOutput)  # type: ignore
-
-    @utils.deprecated("connect_similar_inputs is deprecated. witch to using default connections.")
-    def connect_similar_inputs(self, components):
-        """ Connects all inputs with identical names. """
-        if len(self.inputs) == 0:
-            raise Exception("The component " + self.component_name + " has no inputs.")
-
-        if isinstance(components, list) is False:
-            components = [components]
-
-        for component in components:
-            if isinstance(component, Component) is False:
-                raise Exception("Input variable is not a component")
-            has_not_been_connected = True
-            for cinput in self.inputs:
-                for output in component.outputs:
-                    if cinput.field_name == output.field_name:
-                        has_not_been_connected = False
-                        self.connect_input(cinput.field_name, component.component_name, output.field_name)
-            if has_not_been_connected:
-                raise Exception(
-                    f"No similar inputs from {self.component_name} are compatible with the outputs of {component.component_name}!")
-
     def get_input_definitions(self) -> List[ComponentInput]:
         """ Gets the input definitions. """
         return self.inputs
@@ -279,8 +274,8 @@ class Component:
         raise NotImplementedError()
 
     def write_to_report(self) -> Any:
-        """ Performs the actual calculation. """
-        raise NotImplementedError()
+        """ Abstract function for writing the report entry for this component. """
+        raise NotImplementedError("In " + self.component_name)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """ Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes. """

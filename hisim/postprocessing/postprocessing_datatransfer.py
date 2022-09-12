@@ -1,7 +1,10 @@
+""" Data Transfer Object to get all the result data to the post processing. """
+
+# clean
 from typing import Any, List
 
 from hisim import log
-from hisim.componentwrapper import ComponentWrapper
+from hisim.component_wrapper import ComponentWrapper
 from hisim.simulationparameters import SimulationParameters
 
 

@@ -5,7 +5,7 @@ The hot water storage simulates only storage and demand and needs to be connnect
 hot water demand or as  buffer with input ThermalPowerToBuilding. Both options need input signal for heating power and have
 one output: the hot water storage temperature.
 """
-
+# clean
 # Generic/Built-in
 from typing import Optional, List
 from dataclasses import dataclass
@@ -251,6 +251,10 @@ class HotWaterStorage(dycp.DynamicComponent):
                                                   controller_l1_generic_runtime.L1_Controller.L1DeviceSignal))
         return connections
 
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
+
     def get_heatpump_default_connections(self):
         """ Sets heat pump default connections in hot water storage. """
         hisim.log.information("setting heat pump default connections in hot water storage")
@@ -324,7 +328,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Abstract. Restores the state of the component. Can be called many times while iterating. """
         self.state = self.previous_state.clone()
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Simulates iteration of hot water storage. """
 
         if self.thermal_power_delivered_c.source_output is not None:
@@ -348,7 +352,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         # save outputs
         stsv.set_output_value(self.temperature_mean_c, self.state.temperature_in_kelvin - 273.15)
 
-    def calculate_heat_consumption(self,  stsv, thermal_power_delivered, timestep):
+    def calculate_heat_consumption(self, stsv: cp.SingleTimeStepValues, thermal_power_delivered: float, timestep: int) -> float:
         """ Calculates the heat consumption. """
         if self.use == lt.ComponentType.BOILER:
             # heat loss due to hot water consumption -> base on energy balance in kJ

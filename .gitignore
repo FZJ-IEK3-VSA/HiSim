@@ -148,3 +148,12 @@ tests/finished.flag
 examples/finished.flag
 examples/ac_results_5b
 examples/network_t1.png
+hisim/inputs/cfg.json
+tests/cfg.json
+tests/json/results
+hisim/json_generator.py
+hisim/~$components_information.xlsx
+flake8_calls.txt
+prospector_calls.txt
+prospector_mass_call.cmd
+flake8_mass_call.cmd

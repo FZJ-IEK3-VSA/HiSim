@@ -101,7 +101,9 @@ class HydrogenStorage( cp.Component ):
         
         self.add_default_connections( generic_electrolyzer.Electrolyzer, self.get_electrolyzer_default_connections( ) )
         self.add_default_connections( generic_CHP.GCHP, self.get_fuelcell_default_connections( ) )
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     @staticmethod
     def get_default_config(capacity: float = 200, max_charging_rate: float = 2, max_discharging_rate: float = 2,
                            source_weight: int = 1) -> HydrogenStorageConfig:

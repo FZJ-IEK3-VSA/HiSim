@@ -24,7 +24,9 @@ class Transformer(Component):
 
     def i_restore_state(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         startval_1 = stsv.get_input_value(self.input1)
         startval_2 = stsv.get_input_value(self.input2)

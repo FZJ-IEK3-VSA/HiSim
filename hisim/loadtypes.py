@@ -10,7 +10,7 @@ Guidelines for enum classes:
         is an Unit, then 'Meter' should not be used.
 
 """
-
+# clean
 import enum
 
 

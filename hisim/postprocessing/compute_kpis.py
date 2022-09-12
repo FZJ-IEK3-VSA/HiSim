@@ -16,10 +16,6 @@ from hisim.simulationparameters import SimulationParameters
 #sum consumption and production of individual components
 
 def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters)-> Any:
-
-
-        #self.kpis_values_list=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]
-
     results[ 'consumption' ] = 0
     results[ 'production' ] = 0
     results[ 'storage' ] = 0
@@ -38,7 +34,6 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     for index, output in enumerate(all_outputs):
     
         if output.postprocessing_flag!=None:
-            #print(output.postprocessing_flag,output.full_name)    
             if (InandOutputType.PRODUCTION in output.postprocessing_flag):
                 print("Ich werde an die Production results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]

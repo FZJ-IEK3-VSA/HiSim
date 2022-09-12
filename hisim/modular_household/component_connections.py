@@ -4,7 +4,7 @@ The functions are all called in modular_household.
 """
 
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 
 import csv
 
@@ -32,7 +32,7 @@ from hisim.components import controller_l3_smart_devices
 from hisim import utils
 
 
-def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
+def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
                         production: List, pv_peak_power: Optional[float], count: int) -> Tuple[List, int]:
     """ Sets PV System.
 
@@ -67,7 +67,7 @@ def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, 
     return production, count
 
 
-def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParameters, consumption: List, count: int) \
+def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters, consumption: List, count: int) \
         -> Tuple[List[generic_smart_device.SmartDevice], List, int]:
     """ Sets smart devices without controllers.
 
@@ -106,7 +106,7 @@ def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParamete
     return my_smart_devices, consumption, count
 
 
-def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameters: SimulationParameters,
+def configure_smart_controller_for_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters,
                                                  my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:
     """ Sets l3 controller for smart devices.
 
@@ -146,7 +146,7 @@ def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameter
     my_sim.add_component(my_controller_l3)
 
 
-def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
+def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                       battery_capacity: Optional[float], count: int) -> int:
     """ Sets advanced battery system with surplus controller.
@@ -191,7 +191,7 @@ def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
 
 
 def configure_water_heating(
-        my_sim, my_simulation_parameters: SimulationParameters,
+        my_sim: Any, my_simulation_parameters: SimulationParameters,
         my_occupancy: loadprofilegenerator_connector.Occupancy,
         my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
         my_weather: weather.Weather, water_heating_system_installed: lt.HeatingSystems,
@@ -292,7 +292,7 @@ def configure_water_heating(
     return count
 
 
-def configure_heating(my_sim, my_simulation_parameters: SimulationParameters,
+def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_building: building.Building,
                       my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                       my_weather: weather.Weather, heating_system_installed: str, count: int) -> Tuple[Component, int]:
@@ -384,7 +384,7 @@ def configure_heating(my_sim, my_simulation_parameters: SimulationParameters,
     return my_heater, count
 
 
-def configure_heating_with_buffer(my_sim,
+def configure_heating_with_buffer(my_sim: Any,
                                   my_simulation_parameters: SimulationParameters,
                                   my_building: building.Building,
                                   my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
@@ -504,7 +504,7 @@ def configure_heating_with_buffer(my_sim,
     return my_heater, my_buffer, count
 
 
-def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters: SimulationParameters, my_building: building.Building,
+def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                                                my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                                                chp_power: Optional[float], h2_storage_size: Optional[float], electrolyzer_power: Optional[float],
                                                count: int) -> Tuple[generic_CHP.GCHP, int]:

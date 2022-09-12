@@ -14,9 +14,9 @@ import hisim.loadtypes as lt
 @dataclass_json
 @dataclass()
 class ModularHouseholdResults:
-    terminationflag: lt.Termination = lt.Termination.SUCESSFUL #add enum in loadtypes
     investment_cost: float
     co2_cost: float
     injection: float
     autarky_rate: float
     self_consumption_rate: float
+    terminationflag: lt.Termination = lt.Termination.SUCCESSFUL #add enum in loadtypes

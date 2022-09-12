@@ -1,46 +1,30 @@
 """Example sets up a modular household according to json input file."""
 
-from typing import Optional, List
+from typing import Optional, List, Tuple, Any
 from pathlib import Path
 
-
-# import component_connections
+import csv
 
 import hisim.log
+import hisim.utils
 import hisim.loadtypes as lt
-from hisim.modular_household import component_connections
+# from hisim.modular_household import component_connections
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
+from hisim.component import Component
 from hisim.postprocessingoptions import PostProcessingOptions
+
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
-
-""" Contains functions for initializing and connecting components.
-
-The functions are all called in modular_household.
-"""
-
-
-from typing import List, Optional, Tuple, Any
-
-import csv
-
-import hisim.loadtypes as lt
-from hisim.component import Component
-from hisim.simulator import SimulationParameters
 from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_source
 from hisim.components import controller_l1_generic_runtime
 from hisim.components import controller_l2_generic_heat_clever_simple
 from hisim.components import controller_l2_generic_heat_simple
-from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_hot_water_storage_modular
-from hisim.components import loadprofilegenerator_connector
-from hisim.components import weather
-from hisim.components import building
 from hisim.components import generic_pv_system
 from hisim.components import generic_smart_device
 from hisim.components import advanced_battery_bslib
@@ -49,7 +33,6 @@ from hisim.components import controller_l2_generic_chp
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
 from hisim.components import controller_l3_smart_devices
-from hisim import utils
 
 
 def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
@@ -103,7 +86,7 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         Integer tracking component hierachy for EMS.
 
     """
-    filepath = utils.HISIMPATH["smart_devices"]["device_collection"]
+    filepath = hisim.utils.HISIMPATH["smart_devices"]["device_collection"]
     device_collection = []
 
     with open(filepath, 'r', encoding="utf-8") as file:

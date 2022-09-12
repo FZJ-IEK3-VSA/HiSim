@@ -34,13 +34,13 @@ class ComponentCost:
 def create_componentcost_file(
         component: lt.ComponentType, capacity_unit: lt.Units, capacity_for_cost: List,
         cost_per_capacity: List, time: List, costfactor_per_time: List, capacity_for_co2: List,
-        co2_per_capacity: List):
+        co2_per_capacity: List) -> None:
 
     costfile = ComponentCost(
         component=component, capacity_unit=capacity_unit, capacity_for_cost=capacity_for_cost,
         cost_per_capacity=cost_per_capacity, time=time, costfactor_per_time=costfactor_per_time,
         capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
-    costfile = json.dumps(asdict(costfile))
+    json.dumps(asdict(costfile))
     
 # =============================================================================
 #     with open('ComponentCost' + component.value + '.json', 'w') as outfile:
@@ -68,13 +68,13 @@ class FuelCost:
     
 def create_fuelcost_file(
         fuel: lt.LoadTypes, fuel_unit: lt.Units, price_per_unit_fuel: float,
-        co2_per_unit_fuel:float):
+        co2_per_unit_fuel:float) -> None:
     costfile= FuelCost(fuel=fuel, fuel_unit=fuel_unit, price_per_unit_fuel=price_per_unit_fuel,
                        co2_per_unit_fuel=co2_per_unit_fuel)
-    costfile = json.dumps(asdict(costfile))
+    costfile_written = json.dumps(asdict(costfile))
     
-    with open('FuelCost' + fuel.value + '.json', 'w') as outfile:
-        outfile.write(costfile)
+    with open("FuelCost" + fuel.value + '.json', 'w') as outfile:
+        outfile.write(costfile_written)
 
 def write_electricitycost_file():
     create_fuelcost_file(
@@ -96,7 +96,7 @@ def create_economicparameters_file(insulation_bought: bool,
     h2system_bought: bool,
     h2system_threshold: float,
     ev_bought: bool,
-    ev_threshold: float):
+    ev_threshold: float) -> None:
 
     economic_parameters_file = EconomicParameters(
         insulation_bought=insulation_bought,

@@ -77,6 +77,7 @@ class DisplayNames(str, enum.Enum):
     ELECTRICITY_OUTPUT = "ElectricityOutput"
     ELECTRICITY_INPUT = "ElectricityInput"
 
+
 @enum.unique
 class Termination(str, enum.Enum):
 

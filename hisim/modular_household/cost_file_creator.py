@@ -42,17 +42,21 @@ def create_componentcost_file(
         capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
     json.dumps(asdict(costfile))
     
-# =============================================================================
-#     with open('ComponentCost' + component.value + '.json', 'w') as outfile:
-#         outfile.write(hey)
-# 
-# =============================================================================
+    with open('ComponentCost' + component.value + '.json', 'w') as outfile:
+        outfile.write(costfile)
+
 def write_batterycost_file():
     create_componentcost_file(
         component=lt.ComponentType.BATTERY, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
         cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
-   
+
+def write_pvcost_file():
+    create_componentcost_file(
+        component=lt.ComponentType.PV, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
+        cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
+        capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
+write_pvcost_file()
  
 @dataclass_json
 @dataclass()
@@ -116,11 +120,11 @@ def create_economicparameters_file(insulation_bought: bool,
             ev_bought=ev_bought,
             ev_threshold=ev_threshold)
     economic_parameters_file = json.dumps(asdict(economic_parameters_file))
-    
+
     with open('EconomicParameters.json', 'w') as outfile:
         outfile.write(economic_parameters_file)
-        
-        
+
+
 def write_economicparameters_file():
     create_economicparameters_file(
         insulation_bought=True,
@@ -139,4 +143,4 @@ def write_economicparameters_file():
             h2system_threshold=5e3,
             ev_bought=True,
             ev_threshold=2e4)
-write_economicparameters_file()
+#write_economicparameters_file()

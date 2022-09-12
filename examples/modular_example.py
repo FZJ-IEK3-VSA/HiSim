@@ -2,11 +2,14 @@
 
 from typing import Optional, List, Any
 from pathlib import Path
-
+import os
+import json
 import hisim.log
 import hisim.utils
 import hisim.loadtypes as lt
+import scipy.interpolate
 from hisim.modular_household import component_connections
+from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -19,6 +22,7 @@ from hisim.components import controller_l2_energy_management_system
 
 
 def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+
     """Setup function emulates an household including the basic components.
 
     The configuration of the household is read in via the json input file "system_config.json".
@@ -171,7 +175,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         count = component_connections.configure_battery(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_electricity_controller=my_electricity_controller,
             battery_capacity=battery_capacity, count=count)
-
+        #EconomicParameters.battery_bought abfragen, ob Batterie bereits vorhanden ist
+        ccb = json.load(open('..\hisim\modular_household\ComponentCostBattery.json'))
+        battery_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
+        print("Interpolierter Preis für Kapazität von 1120:", battery_cost_interp(battery_capacity))
+        
     """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included:
         my_chp, count = component_connections.configure_elctrolysis_h2storage_chp_system(
@@ -192,3 +200,27 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if battery_included or chp_included or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
             or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_sim.add_component(my_electricity_controller)
+
+    """PREDICTIVE CONTROLLER FOR SMART DEVICES"""
+    # use predictive controller if smart devices are included and do not use it if it is false
+    if smart_devices_included:
+        my_simulation_parameters.system_config.predictive = True
+        component_connections.configure_smart_controller_for_smart_devices(
+            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_smart_devices=my_smart_devices)
+    else:
+        my_simulation_parameters.system_config.predictive = False
+    
+    investment_cost=battery_cost_interp(battery_capacity)
+    co2_cost=1000    #CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
+    injection=1000
+    autarky_rate=1000
+    self_consumption_rate=1000
+    
+    modular_household_results=ModularHouseholdResults(
+        investment_cost=investment_cost,
+        co2_cost=co2_cost,
+        injection=injection,
+        autarky_rate=autarky_rate,
+        self_consumption_rate=self_consumption_rate,
+        terminationflag=lt.Termination
+        )

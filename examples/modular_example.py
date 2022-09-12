@@ -1,9 +1,7 @@
 """Example sets up a modular household according to json input file."""
 
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Any
 from pathlib import Path
-
-import csv
 
 import hisim.log
 import hisim.utils
@@ -11,7 +9,6 @@ import hisim.loadtypes as lt
 from hisim.modular_household import component_connections
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
-from hisim.component import Component
 from hisim.postprocessingoptions import PostProcessingOptions
 
 from hisim.components import loadprofilegenerator_connector
@@ -19,20 +16,7 @@ from hisim.components import generic_price_signal
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
-from hisim.components import generic_heat_pump_modular
-from hisim.components import generic_heat_source
-from hisim.components import controller_l1_generic_runtime
-from hisim.components import controller_l2_generic_heat_clever_simple
-from hisim.components import controller_l2_generic_heat_simple
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import generic_pv_system
-from hisim.components import generic_smart_device
-from hisim.components import advanced_battery_bslib
-from hisim.components import generic_CHP
-from hisim.components import controller_l2_generic_chp
-from hisim.components import generic_electrolyzer
-from hisim.components import generic_hydrogen_storage
-from hisim.components import controller_l3_smart_devices
+
 
 def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Setup function emulates an household including the basic components.

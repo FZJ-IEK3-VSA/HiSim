@@ -110,6 +110,7 @@ HISIMPATH: Dict[str, Any] = {"results": os.path.join(hisim_abs_path, "results"),
                              "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery",
                                                            "Siemens_Junelight.npy")}
 
+
 def load_smart_appliance(name):  # noqa
     """ Loads file for a single smart appliance by name. """
     with open(HISIMPATH["smart_appliances"], encoding="utf-8") as filestream:
@@ -144,6 +145,7 @@ def get_cache_file(component_key: str, parameter_class: Any, my_simulation_param
         return True, cache_absolute_filepath
     return False, cache_absolute_filepath
 
+
 def load_export_load_profile_generator(target):  # noqa
     """ Returns the paths for the SQL exported files from the Load Profile Generator. """
     targetpath = os.path.join(HISIMPATH["LoadProfileGenerator_export_directory"], target)
@@ -151,6 +153,7 @@ def load_export_load_profile_generator(target):  # noqa
         lpg_export_path = {"electric_vehicle": [os.path.join(targetpath, "Results.HH1.sqlite"), os.path.join(targetpath, "Results.General.sqlite")]}
         return lpg_export_path
     raise ValueError("Target export from Load Profile Generator does not exist")
+
 
 def measure_execution_time(my_function):  # noqa
     """ Utility function that works as decorator for measuring execution time. """

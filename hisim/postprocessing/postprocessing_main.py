@@ -12,7 +12,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_kpis import compute_kpis
+from hisim.postprocessing.compute_kpis import compute_KPIs
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -299,7 +299,6 @@ class PostProcessor:
     #         self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
     #         if building_area is not None:
     #             self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
-
 
     def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """

@@ -1,8 +1,9 @@
 """ Main postprocessing module that starts all other modules. """
 # clean
 import os
+import csv
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
@@ -11,7 +12,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_kpis import compute_kpis
+from hisim.postprocessing.compute_kpis import compute_KPIs
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -26,7 +27,7 @@ class PostProcessor:
         """ Initializes the post processing. """
         self.dirname: str
 
-    def set_dir_results(self, dirname):
+    def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """ Sets the results directory. """
         if dirname is None:
             raise ValueError("No results directory name was defined.")
@@ -218,9 +219,17 @@ class PostProcessor:
         report.close()
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-        """ Computes KPI's and writes them to report. """
-        lines = compute_kpis(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        """ Computes KPI's and writes them to report and csv. """
+        kpi_compute_return = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        lines = kpi_compute_return[0]
         self.write_to_report(text=lines, report=report)
+        csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, "KPIs.csv")
+        kpis_list = kpi_compute_return[1]
+        kpis_values_list = kpi_compute_return[2]
+        with open(csvfilename, "w", encoding='utf8') as csvfile:
+            writer = csv.writer(csvfile)
+            for (kpis_list_elem, kpis_values_list_elem) in zip(kpis_list, kpis_values_list):
+                writer.writerow([kpis_list_elem, kpis_values_list_elem])
 
     def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """

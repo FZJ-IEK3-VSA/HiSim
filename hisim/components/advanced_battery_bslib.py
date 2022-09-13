@@ -89,7 +89,7 @@ class Battery(Component):
                                                      field_name=self.AcBatteryPower,
                                                      load_type=LoadTypes.ELECTRICITY,
                                                      unit=Units.WATT,
-                                                     postprocessing_flag=InandOutputType.CHARGE_DISCHARGE)
+                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE])
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
@@ -100,7 +100,7 @@ class Battery(Component):
                                                     field_name=self.StateOfCharge,
                                                     load_type=LoadTypes.ANY,
                                                     unit=Units.ANY,
-                                                    postprocessing_flag=InandOutputType.STORAGE_CONTENT)
+                                                    postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
     @staticmethod
     def get_default_config(p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
         config=BatteryConfig(

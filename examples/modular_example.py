@@ -47,7 +47,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # try to read the system config from file
     if Path(system_config_filename).is_file():
-        with open(system_config_filename) as system_config_file:
+        with open(system_config_filename, encoding='utf8') as system_config_file:
             system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
         hisim.log.information(f"Read system config from {system_config_filename}")
         my_simulation_parameters.system_config = system_config

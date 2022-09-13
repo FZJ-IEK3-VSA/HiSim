@@ -232,7 +232,6 @@ class PostProcessor:
             for value in range(len(kpis_list)):
                 writer.writerow([kpis_list[value], kpis_values_list[value]])
 
-
     def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """
         report.open()

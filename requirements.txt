@@ -15,3 +15,4 @@ psutil
 pydot
 graphviz
 dataclass_wizard
+utspclient

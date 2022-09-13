@@ -4,7 +4,7 @@ import errno
 import io
 import itertools
 import os
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 import pandas as pd
 import json
 import numpy as np
@@ -297,6 +297,7 @@ class UtspLpgConnector(cp.Component):
                 CalcOption.FlexibilityEvents,
             ],
         )
+        assert simulation_config.CalcSpec is not None
 
         # Enable simulation of transportation and flexible devices
         simulation_config.CalcSpec.EnableTransportation = True
@@ -327,11 +328,15 @@ class UtspLpgConnector(cp.Component):
         driving_distances = (
             result_file_filters.LPGFilters.all_driving_distances_optional()
         )
-        result_files = {**required_files, **car_states, **driving_distances}
+        result_files: Dict[str, Optional[datastructures.ResultFileRequirement]] = {
+            **required_files,
+            **car_states,
+            **driving_distances,
+        }
 
         # Prepare the time series request
         request = datastructures.TimeSeriesRequest(
-            simulation_config.to_json(), "LPG", required_result_files=result_files
+            simulation_config.to_json(), "LPG", required_result_files=result_files  # type: ignore
         )
 
         log.information("Requesting LPG profiles from the UTSP.")

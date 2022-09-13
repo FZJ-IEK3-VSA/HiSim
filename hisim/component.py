@@ -62,7 +62,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
     """ Used in the component class for defining an output. """
 
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
-                 postprocessing_flag: List = [],
+                 postprocessing_flag: Optional[List[Any]],
                  sankey_flow_direction: Optional[bool] = None):
         """ Defines a component output. """
         self.full_name: str = object_name + " # " + field_name
@@ -190,7 +190,7 @@ class Component:
         return myinput
 
     def add_output(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
-                   postprocessing_flag: List = [], sankey_flow_direction: bool = None) -> ComponentOutput:
+                   postprocessing_flag: Optional[List[Any]] = None, sankey_flow_direction: bool = None) -> ComponentOutput:
         """ Adds an output definition. """
         log.debug("adding output: " + field_name + " to component " + object_name)
         outp = ComponentOutput(object_name, field_name, load_type, unit, postprocessing_flag, sankey_flow_direction)

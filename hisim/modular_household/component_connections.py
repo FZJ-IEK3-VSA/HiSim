@@ -86,7 +86,7 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
     filepath = utils.HISIMPATH["smart_devices"]["device_collection"]
     device_collection = []
 
-    with open(filepath, 'r') as file:
+    with open(filepath, 'r', encoding='utf8') as file:
         i = 0
         formatreader = csv.reader(file, delimiter=';')
         for line in formatreader:

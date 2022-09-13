@@ -226,7 +226,7 @@ class PostProcessor:
         csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, "KPIs.csv")
         kpis_list = kpi_compute_return[1]
         kpis_values_list = kpi_compute_return[2]
-        with open(csvfilename, "w", encoding='utf8', ) as csvfile:
+        with open(csvfilename, "w", encoding='utf8') as csvfile:
             writer = csv.writer(csvfile)
             for (kpis_list_elem, kpis_values_list_elem) in zip(kpis_list, kpis_values_list):
                 writer.writerow([kpis_list_elem, kpis_values_list_elem])

@@ -86,19 +86,18 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     """BASICS"""
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value, name='Occupancy')
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location=location.value)
-    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
-                                 my_simulation_repository=my_sim.simulation_repository)
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 
     # Build building
-    my_building_config = building.Building.get_default_config()
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_config.building_code = building_code.value
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)

@@ -3,12 +3,11 @@
 This postprocessing option computes overoll consumption, production, self-consumption and injection
 as well as self consumption rate and autarky rate""" 
 
-import os
-
 import numpy as np
 from typing import List, Any
 import pandas as pd
 
+import hisim.log
 from hisim.loadtypes import InandOutputType
 from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
@@ -35,22 +34,22 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     
         if output.postprocessing_flag!=None:
             if (InandOutputType.PRODUCTION in output.postprocessing_flag):
-                print("Ich werde an die Production results Spalte angehängt:",output.postprocessing_flag,output.full_name,"INDEX:",index )
+                hisim.log.information("Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
 
                 
     
             elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
-                print("I am appended to consumption column:",output.postprocessing_flag,output.full_name,"INDEX:",index )
+                hisim.log.information("I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 
                 results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
                 
             elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
                 results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
-                print("I am appended to storage column:",output.postprocessing_flag,output.full_name,"INDEX:",index)  
+                hisim.log.information("I am appended to storage column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))  
                     
             elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
-                print("I am a battery, when positiv added to consumption and negative to production column:",output.postprocessing_flag,output.full_name ,"INDEX:",index)
+                hisim.log.information("I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
                 neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
                 pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
               

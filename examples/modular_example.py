@@ -63,7 +63,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get system configuration
-    location = my_simulation_parameters.system_config.location
+    location = weather.LocationEnum[my_simulation_parameters.system_config.location.value]
     occupancy_profile = my_simulation_parameters.system_config.occupancy_profile
     building_code = my_simulation_parameters.system_config.building_code
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
@@ -92,7 +92,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=location)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 

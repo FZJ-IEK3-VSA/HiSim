@@ -3,7 +3,7 @@
 import os
 import csv
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
@@ -27,11 +27,11 @@ class PostProcessor:
         """ Initializes the post processing. """
         self.dirname: str
 
-        def set_dir_results(self, dirname):
-            """ Sets the results directory. """
-            if dirname is None:
-                raise ValueError("No results directory name was defined.")
-            self.dirname = dirname
+    def set_dir_results(self, dirname: Optional[str] = None) -> None:
+        """ Sets the results directory. """
+        if dirname is None:
+            raise ValueError("No results directory name was defined.")
+        self.dirname = dirname
 
     @utils.measure_execution_time
     def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:

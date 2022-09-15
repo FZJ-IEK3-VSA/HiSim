@@ -177,9 +177,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             battery_capacity=battery_capacity, count=count)
         #EconomicParameters.battery_bought abfragen, ob Batterie bereits vorhanden ist
         ccb = json.load(open('..\hisim\modular_household\ComponentCostBattery.json'))
-        battery_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
-        print("Interpolierter Preis für Kapazität von 1120:", battery_cost_interp(battery_capacity))
+        print("Battery capacity", battery_capacity)
         
+        economic_parameters = json.load(open('..\hisim\modular_household\EconomicParameters.json'))
+        battery_bought=economic_parameters["battery_bought"]
+        if battery_bought==True:
+            battery_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
+            print("Interpolierter Preis für Kapazität von 1120:", battery_cost_interp(battery_capacity))
+        else:
+            print("Battery was alerady in the house")
     """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included:
         my_chp, count = component_connections.configure_elctrolysis_h2storage_chp_system(

@@ -109,9 +109,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_sim.add_component(my_building)
 
     # add price signal
+
     if my_simulation_parameters.system_config.predictive:
         my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
         my_sim.add_component(my_price_signal)
+
+    economic_parameters = json.load(open('..\hisim\modular_household\EconomicParameters.json'))
 
     """PV"""
     if pv_included:
@@ -121,11 +124,24 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         production, count = component_connections.configure_pv_system(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
             pv_peak_power=pv_peak_power, count=count)
-
+         
+        if economic_parameters["pv_bought"]==True:
+            ccpv = json.load(open('..\hisim\modular_household\ComponentCostPV.json'))       
+            pv_cost = scipy.interpolate.interp1d(ccpv["capacity_for_cost"], ccpv["cost_per_capacity"])
+            print("Interpolierter Preis für Kapazität von 1120:", pv_cost(pv_peak_power))
+        else:
+            pv_cost = 0
+            
     """SMART DEVICES"""
+
     if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count)
+    if economic_parameters["smart_devices_bought"]==True:
+        ccsd = json.load(open('..\hisim\modular_household\ComponentCostSmartDevices.json'))
+        smart_devices_cost = ccsd["smart_devices_cost"]
+    else:
+        smart_devices_cost = 0
 
     """SURPLUS CONTROLLER"""
     if battery_included or chp_included or smart_devices_included \
@@ -179,13 +195,13 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         ccb = json.load(open('..\hisim\modular_household\ComponentCostBattery.json'))
         print("Battery capacity", battery_capacity)
         
-        economic_parameters = json.load(open('..\hisim\modular_household\EconomicParameters.json'))
-        battery_bought=economic_parameters["battery_bought"]
-        if battery_bought==True:
-            battery_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
-            print("Interpolierter Preis für Kapazität von 1120:", battery_cost_interp(battery_capacity))
+        if economic_parameters["battery_bought"]==True:
+            battery_cost = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
+            print("Interpolierter Preis für Kapazität von 1120:", battery_cost(battery_capacity))
         else:
             print("Battery was alerady in the house")
+            battery_cost = 0
+            
     """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included:
         my_chp, count = component_connections.configure_elctrolysis_h2storage_chp_system(

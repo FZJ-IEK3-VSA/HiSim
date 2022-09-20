@@ -229,3 +229,8 @@ values are averaged
 
 <a href="https://www.dwd.de/"><img src="https://www.dwd.de/SharedDocs/bilder/DE/logos/dwd/dwd_logo_258x69.png?__blob=normal&v=1" alt="DWD Logo" width="200px" style="float:right"></a>
 
+This project has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 891943. 
+
+<img src="eulogo.png" alt="EU Logo" width="200px" style="float:right"></a>
+
+<a href="https://www.why-h2020.eu/"><img src="whylogo.jpg" alt="WHY Logo" width="200px" style="float:right"></a>

@@ -130,7 +130,7 @@ class L2_Controller(cp.Component):
 
     @staticmethod
     def get_default_config() -> L2CHPConfig:
-        config = L2CHPConfig(name='L2CHP',
+        config = L2CHPConfig(name='CHPTemperatureHydrogenAndElectricityController',
                              source_weight=1,
                              T_min=20,
                              T_max=22)

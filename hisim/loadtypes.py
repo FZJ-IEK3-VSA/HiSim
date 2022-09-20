@@ -79,6 +79,15 @@ class DisplayNames(str, enum.Enum):
 
 
 @enum.unique
+class Termination(str, enum.Enum):
+
+    """ For the simulation status of modular household. """
+
+    SUCCESSFUL = "Sucessful"
+    INVESTMENT_EXCEEDED = "InvestmentExceeded"
+
+
+@enum.unique
 class LoadTypes(str, enum.Enum):
 
     """ Load type named constants so that they are the same everywhere and no typos happen. """
@@ -159,9 +168,11 @@ class Units(str, enum.Enum):
     # Time
     SECONDS = "s"
     TIMESTEPS = 'timesteps'
+    YEARS = 'years'
 
     # Cost
     CENTS_PER_KWH = "Cents per kWh"
+    EURO = "Euro"
 
     # Binary for controllers
     BINARY = 'binary'

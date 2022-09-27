@@ -52,10 +52,13 @@ class AirConditioner(cp.Component):
     State = "State"
     TemperatureOutside = "TemperatureOutside"
     ElectricityOutputPID = "ElectricityOutputPID"
+    TemperatureMean = "Residence Temperature"
+    FeedForwardSignal="FeedForwardSignal"
 
     # outputs
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
+    pidManipulatedVariable="pidManipulatedVariable"
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -72,6 +75,11 @@ class AirConditioner(cp.Component):
                                                         LoadTypes.TEMPERATURE,
                                                         Units.CELSIUS,
                                                         True)
+        self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
+                                                      self.TemperatureMean,
+                                                      LoadTypes.TEMPERATURE,
+                                                      Units.CELSIUS,
+                                                      True)
         self.stateC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.State,
                                                         LoadTypes.ANY,
@@ -82,6 +90,16 @@ class AirConditioner(cp.Component):
                                                                 LoadTypes.ELECTRICITY,
                                                                 Units.WATT,
                                                                 False)
+        self.feed_forward_signalC: cp.ComponentInput = self.add_input(self.component_name,
+                                                                self.FeedForwardSignal,
+                                                                LoadTypes.ELECTRICITY,
+                                                                Units.WATT,
+                                                                False)
+        
+        self.pid_thermal_powerC: cp.ComponentOutput = self.add_output(self.component_name,
+                                                                             self.pidManipulatedVariable,
+                                                                             LoadTypes.HEATING,
+                                                                             Units.WATT)
 
         self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.ThermalEnergyDelivered,
@@ -112,7 +130,11 @@ class AirConditioner(cp.Component):
         connections.append(
             cp.ComponentConnection(AirConditioner.State, controller_classname, AirConditionercontroller.State))
         return connections
-
+    
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
+    
     def build(self, manufacturer, name, min_operation_time, min_idle_time):
         # Simulation parameters
 
@@ -252,15 +274,27 @@ class AirConditioner(cp.Component):
             stsv.set_output_value(self.electricity_outputC, electricity_output)
 
         if self.control == "PID":
+            t_m_old = stsv.get_input_value(self.t_mC)
+            feed_forward_signal = stsv.get_input_value(self.feed_forward_signalC)
             Electric_Power = stsv.get_input_value(self.electric_power)
             if Electric_Power > 0:
                 cop = self.cal_cop(t_out)
-                thermal_energy_delivered = Electric_Power * cop
+                pid_thermal_power = Electric_Power * cop
+                thermal_energy_delivered = pid_thermal_power + feed_forward_signal
             elif Electric_Power < 0:
                 eer = self.cal_eer(t_out)
-                thermal_energy_delivered = Electric_Power * eer
+                pid_thermal_power = Electric_Power * eer
+                thermal_energy_delivered = pid_thermal_power + feed_forward_signal
             else:
+                pid_thermal_power=0
                 thermal_energy_delivered = 0
+                
+            if thermal_energy_delivered > 15000:
+                thermal_energy_delivered=15000
+            elif thermal_energy_delivered <-15000:
+                thermal_energy_delivered=-15000
+    
+            stsv.set_output_value(self.pid_thermal_powerC, pid_thermal_power)
 
             stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
 

@@ -196,6 +196,8 @@ class Building(dynamic_component.DynamicComponent):
     MassOutput = "MassOutput"
     TemperatureOutput = "TemperatureOutput"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+    HeatFluxWallNode="HeatFluxWallNode"
+    HeatFluxThermalMassNode="HeatFluxThermalMassNode" 
 
     # Similar components to connect to:
     # 1. Weather
@@ -324,6 +326,15 @@ class Building(dynamic_component.DynamicComponent):
                                                                                    self.ReferenceMaxHeatBuildingDemand,
                                                                                    lt.LoadTypes.HEATING,
                                                                                    lt.Units.WATT)
+        self.phi_mC: cp.ComponentOutput = self.add_output(self.component_name,
+                                                          self.HeatFluxThermalMassNode,
+                                                          lt.LoadTypes.HEATING,
+                                                          lt.Units.WATT)
+        self.phi_stC: cp.ComponentOutput = self.add_output(self.component_name,
+                                                          self.HeatFluxWallNode,
+                                                          lt.LoadTypes.HEATING,
+                                                          lt.Units.WATT)
+        
         self.add_default_connections(Weather, self.get_weather_default_connections())
         self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
 
@@ -480,7 +491,7 @@ class Building(dynamic_component.DynamicComponent):
         else:
             solar_gain_through_windows = self.solar_gain_through_windows[timestep]
 
-        t_m, t_air, t_s, phi_loss = self.calc_temperatures_crank_nicolson(energy_demand=thermal_energy_delivered,
+        t_m, t_air, t_s, phi_loss,phi_ia,phi_st,phi_m = self.calc_temperatures_crank_nicolson(energy_demand=thermal_energy_delivered,
                                                                           internal_gains=occupancy_heat_gain,
                                                                           solar_gains=solar_gain_through_windows,
                                                                           t_out=t_out,
@@ -500,6 +511,8 @@ class Building(dynamic_component.DynamicComponent):
         # stsv.set_output_value(self.t_airC, t_air)
         stsv.set_output_value(self.total_power_to_residenceC,
                               phi_loss)  # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
+        stsv.set_output_value(self.phi_mC, phi_m)
+        stsv.set_output_value(self.phi_stC, phi_st)
         stsv.set_output_value(self.solar_gain_through_windowsC, solar_gain_through_windows)  # convert Wh back to W
         stsv.set_output_value(self.var_max_thermal_building_demand,
                               self.max_thermal_building_demand)  # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
@@ -897,7 +910,7 @@ class Building(dynamic_component.DynamicComponent):
         """
 
         # Updates flows
-        phi_loss = self.calc_heat_flow(t_out, internal_gains, solar_gains, energy_demand)
+        phi_loss,phi_ia,phi_st,phi_m = self.calc_heat_flow(t_out, internal_gains, solar_gains, energy_demand)
 
         # Updates total flow
         self.calc_phi_m_tot(t_out)
@@ -914,7 +927,7 @@ class Building(dynamic_component.DynamicComponent):
         # Updates t_w
         t_air = self.calc_t_air(t_out, t_s)
 
-        return t_m, t_air, t_s, phi_loss
+        return t_m, t_air, t_s, phi_loss,phi_ia,phi_st,phi_m
         # return t_m, t_air, t_s
         # return self.t_m, self.t_air, self.t_opperative, self.t_s
 
@@ -944,7 +957,7 @@ class Building(dynamic_component.DynamicComponent):
                      (0.5 * internal_gains + solar_gains)
 
         self.phi_loss = (self.h_tr_w / (9.1 * self.A_t)) * (0.5 * internal_gains + solar_gains)
-        return self.phi_loss
+        return self.phi_loss,self.phi_ia,self.phi_st,self.phi_m
 
     def calc_t_m_next(self, t_m_prev):
         """

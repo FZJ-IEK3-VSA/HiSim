@@ -319,7 +319,7 @@ class ControllerElectricity(cp.Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: ControllerElectricityConfig) -> None:
-        super().__init__(name="ControllerElectricity", my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name="EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = config.strategy
         self.limit_to_shave = config.limit_to_shave
@@ -570,7 +570,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                  limit_to_shave: float = 0):
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_inputs,
-                         name="Controller",
+                         name="EMSElectricityController",
                          my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = strategy

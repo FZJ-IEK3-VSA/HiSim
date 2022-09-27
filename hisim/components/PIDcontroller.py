@@ -144,7 +144,7 @@ class PIDController(cp.Component):
                                                              self.integrator,
                                                              LoadTypes.ANY,
                                                              Units.CELSIUS)
-        self.feed_forward_signalC = cp.ComponentOutput = self.add_output(self.component_name,
+        self.feed_forward_signalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                   self.FeedForwardSignal,
                                                                   LoadTypes.HEATING,
                                                                   Units.WATT)

@@ -132,21 +132,21 @@ class PIDController(cp.Component):
                                                                        Units.WATT)
         self.error_output: cp.ComponentOutput = self.add_output(self.component_name,
                                                                 self.error,
-                                                                LoadTypes.ELECTRICITY,
-                                                                Units.WATT)
+                                                                LoadTypes.ANY,
+                                                                Units.CELSIUS)
 
         self.derivator_output: cp.ComponentOutput = self.add_output(self.component_name,
                                                                 self.derivator,
-                                                                LoadTypes.ELECTRICITY,
-                                                                Units.WATT)
+                                                                LoadTypes.ANY,
+                                                                Units.CELSIUS)
         
         self.integrator_output: cp.ComponentOutput = self.add_output(self.component_name,
                                                              self.integrator,
-                                                             LoadTypes.ELECTRICITY,
-                                                             Units.WATT)
+                                                             LoadTypes.ANY,
+                                                             Units.CELSIUS)
         self.feed_forward_signalC = cp.ComponentOutput = self.add_output(self.component_name,
                                                                   self.FeedForwardSignal,
-                                                                  LoadTypes.ELECTRICITY,
+                                                                  LoadTypes.HEATING,
                                                                   Units.WATT)
         
 

@@ -92,7 +92,7 @@ class AirConditioner(cp.Component):
                                                                 False)
         self.feed_forward_signalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                 self.FeedForwardSignal,
-                                                                LoadTypes.ELECTRICITY,
+                                                                LoadTypes.HEATING,
                                                                 Units.WATT,
                                                                 False)
         

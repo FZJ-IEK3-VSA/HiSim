@@ -65,8 +65,8 @@ class LocationEnum(Enum):
     Muehldorf = ("13Muehldorf", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_13", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
     Stoetten = ("14Stoetten", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_14", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
     Garmisch_Partenkirchen = ("15Garmisch Partenkirchen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_15", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
-    Madrid = ("Madrid", "test-reference-years_2015-2045_15-locations", "NSRDB", "Madrid", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
-    Seville = ("Seville", "test-reference-years_2015-2045_15-locations", "NSRDB", "Seville", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Madrid = ("Madrid", "NSRDB", "NSRDB", "Madrid", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Seville = ("Seville", "NSRDB", "NSRDB", "Seville", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
 
 
 @dataclass

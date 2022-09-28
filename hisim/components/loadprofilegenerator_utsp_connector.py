@@ -1,41 +1,43 @@
-# Generic/Built-in
+""" Contains a component that uses the UTSP to provide LoadProfileGenerator data. """
 import datetime
 import errno
 import io
 import itertools
-import os
-from typing import Dict, Optional, Tuple
-import pandas as pd
 import json
-import numpy as np
+import os
 from dataclasses import dataclass
+from typing import Dict, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 from dataclasses_json import dataclass_json
+
+from utspclient import client, datastructures, result_file_filters
+from utspclient.helpers import lpg_helper
+from utspclient.helpers.lpgdata import (
+    ChargingStationSets,
+    Households,
+    HouseTypes,
+    LoadTypes,
+    TransportationDeviceSets,
+    TravelRouteSets,
+)
+from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
 
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
-from hisim import utils
+from hisim import log, utils
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.components.configuration import PhysicsConfig
-
-from utspclient import client, datastructures, result_file_filters
-from utspclient.helpers import lpg_helper
-from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
-from utspclient.helpers.lpgdata import (
-    LoadTypes,
-    Households,
-    HouseTypes,
-    TravelRouteSets,
-    TransportationDeviceSets,
-    ChargingStationSets,
-)
 
 
 @dataclass_json
 @dataclass
 class UtspConnectorConfig:
+
+    """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
+
     url: str
     api_key: str
     household: JsonReference
@@ -48,6 +50,7 @@ class UtspConnectorConfig:
     def get_default_config(
         url: str = "http://localhost:443/api/v1/profilerequest", api_key: str = ""
     ) -> "UtspConnectorConfig":
+        """Creates a default configuration. Chooses default values for the LPG parameters."""
         result_path = os.path.join(utils.get_input_directory(), "lpg_profiles")
         config = UtspConnectorConfig(
             url,
@@ -62,9 +65,14 @@ class UtspConnectorConfig:
 
 
 class UtspLpgConnector(cp.Component):
-    """
-    Class component that provides heating generated, the electricity consumed
-    by the residents. Data provided or based on LPG exports.
+
+    """Component that provides data from the LoadProfileGenerator.
+
+    This component provides the heating generated, the electricity and water consumed
+    by the residents. Furthermore, transportation and device flexibility data is stored
+    in separate files, configurable via the config object.
+    The data is retrieved from the UTSP, which executes the LoadProfileGenerator to simulate
+    the specified household.
     """
 
     # Inputs
@@ -93,6 +101,7 @@ class UtspLpgConnector(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: UtspConnectorConfig,
     ) -> None:
+        """Initializes the component and retrieves the LPG data."""
         super().__init__(
             name=UtspLpgConnector.__name__,
             my_simulation_parameters=my_simulation_parameters,
@@ -116,16 +125,16 @@ class UtspLpgConnector(cp.Component):
             False,
         )
 
-        self.number_of_residentsC: cp.ComponentOutput = self.add_output(
+        self.number_of_residents_c: cp.ComponentOutput = self.add_output(
             self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.heating_by_residentsC: cp.ComponentOutput = self.add_output(
+        self.heating_by_residents_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
         )
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+        self.electricity_output_c: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -133,7 +142,7 @@ class UtspLpgConnector(cp.Component):
             postprocessing_flag=[lt.InandOutputType.CONSUMPTION],
         )
 
-        self.water_consumptionC: cp.ComponentOutput = self.add_output(
+        self.water_consumption_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
@@ -141,9 +150,11 @@ class UtspLpgConnector(cp.Component):
         )
 
     def i_save_state(self) -> None:
+        """Empty method as component has no state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Empty method as component has no state."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -151,11 +162,13 @@ class UtspLpgConnector(cp.Component):
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Gets called after the iterations are finished at each time step for potential debugging purposes."""
         pass
 
     def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_conversion: bool
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Sets the current output values with data retrieved during initialization."""
         if self.ww_mass_input.source_output is not None:
             # ww demand
             ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
@@ -170,13 +183,9 @@ class UtspLpgConnector(cp.Component):
             freshwater_temperature = (
                 HouseholdWarmWaterDemandConfig.freshwater_temperature
             )
-            temperature_difference_hot = (
-                HouseholdWarmWaterDemandConfig.temperature_difference_hot
-            )  # Grädigkeit
             temperature_difference_cold = (
                 HouseholdWarmWaterDemandConfig.temperature_difference_cold
             )
-            energy_losses_watt = HouseholdWarmWaterDemandConfig.heat_exchanger_losses
             energy_losses = 0
             specific_heat = 4180 / 3600
 
@@ -185,15 +194,6 @@ class UtspLpgConnector(cp.Component):
                 * self.water_consumption[timestep]
                 * (ww_temperature_demand - freshwater_temperature)
             )
-
-            if (
-                ww_temperature_input
-                > (ww_temperature_demand + temperature_difference_hot)
-                or ww_energy_demand == 0
-            ):
-                demand_satisfied = 1
-            else:
-                demand_satisfied = 0
 
             if ww_energy_demand > 0 and (
                 ww_mass_input == 0 and ww_temperature_input == 0
@@ -223,20 +223,18 @@ class UtspLpgConnector(cp.Component):
                 ww_mass_input = 0
                 energy_discharged = 0
 
-            ww_mass_output = ww_mass_input
+        stsv.set_output_value(
+            self.number_of_residents_c, self.number_of_residents[timestep]
+        )
+        stsv.set_output_value(
+            self.heating_by_residents_c, self.heating_by_residents[timestep]
+        )
+        stsv.set_output_value(
+            self.electricity_output_c, self.electricity_consumption[timestep]
+        )
+        stsv.set_output_value(self.water_consumption_c, self.water_consumption[timestep])
 
-        stsv.set_output_value(
-            self.number_of_residentsC, self.number_of_residents[timestep]
-        )
-        stsv.set_output_value(
-            self.heating_by_residentsC, self.heating_by_residents[timestep]
-        )
-        stsv.set_output_value(
-            self.electricity_outputC, self.electricity_consumption[timestep]
-        )
-        stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
-
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.my_simulation_parameters.system_config.predictive:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
@@ -251,9 +249,7 @@ class UtspLpgConnector(cp.Component):
             )
 
     def get_resolution(self) -> str:
-        """
-        Gets the temporal resolution of the simulation as a string in the format
-        hh:mm:ss.
+        """Gets the temporal resolution of the simulation as a string in the format hh:mm:ss.
 
         :return: resolution of the simulation
         :rtype: str
@@ -263,8 +259,7 @@ class UtspLpgConnector(cp.Component):
         return str(resolution)
 
     def get_profiles_from_utsp(self) -> Tuple[str, str, str, str]:
-        """
-        Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
+        """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
         :return: electricity, warm water, high bodily activity and low bodily activity result file contents
         :rtype: Tuple[str]
@@ -353,8 +348,7 @@ class UtspLpgConnector(cp.Component):
         return electricity_file, warm_water_file, high_activity_file, low_activity_file
 
     def save_result_file(self, name: str, content: str) -> None:
-        """
-        Saves a result file in the folder specified in the config object
+        """Saves a result file in the folder specified in the config object.
 
         :param name: the name for the file
         :type name: str
@@ -362,20 +356,21 @@ class UtspLpgConnector(cp.Component):
         :type content: str
         """
         filepath = os.path.join(self.utsp_config.result_path, name)
-        dir = os.path.dirname(filepath)
+        directory = os.path.dirname(filepath)
         # Create the directory if it does not exist
         try:
-            os.makedirs(dir)
+            os.makedirs(directory)
         except OSError as exc:
-            if exc.errno == errno.EEXIST and os.path.isdir(dir):
+            if exc.errno == errno.EEXIST and os.path.isdir(directory):
                 pass
             else:
                 raise
         # Create the result file
-        with open(filepath, "w") as f:
-            f.write(content)
+        with open(filepath, "w", encoding="utf-8") as result_file:
+            result_file.write(content)
 
     def build(self):
+        """Retrieves and preprocesses all data for this component."""
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.component_name,
             parameter_class=self.utsp_config,
@@ -455,20 +450,19 @@ class UtspLpgConnector(cp.Component):
 
             # process data when time resolution of inputs matches timeresolution of simulation
             if steps_original == steps_desired:
-                for mode in range(len(gain_per_person)):
+                for mode, gain in enumerate(gain_per_person):
                     for timestep in range(steps_original):
                         self.number_of_residents[timestep] += occupancy_profile[mode][
                             "Values"
                         ][timestep]
                         self.heating_by_residents[timestep] = (
                             self.heating_by_residents[timestep]
-                            + gain_per_person[mode]
-                            * occupancy_profile[mode]["Values"][timestep]
+                            + gain * occupancy_profile[mode]["Values"][timestep]
                         )
 
             # average data, when time resolution of inputs is coarser than time resolution of simulation
             elif steps_original > steps_desired:
-                for mode in range(len(gain_per_person)):
+                for mode, gain in enumerate(gain_per_person):
                     for timestep in range(steps_desired):
                         number_of_residents_av = (
                             sum(
@@ -485,7 +479,7 @@ class UtspLpgConnector(cp.Component):
                         )
                         self.heating_by_residents[timestep] = (
                             self.heating_by_residents[timestep]
-                            + gain_per_person[mode] * number_of_residents_av
+                            + gain * number_of_residents_av
                         )
                 # power needs averaging, not sum
                 self.electricity_consumption = [
@@ -527,6 +521,7 @@ class UtspLpgConnector(cp.Component):
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):
+        """Adds a report entry for this component."""
         lines = []
-        lines.append("Name: {}".format(self.component_name))
+        lines.append(f"Name: {self.component_name}")
         return lines

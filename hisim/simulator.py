@@ -226,14 +226,14 @@ class Simulator:
         if self.setup_function is None:
             raise Exception("No setup function was set")
         entry: cp.ComponentOutput
-        for index, entry in enumerate(self.all_outputs):
+        for _index, entry in enumerate(self.all_outputs):
             column_name = entry.get_pretty_name()
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
         results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
         # todo: fix this constant
-        index = pd.date_range("2021-01-01 00:00:00", periods=len(results_data_frame), freq="T")
-        results_data_frame.index = index
+        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(results_data_frame), freq="T")
+        results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:4.0f}s")
@@ -286,7 +286,8 @@ class Simulator:
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(results_data_frame.values[:, i_column], index=pd_timeline,
                                    columns=[results_data_frame.columns[i_column]])
-            if 'Temperature' in results_data_frame.columns[i_column] or 'Percent' in results_data_frame.columns[i_column]:
+            column_name: str = results_data_frame.columns[i_column]
+            if 'Temperature' in column_name or 'Percent' in column_name:
                 temp_df = temp_df.resample('M').interpolate(method='linear')
             else:
                 temp_df = temp_df.resample('M').sum()

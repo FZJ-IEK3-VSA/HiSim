@@ -177,7 +177,6 @@ class UtspLpgConnector(cp.Component):
                 HouseholdWarmWaterDemandConfig.temperature_difference_cold
             )
             energy_losses_watt = HouseholdWarmWaterDemandConfig.heat_exchanger_losses
-            # energy_losses = energy_losses_watt * self.seconds_per_timestep
             energy_losses = 0
             specific_heat = 4180 / 3600
 
@@ -226,11 +225,6 @@ class UtspLpgConnector(cp.Component):
 
             ww_mass_output = ww_mass_input
 
-            # stsv.set_output_value(self.ww_mass_output, ww_mass_output)
-            # stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)
-            # stsv.set_output_value(self.demand_satisfied, demand_satisfied)
-            # stsv.set_output_value(self.energy_discharged, energy_discharged)
-
         stsv.set_output_value(
             self.number_of_residentsC, self.number_of_residents[timestep]
         )
@@ -249,7 +243,6 @@ class UtspLpgConnector(cp.Component):
             )
             if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
-            # log.information( type(self.temperature))
             demandforecast = self.electricity_consumption[
                 timestep:last_forecast_timestep
             ]
@@ -531,11 +524,9 @@ class UtspLpgConnector(cp.Component):
             database.to_csv(cache_filepath)
             del data
             del database
-            # utils.save_cache("Occupancy", parameters, database)
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):
         lines = []
         lines.append("Name: {}".format(self.component_name))
-        # lines.append("Profile: {}".format(self.profile_name))
         return lines

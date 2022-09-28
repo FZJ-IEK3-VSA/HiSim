@@ -9,6 +9,7 @@ from hisim import utils
 
 @utils.measure_execution_time
 def test_first_example():
+    """ Performes a simple test for the first example. """
     path = "../examples/simple_examples.py"
     func = "first_example"
     mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60)

@@ -18,6 +18,7 @@ from hisim import log
 
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
+from hisim.components.loadprofilegenerator_utsp_connector import UtspConnectorConfig, UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 from hisim.components.loadprofilegenerator_connector import Occupancy
@@ -326,6 +327,7 @@ class Building(dynamic_component.DynamicComponent):
                                                                                    lt.Units.WATT)
         self.add_default_connections(Weather, self.get_weather_default_connections())
         self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
+        self.add_default_connections(UtspLpgConnector, self.get_utsp_default_connections())
 
         # self.t_airC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                self.TemperatureAir,
@@ -384,6 +386,14 @@ class Building(dynamic_component.DynamicComponent):
         occupancy_classname = Occupancy.get_classname()
         connections.append(
             cp.ComponentConnection(Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents))
+        return connections
+
+    def get_utsp_default_connections(self):
+        log.information("setting utsp default connections")
+        connections = []
+        utsp_classname = UtspLpgConnector.get_classname()
+        connections.append(
+            cp.ComponentConnection(Building.HeatingByResidents, utsp_classname, UtspLpgConnector.HeatingByResidents))
         return connections
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:

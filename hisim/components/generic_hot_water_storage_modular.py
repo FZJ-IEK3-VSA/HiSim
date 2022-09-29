@@ -17,6 +17,7 @@ import numpy as np
 
 # Owned
 import hisim.component as cp
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 import hisim.dynamic_component as dycp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -201,6 +202,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             self.water_consumption_c: cp.ComponentInput = self.add_input(self.component_name, self.WaterConsumption, lt.LoadTypes.WARM_WATER,
                                                                          lt.Units.LITER, mandatory=True)
             self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
+            self.add_default_connections(UtspLpgConnector, self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
             self.l1_device_signal_c: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ON_OFF,
                                                                         lt.Units.BINARY, mandatory=True)
@@ -229,6 +231,15 @@ class HotWaterStorage(dycp.DynamicComponent):
         occupancy_classname = Occupancy.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.WaterConsumption, occupancy_classname,
                                                   Occupancy.WaterConsumption))
+        return connections
+
+    def get_utsp_default_connections(self):
+        """ Sets occupancy default connections in hot water storage. """
+        hisim.log.information("setting utsp default connections in hot water storage")
+        connections = []
+        utsp_classname = Occupancy.get_classname()
+        connections.append(cp.ComponentConnection(HotWaterStorage.WaterConsumption, utsp_classname,
+                                                  UtspLpgConnector.WaterConsumption))
         return connections
 
     def get_l1_default_connections(self):

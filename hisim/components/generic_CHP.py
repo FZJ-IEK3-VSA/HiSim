@@ -72,8 +72,8 @@ class GCHP( cp.Component ):
     FuelDelivered = "FuelDelivered"
     
     def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ) -> None:
-        super().__init__( name = config.name + str( config.source_weight ), my_simulation_parameters=my_simulation_parameters )
-        self.build( config )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters )
+        self.build(config)
 
         #Inputs
         self.L1DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
@@ -233,8 +233,8 @@ class L1_Controller( cp.Component ):
                   my_simulation_parameters : SimulationParameters,
                   config : L1CHPConfig ):
         
-        super().__init__( name = config.name + str( config.source_weight ), 
-                          my_simulation_parameters = my_simulation_parameters )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), 
+                          my_simulation_parameters=my_simulation_parameters )
         
         self.build( config )
         

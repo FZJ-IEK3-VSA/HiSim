@@ -77,7 +77,7 @@ class HeatSource( cp.Component ):
             Efficiency of heat transfer
         """
         
-        super( ).__init__( name = 'HeatSource' + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super( ).__init__( config.name + '_w' + str(config.source_weight), my_simulation_parameters = my_simulation_parameters )
         
         #introduce parameters of district heating
         self.build(config)

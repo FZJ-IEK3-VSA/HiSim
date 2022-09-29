@@ -131,8 +131,8 @@ class L2_Controller( cp.Component ):
     @utils.measure_execution_time
     def __init__( self, my_simulation_parameters : SimulationParameters, config:L2Config) -> None:
                   
-        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
-        self.build( config )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+        self.build(config)
         
         #Component Outputs
         self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
@@ -176,8 +176,8 @@ class L2_Controller( cp.Component ):
     @staticmethod
     def get_default_config_buffer_heating() -> L2Config:
         config = L2Config(name='L2BufferTemperatureController', source_weight=1, T_min_heating=30.0, T_max_heating=50.0,
-                          cooling_considered=False, T_min_cooling=None, T_max_cooling=None,
-                          heating_season_begin=None, heating_season_end=None) 
+                          cooling_considered=False, T_min_cooling=23, T_max_cooling=25,
+                          heating_season_begin=270, heating_season_end=150) 
         return config
     
     @staticmethod
@@ -249,7 +249,7 @@ class L2_Controller( cp.Component ):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)  -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-        T_control = stsv.get_input_value( self.ReferenceTemperatureC )  
+        T_control = stsv.get_input_value(self.ReferenceTemperatureC)  
         if force_convergence:
             pass
             # if self.cooling_considered:

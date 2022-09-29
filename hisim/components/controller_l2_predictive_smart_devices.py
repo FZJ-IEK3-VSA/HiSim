@@ -178,6 +178,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
         
         #loops over components -> also fixes hierachy in control
         while ind < end:
+            
             devicestate = 0
             weight_counter = self.source_weights_sorted[ ind ]
             component_type = self.components_sorted[ ind ]
@@ -275,7 +276,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
                                              weight_counter = weight_counter,
                                              output_value = signal[ - 1 ] )
                 else:
-                    continue
+                    pass
                     
                 ind = advance( component_type, ind ) 
                 self.signal = ControllerSignal( signal = signal )

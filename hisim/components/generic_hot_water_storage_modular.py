@@ -133,9 +133,9 @@ class StorageState:
         is set as the upper limit for the temperature in buffer for cooling in summer.
         """
         if heating:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 30) * self.volume_in_l * 0.977 * 4.182 * 1e3
+            available_energy = (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
         else:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 20) * self.volume_in_l * 0.977 * 4.182 * 1e3
+            available_energy = (self.temperature_in_kelvin - 273.15 - 21) * self.volume_in_l * 0.977 * 4.182 * 1e3
         return available_energy
 
 
@@ -188,7 +188,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Initializes instance of HotWaterStorage class. """
 
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
-                         name=config.name + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+                         name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.build(config)
 
@@ -211,7 +211,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             hisim.log.error('Type of hot water storage is not defined')
 
         self.thermal_power_delivered_c: cp.ComponentInput = self.add_input(self.component_name, self.ThermalPowerDelivered,
-                                                                           lt.LoadTypes.HEATING, lt.Units.WATT, mandatory=False)
+                                                                            lt.LoadTypes.HEATING, lt.Units.WATT, mandatory=False)
 
         # Outputs
         self.temperature_mean_c: cp.ComponentOutput = self.add_output(
@@ -367,8 +367,8 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
             if self.cooling_considered:
                 if self.heating_season_end < timestep < self.heating_season_begin:
-                    available_power = self.state.return_available_energy(
-                        heating=False) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
+                    available_power = self.state.return_available_energy(heating=False) \
+                        / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
                     heatconsumption = -heatconsumption
                     if heatconsumption < available_power:
                         heatconsumption = min(available_power, 0)

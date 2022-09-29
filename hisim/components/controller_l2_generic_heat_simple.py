@@ -150,14 +150,14 @@ class L2_Controller( cp.Component ):
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         self.add_default_connections( generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections( ) )
 
-    def get_building_default_connections( self ):
+    def get_building_default_connections(self):
         log.information("setting building default connections in L2 Controller")
         connections = [ ]
         building_classname = Building.get_classname( )
         connections.append( cp.ComponentConnection( L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean ) )
         return connections
     
-    def get_boiler_default_connections( self ):
+    def get_boiler_default_connections(self):
         log.information("setting boiler default connections in L2 Controller")
         connections = [ ]
         boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname( )
@@ -167,22 +167,22 @@ class L2_Controller( cp.Component ):
         """ Prepares the simulation. """
         pass
     @staticmethod
-    def get_default_config_heating():
-        config = L2Config(name='HeatingTemperatureController', source_weight=1, T_min_heating=20.0, T_max_heating=22.0,
+    def get_default_config_heating() -> L2Config:
+        config = L2Config(name='L2HeatingTemperatureController', source_weight=1, T_min_heating=20.0, T_max_heating=22.0,
                           cooling_considered=False, T_min_cooling=23, T_max_cooling=25,
                           heating_season_begin=270, heating_season_end=150)
         return config
     
     @staticmethod
-    def get_default_config_buffer_heating():
-        config = L2Config(name='BufferTemperatureController', source_weight=1, T_min_heating=30.0, T_max_heating=50.0,
+    def get_default_config_buffer_heating() -> L2Config:
+        config = L2Config(name='L2BufferTemperatureController', source_weight=1, T_min_heating=30.0, T_max_heating=50.0,
                           cooling_considered=False, T_min_cooling=None, T_max_cooling=None,
                           heating_season_begin=None, heating_season_end=None) 
         return config
     
     @staticmethod
-    def get_default_config_waterheating():
-        config = L2Config(name='DHWTemperatureController', source_weight=1, T_min_heating=50.0, T_max_heating=80.0,
+    def get_default_config_waterheating() -> L2Config:
+        config = L2Config(name='L2DHWTemperatureController', source_weight=1, T_min_heating=50.0, T_max_heating=80.0,
                           cooling_considered=False, T_min_cooling=None, T_max_cooling=None,
                           heating_season_begin=None, heating_season_end=None)
         return config

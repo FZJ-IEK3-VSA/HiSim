@@ -210,7 +210,7 @@ class L2_Controller( cp.Component ):
     
     @staticmethod
     def get_default_config_heating():
-        config = L2Config( name = 'HeatingTemperatureController',
+        config = L2Config( name = 'L2HeatingTemperatureController',
                            source_weight =  1,
                            T_min_heating = 20.0,
                            T_max_heating = 22.0,
@@ -225,7 +225,7 @@ class L2_Controller( cp.Component ):
     
     @staticmethod
     def get_default_config_buffer_heating():
-        config = L2Config( name = 'BufferTemperatureController',
+        config = L2Config( name = 'L2BufferTemperatureController',
                            source_weight =  1,
                            T_min_heating = 30.0,
                            T_max_heating = 50.0,
@@ -240,7 +240,7 @@ class L2_Controller( cp.Component ):
     
     @staticmethod
     def get_default_config_waterheating():
-        config = L2Config( name = 'DHWTemperatureController',
+        config = L2Config( name = 'L2DHWTemperatureController',
                            source_weight =  1,
                            T_min_heating = 50.0,
                            T_max_heating = 80.0,

@@ -25,10 +25,9 @@ from hisim.components import generic_pv_system
 from hisim.components import generic_smart_device
 from hisim.components import advanced_battery_bslib
 from hisim.components import generic_CHP
-from hisim.components import controller_l2_generic_chp
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
-from hisim.components import controller_l3_smart_devices
+from hisim.components import controller_l2_predictive_smart_devices
 from hisim import utils
 
 
@@ -121,7 +120,7 @@ def configure_smart_controller_for_smart_devices(my_sim: Any, my_simulation_para
 
     """
     # construct predictive controller
-    my_controller_l3 = controller_l3_smart_devices.L3_Controller(my_simulation_parameters=my_simulation_parameters)
+    my_controller_l3 = controller_l2_predictive_smart_devices.L3_Controller(my_simulation_parameters=my_simulation_parameters)
 
     for elem in my_smart_devices:
         l3_activation_signal = my_controller_l3.add_component_output(
@@ -531,7 +530,8 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
 
     """
     # Fuel Cell default configurations
-    l2_config = controller_l2_generic_chp.L2_Controller.get_default_config()
+    # l2_config = controller_l2_generic_chp.L2_Controller.get_default_config()
+    l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating()
     l2_config.source_weight = count
     l1_config = generic_CHP.L1_Controller.get_default_config()
     l1_config.source_weight = count
@@ -547,7 +547,8 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
     my_sim.add_component(my_chp)
 
     # heat controller of fuel cell
-    my_chp_controller_l2 = controller_l2_generic_chp.L2_Controller(my_simulation_parameters=my_simulation_parameters, config=l2_config)
+    #my_chp_controller_l2 = controller_l2_generic_chp.L2_Controller(my_simulation_parameters=my_simulation_parameters, config=l2_config)
+    my_chp_controller_l2 = controller_l2_generic_heat_simple.L2_Controller(my_simulation_parameters=my_simulation_parameters, config=l2_config)
     my_chp_controller_l2.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_chp_controller_l2)
 

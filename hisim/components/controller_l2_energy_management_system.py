@@ -570,7 +570,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                  limit_to_shave: float = 0):
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_inputs,
-                         name="EMSElectricityController",
+                         name="L2EMSElectricityController",
                          my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = strategy

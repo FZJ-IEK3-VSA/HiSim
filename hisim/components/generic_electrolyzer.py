@@ -362,7 +362,7 @@ class L1_Controller( cp.Component ):
         
     @staticmethod
     def get_default_config() -> L1ElectrolyzerConfig :
-        config = L1ElectrolyzerConfig( name = 'L1Electrolyzer',
+        config = L1ElectrolyzerConfig( name = 'L1ElectrolyzerRuntimeController',
                                        source_weight =  1,
                                        min_operation_time = 14400,
                                        min_idle_time = 7200,

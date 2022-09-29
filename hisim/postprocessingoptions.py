@@ -1,6 +1,5 @@
-
 """ For setting the post processing options. """
-
+# clean
 from enum import IntEnum
 
 
@@ -16,4 +15,6 @@ class PostProcessingOptions(IntEnum):
     OPEN_DIRECTORY_IN_EXPLORER = 6
     EXPORT_TO_CSV = 7
     COMPUTE_KPI = 8
-    GENERATE_PDF_REPORT = 8
+    GENERATE_PDF_REPORT = 9
+    MAKE_NETWORK_CHARTS = 10
+    PLOT_SPECIAL_TESTING_SINGLE_DAY = 11

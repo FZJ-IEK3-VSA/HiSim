@@ -4,7 +4,7 @@ The functions are all called in modular_household.
 """
 
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 
 import csv
 
@@ -32,7 +32,7 @@ from hisim.components import controller_l3_smart_devices
 from hisim import utils
 
 
-def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
+def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
                         production: List, pv_peak_power: Optional[float], count: int) -> Tuple[List, int]:
     """ Sets PV System.
 
@@ -67,7 +67,7 @@ def configure_pv_system(my_sim, my_simulation_parameters: SimulationParameters, 
     return production, count
 
 
-def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParameters, consumption: List, count: int) \
+def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters, consumption: List, count: int) \
         -> Tuple[List[generic_smart_device.SmartDevice], List, int]:
     """ Sets smart devices without controllers.
 
@@ -86,7 +86,7 @@ def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParamete
     filepath = utils.HISIMPATH["smart_devices"]["device_collection"]
     device_collection = []
 
-    with open(filepath, 'r') as file:
+    with open(filepath, 'r', encoding='utf8') as file:
         i = 0
         formatreader = csv.reader(file, delimiter=';')
         for line in formatreader:
@@ -106,7 +106,7 @@ def configure_smart_devices(my_sim, my_simulation_parameters: SimulationParamete
     return my_smart_devices, consumption, count
 
 
-def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameters: SimulationParameters,
+def configure_smart_controller_for_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters,
                                                  my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:
     """ Sets l3 controller for smart devices.
 
@@ -146,7 +146,7 @@ def configure_smart_controller_for_smart_devices(my_sim, my_simulation_parameter
     my_sim.add_component(my_controller_l3)
 
 
-def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
+def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                       battery_capacity: Optional[float], count: int) -> int:
     """ Sets advanced battery system with surplus controller.
@@ -191,7 +191,7 @@ def configure_battery(my_sim, my_simulation_parameters: SimulationParameters,
 
 
 def configure_water_heating(
-        my_sim, my_simulation_parameters: SimulationParameters,
+        my_sim: Any, my_simulation_parameters: SimulationParameters,
         my_occupancy: loadprofilegenerator_connector.Occupancy,
         my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
         my_weather: weather.Weather, water_heating_system_installed: lt.HeatingSystems,
@@ -217,6 +217,7 @@ def configure_water_heating(
 
     """
     boiler_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_boiler()
+    boiler_config.name = 'DHW_Boiler'
     if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
         waterheater_config = generic_heat_pump_modular.HeatPump.get_default_config_waterheating()
         waterheater_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config_heatpump()
@@ -291,7 +292,7 @@ def configure_water_heating(
     return count
 
 
-def configure_heating(my_sim, my_simulation_parameters: SimulationParameters,
+def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_building: building.Building,
                       my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                       my_weather: weather.Weather, heating_system_installed: str, count: int) -> Tuple[Component, int]:
@@ -383,7 +384,7 @@ def configure_heating(my_sim, my_simulation_parameters: SimulationParameters,
     return my_heater, count
 
 
-def configure_heating_with_buffer(my_sim,
+def configure_heating_with_buffer(my_sim: Any,
                                   my_simulation_parameters: SimulationParameters,
                                   my_building: building.Building,
                                   my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
@@ -437,9 +438,8 @@ def configure_heating_with_buffer(my_sim,
     else:
         buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer()
     buffer_config.power = float(my_building.max_thermal_building_demand)
-    buffer_l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config()
     buffer_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating()
-    [buffer_config.source_weight, buffer_l1_config.source_weight, buffer_l2_config.source_weight] = [count] * 3
+    [buffer_config.source_weight, buffer_l2_config.source_weight] = [count] * 2
     count += 1
 
     heater_config.power_th = my_building.max_thermal_building_demand
@@ -493,12 +493,9 @@ def configure_heating_with_buffer(my_sim,
                                                                               config=buffer_l2_config)
     my_buffer_controller_l2.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_buffer_controller_l2)
-    my_buffer_controller_l1 = controller_l1_generic_runtime.L1_Controller(my_simulation_parameters=my_simulation_parameters,
-                                                                          config=buffer_l1_config)
-    my_buffer_controller_l1.connect_only_predefined_connections(my_buffer_controller_l2)
-    my_sim.add_component(my_buffer_controller_l1)
-
-    my_buffer.connect_only_predefined_connections(my_buffer_controller_l1)
+    my_buffer.connect_input(my_buffer.L1DeviceSignal,
+                            my_buffer_controller_l2.component_name,
+                            my_buffer_controller_l2.l2_DeviceSignal)
 
     my_building.add_component_input_and_connect(source_component_class=my_buffer, source_component_output=my_buffer.HeatToBuilding,
                                                 source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
@@ -507,7 +504,7 @@ def configure_heating_with_buffer(my_sim,
     return my_heater, my_buffer, count
 
 
-def configure_elctrolysis_h2storage_chp_system(my_sim, my_simulation_parameters: SimulationParameters, my_building: building.Building,
+def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                                                my_electricity_controller: controller_l2_energy_management_system.ControllerElectricityGeneric,
                                                chp_power: Optional[float], h2_storage_size: Optional[float], electrolyzer_power: Optional[float],
                                                count: int) -> Tuple[generic_CHP.GCHP, int]:

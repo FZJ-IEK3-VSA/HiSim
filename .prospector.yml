@@ -20,6 +20,9 @@ pylint:
       - abstract-method
       - pointless-string-statement
       - no-self-use
+      - too-many-statements
+      - too-few-public-methods
+      - unnecessary-pass
 #    disable:
 #      - too-many-locals
 #      - arguments-differ
@@ -33,6 +36,11 @@ pep257:
 #      - D212 # Multi-line docstring summary should start at the first line
 #      - D213 # Multi-line docstring summary should start at the second line
 
+pycodestyle:
+  disable:
+    - N806
+    - N803
+    - N802
 
 pydocstyle:
   run: true

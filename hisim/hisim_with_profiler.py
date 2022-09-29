@@ -1,5 +1,5 @@
-
 """ For calling a model with profiler and creating a log file. """
+# clean
 import cProfile
 import pstats
 import hisim.hisim_main as hsm

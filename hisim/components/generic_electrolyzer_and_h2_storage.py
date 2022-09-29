@@ -221,6 +221,9 @@ class Electrolyzer(Component):
         lines = []
         lines.append("CHP operation with constant electical and thermal power: " + self.component_name)
         return lines
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     @staticmethod
     def get_default_config():
         config=ElectrolyzerConfig(
@@ -499,7 +502,9 @@ class HydrogenStorage(Component):
         return config
     def i_save_state(self):
         self.previous_state = self.hydrogenstorage.fill
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_restore_state(self):
         self.hydrogenstorage.fill = self.previous_state
 

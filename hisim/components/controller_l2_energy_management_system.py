@@ -169,7 +169,9 @@ class ControllerHeat(cp.Component):
 
     def write_to_report(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone()
 
@@ -317,7 +319,7 @@ class ControllerElectricity(cp.Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: ControllerElectricityConfig) -> None:
-        super().__init__(name="ControllerElectricity", my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name="EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = config.strategy
         self.limit_to_shave = config.limit_to_shave
@@ -568,7 +570,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                  limit_to_shave: float = 0):
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_inputs,
-                         name="Controller",
+                         name="EMSElectricityController",
                          my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = strategy
@@ -616,7 +618,9 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
     def i_restore_state(self)->None:
         pass
         # self.state = self.previous_state
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)-> None:
         pass
 

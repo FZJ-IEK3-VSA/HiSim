@@ -27,31 +27,33 @@ def test_building():
     my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
 
 
-    #repo = component.SimRepository()
+    repo = component.SimRepository()
     t2 = time.perf_counter()
     log.profile("T2: " + str(t2-t1))
     # Set Occupancy
-    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name=my_occupancy_profile)
+    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name=my_occupancy_profile, name="Occupancy-1")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-    #my_occupancy.set_sim_repo( repo )
-
+    my_occupancy.set_sim_repo( repo )
+    my_occupancy.i_prepare_simulation()
     t3 = time.perf_counter()
     log.profile("T2: " + str(t3 - t2))
 
     # Set Weather
-    my_weather_config=weather.WeatherConfig(location=weather_location)
+    my_weather_config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config,my_simulation_parameters=my_simulation_parameters)
-    #my_weather.set_sim_repo(repo)
+    my_weather.set_sim_repo(repo)
+    my_weather.i_prepare_simulation()
     t4 = time.perf_counter()
     log.profile("T2: " + str(t4 - t3))
 
     # Set Residence
-    my_residence_config=building.Building.get_default_config()
+    my_residence_config=building.BuildingConfig.get_default_german_single_family_home()
     my_residence_config.building_code=building_code
     my_residence_config.bClass=bClass
 
     my_residence = building.Building(config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
-
+    my_residence.set_sim_repo(repo)
+    my_residence.i_prepare_simulation()
     # Fake energy delivered
     thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",
                                                                 "ThermalDelivery",
@@ -65,11 +67,11 @@ def test_building():
 
 
     assert 1 == 1
-    my_residence.t_outC.source_output = my_weather.t_outC
-    my_residence.altitudeC.source_output = my_weather.altitudeC
-    my_residence.azimuthC.source_output = my_weather.azimuthC
-    my_residence.DNIC.source_output = my_weather.DNIC
-    my_residence.DHIC.source_output = my_weather.DHIC
+    my_residence.t_outC.source_output = my_weather.air_temperature_output
+    my_residence.altitudeC.source_output = my_weather.altitude_output
+    my_residence.azimuthC.source_output = my_weather.azimuth_output
+    my_residence.DNIC.source_output = my_weather.DNI_output
+    my_residence.DHIC.source_output = my_weather.DHI_output
     my_residence.occupancy_heat_gainC.source_output = my_occupancy.heating_by_residentsC
     my_residence.thermal_energy_deliveredC.source_output = thermal_energy_delivered_output
 

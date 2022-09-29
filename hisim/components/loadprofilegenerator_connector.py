@@ -2,6 +2,7 @@
 import pandas as pd
 import json
 import numpy as np
+from typing import Any
 from dataclasses import dataclass
 from  dataclasses_json import dataclass_json
 
@@ -22,10 +23,18 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-@dataclass_json
 @dataclass
-class OccupancyConfig:
+class OccupancyConfig(cp.ConfigBase):
+    def get_main_classname(self):
+        return Occupancy.get_full_classname()
+
     profile_name: str
+
+    @classmethod
+    def get_default_CHS01(cls) -> Any:
+        config = OccupancyConfig("Occupancy_1", "CH01")
+        return config
+
 
 class Occupancy(cp.Component):
     """
@@ -111,22 +120,21 @@ class Occupancy(cp.Component):
                                                                          lt.Units.WATT)
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION])
 
         self.water_consumptionC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.WaterConsumption,
                                                                        lt.LoadTypes.WARM_WATER,
                                                                        lt.Units.LITER)
-    @staticmethod
-    def get_default_config(profile_name: str = 'CH01') -> OccupancyConfig:
-        config= OccupancyConfig(profile_name = profile_name)
-        return config
+
     def i_save_state(self) -> None:
         pass
 
     def i_restore_state(self) -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 

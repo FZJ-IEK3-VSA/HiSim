@@ -94,15 +94,15 @@ class SmartDevice( cp.Component ):
     def __init__( self,
                   identifier : str,
                   source_weight : int,
-                  my_simulation_parameters: SimulationParameters ):
-        super().__init__ ( name = 'SmartDevice' + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
+                  my_simulation_parameters: SimulationParameters):
+        super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
         #mandatory Output
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION])
         self.l3_DeviceActivationC: cp.ComponentInput = self.add_input(self.component_name,
                                                                       self.l3_DeviceActivation,
                                                                       lt.LoadTypes.ACTIVATION,
@@ -131,7 +131,9 @@ class SmartDevice( cp.Component ):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool )  -> None:
         
         #initialize power

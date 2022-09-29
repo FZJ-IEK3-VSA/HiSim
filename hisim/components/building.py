@@ -8,7 +8,8 @@ import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import List, Any
-# Owned
+from functools import lru_cache
+
 from hisim import utils
 from hisim import component as cp
 from hisim import dynamic_component
@@ -17,10 +18,11 @@ from hisim import log
 
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
+from hisim.components.loadprofilegenerator_utsp_connector import UtspConnectorConfig, UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 from hisim.components.loadprofilegenerator_connector import Occupancy
-from functools import lru_cache
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -112,11 +114,23 @@ class BuildingControllerState:
 
 @dataclass_json
 @dataclass
-class BuildingConfig:
+class BuildingConfig(cp.ConfigBase):
+    def get_main_classname(self):
+        return Building.get_full_classname()
+
     heating_reference_temperature: float
     building_code: str
     bClass: str
     initial_temperature: float
+
+    @classmethod
+    def get_default_german_single_family_home(cls) -> Any:
+        config = BuildingConfig(name="Building_1",
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+            bClass="medium",
+            initial_temperature=23,
+            heating_reference_temperature=-14)
+        return config
 
 
 @dataclass_json
@@ -184,10 +198,6 @@ class Building(dynamic_component.DynamicComponent):
     TemperatureOutput = "TemperatureOutput"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
 
-    # dynamic
-    my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
-    my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
-
     # Similar components to connect to:
     # 1. Weather
     # 2. Occupancy
@@ -196,7 +206,9 @@ class Building(dynamic_component.DynamicComponent):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters, config: BuildingConfig):
-
+        # dynamic
+        self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
+        self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_outputs,
                          name="Building",
@@ -315,6 +327,7 @@ class Building(dynamic_component.DynamicComponent):
                                                                                    lt.Units.WATT)
         self.add_default_connections(Weather, self.get_weather_default_connections())
         self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
+        self.add_default_connections(UtspLpgConnector, self.get_utsp_default_connections())
 
         # self.t_airC : cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                self.TemperatureAir,
@@ -346,14 +359,7 @@ class Building(dynamic_component.DynamicComponent):
         #                                                           lt.LoadTypes.WarmWater,
         #                                                           lt.Units.Celsius)
 
-    @staticmethod
-    def get_default_config():
-        config = BuildingConfig(
-            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-            bClass="medium",
-            initial_temperature=23,
-            heating_reference_temperature=-14)
-        return config
+
 
     def get_weather_default_connections(self):
         log.information("setting weather default connections")
@@ -380,6 +386,14 @@ class Building(dynamic_component.DynamicComponent):
         occupancy_classname = Occupancy.get_classname()
         connections.append(
             cp.ComponentConnection(Building.HeatingByResidents, occupancy_classname, Occupancy.HeatingByResidents))
+        return connections
+
+    def get_utsp_default_connections(self):
+        log.information("setting utsp default connections")
+        connections = []
+        utsp_classname = UtspLpgConnector.get_classname()
+        connections.append(
+            cp.ComponentConnection(Building.HeatingByResidents, utsp_classname, UtspLpgConnector.HeatingByResidents))
         return connections
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -514,7 +528,9 @@ class Building(dynamic_component.DynamicComponent):
 
     def i_save_state(self)-> None:
         self.previous_state = self.state.self_copy()
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def i_restore_state(self)-> None:
         self.state = self.previous_state.self_copy()
 
@@ -1209,6 +1225,10 @@ class BuildingController(cp.Component):
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        pass
+
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:

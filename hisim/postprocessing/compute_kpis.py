@@ -3,14 +3,18 @@
 This postprocessing option computes overoll consumption, production, self-consumption and injection
 as well as self consumption rate and autarky rate""" 
 
-from typing import List
+import numpy as np
+from typing import List, Any
 import pandas as pd
 
+import hisim.log
+from hisim.loadtypes import InandOutputType
 from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
 #sum consumption and production of individual components
-def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters):
+
+def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters)-> Any:
     results[ 'consumption' ] = 0
     results[ 'production' ] = 0
     results[ 'storage' ] = 0
@@ -24,18 +28,45 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     # flags for ComponentTypes: cp.ComponentOutput.component_type
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
-    
+
+
     for index, output in enumerate(all_outputs):
-        if 'ElectricityOutput' in output.full_name:
-            if ( 'PVSystem' in output.full_name) or ('CHP' in output.full_name) :
+    
+        if output.postprocessing_flag is not None:
+            if (InandOutputType.PRODUCTION in output.postprocessing_flag):
+                hisim.log.information("Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
-            else:
+
+                
+    
+            elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
+                hisim.log.information("I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
+                
                 results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
-        elif 'AcBatteryPower' in output.full_name:
-            results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index]
+                
+            elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
+                results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
+                hisim.log.information("I am appended to storage column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))  
+                    
+            elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
+                hisim.log.information("I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
+                neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
+                pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
+              
+                results["pos_battery"]=results.iloc[:,index].tolist()
+                #Replace negative values with zero
+                results["pos_battery"].values[results["pos_battery"]<0]=0 
+                results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
+              
+                results["neg_battery"]=results.iloc[:,index].tolist()
+                #Replace positve values with zero
+                results["neg_battery"].values[results["neg_battery"]>0]=0 
+                results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
+                results=results.drop(['neg_battery', 'pos_battery'], axis=1)
+                    
         else:
-            continue
-     
+            continue     
+
     #sum over time make it more clear and better
     consumption_sum = results[ 'consumption' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
     production_sum = results[ 'production' ].sum( ) * simulation_parameters.seconds_per_timestep / 3.6e6
@@ -53,6 +84,9 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         battery_losses = 0
     h2_system_losses = 0  # explicitly compute that
         
+    
+    
+    #Electricity Price
     if production_sum > 0:
         #evaluate electricity price
         if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in results:
@@ -71,6 +105,7 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
             price = 0
         self_consumption_rate = 0
         autarky_rate = 0
+
     #initilize lines for report
     lines: List = []
     lines.append("Consumption: {:4.0f} kWh".format(consumption_sum))
@@ -83,6 +118,12 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append("Hydrogen storage content: {:4.0f} kWh".format(0))
     lines.append("Autarky Rate: {:3.1f} %".format(autarky_rate))
     lines.append("Self Consumption Rate: {:3.1f} %".format(self_consumption_rate))
-    lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2))
+    lines.append("Price paid for electricity: {:3.0f} EUR".format(price *1e-2)) 
     
-    return lines
+    #initialize list for the KPI.scv
+    kpis_list =["Consumption:","Production:","Self consumption:","Injection:","Battery losses:","Hydrogen system losses:","Autarky Rate:","Self Consumption Rate:","Price paid for electricity:"]
+    kpis_values_list=[consumption_sum, production_sum,self_consumption_sum,injection_sum,battery_losses,h2_system_losses,autarky_rate,self_consumption_rate,price]
+
+    return lines, kpis_list,kpis_values_list
+
+

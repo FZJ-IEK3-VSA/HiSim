@@ -81,6 +81,11 @@ class GasHeater(Component):
                     temperature_max = 80  # [°C])
                     )
         return config
+
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
+
     def write_to_report(self) -> List[str]:
         pass
 

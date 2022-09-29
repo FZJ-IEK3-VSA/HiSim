@@ -114,7 +114,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
         
         super( ).__init__(  my_component_inputs = self.my_component_inputs,
                             my_component_outputs = self.my_component_outputs,
-                            name = "L3Controller", 
+                            name = "SmartDeviceController", 
                             my_simulation_parameters = my_simulation_parameters )
         
         self.build( threshold_price, threshold_peak )
@@ -139,7 +139,9 @@ class L3_Controller(dynamic_component.DynamicComponent):
             return 1
         else:
             return 0
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def write_to_report(self) -> List[str]:
         lines:List[str] = []
         lines.append("L3 Controller Heat Pump: " + self.component_name)

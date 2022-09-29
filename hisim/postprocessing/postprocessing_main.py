@@ -1,8 +1,9 @@
 """ Main postprocessing module that starts all other modules. """
-
+# clean
 import os
+import csv
 import sys
-from typing import Any
+from typing import Any, Optional
 
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
@@ -11,40 +12,10 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_KPIs import compute_KPIs
-from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.compute_kpis import compute_KPIs
+from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
-
-
-class PostProcessingDataTransfer:  # noqa: too-few-public-methods
-
-    """ Data class for transfering the result data to this class. """
-
-    def __init__(self,
-                 results: Any,
-                 all_outputs: Any,
-                 simulation_parameters: SimulationParameters,
-                 wrapped_components: Any,
-                 mode: Any,
-                 setup_function: Any,
-                 execution_time: Any,
-                 results_monthly: Any,
-                 ) -> None:
-        """ Initializes the values. """
-        # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
-        self.time_correction_factor = simulation_parameters.seconds_per_timestep / 3600
-        self.results = results
-        self.all_outputs = all_outputs
-        self.simulation_parameters = simulation_parameters
-        self.wrapped_components = wrapped_components
-        self.mode = mode
-        self.setup_function = setup_function
-        self.execution_time = execution_time
-        self.results_monthly = results_monthly
-        self.post_processing_options = simulation_parameters.post_processing_options
-        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
-        for option in self.post_processing_options:
-            log.information("Selected post processing option: " + str(option))
+from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 
 
 class PostProcessor:
@@ -54,8 +25,9 @@ class PostProcessor:
     @utils.measure_execution_time
     def __init__(self):
         """ Initializes the post processing. """
+        self.dirname: str
 
-    def set_dir_results(self, dirname):
+    def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """ Sets the results directory. """
         if dirname is None:
             raise ValueError("No results directory name was defined.")
@@ -94,9 +66,9 @@ class PostProcessor:
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
         if docker_flag.lower() in ("true", "yes", "y", "1"):
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
-            ALLOWED_OPTIONS_FOR_DOCKER = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
+            allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
             # Of all specified options, select those that are allowed
-            valid_options = list(set(ppdt.post_processing_options) & ALLOWED_OPTIONS_FOR_DOCKER)
+            valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
             if len(valid_options) < len(ppdt.post_processing_options):
                 # At least one invalid option was set
                 ppdt.post_processing_options = valid_options
@@ -129,13 +101,15 @@ class PostProcessor:
             self.write_components_to_report(ppdt, report)
         # Export all results to
         if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
-            log.information("Computing KPIs for the report.")
             log.information("Computing KPIs")
             self.compute_kpis(ppdt, report)
+        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
+            log.information("Computing Network Charts")
+            self.make_network_charts(ppdt)
 
         # only a single day has been calculated. This gets special charts for debugging.
-        if len(ppdt.results) == 1440:
-            log.information("Making sankey plots.")
+        if PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options and len(ppdt.results) == 1440:
+            log.information("Making special single day plots for a single day calculation for testing.")
             self.make_special_one_day_debugging_plots(ppdt)
 
         # Open file explorer
@@ -143,6 +117,11 @@ class PostProcessor:
             log.information("opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function")
+
+    def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
+        """ Generates the network charts that show the connection of the elements. """
+        systemchart = SystemChart(ppdt)
+        systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Makes special plots for debugging if only a single day was calculated."""
@@ -174,7 +153,7 @@ class PostProcessor:
     def make_sankey_plots(self) -> None:
         """ Makes Sankey plots. Needs work. """
         log.information("plotting sankeys")
-        #    self.plot_sankeys()
+        # TODO:   self.plot_sankeys()
 
     def make_bar_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Make bar charts. """
@@ -201,7 +180,7 @@ class PostProcessor:
     def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Make carpet plots. """
         for index, output in enumerate(ppdt.all_outputs):
-            # log.information("Making carpet plots")
+            log.trace("Making carpet plots")
             my_carpet = charts.Carpet(output=output.full_name,
 
                                       units=output.unit,
@@ -240,85 +219,26 @@ class PostProcessor:
         report.close()
 
     def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-        """ Computes KPI's and writes them to report. """
-        lines = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        """ Computes KPI's and writes them to report and csv. """
+        kpi_compute_return = compute_KPIs(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+        lines = kpi_compute_return[0]
         self.write_to_report(text=lines, report=report)
-
-    #
-    # def cal_pos_sim(self):
-    #     self.write_components_to_report()
-    #
-    #     total_electricity_consumed = None
-    #     total_electricity_not_covered = None
-    #     heat_pump_heating = None
-    #     heat_pump_cooling = 0.0
-    #     building_area = None
-    #     solar_gain_through_windows = None
-    #     internal_gains = None
-    #
-    #     for index, entry in enumerate(self.ppdt.wrapped_components):
-    #         if entry.MyComponent.ComponentName == "Building":
-    #             building_area = entry.MyComponent.A_f
-    #
-    #     for index, entry in enumerate(self.ppdt.all_outputs):
-    #         if entry.ObjectName == "ElectricityGrid_Consumed":
-    #             total_electricity_consumed = sum(entry.Results)* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "ElectricityGrid_NotConveredConsumed":
-    #             total_electricity_not_covered = sum(entry.Results)* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "Heating":
-    #             heat_pump_heating = sum(entry.Results)* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "Cooling":
-    #             heat_pump_cooling = abs(sum(entry.Results))* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "ElectricityOutput":
-    #             heat_pump_electricity_output = abs(sum(entry.Results)) * self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "NumberOfCycles":
-    #             heat_pump_number_of_cycles = abs(entry.Results[-1])
-    #         if entry.ObjectName == "Building" and entry.FieldName == "SolarGainThroughWindows":
-    #             solar_gain_through_windows = abs(sum(entry.Results))* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "Occupancy" and entry.FieldName == "HeatingByResidents":
-    #             internal_gains = abs(sum(entry.Results)*self.ppdt.time_correction_factor)
-    #
-    #     # Writes self-consumption and autarky
-    #     if total_electricity_consumed is not None:
-    #         if total_electricity_not_covered is not None:
-    #             autarky = ( ( total_electricity_consumed - total_electricity_not_covered ) / total_electricity_consumed ) * 100
-    #             text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
-    #             self.write_to_report(text)
-    #             text = ["Not Covered: {:.0f} kWh".format(total_electricity_not_covered * 1E-3)]
-    #             self.write_to_report(text)
-    #             text = ["Autarky: {:.3}%".format(autarky)]
-    #             self.write_to_report(text)
-    #
-    #     # Writes performance of heat pump
-    #     if heat_pump_heating is not None:
-    #         self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
-    #         self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
-    #         self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
-    #         self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
-    #         self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)
-    #                                                                                               /heat_pump_electricity_output )])
-    #         if building_area is not None:
-    #             self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
-    #
-    #     # Writes building solar gains
-    #     if solar_gain_through_windows is not None:
-    #         self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
-    #         if building_area is not None:
-    #             self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
-    #
-    #     # Writes building internal gains
-    #     if internal_gains is not None:
-    #         self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
-    #         if building_area is not None:
-    #             self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
+        csvfilename = os.path.join(ppdt.simulation_parameters.result_directory, "KPIs.csv")
+        kpis_list = kpi_compute_return[1]
+        kpis_values_list = kpi_compute_return[2]
+        with open(csvfilename, "w", encoding='utf8') as csvfile:
+            writer = csv.writer(csvfile)
+            for (kpis_list_elem, kpis_values_list_elem) in zip(kpis_list, kpis_values_list):
+                writer.writerow([kpis_list_elem, kpis_values_list_elem])
 
     def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """
         report.open()
         for wrapped_component in ppdt.wrapped_components:
-            # print( wc.my_component )
-            # if hasattr(wc.my_component, "write_to_report"):
-            component_content = wrapped_component.my_component.write_to_report()
+            if hasattr(wrapped_component.my_component, "write_to_report"):
+                component_content = wrapped_component.my_component.write_to_report()
+            else:
+                raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
             if isinstance(component_content, list) is False:
                 component_content = [component_content]
             if isinstance(component_content, str) is True:
@@ -330,8 +250,6 @@ class PostProcessor:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         report.write(["### All Outputs"])
         report.write(all_output_names)
-        #   def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
-        #                  sankey_flow_direction: Optional[bool] = None):
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -344,9 +262,6 @@ class PostProcessor:
             os.startfile(os.path.realpath(ppdt.simulation_parameters.result_directory))  # noqa: B606
         else:
             log.information("Not on Windows. Can't open explorer.")
-        # else:
-        #    opener = "open" if sys.platform == "darwin" else "xdg-open"
-        #    subprocess.call([opener, os.path.realpath(self.ppdt.directory_path)])
 
     def export_sankeys(self):
         """ Exports Sankeys plots.
@@ -354,38 +269,3 @@ class PostProcessor:
         ToDo: implement
         """
         pass  # noqa: unnecessary-pass
-
-    # def get_std_results(self, ppdt: PostProcessingDataTransfer):
-    #     """ Reshapes the results for bar charts.
-    #
-    #     ToDo: to be redefined and recoded in monthly bar plots in Bar Class
-    #     """
-    #     pd_timeline = pd.date_range(start=self.ppdt.simulation_parameters.start_date,
-    #                                 end=self.ppdt.simulation_parameters.end_date,
-    #                                 freq=f'{self.ppdt.simulation_parameters.seconds_per_timestep}S')[:-1]
-    #     n_columns = ppdt.results.shape[1]
-    #     my_data_frame = pd.DataFrame()
-    #     for i_column in range(n_columns):
-    #         temp_df = pd.DataFrame(self.ppdt.results.values[:, i_column], index=pd_timeline,
-    #                                columns=[self.ppdt.results.columns[i_column]])
-    #         if 'Temperature' in self.ppdt.results.columns[i_column] or 'Percent' in self.ppdt.results.columns[i_column]:
-    #             temp_df = temp_df.resample('H').interpolate(method='linear')
-    #         else:
-    #             temp_df = temp_df.resample('H').sum()
-    #         my_data_frame[temp_df.columns[0]] = temp_df.values[:, 0]
-    #         my_data_frame.index = temp_df.index
-    #
-    #     ppdt.results.index = pd_timeline
-    #
-    #     dfm = pd.DataFrame()
-    #     for i_column in range(n_columns):
-    #         temp_df = pd.DataFrame(ppdt.results.values[:, i_column], index=pd_timeline,
-    #                                columns=[ppdt.results.columns[i_column]])
-    #         if 'Temperature' in ppdt.results.columns[i_column] or 'Percent' in ppdt.results.columns[i_column]:
-    #             temp_df = temp_df.resample('M').interpolate(method='linear')
-    #         else:
-    #             temp_df = temp_df.resample('M').sum()
-    #         dfm[temp_df.columns[0]] = temp_df.values[:, 0]
-    #         dfm.index = temp_df.index
-    #
-    #     self.result_m = dfm

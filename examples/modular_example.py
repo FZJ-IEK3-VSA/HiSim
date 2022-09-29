@@ -1,14 +1,16 @@
 """Example sets up a modular household according to json input file."""
 
-from typing import Optional, List
+from typing import Optional, List, Any
 from pathlib import Path
 
-import component_connections
 import hisim.log
+import hisim.utils
 import hisim.loadtypes as lt
+from hisim.modular_household import component_connections
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
+
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
 from hisim.components import weather
@@ -16,8 +18,7 @@ from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
 
 
-
-def modular_household_explicit(my_sim, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Setup function emulates an household including the basic components.
 
     The configuration of the household is read in via the json input file "system_config.json".
@@ -38,12 +39,15 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
     # Build system parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.skip_finished_results = False
 
     # try to read the system config from file
     if Path(system_config_filename).is_file():
-        with open(system_config_filename) as system_config_file:
+        with open(system_config_filename, encoding='utf8') as system_config_file:
             system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
         hisim.log.information(f"Read system config from {system_config_filename}")
         my_simulation_parameters.system_config = system_config
@@ -59,7 +63,7 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get system configuration
-    location = my_simulation_parameters.system_config.location
+    location = weather.LocationEnum[my_simulation_parameters.system_config.location.value]
     occupancy_profile = my_simulation_parameters.system_config.occupancy_profile
     building_code = my_simulation_parameters.system_config.building_code
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
@@ -82,19 +86,18 @@ def modular_household_explicit(my_sim, my_simulation_parameters: Optional[Simula
 
     """BASICS"""
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value, name='Occupancy')
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig(location=location.value)
-    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
-                                 my_simulation_repository=my_sim.simulation_repository)
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=location)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 
     # Build building
-    my_building_config = building.Building.get_default_config()
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_config.building_code = building_code.value
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)

@@ -130,7 +130,7 @@ class L2_Controller(cp.Component):
 
     @staticmethod
     def get_default_config() -> L2CHPConfig:
-        config = L2CHPConfig(name='L2CHP',
+        config = L2CHPConfig(name='CHPTemperatureHydrogenAndElectricityController',
                              source_weight=1,
                              T_min=20,
                              T_max=22)
@@ -143,7 +143,9 @@ class L2_Controller(cp.Component):
         connections.append(
             cp.ComponentConnection(L2_Controller.ReferenceTemperature, building_classname, Building.TemperatureMean))
         return connections
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build(self, config: L2CHPConfig) -> None:
 
         self.name = config.name

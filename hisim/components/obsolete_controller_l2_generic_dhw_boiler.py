@@ -150,7 +150,9 @@ class L2_Controller(cp.Component):
         connections.append(
             cp.ComponentConnection(L2_Controller.ReferenceTemperature, boiler_classname, Boiler.TemperatureMean))
         return connections
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     @staticmethod
     def get_default_config() -> L2Config:
         config = L2Config(name='L2Boiler',

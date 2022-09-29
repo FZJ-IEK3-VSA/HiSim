@@ -101,7 +101,7 @@ class Electrolyzer( cp.Component ):
                                                                    lt.Units.KG_PER_SEC)
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=Electrolyzer.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, component_type=lt.ComponentType.ELECTROLYZER, postprocessing_flag=lt.InandOutputType.CONSUMPTION)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION, lt.ComponentType.ELECTROLYZER])
         self.add_default_connections( L1_Controller, self.get_l1_controller_default_connections( ) )
         
     @staticmethod
@@ -114,7 +114,9 @@ class Electrolyzer( cp.Component ):
                                      max_hydrogen_production_rate_hour = 5000  # [Nl/h]
                                      )
         return config
-    
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def get_l1_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic electrolyzer" )
         connections: List[cp.ComponentConnection] = [ ]
@@ -293,7 +295,9 @@ class L1_Controller( cp.Component ):
         h2storage_classname = generic_hydrogen_storage.HydrogenStorage.get_classname( )
         connections.append( cp.ComponentConnection( L1_Controller.HydrogenSOC, h2storage_classname, generic_hydrogen_storage.HydrogenStorage.HydrogenSOC ) )
         return connections
-
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
     def build( self, config: L1ElectrolyzerConfig ) -> None:
         
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )

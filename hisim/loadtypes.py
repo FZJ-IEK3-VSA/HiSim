@@ -10,7 +10,7 @@ Guidelines for enum classes:
         is an Unit, then 'Meter' should not be used.
 
 """
-
+# clean
 import enum
 
 
@@ -76,6 +76,15 @@ class DisplayNames(str, enum.Enum):
 
     ELECTRICITY_OUTPUT = "ElectricityOutput"
     ELECTRICITY_INPUT = "ElectricityInput"
+
+
+@enum.unique
+class Termination(str, enum.Enum):
+
+    """ For the simulation status of modular household. """
+
+    SUCCESSFUL = "Sucessful"
+    INVESTMENT_EXCEEDED = "InvestmentExceeded"
 
 
 @enum.unique
@@ -159,9 +168,11 @@ class Units(str, enum.Enum):
     # Time
     SECONDS = "s"
     TIMESTEPS = 'timesteps'
+    YEARS = 'years'
 
     # Cost
     CENTS_PER_KWH = "Cents per kWh"
+    EURO = "Euro"
 
     # Binary for controllers
     BINARY = 'binary'

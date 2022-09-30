@@ -65,7 +65,7 @@ def test_chp_system():
         my_chp_controller.i_simulate( t, stsv,  False )
         my_chp.i_simulate( t, stsv, False )
         
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 3000
+    assert stsv.values[ my_chp.ThermalPowerDeliveredC.global_index] == 3000
     assert stsv.values[my_chp.ElectricityOutputC.global_index] == 2000
     assert stsv.values[ my_chp.FuelDeliveredC.global_index] > 4e-5
     
@@ -78,7 +78,7 @@ def test_chp_system():
         my_chp_controller.i_simulate( tt, stsv,  False )
         my_chp.i_simulate( tt, stsv, False )
 
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 0
+    assert stsv.values[ my_chp.ThermalPowerDeliveredC.global_index] == 0
     assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
     assert stsv.values[ my_chp.FuelDeliveredC.global_index] == 0
     
@@ -99,7 +99,7 @@ def test_chp_system():
         my_chp_controller.i_simulate( it, stsv,  False )
         my_chp.i_simulate( it, stsv, False )
 
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 0
+    assert stsv.values[ my_chp.ThermalPowerDeliveredC.global_index] == 0
     assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
     assert stsv.values[ my_chp.FuelDeliveredC.global_index] == 0
     
@@ -120,6 +120,6 @@ def test_chp_system():
         my_chp_controller.i_simulate( tt, stsv,  False )
         my_chp.i_simulate( tt, stsv, False )
 
-    assert stsv.values[ my_chp.ThermalEnergyDeliveredC.global_index] == 0
+    assert stsv.values[ my_chp.ThermalPowerDeliveredC.global_index] == 0
     assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
     assert stsv.values[ my_chp.FuelDeliveredC.global_index] == 0

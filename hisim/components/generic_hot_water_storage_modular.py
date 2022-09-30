@@ -17,6 +17,7 @@ import numpy as np
 
 # Owned
 import hisim.component as cp
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 import hisim.dynamic_component as dycp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -132,9 +133,9 @@ class StorageState:
         is set as the upper limit for the temperature in buffer for cooling in summer.
         """
         if heating:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 30) * self.volume_in_l * 0.977 * 4.182 * 1e3
+            available_energy = (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
         else:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 20) * self.volume_in_l * 0.977 * 4.182 * 1e3
+            available_energy = (self.temperature_in_kelvin - 273.15 - 21) * self.volume_in_l * 0.977 * 4.182 * 1e3
         return available_energy
 
 
@@ -187,7 +188,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Initializes instance of HotWaterStorage class. """
 
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
-                         name=config.name + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+                         name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.build(config)
 
@@ -201,6 +202,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             self.water_consumption_c: cp.ComponentInput = self.add_input(self.component_name, self.WaterConsumption, lt.LoadTypes.WARM_WATER,
                                                                          lt.Units.LITER, mandatory=True)
             self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
+            self.add_default_connections(UtspLpgConnector, self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
             self.l1_device_signal_c: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ON_OFF,
                                                                         lt.Units.BINARY, mandatory=True)
@@ -229,6 +231,15 @@ class HotWaterStorage(dycp.DynamicComponent):
         occupancy_classname = Occupancy.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.WaterConsumption, occupancy_classname,
                                                   Occupancy.WaterConsumption))
+        return connections
+
+    def get_utsp_default_connections(self):
+        """ Sets occupancy default connections in hot water storage. """
+        hisim.log.information("setting utsp default connections in hot water storage")
+        connections = []
+        utsp_classname = Occupancy.get_classname()
+        connections.append(cp.ComponentConnection(HotWaterStorage.WaterConsumption, utsp_classname,
+                                                  UtspLpgConnector.WaterConsumption))
         return connections
 
     def get_l1_default_connections(self):
@@ -356,8 +367,8 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
             if self.cooling_considered:
                 if self.heating_season_end < timestep < self.heating_season_begin:
-                    available_power = self.state.return_available_energy(
-                        heating=False) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
+                    available_power = self.state.return_available_energy(heating=False) \
+                        / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
                     heatconsumption = -heatconsumption
                     if heatconsumption < available_power:
                         heatconsumption = min(available_power, 0)

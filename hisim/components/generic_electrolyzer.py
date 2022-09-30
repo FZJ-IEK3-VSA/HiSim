@@ -86,8 +86,8 @@ class Electrolyzer( cp.Component ):
         Output pressure may be used in the future for the
         """
         
-        super().__init__( name = config.name + str( config.source_weight ), 
-                              my_simulation_parameters = my_simulation_parameters )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), 
+                         my_simulation_parameters=my_simulation_parameters )
         self.build( config )
         self.min_hydrogen_production_rate: float
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(self.component_name,
@@ -265,7 +265,7 @@ class L1_Controller( cp.Component ):
                   my_simulation_parameters : SimulationParameters,
                   config : L1ElectrolyzerConfig ) -> None:
         
-        super().__init__( name = config.name + str( config.source_weight ), 
+        super().__init__(name=config.name + '_w' + str(config.source_weight), 
                           my_simulation_parameters = my_simulation_parameters )
         
         self.build( config )
@@ -362,7 +362,7 @@ class L1_Controller( cp.Component ):
         
     @staticmethod
     def get_default_config() -> L1ElectrolyzerConfig :
-        config = L1ElectrolyzerConfig( name = 'L1Electrolyzer',
+        config = L1ElectrolyzerConfig( name = 'L1ElectrolyzerRuntimeController',
                                        source_weight =  1,
                                        min_operation_time = 14400,
                                        min_idle_time = 7200,

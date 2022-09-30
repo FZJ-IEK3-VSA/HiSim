@@ -13,6 +13,7 @@ import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.loadprofilegenerator_connector import Occupancy
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components import controller_l1_generic_runtime
 import hisim.log as log
 seaborn.set(style='ticks')
@@ -190,6 +191,7 @@ class Boiler( cp.Component ):
             raise Exception(" The fuel ", str( self.fuel ), " is not available. Choose either 'electricity' or 'hydrogen'. " )
             
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
+        self.add_default_connections( UtspLpgConnector, self.get_utsp_default_connections( ) )
         self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
         
     def get_occupancy_default_connections( self ) -> List[cp.ComponentConnection]:
@@ -197,6 +199,13 @@ class Boiler( cp.Component ):
         connections: List[cp.ComponentConnection] = [ ]
         occupancy_classname = Occupancy.get_classname( )
         connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, Occupancy.WaterConsumption ) )
+        return connections
+        
+    def get_utsp_default_connections( self ) -> List[cp.ComponentConnection]:
+        log.information("setting utsp default connections in dhw boiler" )
+        connections: List[cp.ComponentConnection] = [ ]
+        occupancy_classname = Occupancy.get_classname( )
+        connections.append( cp.ComponentConnection( Boiler.WaterConsumption, occupancy_classname, UtspLpgConnector.WaterConsumption ) )
         return connections
     
     def get_l1_controller_default_connections( self )-> List[cp.ComponentConnection]:

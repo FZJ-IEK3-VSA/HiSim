@@ -55,12 +55,12 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
               
                 results["pos_battery"]=results.iloc[:,index].tolist()
                 #Replace negative values with zero
-                results["pos_battery"].values[results["pos_battery"]<0]=0 
+                results["pos_battery"].clip(upper=0, inplace=True) 
                 results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
               
                 results["neg_battery"]=results.iloc[:,index].tolist()
                 #Replace positve values with zero
-                results["neg_battery"].values[results["neg_battery"]>0]=0 
+                results["neg_battery"].clip(lower=0, inplace=True)
                 results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
                 results=results.drop(['neg_battery', 'pos_battery'], axis=1)
                     

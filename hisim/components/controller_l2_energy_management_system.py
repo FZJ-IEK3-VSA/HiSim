@@ -570,7 +570,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                  limit_to_shave: float = 0):
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_inputs,
-                         name="EMSElectricityController",
+                         name="L2EMSElectricityController",
                          my_simulation_parameters=my_simulation_parameters)
 
         self.strategy = strategy
@@ -691,7 +691,7 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
                                         weight_counter=weight_counter, output_value=0)
 
-        elif component_type in [ lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP ]:
+        elif component_type in [lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP, lt.ComponentType.SMART_DEVICE]:
 
             if deltademand > 0:
                 self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET],
@@ -745,8 +745,10 @@ class ControllerElectricityGeneric(dynamic_component.DynamicComponent):
         for ind in range( len( self.source_weights_sorted ) ): 
             component_type = self.components_sorted[ ind ]
             source_weight = self.source_weights_sorted[ ind ]
-            if component_type in [ lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP ]:
-                if not skip_CHP or component_type in [ lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP ]: 
+            if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER,
+                                  lt.ComponentType.HEAT_PUMP, lt.ComponentType.SMART_DEVICE]:
+                if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER,
+                                                      lt.ComponentType.HEAT_PUMP, lt.ComponentType.SMART_DEVICE]: 
                     delta_demand, is_battery = self.control_electricity_component_iterative( deltademand = delta_demand,
                                                                                              stsv = stsv,
                                                                                              weight_counter = source_weight,

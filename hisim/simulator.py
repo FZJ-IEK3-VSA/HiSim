@@ -176,8 +176,9 @@ class Simulator:
         all_result_lines = []
         log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
+        last_step: int = 0
         starttime = datetime.datetime.now()
-        total_iteration_tries = 0
+        total_iteration_tries_since_last_msg = 0
 
         for step in range(self._simulation_parameters.timesteps):
             if self._simulation_parameters.timesteps % 500 == 0:
@@ -186,7 +187,7 @@ class Simulator:
             (resulting_stsv, iteration_tries) = self.process_one_timestep(step)
 
             # Accumulates iteration counter
-            total_iteration_tries += iteration_tries
+            total_iteration_tries_since_last_msg += iteration_tries
 
             # Appends
             all_result_lines.append(resulting_stsv.values)
@@ -196,7 +197,9 @@ class Simulator:
 
             # For simulation longer than 5 seconds
             if elapsed.total_seconds() > 5:
-                lastmessage = self.show_progress(starttime, step, total_iteration_tries)
+                lastmessage = self.show_progress(starttime, step, total_iteration_tries_since_last_msg, last_step)
+                last_step = step
+                total_iteration_tries_since_last_msg = 0
 
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
         log.information("Starting postprocessing")
@@ -252,7 +255,7 @@ class Simulator:
         log.information("Finished preparing post processing")
         return ppdt
 
-    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int) -> datetime.datetime:
+    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int, last_step: int) -> datetime.datetime:
         """ Makes the pretty progress messages with time estimate. """
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
@@ -260,10 +263,11 @@ class Simulator:
         elapsed_seconds_str: str = str(elapsed_seconds).zfill(2)
         # Calculates steps achieved per time duration
         steps_per_second = step / elapsed.total_seconds()
-        if step == 0:
+        elapsed_steps: int = step - last_step
+        if elapsed_steps == 0:
             average_iteration_tries: float = 1
         else:
-            average_iteration_tries = total_iteration_tries / step
+            average_iteration_tries = total_iteration_tries / elapsed_steps
         time_elapsed = datetime.timedelta(seconds=((self._simulation_parameters.timesteps - step) / steps_per_second))
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore

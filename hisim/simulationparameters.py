@@ -95,6 +95,11 @@ class SimulationParameters(JSONWizard):
         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep, "")
 
     @classmethod
+    def three_months_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """ Generates a parameter set for a single january, primarily for unit testing. """
+        return cls(datetime.date(year, 1, 1), datetime.date(year, 6, 30), seconds_per_timestep, "")
+
+    @classmethod
     def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single week, primarily for unit testing. """
         return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 8), seconds_per_timestep, "")

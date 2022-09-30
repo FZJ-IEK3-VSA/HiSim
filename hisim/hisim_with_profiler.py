@@ -8,7 +8,7 @@ import hisim.hisim_main as hsm
 def maincall() -> None:
     """ For calling the Hisim main. """
     # change call here as needed
-    hsm.main("..\\examples\\basic_household.py", "basic_household_with_default_connections")
+    hsm.main("..\\examples\\modular_example.py", "modular_household_explicit")
 
 
 if __name__ == "__main__":

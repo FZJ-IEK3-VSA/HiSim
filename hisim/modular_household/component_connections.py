@@ -27,7 +27,6 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
-from hisim.components import controller_l2_predictive_smart_devices
 from hisim import utils
 
 
@@ -111,7 +110,7 @@ def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParamet
 
 
 def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int) \
-        -> Tuple[List[generic_smart_device.SmartDevice], List, int]:
+        -> Tuple[List[generic_smart_device.SmartDevice], int]:
     """ Sets smart devices without controllers.
 
     Parameters

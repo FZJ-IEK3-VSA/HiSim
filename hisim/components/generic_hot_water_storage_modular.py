@@ -211,7 +211,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             hisim.log.error('Type of hot water storage is not defined')
 
         self.thermal_power_delivered_c: cp.ComponentInput = self.add_input(self.component_name, self.ThermalPowerDelivered,
-                                                                            lt.LoadTypes.HEATING, lt.Units.WATT, mandatory=False)
+                                                                           lt.LoadTypes.HEATING, lt.Units.WATT, mandatory=False)
 
         # Outputs
         self.temperature_mean_c: cp.ComponentOutput = self.add_output(

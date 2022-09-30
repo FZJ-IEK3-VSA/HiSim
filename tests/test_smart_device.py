@@ -28,11 +28,11 @@ def test_smart_device():
             i += 1
      
     #create smart_device        
-    my_smart_device = generic_smart_device.SmartDevice( identifier = device, source_weight = 0, my_simulation_parameters = mysim )
+    my_smart_device = generic_smart_device.SmartDevice(identifier=device, source_weight=0, my_simulation_parameters=mysim)
     
     #get first activation and corrisponding profile from data (SmartDevice Class reads in data )
-    activation = my_smart_device.latest_start[ 0 ]
-    profile = my_smart_device.electricity_profile[ 0 ]
+    activation = my_smart_device.latest_start[0]
+    profile = my_smart_device.electricity_profile[0]
 
     #assign outputs correctly
     number_of_outputs = 1
@@ -41,8 +41,8 @@ def test_smart_device():
     
     # Simulate and check that (a) device is activated at latest possible starting point, (b) device runs with the defined power profile
     my_smart_device.i_restore_state()
-    for j in range( activation + len( profile ) ):
-        my_smart_device.i_simulate( j, stsv, False )
+    for j in range(activation + len(profile)):
+        my_smart_device.i_simulate(j, stsv, False)
         if j >= activation:
-            assert stsv.values[ 0 ] == profile[ j - activation ]
+            assert stsv.values[0] == profile[j - activation]
 

@@ -80,7 +80,7 @@ class HydrogenStorage( cp.Component ):
 
     def __init__( self, my_simulation_parameters : SimulationParameters,
                         config : HydrogenStorageConfig ) -> None:
-        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters )
         
         self.build( config )
         

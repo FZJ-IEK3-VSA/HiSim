@@ -6,7 +6,7 @@ from hisim import utils
 #from math import pi
 #from math import floor
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import controller_l2_generic_chp
+from hisim.components import controller_l2_generic_heat_simple
 from hisim.components import generic_hydrogen_storage
 import hisim.log as log
 import pandas as pd
@@ -67,13 +67,13 @@ class GCHP( cp.Component ):
     L1DeviceSignal = "L1DeviceSignal"
 
     # Outputs
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ThermalPowerDelivered = "ThermalPowerDelivered"
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
     
     def __init__( self, my_simulation_parameters: SimulationParameters, config: GCHPConfig ) -> None:
-        super().__init__( name = config.name + str( config.source_weight ), my_simulation_parameters=my_simulation_parameters )
-        self.build( config )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters )
+        self.build(config)
 
         #Inputs
         self.L1DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
@@ -83,8 +83,8 @@ class GCHP( cp.Component ):
                                                                   mandatory = True)
         
         #Component outputs
-        self.ThermalEnergyDeliveredC: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name, field_name=self.ThermalEnergyDelivered, load_type=lt.LoadTypes.HEATING,
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
@@ -130,7 +130,7 @@ class GCHP( cp.Component ):
         self.state.state = stsv.get_input_value( self.L1DeviceSignalC )
        
         # Outputs
-        stsv.set_output_value( self.ThermalEnergyDeliveredC, self.state.state * self.p_th )
+        stsv.set_output_value( self.ThermalPowerDeliveredC, self.state.state * self.p_th )
         stsv.set_output_value( self.ElectricityOutputC, self.state.state * self.p_el )
         
         #heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
@@ -233,8 +233,8 @@ class L1_Controller( cp.Component ):
                   my_simulation_parameters : SimulationParameters,
                   config : L1CHPConfig ):
         
-        super().__init__( name = config.name + str( config.source_weight ), 
-                          my_simulation_parameters = my_simulation_parameters )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), 
+                          my_simulation_parameters=my_simulation_parameters )
         
         self.build( config )
         
@@ -256,7 +256,7 @@ class L1_Controller( cp.Component ):
                                                                lt.Units.PERCENT,
                                                                mandatory = True)
 
-        self.add_default_connections( controller_l2_generic_chp.L2_Controller, self.get_l2_controller_default_connections( ) )
+        self.add_default_connections( controller_l2_generic_heat_simple.L2_Controller, self.get_l2_controller_default_connections( ) )
         self.add_default_connections( generic_hydrogen_storage.HydrogenStorage, self.get_hydrogen_storage_default_connections( ) )
         
         
@@ -269,8 +269,8 @@ class L1_Controller( cp.Component ):
     def get_l2_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l2 default connections in l1")
         connections: List[cp.ComponentConnection] = [ ]
-        controller_classname = controller_l2_generic_chp.L2_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_chp.L2_Controller.l2_DeviceSignal ) )
+        controller_classname = controller_l2_generic_heat_simple.L2_Controller.get_classname( )
+        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heat_simple.L2_Controller.l2_DeviceSignal ) )
         return connections
     
     def get_hydrogen_storage_default_connections( self ) -> List[cp.ComponentConnection]:
@@ -339,7 +339,7 @@ class L1_Controller( cp.Component ):
         
     @staticmethod
     def get_default_config() -> L1CHPConfig:
-        config = L1CHPConfig( name = 'L1CHP',
+        config = L1CHPConfig( name = 'L1CHPRunTimeController',
                               source_weight =  1,
                               min_operation_time = 14400,
                               min_idle_time = 7200,

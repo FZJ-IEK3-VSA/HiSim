@@ -117,7 +117,7 @@ class HeatPump(cp.Component):
     @utils.measure_execution_time
     def __init__( self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters ):
         
-        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters = my_simulation_parameters )
 
         self.build( config )
 

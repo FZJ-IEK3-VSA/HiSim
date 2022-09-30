@@ -103,7 +103,7 @@ class L1_Controller( cp.Component ):
     @utils.measure_execution_time
     def __init__( self, my_simulation_parameters : SimulationParameters, config: L1Config ) -> None:
         
-        super().__init__( config.name + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
         self.build( config )
         
         #add inputs
@@ -142,7 +142,7 @@ class L1_Controller( cp.Component ):
         pass
     @staticmethod
     def get_default_config_heatpump()  -> L1Config:
-        config = L1Config(name='RuntimeController', source_weight=1, min_operation_time=3600 * 3,
+        config = L1Config(name='L1RuntimeController', source_weight=1, min_operation_time=3600 * 3,
                           min_idle_time=3600) 
         return config
 

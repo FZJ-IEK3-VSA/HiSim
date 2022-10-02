@@ -222,7 +222,7 @@ class Simulator:
     def prepare_post_processing(self, all_result_lines, start_counter):
         """ Prepares the post processing. """
         log.information("Preparing post processing")
-        """  Prepares the results from the simulation for the post processing. """
+        # Prepares the results from the simulation for the post processing.
         if len(all_result_lines) != self._simulation_parameters.timesteps:
             raise Exception("not all lines were generated")
         colum_names = []

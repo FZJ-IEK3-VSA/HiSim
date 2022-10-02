@@ -1,7 +1,7 @@
 from hisim import component as cp
 #import components as cps
 #import components
-from hisim.components import generic_hot_water_storage
+from hisim.components import generic_heat_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft

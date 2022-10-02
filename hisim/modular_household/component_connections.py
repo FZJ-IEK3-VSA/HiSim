@@ -424,14 +424,14 @@ def configure_heating_with_buffer(my_sim: Any,
     else:
         buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer()
     buffer_config.power = float(my_building.max_thermal_building_demand)
-    buffer_l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_heating("buffer")
-    [buffer_config.source_weight, buffer_l2_config.source_weight] = [count] * 2
+    building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatController.get_default_config_heating("buffer")
+    [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
     heater_config.power_th = my_building.max_thermal_building_demand
     if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
         heater_l2_config.P_threshold = heater_config.power_th / 3
-        [heater_l2_config.cooling_considered, buffer_l2_config.cooling_considered] = [True] * 2
+        [heater_l2_config.cooling_considered, building_heating_controller_config.cooling_considered] = [True] * 2
     elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
         heater_l2_config.P_threshold = heater_config.power_th
 
@@ -475,13 +475,13 @@ def configure_heating_with_buffer(my_sim: Any,
         my_heater_controller_l2.connect_dynamic_input(input_fieldname=controller_l2_generic_heat_clever_simple.L2HeatSmartController.ElectricityTarget,
                                                       src_object=electricity_to_heatpump)
 
-    my_buffer_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(my_simulation_parameters=my_simulation_parameters,
-                                                                                        config=buffer_l2_config)
+    my_buffer_controller_l2 = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
+                                                                                        config=building_heating_controller_config)
     my_buffer_controller_l2.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_buffer_controller_l2)
     my_buffer.connect_input(my_buffer.L1DeviceSignal,
                             my_buffer_controller_l2.component_name,
-                            my_buffer_controller_l2.l2_device_signal)
+                            my_buffer_controller_l2.boiler_signal)
 
     my_building.add_component_input_and_connect(source_component_class=my_buffer, source_component_output=my_buffer.HeatToBuilding,
                                                 source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,

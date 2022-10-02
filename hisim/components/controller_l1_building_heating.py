@@ -125,10 +125,10 @@ class L1BuildingHeatController(cp.Component):
     """
 
     # Inputs
-    ReferenceTemperature = "ReferenceTemperature"
+    BuildingTemperature = "BuildingTemperature"
 
     # Outputs
-    l2_device_signal = "l2_DeviceSignal"
+    boiler_signal = "l2_DeviceSignal"
 
     # #Forecasts
     # HeatPumpLoadForecast = "HeatPumpLoadForecast"
@@ -140,7 +140,7 @@ class L1BuildingHeatController(cp.Component):
     @utils.measure_execution_time
     def __init__(self, my_simulation_parameters: SimulationParameters, config: L1BuildingHeatingConfig) -> None:
         """ For initializing. """
-        if(not config.__class__.__name__ == L1BuildingHeatingConfig.__name__):
+        if not config.__class__.__name__ == L1BuildingHeatingConfig.__name__:
             raise ValueError("Wrong config class.")
         super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
         self.config: L1BuildingHeatingConfig = config
@@ -159,21 +159,21 @@ class L1BuildingHeatController(cp.Component):
         self.previous_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
 
         # Component Outputs
-        self.l2_device_signal_channel: cp.ComponentOutput = self.add_output(self.component_name, self.l2_device_signal, LoadTypes.ON_OFF, Units.BINARY)
+        self.l2_device_signal_channel: cp.ComponentOutput = self.add_output(self.component_name, self.boiler_signal, LoadTypes.ON_OFF, Units.BINARY)
 
         # Component Inputs
-        self.reference_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.ReferenceTemperature, LoadTypes.TEMPERATURE,
+        self.reference_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.BuildingTemperature, LoadTypes.TEMPERATURE,
                                                                                Units.CELSIUS, mandatory=True)
 
         self.add_default_connections(Building, self.get_building_default_connections())
-        self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections())
+        self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_buffer_default_connections())
 
     def get_building_default_connections(self):
         """ Sets the default connections for the building. """
         log.information("setting building default connections in L1 building Controller")
         connections = []
         building_classname = Building.get_classname()
-        connections.append(cp.ComponentConnection(L1BuildingHeatController.ReferenceTemperature, building_classname, Building.TemperatureMean))
+        connections.append(cp.ComponentConnection(L1BuildingHeatController.BuildingTemperature, building_classname, Building.TemperatureMean))
         return connections
 
     def get_buffer_default_connections(self):
@@ -181,7 +181,7 @@ class L1BuildingHeatController(cp.Component):
         log.information("setting buffer default connections in L1 building Controller")
         connections = []
         boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
-        connections.append(cp.ComponentConnection(L1BuildingHeatController.ReferenceTemperature, boiler_classname,
+        connections.append(cp.ComponentConnection(L1BuildingHeatController.BuildingTemperature, boiler_classname,
                                                   generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean))
         return connections
 
@@ -190,9 +190,9 @@ class L1BuildingHeatController(cp.Component):
         pass
 
     @staticmethod
-    def get_default_config_heating() -> L1BuildingHeatingConfig:
+    def get_default_config_heating(name: str) -> L1BuildingHeatingConfig:
         """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L2HeatingTemperatureController', source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
+        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
                                          cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25, day_of_heating_season_begin=270,
                                          day_of_heating_season_end=150)
         return config
@@ -237,16 +237,13 @@ class L1BuildingHeatController(cp.Component):
                 self.state = self.previous_state.clone()
 
     def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
-        """ Controles the heating. """
+        """ Controlls the building heating. """
         if t_control > t_max_heating:
             # stop heating if temperature exceeds upper limit
             self.state.deactivate()
-            self.previous_state.deactivate()
-
         elif t_control < t_min_heating:
             # start heating if temperature goes below lower limit
             self.state.activate()
-            self.previous_state.activate()
         else:
             if self.state.compulsory == 1:
                 # use previous state if it compulsory
@@ -275,8 +272,6 @@ class L1BuildingHeatController(cp.Component):
         t_control = stsv.get_input_value(self.reference_temperature_channel)
 
         # check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
-        if self.state.is_first_iteration(timestep):
-            self.previous_state.is_first_iteration(timestep)
         if self.cooling_considered:
             # check out during cooling season
             if self.heating_season_begin > timestep > self.heating_season_end:

@@ -6,7 +6,7 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
-from hisim.components import generic_hot_water_storage
+from hisim.components import generic_heat_water_storage
 from hisim.components import generic_gas_heater
 
 __authors__ = "Maximilian Hillen"

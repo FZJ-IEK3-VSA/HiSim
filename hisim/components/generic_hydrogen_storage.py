@@ -26,7 +26,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class HydrogenStorageConfig:
+class GenericHydrogenStorageConfig:
     name: str
     source_weight : int
     min_capacity: float # [kg_H2]
@@ -57,7 +57,7 @@ class HydrogenStorageConfig:
         self.energy_for_discharge = energy_for_discharge
         self.loss_factor_per_day = loss_factor_per_day
         
-class HydrogenStorageState:
+class GenericHydrogenStorageState:
     """
     This data class saves the state of the electrolyzer.
     """
@@ -66,11 +66,11 @@ class HydrogenStorageState:
         self.fill = fill
         
     def clone( self ) -> Any:
-        return HydrogenStorageState( fill = self.fill )
+        return GenericHydrogenStorageState(fill = self.fill)
 
     
 
-class HydrogenStorage( cp.Component ):
+class GenericHydrogenStorage(cp.Component):
     # input
     HydrogenInput = "HydrogenInput"                 # kg/s
     HydrogenOutput = "HydrogenOutput"               # kg/s
@@ -78,8 +78,8 @@ class HydrogenStorage( cp.Component ):
     # output
     HydrogenSOC = "HydrogenSOC"          # kg/s
 
-    def __init__( self, my_simulation_parameters : SimulationParameters,
-                        config : HydrogenStorageConfig ) -> None:
+    def __init__(self, my_simulation_parameters : SimulationParameters,
+                 config : GenericHydrogenStorageConfig) -> None:
         super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters )
         
         self.build( config )
@@ -99,37 +99,37 @@ class HydrogenStorage( cp.Component ):
             object_name=self.component_name, field_name=self.HydrogenSOC, load_type=lt.LoadTypes.HYDROGEN,
             unit=lt.Units.PERCENT, postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT])
         
-        self.add_default_connections( generic_electrolyzer.Electrolyzer, self.get_electrolyzer_default_connections( ) )
+        self.add_default_connections(generic_electrolyzer.GenericElectrolyzer, self.get_electrolyzer_default_connections())
         self.add_default_connections( generic_CHP.GCHP, self.get_fuelcell_default_connections( ) )
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
     @staticmethod
     def get_default_config(capacity: float = 200, max_charging_rate: float = 2, max_discharging_rate: float = 2,
-                           source_weight: int = 1) -> HydrogenStorageConfig:
-        config = HydrogenStorageConfig(name="HydrogenStorage",
-                                       source_weight=source_weight,
-                                       min_capacity=0,
-                                       max_capacity=capacity,
-                                       max_charging_rate_hour=max_charging_rate,
-                                       max_discharging_rate_hour=max_discharging_rate,
-                                       energy_for_charge=0,
-                                       energy_for_discharge=0,
-                                       loss_factor_per_day=0)
+                           source_weight: int = 1) -> GenericHydrogenStorageConfig:
+        config = GenericHydrogenStorageConfig(name="HydrogenStorage",
+                                              source_weight=source_weight,
+                                              min_capacity=0,
+                                              max_capacity=capacity,
+                                              max_charging_rate_hour=max_charging_rate,
+                                              max_discharging_rate_hour=max_discharging_rate,
+                                              energy_for_charge=0,
+                                              energy_for_discharge=0,
+                                              loss_factor_per_day=0)
         return config
     
     def get_fuelcell_default_connections( self )-> List[cp.ComponentConnection]:
         log.information("setting fuel cell default connections in generic H2 storage" )
         connections: List[cp.ComponentConnection] = [ ]
         chp_classname = generic_CHP.GCHP.get_classname( )
-        connections.append( cp.ComponentConnection( HydrogenStorage.HydrogenOutput, chp_classname, generic_CHP.GCHP.FuelDelivered ) )
+        connections.append(cp.ComponentConnection(GenericHydrogenStorage.HydrogenOutput, chp_classname, generic_CHP.GCHP.FuelDelivered))
         return connections
     
     def get_electrolyzer_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting electrolyzer default connections in generic H2 storage" )
         connections: List[cp.ComponentConnection] = [ ]
-        electrolyzer_classname = generic_electrolyzer.Electrolyzer.get_classname( )
-        connections.append( cp.ComponentConnection( HydrogenStorage.HydrogenInput, electrolyzer_classname, generic_electrolyzer.Electrolyzer.HydrogenOutput ) )
+        electrolyzer_classname = generic_electrolyzer.GenericElectrolyzer.get_classname()
+        connections.append(cp.ComponentConnection(GenericHydrogenStorage.HydrogenInput, electrolyzer_classname, generic_electrolyzer.GenericElectrolyzer.HydrogenOutput))
         return connections
     
     def store( self, charging_rate : float ) -> Tuple[float, float, float]:
@@ -192,7 +192,7 @@ class HydrogenStorage( cp.Component ):
     def storage_losses( self ) -> None:
         self.state.fill -= self.state.fill * self.loss_factor
     
-    def build( self, config: HydrogenStorageConfig ) -> None:
+    def build(self, config: GenericHydrogenStorageConfig) -> None:
         self.name = config.name
         self.source_weight = config.source_weight
         self.min_capacity = config.min_capacity
@@ -203,8 +203,8 @@ class HydrogenStorage( cp.Component ):
         self.energy_for_charge = config.energy_for_charge
         self.energy_for_discharge = config.energy_for_discharge
         
-        self.state = HydrogenStorageState( )
-        self.previous_state = HydrogenStorageState( )
+        self.state = GenericHydrogenStorageState()
+        self.previous_state = GenericHydrogenStorageState()
     
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )

@@ -63,7 +63,7 @@ class HeatPumpConfig:
         self.heating_season_begin = heating_season_begin
         self.heating_season_end = heating_season_end
         
-class HeatPumpState:
+class ModularHeatPumpState:
     """
     This data class saves the state of the heat pump.
     """
@@ -73,9 +73,9 @@ class HeatPumpState:
         self.timestep = timestep
         
     def clone( self ):
-        return HeatPumpState( state = self.state, timestep = self.timestep )
+        return ModularHeatPumpState(state = self.state, timestep = self.timestep)
 
-class HeatPump(cp.Component):
+class ModularHeatPump(cp.Component):
     """
     Heat pump implementation. It does support a refrigeration cycle. The heatpump_modular differs to heatpump in (a) minumum run- and
     idle time are given in seconds (not in time steps), (b) the season for heating and cooling is explicitly separated by days of the year.
@@ -142,27 +142,27 @@ class HeatPump(cp.Component):
         #Outputs
         self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION])
             
         self.add_default_connections( Weather, self.get_weather_default_connections( ) )
-        self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
+        self.add_default_connections(controller_l1_generic_runtime.L1GenericRuntimeController, self.get_l1_controller_default_connections())
         
     def get_weather_default_connections( self ):
         log.information("setting weather default connections in HeatPump")
         connections = [ ]
         weather_classname = Weather.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
+        connections.append(cp.ComponentConnection(ModularHeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
         return connections
     
     def get_l1_controller_default_connections( self ):
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
-        controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.L1DeviceSignal ) )
-        connections.append( cp.ComponentConnection( HeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
+        controller_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
+        connections.append(cp.ComponentConnection(ModularHeatPump.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1GenericRuntimeController.L1DeviceSignal))
+        connections.append(cp.ComponentConnection(ModularHeatPump.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1GenericRuntimeController.l1_RunTimeSignal))
         return connections
     
     @staticmethod
@@ -246,8 +246,8 @@ class HeatPump(cp.Component):
             self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         
-        self.state = HeatPumpState( )
-        self.previous_state = HeatPumpState( )
+        self.state = ModularHeatPumpState()
+        self.previous_state = ModularHeatPumpState()
 
         # Writes info to report
         self.write_to_report()
@@ -305,7 +305,7 @@ class HeatPump(cp.Component):
         #         self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.HEAT_PUMP, source_weight = self.source_weight, entry =[self.power_th / cop] * runtime)
 
 
-    def prin1t_outpu1t(self, t_m :float, state: HeatPumpState) -> None:
+    def prin1t_outpu1t(self, t_m :float, state: ModularHeatPumpState) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))

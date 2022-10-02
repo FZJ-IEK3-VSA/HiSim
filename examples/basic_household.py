@@ -139,8 +139,8 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
                                           my_base_electricity_load_profile.ElectricityOutput)
     my_sim.add_component(my_heat_pump_controller)
 
-    my_heat_pump = generic_heat_pump.HeatPump(manufacturer=hp_manufacturer, name=hp_name, min_operation_time=hp_min_operation_time,
-                                              min_idle_time=hp_min_idle_time, my_simulation_parameters=my_simulation_parameters)
+    my_heat_pump = generic_heat_pump.GenericHeatPump(manufacturer=hp_manufacturer, name=hp_name, min_operation_time=hp_min_operation_time,
+                                                     min_idle_time=hp_min_idle_time, my_simulation_parameters=my_simulation_parameters)
     my_heat_pump.connect_input(my_heat_pump.State, my_heat_pump_controller.component_name, my_heat_pump_controller.State)
     my_heat_pump.connect_input(my_heat_pump.TemperatureOutside, my_weather.component_name, my_weather.TemperatureOutside)
 

@@ -33,7 +33,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-class HeatPumpState:
+class GenericHeatPumpState:
 
     def __init__(self,
                  start_timestep: int=0,
@@ -65,9 +65,9 @@ class HeatPumpState:
             raise Exception("Impossible Heat Pump State.")
             
     def clone(self) -> Any:
-        return HeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
+        return GenericHeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
 
-class HeatPump(cp.Component):
+class GenericHeatPump(cp.Component):
     """
     Heat pump implementation. It does support a
     refrigeration cycle. Thermal output is delivered straight to
@@ -118,7 +118,7 @@ class HeatPump(cp.Component):
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
-        self.state = HeatPumpState(start_timestep=int(0),cycle_number=0)
+        self.state = GenericHeatPumpState(start_timestep=int(0), cycle_number=0)
         self.previous_state = self.state.clone( )
 
 
@@ -199,14 +199,14 @@ class HeatPump(cp.Component):
         log.information("setting weather default connections in HeatPump")
         connections = [ ]
         weather_classname = Weather.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside ) )
+        connections.append(cp.ComponentConnection(GenericHeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
         return connections
     
     def get_controller_default_connections( self )  -> List[cp.ComponentConnection]:
         log.information("setting controller default connections in HeatPump")
         connections = [ ]
         controller_classname = HeatPumpController.get_classname( )
-        connections.append( cp.ComponentConnection( HeatPump.State, controller_classname, HeatPumpController.State ) )
+        connections.append(cp.ComponentConnection(GenericHeatPump.State, controller_classname, HeatPumpController.State))
         return connections
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
@@ -350,8 +350,8 @@ class HeatPump(cp.Component):
             number_of_cycles = self.state.cycle_number
             # Checks if the minimum running time has been reached
             if timestep >= self.state.start_timestep + self.min_operation_time and stateC == 0:
-                self.state = HeatPumpState(start_timestep=timestep,
-                                           cycle_number=number_of_cycles)
+                self.state = GenericHeatPumpState(start_timestep=timestep,
+                                                  cycle_number=number_of_cycles)
 
             stsv.set_output_value(self.thermal_energy_deliveredC, self.state.thermal_energy_delivered)
             stsv.set_output_value(self.heatingC, self.state.heating)
@@ -366,15 +366,15 @@ class HeatPump(cp.Component):
             number_of_cycles = self.number_of_cycles
             if stateC == 1:
             #if stsv.get_input_value(self.stateC) > 0:
-                self.state = HeatPumpState(start_timestep=timestep,
-                                        thermal_energy_delivered = self.max_heating_power,
-                                        cop=self.cal_cop(t_out),
-                                        cycle_number=number_of_cycles)
+                self.state = GenericHeatPumpState(start_timestep=timestep,
+                                                  thermal_energy_delivered = self.max_heating_power,
+                                                  cop=self.cal_cop(t_out),
+                                                  cycle_number=number_of_cycles)
             else:
-                self.state = HeatPumpState(start_timestep=timestep,
-                                           thermal_energy_delivered = self.max_cooling_power,
-                                           cop=self.cal_cop(t_out),
-                                           cycle_number = number_of_cycles)
+                self.state = GenericHeatPumpState(start_timestep=timestep,
+                                                  thermal_energy_delivered = self.max_cooling_power,
+                                                  cop=self.cal_cop(t_out),
+                                                  cycle_number = number_of_cycles)
 
         #log.information(self.state.thermal_energy_delivered)
         # Outputs

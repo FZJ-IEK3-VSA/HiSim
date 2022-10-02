@@ -33,13 +33,13 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     for index, output in enumerate(all_outputs):
     
         if output.postprocessing_flag is not None:
-            if (InandOutputType.PRODUCTION in output.postprocessing_flag):
+            if (InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag):
                 hisim.log.information("Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
 
                 
     
-            elif (InandOutputType.CONSUMPTION in output.postprocessing_flag):
+            elif (InandOutputType.ELECTRICITY_CONSUMPTION in output.postprocessing_flag):
                 hisim.log.information("I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 
                 results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]

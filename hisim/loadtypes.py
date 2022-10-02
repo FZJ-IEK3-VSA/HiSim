@@ -213,8 +213,8 @@ class InandOutputType(str, enum.Enum):
     RECOMMENDED_ACTIVATION = "RecommendedActivation"
 
     # Energy Management System / Postprocessing Options
-    PRODUCTION = "Production"
-    CONSUMPTION = "Consumption"
+    ELECTRICITY_PRODUCTION = "Production"
+    ELECTRICITY_CONSUMPTION = "Consumption"
     STORAGE_CONTENT = "StorageContent"
     CHARGE_DISCHARGE = "ChargeDischarge"
 

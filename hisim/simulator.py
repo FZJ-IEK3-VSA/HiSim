@@ -75,7 +75,7 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.prepare_calculation()
 
-    def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
+    def process_one_timestep(self, timestep: int, previous_stsv: cp.SingleTimeStepValues) -> Tuple[cp.SingleTimeStepValues, int]:
         """ Executes one simulation timestep.
 
         Some components can be connected in a circle.
@@ -100,12 +100,12 @@ class Simulator:
             raise Exception("Not a single column was defined.")
 
         # Saves number of outputs
-        number_of_outputs = len(self.all_outputs)
+        # number_of_outputs = len(self.all_outputs)
 
         # Creates List with values
-        stsv = cp.SingleTimeStepValues(number_of_outputs)
+        stsv = previous_stsv.clone()
         # Creates a buffer List with values
-        previous_values = cp.SingleTimeStepValues(number_of_outputs)
+        previous_values = previous_stsv.clone()
         iterative_tries = 0
         force_convergence = False
 
@@ -179,13 +179,17 @@ class Simulator:
         last_step: int = 0
         starttime = datetime.datetime.now()
         total_iteration_tries_since_last_msg = 0
+ 
+        # Creates empty list with values to get started
+        number_of_outputs = len(self.all_outputs)
+        stsv = cp.SingleTimeStepValues(number_of_outputs)
 
         for step in range(self._simulation_parameters.timesteps):
             if self._simulation_parameters.timesteps % 500 == 0:
                 log.information("Starting step " + str(step))
 
-            (resulting_stsv, iteration_tries) = self.process_one_timestep(step)
-
+            (resulting_stsv, iteration_tries) = self.process_one_timestep(step, stsv)
+            stsv = cp.SingleTimeStepValues(number_of_outputs)
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
 

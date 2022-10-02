@@ -138,11 +138,11 @@ def basic_household_with_default_connections(my_sim: Any, my_simulation_paramete
                                           my_base_electricity_load_profile.ElectricityOutput)
     my_sim.add_component(my_heat_pump_controller)
 
-    my_heat_pump = generic_heat_pump.HeatPump(manufacturer=hp_manufacturer,
-                                          name=hp_name,
-                                          min_operation_time=hp_min_operation_time,
-                                          min_idle_time=hp_min_idle_time,
-                                      my_simulation_parameters=my_simulation_parameters)
+    my_heat_pump = generic_heat_pump.GenericHeatPump(manufacturer=hp_manufacturer,
+                                                     name=hp_name,
+                                                     min_operation_time=hp_min_operation_time,
+                                                     min_idle_time=hp_min_idle_time,
+                                                     my_simulation_parameters=my_simulation_parameters)
     my_heat_pump.connect_only_predefined_connections( my_weather, my_heat_pump_controller )
 
     my_sim.add_component(my_heat_pump)

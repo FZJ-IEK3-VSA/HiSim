@@ -1,5 +1,5 @@
 """Example sets up a modular household according to json input file."""
-
+# clean
 from typing import Optional, List, Any
 from pathlib import Path
 
@@ -57,7 +57,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
             predictive=True, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=True,
             water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_included=True,
-            buffer_volume=500, battery_included=True, battery_capacity=10e3, chp_included=True, chp_power=10e3, h2_storage_size=100,
+            buffer_volume=500, battery_included=True, battery_capacity=10e3, chp_included=False, chp_power=10e3, h2_storage_size=100,
             electrolyzer_power=5e3, current_mobility=lt.Cars.NO_CAR, mobility_distance=lt.MobilityDistance.RURAL)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -124,20 +124,20 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if battery_included or chp_included or smart_devices_included \
             or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
             or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
-        my_electricity_controller = controller_l2_energy_management_system.ControllerElectricityGeneric(
+        my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
             my_simulation_parameters=my_simulation_parameters)
 
         my_electricity_controller.add_component_inputs_and_connect(source_component_classes=consumption,
                                                                    outputstring='ElectricityOutput',
                                                                    source_load_type=lt.LoadTypes.ELECTRICITY,
                                                                    source_unit=lt.Units.WATT,
-                                                                   source_tags=[lt.InandOutputType.CONSUMPTION],
+                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION],
                                                                    source_weight=999)
         my_electricity_controller.add_component_inputs_and_connect(source_component_classes=production,
                                                                    outputstring='ElectricityOutput',
                                                                    source_load_type=lt.LoadTypes.ELECTRICITY,
                                                                    source_unit=lt.Units.WATT,
-                                                                   source_tags=[lt.InandOutputType.PRODUCTION],
+                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
                                                                    source_weight=999)
     """SMART CONTROLLER FOR SMART DEVICES"""
     # use predictive controller if smart devices are included and do not use it if it is false

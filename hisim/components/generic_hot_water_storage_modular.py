@@ -206,7 +206,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         elif self.use == lt.ComponentType.BUFFER:
             self.l1_device_signal_c: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ON_OFF,
                                                                         lt.Units.BINARY, mandatory=True)
-            self.add_default_connections(controller_l1_generic_runtime.L1_Controller, self.get_l1_default_connections())
+            self.add_default_connections(controller_l1_generic_runtime.L1GenericRuntimeController, self.get_l1_default_connections())
         else:
             hisim.log.error('Type of hot water storage is not defined')
 
@@ -221,7 +221,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.heat_to_building_c: cp.ComponentOutput = self.add_output(self.component_name, self.HeatToBuilding,
                                                                       lt.LoadTypes.HEATING, lt.Units.WATT)
 
-        self.add_default_connections(generic_heat_pump_modular.HeatPump, self.get_heatpump_default_connections())
+        self.add_default_connections(generic_heat_pump_modular.ModularHeatPump, self.get_heatpump_default_connections())
         self.add_default_connections(generic_heat_source.HeatSource, self.get_heatpump_default_connections())
 
     def get_occupancy_default_connections(self):
@@ -246,9 +246,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Sets L1 power default connections in hot water storage. """
         hisim.log.information("setting L1 power default connections in hot water storage")
         connections = []
-        l1_classname = controller_l1_generic_runtime.L1_Controller.get_classname()
+        l1_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.L1DeviceSignal, l1_classname,
-                                                  controller_l1_generic_runtime.L1_Controller.L1DeviceSignal))
+                                                  controller_l1_generic_runtime.L1GenericRuntimeController.L1DeviceSignal))
         return connections
 
     def i_prepare_simulation(self) -> None:
@@ -259,9 +259,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Sets heat pump default connections in hot water storage. """
         hisim.log.information("setting heat pump default connections in hot water storage")
         connections = []
-        heatpump_classname = generic_heat_pump_modular.HeatPump.get_classname()
+        heatpump_classname = generic_heat_pump_modular.ModularHeatPump.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.ThermalPowerDelivered, heatpump_classname,
-                                                  generic_heat_pump_modular.HeatPump.ThermalPowerDelivered))
+                                                  generic_heat_pump_modular.ModularHeatPump.ThermalPowerDelivered))
         return connections
 
     def get_heatsource_default_connections(self):

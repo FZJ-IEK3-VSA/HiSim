@@ -14,9 +14,9 @@ def test_heat_pump_modular():
     my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
     #default config
-    my_hp_config = generic_heat_pump_modular.HeatPump.get_default_config_heating( )
-    l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_heating( )
-    l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config_heatpump( )
+    my_hp_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_heating()
+    l2_config = controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_default_config_heating()
+    l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config_heatpump()
 
     #definition of outputs
     number_of_outputs = 7
@@ -24,16 +24,16 @@ def test_heat_pump_modular():
 
     #===================================================================================================================
     # Set Heat Pump
-    my_heat_pump = generic_heat_pump_modular.HeatPump( config = my_hp_config,
-                                                       my_simulation_parameters = my_simulation_parameters )
+    my_heat_pump = generic_heat_pump_modular.ModularHeatPump(config = my_hp_config,
+                                                             my_simulation_parameters = my_simulation_parameters)
 
     # Set L1 Heat Pump Controller
-    my_heat_pump_controller_l1 = controller_l1_generic_runtime.L1_Controller( config = l1_config,
-                                                                              my_simulation_parameters = my_simulation_parameters )
+    my_heat_pump_controller_l1 = controller_l1_generic_runtime.L1GenericRuntimeController(config = l1_config,
+                                                                                          my_simulation_parameters = my_simulation_parameters)
     
     # Set L2 Heat Pump Controller
-    my_heat_pump_controller_l2 = controller_l2_generic_heat_clever_simple.L2_Controller(  config = l2_config, 
-                                                                                        my_simulation_parameters = my_simulation_parameters )
+    my_heat_pump_controller_l2 = controller_l2_generic_heat_clever_simple.L2HeatSmartController(config = l2_config,
+                                                                                                my_simulation_parameters = my_simulation_parameters)
 
     #definition of weather output
     t_air_outdoorC = cp.ComponentOutput("FakeTemperatureOutside",

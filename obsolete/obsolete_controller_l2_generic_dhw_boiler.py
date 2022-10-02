@@ -1,14 +1,13 @@
 # -*- coding: utf-8 -*-
 
 # Generic/Built-in
-import numpy as np
 from typing import Any, List
 # Owned
 import hisim.utils as utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.obsolete_generic_dhw_boiler_with_heating import Boiler
+from obsolete.obsolete_generic_dhw_boiler_with_heating import Boiler
 from hisim import log
 
 from dataclasses import dataclass
@@ -49,7 +48,7 @@ class L2Config:
         self.T_tolerance = T_tolerance
 
 
-class L2_ControllerState:
+class L2_DHWControllerState:
     """
     This data class saves the state of the heat pump.
     """
@@ -61,8 +60,8 @@ class L2_ControllerState:
         self.count = count
 
     def clone(self) -> Any:
-        return L2_ControllerState(timestep_actual=self.timestep_actual, state=self.state, compulsory=self.compulsory,
-                                  count=self.count)
+        return L2_DHWControllerState(timestep_actual=self.timestep_actual, state=self.state, compulsory=self.compulsory,
+                                     count=self.count)
 
     def is_first_iteration(self, timestep: int) -> bool:
         if self.timestep_actual + 1 == timestep:
@@ -90,7 +89,7 @@ class L2_ControllerState:
         self.count += 1
 
 
-class L2_Controller(cp.Component):
+class L2_dhw_Controller(cp.Component):
     """ L2 heat pump controller. Processes signals ensuring comfort temperature of building
 
     Parameters
@@ -148,7 +147,7 @@ class L2_Controller(cp.Component):
         connections: List[cp.ComponentConnection] = []
         boiler_classname = Boiler.get_classname()
         connections.append(
-            cp.ComponentConnection(L2_Controller.ReferenceTemperature, boiler_classname, Boiler.TemperatureMean))
+            cp.ComponentConnection(L2_dhw_Controller.ReferenceTemperature, boiler_classname, Boiler.TemperatureMean))
         return connections
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
@@ -168,8 +167,8 @@ class L2_Controller(cp.Component):
         self.T_min = config.T_min
         self.T_max = config.T_max
         self.T_tolerance = config.T_tolerance
-        self.state = L2_ControllerState()
-        self.previous_state = L2_ControllerState()
+        self.state = L2_DHWControllerState()
+        self.previous_state = L2_DHWControllerState()
 
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone()
@@ -240,7 +239,7 @@ class L2_Controller(cp.Component):
 
         stsv.set_output_value(self.l2_DeviceSignalC, self.state.state)
 
-    def prin1t_outpu1t(self, t_m: int, state: L2_ControllerState) -> None:
+    def prin1t_outpu1t(self, t_m: int, state: L2_DHWControllerState) -> None:
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))

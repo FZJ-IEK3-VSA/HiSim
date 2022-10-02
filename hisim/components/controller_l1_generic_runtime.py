@@ -39,7 +39,7 @@ class L1Config:
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
 
-class L1_ControllerState:
+class L1GenericRuntimeControllerState:
     """
     This data class saves the state of the controller.
     """
@@ -50,7 +50,7 @@ class L1_ControllerState:
         self.timestep_of_last_action = timestep_of_last_action
         
     def clone( self ) -> Any:
-        return L1_ControllerState( timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action )
+        return L1GenericRuntimeControllerState(timestep_actual = self.timestep_actual, state = self.state, timestep_of_last_action = self.timestep_of_last_action)
     
     def is_first_iteration( self, timestep: int )-> bool:
         if self.timestep_actual + 1 == timestep:
@@ -70,7 +70,7 @@ class L1_ControllerState:
         self.state = 0
         self.timestep_of_last_action = timestep 
 
-class L1_Controller( cp.Component ):
+class L1GenericRuntimeController(cp.Component):
     
     """
     L1 Heat Pump Controller. It takes care of the operation of the heat pump only in terms of running times.
@@ -112,7 +112,7 @@ class L1_Controller( cp.Component ):
                                                                   LoadTypes.ON_OFF,
                                                                   Units.BINARY,
                                                                   mandatory = True)
-        self.add_default_connections( controller_l2_generic_heat_clever_simple.L2_Controller, self.get_l2_controller_default_connections( ) )
+        self.add_default_connections(controller_l2_generic_heat_clever_simple.L2HeatSmartController, self.get_l2_controller_default_connections())
         
         
         #add outputs
@@ -128,8 +128,8 @@ class L1_Controller( cp.Component ):
     def get_l2_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l2 default connections in l1")
         connections = [ ]
-        controller_classname = controller_l2_generic_heat_clever_simple.L2_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( L1_Controller.l2_DeviceSignal, controller_classname,controller_l2_generic_heat_clever_simple.L2_Controller.l2_DeviceSignal ) )
+        controller_classname = controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_classname()
+        connections.append(cp.ComponentConnection(L1GenericRuntimeController.l2_DeviceSignal, controller_classname, controller_l2_generic_heat_clever_simple.L2HeatSmartController.l2_DeviceSignal))
         return connections
     
     @staticmethod
@@ -152,9 +152,9 @@ class L1_Controller( cp.Component ):
         self.on_time = int( config.min_operation_time / self.my_simulation_parameters.seconds_per_timestep )
         self.off_time = int( config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep )
         
-        self.state0 = L1_ControllerState( )
-        self.state = L1_ControllerState( )
-        self.previous_state = L1_ControllerState( )
+        self.state0 = L1GenericRuntimeControllerState()
+        self.state = L1GenericRuntimeControllerState()
+        self.previous_state = L1GenericRuntimeControllerState()
 
     def i_save_state(self) -> None:
         self.previous_state = self.state.clone( )
@@ -168,7 +168,7 @@ class L1_Controller( cp.Component ):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool)  -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
-            pass
+            return
         
         l2_devicesignal = stsv.get_input_value( self.l2_DeviceSignalC )
         

@@ -2,7 +2,7 @@ from typing import Any
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 
-from hisim.components.configuration import CHPControllerConfig, GasControllerConfig, ElectrolyzerConfig
+from hisim.components.configuration import CHPControllerConfig, GasControllerConfig, AdvElectrolyzerConfig
 from hisim.components import advanced_fuel_cell as chp
 from hisim.components.configuration import ExtendedControllerConfig
 from hisim.simulationparameters import SimulationParameters
@@ -192,15 +192,15 @@ class ExtendedControllerSimulation:
         """
         power_available = -power_from_or_to_grid
 
-        if power_available < ElectrolyzerConfig.min_power:
+        if power_available < AdvElectrolyzerConfig.min_power:
             power_to_electrolyzer = 0
             # no change
             # power_from_or_to_grid = power_available
-        elif ElectrolyzerConfig.min_power <= power_available <= ElectrolyzerConfig.max_power:
+        elif AdvElectrolyzerConfig.min_power <= power_available <= AdvElectrolyzerConfig.max_power:
             power_to_electrolyzer = power_available
             power_from_or_to_grid = 0
         else: # power_available > ElectrolyzerConfig.max_power:
-            power_to_electrolyzer = ElectrolyzerConfig.max_power
+            power_to_electrolyzer = AdvElectrolyzerConfig.max_power
             # not al the electricity can go to the electolyzer --> power_from_or_to_gridstays negative
             power_from_or_to_grid = power_to_electrolyzer - power_available
 

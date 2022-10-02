@@ -192,7 +192,7 @@ class Boiler( cp.Component ):
             
         self.add_default_connections( Occupancy, self.get_occupancy_default_connections( ) )
         self.add_default_connections( UtspLpgConnector, self.get_utsp_default_connections( ) )
-        self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
+        self.add_default_connections(controller_l1_generic_runtime.L1GenericRuntimeController, self.get_l1_controller_default_connections())
         
     def get_occupancy_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting occupancy default connections in dhw boiler" )
@@ -211,9 +211,9 @@ class Boiler( cp.Component ):
     def get_l1_controller_default_connections( self )-> List[cp.ComponentConnection]:
         log.information( "setting l1 default connections in dhw boiler"  )
         connections: List[cp.ComponentConnection] = [ ]
-        controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( Boiler.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_DeviceSignal ) )
-        connections.append( cp.ComponentConnection( Boiler.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.l1_RunTimeSignal ) )
+        controller_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
+        connections.append(cp.ComponentConnection(Boiler.l1_DeviceSignal, controller_classname, controller_l1_generic_runtime.L1GenericRuntimeController.l1_DeviceSignal))
+        connections.append(cp.ComponentConnection(Boiler.l1_RunTimeSignal, controller_classname, controller_l1_generic_runtime.L1GenericRuntimeController.l1_RunTimeSignal))
         return connections
     
     @staticmethod

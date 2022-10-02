@@ -22,7 +22,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class ElectrolyzerConfig:
+class ElectrolyzerWithStorageConfig:
     component_name: str
     waste_energy: float # [W]
     min_power: float # [W]
@@ -35,7 +35,7 @@ class ElectrolyzerConfig:
 
 @dataclass_json
 @dataclass
-class HydrogenStorageConfig:
+class ElectrolyzerWithHydrogenStorageConfig:
     component_name: str
     min_capacity: float # [kg_H2]
     max_capacity: float # [kg_H2]
@@ -165,7 +165,7 @@ class ElectrolyzerSimulation:
 
         return hydrogen_output, oxygen_output, power_level
 
-class Electrolyzer(Component):
+class AdvancedElectrolyzer(Component):
     # input
     ElectricityInput = "Electricity Input"              # W
     HydrogenNotStored= "HydrogenNotStored"            # kg/s
@@ -179,25 +179,25 @@ class Electrolyzer(Component):
     PowerLevel = "Power Level"                          # %
     ElectricityRealNeeded = "ElectricityRealNeeded"
 
-    def __init__(self,my_simulation_parameters: SimulationParameters,
-                 config: ElectrolyzerConfig):
+    def __init__(self, my_simulation_parameters: SimulationParameters,
+                 config: ElectrolyzerWithStorageConfig):
 
         super().__init__(config.component_name, my_simulation_parameters=my_simulation_parameters)
 
         # input
-        self.hydrogen_not_stored: ComponentInput = self.add_input(self.component_name, Electrolyzer.HydrogenNotStored, lt.LoadTypes.HYDROGEN, lt.Units.KG, True)
+        self.hydrogen_not_stored: ComponentInput = self.add_input(self.component_name, AdvancedElectrolyzer.HydrogenNotStored, lt.LoadTypes.HYDROGEN, lt.Units.KG, True)
 
-        self.electricity_input: ComponentInput = self.add_input(self.component_name, Electrolyzer.ElectricityInput, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
+        self.electricity_input: ComponentInput = self.add_input(self.component_name, AdvancedElectrolyzer.ElectricityInput, lt.LoadTypes.ELECTRICITY, lt.Units.WATT, True)
         # output
-        self.water_demand: ComponentOutput = self.add_output(self.component_name, Electrolyzer.WaterDemand, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
-        self.hydrogen_output: ComponentOutput = self.add_output(self.component_name, Electrolyzer.HydrogenOutput, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
-        self.oxygen_output: ComponentOutput = self.add_output(self.component_name, Electrolyzer.OxygenOutput, lt.LoadTypes.OXYGEN, lt.Units.KG_PER_SEC)
-        self.energy_losses: ComponentOutput = self.add_output(self.component_name, Electrolyzer.EnergyLosses, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
-        self.unused_power: ComponentOutput = self.add_output(self.component_name, Electrolyzer.UnusedPower, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
-        self.electricity_real_needed: ComponentOutput = self.add_output(self.component_name, Electrolyzer.ElectricityRealNeeded, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.water_demand: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.WaterDemand, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
+        self.hydrogen_output: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.HydrogenOutput, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
+        self.oxygen_output: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.OxygenOutput, lt.LoadTypes.OXYGEN, lt.Units.KG_PER_SEC)
+        self.energy_losses: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.EnergyLosses, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.unused_power: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.UnusedPower, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
+        self.electricity_real_needed: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.ElectricityRealNeeded, lt.LoadTypes.ELECTRICITY, lt.Units.WATT)
 
-        self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.component_name, Electrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.ANY, lt.Units.ANY)
-        self.power_level: ComponentOutput = self.add_output(self.component_name, Electrolyzer.PowerLevel, lt.LoadTypes.ANY, lt.Units.PERCENT)
+        self.electrolyzer_efficiency: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.ElectrolyzerEfficiency, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.power_level: ComponentOutput = self.add_output(self.component_name, AdvancedElectrolyzer.PowerLevel, lt.LoadTypes.ANY, lt.Units.PERCENT)
 
         self.max_power:float = config.max_power
         self.min_power = config.min_power
@@ -226,7 +226,7 @@ class Electrolyzer(Component):
         pass
     @staticmethod
     def get_default_config():
-        config=ElectrolyzerConfig(
+        config=ElectrolyzerWithStorageConfig(
             component_name= "Electrolyzer",
             waste_energy=400,  # [W]
             min_power= 1_200,  # [W]
@@ -455,7 +455,7 @@ class HydrogenStorage(Component):
     DischargingHydrogenAmountReal= "Discharging Hydrogen Amount Real"               # kg/s
 
     def __init__(self, my_simulation_parameters:SimulationParameters,
-                 config:HydrogenStorageConfig):
+                 config:ElectrolyzerWithHydrogenStorageConfig):
         super().__init__(config.component_name, my_simulation_parameters=my_simulation_parameters)
         self.charging_hydrogen: ComponentInput = self.add_input(self.component_name, HydrogenStorage.ChargingHydrogenAmount, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC, True)
         self.discharging_hydrogen: ComponentInput = self.add_input(self.component_name, HydrogenStorage.DischargingHydrogenAmountTarget, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC, False)
@@ -489,7 +489,7 @@ class HydrogenStorage(Component):
 
     @staticmethod
     def get_default_config():
-        config=HydrogenStorageConfig(
+        config=ElectrolyzerWithHydrogenStorageConfig(
             component_name = "HydrogenStorage",
             min_capacity = 0,
             max_capacity = 500,

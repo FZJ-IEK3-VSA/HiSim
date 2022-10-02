@@ -15,8 +15,8 @@ def test_heat_source():
     
     #default config
     my_heat_source_config = generic_heat_source.HeatSource.get_default_config_heating()
-    l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating()
-    l1_config = controller_l1_generic_runtime.L1_Controller.get_default_config()
+    l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_heating()
+    l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config()
 
     #definition of outputs
     number_of_outputs = 5
@@ -28,11 +28,11 @@ def test_heat_source():
                                                     my_simulation_parameters=my_simulation_parameters)
 
     # Set L1 Heat Pump Controller
-    my_heat_source_controller_l1 = controller_l1_generic_runtime.L1_Controller(
+    my_heat_source_controller_l1 = controller_l1_generic_runtime.L1GenericRuntimeController(
         config=l1_config, my_simulation_parameters=my_simulation_parameters)
     
     # Set L2 Heat Pump Controller
-    my_heat_source_controller_l2 = controller_l2_generic_heat_simple.L2_Controller(
+    my_heat_source_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(
         config = l2_config, my_simulation_parameters=my_simulation_parameters)
     
     #definition of building output
@@ -42,14 +42,14 @@ def test_heat_source():
                               lt.Units.WATT)
     
     #connection of in- and outputs
-    my_heat_source_controller_l2.ReferenceTemperatureC.source_output = t_mC
+    my_heat_source_controller_l2.reference_temperature_channel.source_output = t_mC
     my_heat_source.L1DeviceSignalC.source_output = my_heat_source_controller_l1.L1DeviceSignalC
-    my_heat_source_controller_l1.l2_DeviceSignalC.source_output = my_heat_source_controller_l2.l2_DeviceSignalC
+    my_heat_source_controller_l1.l2_DeviceSignalC.source_output = my_heat_source_controller_l2.l2_device_signal_channel
 
     # indexing of in- and outputs
     t_mC.global_index = 0
     my_heat_source_controller_l1.L1DeviceSignalC.global_index = 1  
-    my_heat_source_controller_l2.l2_DeviceSignalC.global_index = 2
+    my_heat_source_controller_l2.l2_device_signal_channel.global_index = 2
     my_heat_source.FuelDeliveredC.global_index = 3
     my_heat_source.ThermalPowerDeliveredC.global_index = 4
     

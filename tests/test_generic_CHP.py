@@ -27,9 +27,9 @@ def test_chp_system():
     my_chp_config = generic_CHP.GCHP.get_default_config( )
     my_chp = generic_CHP.GCHP( config = my_chp_config,
                               my_simulation_parameters = my_simulation_parameters )
-    my_chp_controller_config = generic_CHP.L1_Controller.get_default_config( )
-    my_chp_controller = generic_CHP.L1_Controller( config = my_chp_controller_config,
-                                                   my_simulation_parameters = my_simulation_parameters )
+    my_chp_controller_config = generic_CHP.L1GenericCHPRuntimeController.get_default_config()
+    my_chp_controller = generic_CHP.L1GenericCHPRuntimeController(config = my_chp_controller_config,
+                                                                  my_simulation_parameters = my_simulation_parameters)
     
     # Set Fake Inputs
     electricity_target = cp.ComponentOutput( 'FakeElectricityTarget',

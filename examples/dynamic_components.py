@@ -76,7 +76,7 @@ def dynamic_components_demonstration(my_sim: Any, my_simulation_parameters: Opti
                                                       config=my_advanced_fuel_cell_config_1)
     my_advanced_fuel_cell_2 = advanced_fuel_cell.CHP(my_simulation_parameters=my_simulation_parameters,
                                                       config=my_advanced_fuel_cell_config_2)
-    my_cl2 = cl2.ControllerElectricityGeneric(my_simulation_parameters=my_simulation_parameters)
+    my_cl2 = cl2.L2GenericEnergyManagementSystem(my_simulation_parameters=my_simulation_parameters)
 
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy")
     my_occupancy = loadprofilegenerator_connector.Occupancy( config=my_occupancy_config, my_simulation_parameters = my_simulation_parameters )
@@ -104,13 +104,13 @@ def dynamic_components_demonstration(my_sim: Any, my_simulation_parameters: Opti
                                             outputstring = 'ElectricityOutput',
                                             source_load_type = lt.LoadTypes.ELECTRICITY,
                                             source_unit = lt.Units.WATT,
-                                            source_tags = [lt.InandOutputType.CONSUMPTION],
+                                            source_tags = [lt.InandOutputType.ELECTRICITY_CONSUMPTION],
                                             source_weight = 999)
     my_cl2.add_component_inputs_and_connect(source_component_classes = [ my_photovoltaic_system ],
                                             outputstring = 'ElectricityOutput',
                                             source_load_type = lt.LoadTypes.ELECTRICITY,
                                             source_unit = lt.Units.WATT,
-                                            source_tags = [lt.InandOutputType.PRODUCTION],
+                                            source_tags = [lt.InandOutputType.ELECTRICITY_PRODUCTION],
                                             source_weight = 999)
     my_cl2.add_component_input_and_connect(source_component_class = my_advanced_battery_1,
                                            source_component_output = my_advanced_battery_1.AcBatteryPower,

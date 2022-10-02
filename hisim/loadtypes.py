@@ -214,7 +214,8 @@ class InandOutputType(str, enum.Enum):
 
     # Energy Management System / Postprocessing Options
     ELECTRICITY_PRODUCTION = "Production"
-    ELECTRICITY_CONSUMPTION = "Consumption"
+    ELECTRICITY_CONSUMPTION_EMS_CONTROLLED = "Consumption with EMS control"
+    ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"
     CHARGE_DISCHARGE = "ChargeDischarge"
 

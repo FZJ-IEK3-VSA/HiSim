@@ -144,7 +144,7 @@ class L2HeatSmartController(cp.Component):
 
     # Outputs
     l2_DeviceSignal = "l2_DeviceSignal"
-    
+
     # #Forecasts
     # HeatPumpLoadForecast = "HeatPumpLoadForecast"
 
@@ -164,6 +164,7 @@ class L2HeatSmartController(cp.Component):
                                                                     self.l2_DeviceSignal,
                                                                     LoadTypes.ON_OFF,
                                                                     Units.BINARY)
+
 
         #Component Inputs
         self.ReferenceTemperatureC: cp.ComponentInput = self.add_input(self.component_name,
@@ -292,26 +293,13 @@ class L2HeatSmartController(cp.Component):
                 #use previous state if l3 was not available
                 self.state = self.previous_state.clone( )
                 
-    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> None:
-        if T_control > T_max_heating:
-            #stop heating if temperature exceeds upper limit
-            self.state.deactivate( )
-            self.previous_state.deactivate( )
+    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> bool:
+        if l3state > 0:
+            T_min_heating = T_min_heating + 5
+        if T_control < T_min_heating:
+            return 1
+        return 0
 
-        elif T_control < T_min_heating:
-            #start heating if temperature goes below lower limit
-            self.state.activate( )
-            self.previous_state.activate( )
-        else:
-            if self.state.compulsory == 1:
-                #use previous state if it compulsory
-                pass
-            elif self.ElectricityTargetC.source_output is not None:
-                #use recommendation from l3 if available and not compulsory
-                self.state.state = l3state
-            else:
-                #use revious state if l3 was not available
-                self.state = self.previous_state.clone( )
 
     def i_save_state(self):
         self.previous_state = self.state.clone( )
@@ -323,82 +311,62 @@ class L2HeatSmartController(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
+        if force_convergence:
+            return
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )  
-        if self.my_simulation_parameters.system_config.predictive == True:
-            RunTimeSignal = stsv.get_input_value( self.l1_RunTimeSignalC )
-        else:
-            RunTimeSignal = 0
-        if force_convergence:
-            pass
-            # if self.cooling_considered:
-            #     if timestep < self.heating_season_begin and timestep > self.heating_season_end:
-            #         if T_control > ( self.T_max_cooling + self.T_min_cooling ) / 2 :
-            #             stsv.set_output_value( self.l2_DeviceSignalC, 1 )
-            #         else:
-            #             stsv.set_output_value( self.l2_DeviceSignalC, 0 )
-            #     else:
-            #         if T_control < ( self.T_max_heating + self.T_min_heating ) / 2 :
-            #             stsv.set_output_value( self.l2_DeviceSignalC, 1 )
-            #         else:
-            #             stsv.set_output_value( self.l2_DeviceSignalC, 0 )
-                
-            # else:
-            #     if T_control < ( self.T_max_heating + self.T_min_heating ) / 2 :
-            #         stsv.set_output_value( self.l2_DeviceSignalC, 1 )
-            #     else:
-            #         stsv.set_output_value( self.l2_DeviceSignalC, 0 )
-        
-        else:
-            #get l3 recommendation if available
-            electricity_target = stsv.get_input_value( self.ElectricityTargetC )
-            if electricity_target >= self.P_threshold:
-                l3state = 1
-            else:
-                l3state = 0
-        
-            #reset temperature limits if recommended from l3
-            if self.cooling_considered:  
-                if l3state == 1 :
-                    if RunTimeSignal > 0:
-                        T_min_cooling = self.T_min_cooling - self.T_tolerance
-                    else:
-                        T_min_cooling = ( self.T_min_cooling + self.T_max_cooling ) / 2
-                    T_max_cooling = self.T_max_cooling
-                elif l3state == 0:
-                    T_max_cooling = self.T_max_cooling + self.T_tolerance
-                    T_min_cooling = self.T_min_cooling 
-                    
-            if l3state == 1:
-                if RunTimeSignal > 0:
-                    T_max_heating = self.T_max_heating + self.T_tolerance
-                else:
-                    T_max_heating = ( self.T_min_heating + self.T_max_heating ) / 2
-                T_min_heating = self.T_min_heating
-                self.state.is_compulsory( )
-                self.previous_state.is_compulsory( )
-            elif l3state == 0:
-                 T_max_heating = self.T_max_heating 
-                 T_min_heating = self.T_min_heating - self.T_tolerance
-                 self.state.is_compulsory( )
-                 self.previous_state.is_compulsory( )
+        # if self.my_simulation_parameters.system_config.predictive == True:
+        #     RunTimeSignal = stsv.get_input_value( self.l1_RunTimeSignalC )
+        # else:
+        #     RunTimeSignal = 0
 
-            #check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
-            if self.state.is_first_iteration( timestep ):
-                self.previous_state.is_first_iteration( timestep )
-            
-            if self.cooling_considered:
-                #check out during cooling season
-                if timestep < self.heating_season_begin and timestep > self.heating_season_end:
-                    self.control_cooling( T_control = T_control, T_min_cooling = T_min_cooling, T_max_cooling = T_max_cooling, l3state = l3state )
-                #check out during heating season
-                else:
-                    self.control_heating( T_control = T_control, T_min_heating = T_min_heating, T_max_heating = T_max_heating, l3state = l3state )
-                        
-            #check out during heating season
-            else:
-                self.control_heating( T_control = T_control, T_min_heating = T_min_heating, T_max_heating = T_max_heating, l3state = l3state )
-            stsv.set_output_value( self.l2_DeviceSignalC, self.state.state )
+
+        #get l3 recommendation if available
+        electricity_target = stsv.get_input_value( self.ElectricityTargetC )
+        if electricity_target >= self.P_threshold:
+            l3state = 1
+        else:
+            l3state = 0
+
+        #reset temperature limits if recommended from l3
+        # if self.cooling_considered:
+        #     if l3state == 1 :
+        #         if RunTimeSignal > 0:
+        #             T_min_cooling = self.T_min_cooling - self.T_tolerance
+        #         else:
+        #             T_min_cooling = ( self.T_min_cooling + self.T_max_cooling ) / 2
+        #         T_max_cooling = self.T_max_cooling
+        #     elif l3state == 0:
+        #         T_max_cooling = self.T_max_cooling + self.T_tolerance
+        #         T_min_cooling = self.T_min_cooling
+
+        # if l3state == 1:
+        #     # if RunTimeSignal > 0:
+        #     #     T_max_heating = self.T_max_heating + self.T_tolerance
+        #     # else:
+        #     T_max_heating = ( self.T_min_heating + self.T_max_heating ) / 2
+        #     T_min_heating = self.T_min_heating
+        #     self.state.is_compulsory( )
+        #     self.previous_state.is_compulsory( )
+        # elif l3state == 0:
+        #      T_max_heating = self.T_max_heating
+        #      T_min_heating = self.T_min_heating - self.T_tolerance
+        #      self.state.is_compulsory( )
+        #      self.previous_state.is_compulsory( )
+
+
+        # if self.cooling_considered:
+        #     #check out during cooling season
+        #     if timestep < self.heating_season_begin and timestep > self.heating_season_end:
+        #         self.control_cooling( T_control = T_control, T_min_cooling = T_min_cooling, T_max_cooling = T_max_cooling, l3state = l3state )
+        #     #check out during heating season
+        #     else:
+        #         self.control_heating( T_control = T_control, T_min_heating = T_min_heating, T_max_heating = T_max_heating, l3state = l3state )
+        #
+        # #check out during heating season
+        # else:
+        control_signal = self.control_heating( T_control = T_control, T_min_heating = self.T_min_heating, T_max_heating = self.T_max_heating, l3state = l3state )
+        stsv.set_output_value( self.l2_DeviceSignalC, control_signal )
         
     def write_to_report( self ):
         lines = []
@@ -408,7 +376,3 @@ class L2HeatSmartController(cp.Component):
         lines.append( "tolerance: {:4.0f} °C".format( self.T_tolerance))
         return lines
 
-    def prin1t_outpu1t(self, t_m, state):
-        log.information("==========================================")
-        log.information("T m: {}".format(t_m))
-        log.information("State: {}".format(state))

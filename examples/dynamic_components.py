@@ -104,7 +104,7 @@ def dynamic_components_demonstration(my_sim: Any, my_simulation_parameters: Opti
                                             outputstring = 'ElectricityOutput',
                                             source_load_type = lt.LoadTypes.ELECTRICITY,
                                             source_unit = lt.Units.WATT,
-                                            source_tags = [lt.InandOutputType.ELECTRICITY_CONSUMPTION],
+                                            source_tags = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                                             source_weight = 999)
     my_cl2.add_component_inputs_and_connect(source_component_classes = [ my_photovoltaic_system ],
                                             outputstring = 'ElectricityOutput',

@@ -84,6 +84,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
     my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
+    TotalElectricityConsumption = "TotalElectricityConsumption"
+    FlexibleElectricity = "FlexibleElectricity"
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    StorageTemperatureModifier = "StorageTemperatureModifier"
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -106,6 +110,27 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                                                                                field_name=self.ElectricityToOrFromGrid,
                                                                                load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
                                                                                sankey_flow_direction=False)
+
+        self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                               field_name=self.TotalElectricityConsumption,
+                                                                               load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
+                                                                               sankey_flow_direction=False)
+
+        self.flexible_electricity: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                               field_name=self.FlexibleElectricity,
+                                                                               load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
+                                                                               sankey_flow_direction=False)
+
+
+        self.building_temperature_modifier: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                               field_name=self.BuildingTemperatureModifier,
+                                                                               load_type=lt.LoadTypes.TEMPERATURE, unit=lt.Units.CELSIUS,
+                                                                               sankey_flow_direction=False)
+
+        self.storage_temperature_modifier: cp.ComponentOutput = self.add_output(object_name=self.component_name,
+                                                                                 field_name=self.StorageTemperatureModifier,
+                                                                                 load_type=lt.LoadTypes.TEMPERATURE, unit=lt.Units.CELSIUS,
+                                                                                 sankey_flow_direction=False)
 
         self.check_peak_shaving: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.CheckPeakShaving,
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False)
@@ -372,15 +397,24 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # get production
         production = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]))
-        consumption = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION]))
+        consumption_uncontrolled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]))
+        consumption_ems_controlled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]))
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        delta_demand = production - consumption
-
+        flexible_electricity = production - consumption_uncontrolled
+        electricity_to_grid = production - consumption_uncontrolled - consumption_ems_controlled
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(delta_demand=delta_demand, stsv=stsv)
-            stsv.set_output_value(self.electricity_to_or_from_grid, delta_demand)
+            self.optimize_own_consumption_iterative(delta_demand=electricity_to_grid, stsv=stsv)
+            stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
+            stsv.set_output_value(self.flexible_electricity, flexible_electricity )
+        stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)
+        if flexible_electricity > 0:
+            stsv.set_output_value(self.building_temperature_modifier, 0)
+            stsv.set_output_value(self.storage_temperature_modifier, 0)
+        else:
+            stsv.set_output_value(self.building_temperature_modifier, 0)
+            stsv.set_output_value(self.storage_temperature_modifier, 0)
         '''
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)

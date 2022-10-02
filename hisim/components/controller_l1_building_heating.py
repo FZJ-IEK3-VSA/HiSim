@@ -10,11 +10,13 @@ from typing import Optional
 
 from dataclasses_json import dataclass_json
 
+from hisim.component import ConfigBase
 from hisim import utils
 from hisim import component as cp
 from hisim import log
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components.building import Building
+from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -30,7 +32,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L1BuildingHeatingConfig:
+class L1BuildingHeatingConfig(ConfigBase):
 
     """ L2 Controller Config. """
 
@@ -126,7 +128,7 @@ class L1BuildingHeatController(cp.Component):
 
     # Inputs
     BuildingTemperature = "BuildingTemperature"
-
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"
     # Outputs
     boiler_signal = "l2_DeviceSignal"
 
@@ -162,11 +164,14 @@ class L1BuildingHeatController(cp.Component):
         self.l2_device_signal_channel: cp.ComponentOutput = self.add_output(self.component_name, self.boiler_signal, LoadTypes.ON_OFF, Units.BINARY)
 
         # Component Inputs
-        self.reference_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.BuildingTemperature, LoadTypes.TEMPERATURE,
-                                                                               Units.CELSIUS, mandatory=True)
+        self.building_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.BuildingTemperature, LoadTypes.TEMPERATURE,
+                                                                              Units.CELSIUS, mandatory=True)
+        self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(self.component_name, self.BuildingTemperatureModifier, LoadTypes.TEMPERATURE,
+                                                                              Units.CELSIUS, mandatory=False)
 
         self.add_default_connections(Building, self.get_building_default_connections())
         self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_buffer_default_connections())
+        self.add_default_connections(controller_l2_energy_management_system.L2GenericEnergyManagementSystem, self.get_ems_default_connections())
 
     def get_building_default_connections(self):
         """ Sets the default connections for the building. """
@@ -174,6 +179,14 @@ class L1BuildingHeatController(cp.Component):
         connections = []
         building_classname = Building.get_classname()
         connections.append(cp.ComponentConnection(L1BuildingHeatController.BuildingTemperature, building_classname, Building.TemperatureMean))
+        return connections
+
+    def get_ems_default_connections(self):
+        """ Sets the default connections for the building. """
+        log.information("setting building default connections in L1 building Controller")
+        connections = []
+        ems_classname = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
+        connections.append(cp.ComponentConnection(L1BuildingHeatController.BuildingTemperatureModifier, ems_classname, controller_l2_energy_management_system.L2GenericEnergyManagementSystem.BuildingTemperatureModifier))
         return connections
 
     def get_buffer_default_connections(self):
@@ -197,60 +210,17 @@ class L1BuildingHeatController(cp.Component):
                                          day_of_heating_season_end=150)
         return config
 
-    @staticmethod
-    def get_default_config_buffer_heating() -> L1BuildingHeatingConfig:
-        """ Default Config for the buffer temperature. """
-        config = L1BuildingHeatingConfig(name='L2BufferTemperatureController', source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
-                                         cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
-                                         day_of_heating_season_begin=270, day_of_heating_season_end=150)
-        return config
 
-    @staticmethod
-    def get_default_config_waterheating() -> L1BuildingHeatingConfig:
-        """ Generate Default Config for a DHW controller. """
-        config = L1BuildingHeatingConfig(name='L2DHWTemperatureController', source_weight=1, t_min_heating_in_celsius=50.0, t_max_heating_in_celsius=80.0,
-                                         cooling_considered=False, t_min_cooling_in_celsius=None, t_max_cooling_in_celsius=None,
-                                         day_of_heating_season_begin=None, day_of_heating_season_end=None)
-        return config
-
-    def control_cooling(self, t_control: float, t_min_cooling: Optional[float], t_max_cooling: Optional[float]) -> None:
-        """ Controls the cooling. """
-        if t_min_cooling is None:
-            raise ValueError("T_min_cooling was None.")
-        if t_max_cooling is None:
-            raise ValueError("T_max_cooling was None.")
-        """ Controls the cooling. """
-        if t_control > t_max_cooling:
-            # start cooling if temperature exceeds upper limit
-            self.state.activate()
-            self.previous_state.activate()
-        elif t_control < t_min_cooling:
-            # stop cooling if temperature goes below lower limit
-            self.state.deactivate()
-            self.previous_state.deactivate()
-        else:
-            if self.state.compulsory == 1:
-                # use previous state if it is compulsory
-                pass
-            else:
-                # use previous state if l3 was not available
-                self.state = self.previous_state.clone()
-
-    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
+    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float):
         """ Controlls the building heating. """
         if t_control > t_max_heating:
-            # stop heating if temperature exceeds upper limit
-            self.state.deactivate()
+            # print("t_control > t_max_heating"  + str(t_control) + " " + str(t_max_heating))
+            self.previous_state.state = 0
+            return
         elif t_control < t_min_heating:
             # start heating if temperature goes below lower limit
-            self.state.activate()
-        else:
-            if self.state.compulsory == 1:
-                # use previous state if it compulsory
-                pass
-            else:
-                # use previous state if temperature is in given limit
-                self.state = self.previous_state.clone()
+            self.previous_state.state = 1
+            return
 
     def i_save_state(self) -> None:
         """ Saves the state. """
@@ -269,26 +239,16 @@ class L1BuildingHeatController(cp.Component):
         if force_convergence:
             return
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-        t_control = stsv.get_input_value(self.reference_temperature_channel)
-
-        # check if it is the first iteration and reset compulsory and timestep_of_last_activation in state and previous_state
-        if self.cooling_considered:
-            # check out during cooling season
-            if self.heating_season_begin > timestep > self.heating_season_end:
-                self.control_cooling(t_control=t_control, t_min_cooling=self.config.t_min_cooling_in_celsius, t_max_cooling=self.config.t_max_cooling_in_celsius)
-            # check out during heating season
-            else:
-                self.control_heating(t_control=t_control, t_min_heating=self.config.t_min_heating_in_celsius, t_max_heating=self.config.t_max_heating_in_celsius)
-
-        # check out during heating season
-        else:
-            self.control_heating(t_control=t_control, t_min_heating=self.config.t_min_heating_in_celsius, t_max_heating=self.config.t_max_heating_in_celsius)
+        t_control = stsv.get_input_value(self.building_temperature_channel)
+        temperature_modifier = stsv.get_input_value(self.building_temperature_modifier_channel)
+        t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
+        t_max_target = self.config.t_max_heating_in_celsius + temperature_modifier
+        self.control_heating(t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target)
         stsv.set_output_value(self.l2_device_signal_channel, self.state.state)
 
     def write_to_report(self) -> List[str]:
         """ Writes the information of the current component to the report. """
         lines: List[str] = []
         lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(f"upper set temperature: {self.config.t_max_heating_in_celsius:4.0f} °C")
-        lines.append(f"lower set temperature: {self.config.t_min_heating_in_celsius:4.0f} °C")
+        lines.append(self.config.get_string_dict()) # type: ignore
         return lines

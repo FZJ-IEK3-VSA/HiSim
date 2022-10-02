@@ -38,8 +38,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
@@ -55,9 +56,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     else:
         my_simulation_parameters.reset_system_config(
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
-            predictive=True, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=True,
+            predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=False,
             water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_included=True,
-            buffer_volume=500, battery_included=True, battery_capacity=10e3, chp_included=False, chp_power=10e3, h2_storage_size=100,
+            buffer_volume=500, battery_included=False, battery_capacity=10e3, chp_included=False, chp_power=10e3, h2_storage_size=100,
             electrolyzer_power=5e3, current_mobility=lt.Cars.NO_CAR, mobility_distance=lt.MobilityDistance.RURAL)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -104,8 +105,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_sim.add_component(my_building)
 
     # add price signal
-    my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
-    my_sim.add_component(my_price_signal)
+    if my_simulation_parameters.system_config.predictive:
+        my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
+        my_sim.add_component(my_price_signal)
 
     """PV"""
     if pv_included:
@@ -117,8 +119,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             pv_peak_power=pv_peak_power, count=count)
 
     """SMART DEVICES"""
-    my_smart_devices, count = component_connections.configure_smart_devices(
-        my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count)
+    if smart_devices_included:
+        my_smart_devices, count = component_connections.configure_smart_devices(
+            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count)
 
     """SURPLUS CONTROLLER"""
     if battery_included or chp_included or smart_devices_included \
@@ -131,7 +134,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                                    outputstring='ElectricityOutput',
                                                                    source_load_type=lt.LoadTypes.ELECTRICITY,
                                                                    source_unit=lt.Units.WATT,
-                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION],
+                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
                                                                    source_weight=999)
         my_electricity_controller.add_component_inputs_and_connect(source_component_classes=production,
                                                                    outputstring='ElectricityOutput',
@@ -142,14 +145,13 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     """SMART CONTROLLER FOR SMART DEVICES"""
     # use predictive controller if smart devices are included and do not use it if it is false
     if smart_devices_included:
-        component_connections.configure_smart_controller_for_smart_devices(
-            my_sim=my_sim, my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices)
+        component_connections.configure_smart_controller_for_smart_devices(my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices)
 
     """WATERHEATING"""
-    count = component_connections.configure_water_heating(
-        my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
-        my_electricity_controller=my_electricity_controller, my_weather=my_weather,
-        water_heating_system_installed=water_heating_system_installed, count=count)
+#    count = component_connections.configure_water_heating(
+ #       my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
+  #      my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+   #     water_heating_system_installed=water_heating_system_installed, count=count)
 
     """HEATING"""
     if buffer_included:

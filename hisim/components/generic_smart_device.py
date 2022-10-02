@@ -98,7 +98,7 @@ class SmartDevice( cp.Component ):
         #mandatory Output
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
            
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(
             object_name=self.component_name, field_name=self.ElectricityTarget,

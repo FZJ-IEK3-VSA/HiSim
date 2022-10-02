@@ -119,11 +119,12 @@ class StorageState:
         # 4.182 is the specific heat of water in kJ / (K * kg)
         self.temperature_in_kelvin = energy_in_kilo_joule / (self.volume_in_l * 0.977 * 4.182)  # temperature given in K
         # filter for boiling water
-        if self.temperature_in_kelvin > 95 + 273.15:
-            self.temperature_in_kelvin = 95 + 273.15
-        # filter for freezing water
-        elif self.temperature_in_kelvin < 2 + 273.15:
-            self.temperature_in_kelvin = 2 + 273.15
+        # no filtering -> this hides major problems - Noah
+#        if self.temperature_in_kelvin > 95 + 273.15:
+ #           self.temperature_in_kelvin = 95 + 273.15
+  #      # filter for freezing water
+   #     elif self.temperature_in_kelvin < 2 + 273.15:
+    #        self.temperature_in_kelvin = 2 + 273.15
 
     def return_available_energy(self, heating: bool) -> float:
         """ Returns available energy in (J).
@@ -287,7 +288,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Returns default configuration for buffer (radius:height = 1:4). """
         radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=800, surface=6 * radius * radius * np.pi, u_value=0.36,
+            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=6 * radius * radius * np.pi, u_value=0.36,
             warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,
             heating_season_begin=270, heating_season_end=150)
         return config

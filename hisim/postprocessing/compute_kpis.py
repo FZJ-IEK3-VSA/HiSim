@@ -39,7 +39,7 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
 
                 
     
-            elif (InandOutputType.ELECTRICITY_CONSUMPTION in output.postprocessing_flag):
+            elif (InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag) or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag:
                 hisim.log.information("I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 
                 results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]

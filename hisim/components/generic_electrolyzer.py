@@ -101,7 +101,7 @@ class GenericElectrolyzer(cp.Component):
                                                                    lt.Units.KG_PER_SEC)
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=GenericElectrolyzer.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION, lt.ComponentType.ELECTROLYZER])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, lt.ComponentType.ELECTROLYZER])
         self.add_default_connections(L1GenericElectrolyzerController, self.get_l1_controller_default_connections())
         
     @staticmethod

@@ -77,6 +77,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
     mobility_set = my_simulation_parameters.system_config.mobility_set
     # mobility_distance = my_simulation_parameters.system_config.mobility_distance
+
     clever = my_simulation_parameters.system_config.clever
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
     if pv_included:
@@ -247,6 +248,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             chp_power=chp_power, h2_storage_size=h2_storage_size, electrolyzer_power=electrolyzer_power, count=count)
         heater.append(my_chp)
 
+
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
         h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
         electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
@@ -284,7 +286,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         smart_devices_cost) + "battery_cost" + str(battery_cost) + "surplus_controller_cost" + str(surplus_controller_cost) + "heatpump_cost" + str(
         heatpump_cost) + "buffer_cost" + str(buffer_cost) + "chp_cost" + str(chp_cost) + "h2_storage_cost" + str(
         h2_storage_cost) + "electrolyzer_cost" + str(electrolyzer_cost) + "ev_cost" + str(ev_cost))
-
 
 def needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):  # noqa
     """ Checks if a system needs an EMS. """

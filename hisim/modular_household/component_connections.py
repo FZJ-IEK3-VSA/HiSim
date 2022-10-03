@@ -34,7 +34,6 @@ from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
 from hisim import utils
 
-
 def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
                         production: List, pv_peak_power: Optional[float], count: int) -> Tuple[List, int]:
     """ Sets PV System.
@@ -107,7 +106,6 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         count += 1
 
     return my_smart_devices, count
-
 
 def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int, ev_included: bool,
                    occupancy_config: loadprofilegenerator_connector.OccupancyConfig) -> Tuple[List[generic_car.Car], int]:
@@ -225,7 +223,6 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
 
     return ev_capacities
 
-
 def configure_smart_controller_for_smart_devices(my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
                                                  my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:
     """ Sets l3 controller for smart devices.
@@ -341,9 +338,12 @@ def configure_water_heating(
 
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
+    
     my_sim.add_component(my_heater)
+    my_sim.add_component(my_heater_controller_l1)
+    my_sim.add_component(my_heater_controller_l2)
+    
     my_boiler.connect_only_predefined_connections(my_heater)
-
     return count
 
 

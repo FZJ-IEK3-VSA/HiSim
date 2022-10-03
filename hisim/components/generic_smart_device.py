@@ -11,7 +11,6 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
-#from hisim.components import controller_l3_predictive
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
@@ -138,14 +137,6 @@ class SmartDevice( cp.Component ):
                     
                 if timestep == activation:
                     self.state.run( timestep, self.electricity_profile[ self.state.position ] )
-                    if self.predictive == True:
-                        if self.state.position < len( self.electricity_profile ) - 1:
-                            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
-                                                                         entry = [ self.electricity_profile[ self.state.position ], self.electricity_profile[ self.state.position + 1 ] ])
-                            
-                        elif self.state.position == len( self.electricity_profile ) - 1:
-                            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
-                                                                         entry = [ self.electricity_profile[ self.state.position ], [ ] ])
         
         #run device if it was already activated
         else:
@@ -217,7 +208,6 @@ class SmartDevice( cp.Component ):
         self.electricity_profile = electricity_profile
         self.state = SmartDeviceState( )
         self.previous_state = SmartDeviceState( )
-        self.predictive = self.my_simulation_parameters.system_config.predictive
 
     def write_to_report(self) -> List[str]:
         lines: List[str] = []

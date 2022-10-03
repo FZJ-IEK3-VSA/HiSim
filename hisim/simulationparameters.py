@@ -19,6 +19,7 @@ class SystemConfig:
     location: Locations = Locations.AACHEN
     occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01
     building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002
+    clever: bool = False
     predictive: bool = False
     prediction_horizon: int = 24 * 3600
     pv_included: bool = True
@@ -123,8 +124,9 @@ class SimulationParameters(JSONWizard):
 
     def reset_system_config(
             self, location: Locations = Locations.AACHEN, occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01,
-            building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002, predictive: bool = True, prediction_horizon: int = 0,
-            pv_included: bool = True, pv_peak_power: Optional[float] = 9, smart_devices_included: bool = True,
+            building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002, clever: bool = True, 
+            predictive: bool = False, prediction_horizon: int = 0, pv_included: bool = True,
+            pv_peak_power: Optional[float] = 9, smart_devices_included: bool = True,
             water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
             heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
             buffer_included: bool = True, buffer_volume: Optional[float] = 500, battery_included: bool = False, battery_capacity: Optional[float] = 5,
@@ -133,7 +135,7 @@ class SimulationParameters(JSONWizard):
             mobility_distance: MobilityDistance = MobilityDistance.RURAL) -> None:  # noqa
         """ Configures a system config. """
         self.system_config = SystemConfig(
-            location=location, occupancy_profile=occupancy_profile, building_code=building_code, predictive=predictive,
+            location=location, occupancy_profile=occupancy_profile, building_code=building_code, clever=clever, predictive=predictive,
             prediction_horizon=prediction_horizon, pv_included=pv_included, pv_peak_power=pv_peak_power,
             smart_devices_included=smart_devices_included, water_heating_system_installed=water_heating_system_installed,
             heating_system_installed=heating_system_installed, buffer_included=buffer_included, buffer_volume=buffer_volume,

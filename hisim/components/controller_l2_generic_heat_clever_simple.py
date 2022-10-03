@@ -140,7 +140,7 @@ class L2HeatSmartController(cp.Component):
     # Inputs
     ReferenceTemperature = "ReferenceTemperature"
     ElectricityTarget = "ElectricityTarget"
-    l1_RunTimeSignal = "l1_RunTimeSignal"
+    L1RunTimeSignal = "L1RunTimeSignal"
 
     # Outputs
     l2_DeviceSignal = "l2_DeviceSignal"
@@ -171,12 +171,9 @@ class L2HeatSmartController(cp.Component):
                                                                        self.ReferenceTemperature,
                                                                        LoadTypes.TEMPERATURE,
                                                                        Units.CELSIUS,
-                                                                       mandatory = True)
-        self.l1_RunTimeSignalC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                   self.l1_RunTimeSignal,
-                                                                   LoadTypes.ANY,
-                                                                   Units.ANY,
-                                                                   mandatory = False)
+                                                                       mandatory=True)
+        self.L1RunTimeSignalC: cp.ComponentInput = self.add_input(
+            self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY, True)
         
         self.add_default_connections( Building, self.get_building_default_connections( ) )
         self.add_default_connections( generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections( ) )
@@ -205,7 +202,7 @@ class L2HeatSmartController(cp.Component):
         return connections
     def get_l1_default_connections( self ):
         log.information("setting L1 default connections in L2 Controller")
-        connections = [ ]
+        connections = []
         l1_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
         connections.append(cp.ComponentConnection(L2HeatSmartController.l1_RunTimeSignal, l1_classname, controller_l1_generic_runtime.L1GenericRuntimeController.l1_RunTimeSignal))
         return connections
@@ -319,7 +316,6 @@ class L2HeatSmartController(cp.Component):
         #     RunTimeSignal = stsv.get_input_value( self.l1_RunTimeSignalC )
         # else:
         #     RunTimeSignal = 0
-
 
         #get l3 recommendation if available
         electricity_target = stsv.get_input_value( self.ElectricityTargetC )

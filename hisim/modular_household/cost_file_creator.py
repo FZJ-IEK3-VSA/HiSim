@@ -40,10 +40,10 @@ def create_componentcost_file(
         component=component, capacity_unit=capacity_unit, capacity_for_cost=capacity_for_cost,
         cost_per_capacity=cost_per_capacity, time=time, costfactor_per_time=costfactor_per_time,
         capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
-    json.dumps(asdict(costfile))
+    costfile_written=json.dumps(asdict(costfile))
     
     with open('ComponentCost' + component.value + '.json', 'w') as outfile:
-        outfile.write(str(costfile))
+        outfile.write(costfile_written)
 
 def write_batterycost_file():
     create_componentcost_file(
@@ -51,18 +51,18 @@ def write_batterycost_file():
         cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
 
-def write_pvcost_file():
+def write_heatpump_cost_file():
     create_componentcost_file(
-        component=lt.ComponentType.PV, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
+        component=lt.ComponentType.HEAT_PUMP, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
         cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
 
 def write_smartdev_cost_file():
     create_componentcost_file(
-        component=lt.ComponentType.SMART_DEVICE, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
+        component=lt.ComponentType.HEAT_PUMP, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
         cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
-write_pvcost_file()
+write_heatpump_cost_file()
  
 
 @dataclass_json

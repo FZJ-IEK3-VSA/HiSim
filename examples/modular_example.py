@@ -128,7 +128,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         if economic_parameters["pv_bought"]==True:
             ccpv = json.load(open('..\hisim\modular_household\ComponentCostPV.json'))       
             pv_cost = scipy.interpolate.interp1d(ccpv["capacity_for_cost"], ccpv["cost_per_capacity"])
-            print("Interpolierter Preis für Kapazität von 1120:", pv_cost(pv_peak_power))
+            pv_cost=pv_cost(pv_peak_power)
+            #print("Interpolierter Preis für Kapazität:", pv_cost(pv_peak_power))
         else:
             pv_cost = 0
             

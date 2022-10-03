@@ -15,7 +15,7 @@ def test_simple_bucket_boiler_state():
     
     # Boiler defualt config
     l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_waterheating()
-    l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config()
+    l1_config = controller_l1_generic_runtime.L1Config.get_default_config("runtime controller 1")
     boiler_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_boiler( )
     heater_config = generic_heat_source.HeatSource.get_default_config_waterheating( )
     

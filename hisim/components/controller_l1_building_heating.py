@@ -167,7 +167,7 @@ class L1BuildingHeatController(cp.Component):
         self.building_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.BuildingTemperature, LoadTypes.TEMPERATURE,
                                                                               Units.CELSIUS, mandatory=True)
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(self.component_name, self.BuildingTemperatureModifier, LoadTypes.TEMPERATURE,
-                                                                              Units.CELSIUS, mandatory=False)
+                                                                                       Units.CELSIUS, mandatory=False)
 
         self.add_default_connections(Building, self.get_building_default_connections())
         self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_buffer_default_connections())
@@ -186,7 +186,8 @@ class L1BuildingHeatController(cp.Component):
         log.information("setting building default connections in L1 building Controller")
         connections = []
         ems_classname = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
-        connections.append(cp.ComponentConnection(L1BuildingHeatController.BuildingTemperatureModifier, ems_classname, controller_l2_energy_management_system.L2GenericEnergyManagementSystem.BuildingTemperatureModifier))
+        connections.append(cp.ComponentConnection(L1BuildingHeatController.BuildingTemperatureModifier, ems_classname,
+                                                  controller_l2_energy_management_system.L2GenericEnergyManagementSystem.BuildingTemperatureModifier))
         return connections
 
     def get_buffer_default_connections(self):
@@ -210,17 +211,15 @@ class L1BuildingHeatController(cp.Component):
                                          day_of_heating_season_end=150)
         return config
 
-
-    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float):
+    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
         """ Controlls the building heating. """
         if t_control > t_max_heating:
             # print("t_control > t_max_heating"  + str(t_control) + " " + str(t_max_heating))
             self.previous_state.state = 0
             return
-        elif t_control < t_min_heating:
+        if t_control < t_min_heating:
             # start heating if temperature goes below lower limit
             self.previous_state.state = 1
-            return
 
     def i_save_state(self) -> None:
         """ Saves the state. """
@@ -250,5 +249,5 @@ class L1BuildingHeatController(cp.Component):
         """ Writes the information of the current component to the report. """
         lines: List[str] = []
         lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(self.config.get_string_dict()) # type: ignore
+        lines.append(self.config.get_string_dict())  # type: ignore
         return lines

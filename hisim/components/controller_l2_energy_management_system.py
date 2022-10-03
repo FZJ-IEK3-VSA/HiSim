@@ -21,14 +21,6 @@ __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
 
-@dataclass_json
-@dataclass
-class ControllerHeatConfig:
-    temperature_storage_target_warm_water: float = 50
-    temperature_storage_target_heating_water: float = 35
-    temperature_storage_target_hysteresis_ww: float = 45
-    temperature_storage_target_hysteresis_hw: float = 35
-
 
 @dataclass_json
 @dataclass
@@ -36,36 +28,6 @@ class ControllerElectricityConfig:
     strategy: str = "optimize_own_consumption"
     # strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
     limit_to_shave: float = 0
-
-
-# class ControllerState
-class ControllerState:
-    """
-    Save State if Heater Components were supposed to run
-    in last timestep (Control_Signal).
-    Saves timestep of hysteresis of storages and  the
-    changing target temperature of storages. The
-    target temperature in states changes when target
-    temperature of storage is reached.
-    """
-
-    def __init__(self, control_signal_gas_heater: float, control_signal_chp: float, control_signal_heat_pump: float,
-                 temperature_storage_target_ww_C: float, temperature_storage_target_hw_C: float, timestep_of_hysteresis_ww: int,
-                 timestep_of_hysteresis_hw: int) -> None:
-        self.control_signal_gas_heater: float = control_signal_gas_heater
-        self.control_signal_chp: float = control_signal_chp
-        self.control_signal_heat_pump: float = control_signal_heat_pump
-        self.temperature_storage_target_ww_C: float = temperature_storage_target_ww_C
-        self.temperature_storage_target_hw_C: float = temperature_storage_target_hw_C
-        self.timestep_of_hysteresis_ww: int = timestep_of_hysteresis_ww
-        self.timestep_of_hysteresis_hw: int = timestep_of_hysteresis_hw
-
-    def clone(self) -> "ControllerState":
-        return ControllerState(control_signal_gas_heater=self.control_signal_gas_heater, control_signal_chp=self.control_signal_chp,
-                               control_signal_heat_pump=self.control_signal_heat_pump,
-                               temperature_storage_target_ww_C=self.temperature_storage_target_ww_C,
-                               temperature_storage_target_hw_C=self.temperature_storage_target_hw_C,
-                               timestep_of_hysteresis_ww=self.timestep_of_hysteresis_ww, timestep_of_hysteresis_hw=self.timestep_of_hysteresis_hw)
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):

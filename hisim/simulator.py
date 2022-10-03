@@ -179,7 +179,7 @@ class Simulator:
         last_step: int = 0
         starttime = datetime.datetime.now()
         total_iteration_tries_since_last_msg = 0
- 
+
         # Creates empty list with values to get started
         number_of_outputs = len(self.all_outputs)
         stsv = cp.SingleTimeStepValues(number_of_outputs)

@@ -45,6 +45,7 @@ class HeatPumpConfig:
     cooling_considered: bool
     heating_season_begin: Optional[int]
     heating_season_end: Optional[int]
+    P_threshold: float
 
     def __init__(self, name: str, source_weight: int, manufacturer: str, device_name: str, power_th: float, cooling_considered: bool,
                  heating_season_begin: Optional[int], heating_season_end: Optional[int]):
@@ -136,7 +137,7 @@ class ModularHeatPump(cp.Component):
                                                                       load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
                                                                       postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
 
-        self.PowerModifier: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
+        self.PowerModifierChannel: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY,postprocessing_flag=[])
 
         self.add_default_connections(Weather, self.get_weather_default_connections())
@@ -275,7 +276,7 @@ class ModularHeatPump(cp.Component):
             power_modifier = 1
 
         stsv.set_output_value(self.ThermalPowerDeliveredC, self.power_th * power_modifier)
-        stsv.set_output_value(self.PowerModifier, power_modifier)
+        stsv.set_output_value(self.PowerModifierChannel, power_modifier)
 
         stsv.set_output_value(self.ElectricityOutputC,  electric_power * power_modifier)
 

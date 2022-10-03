@@ -16,7 +16,7 @@ def test_heat_pump_modular():
     #default config
     my_hp_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_heating()
     l2_config = controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_default_config_heating()
-    l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config_heatpump()
+    l1_config = controller_l1_generic_runtime.L1Config.get_default_config_heatpump("HP1")
 
     #definition of outputs
     number_of_outputs = 7
@@ -57,7 +57,7 @@ def test_heat_pump_modular():
     my_heat_pump_controller_l2.ReferenceTemperatureC.source_output = t_mC
     my_heat_pump_controller_l2.ElectricityTargetC.source_output = ElectricityTargetC
     my_heat_pump.TemperatureOutsideC.source_output = t_air_outdoorC
-    my_heat_pump.L1DeviceSignalC.source_output = my_heat_pump_controller_l1.L1DeviceSignalC
+    my_heat_pump.L1HeatPumpTargetPercentage.source_output = my_heat_pump_controller_l1.L1DeviceSignalC
     my_heat_pump_controller_l1.l2_DeviceSignalC.source_output = my_heat_pump_controller_l2.l2_DeviceSignalC
 
     # indexing of in- and outputs

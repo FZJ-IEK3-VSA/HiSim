@@ -154,7 +154,6 @@ class PVSystemConfig(ConfigBase):
     tilt: float
     load_module_data: bool
     source_weight: int
-
     @classmethod
     def get_default_PV_system(cls):
         """ Gets a default PV system. """

@@ -116,6 +116,7 @@ class OverviewGenerator:
     """ Generates an overview of all modules. """
 
     def __init__(self):
+        """ Initializes the class. """
         self.existing_classes: List[str] = []
 
     def add_to_cell(self, column: int, row: int, value: Any, worksheet: Workbook) -> int:

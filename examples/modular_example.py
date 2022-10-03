@@ -148,10 +148,10 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         component_connections.configure_smart_controller_for_smart_devices(my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices)
 
     """WATERHEATING"""
-#    count = component_connections.configure_water_heating(
- #       my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
-  #      my_electricity_controller=my_electricity_controller, my_weather=my_weather,
-   #     water_heating_system_installed=water_heating_system_installed, count=count)
+    #    count = component_connections.configure_water_heating(
+    #       my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
+    #      my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+    #     water_heating_system_installed=water_heating_system_installed, count=count)
 
     """HEATING"""
     if buffer_included:

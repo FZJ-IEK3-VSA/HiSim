@@ -293,7 +293,7 @@ class L2HeatSmartController(cp.Component):
                 #use previous state if l3 was not available
                 self.state = self.previous_state.clone( )
                 
-    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> bool:
+    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> int:
         if l3state > 0:
             T_min_heating = T_min_heating + 5
         if T_control < T_min_heating:

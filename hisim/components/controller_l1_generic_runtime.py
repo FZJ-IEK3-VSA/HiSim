@@ -6,7 +6,7 @@ from typing import Any, List
 from dataclasses_json import dataclass_json
 
 import hisim.utils as utils
-from component import ConfigBase
+from hisim.component import ConfigBase
 from hisim import component as cp
 from hisim import log
 from hisim.components import controller_l2_generic_heat_clever_simple

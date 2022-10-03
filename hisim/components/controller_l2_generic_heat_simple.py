@@ -140,7 +140,7 @@ class L2GenericHeatController(cp.Component):
     @utils.measure_execution_time
     def __init__(self, my_simulation_parameters: SimulationParameters, config: L2GenericHeatConfig) -> None:
         """ For initializing. """
-        if(not config.__class__.__name__ == L2GenericHeatConfig.__name__):
+        if not config.__class__.__name__ == L2GenericHeatConfig.__name__:
             raise ValueError("Wrong config class.")
         super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
         self.config: L2GenericHeatConfig = config

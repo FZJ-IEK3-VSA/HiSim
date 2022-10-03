@@ -15,8 +15,8 @@ def test_heat_source():
     
     #default config
     my_heat_source_config = generic_heat_source.HeatSource.get_default_config_heating()
-    l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_heating()
-    l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config()
+    l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_heating("controller l2")
+    l1_config = controller_l1_generic_runtime.L1Config.get_default_config("controller")
 
     #definition of outputs
     number_of_outputs = 5

@@ -21,8 +21,6 @@ __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
 
-
-
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     """
     Surplus electricity controller - time step based. 
@@ -246,16 +244,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     # follows strategy to first charge battery than produce H2
     '''
     def seasonal_storage(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
-
         electricity_to_or_from_battery_target:float = 0
         electricity_from_chp_target:float = 0
         electricity_to_or_from_grid:float = 0
         electricity_to_electrolyzer_target:float = 0
-
         # Check if Battery is Component of Simulation
         if self.electricity_to_or_from_battery_real.SourceOutput is not None:
             electricity_to_or_from_battery_target = delta_demand
-
         # electricity_not_used_battery of Charge or Discharge
         electricity_not_used_battery = electricity_to_or_from_battery_target - stsv.get_input_value(
             self.electricity_to_or_from_battery_real)
@@ -268,35 +263,27 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     self.electricity_to_or_from_battery_real)
                 if electricity_to_electrolyzer_target<0:
                     electricity_to_electrolyzer_target=0
-
             # Negative sign, because Electricity will flow into grid->Production of Electricity
             electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
                 self.electricity_to_or_from_battery_real) + (electricity_to_electrolyzer_target-stsv.get_input_value(self.electricity_to_electrolyzer_unused))
-
         # less electricity than needed
         elif delta_demand < 0:
-
             if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.SourceOutput is not None:
                 electricity_from_chp_target = -delta_demand + stsv.get_input_value(
                     self.electricity_to_or_from_battery_real)
-
             # Positive sing, because Electricity will flow out of grid->Consumption of Electricity
             electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
                 self.electricity_to_or_from_battery_real) - stsv.get_input_value(self.electricity_from_chp_real)
-
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
         stsv.set_output_value(self.electricity_from_chp_target, electricity_from_chp_target)
         stsv.set_output_value(self.electricity_to_electrolyzer_target, electricity_to_electrolyzer_target)
         stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
-
-
     #peak-shaving from grid tries to reduce/shave electricity from grid to an defined boarder
     #just used for industry, trade and service
     #so far no chp is added. But produces elect. has to be addded to delta demand
     def peak_shaving_from_grid(self,delta_demand:float,limit_to_shave: float,stsv: cp.SingleTimeStepValues):
         electricity_to_or_from_battery_target:float=0
         check_peak_shaving:float=0
-
         # more electricity than needed
         if delta_demand > 0:
             electricity_to_or_from_battery_target = delta_demand
@@ -309,21 +296,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.electricity_to_or_from_battery_real)
         electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
             self.electricity_to_or_from_battery_real)
-
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
         stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
         stsv.set_output_value(self.check_peak_shaving, check_peak_shaving)
-
     #peak-shaving from grid tries to reduce/shave electricity into grid to an defined boarder
     #so far no chp is added. But produces elect. has to be addded to delta demand
     def peak_shaving_into_grid(self,delta_demand:float,limit_to_shave: float,stsv: cp.SingleTimeStepValues):
         #Hier delta Demand noch die Leistung aus CHP hinzufügen
         electricity_to_or_from_battery_target:float=0
         check_peak_shaving:float=0
-
         if delta_demand > limit_to_shave:
             electricity_to_or_from_battery_target=delta_demand-limit_to_shave
-
             if delta_demand - limit_to_shave - stsv.get_input_value(
                 self.electricity_to_or_from_battery_real) > 0:
                 check_peak_shaving = delta_demand - limit_to_shave - stsv.get_input_value(
@@ -332,7 +315,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 check_peak_shaving = 1
         elif delta_demand<0:
             electricity_to_or_from_battery_target=delta_demand
-
         electricity_to_or_from_grid=-delta_demand + stsv.get_input_value(
             self.electricity_to_or_from_battery_real)
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
@@ -387,13 +369,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # not perfect solution!
         '''
         if self.temperature_residence<self.min_comfortable_temperature_residence:
-
-
             #heat
             #here has to be added how "strong" HeatingWater Storage can be discharged
             #Working with upper boarder?
-
         elif self.temperature_residence > self.max_comfortable_temperature_residence:
             #cool
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
-        '''

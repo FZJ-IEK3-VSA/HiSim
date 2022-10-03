@@ -99,9 +99,6 @@ class Simulator:
         if (len(self.all_outputs)) == 0:
             raise Exception("Not a single column was defined.")
 
-        # Saves number of outputs
-        # number_of_outputs = len(self.all_outputs)
-
         # Creates List with values
         stsv = previous_stsv.clone()
         # Creates a buffer List with values

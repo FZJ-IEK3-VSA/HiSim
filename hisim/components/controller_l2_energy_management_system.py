@@ -57,10 +57,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def __init__(self, my_simulation_parameters: SimulationParameters, strategy: str = "optimize_own_consumption",
                  # strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
                  limit_to_shave: float = 0):
-        super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_inputs,
-                         name="L2EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
+        super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_inputs,
+                         name="L2EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
+
         self.strategy = strategy
         self.limit_to_shave = limit_to_shave
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,

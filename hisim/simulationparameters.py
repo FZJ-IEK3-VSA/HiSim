@@ -43,8 +43,8 @@ class SimulationParameters(JSONWizard):
 
     """ Defines HOW the simulation is going to proceed: Time resolution, time span and all these things. """
 
-    start_date: datetime.date
-    end_date: datetime.date
+    start_date: datetime.datetime
+    end_date: datetime.datetime
     seconds_per_timestep: int
     post_processing_options: List[int]
     logging_level: int
@@ -57,8 +57,8 @@ class SimulationParameters(JSONWizard):
                  post_processing_options: List[int] = None, logging_level: int = log.LogPrio.INFORMATION,
                  skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
         """ Initializes the class. """
-        self.start_date = start_date
-        self.end_date = end_date
+        self.start_date: datetime.datetime = start_date
+        self.end_date: datetime.datetime = end_date
         self.seconds_per_timestep = seconds_per_timestep
         self.duration = end_date - start_date
         total_seconds = self.duration.total_seconds()

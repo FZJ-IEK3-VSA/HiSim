@@ -2,7 +2,7 @@
 # clean
 import os
 import datetime
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, cast
 import time
 
 import pandas as pd
@@ -294,7 +294,8 @@ class Simulator:
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(results_data_frame.values[:, i_column], index=pd_timeline,
                                    columns=[results_data_frame.columns[i_column]])
-            column_name: str = results_data_frame.columns[i_column]  # noqa
+            column_name1 = results_data_frame.columns[i_column]  # noqa
+            column_name: str = cast(str, column_name1)
             if 'Temperature' in column_name or 'Percent' in column_name:
                 temp_df = temp_df.resample('M').interpolate(method='linear')
             else:

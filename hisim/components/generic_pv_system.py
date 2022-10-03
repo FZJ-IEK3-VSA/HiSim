@@ -495,8 +495,9 @@ class PVSystem(cp.Component):
             # load in [kW/kWp]
             ac_power = sapm_out["p_mp"] / peak_load
 
-        if math.isnan(ac_power):
-            ac_power = 0.0
+        if math.isnan(ac_power):  # type: ignore
+            raise ValueError("AC power was NAN")
+            # ac_power = 0.0
 
         # ac_power = ac_power * self.time_correction_factor
         # ac_power = ac_power

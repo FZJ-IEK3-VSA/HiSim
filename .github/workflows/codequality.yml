@@ -51,7 +51,7 @@ jobs:
         prospector hisim/components/controller_l1_building_heating.py
         prospector hisim/components/controller_l2_generic_heat_simple.py
         prospector hisim/components/generic_hot_water_storage_modular.py
-        prospector hisim/components/weather.py
+        # prospector hisim/components/weather.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/postprocessing/chartbase.py
         prospector hisim/postprocessing/charts.py

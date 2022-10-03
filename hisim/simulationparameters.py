@@ -52,7 +52,7 @@ class SimulationParameters(JSONWizard):
     skip_finished_results: bool
     system_config: SystemConfig
 
-    def __init__(self, start_date: datetime.date, end_date: datetime.date, seconds_per_timestep: int,
+    def __init__(self, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int,
                  result_directory: str = "",
                  post_processing_options: List[int] = None, logging_level: int = log.LogPrio.INFORMATION,
                  skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
@@ -75,7 +75,7 @@ class SimulationParameters(JSONWizard):
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a full year without any post processing, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep, "")
+        return cls(datetime.datetime(year, 1, 1), datetime.datetime(year + 1, 1, 1), seconds_per_timestep, "")
 
     def enable_all_options(self) -> None:
         """ Enables all the post processing options . """
@@ -85,34 +85,34 @@ class SimulationParameters(JSONWizard):
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a full year with all the post processing, primarily for unit testing. """
-        pars = cls(datetime.date(year, 1, 1), datetime.date(year + 1, 1, 1), seconds_per_timestep, "")
+        pars = cls(datetime.datetime(year, 1, 1), datetime.datetime(year + 1, 1, 1), seconds_per_timestep, "")
         pars.enable_all_options()
         return pars
 
     @classmethod
     def january_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single january, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 31), seconds_per_timestep, "")
+        return cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 1, 31), seconds_per_timestep, "")
 
     @classmethod
     def three_months_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single january, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 6, 30), seconds_per_timestep, "")
+        return cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 6, 30), seconds_per_timestep, "")
 
     @classmethod
     def one_week_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single week, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 8), seconds_per_timestep, "")
+        return cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 1, 8), seconds_per_timestep, "")
 
     @classmethod
     def one_day_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
-        return cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep, "")
+        return cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 1, 2), seconds_per_timestep, "")
 
     @classmethod
     def one_day_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
-        pars = cls(datetime.date(year, 1, 1), datetime.date(year, 1, 2), seconds_per_timestep, "")
+        pars = cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 1, 2), seconds_per_timestep, "")
         pars.enable_all_options()
         return pars
 

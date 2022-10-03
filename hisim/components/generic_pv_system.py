@@ -212,7 +212,7 @@ class PVSystem(cp.Component):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.data: Any
-        super().__init__(self.pvconfig.name + str(self.pvconfig.source_weight), my_simulation_parameters=my_simulation_parameters)
+        super().__init__(self.pvconfig.name + '_w' + str(self.pvconfig.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.t_outC: cp.ComponentInput = self.add_input(self.component_name, self.TemperatureOutside, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS,
                                                         True)

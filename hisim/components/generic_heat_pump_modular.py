@@ -97,6 +97,7 @@ class ModularHeatPump(cp.Component):
     L1DeviceSignal = "L1DeviceSignal"
     l1_RunTimeSignal = 'l1_RunTimeSignal'
     ems_flexible_electricity = "EMS Modulating Signal"
+
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
     ElectricityOutput = "ElectricityOutput"

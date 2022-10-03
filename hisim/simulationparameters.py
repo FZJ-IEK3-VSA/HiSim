@@ -10,7 +10,6 @@ from hisim import log
 from hisim.system_config import SystemConfig
 from hisim.postprocessingoptions import PostProcessingOptions
 
-
 @dataclass()
 class SimulationParameters(JSONWizard):
 

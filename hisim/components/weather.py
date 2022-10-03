@@ -198,14 +198,14 @@ class Weather(Component):
         stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
 
         # set the temperature forecast
-        if self.my_simulation_parameters.system_config.predictive:
-            timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            last_forecast_timestep = int(timestep + timesteps_24h)
-            if last_forecast_timestep > len(self.temperature_list):
-                last_forecast_timestep = len(self.temperature_list)
-            # log.information( type(self.temperature))
-            temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
+        # if self.my_simulation_parameters.system_config.predictive:
+        #     timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        #     last_forecast_timestep = int(timestep + timesteps_24h)
+        #     if last_forecast_timestep > len(self.temperature_list):
+        #         last_forecast_timestep = len(self.temperature_list)
+        #     # log.information( type(self.temperature))
+        #     temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
+        #     self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
         self.last_timestep_with_update = timestep
 
     def i_prepare_simulation(self) -> None:

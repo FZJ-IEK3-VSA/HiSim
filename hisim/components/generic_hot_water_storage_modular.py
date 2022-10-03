@@ -120,12 +120,12 @@ class StorageState:
         self.temperature_in_kelvin = energy_in_kilo_joule / (self.volume_in_l * 0.977 * 4.182)  # temperature given in K
         # filter for boiling water
         # no filtering -> this hides major problems - Noah
-#        if self.temperature_in_kelvin > 95 + 273.15:
- #           self.temperature_in_kelvin = 95 + 273.15
-  #      # filter for freezing water
-   #     elif self.temperature_in_kelvin < 2 + 273.15:
-    #        self.temperature_in_kelvin = 2 + 273.15
-
+        """       if self.temperature_in_kelvin > 95 + 273.15:
+        #           self.temperature_in_kelvin = 95 + 273.15
+        # filter for freezing water
+        #     elif self.temperature_in_kelvin < 2 + 273.15:
+        #        self.temperature_in_kelvin = 2 + 273.15
+        """
     def return_available_energy(self, heating: bool) -> float:
         """ Returns available energy in (J).
 

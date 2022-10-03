@@ -22,13 +22,6 @@ __status__ = "development"
 
 
 
-@dataclass_json
-@dataclass
-class ControllerElectricityConfig:
-    strategy: str = "optimize_own_consumption"
-    # strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
-    limit_to_shave: float = 0
-
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     """

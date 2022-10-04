@@ -57,12 +57,12 @@ def write_heatpump_cost_file():
         cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
 
-def write_smartdev_cost_file():
+def write_chp_cost_file():
     create_componentcost_file(
-        component=lt.ComponentType.HEAT_PUMP, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
+        component=lt.ComponentType.PREDICTIVE_CONTROLLER, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500,1000,2000,10000],
         cost_per_capacity=[1000,1800,2500,5000], time=[2022,2030,2050], costfactor_per_time=[100,90,60],
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000] )
-write_heatpump_cost_file()
+write_chp_cost_file()
  
 
 @dataclass_json

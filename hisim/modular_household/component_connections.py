@@ -3,8 +3,6 @@
 The functions are all called in modular_household.
 """
 
-# clean
-
 from typing import List, Optional, Tuple, Any
 
 import csv

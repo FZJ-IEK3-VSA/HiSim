@@ -1,5 +1,5 @@
 """Example sets up a modular household according to json input file."""
-# clean
+
 from typing import Optional, List, Any
 from pathlib import Path
 

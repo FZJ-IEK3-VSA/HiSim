@@ -1,5 +1,5 @@
 """  Basic household example. Shows how to set up a standard system. """
-# clean
+
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector

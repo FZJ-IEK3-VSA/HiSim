@@ -17,9 +17,9 @@ class SystemChart:
 
     def make_chart(self) -> None:
         """ Makes different charts. Entry point for the class. """
-        self.make_graphviz_chart(with_labels=False,with_class_names=True,filename= "System_no_Edge_with_class_labels.png")
+        self.make_graphviz_chart(with_labels=False, with_class_names=True, filename="System_no_Edge_with_class_labels.png")
         self.make_graphviz_chart(with_labels=False, with_class_names=False, filename="System_no_Edge_labels.png")
-        self.make_graphviz_chart(with_labels=True, with_class_names=False,filename="System_with_Edge_labels.png")
+        self.make_graphviz_chart(with_labels=True, with_class_names=False, filename="System_with_Edge_labels.png")
 
     def make_graphviz_chart(self, with_labels: bool, with_class_names: bool, filename: str) -> None:
         """ Visualizes the entire system with graphviz. """

@@ -1,5 +1,4 @@
 """ Handles all the weather data processing. """
-# clean
 
 import datetime
 import math

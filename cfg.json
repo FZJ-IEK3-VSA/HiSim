@@ -1,0 +1,101 @@
+{
+    "systemName": "TestModel",
+    "componentEntries": [
+        {
+            "componentFullClassname": "hisim.components.loadprofilegenerator_connector.Occupancy",
+            "componentName": "Occupancy_1",
+            "configuration": {
+                "name": "Occupancy_1",
+                "profileName": "CH01"
+            },
+            "configFullClassname": "hisim.components.loadprofilegenerator_connector.OccupancyConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.weather.Weather",
+            "componentName": "Weather_1",
+            "configuration": {
+                "name": "Weather_1",
+                "location": "Aachen",
+                "sourcePath": "C:\\Users\\Selina\\HiSim\\hisim\\inputs\\weather\\test-reference-years_1995-2012_1-location\\data_processed\\aachen_center",
+                "dataSource": 1
+            },
+            "configFullClassname": "hisim.components.weather.WeatherConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.building.Building",
+            "componentName": "Building_1",
+            "configuration": {
+                "name": "Building_1",
+                "heating_reference_temperature": -14,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "bClass": "medium",
+                "initial_temperature": 23
+            },
+            "configFullClassname": "hisim.components.building.BuildingConfig",
+            "defaultConnections": [
+                "Weather_1",
+                "Occupancy_1"
+            ],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_pv_system.PVSystem",
+            "componentName": "PVSystem",
+            "configuration": {
+                "name": "PVSystem",
+                "time": 2019,
+                "location": "Aachen",
+                "module_name": "Hanwha_HSL60P6_PA_4_250T__2013_",
+                "integrate_inverter": true,
+                "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                "power": 10000.0,
+                "azimuth": 180,
+                "tilt": 30,
+                "load_module_data": false,
+                "source_weight": 0
+            },
+            "configFullClassname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "defaultConnections": [
+                "Weather_1"
+            ],
+            "manualConnections": []
+        }
+    ],
+    "mySimulationParameters": {
+        "startDate": "2022-01-01",
+        "endDate": "2022-01-31",
+        "secondsPerTimestep": 60,
+        "postProcessingOptions": [
+            10
+        ],
+        "loggingLevel": 3,
+        "resultDirectory": "",
+        "skipFinishedResults": false,
+        "systemConfig": {
+            "location": "Aachen",
+            "occupancyProfile": "CH01",
+            "buildingCode": "DE.N.SFH.05.Gen.ReEx.001.002",
+            "predictive": false,
+            "predictionHorizon": 86400,
+            "pvIncluded": true,
+            "pvPeakPower": 10000.0,
+            "smartDevicesIncluded": true,
+            "waterHeatingSystemInstalled": "HeatPump",
+            "heatingSystemInstalled": "HeatPump",
+            "bufferIncluded": true,
+            "bufferVolume": 500,
+            "batteryIncluded": false,
+            "batteryCapacity": 10000.0,
+            "chpIncluded": false,
+            "chpPower": 10000.0,
+            "h2StorageSize": 100,
+            "electrolyzerPower": 10000.0,
+            "currentMobility": "NoCar",
+            "mobilityDistance": "rural"
+        }
+    }
+}

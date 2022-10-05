@@ -243,7 +243,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_sim.add_component(my_electricity_controller)
 
-    if economic_parameters["h2system_bought"]==True:
+    if economic_parameters["h2system_bought"] is True:
 
         ccchp = json.load(open('..\hisim\modular_household\ComponentCostCHP.json'))
         chp_cost_interp = scipy.interpolate.interp1d(ccchp["capacity_for_cost"], ccchp["cost_per_capacity"])
@@ -260,7 +260,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         chp_cost = 0
         h2_storage_cost=0
         electrolyzer_cost=0
-    
 
     """PREDICTIVE CONTROLLER FOR SMART DEVICES"""
     # use predictive controller if smart devices are included and do not use it if it is false
@@ -270,14 +269,13 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_smart_devices=my_smart_devices)
     else:
         my_simulation_parameters.system_config.predictive = False
-        
+
     if economic_parameters["smart_devices_bought"]==True:
         ccpcfsd = json.load(open('..\hisim\modular_household\ComponentCostPredictiveControllerforSmartDevices.json'))
         predictive_controller_for_smart_devices_cost = ccpcfsd["predictive_controller_for_smart_devices_cost"]
     else:
         predictive_controller_for_smart_devices_cost = 0
-        
-       
+
     """ELECTRIC VEHICLE"""        
     if economic_parameters["ev_bought"]==True:
         ccev = json.load(open('..\hisim\modular_household\ComponentCostElectricVehicle.json'))
@@ -285,7 +283,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         ev_cost=ev_cost_interp(battery_capacity)
     else:
         ev_cost = 0
-        
+
     """BUFFER"""        
     if economic_parameters["buffer_bought"]==True:
         ccbu = json.load(open('..\hisim\modular_household\ComponentCostBuffer.json'))
@@ -293,21 +291,20 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         buffer_cost=buffer_cost_interp(buffer_volume)
     else:
         buffer_cost = 0
-    
-    investment_cost= pv_cost + smart_devices_cost + battery_cost + buffer_cost + chp_cost + h2_storage_cost + electrolyzer_cost + predictive_controller_for_smart_devices_cost + ev_cost + surplus_controller_cost # +  water_heating_system_cost + heating_system_cost
-    
-    
-    co2_cost=1000    #CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
-    injection=1000
-    autarky_rate=1000
-    self_consumption_rate=1000
-    
-    modular_household_results=ModularHouseholdResults(
+
+    investment_cost= pv_cost + smart_devices_cost + battery_cost + buffer_cost + chp_cost
+    + h2_storage_cost + electrolyzer_cost + predictive_controller_for_smart_devices_cost + ev_cost + surplus_controller_cost
+    # +  water_heating_system_cost + heating_system_cost
+
+    co2_cost = 1000    # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
+    injection = 1000
+    autarky_rate = 1000
+    self_consumption_rate = 1000
+
+    modular_household_results = ModularHouseholdResults(
         investment_cost=investment_cost,
         co2_cost=co2_cost,
         injection=injection,
         autarky_rate=autarky_rate,
         self_consumption_rate=self_consumption_rate,
-        terminationflag=lt.Termination.SUCCESSFUL
-        )
-
+        terminationflag=lt.Termination.SUCCESSFUL)

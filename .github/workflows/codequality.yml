@@ -60,15 +60,18 @@ jobs:
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/postprocessing/system_chart.py
+
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
         prospector tests/test_examples.py
-	#prospector hisim/modular_household/cost_file_creator.py
-	#prospector hisim/modular_household/economic_parameters.py
-	#prospector hisim/modular_household/modular_household_results.py
-        #prospector examples/modular_example.py
-	#prospector hisim/postprocessing/postprocessing_datatransfer.py
-        #prospector hisim/postprocessing/compute_kpis.py
+
+        #prospector hisim/modular_household/component_connections.py
+        prospector hisim/modular_household/cost_file_creator.py
+        prospector hisim/modular_household/economic_parameters.py
+        prospector hisim/modular_household/modular_household_results.py
+        prospector examples/modular_example.py
+	    prospector hisim/postprocessing/postprocessing_datatransfer.py
+        prospector hisim/postprocessing/compute_kpis.py
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150

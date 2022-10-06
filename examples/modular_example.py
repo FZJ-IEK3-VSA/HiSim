@@ -8,6 +8,7 @@ import hisim.log
 import hisim.utils
 import hisim.loadtypes as lt
 import scipy.interpolate
+import hisim.modular_household.preprocessing as preprocessing
 from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulationparameters import SystemConfig
@@ -118,6 +119,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         my_sim.add_component(my_price_signal)
 
     economic_parameters = json.load(open('..\hisim\modular_household\EconomicParameters.json'))
+    
 
     """PV"""
     if pv_included:
@@ -127,25 +129,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         production, count = component_connections.configure_pv_system(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
             pv_peak_power=pv_peak_power, count=count)
-
-        if economic_parameters["pv_bought"]==True:
-            ccpv = json.load(open('..\hisim\modular_household\ComponentCostPV.json'))       
-            pv_cost = scipy.interpolate.interp1d(ccpv["capacity_for_cost"], ccpv["cost_per_capacity"])
-            pv_cost = pv_cost(pv_peak_power)
-            #print("Interpolierter Preis für Kapazität:", pv_cost(pv_peak_power))
-        else:
-            pv_cost = 0
+        preprocessing.calculate_pv_investment_cost(economic_parameters, pv_peak_power)
 
     """SMART DEVICES"""
-
     if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count)
-    if economic_parameters["smart_devices_bought"]==True:
-        ccsd = json.load(open('..\hisim\modular_household\ComponentCostSmartDevice.json'))
-        smart_devices_cost = ccsd["smart_devices_cost"]
-    else:
-        smart_devices_cost = 0
 
     """SURPLUS CONTROLLER"""
     if battery_included or chp_included or smart_devices_included \
@@ -192,6 +181,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_electricity_controller=my_electricity_controller, my_weather=my_weather, heating_system_installed=heating_system_installed,
             count=count)
     heater.append(my_heater)
+    (my_heater.power_th)
 
 # =============================================================================
 #     if economic_parameters["heatpump_bought"]==True:
@@ -212,15 +202,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         count = component_connections.configure_battery(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_electricity_controller=my_electricity_controller,
             battery_capacity=battery_capacity, count=count)
-        #EconomicParameters.battery_bought abfragen, ob Batterie bereits vorhanden ist
-        ccb = json.load(open('..\hisim\modular_household\ComponentCostBattery.json'))
-        print("Battery capacity", battery_capacity)
-        
-        if economic_parameters["battery_bought"]==True:
-            battery_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
-            battery_cost=battery_cost_interp(battery_capacity)
-        else:
-            battery_cost = 0
+
 
     """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included:
@@ -243,23 +225,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_sim.add_component(my_electricity_controller)
 
-    if economic_parameters["h2system_bought"] is True:
-
-        ccchp = json.load(open('..\hisim\modular_household\ComponentCostCHP.json'))
-        chp_cost_interp = scipy.interpolate.interp1d(ccchp["capacity_for_cost"], ccchp["cost_per_capacity"])
-        chp_cost = chp_cost_interp(chp_power)
-
-        cch2 = json.load(open('..\hisim\modular_household\ComponentCostH2Storage.json'))
-        h2_storage_cost_interp = scipy.interpolate.interp1d(cch2["capacity_for_cost"], cch2["cost_per_capacity"])
-        h2_storage_cost = h2_storage_cost_interp(h2_storage_size)
-
-        ccel = json.load(open('..\hisim\modular_household\ComponentCostElectrolyzer.json'))
-        electrolyzer_cost_interp = scipy.interpolate.interp1d(ccel["capacity_for_cost"], ccel["cost_per_capacity"])
-        electrolyzer_cost = electrolyzer_cost_interp(electrolyzer_power)
-    else:
-        chp_cost = 0
-        h2_storage_cost=0
-        electrolyzer_cost=0
+    
 
     """PREDICTIVE CONTROLLER FOR SMART DEVICES"""
     # use predictive controller if smart devices are included and do not use it if it is false
@@ -270,32 +236,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     else:
         my_simulation_parameters.system_config.predictive = False
 
-    if economic_parameters["smart_devices_bought"]==True:
-        ccpcfsd = json.load(open('..\hisim\modular_household\ComponentCostPredictiveControllerforSmartDevices.json'))
-        predictive_controller_for_smart_devices_cost = ccpcfsd["predictive_controller_for_smart_devices_cost"]
-    else:
-        predictive_controller_for_smart_devices_cost = 0
-
-    """ELECTRIC VEHICLE"""        
-    if economic_parameters["ev_bought"]==True:
-        ccev = json.load(open('..\hisim\modular_household\ComponentCostElectricVehicle.json'))
-        ev_cost_interp = scipy.interpolate.interp1d(ccev["capacity_for_cost"], ccev["cost_per_capacity"])
-        ev_cost=ev_cost_interp(battery_capacity)
-    else:
-        ev_cost = 0
-
-    """BUFFER"""        
-    if economic_parameters["buffer_bought"]==True:
-        ccbu = json.load(open('..\hisim\modular_household\ComponentCostBuffer.json'))
-        buffer_cost_interp = scipy.interpolate.interp1d(ccbu["capacity_for_cost"], ccbu["cost_per_capacity"])
-        buffer_cost=buffer_cost_interp(buffer_volume)
-    else:
-        buffer_cost = 0
-
-    investment_cost= pv_cost + smart_devices_cost + battery_cost + buffer_cost + chp_cost
-    + h2_storage_cost + electrolyzer_cost + predictive_controller_for_smart_devices_cost + ev_cost + surplus_controller_cost
-    # +  water_heating_system_cost + heating_system_cost
-
+    investment_cost=1000
     co2_cost = 1000    # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
     injection = 1000
     autarky_rate = 1000

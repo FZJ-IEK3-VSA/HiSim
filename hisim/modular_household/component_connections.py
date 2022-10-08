@@ -430,7 +430,6 @@ def configure_water_heating_electric(
                                                                   source_weight=999)
     return count
 
-
 def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                       heating_system_installed: lt.HeatingSystems, count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.

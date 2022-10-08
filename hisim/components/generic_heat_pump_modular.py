@@ -115,6 +115,11 @@ class ModularHeatPump(cp.Component):
         self.config = config
         self.build(config)
 
+	if my_simulation_parameters.system_config.clever:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        else:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+
         # Inputs - Mandatories
         self.TemperatureOutsideC: cp.ComponentInput = self.add_input(self.component_name, self.TemperatureOutside, lt.LoadTypes.ANY, lt.Units.CELSIUS,
                                                                      mandatory=True)
@@ -131,7 +136,7 @@ class ModularHeatPump(cp.Component):
                                                                           postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ElectricityOutput,
                                                                       load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                      postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
+                                                                      postprocessing_flag=postprocessing_flag)
 
         self.PowerModifierChannel: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY,postprocessing_flag=[])

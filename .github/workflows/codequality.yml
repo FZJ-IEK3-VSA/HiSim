@@ -38,6 +38,13 @@ jobs:
         prospector hisim/dynamic_component.py
         prospector hisim/hisim_main.py
         prospector hisim/hisim_with_profiler.py
+        prospector hisim/utils.py
+        prospector hisim/simulator.py
+        prospector hisim/simulationparameters.py
+        prospector hisim/sim_repository.py
+        prospector hisim/project_code_overview_generator.py
+        prospector hisim/postprocessingoptions.py
+	prospector hisim/system_config.py
         prospector hisim/json_executor.py
         prospector hisim/json_generator.py
         prospector hisim/loadtypes.py

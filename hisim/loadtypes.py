@@ -25,33 +25,20 @@ class HeatingSystems(str, enum.Enum):
     GAS_HEATING = "GasHeating"
     DISTRICT_HEATING = "DistrictHeating"
 
-
-@enum.unique
-class Cars(str, enum.Enum):
-
-    """ To parse heating systems in simulation inputs. """
-
-    ELECTRIC_CAR = "EV"
-    FUEL_CAR = "FuelCar"
-    NO_CAR = "NoCar"
-
-
-@enum.unique
-class MobilityDistance(str, enum.Enum):
-
-    """ To parse heating systems in simulation inputs. """
-
-    CLOSE_URBAN = "CloseUrban"
-    FAR_URBAN = "FarUrban"
-    RURAL = "rural"
-
-
 @enum.unique
 class Locations(str, enum.Enum):
 
     """ To parse locations for climate data. """
 
     AACHEN = "Aachen"
+    
+@enum.unique
+class ChargingLocations(str, enum.Enum):
+
+    """ To parse locations for EV Charging. """
+
+    AT_HOME = "AtHome"
+    AT_WORK = "AtWork"
 
 
 @enum.unique
@@ -110,9 +97,9 @@ class LoadTypes(str, enum.Enum):
     OXYGEN = "Oxygen"
     WATER = "Water"
     WARM_WATER = "WarmWater"
-
-    OIL = 'Oil'
-    DISTRICTHEATING = 'DistrictHeating'
+    DIESEL = "Diesel"
+    OIL = "Oil"
+    DISTRICTHEATING = "DistrictHeating"
 
     PRICE = "Price"
 
@@ -218,7 +205,7 @@ class InandOutputType(str, enum.Enum):
     RECOMMENDED_ACTIVATION = "RecommendedActivation"
 
     # Energy Management System / Postprocessing Options
-    ELECTRICITY_PRODUCTION = "Production"
+    ELECTRICITY_PRODUCTION = "ElectricityProduction"
     ELECTRICITY_CONSUMPTION_EMS_CONTROLLED = "Consumption with EMS control"
     ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"
@@ -227,3 +214,5 @@ class InandOutputType(str, enum.Enum):
     # Heating
     HEAT_TO_BUILDING = "HeatToBuilding"
     HEAT_TO_BUFFER = "HeatToBuffer"
+    THERMAL_PRODUCTION = "ThermalProduction"
+    FUEL_CONSUMPTION = "FuelConsumption"

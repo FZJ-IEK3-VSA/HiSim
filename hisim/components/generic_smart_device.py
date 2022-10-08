@@ -87,17 +87,23 @@ class SmartDevice( cp.Component ):
     ElectricityTarget = "ElectricityTarget"
 
     def __init__( self,
-                  identifier : str,
-                  source_weight : int,
-                  my_simulation_parameters: SimulationParameters):
+                  identifier: str,
+                  source_weight: int,
+                  my_simulation_parameters: SimulationParameters,
+                  smart_devices_included: bool):
         super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + '_w' + str(source_weight), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
+        if my_simulation_parameters.system_config.clever and smart_devices_included:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        else:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        
         #mandatory Output
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
+            unit=lt.Units.WATT, postprocessing_flag=postprocessing_flag)
            
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(
             object_name=self.component_name, field_name=self.ElectricityTarget,

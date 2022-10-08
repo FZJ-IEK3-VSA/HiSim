@@ -237,7 +237,6 @@ class PVSystem(cp.Component):
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=PVSystem.ElectricityOutput,
                                                                        load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-
         self.add_default_connections(Weather, self.get_weather_default_connections())
 
     @staticmethod

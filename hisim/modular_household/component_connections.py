@@ -128,7 +128,7 @@ def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParamet
     return production, count
 
 
-def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int) \
+def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int, smart_devices_included: bool) \
         -> Tuple[List[generic_smart_device.SmartDevice], int]:
     """ Sets smart devices without controllers.
 
@@ -157,7 +157,8 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
     my_smart_devices: List[generic_smart_device.SmartDevice] = []
     for device in device_collection:
         my_smart_devices.append(generic_smart_device.SmartDevice(
-            identifier=device, source_weight=count, my_simulation_parameters=my_simulation_parameters))
+            identifier=device, source_weight=count, my_simulation_parameters=my_simulation_parameters,
+            smart_devices_included=smart_devices_included))
         my_sim.add_component(my_smart_devices[-1])
         count += 1
 
@@ -169,7 +170,7 @@ def configure_smart_controller_for_smart_devices(my_electricity_controller: cont
 
     Parameters
     ----------
-    my_electricity_controller: ControllerElectricityGeneric
+    my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
     my_smart_devices: List[SmartDevice]
         List of initilized smart devices.
@@ -203,7 +204,7 @@ def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameter
         filename of orginal built example.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
-    my_electricity_controller: ControllerElectricityGeneric
+    my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
     battery_capacity: float or None
         Capacity of the battery in Wh. In case of None default is used.
@@ -252,7 +253,7 @@ def configure_water_heating(
         The simulation parameters.
     my_occupancy: Occupancy
         The initialized occupancy component.
-    my_electricity_controller: ControllerElectricityGeneric
+    my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
     my_weather: Weather
         The initialized Weather component.
@@ -333,7 +334,8 @@ def configure_water_heating(
 def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_building: building.Building,
                       my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, conrolable: bool, count: int) -> Tuple:
+                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, 
+                      controlable: bool, count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -344,7 +346,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
         The simulation parameters.
     my_building: Building
         The initialized building component.
-    my_electricity_controller: ControllerElectricityGeneric
+    my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
     my_weather: Weather
         The initialized Weather component.
@@ -427,7 +429,7 @@ def configure_heating_with_buffer(my_sim: Any,
         The simulation parameters.
     my_building: Building
         The initialized building component.
-    my_electricity_controller: ControllerElectricityGeneric
+    my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
     my_weather: Weather
         The initialized Weather component.
@@ -533,7 +535,7 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
         The simulation parameters.
     my_building: Building
         The initialized building component.
-    my_electricity_controller: ControllerElectricityGeneric
+    my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
     chp_power: float or None
         Maximum power (thermal+electrical+loss) of CHP in Watt.

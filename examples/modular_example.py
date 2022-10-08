@@ -7,11 +7,16 @@ import json
 import hisim.log
 import hisim.utils
 import hisim.loadtypes as lt
+
+import utspclient.helpers.lpgdata as ld
+
 from hisim.modular_household import preprocessing
 from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.system_config import SystemConfig
 
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
@@ -55,12 +60,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         my_simulation_parameters.system_config = system_config
 
     else:
-        my_simulation_parameters.reset_system_config(
+        my_simulation_parameters.system_config = SystemConfig(
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
             clever=True, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=True,
             water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_included=True,
-            buffer_volume=500, battery_included=False, battery_capacity=10e3, chp_included=False, chp_power=10e3, h2_storage_size=100,
-            electrolyzer_power=5e3, current_mobility=lt.Cars.NO_CAR, mobility_distance=lt.MobilityDistance.RURAL)
+            buffer_volume=500, battery_included=True, battery_capacity=10e3, chp_included=True, chp_power=10e3, h2_storage_size=100,
+            electrolyzer_power=5e3)
         ev_included = False
         ev_capacity = 0
         h2_storage_included = False
@@ -72,13 +77,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     location = weather.LocationEnum[my_simulation_parameters.system_config.location.value]
     occupancy_profile = my_simulation_parameters.system_config.occupancy_profile
     building_code = my_simulation_parameters.system_config.building_code
+    water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed  # Electricity, Hydrogen or False
+    heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
+    mobility_set = my_simulation_parameters.system_config.mobility_set
+    mobility_distance = my_simulation_parameters.system_config.mobility_distance
     clever = my_simulation_parameters.system_config.clever
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
     if pv_included:
         pv_peak_power = my_simulation_parameters.system_config.pv_peak_power
     smart_devices_included = my_simulation_parameters.system_config.smart_devices_included  # True or False
-    water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed  # Electricity, Hydrogen or False
-    heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
     buffer_included = my_simulation_parameters.system_config.buffer_included
     if buffer_included:
         buffer_volume = my_simulation_parameters.system_config.buffer_volume
@@ -88,8 +95,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     chp_included = my_simulation_parameters.system_config.chp_included
     if chp_included:
         chp_power = my_simulation_parameters.system_config.chp_power
+    h2_storage_included = my_simulation_parameters.system_config.h2_storage_included
+    if h2_storage_included:
         h2_storage_size = my_simulation_parameters.system_config.h2_storage_size
+    electrolyzer_included = my_simulation_parameters.system_config.electrolyzer_included
+    if electrolyzer_included:
         electrolyzer_power = my_simulation_parameters.system_config.electrolyzer_power
+    ev_included = my_simulation_parameters.system_config.ev_included
+    if ev_included:
+        charging_station = my_simulation_parameters.system_config.charging_station
 
     """BASICS"""
     # Build occupancy
@@ -129,13 +143,17 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         production, count = component_connections.configure_pv_system(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
             pv_peak_power=pv_peak_power, count=count)
+        
+    """CARS"""
+    if mobility_set is not None:
+        print( 'hihi' )
 
         pv_cost = preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
 
     """SMART DEVICES"""
-    if smart_devices_included:
-        my_smart_devices, count = component_connections.configure_smart_devices(
-            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count)
+    my_smart_devices, count = component_connections.configure_smart_devices(
+        my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count,
+        smart_devices_included=smart_devices_included)
 
         smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
@@ -203,7 +221,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         battery_cost = preprocessing.calculate_battery_investment_cost(economic_parameters, battery_included, battery_capacity)
 
     """CHP + H2 STORAGE + ELECTROLYSIS"""
-    if chp_included and clever:
+    if chp_included and h2_storage_included and electrolyzer_included and clever:
         my_chp, count = component_connections.configure_elctrolysis_h2storage_chp_system(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
             my_electricity_controller=my_electricity_controller, chp_power=chp_power, h2_storage_size=h2_storage_size,

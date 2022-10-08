@@ -85,7 +85,7 @@ class GCHP( cp.Component ):
         #Component outputs
         self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.FUEL_CELL])

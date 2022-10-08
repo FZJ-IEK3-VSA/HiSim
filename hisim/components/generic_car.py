@@ -1,0 +1,183 @@
+"""Simple Car (LPG connected) and charging station (if it is electric)."""
+
+# -*- coding: utf-8 -*-
+from typing import Optional
+from os import listdir
+from collections import Counter
+from dataclasses import dataclass
+import datetime as dt
+import json
+from dataclasses_json import dataclass_json
+
+import pandas as pd
+import numpy as np
+
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
+from hisim.components.loadprofilegenerator_connector import OccupancyConfig
+from hisim import utils
+
+__authors__ = "Johanna Ganglbauer"
+__copyright__ = "Copyright 2021, the House Infrastructure Project"
+__credits__ = ["Noah Pflugradt"]
+__license__ = ""
+__version__ = ""
+__maintainer__ = "Johanna Ganglbauer"
+__email__ = "johanna.ganglbauer@4wardenergy.at"
+__status__ = "development"
+
+
+@dataclass_json
+@dataclass
+class CarConfig:
+
+    """ Definition of configuration of Car. """
+
+    name: str
+    source_weight: int
+    fuel: lt.LoadTypes
+    consumption_per_km: float
+
+    def __init__(self, name: str, source_weight: int, fuel: lt.LoadTypes, consumption_per_km: float):
+        """ Initialization of car configuration. """
+
+        self.name = name
+        self.source_weight = source_weight
+        self.fuel = fuel
+        self.consumption_per_km = consumption_per_km  # consumption in kWh/km or l/km
+
+
+class ChargingStationConfig:
+
+    """ Definition of the configuration of Charging Station. """
+
+    location: lt.ChargingLocations
+    power: float
+
+    def __init__(self, name: str, source_weight: int, charging_location: lt.ChargingLocations, charging_power: Optional[float]):
+        """ Initialization of the configuration of Charging Station. """
+
+        self.name = name
+        self.source_weight = source_weight
+        self.charging_location = charging_location
+        self.charging_power = charging_power
+
+
+class Car(cp.Component):
+
+    """ Simulates car with constant consumption. Car usage (driven kilometers and state) orginate from LPG. """
+
+    # Outputs
+    FuelConsumption = "FuelConsumption"
+    ElectricityOutput = "ElectricityOutput"
+    CarLocation = "CarLocation"
+
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: CarConfig,
+                 occupancy_config: OccupancyConfig) -> None:
+        """ Initializes Car. """
+        super().__init__(name=config.name + '_w' + str(config.source_weight),
+                         my_simulation_parameters=my_simulation_parameters)
+        self.build(config=config, occupancy_config=occupancy_config)
+
+        if self.fuel == lt.LoadTypes.ELECTRICITY:
+            self.electricity_output: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
+                unit=lt.Units.WATT)
+            self.car_location_output: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name, field_name=self.CarLocation, load_type=lt.LoadTypes.ANY,
+                unit=lt.Units.ANY)
+        elif self.fuel == lt.LoadTypes.DIESEL:
+            self.fuel_consumption: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name, field_name=self.FuelConsumption, load_type=lt.LoadTypes.DIESEL,
+                unit=lt.Units.LITER)
+
+    def i_save_state(self) -> None:
+        """ Saves actual state. """
+        pass
+
+    def i_restore_state(self) -> None:
+        """ Restores previous state. """
+        pass
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """ Checks statements. """
+        pass
+
+    def i_prepare_simulation(self) -> None:
+        """ Prepares the simulation. """
+        pass
+
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
+        """ Returns consumption and location of car in each timestep. """
+
+        if self.fuel == lt.LoadTypes.ELECTRICITY:
+            watt_used = self.meters_driven[timestep] * self.consumption_per_km * \
+                (3600 / self.my_simulation_parameters.seconds_per_timestep)  # conversion Wh to W
+            stsv.set_output_value(self.electricity_output, watt_used)
+            stsv.set_output_value(self.car_location_output, self.car_location[timestep])
+
+        # if not already running: check if activation makes sense
+        elif self.fuel == lt.LoadTypes.DIESEL:
+            liters_used = self.meters_driven[timestep] * self.consumption_per_km * 1e-3  # conversion meter to kilometer
+            stsv.set_output_value(self.fuel_consumption, liters_used)
+
+    def build(self, config: CarConfig, occupancy_config: OccupancyConfig) -> None:
+        """ Loads necesary data and saves config to class. """
+        self.name = config.name
+        self.souce_weight = config.source_weight
+        self.fuel = config.fuel
+        self.consumption_per_km = config.consumption_per_km
+        self.car_location = []
+        self.meters_driven = []
+
+        location_translator = {"School": 0, "Event Loacation": 0, "Shopping": 0, "null": 0,
+                               "Home": 1, "Workplace": 2}
+
+        # check if caching is possible
+        file_exists, cache_filepath = utils.get_cache_file(component_key=self.component_name, parameter_class=occupancy_config,
+                                                           my_simulation_parameters=self.my_simulation_parameters)
+        if file_exists:
+            # load from cache
+            dataframe = pd.read_csv(cache_filepath, sep=',', decimal='.', encoding="cp1252")
+            self.car_location = dataframe['car_location'].tolist()
+            self.meters_driven = dataframe['meters_driven'].tolist()
+        else:
+            # load car data from LPG output
+            filepaths = listdir(utils.HISIMPATH["cars"])
+            filepath_location = [elem for elem in filepaths if elem in "CarLocation." + self.name][0]
+            filepath_meters_driven = [elem for elem in filepaths if elem in "DrivingDistance" + self.name][0]
+            with open(filepath_location) as json_file:
+                car_location = json.load(json_file)
+            with open(filepath_meters_driven) as json_file:
+                meters_driven = json.load(json_file)
+
+            # extract values for location and distance of car
+            car_location = car_location["Values"]
+            meters_driven = meters_driven["Values"]
+
+            # compare time resolution of LPG to time resolution of hisim
+            time_resolution_original = dt.datetime.strptime(car_location["Timeresolution"], "$H:%M:%S")
+            seconds_per_timestep_original = time_resolution_original.hour * 3600 \
+                + time_resolution_original.minute * 60 + time_resolution_original.second
+            steps_ratio = int(seconds_per_timestep_original / self.my_simulation_parameters.seconds_per_timestep)
+
+            # translate car location to integers (according to location_translator)
+            meters_driven = [location_translator[elem] for elem in meters_driven]
+
+            # sum / extract most common value from data to match hisim time resolution
+            for i in range(int(len(meters_driven) / steps_ratio)):
+                self.meters_driven.append(sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio]))  # sum
+                location_list = car_location[i * steps_ratio: (i + 1) * steps_ratio]  # extract list
+                location_counts: Counter = Counter(location_list)  # count occurances
+                self.car_location.append(max(location_list, key=location_counts.get)  # extract most common
+
+            # save data in cache
+            data = np.transpose([self.car_location,
+                                 self.meters_driven])
+            database = pd.DataFrame(data, columns=['car_location',
+                                                   'meters_driven'])
+
+            database.to_csv(cache_filepath)
+            del data
+            del database

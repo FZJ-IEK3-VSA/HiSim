@@ -32,6 +32,14 @@ class Locations(str, enum.Enum):
     """ To parse locations for climate data. """
 
     AACHEN = "Aachen"
+    
+@enum.unique
+class ChargingLocations(str, enum.Enum):
+
+    """ To parse locations for EV Charging. """
+
+    AT_HOME = "AtHome"
+    AT_WORK = "AtWork"
 
 
 @enum.unique

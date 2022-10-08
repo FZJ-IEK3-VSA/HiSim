@@ -1,7 +1,7 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 # clean
 from __future__ import annotations
-from typing import List, Optional
+from typing import List
 import datetime
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard

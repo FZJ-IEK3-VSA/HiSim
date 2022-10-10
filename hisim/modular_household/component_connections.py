@@ -124,6 +124,7 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
     occupancy_config: loadprofilegenerator_connector.OccupancyConfig
         Unique description of load profile generator call (mobility is related!)
 
+
     """
     # get names of all available cars
     filepaths = listdir(utils.HISIMPATH["cars"])

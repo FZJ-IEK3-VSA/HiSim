@@ -6,10 +6,13 @@ from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
-from hisim.loadtypes import LoadTypes, Units, InandOutputType
+from hisim import log
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, ComponentConnection
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
+from hisim.components import controller_l1_generic_ev_charge
+
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = "..."
@@ -23,10 +26,11 @@ __status__ = "development"
 @dataclass
 class BatteryConfig:
     system_id: str
-    p_inv_custom: float
-    e_bat_custom: float
+    p_inv_custom: float  # power in Watt
+    e_bat_custom: float  # capacity in Kilowatt
     name: str
-    source_weight : int
+    source_weight: int
+    ev: bool  #True if battery belongs to electric vehicle, False if it is only battery
 
 class Battery(Component):
     """
@@ -85,11 +89,19 @@ class Battery(Component):
                                                     mandatory=True)
 
         # Define component outputs
-        self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
-                                                     field_name=self.AcBatteryPower,
-                                                     load_type=LoadTypes.ELECTRICITY,
-                                                     unit=Units.WATT,
-                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE])
+        if config.ev:
+            self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
+                                                         field_name=self.AcBatteryPower,
+                                                         load_type=LoadTypes.ELECTRICITY,
+                                                         unit=Units.WATT,
+                                                         postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.CAR_BATTERY])
+        else:
+            self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
+                                                         field_name=self.AcBatteryPower,
+                                                         load_type=LoadTypes.ELECTRICITY,
+                                                         unit=Units.WATT,
+                                                         postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY])
+            
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
@@ -101,15 +113,28 @@ class Battery(Component):
                                                     load_type=LoadTypes.ANY,
                                                     unit=Units.ANY,
                                                     postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
+        
+        self.add_default_connections(controller_l1_generic_ev_charge.L1Controller, self.get_charge_controller_default_connections())
+        
     @staticmethod
-    def get_default_config(p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
+    def get_default_config(name: str = 'Battery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1, ev: bool = False) -> Any:
         config=BatteryConfig(
             system_id='SG1',
             p_inv_custom=p_inv_custom,
             e_bat_custom=e_bat_custom,
-            name= "Battery",
-            source_weight=source_weight)
+            name=name,
+            source_weight=source_weight,
+            ev=ev)
         return config
+
+    def get_charge_controller_default_connections(self) -> None:
+        log.information("setting ev charge controller default connections in car battery")
+        connections: List[ComponentConnection] = []
+        ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname( )
+        connections.append(ComponentConnection(Battery.LoadingPowerInput, ev_charge_controller_classname, controller_l1_generic_ev_charge.L1Controller.ToOrFromBattery))
+        return connections
+        
+
     def i_save_state(self)  -> None:
         self.previous_state = deepcopy(self.state)
 

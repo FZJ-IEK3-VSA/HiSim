@@ -238,7 +238,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         
         self.build( config )
         
-        #add inputs
+        # add inputs
         self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l2_DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
@@ -260,7 +260,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         self.add_default_connections(generic_hydrogen_storage.GenericHydrogenStorage, self.get_hydrogen_storage_default_connections())
         
         
-        #add outputs
+        # add outputs
         self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.L1DeviceSignal,
                                                                     lt.LoadTypes.ON_OFF,

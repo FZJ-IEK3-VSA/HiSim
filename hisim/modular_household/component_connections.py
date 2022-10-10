@@ -8,6 +8,8 @@ from os import listdir
 
 import csv
 
+from utspclient.helpers.lpgpythonbindings import JsonReference
+
 import hisim.loadtypes as lt
 from hisim.component import Component
 from hisim.simulator import SimulationParameters
@@ -26,6 +28,7 @@ from hisim.components import building
 from hisim.components import generic_pv_system
 from hisim.components import generic_smart_device
 from hisim.components import generic_car
+from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import advanced_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
@@ -34,6 +37,9 @@ from hisim import utils
 
 def initialize_heater_config(heating_system_installed: lt.HeatingSystems, configuration: str) -> Any:
     """ Returns Config of Heating Device. """
+    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
+                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
+
     if configuration == 'waterheating':
         if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
             heater_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_waterheating()
@@ -49,12 +55,7 @@ def initialize_heater_config(heating_system_installed: lt.HeatingSystems, config
         elif heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING]:
             heater_config = generic_heat_source.HeatSource.get_default_config_heating()
     if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING]:
-        if heating_system_installed == lt.HeatingSystems.GAS_HEATING:
-            heater_config.fuel = lt.LoadTypes.GAS
-        elif heating_system_installed == lt.HeatingSystems.OIL_HEATING:
-            heater_config.fuel = lt.LoadTypes.OIL
-        elif heating_system_installed == lt.HeatingSystems.DISTRICT_HEATING:
-            heater_config.fuel = lt.LoadTypes.DISTRICTHEATING
+        heater_config.fuel = fuel_translator[heating_system_installed]
     return heater_config
 
 
@@ -73,19 +74,19 @@ def initialize_heater_l2_config(heating_system_installed: lt.HeatingSystems, con
     """ Returns Config of L2TemperatureController for Heating. """
     if configuration == 'waterheating':
         if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
-                or controlable == False:
+                or controlable is False:
             heater_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_waterheating()
         else:
             heater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_waterheating()
-    elif configuration == 'heating':  
+    elif configuration == 'heating':
         if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
-                or controlable == False:
+                or controlable is False:
             heater_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_heating()
         else:
             heater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_heating()
     elif configuration == 'bufferheating':
         if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
-                or controlable == False:
+                or controlable is False:
             heater_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_buffer_heating()
         else:
             heater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_buffer_heating()
@@ -137,6 +138,8 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         filename of orginal built example.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
+    smart_devices_included: bool
+        True if smart devices (washing machine, dish washer, etc.) are actually smart or surplus controlled.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -180,12 +183,13 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
         True if Car is electric, False if it is diesel.
     occupancy_config: loadprofilegenerator_connector.OccupancyConfig
         Unique description of load profile generator call (mobility is related!)
+
     """
     # get names of all available cars
     filepaths = listdir(utils.HISIMPATH["cars"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(',')[0].partition('.')[2] for elem in filepaths_location]
-   
+
     # decide if they are diesel driven or electricity driven
     if ev_included:
         my_car_config = generic_car.Car.get_default_ev_config()
@@ -193,7 +197,7 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
         my_car_config = generic_car.Car.get_default_diesel_config()
 
     # create all cars
-    my_cars: List[generic_cars.Cars] = []
+    my_cars: List[generic_car.Car] = []
     for car in names:
         my_car_config.name = car
         my_car_config.source_weight = count
@@ -201,10 +205,73 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
             my_simulation_parameters=my_simulation_parameters, config=my_car_config,
             occupancy_config=occupancy_config))
         my_sim.add_component(my_cars[-1])
-        print( 'appended car' )
         count += 1
 
     return my_cars, count
+
+
+def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationParameters, my_cars: List[generic_car.Car], charging_station_set: JsonReference,
+                           mobility_set: JsonReference, my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+                           clever: bool) -> None:
+    """ Sets batteries and controllers of electric vehicles.
+
+    Parameters
+    ----------
+    my_sim: str
+        filename of orginal built example.
+    my_simulation_parameters: SimulationParameters
+        The simulation parameters.
+    my_cars: List[Car]
+        List of initilized cars.
+    charging_station_set: ChargingStationSets
+        Encoding of the charging station.
+    mobility_set: TransportationDeviceSets
+        Encoding of the available cars.
+    my_electricity_controller: L2GenericEnergyManagementSystem
+        The initialized electricity controller.
+    clever: bool
+        True if battery of electric vehicle is charged with surplus.
+
+    """
+    if mobility_set.Name is None:
+        raise Exception('For EV configuration mobility set is obligatory.')
+    mobility_speed = mobility_set.Name.partition('and ')[2].partition(' ')[2].partition(' km/h')[0]
+    if mobility_speed == '30':
+        car_battery_config = advanced_battery_bslib.Battery.get_default_config(
+            e_bat_custom=30, p_inv_custom=3700, name="CarBattery", ev=True)
+    elif mobility_speed == '60':
+        car_battery_config = advanced_battery_bslib.Battery.get_default_config(
+            e_bat_custom=50, p_inv_custom=11000, name="CarBattery", ev=True)
+    car_battery_controller_config = controller_l1_generic_ev_charge.L1Controller.get_default_config(
+        charging_station_set=charging_station_set)
+    if clever:
+        car_battery_controller_config.battery_set=0.4  # lower threshold for soc of car battery in clever case
+
+    for car in my_cars:
+        car_battery_config.source_weight = car.source_weight
+        car_battery_controller_config.source_weight = car.source_weight
+        my_carbattery = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters, config=car_battery_config)
+        my_controller_carbattery = controller_l1_generic_ev_charge.L1Controller(my_simulation_parameters=my_simulation_parameters,
+                                                                                 config=car_battery_controller_config)
+        my_controller_carbattery.connect_only_predefined_connections(car)
+        my_controller_carbattery.connect_only_predefined_connections(my_carbattery)
+        my_carbattery.connect_only_predefined_connections(my_controller_carbattery)
+        my_sim.add_component(my_carbattery)
+        my_sim.add_component(my_controller_carbattery)
+    
+        if clever:
+            my_electricity_controller.add_component_input_and_connect(
+                source_component_class=my_carbattery, source_component_output=my_carbattery.AcBatteryPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+                source_weight=my_carbattery.source_weight)
+        
+            electricity_target = my_electricity_controller.add_component_output(
+                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET, source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+                source_weight=my_controller_carbattery.source_weight, source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT)
+        
+            my_controller_carbattery.connect_dynamic_input(
+                input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget, src_object=electricity_target)
 
 
 def configure_smart_controller_for_smart_devices(my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
@@ -257,7 +324,7 @@ def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameter
     """
     if battery_capacity is not None:
         my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config(
-            e_bat_custom=battery_capacity, p_inv_custom=battery_capacity * 0.5, source_weight=count)
+            e_bat_custom=battery_capacity, p_inv_custom=battery_capacity * 0.5 * 1e3, source_weight=count, ev=False)
     else:
         my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config(source_weight=count)
     count += 1
@@ -302,6 +369,8 @@ def configure_water_heating(
         The initialized Weather component.
     water_heating_system_installed: str
         Type of installed WaterHeatingSystem
+    controlable: bool
+        True if control of heating device is smart, False if not.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -327,7 +396,7 @@ def configure_water_heating(
     my_boiler.connect_only_predefined_connections(my_occupancy)
     my_sim.add_component(my_boiler)
 
-    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] and controlable == True:
+    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] and controlable is True:
         my_heater_controller_l2 = controller_l2_generic_heat_clever_simple.L2_Controller(my_simulation_parameters=my_simulation_parameters,
                                                                                          config=heater_l2_config)
     else:
@@ -344,20 +413,20 @@ def configure_water_heating(
         my_heater = generic_heat_pump_modular.ModularHeatPump(config=heater_config, my_simulation_parameters=my_simulation_parameters)
         my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
         my_heater.connect_only_predefined_connections(my_weather)
-        if controlable == True:
+        if controlable is True:
             my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
     else:
         my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
-    
+
     my_sim.add_component(my_heater)
     my_sim.add_component(my_heater_controller_l1)
     my_sim.add_component(my_heater_controller_l2)
-    
+
     my_boiler.connect_only_predefined_connections(my_heater)
 
     if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
-            and controlable == True:
+            and controlable is True:
         my_electricity_controller.add_component_input_and_connect(source_component_class=my_heater,
                                                                   source_component_output=my_heater.ElectricityOutput,
                                                                   source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -377,7 +446,7 @@ def configure_water_heating(
 def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_building: building.Building,
                       my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, 
+                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems,
                       controlable: bool, count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
@@ -395,6 +464,8 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
         The initialized Weather component.
     heating_system_installed: str
         Type of installed HeatingSystem
+    controlable: bool
+        True if control of heating device is smart, False if not.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -413,9 +484,9 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
     elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
         heater_l2_config.P_threshold = heater_config.power_th
 
-    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] and controlable == True:
-        my_heater_controller_l2 = controller_l2_generic_heat_clever_simple.L2HeatSmartController(my_simulation_parameters=my_simulation_parameters,
-                                                                                                 config=heater_l2_config)
+    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] and controlable is True:
+        my_heater_controller_l2 = controller_l2_generic_heat_clever_simple.L2_Controller(my_simulation_parameters=my_simulation_parameters,
+                                                                                         config=heater_l2_config)
     else:
         my_heater_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(my_simulation_parameters=my_simulation_parameters,
                                                                                             config=heater_l2_config)
@@ -431,7 +502,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
     if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_heater = generic_heat_pump_modular.ModularHeatPump(config=heater_config, my_simulation_parameters=my_simulation_parameters)
         my_heater.connect_only_predefined_connections(my_weather)
-        if controlable == True:
+        if controlable is True:
             my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
     else:
         my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
@@ -439,7 +510,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
     my_sim.add_component(my_heater)
 
     if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
-            and controlable == True:
+            and controlable is True:
         my_electricity_controller.add_component_input_and_connect(source_component_class=my_heater,
                                                                   source_component_output=my_heater.ElectricityOutput,
                                                                   source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
@@ -480,6 +551,8 @@ def configure_heating_with_buffer(my_sim: Any,
         Type of installed HeatingSystem.
     buffer_volume: float or None
         Volume of buffer storage in liters. In case of None default is used.
+    controlable: bool
+        True if control of heating device is smart, False if not.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -528,14 +601,14 @@ def configure_heating_with_buffer(my_sim: Any,
     	my_heater.connect_only_predefined_connections(my_weather)
 	my_heater.connect_only_predefined_connections(my_heatpump_controller_l1)
 	if controlable:
-    		my_heater.connect_only_predefined_connections(my_electricity_controller)
+    	    my_heater.connect_only_predefined_connections(my_electricity_controller)
     else:
         my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     	my_heater.connect_only_predefined_connections(my_heater_controller_l1)
     my_sim.add_component(my_heater)
 
     if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
-            and controlable == True:
+            and controlable is True:
         my_electricity_controller.add_component_input_and_connect(source_component_class=my_heater,
                                                                   source_component_output=my_heater.ElectricityOutput,
                                                                   source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,

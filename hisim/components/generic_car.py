@@ -1,7 +1,7 @@
 """Simple Car (LPG connected) and charging station (if it is electric)."""
 
 # -*- coding: utf-8 -*-
-from typing import Optional, List
+from typing import List
 from os import listdir, path
 from collections import Counter
 from dataclasses import dataclass
@@ -46,22 +46,6 @@ class CarConfig:
         self.source_weight = source_weight
         self.fuel = fuel
         self.consumption_per_km = consumption_per_km  # consumption in kWh/km or l/km
-
-
-class ChargingStationConfig:
-
-    """ Definition of the configuration of Charging Station. """
-
-    location: lt.ChargingLocations
-    power: float
-
-    def __init__(self, name: str, source_weight: int, charging_location: lt.ChargingLocations, charging_power: Optional[float]):
-        """ Initialization of the configuration of Charging Station. """
-
-        self.name = name
-        self.source_weight = source_weight
-        self.charging_location = charging_location
-        self.charging_power = charging_power
 
 
 class Car(cp.Component):
@@ -121,21 +105,23 @@ class Car(cp.Component):
         elif self.fuel == lt.LoadTypes.DIESEL:
             liters_used = self.meters_driven[timestep] * self.consumption_per_km * 1e-3  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
-            
+
     @staticmethod
     def get_default_diesel_config() -> CarConfig:
-        config=CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.DIESEL, consumption_per_km=6) 
+        """ Defines default configuration for diesel vehicle. """
+        config = CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.DIESEL, consumption_per_km=0.06)
         return config
-    
+
     @staticmethod
     def get_default_ev_config() -> CarConfig:
-        config=CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.ELECTRICITY, consumption_per_km=15) 
+        """ Defines default configuration for electric vehicle. """
+        config = CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.ELECTRICITY, consumption_per_km=0.15)
         return config
 
     def build(self, config: CarConfig, occupancy_config: OccupancyConfig) -> None:
         """ Loads necesary data and saves config to class. """
         self.name = config.name
-        self.souce_weight = config.source_weight
+        self.source_weight = config.source_weight
         self.fuel = config.fuel
         self.consumption_per_km = config.consumption_per_km
         self.car_location = []
@@ -155,8 +141,8 @@ class Car(cp.Component):
         else:
             # load car data from LPG output
             filepaths = listdir(utils.HISIMPATH["cars"])
-            filepath_location = [elem for elem in filepaths if ("CarLocation." + self.name) in elem][0]
-            filepath_meters_driven = [elem for elem in filepaths if ("DrivingDistance." + self.name) in elem][0]
+            filepath_location = [elem for elem in filepaths if "CarLocation." + self.name in elem][0]
+            filepath_meters_driven = [elem for elem in filepaths if "DrivingDistance." + self.name in elem][0]
             with open(path.join(utils.HISIMPATH["cars"], filepath_location)) as json_file:
                 car_location = json.load(json_file)
             with open(path.join(utils.HISIMPATH["cars"], filepath_meters_driven)) as json_file:
@@ -167,7 +153,7 @@ class Car(cp.Component):
             seconds_per_timestep_original = time_resolution_original.hour * 3600 \
                 + time_resolution_original.minute * 60 + time_resolution_original.second
             steps_ratio = int(self.my_simulation_parameters.seconds_per_timestep / seconds_per_timestep_original)
-            
+
             # extract values for location and distance of car
             car_location = car_location["Values"]
             meters_driven = meters_driven["Values"]
@@ -191,8 +177,9 @@ class Car(cp.Component):
             database.to_csv(cache_filepath)
             del data
             del database
-            
+
     def write_to_report(self) -> List[str]:
+        """ Writes Car values to report. """
         lines = []
         lines.append("LPG configured" + self.fuel.value + " " + self.component_name)
         return lines

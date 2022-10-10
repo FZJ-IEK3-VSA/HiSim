@@ -177,6 +177,7 @@ class ComponentType(str, enum.Enum):
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
     BATTERY = "Battery"
+    CAR_BATTERY = "CarBattery"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
     CHP = "CHP"

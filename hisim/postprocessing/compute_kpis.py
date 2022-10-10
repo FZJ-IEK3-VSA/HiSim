@@ -5,8 +5,8 @@ from typing import List, Any
 import pandas as pd
 
 import hisim.log
+from hisim.loadtypes import InandOutputType, ComponentType
 from hisim.component import ComponentOutput
-from hisim.loadtypes import InandOutputType
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -34,8 +34,6 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 hisim.log.information("Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
                 results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
 
-                
-    
             elif output.postprocessing_flag in [InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                                                 InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]:
                 hisim.log.information("I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
@@ -47,21 +45,23 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 hisim.log.information("I am appended to storage column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))  
                     
             elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
+                # Block for battery and electric vehicle
                 hisim.log.information("I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
-                neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
                 pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
-              
                 results["pos_battery"]=results.iloc[:,index].tolist()
-                #Replace negative values with zero
+                # Replace negative values with zero
                 results["pos_battery"].clip(upper=0, inplace=True) 
                 results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
-              
-                results["neg_battery"]=results.iloc[:,index].tolist()
-                #Replace positve values with zero
-                results["neg_battery"].clip(lower=0, inplace=True)
-
-                results['production'] = results['production'] + results["neg_battery"]
-                results = results.drop(['neg_battery', 'pos_battery'], axis=1)
+                results=results.drop(['pos_battery'], axis=1)
+                if ComponentType.BATTERY in output.postprocessing_flag:
+                    # Block for battery only
+                    neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
+                    results["neg_battery"]=results.iloc[:,index].tolist()
+                    #Replace positve values with zero
+                    results["neg_battery"].clip(lower=0, inplace=True)
+                    results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
+                    results=results.drop(['neg_battery'], axis=1)
+ 
         else:
             continue
 

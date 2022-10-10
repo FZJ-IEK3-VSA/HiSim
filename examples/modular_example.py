@@ -62,14 +62,13 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     else:
         my_simulation_parameters.system_config = SystemConfig(
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
+            water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP,
+            mobility_set=ld.TransportationDeviceSets.Bus_and_two_30_km_h_Cars, mobility_distance=ld.TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             clever=True, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=True,
-            water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_included=True,
-            buffer_volume=500, battery_included=True, battery_capacity=10e3, chp_included=True, chp_power=10e3, h2_storage_size=100,
-            electrolyzer_power=5e3)
-        ev_included = False
-        ev_capacity = 0
-        h2_storage_included = False
-        electrolyzer_included = False
+            buffer_included=True, buffer_volume=500, battery_included=True, battery_capacity=10, chp_included=False, chp_power=10e3, h2_storage_included=False,
+            h2_storage_size=100,electrolyzer_included=False, electrolyzer_power=5e3, ev_included=True,
+            charging_station=ld.ChargingStationSets.Charging_At_Home_with_03_7_kW)
+	ev_capacity=0
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -183,6 +182,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         if economic_parameters["surpluscontroller_bought"]:
             hisim.log.information("Error: Surplus Controller is bought but not needed/included")
 
+    """ EV BATTERY """
+    if ev_included:
+        component_connections.configure_ev_batteries(
+            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_cars=my_cars, charging_station_set=charging_station,
+            mobility_set=mobility_set, my_electricity_controller=my_electricity_controller, clever=clever)
+    
     """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
     if smart_devices_included and clever:

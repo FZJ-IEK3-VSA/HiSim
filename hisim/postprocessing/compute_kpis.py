@@ -8,7 +8,7 @@ from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
 
-def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters) -> Any:
+def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters) -> Any:  # noqa: MC0001
     """Calculation of several KPIs."""
     results['consumption'] = 0
     results['production'] = 0
@@ -45,8 +45,8 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                     
             elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
                 hisim.log.information("I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
-                neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
-                pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
+                # neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
+                # pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
               
                 results["pos_battery"]=results.iloc[:,index].tolist()
 
@@ -60,7 +60,6 @@ def compute_KPIs(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
 
                 results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
                 results=results.drop(['neg_battery', 'pos_battery'], axis=1)
-
         else:
             continue
 

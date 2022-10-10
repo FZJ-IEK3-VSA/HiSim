@@ -406,6 +406,8 @@ def configure_heating_with_buffer(my_sim: Any,
         Volume of buffer storage in liters. In case of None default is used.
     count: int
         Integer tracking component hierachy for EMS.
+    power_th: float
+        IDK
 
     """
 

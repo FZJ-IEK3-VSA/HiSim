@@ -118,6 +118,12 @@ def create_economicparameters_file(
         battery_threshold: float,
         h2system_bought: bool,
         h2system_threshold: float,
+        chp_bought: bool,
+        chp_threshold: float,
+        electrolyzer_bought: bool,
+        electrolyzer_threshold: float,
+        surpluscontroller_bought: bool,
+        surpluscontroller_threshold: float,
         ev_bought: bool,
         ev_threshold: float) -> None:
     """Economic Parameters are written to json file."""
@@ -137,6 +143,12 @@ def create_economicparameters_file(
         battery_threshold=battery_threshold,
         h2system_bought=h2system_bought,
         h2system_threshold=h2system_threshold,
+        chp_bought=chp_bought,
+        chp_threshold=chp_threshold,
+        electrolyzer_bought=electrolyzer_bought,
+        electrolyzer_threshold=electrolyzer_threshold,
+        surpluscontroller_bought=surpluscontroller_bought,
+        surpluscontroller_threshold=surpluscontroller_threshold,
         ev_bought=ev_bought,
         ev_threshold=ev_threshold)
     economic_parameters_file = json.dumps(asdict(economic_parameters_file))
@@ -162,5 +174,11 @@ def write_economicparameters_file():
         battery_threshold=1e3,
         h2system_bought=False,
         h2system_threshold=5e3,
+        chp_bought=False,
+        chp_threshold=5e3,
+        electrolyzer_bought=False,
+        electrolyzer_threshold=5e3,
+        surpluscontroller_bought=False,
+        surpluscontroller_threshold=5e3,
         ev_bought=True,
         ev_threshold=2e4)

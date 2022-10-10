@@ -72,6 +72,7 @@ jobs:
         prospector examples/modular_example.py
 	    prospector hisim/postprocessing/postprocessing_datatransfer.py
         prospector hisim/postprocessing/compute_kpis.py
+	#prospector hisim/modular_household/preprocessing.py
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150

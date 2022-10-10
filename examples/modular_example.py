@@ -164,7 +164,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if smart_devices_included:
         component_connections.configure_smart_controller_for_smart_devices(my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices)
 
-    surplus_controller_cost=400
+    surplus_controller_cost = 400
 
     """WATERHEATING"""
     #    count = component_connections.configure_water_heating(

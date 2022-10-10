@@ -45,8 +45,6 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                     
             elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
                 hisim.log.information("I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
-                # neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
-                # pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
               
                 results["pos_battery"]=results.iloc[:,index].tolist()
 

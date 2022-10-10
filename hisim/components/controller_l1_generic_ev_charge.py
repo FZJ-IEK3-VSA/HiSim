@@ -99,10 +99,12 @@ class L1Controller(cp.Component):
             self.component_name, self.StateOfCharge, lt.LoadTypes.ANY, lt.Units.ANY,
             mandatory=True)
 
+
         if self.clever:
             self.electricity_target: cp.ComponentInput = self.add_input(
                 self.component_name, self.ElectricityTarget, lt.LoadTypes.ELECTRICITY, lt.Units.WATT,
                 mandatory=True)
+
 
         # add outputs
         self.p_set: cp.ComponentOutput = self.add_output(
@@ -147,14 +149,12 @@ class L1Controller(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         """ Returns battery charge and discharge (energy consumption of car) of battery at each timestep. """
-
         if force_convergence:
             pass
         else:
             car_location = stsv.get_input_value(self.car_location)
             car_consumption = stsv.get_input_value(self.car_consumption)
             soc = stsv.get_input_value(self.state_of_charge)
-
             if car_consumption > 0:
                 self.state.power = -car_consumption
             elif soc < self.battery_set and car_location == self.charging_location:

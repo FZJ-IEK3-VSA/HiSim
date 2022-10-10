@@ -208,6 +208,7 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
         my_sim.add_component(my_carbattery)
         my_sim.add_component(my_controller_carbattery)
 
+
         if clever:
             my_electricity_controller.add_component_input_and_connect(
                 source_component_class=my_carbattery, source_component_output=my_carbattery.AcBatteryPower,

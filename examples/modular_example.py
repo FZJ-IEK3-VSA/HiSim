@@ -146,7 +146,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         
     """CARS"""
     if mobility_set is not None:
-        print( 'hihi' )
+        my_cars, count = component_connections.configure_cars(
+            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count, ev_included=ev_included,
+                   occupancy_config=my_occupancy_config)
 
         pv_cost = preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
 

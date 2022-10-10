@@ -1,8 +1,8 @@
 """Simple Car (LPG connected) and charging station (if it is electric)."""
 
 # -*- coding: utf-8 -*-
-from typing import Optional
-from os import listdir
+from typing import Optional, List
+from os import listdir, path
 from collections import Counter
 from dataclasses import dataclass
 import datetime as dt
@@ -121,6 +121,16 @@ class Car(cp.Component):
         elif self.fuel == lt.LoadTypes.DIESEL:
             liters_used = self.meters_driven[timestep] * self.consumption_per_km * 1e-3  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
+            
+    @staticmethod
+    def get_default_diesel_config() -> CarConfig:
+        config=CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.DIESEL, consumption_per_km=6) 
+        return config
+    
+    @staticmethod
+    def get_default_ev_config() -> CarConfig:
+        config=CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.ELECTRICITY, consumption_per_km=15) 
+        return config
 
     def build(self, config: CarConfig, occupancy_config: OccupancyConfig) -> None:
         """ Loads necesary data and saves config to class. """
@@ -131,7 +141,7 @@ class Car(cp.Component):
         self.car_location = []
         self.meters_driven = []
 
-        location_translator = {"School": 0, "Event Loacation": 0, "Shopping": 0, "null": 0,
+        location_translator = {"School": 0, "Event Location": 0, "Shopping": 0, None: 0,
                                "Home": 1, "Workplace": 2}
 
         # check if caching is possible
@@ -145,32 +155,32 @@ class Car(cp.Component):
         else:
             # load car data from LPG output
             filepaths = listdir(utils.HISIMPATH["cars"])
-            filepath_location = [elem for elem in filepaths if elem in "CarLocation." + self.name][0]
-            filepath_meters_driven = [elem for elem in filepaths if elem in "DrivingDistance" + self.name][0]
-            with open(filepath_location) as json_file:
+            filepath_location = [elem for elem in filepaths if ("CarLocation." + self.name) in elem][0]
+            filepath_meters_driven = [elem for elem in filepaths if ("DrivingDistance." + self.name) in elem][0]
+            with open(path.join(utils.HISIMPATH["cars"], filepath_location)) as json_file:
                 car_location = json.load(json_file)
-            with open(filepath_meters_driven) as json_file:
+            with open(path.join(utils.HISIMPATH["cars"], filepath_meters_driven)) as json_file:
                 meters_driven = json.load(json_file)
 
+            # compare time resolution of LPG to time resolution of hisim
+            time_resolution_original = dt.datetime.strptime(car_location["TimeResolution"], "%H:%M:%S")
+            seconds_per_timestep_original = time_resolution_original.hour * 3600 \
+                + time_resolution_original.minute * 60 + time_resolution_original.second
+            steps_ratio = int(self.my_simulation_parameters.seconds_per_timestep / seconds_per_timestep_original)
+            
             # extract values for location and distance of car
             car_location = car_location["Values"]
             meters_driven = meters_driven["Values"]
 
-            # compare time resolution of LPG to time resolution of hisim
-            time_resolution_original = dt.datetime.strptime(car_location["Timeresolution"], "$H:%M:%S")
-            seconds_per_timestep_original = time_resolution_original.hour * 3600 \
-                + time_resolution_original.minute * 60 + time_resolution_original.second
-            steps_ratio = int(seconds_per_timestep_original / self.my_simulation_parameters.seconds_per_timestep)
-
             # translate car location to integers (according to location_translator)
-            meters_driven = [location_translator[elem] for elem in meters_driven]
+            car_location = [location_translator[elem] for elem in car_location]
 
             # sum / extract most common value from data to match hisim time resolution
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio]))  # sum
                 location_list = car_location[i * steps_ratio: (i + 1) * steps_ratio]  # extract list
                 location_counts: Counter = Counter(location_list)  # count occurances
-                self.car_location.append(max(location_list, key=location_counts.get)  # extract most common
+                self.car_location.append(max(location_list, key=location_counts.get))  # extract most common
 
             # save data in cache
             data = np.transpose([self.car_location,
@@ -181,3 +191,8 @@ class Car(cp.Component):
             database.to_csv(cache_filepath)
             del data
             del database
+            
+    def write_to_report(self) -> List[str]:
+        lines = []
+        lines.append("LPG configured" + self.fuel.value + " " + self.component_name)
+        return lines

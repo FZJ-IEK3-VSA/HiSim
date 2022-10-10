@@ -4,6 +4,7 @@ The functions are all called in modular_household.
 """
 
 from typing import List, Optional, Tuple, Any
+from os import listdir
 
 import csv
 
@@ -24,6 +25,7 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import generic_pv_system
 from hisim.components import generic_smart_device
+from hisim.components import generic_car
 from hisim.components import advanced_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
@@ -73,7 +75,6 @@ def initialize_heater_l2_config(heating_system_installed: lt.HeatingSystems, con
         if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
                 or controlable == False:
             heater_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_waterheating()
-            print( 'waterheating is not clever')
         else:
             heater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_waterheating()
     elif configuration == 'heating':  
@@ -86,10 +87,8 @@ def initialize_heater_l2_config(heating_system_installed: lt.HeatingSystems, con
         if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
                 or controlable == False:
             heater_l2_config = controller_l2_generic_heat_simple.L2_Controller.get_default_config_buffer_heating()
-            print( 'bufrerheating is not clever')
         else:
             heater_l2_config = controller_l2_generic_heat_clever_simple.L2_Controller.get_default_config_buffer_heating()
-            print( 'bufferheating is clever', controlable)
     return heater_l2_config
 
 
@@ -163,6 +162,50 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         count += 1
 
     return my_smart_devices, count
+
+
+def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int, ev_included: bool,
+                   occupancy_config: loadprofilegenerator_connector.OccupancyConfig) -> Tuple[List[generic_car.Car], int]:
+    """ Sets smart devices without controllers.
+
+    Parameters
+    ----------
+    my_sim: str
+        filename of orginal built example.
+    my_simulation_parameters: SimulationParameters
+        The simulation parameters.
+    count: int
+        Integer tracking component hierachy for EMS.
+    ev_included: bool
+        True if Car is electric, False if it is diesel.
+    occupancy_config: loadprofilegenerator_connector.OccupancyConfig
+        Unique description of load profile generator call (mobility is related!)
+    """
+    # get names of all available cars
+    filepaths = listdir(utils.HISIMPATH["cars"])
+    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
+    names = [elem.partition(',')[0].partition('.')[2] for elem in filepaths_location]
+   
+    # decide if they are diesel driven or electricity driven
+    if ev_included:
+        my_car_config = generic_car.Car.get_default_ev_config()
+    else:
+        my_car_config = generic_car.Car.get_default_diesel_config()
+
+    # create all cars
+    my_cars: List[generic_cars.Cars] = []
+    for car in names:
+        my_car_config.name = car
+        my_car_config.source_weight = count
+        my_cars.append(generic_car.Car(
+            my_simulation_parameters=my_simulation_parameters, config=my_car_config,
+            occupancy_config=occupancy_config))
+        my_sim.add_component(my_cars[-1])
+        print( 'appended car' )
+        count += 1
+
+    return my_cars, count
+
 
 def configure_smart_controller_for_smart_devices(my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
                                                  my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:

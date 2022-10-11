@@ -109,12 +109,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
+    
+    # load economic parameters:
+    economic_parameters = json.load(open(r'..\hisim\modular_household\EconomicParameters.json'))
+    pv_cost, smart_devices_cost, battery_cost, surplus_controller_cost, heatpump_cost, buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost = [0] * 10
 
     # add price signal
     if my_simulation_parameters.system_config.predictive:
         my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
         my_sim.add_component(my_price_signal)
-        economic_parameters = json.load(open(r'..\hisim\modular_household\EconomicParameters.json'))
 
     """PV"""
     if pv_included:
@@ -131,7 +134,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count)
+
         smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
+
     """SURPLUS CONTROLLER"""
     if battery_included or chp_included or smart_devices_included or ev_included\
             or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
@@ -151,6 +156,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                                    source_unit=lt.Units.WATT,
                                                                    source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
                                                                    source_weight=999)
+
         surplus_controller_cost = preprocessing.calculate_surplus_controller_investment_cost(economic_parameters)
 
     if not (battery_included or chp_included or smart_devices_included or ev_included
@@ -160,17 +166,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             hisim.log.information("Error: Surplus Controller is bought but not needed/included")
 
     """SMART CONTROLLER FOR SMART DEVICES"""
-    # use predictive controller if smart devices are included and do not use it if it is false
+    # use smart controller if smart devices are included and do not use it if it is false
     if smart_devices_included:
         component_connections.configure_smart_controller_for_smart_devices(my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices)
 
-    surplus_controller_cost = 400
-
     """WATERHEATING"""
-    #    count = component_connections.configure_water_heating(
-    #       my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
-    #      my_electricity_controller=my_electricity_controller, my_weather=my_weather,
-    #     water_heating_system_installed=water_heating_system_installed, count=count)
+    count = component_connections.configure_water_heating(
+      my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
+      my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+    water_heating_system_installed=water_heating_system_installed, count=count)
 
     """HEATING"""
     if (heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]
@@ -190,18 +194,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             count=count)
         heatpump_cost = preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
     heater.append(my_heater)
-
-# =============================================================================
-#     if economic_parameters["heatpump_bought"]==True:
-#         heating_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
-#         heating_cost=heating_cost_interp(battery_capacity)
-#
-#         water_heating_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
-#         water_heating_cost=heating_cost_interp(battery_capacity)
-#     else:
-#         heating_system_cost = 0
-#         water_heating_system_cost = 0
-# =============================================================================
 
     """BATTERY"""
     if battery_included:
@@ -226,31 +218,25 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_building.add_component_inputs_and_connect(source_component_classes=heater, outputstring='ThermalPowerDelivered',
                                                          source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
                                                          source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
+            
+        chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
+        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2system_included, h2_storage_size)
+        electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
 
     if battery_included or chp_included or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
             or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_sim.add_component(my_electricity_controller)
-    chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
-    h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2system_included, h2_storage_size)
-    electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
 
     """EV"""
     if ev_included:
         ev_cost = preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity)
 
-    """PREDICTIVE CONTROLLER FOR SMART DEVICES"""
-    # use predictive controller if smart devices are included and do not use it if it is false
-    if smart_devices_included:
-        my_simulation_parameters.system_config.predictive = True
-        component_connections.configure_smart_controller_for_smart_devices(
-            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_smart_devices=my_smart_devices)
-    else:
-        my_simulation_parameters.system_config.predictive = False
-
     co2_cost = 1000    # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
     injection = 1000
     autarky_rate = 1000
     self_consumption_rate = 1000
+    surplus_controller_cost = 400
+    
     investment_cost = preprocessing.total_investment_cost_threshold_exceedance_check(economic_parameters, pv_cost, smart_devices_cost,
                                                                                      battery_cost, surplus_controller_cost,
                                                                                      heatpump_cost, buffer_cost, chp_cost,

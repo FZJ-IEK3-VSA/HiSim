@@ -307,7 +307,7 @@ def configure_water_heating(
 def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters,
                       my_building: building.Building,
                       my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, count: int) -> Tuple[Component, int]:
+                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, count: int) -> Tuple:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -385,7 +385,7 @@ def configure_heating_with_buffer(my_sim: Any,
                                   my_building: building.Building,
                                   my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
                                   my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, buffer_volume: Optional[float], count: int) \
-        -> Tuple[Component, generic_hot_water_storage_modular.HotWaterStorage, int]:
+        -> Tuple:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters

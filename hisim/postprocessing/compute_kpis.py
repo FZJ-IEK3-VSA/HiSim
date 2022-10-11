@@ -56,7 +56,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                 #Replace positve values with zero
                 results["neg_battery"].clip(lower=0, inplace=True)
 
-                results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
+                results[ 'production' ] = results[ 'production' ] + results["neg_battery"]
                 results=results.drop(['neg_battery', 'pos_battery'], axis=1)
         else:
             continue

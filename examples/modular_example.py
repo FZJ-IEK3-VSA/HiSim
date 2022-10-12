@@ -63,6 +63,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             buffer_volume=500, battery_included=False, battery_capacity=10e3, chp_included=False, chp_power=10e3, h2_storage_size=100,
             electrolyzer_power=5e3, current_mobility=lt.Cars.NO_CAR, mobility_distance=lt.MobilityDistance.RURAL)
         ev_included = False
+        ev_capacity = 0
         h2_storage_included = False
         electrolyzer_included = False
         
@@ -219,7 +220,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                          source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
             
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
-        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2storage_included, h2_storage_size)
+        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
         electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
 
     if battery_included or chp_included or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \

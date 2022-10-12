@@ -41,12 +41,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     # Build system parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.skip_finished_results = False
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.skip_finished_results = False
 
     # try to read the system config from file
     if Path(system_config_filename).is_file():
@@ -62,11 +62,10 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP, buffer_included=True,
             buffer_volume=500, battery_included=False, battery_capacity=10e3, chp_included=False, chp_power=10e3, h2_storage_size=100,
             electrolyzer_power=5e3, current_mobility=lt.Cars.NO_CAR, mobility_distance=lt.MobilityDistance.RURAL)
-        # The following three parameters should be included in the above configuration. For now they are just dummys.
-        ev_included = True
-        ev_capacity = 700
-        h2system_included = True
-        electrolyzer_included = True
+        ev_included = False
+        h2_storage_included = False
+        electrolyzer_included = False
+        
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get system configuration
@@ -220,7 +219,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                          source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
             
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
-        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2system_included, h2_storage_size)
+        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2storage_included, h2_storage_size)
         electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
 
     if battery_included or chp_included or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \

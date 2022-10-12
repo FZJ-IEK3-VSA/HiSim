@@ -1,6 +1,7 @@
 """Example sets up a modular household according to json input file."""
 
 from typing import Optional, List, Any
+from os import path
 from pathlib import Path
 import json
 import hisim.log
@@ -111,7 +112,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_sim.add_component(my_building)
     
     # load economic parameters:
-    economic_parameters = json.load(open(r'..\hisim\modular_household\EconomicParameters.json'))
+    economic_parameters = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'EconomicParameters.json'), mode='r'))
     pv_cost, smart_devices_cost, battery_cost, surplus_controller_cost, heatpump_cost, buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost = [0] * 10
 
     # add price signal

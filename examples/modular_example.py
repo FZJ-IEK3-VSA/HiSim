@@ -148,6 +148,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         my_cars, count = component_connections.configure_cars(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count, ev_included=ev_included,
                    occupancy_config=my_occupancy_config)
+        if not ev_included or clever is False:
+            [consumption.append(elem) for elem in my_cars]
 
         pv_cost = preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
 
@@ -155,6 +157,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_smart_devices, count = component_connections.configure_smart_devices(
         my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count,
         smart_devices_included=smart_devices_included)
+    if not smart_devices_included or clever is False:
+        [consumption.append(elem) for elem in my_smart_devices]
 
         smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
@@ -167,7 +171,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                                    outputstring='ElectricityOutput',
                                                                    source_load_type=lt.LoadTypes.ELECTRICITY,
                                                                    source_unit=lt.Units.WATT,
-                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                                                                    source_weight=999)
         my_electricity_controller.add_component_inputs_and_connect(source_component_classes=production,
                                                                    outputstring='ElectricityOutput',

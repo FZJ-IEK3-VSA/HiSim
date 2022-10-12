@@ -198,7 +198,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # get production
         production = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]))
         consumption_uncontrolled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]))
-        consumption_ems_controlled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]))
+        consumption_ems_controlled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_REAL]))
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign

@@ -9,6 +9,12 @@ import numpy as np
 from hisim import log
 from hisim.postprocessing.chartbase import Chart
 from hisim import utils
+from hisim.components import building
+from hisim.components import generic_heat_pump_modular
+from hisim.components import generic_heat_pump
+from hisim.components import advanced_heat_pump_hplib
+from hisim.components import building
+from hisim.components import loadprofilegenerator_connector
 mpl.rcParams['agg.path.chunksize'] = 10000
 
 
@@ -325,18 +331,22 @@ class SankeyHISIM(Chart):
         total_energy_to_residence = 0
         solar_gain_through_windows = 0
         for _index, output_result in enumerate(data):
-            if output_result.component_name == "Occupancy" and output_result.display_name == "HeatingByResidents":
+            if output_result.component_name == "Occupancy" and \
+                    output_result.display_name == loadprofilegenerator_connector.Occupancy.HeatingByResidents:
                 heating_by_residents = sum(output_result.Results)
-            if output_result.component_name == "HeatPump" and output_result.display_name == "ThermalEnergyDelivered":
+            if output_result.component_name == "HeatPump" and \
+                    (output_result.display_name == generic_heat_pump_modular.ModularHeatPump.ThermalPowerDeliverd or \
+                     output_result.display_name == generic_heat_pump.GenericHeatPump.ThermalEnergyDeliverd or \
+                     output_result.display_name == advanced_heat_pump_hplib.HeatPumpHplib.ThermalOutputPower):
                 thermal_energy_delivered = sum(output_result.Results)
             if output_result.component_name == "Building":
-                if output_result.display_name == "TotalEnergyToResidence":
+                if output_result.display_name == building.Building.TotalEnergyToResidence:
                     total_energy_to_residence = sum(output_result.Results)
-                if output_result.display_name == "SolarGainThroughWindows":
+                if output_result.display_name == building.Building.SolarGainThroughWindows:
                     solar_gain_through_windows = sum(output_result.Results)
-                if output_result.display_name == "InternalLoss":
+                if output_result.display_name == building.Building.InternalLoss:
                     internal_loss = sum(output_result.Results)
-                if output_result.display_name == "StoredEnergyVariation":
+                if output_result.display_name == building.Building.StoredEnergyVariation:
                     stored_energy_variation = sum(output_result.Results)
         if heating_by_residents == 0 or total_energy_to_residence == 0 or solar_gain_through_windows == 0:
             raise Exception("Sum of outputs has not been calculated.")

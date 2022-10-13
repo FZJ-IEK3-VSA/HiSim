@@ -70,7 +70,7 @@ jobs:
         prospector hisim/modular_household/economic_parameters.py
         prospector hisim/modular_household/modular_household_results.py
         prospector examples/modular_example.py
-	    prospector hisim/postprocessing/postprocessing_datatransfer.py
+	      prospector hisim/postprocessing/postprocessing_datatransfer.py
         prospector hisim/postprocessing/compute_kpis.py
 	#prospector hisim/modular_household/preprocessing.py
 

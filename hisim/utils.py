@@ -109,7 +109,7 @@ HISIMPATH: Dict[str, Any] = {"results": os.path.join(hisim_abs_path, "results"),
                              "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
                              "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery",
                                                            "Siemens_Junelight.npy"),
-                             "modular_household": os.path.join(hisim_abs_path, "modular_household") }
+                             "modular_household": os.path.join(hisim_abs_path, "modular_household")}
 
 
 def load_smart_appliance(name):  # noqa

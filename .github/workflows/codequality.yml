@@ -30,7 +30,7 @@ jobs:
     - name: Lint with prospector
       working-directory: ./
       run: |
-        # prospector examples/basic_household.py
+        prospector examples/basic_household.py
         prospector examples/basic_household_only_heating.py
         # prospector examples/modular_example.py
         prospector hisim/component.py

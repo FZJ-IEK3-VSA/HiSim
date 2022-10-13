@@ -157,3 +157,4 @@ flake8_calls.txt
 prospector_calls.txt
 prospector_mass_call.cmd
 flake8_mass_call.cmd
+examples/profile.json

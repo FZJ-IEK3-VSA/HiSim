@@ -11,8 +11,6 @@ from typing import Optional, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-import matplotlib
-import seaborn
 import numpy as np
 
 # Owned

@@ -13,7 +13,6 @@ from hisim.components import building
 from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_pump
 from hisim.components import advanced_heat_pump_hplib
-from hisim.components import building
 from hisim.components import loadprofilegenerator_connector
 mpl.rcParams['agg.path.chunksize'] = 10000
 
@@ -330,14 +329,17 @@ class SankeyHISIM(Chart):
         heating_by_residents = 0
         total_energy_to_residence = 0
         solar_gain_through_windows = 0
+        internal_loss = 0
+        stored_energy_variation = 0
+        thermal_energy_delivered = 0
         for _index, output_result in enumerate(data):
             if output_result.component_name == "Occupancy" and \
                     output_result.display_name == loadprofilegenerator_connector.Occupancy.HeatingByResidents:
                 heating_by_residents = sum(output_result.Results)
-            if output_result.component_name == "HeatPump" and \
-                    (output_result.display_name == generic_heat_pump_modular.ModularHeatPump.ThermalPowerDeliverd or \
-                     output_result.display_name == generic_heat_pump.GenericHeatPump.ThermalEnergyDeliverd or \
-                     output_result.display_name == advanced_heat_pump_hplib.HeatPumpHplib.ThermalOutputPower):
+            if output_result.component_name == "HeatPump" and (output_result.display_name in
+                                                               (generic_heat_pump_modular.ModularHeatPump.ThermalPowerDelivered,
+                                                                generic_heat_pump.GenericHeatPump.ThermalEnergyDelivered,
+                                                                advanced_heat_pump_hplib.HeatPumpHplib.ThermalOutputPower)):
                 thermal_energy_delivered = sum(output_result.Results)
             if output_result.component_name == "Building":
                 if output_result.display_name == building.Building.TotalEnergyToResidence:

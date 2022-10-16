@@ -12,7 +12,6 @@ from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
-from hisim.postprocessingoptions import PostProcessingOptions
 
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import generic_price_signal
@@ -67,7 +66,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         ev_capacity = 0
         h2_storage_included = False
         electrolyzer_included = False
-        
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get system configuration
@@ -94,7 +93,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     """BASICS"""
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value, name='Occupancy')
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value, name='Occupancy') # noqa: unexpected-keyword-arg
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
@@ -110,9 +109,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
-    
+
     # load economic parameters:
-    economic_parameters = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'EconomicParameters.json'), mode='r'))
+    economic_parameters_file = path.join(hisim.utils.HISIMPATH['modular_household'], 'EconomicParameters.json')
+    with open(file=economic_parameters_file, mode='r', encoding="utf-8"):
+        economic_parameters = json.load()
     pv_cost, smart_devices_cost, battery_cost, surplus_controller_cost, heatpump_cost, buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost = [0] * 10
 
     # add price signal
@@ -219,7 +220,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_building.add_component_inputs_and_connect(source_component_classes=heater, outputstring='ThermalPowerDelivered',
                                                          source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
                                                          source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
-            
+
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
         h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
         electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
@@ -237,7 +238,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     autarky_rate = 1000
     self_consumption_rate = 1000
     surplus_controller_cost = 400
-    
+
     investment_cost = preprocessing.total_investment_cost_threshold_exceedance_check(economic_parameters, pv_cost, smart_devices_cost,
                                                                                      battery_cost, surplus_controller_cost,
                                                                                      heatpump_cost, buffer_cost, chp_cost,

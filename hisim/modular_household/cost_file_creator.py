@@ -39,7 +39,7 @@ def create_componentcost_file(
         capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
     costfile_written = json.dumps(asdict(costfile))
 
-    with open('ComponentCost' + component.value + '.json', 'w') as outfile:
+    with open('ComponentCost' + component.value + '.json', 'w', encoding="utf-8") as outfile:
         outfile.write(costfile_written)
 
 
@@ -92,7 +92,7 @@ def create_fuelcost_file(
                         co2_per_unit_fuel=co2_per_unit_fuel)
     costfile_written = json.dumps(asdict(costfile))
 
-    with open("FuelCost" + fuel.value + '.json', 'w') as outfile:
+    with open("FuelCost" + fuel.value + '.json', 'w', encoding="utf-8) as outfile:
         outfile.write(costfile_written)
 
 
@@ -153,7 +153,7 @@ def create_economicparameters_file(
         ev_threshold=ev_threshold)
     economic_parameters_file = json.dumps(asdict(economic_parameters_file))
 
-    with open('EconomicParameters.json', 'w') as outfile:
+    with open('EconomicParameters.json', 'w', encoding="utf-8) as outfile:
         outfile.write(economic_parameters_file)
 
 

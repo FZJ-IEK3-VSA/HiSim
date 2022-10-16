@@ -29,6 +29,7 @@ def test_basic_household_network_chart():
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 
+
 @utils.measure_execution_time
 def test_modular_household_configurations():
     """ Tests the modular example. """

@@ -112,8 +112,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # load economic parameters:
     economic_parameters_file = path.join(hisim.utils.HISIMPATH['modular_household'], 'EconomicParameters.json')
-    with open(file=economic_parameters_file, mode='r', encoding="utf-8"):
-        economic_parameters = json.load()
+    with open(file=economic_parameters_file, mode='r', encoding="utf-8") as inputfile:
+        economic_parameters = json.load(inputfile)
     pv_cost, smart_devices_cost, battery_cost, surplus_controller_cost, heatpump_cost, buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost = [0] * 10
 
     # add price signal
@@ -140,9 +140,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
     """SURPLUS CONTROLLER"""
-    if battery_included or chp_included or smart_devices_included or ev_included\
-            or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
-            or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
+    if needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
             my_simulation_parameters=my_simulation_parameters)
 
@@ -161,9 +159,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
         surplus_controller_cost = preprocessing.calculate_surplus_controller_investment_cost(economic_parameters)
 
-    if not (battery_included or chp_included or smart_devices_included or ev_included
-            or heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]
-            or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]):
+    if not needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):
         if economic_parameters["surpluscontroller_bought"]:
             hisim.log.information("Error: Surplus Controller is bought but not needed/included")
 
@@ -247,7 +243,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                                  surplus_controller_cost, heatpump_cost,
                                                                  buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost)
 
-    modular_household_results = ModularHouseholdResults(
+    # modular_household_results = \
+    ModularHouseholdResults(
         investment_cost=investment_cost,
         co2_cost=co2_cost,
         injection=injection,
@@ -266,3 +263,20 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                           + "h2_storage_cost" + str(h2_storage_cost)
                           + "electrolyzer_cost" + str(electrolyzer_cost)
                           + "ev_cost" + str(ev_cost))
+
+
+def needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed): # noqa: too-many-return-statements
+    """ Checks if a system needs an EMS. """
+    if battery_included:
+        return True
+    if chp_included:
+        return True
+    if smart_devices_included:
+        return True
+    if ev_included:
+        return True
+    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
+        return True
+    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
+        return True
+    return False

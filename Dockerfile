@@ -3,12 +3,6 @@ FROM python
 
 WORKDIR /app
 
-# install dependencies
-RUN apt-get update
-RUN apt-get upgrade -y
-RUN apt-get install -y python-tk
-RUN apt-get install -y xdg-utils
-
 # Copy relevant files
 COPY setup.py setup.py
 # These files are needed by setup.py

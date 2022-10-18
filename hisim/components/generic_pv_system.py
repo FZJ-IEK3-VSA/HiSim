@@ -318,7 +318,7 @@ class PVSystem(cp.Component):
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.my_simulation_parameters.system_config.predictive == True and self.my_simulation_parameters.system_config.prediction_horizon:
             last_forecast_timestep = int(
                 timestep + self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
             if (last_forecast_timestep > len(self.output)):

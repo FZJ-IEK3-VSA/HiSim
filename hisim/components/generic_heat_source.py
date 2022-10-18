@@ -77,7 +77,7 @@ class HeatSource( cp.Component ):
             Efficiency of heat transfer
         """
         
-        super( ).__init__( name = 'HeatSource' + str( config.source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super( ).__init__( config.name + '_w' + str(config.source_weight), my_simulation_parameters = my_simulation_parameters )
         
         #introduce parameters of district heating
         self.build(config)
@@ -92,23 +92,23 @@ class HeatSource( cp.Component ):
         # Outputs 
         self.ThermalPowerDeliveredC : cp.ComponentOutput = self.add_output( 
             object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.FuelDelivered, load_type=self.fuel,
-            unit=lt.Units.ANY, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
+            unit=lt.Units.ANY, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         
         if config.fuel == lt.LoadTypes.OIL:
             self.FuelDeliveredC.unit = lt.Units.LITER        
         else:
             self.FuelDeliveredC.unit = lt.Units.WATT_HOUR
         
-        self.add_default_connections( controller_l1_generic_runtime.L1_Controller, self.get_l1_controller_default_connections( ) )
+        self.add_default_connections(controller_l1_generic_runtime.L1GenericRuntimeController, self.get_l1_controller_default_connections())
         
     def get_l1_controller_default_connections( self ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in HeatPump")
         connections = [ ]
-        controller_classname = controller_l1_generic_runtime.L1_Controller.get_classname( )
-        connections.append( cp.ComponentConnection( HeatSource.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1_Controller.L1DeviceSignal ) )
+        controller_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
+        connections.append(cp.ComponentConnection(HeatSource.L1DeviceSignal, controller_classname, controller_l1_generic_runtime.L1GenericRuntimeController.L1DeviceSignal))
         return connections
     
     @staticmethod

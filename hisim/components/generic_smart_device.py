@@ -9,7 +9,6 @@ from typing import Optional, List
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components import controller_l3_smart_devices
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
 #from hisim.components import controller_l3_predictive
@@ -79,49 +78,31 @@ class SmartDevice( cp.Component ):
         profile code corresponded to the family or residents configuration
     """
       
-    #optional Inputs
+    #mandatory Inputs
     l3_DeviceActivation = "l3_DeviceActivation"
     
-    # Outputs
-    #mandatory
+    # mandatory Outputs
     ElectricityOutput = "ElectricityOutput"
     
-    #optional
-    LastActivation = "LastActivation"
-    EarliestActivation = "EarliestActivation"
-    LatestActivation = "LatestActivation"
+    #optional Inputs
+    ElectricityTarget = "ElectricityTarget"
 
     def __init__( self,
                   identifier : str,
                   source_weight : int,
                   my_simulation_parameters: SimulationParameters):
-        super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + str( source_weight ), my_simulation_parameters = my_simulation_parameters )
+        super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + '_w' + str(source_weight), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
         #mandatory Output
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION])
-        self.l3_DeviceActivationC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                      self.l3_DeviceActivation,
-                                                                      lt.LoadTypes.ACTIVATION,
-                                                                      lt.Units.TIMESTEPS,
-                                                                      mandatory = False)
-        
-        if self.predictive:    
-            self.LastActivationC: cp.ComponentOutput = self.add_output(object_name = self.component_name,
-                                                                       field_name = self.LastActivation,
-                                                                       load_type = lt.LoadTypes.ACTIVATION,
-                                                                       unit = lt.Units.TIMESTEPS)
-            self.EarliestActivationC: cp.ComponentOutput = self.add_output(object_name = self.component_name,
-                                                                           field_name = self.EarliestActivation,
-                                                                           load_type = lt.LoadTypes.ACTIVATION,
-                                                                           unit = lt.Units.TIMESTEPS)
-            self.LatestActivationC: cp.ComponentOutput = self.add_output(object_name = self.component_name,
-                                                                         field_name = self.LatestActivation,
-                                                                         load_type = lt.LoadTypes.ACTIVATION,
-                                                                         unit = lt.Units.TIMESTEPS)
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
+           
+        self.ElectricityTargetC: cp.ComponentInput = self.add_input(
+            object_name=self.component_name, field_name=self.ElectricityTarget,
+            load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, mandatory=False )
             
     def i_save_state( self ) -> None:
         self.previous_state : SmartDeviceState = self.state.clone( )
@@ -131,27 +112,26 @@ class SmartDevice( cp.Component ):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
+    
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
+    
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool )  -> None:
         
         #initialize power
         self.state.actual_power = 0
         
-        #set forecast in first timestep
-        if timestep == 0 and self.predictive:
-            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
-                                                         entry = [ [ ], self.electricity_profile[ 0 ] ])
-        
-        #if not already running: check if activation makes sense
+        # if not already running: check if activation makes sense
         if timestep > self.state.timestep_of_activation + self.state.time_to_go:
-            if timestep > self.earliest_start[ self.state.position ]: #needs to be switched off
+            if timestep > self.earliest_start[self.state.position]: # can be turnod on
                 #initialize next activation
                 activation:float = timestep + 10
-                #when predictive read in best activation
-                if self.predictive:
-                    activation = stsv.get_input_value( self.l3_DeviceActivationC )
+                #if surplus controller is connected get related signal
+                if self.ElectricityTargetC.source_output is not None:
+                    electricity_target = stsv.get_input_value(self.ElectricityTargetC)
+                    if electricity_target >= self.electricity_profile[self.state.position][0]:
+                        activation = timestep
                 #if last possible switch on force activation
                 if timestep >= self.latest_start[ self.state.position ]: #needs to be activated
                     activation = timestep
@@ -172,12 +152,6 @@ class SmartDevice( cp.Component ):
             self.state.run( timestep, self.electricity_profile[ self.state.position ] )
 
         stsv.set_output_value( self.ElectricityOutputC, self.state.actual_power )
-        
-        if self.predictive == True:
-            #pass conditions to smart controller
-            stsv.set_output_value( self.LastActivationC, self.state.timestep_of_activation )
-            stsv.set_output_value( self.EarliestActivationC, self.earliest_start[ self.state.position ] )
-            stsv.set_output_value( self.LatestActivationC, self.latest_start[ self.state.position ] )
         
     def build( self, identifier: str, source_weight: int, seconds_per_timestep : int = 60 ) -> None:
 

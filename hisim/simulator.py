@@ -2,7 +2,7 @@
 # clean
 import os
 import datetime
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, cast
 import time
 
 import pandas as pd
@@ -75,7 +75,7 @@ class Simulator:
         for wrapped_component in self.wrapped_components:
             wrapped_component.prepare_calculation()
 
-    def process_one_timestep(self, timestep: int) -> Tuple[cp.SingleTimeStepValues, int]:
+    def process_one_timestep(self, timestep: int, previous_stsv: cp.SingleTimeStepValues) -> Tuple[cp.SingleTimeStepValues, int]:
         """ Executes one simulation timestep.
 
         Some components can be connected in a circle.
@@ -99,13 +99,10 @@ class Simulator:
         if (len(self.all_outputs)) == 0:
             raise Exception("Not a single column was defined.")
 
-        # Saves number of outputs
-        number_of_outputs = len(self.all_outputs)
-
         # Creates List with values
-        stsv = cp.SingleTimeStepValues(number_of_outputs)
+        stsv = previous_stsv.clone()
         # Creates a buffer List with values
-        previous_values = cp.SingleTimeStepValues(number_of_outputs)
+        previous_values = previous_stsv.clone()
         iterative_tries = 0
         force_convergence = False
 
@@ -176,17 +173,22 @@ class Simulator:
         all_result_lines = []
         log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
+        last_step: int = 0
         starttime = datetime.datetime.now()
-        total_iteration_tries = 0
+        total_iteration_tries_since_last_msg = 0
+
+        # Creates empty list with values to get started
+        number_of_outputs = len(self.all_outputs)
+        stsv = cp.SingleTimeStepValues(number_of_outputs)
 
         for step in range(self._simulation_parameters.timesteps):
             if self._simulation_parameters.timesteps % 500 == 0:
                 log.information("Starting step " + str(step))
 
-            (resulting_stsv, iteration_tries) = self.process_one_timestep(step)
-
+            (resulting_stsv, iteration_tries) = self.process_one_timestep(step, stsv)
+            stsv = cp.SingleTimeStepValues(number_of_outputs)
             # Accumulates iteration counter
-            total_iteration_tries += iteration_tries
+            total_iteration_tries_since_last_msg += iteration_tries
 
             # Appends
             all_result_lines.append(resulting_stsv.values)
@@ -196,7 +198,9 @@ class Simulator:
 
             # For simulation longer than 5 seconds
             if elapsed.total_seconds() > 5:
-                lastmessage = self.show_progress(starttime, step, total_iteration_tries)
+                lastmessage = self.show_progress(starttime, step, total_iteration_tries_since_last_msg, last_step)
+                last_step = step
+                total_iteration_tries_since_last_msg = 0
 
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
         log.information("Starting postprocessing")
@@ -219,7 +223,7 @@ class Simulator:
     def prepare_post_processing(self, all_result_lines, start_counter):
         """ Prepares the post processing. """
         log.information("Preparing post processing")
-        """  Prepares the results from the simulation for the post processing. """
+        # Prepares the results from the simulation for the post processing.
         if len(all_result_lines) != self._simulation_parameters.timesteps:
             raise Exception("not all lines were generated")
         colum_names = []
@@ -252,7 +256,7 @@ class Simulator:
         log.information("Finished preparing post processing")
         return ppdt
 
-    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int) -> datetime.datetime:
+    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int, last_step: int) -> datetime.datetime:
         """ Makes the pretty progress messages with time estimate. """
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
@@ -260,10 +264,11 @@ class Simulator:
         elapsed_seconds_str: str = str(elapsed_seconds).zfill(2)
         # Calculates steps achieved per time duration
         steps_per_second = step / elapsed.total_seconds()
-        if step == 0:
+        elapsed_steps: int = step - last_step
+        if elapsed_steps == 0:
             average_iteration_tries: float = 1
         else:
-            average_iteration_tries = total_iteration_tries / step
+            average_iteration_tries = total_iteration_tries / elapsed_steps
         time_elapsed = datetime.timedelta(seconds=((self._simulation_parameters.timesteps - step) / steps_per_second))
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore
@@ -286,7 +291,8 @@ class Simulator:
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(results_data_frame.values[:, i_column], index=pd_timeline,
                                    columns=[results_data_frame.columns[i_column]])
-            column_name: str = results_data_frame.columns[i_column]  # noqa
+            column_name1 = results_data_frame.columns[i_column]  # noqa
+            column_name: str = cast(str, column_name1)
             if 'Temperature' in column_name or 'Percent' in column_name:
                 temp_df = temp_df.resample('M').interpolate(method='linear')
             else:

@@ -17,16 +17,20 @@ class SystemChart:
 
     def make_chart(self) -> None:
         """ Makes different charts. Entry point for the class. """
-        self.make_graphviz_chart(False, "System_no_Edge_labels.png")
-        self.make_graphviz_chart(True, "System_with_Edge_labels.png")
+        self.make_graphviz_chart(with_labels=False, with_class_names=True, filename="System_no_Edge_with_class_labels.png")
+        self.make_graphviz_chart(with_labels=False, with_class_names=False, filename="System_no_Edge_labels.png")
+        self.make_graphviz_chart(with_labels=True, with_class_names=False, filename="System_with_Edge_labels.png")
 
-    def make_graphviz_chart(self, with_labels: bool, filename: str) -> None:
+    def make_graphviz_chart(self, with_labels: bool, with_class_names: bool, filename: str) -> None:
         """ Visualizes the entire system with graphviz. """
         graph = pydot.Dot(graph_type='digraph')
         graph.set_node_defaults(color='lightgray', style='filled', shape='box', fontname='Arial', fontsize='10')
         node_dict = {}
         for component in self.ppdt.wrapped_components:
-            my_node = pydot.Node(component.my_component.component_name)
+            node_name = component.my_component.component_name
+            if with_class_names:
+                node_name = node_name + "\n" + component.my_component.__class__.__name__
+            my_node = pydot.Node(node_name)
             node_dict[component.my_component.component_name] = my_node
             graph.add_node(my_node)
         edge_labels = {}

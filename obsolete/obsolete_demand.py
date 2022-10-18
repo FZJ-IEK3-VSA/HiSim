@@ -4,7 +4,7 @@ from hisim.component import Component, ComponentOutput, ComponentInput, SingleTi
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import LoadConfig
-from hisim.components.configuration import ElectrolyzerConfig
+from hisim.components.configuration import AdvElectrolyzerConfig
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
@@ -183,17 +183,17 @@ class ElectricityDistributor(Component):
         if power_after_own_consumtion < 0:
             # adding a negative value gives a negative result --> electricity from grid
             power_from_to_grid += power_after_own_consumtion
-        elif power_after_own_consumtion < ElectrolyzerConfig.min_power:
+        elif power_after_own_consumtion < AdvElectrolyzerConfig.min_power:
             # Electrolyzer cant operate at this low power
             power_from_to_grid = power_after_own_consumtion
-        elif ElectrolyzerConfig.min_power <= power_after_own_consumtion <= ElectrolyzerConfig.max_power:
+        elif AdvElectrolyzerConfig.min_power <= power_after_own_consumtion <= AdvElectrolyzerConfig.max_power:
             # power in range of Electrolyzer so all the power goes into it
             power_to_electrolyzer = power_after_own_consumtion
 
-        elif power_after_own_consumtion > ElectrolyzerConfig.max_power:
+        elif power_after_own_consumtion > AdvElectrolyzerConfig.max_power:
             # Power goes to Electrolyzer and to grid
-            power_to_electrolyzer = ElectrolyzerConfig.max_power
-            power_after_own_consumtion -= ElectrolyzerConfig.max_power
+            power_to_electrolyzer = AdvElectrolyzerConfig.max_power
+            power_after_own_consumtion -= AdvElectrolyzerConfig.max_power
             power_from_to_grid = power_after_own_consumtion
 
         stsv.set_output_value(self.power_to_electrolyzer, power_to_electrolyzer)

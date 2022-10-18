@@ -5,8 +5,8 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.components import controller_l2_energy_management_system
-from hisim.components import generic_hot_water_storage
+from hisim.components import controller_l1_heat_old
+from hisim.components import generic_heat_water_storage
 from hisim.components import generic_gas_heater
 
 __authors__ = "Maximilian Hillen"
@@ -68,15 +68,15 @@ def basic_household_only_heating(my_sim: Any, my_simulation_parameters: Optional
                                                          my_simulation_parameters=my_simulation_parameters)
 
     # Build Storage
-    my_storage = generic_hot_water_storage.HeatStorage(config=generic_hot_water_storage.HeatStorage.get_default_config(),
-                                                       my_simulation_parameters=my_simulation_parameters)
+    my_storage = generic_heat_water_storage.HeatStorage(config=generic_heat_water_storage.HeatStorage.get_default_config(),
+                                                        my_simulation_parameters=my_simulation_parameters)
 
-    my_storage_controller = generic_hot_water_storage.HeatStorageController(
-        config=generic_hot_water_storage.HeatStorageController.get_default_config(), my_simulation_parameters=my_simulation_parameters)
+    my_storage_controller = generic_heat_water_storage.HeatStorageController(
+        config=generic_heat_water_storage.HeatStorageController.get_default_config(), my_simulation_parameters=my_simulation_parameters)
 
     # Build Controller
-    my_controller_heat = controller_l2_energy_management_system.ControllerHeat(
-        config=controller_l2_energy_management_system.ControllerHeat.get_default_config(), my_simulation_parameters=my_simulation_parameters)
+    my_controller_heat = controller_l1_heat_old.ControllerHeat(
+        config=controller_l1_heat_old.ControllerHeat.get_default_config(), my_simulation_parameters=my_simulation_parameters)
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 

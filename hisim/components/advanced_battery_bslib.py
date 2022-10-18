@@ -58,7 +58,7 @@ class Battery(Component):
             Useable battery capacity. Only for system_ids of type "Generic". [Wh]
         """
         self.battery_config = config
-        super().__init__(name=self.battery_config.name + str( self.battery_config.source_weight ), my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
         
         self.source_weight = self.battery_config.source_weight
 

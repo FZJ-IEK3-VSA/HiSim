@@ -17,12 +17,12 @@ def test_chp_system():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
-    my_electrolyzer_config = generic_electrolyzer.Electrolyzer.get_default_config( )
-    my_electrolyzer = generic_electrolyzer.Electrolyzer(config = my_electrolyzer_config,
-                                                        my_simulation_parameters = my_simulation_parameters)
-    my_electrolyzer_controller_config = generic_electrolyzer.L1_Controller.get_default_config( )
-    my_electrolyzer_controller = generic_electrolyzer.L1_Controller( config = my_electrolyzer_controller_config,
-                                                                    my_simulation_parameters = my_simulation_parameters )
+    my_electrolyzer_config = generic_electrolyzer.GenericElectrolyzer.get_default_config()
+    my_electrolyzer = generic_electrolyzer.GenericElectrolyzer(config = my_electrolyzer_config,
+                                                               my_simulation_parameters = my_simulation_parameters)
+    my_electrolyzer_controller_config = generic_electrolyzer.L1GenericElectrolyzerController.get_default_config()
+    my_electrolyzer_controller = generic_electrolyzer.L1GenericElectrolyzerController(config = my_electrolyzer_controller_config,
+                                                                                      my_simulation_parameters = my_simulation_parameters)
     
     # Set Fake Inputs
     electricity_target = cp.ComponentOutput( 'FakeElectricityTarget',

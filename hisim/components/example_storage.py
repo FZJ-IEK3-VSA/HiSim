@@ -6,7 +6,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 
-class SimpleStorageState:
+class ExampleStorageState:
     def __init__(self, min_val: float, max_val: float) -> None:
         self.fill:float = 0
         self.max_val:float = max_val
@@ -62,7 +62,7 @@ class SimpleStorage(Component):
                                                              loadtype, unit)
         self.current_fill_percent: ComponentOutput = self.add_output(self.component_name, SimpleStorage.CurrentFillLevelPercent,
                                                                      loadtype, lt.Units.PERCENT)
-        self.state = SimpleStorageState(0, capacity)
+        self.state = ExampleStorageState(0, capacity)
         self.capacity = capacity
         self.previous_state = copy.copy(self.state)
 

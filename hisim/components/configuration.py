@@ -103,7 +103,7 @@ class HydrogenStorageConfig:
 
     loss_factor_per_day = 0             # [lost_%/day]
 
-class ElectrolyzerConfig:
+class AdvElectrolyzerConfig:
     waste_energy = 400                    # [W]   # 400
     min_power = 1_400                     # [W]   # 1400
     max_power = 2_4000                   # [W]   # 2400

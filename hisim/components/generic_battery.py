@@ -17,7 +17,7 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-class ControllableState:
+class GenericBatteryState:
     def __init__(self, init_stored_energy=0, max_stored_energy=None, min_stored_energy=None, max_var_stored_energy=None, min_var_stored_energy=None):
         self.stored_energy = init_stored_energy
         self.max_stored_energy = max_stored_energy
@@ -52,7 +52,7 @@ class ControllableState:
         self.chargeWh = discharge
 
 
-class Battery(cp.Component):
+class GenericBattery(cp.Component):
     # Imports
     ElectricityInput = "ElectricityInput"
     State = "State"

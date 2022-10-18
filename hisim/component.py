@@ -26,6 +26,10 @@ class ConfigBase(JSONWizard):
 
     name: str
 
+    def __init__(self):
+        """ Initializes. """
+        pass
+
     @classmethod
     def get_main_classname(cls):
         """ Returns the fully qualified class name for the class that is getting configured. Used for Json. """
@@ -109,6 +113,12 @@ class SingleTimeStepValues:
     def copy_values_from_other(self, other):
         """ Copy all values from a single time step values. """
         self.values = other.values[:]
+
+    def clone(self):
+        """ Makes a copy of the current object. """
+        newstsv = SingleTimeStepValues(len(self.values))
+        newstsv.values = self.values[:]
+        return newstsv
 
     def get_input_value(self, component_input: ComponentInput) -> float:
         """ Gets a value for an input from the single time step values. """

@@ -139,7 +139,7 @@ class UtspLpgConnector(cp.Component):
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.CONSUMPTION],
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         )
 
         self.water_consumption_c: cp.ComponentOutput = self.add_output(

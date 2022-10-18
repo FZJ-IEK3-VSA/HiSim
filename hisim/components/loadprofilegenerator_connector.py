@@ -120,7 +120,7 @@ class Occupancy(cp.Component):
                                                                          lt.Units.WATT)
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.CONSUMPTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED])
 
         self.water_consumptionC : cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.WaterConsumption,

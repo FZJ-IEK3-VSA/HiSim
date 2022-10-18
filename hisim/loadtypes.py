@@ -185,11 +185,16 @@ class ComponentType(str, enum.Enum):
 
     PV = "PV"
     SMART_DEVICE = "SmartDevice"
+    SURPLUS_CONTROLLER = "SurplusController"
+    PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
     BATTERY = "Battery"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
+    CHP = "CHP"
+    H2_STORAGE = "H2Storage"
+    ELECTRIC_VEHICLE = "ElectricVehicle"
     ELECTRIC_BOILER = "ElectricBoiler"
     BOILER = "Boiler"
     BUFFER = "Buffer"
@@ -213,8 +218,9 @@ class InandOutputType(str, enum.Enum):
     RECOMMENDED_ACTIVATION = "RecommendedActivation"
 
     # Energy Management System / Postprocessing Options
-    PRODUCTION = "Production"
-    CONSUMPTION = "Consumption"
+    ELECTRICITY_PRODUCTION = "Production"
+    ELECTRICITY_CONSUMPTION_EMS_CONTROLLED = "Consumption with EMS control"
+    ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"
     CHARGE_DISCHARGE = "ChargeDischarge"
 

@@ -1,6 +1,6 @@
 """ Class for the simulation repository. """
 # clean
-from typing import Any
+from typing import Any, Dict
 
 from hisim import loadtypes as lt
 
@@ -11,8 +11,8 @@ class SimRepository:
 
     def __init__(self) -> None:
         """ Initializes the SimRepository. """
-        self.my_dict: dict[str, Any] = {}
-        self.my_dynamic_dict: dict[lt.ComponentType, dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
+        self.my_dict: Dict[str, Any] = {}
+        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
 
     def set_entry(self, key: str, entry: Any) -> None:
         """ Sets an entry in the SimRepository. """

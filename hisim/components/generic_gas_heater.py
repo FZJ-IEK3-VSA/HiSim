@@ -16,7 +16,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GasHeaterConfig:
+class GenericGasHeaterConfig:
     """
     Gas Heater Config
     """
@@ -45,7 +45,7 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower="ThermalOutputPower"
 
-    def __init__(self,my_simulation_parameters: SimulationParameters , config : GasHeaterConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config : GenericGasHeaterConfig) -> None:
         super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
         self.control_signal: ComponentInput = self.add_input(self.component_name, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
         self.mass_inp_temp: ComponentInput = self.add_input(self.component_name, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
@@ -68,7 +68,7 @@ class GasHeater(Component):
 
     @staticmethod
     def get_default_config():
-        config=GasHeaterConfig(
+        config=GenericGasHeaterConfig(
                     temperaturedelta = 10,
                     power_max = 12_000,
                     is_modulating = True,

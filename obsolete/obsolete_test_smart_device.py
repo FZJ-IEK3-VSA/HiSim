@@ -1,7 +1,6 @@
 from hisim import component as cp
 from hisim.components import generic_heat_pump
-from hisim.components import obsolete_generic_smart_device_controller
-from hisim.components import obsolete_generic_smart_device
+from obsolete import obsolete_generic_smart_device, obsolete_generic_smart_device_controller
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -18,10 +17,10 @@ def test_smart_device_library():
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                  seconds_per_timestep=60)
     # Set Heat Pump
-    generic_heat_pump.HeatPump(manufacturer=manufacturer,
-                           name=name,
-                           min_operation_time=minimum_idle_time,
-                           min_idle_time=minimum_operation_time, my_simulation_parameters=mysim)
+    generic_heat_pump.GenericHeatPump(manufacturer=manufacturer,
+                                      name=name,
+                                      min_operation_time=minimum_idle_time,
+                                      min_idle_time=minimum_operation_time, my_simulation_parameters=mysim)
 
 def test_smart_device():
     """

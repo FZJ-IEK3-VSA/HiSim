@@ -154,7 +154,6 @@ class PVSystemConfig(ConfigBase):
     tilt: float
     load_module_data: bool
     source_weight: int
-
     @classmethod
     def get_default_PV_system(cls):
         """ Gets a default PV system. """
@@ -237,7 +236,7 @@ class PVSystem(cp.Component):
         self.wind_speedC: cp.ComponentInput = self.add_input(self.component_name, self.WindSpeed, lt.LoadTypes.SPEED, lt.Units.METER_PER_SECOND, True)
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=PVSystem.ElectricityOutput,
-            load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.PRODUCTION])
+                                                                       load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
 
         self.add_default_connections(Weather, self.get_weather_default_connections())
 
@@ -487,6 +486,7 @@ class PVSystem(cp.Component):
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()
+        
         if self.pvconfig.integrate_inverter:
             # calculate load after inverter
             iv_load = pvlib.inverter.sandia(inverter=self.inverter, v_dc=sapm_out["v_mp"], p_dc=sapm_out["p_mp"])
@@ -495,8 +495,9 @@ class PVSystem(cp.Component):
             # load in [kW/kWp]
             ac_power = sapm_out["p_mp"] / peak_load
 
-        if math.isnan(ac_power):
-            ac_power = 0.0
+        if math.isnan(ac_power):  # type: ignore
+            raise ValueError("AC power was NAN")
+            # ac_power = 0.0
 
         # ac_power = ac_power * self.time_correction_factor
         # ac_power = ac_power

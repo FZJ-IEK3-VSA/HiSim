@@ -42,7 +42,7 @@ tank_height = 30
 tank_start_temperature: float = 20"""
 
 
-class WarmWaterStorage:
+class ObsStratifiedWarmWaterStorage:
     # Layer 0 is the upmost layer
     def __init__(self, tank_diameter: float, tank_height: float, tank_start_temperature: float = 20):
         """ Initialises a tarting tank and adds one slice with the tanks height and the starting temperature"""
@@ -55,7 +55,7 @@ class WarmWaterStorage:
         self.area = (math.pi / 4) * (self.diameter ** 2)
         self.volume = self.area * self.height_storage
         self.my_slices = []
-        self.my_slices.append(WaterSlice(self.diameter, self.height_storage, self.start_temperature))
+        self.my_slices.append(ObsWaterSlice(self.diameter, self.height_storage, self.start_temperature))
 
     def check_units_wws(self):
         for value in (self.diameter, self.height_storage, self.start_temperature):
@@ -169,7 +169,7 @@ class WarmWaterStorage:
         temperature_difference = 0.1
         height = slice_mass_input / (self.area * 1000)
         temperature = slice_temperature_input
-        ws = WaterSlice(self.diameter, height, temperature)
+        ws = ObsWaterSlice(self.diameter, height, temperature)
         if is_from_top:
             if (ws.temperature + temperature_difference) >= self.my_slices[0].temperature >= (ws.temperature - temperature_difference):
                 self.my_slices[0].height += ws.height
@@ -201,7 +201,7 @@ class WarmWaterStorage:
             pass
         else:
             collected_height_so_far:float = 0
-            pushed_out_slice = WaterSlice(self.diameter, 0, 0)
+            pushed_out_slice = ObsWaterSlice(self.diameter, 0, 0)
             while collected_height_so_far < ws.height:              # ws.height bezieht sich auf das neu eingebrachte slice
                 height_still_needed = ws.height - collected_height_so_far
                 if is_from_top:
@@ -214,7 +214,7 @@ class WarmWaterStorage:
                     collected_height_so_far += slice_to_push.height
                 else:   # Die unterste Schicht muss nicht komplett entfernt werden, sonder der Differenzbetrag muss von der letzten schicht abgezogen werden
                     # Des Auszugebenden slice wird der notwendige Anteil es untersten slices übergeben
-                    pushed_out_slice.add_another_slice(WaterSlice(self.diameter, height_still_needed, slice_to_push.temperature))
+                    pushed_out_slice.add_another_slice(ObsWaterSlice(self.diameter, height_still_needed, slice_to_push.temperature))
                     # Unterstes slice wird verkürzt, sowohl höhe als auch masse & Enthalpie
                     slice_to_push.height -= height_still_needed
                     # Wenn andernorts mit der Masse/Enthalpie gearbeitet wird, sollte diese auch entfernt werden
@@ -283,7 +283,7 @@ class WarmWaterStorage:
                 self.my_slices[i + 1].temperature = self.my_slices[i + 1].calculate_temperature()
 
 
-class WaterSlice:
+class ObsWaterSlice:
 
     def check_units(self):
         for value in (self.diameter, self.height, self.temperature):

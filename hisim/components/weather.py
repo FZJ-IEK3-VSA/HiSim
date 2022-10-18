@@ -1,5 +1,4 @@
 """ Handles all the weather data processing. """
-# clean
 
 import datetime
 import math
@@ -78,7 +77,8 @@ class WeatherConfig(ConfigBase):
     source_path: str
     data_source: WeatherDataSourceEnum
 
-    def get_main_classname(self):
+    @classmethod
+    def get_main_classname(cls):
         """ Get the name of the main class. """
         return Weather.get_full_classname()
 

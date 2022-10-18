@@ -585,11 +585,12 @@ class Building(dynamic_component.DynamicComponent):
                          encoding="cp1252",
                          low_memory=False)
         buildingdata = df.loc[df["Code_BuildingVariant"] == building_code]
-
-        max_thermal_building_demand = (buildingdata["h_Transmission"].values[0] +
-                                       buildingdata["h_Ventilation"].values[
-                                           0]) * (initial_temperature - heating_reference_temperature) * \
-                                      buildingdata["A_C_Ref"].values[0]
+        vals1 = buildingdata["h_Transmission"].values[0]
+        if vals1 is None:
+            raise ValueError("h_Transmission was none.")
+        vals2 = buildingdata["h_Ventilation"].values[0]
+        ac_ref = buildingdata["A_C_Ref"].values[0]
+        max_thermal_building_demand = (vals1 + vals2) * (initial_temperature - heating_reference_temperature) * ac_ref
         return max_thermal_building_demand
 
     def __str__(self):

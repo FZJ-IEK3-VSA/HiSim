@@ -11,8 +11,6 @@ from typing import Optional, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-import matplotlib
-import seaborn
 import numpy as np
 
 # Owned
@@ -26,11 +24,6 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_source
 from hisim.components import controller_l1_generic_runtime
 import hisim.log
-seaborn.set(style='ticks')
-font = {'family': 'normal',
-        'size': 24}
-
-matplotlib.rc('font', **font)
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -119,11 +112,12 @@ class StorageState:
         # 4.182 is the specific heat of water in kJ / (K * kg)
         self.temperature_in_kelvin = energy_in_kilo_joule / (self.volume_in_l * 0.977 * 4.182)  # temperature given in K
         # filter for boiling water
+        # no filtering -> this hides major problems - Noah
         if self.temperature_in_kelvin > 95 + 273.15:
-            self.temperature_in_kelvin = 95 + 273.15
+            raise ValueError("Water was boiling. This points towards a major problem in your model.")
         # filter for freezing water
-        elif self.temperature_in_kelvin < 2 + 273.15:
-            self.temperature_in_kelvin = 2 + 273.15
+        if self.temperature_in_kelvin < 2 + 273.15:
+            raise ValueError("Water in your storage tank was freezing. This points towards a major problem in your model.")
 
     def return_available_energy(self, heating: bool) -> float:
         """ Returns available energy in (J).
@@ -133,9 +127,9 @@ class StorageState:
         is set as the upper limit for the temperature in buffer for cooling in summer.
         """
         if heating:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 30) * self.volume_in_l * 0.977 * 4.182 * 1e3
+            available_energy = (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
         else:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 20) * self.volume_in_l * 0.977 * 4.182 * 1e3
+            available_energy = (self.temperature_in_kelvin - 273.15 - 21) * self.volume_in_l * 0.977 * 4.182 * 1e3
         return available_energy
 
 
@@ -188,7 +182,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Initializes instance of HotWaterStorage class. """
 
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
-                         name=config.name + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+                         name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.build(config)
 
@@ -206,7 +200,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         elif self.use == lt.ComponentType.BUFFER:
             self.l1_device_signal_c: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ON_OFF,
                                                                         lt.Units.BINARY, mandatory=True)
-            self.add_default_connections(controller_l1_generic_runtime.L1_Controller, self.get_l1_default_connections())
+            self.add_default_connections(controller_l1_generic_runtime.L1GenericRuntimeController, self.get_l1_default_connections())
         else:
             hisim.log.error('Type of hot water storage is not defined')
 
@@ -221,7 +215,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.heat_to_building_c: cp.ComponentOutput = self.add_output(self.component_name, self.HeatToBuilding,
                                                                       lt.LoadTypes.HEATING, lt.Units.WATT)
 
-        self.add_default_connections(generic_heat_pump_modular.HeatPump, self.get_heatpump_default_connections())
+        self.add_default_connections(generic_heat_pump_modular.ModularHeatPump, self.get_heatpump_default_connections())
         self.add_default_connections(generic_heat_source.HeatSource, self.get_heatpump_default_connections())
 
     def get_occupancy_default_connections(self):
@@ -246,9 +240,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Sets L1 power default connections in hot water storage. """
         hisim.log.information("setting L1 power default connections in hot water storage")
         connections = []
-        l1_classname = controller_l1_generic_runtime.L1_Controller.get_classname()
+        l1_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.L1DeviceSignal, l1_classname,
-                                                  controller_l1_generic_runtime.L1_Controller.L1DeviceSignal))
+                                                  controller_l1_generic_runtime.L1GenericRuntimeController.L1DeviceSignal))
         return connections
 
     def i_prepare_simulation(self) -> None:
@@ -259,9 +253,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Sets heat pump default connections in hot water storage. """
         hisim.log.information("setting heat pump default connections in hot water storage")
         connections = []
-        heatpump_classname = generic_heat_pump_modular.HeatPump.get_classname()
+        heatpump_classname = generic_heat_pump_modular.ModularHeatPump.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.ThermalPowerDelivered, heatpump_classname,
-                                                  generic_heat_pump_modular.HeatPump.ThermalPowerDelivered))
+                                                  generic_heat_pump_modular.ModularHeatPump.ThermalPowerDelivered))
         return connections
 
     def get_heatsource_default_connections(self):
@@ -287,7 +281,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Returns default configuration for buffer (radius:height = 1:4). """
         radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=800, surface=6 * radius * radius * np.pi, u_value=0.36,
+            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=6 * radius * radius * np.pi, u_value=0.36,
             warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,
             heating_season_begin=270, heating_season_end=150)
         return config
@@ -367,8 +361,8 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
             if self.cooling_considered:
                 if self.heating_season_end < timestep < self.heating_season_begin:
-                    available_power = self.state.return_available_energy(
-                        heating=False) / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
+                    available_power = self.state.return_available_energy(heating=False) \
+                        / self.my_simulation_parameters.seconds_per_timestep + thermal_power_delivered
                     heatconsumption = -heatconsumption
                     if heatconsumption < available_power:
                         heatconsumption = min(available_power, 0)

@@ -115,6 +115,10 @@ class OverviewGenerator:
 
     """ Generates an overview of all modules. """
 
+    def __init__(self):
+        """ Initializes the class. """
+        self.existing_classes: List[str] = []
+
     def add_to_cell(self, column: int, row: int, value: Any, worksheet: Workbook) -> int:
         """ Write data to the Excel sheet. """
         worksheet.cell(column=column, row=row, value=value)
@@ -250,6 +254,9 @@ class OverviewGenerator:
             if str(mytype) == "<class 'type'>":
                 class_info = ClassInformation()
                 class_info.class_name = strname
+                if strname in self.existing_classes:
+                    raise Exception("The class " + strname + " exists multiple times.")
+                self.existing_classes.append(strname)
                 class_info.lines_of_code = len(inspect.getsourcelines(module_member[1]))
                 myfi.classes.append(class_info)
                 continue
@@ -314,6 +321,8 @@ class OverviewGenerator:
                     print("found clean tag " + myfi.file_name)
                     myfi.cleaned = True
                 pass
+        if not myfi.cleaned:
+            print("no clean tag " + myfi.file_name)
         myfi.lines = count
 
     def collect_files(self):

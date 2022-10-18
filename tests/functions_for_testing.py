@@ -10,7 +10,7 @@ def get_number_of_outputs(list_of_components: list) -> int:
         if isinstance(component, ComponentOutput):
             number_of_outputs = number_of_outputs + 1
         else:
-            number_of_outputs = number_of_outputs + component.outputs.__len__()
+            number_of_outputs = number_of_outputs + len(component.outputs)
     return number_of_outputs
 
 

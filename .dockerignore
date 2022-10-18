@@ -2,3 +2,6 @@
 examples/results/
 # the finished.flag can prevent the calculation
 examples/finished.flag
+
+# cache folder for the inputs
+hisim/inputs/cache

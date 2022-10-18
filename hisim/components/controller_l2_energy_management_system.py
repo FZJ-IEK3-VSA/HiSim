@@ -236,3 +236,4 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         elif self.temperature_residence > self.max_comfortable_temperature_residence:
             #cool
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
+        '''

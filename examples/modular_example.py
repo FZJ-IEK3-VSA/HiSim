@@ -13,7 +13,6 @@ import utspclient.helpers.lpgdata as ld
 from hisim.modular_household import preprocessing
 from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
-from hisim.simulationparameters import SystemConfig
 from hisim.simulator import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.system_config import SystemConfig
@@ -139,9 +138,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         production, count = component_connections.configure_pv_system(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
             pv_peak_power=pv_peak_power, count=count)
+	pv_cost = preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
         production, count = component_connections.configure_pv_system(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
             pv_peak_power=pv_peak_power, count=count)
+	pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
         
     """CARS"""
     if mobility_set is not None:
@@ -149,9 +150,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count, ev_included=ev_included,
                    occupancy_config=my_occupancy_config)
         if not ev_included or clever is False:
-            [consumption.append(elem) for elem in my_cars]
-
-        pv_cost = preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
+            [consumption.append(elem) for elem in my_cars]   
 
     """SMART DEVICES"""
     my_smart_devices, count = component_connections.configure_smart_devices(

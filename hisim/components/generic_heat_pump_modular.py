@@ -115,7 +115,7 @@ class ModularHeatPump(cp.Component):
         self.config = config
         self.build(config)
 
-	if my_simulation_parameters.system_config.clever:
+        if my_simulation_parameters.system_config.clever:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
         else:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]

@@ -6,7 +6,6 @@ from pathlib import Path
 from typing import Optional, List, Any
 
 import utspclient.helpers.lpgdata as ld
-
 import hisim.loadtypes as lt
 import hisim.log
 import hisim.utils

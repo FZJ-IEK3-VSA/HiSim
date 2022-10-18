@@ -56,6 +56,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                         0] + output.full_name + "INDEX:" + str(index))
                 results["battery_charge"] = results["battery_charge"] + results.iloc[:, index].clip(lower=0)
                 results["battery_discharge"] = results["battery_discharge"] - results.iloc[:, index].clip(upper=0)
+
         else:
             continue
 

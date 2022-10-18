@@ -592,16 +592,19 @@ def configure_heating_with_buffer(my_sim: Any,
         my_sim.add_component(my_heater_controller_l2)
 
         my_heater_controller_l1 = controller_l1_generic_runtime.L1_Controller(my_simulation_parameters=my_simulation_parameters,
-                                                                          config=heater_l1_config)
+                                                                              config=heater_l1_config)
         my_heater_controller_l1.connect_only_predefined_connections(my_heater_controller_l2)
         my_sim.add_component(my_heater_controller_l1)
 
     if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         my_heater = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
         my_heater.connect_only_predefined_connections(my_weather)
+
     my_heater.connect_only_predefined_connections(my_heatpump_controller_l1)
+
     if controlable:
-        my_heater.connect_only_predefined_connections(my_electricity_controller)
+        heater.connect_only_predefined_connections(my_electricity_controller)
+
     else:
         my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
         my_heater.connect_only_predefined_connections(my_heater_controller_l1)

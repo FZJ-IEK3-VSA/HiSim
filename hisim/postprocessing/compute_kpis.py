@@ -14,6 +14,8 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     """Calculation of several KPIs."""
     results['consumption'] = 0
     results['production'] = 0
+    results['battery_charge'] = 0
+    results['battery_discharge'] = 0
     results['storage'] = 0
     index: int
     output: ComponentOutput
@@ -30,38 +32,32 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     for index, output in enumerate(all_outputs):
 
         if output.postprocessing_flag is not None:
-            if (InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag):
-                hisim.log.information("Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
-                results[ 'production' ] = results[ 'production' ] + results.iloc[:, index]
 
-            elif output.postprocessing_flag in [InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                                                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]:
-                hisim.log.information("I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index) )
-                
-                results[ 'consumption' ] = results[ 'consumption' ] + results.iloc[:, index]
-                
-            elif (InandOutputType.STORAGE_CONTENT in output.postprocessing_flag):
-                results[ 'storage' ] = results[ 'storage' ] + results.iloc[:, index] 
-                hisim.log.information("I am appended to storage column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))  
-                    
-            elif (InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag):
-                # Block for battery and electric vehicle
-                hisim.log.information("I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
-                pos_battery=results[results.iloc[:, index] > 0].iloc[:,index]
-                results["pos_battery"]=results.iloc[:,index].tolist()
-                # Replace negative values with zero
-                results["pos_battery"].clip(upper=0, inplace=True) 
-                results[ 'consumption' ] = results[ 'consumption' ] + results["pos_battery"]
-                results=results.drop(['pos_battery'], axis=1)
-                if ComponentType.BATTERY in output.postprocessing_flag:
-                    # Block for battery only
-                    neg_battery=results[results.iloc[:, index] < 0].iloc[:,index]
-                    results["neg_battery"]=results.iloc[:,index].tolist()
-                    #Replace positve values with zero
-                    results["neg_battery"].clip(lower=0, inplace=True)
-                    results[ 'production' ] = results[ 'production' ] + results["neg_battery"] 
-                    results=results.drop(['neg_battery'], axis=1)
- 
+            if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
+                hisim.log.information(
+                    "Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(
+                        index))
+                results['production'] = results['production'] + results.iloc[:, index]
+
+            elif (
+                    InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag) \
+                    or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag:
+                hisim.log.information(
+                    "I am appended to consumption column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
+
+                results['consumption'] = results['consumption'] + results.iloc[:, index]
+
+            elif InandOutputType.STORAGE_CONTENT in output.postprocessing_flag:
+                results['storage'] = results['storage'] + results.iloc[:, index]
+                hisim.log.information("I am appended to storage column:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(index))
+
+            elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
+                hisim.log.information(
+                    "I am a battery, when positiv added to consumption and negative to production column:" + output.postprocessing_flag[
+                        0] + output.full_name + "INDEX:" + str(index))
+                results["battery_charge"] = results["battery_charge"] + results.iloc[:, index].clip(lower=0)
+                results["battery_discharge"] = results["battery_discharge"] - results.iloc[:, index].clip(upper=0)
+
         else:
             continue
 
@@ -71,11 +67,11 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
 
     if production_sum > 0:
         # evaluate injection, sum over time
-        injection = (results['production'] - results['storage'] - results['consumption'])
+        injection = (results['production'] + results['battery_charge'] - results['consumption'] - results['battery_charge'])
         injection_sum = injection[injection > 0].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
 
-        battery_losses = results['storage'].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
-        self_consumption_sum = production_sum - injection_sum - battery_losses
+        battery_losses = 0
+        self_consumption_sum = production_sum - injection_sum #- battery_losses
     else:
         self_consumption_sum = 0
         injection_sum = 0

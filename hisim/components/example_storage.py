@@ -21,6 +21,7 @@ from hisim.component import Component, SingleTimeStepValues, ComponentInput, Com
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.component import ConfigBase
+from hisim import log
 
 
 class ExampleStorageState:
@@ -82,7 +83,7 @@ class SimpleStorageConfig(ConfigBase):
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
-    component_name: str
+    name: str
     loadtype: lt.LoadTypes
     unit: lt.Units
     capacity: float
@@ -90,7 +91,7 @@ class SimpleStorageConfig(ConfigBase):
     @classmethod
     def get_default_thermal_storage(cls):
         """ Gets a default Simple Storage. """
-        return SimpleStorageConfig(component_name="Simple Thermal Storage", loadtype=lt.LoadTypes.WARM_WATER, unit=lt.Units.KWH, capacity=50)
+        return SimpleStorageConfig(name="Simple Thermal Storage", loadtype=lt.LoadTypes.WARM_WATER, unit=lt.Units.KWH, capacity=50)
 
 
 class SimpleStorage(Component):
@@ -106,16 +107,16 @@ class SimpleStorage(Component):
     def __init__(self, my_simulation_parameters: SimulationParameters, config: SimpleStorageConfig) -> None:
         """Constructs all the neccessary attributes for the SimpleStorage object."""
         self.simplestorageconfig = config
-        super().__init__(self.simplestorageconfig.component_name, my_simulation_parameters=my_simulation_parameters)
-        self.charging_input: ComponentInput = self.add_input(self.simplestorageconfig.component_name, SimpleStorage.ChargingAmount,
+        super().__init__(self.simplestorageconfig.name, my_simulation_parameters=my_simulation_parameters)
+        self.charging_input: ComponentInput = self.add_input(self.simplestorageconfig.name, SimpleStorage.ChargingAmount,
                                                              self.simplestorageconfig.loadtype, self.simplestorageconfig.unit, True)
-        self.discharging_input: ComponentInput = self.add_input(self.simplestorageconfig.component_name, SimpleStorage.DischargingAmount,
+        self.discharging_input: ComponentInput = self.add_input(self.simplestorageconfig.name, SimpleStorage.DischargingAmount,
                                                                 self.simplestorageconfig.loadtype, self.simplestorageconfig.unit, True)
-        self.actual_delta: ComponentOutput = self.add_output(self.simplestorageconfig.component_name, SimpleStorage.ActualStorageDelta,
+        self.actual_delta: ComponentOutput = self.add_output(self.simplestorageconfig.name, SimpleStorage.ActualStorageDelta,
                                                              self.simplestorageconfig.loadtype, self.simplestorageconfig.unit)
-        self.current_fill: ComponentOutput = self.add_output(self.simplestorageconfig.component_name, SimpleStorage.CurrentFillLevel,
+        self.current_fill: ComponentOutput = self.add_output(self.simplestorageconfig.name, SimpleStorage.CurrentFillLevel,
                                                              self.simplestorageconfig.loadtype, self.simplestorageconfig.unit)
-        self.current_fill_percent: ComponentOutput = self.add_output(self.simplestorageconfig.component_name, SimpleStorage.CurrentFillLevelPercent,
+        self.current_fill_percent: ComponentOutput = self.add_output(self.simplestorageconfig.name, SimpleStorage.CurrentFillLevelPercent,
                                                                      self.simplestorageconfig.loadtype, lt.Units.PERCENT)
         self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)
         self.capacity = self.simplestorageconfig.capacity
@@ -131,16 +132,26 @@ class SimpleStorage(Component):
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
         """Simulates the storage."""
+        log.information("timestep " + str(timestep))
+        log.information("state fill " + str(self.state.fill))
+        log.information("storage capacity " + str(self.capacity) + "\n")
         charging = stsv.get_input_value(self.charging_input)
+        log.information("get input: charging " + str(charging))
         discharging = stsv.get_input_value(self.discharging_input)
+        log.information("get input: discharging " + str(discharging) + "\n")
         if charging < 0:
             raise Exception("trying to charge with negative amount" + str(charging))
         if discharging > 0:
             raise Exception("trying to discharge with positive amount: " + str(discharging))
         charging_delta = self.state.store(charging)
+        log.information("charging delta (store) " + str(charging_delta))
         discharging_delta = self.state.withdraw(discharging * -1) * -1
+        log.information("discharging delta (withdraw) " + str(discharging_delta) + "\n")
         actual_delta = charging_delta + discharging_delta
+        log.information("set output: actual delta (charging delta + discharging delta) " + str(actual_delta))
+        log.information("set output: current fill (state fill) " + str(self.state.fill))
         stsv.set_output_value(self.actual_delta, actual_delta)
         stsv.set_output_value(self.current_fill, self.state.fill)
         percent_fill = self.state.fill / self.capacity
+        log.information("set output: percent fill " + str(percent_fill) + "\n \n")
         stsv.set_output_value(self.current_fill_percent, percent_fill)

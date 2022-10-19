@@ -127,7 +127,7 @@ class Battery(Component):
             ev=ev)
         return config
 
-    def get_charge_controller_default_connections(self) -> None:
+    def get_charge_controller_default_connections(self) -> Any:
         log.information("setting ev charge controller default connections in car battery")
         connections: List[ComponentConnection] = []
         ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname( )

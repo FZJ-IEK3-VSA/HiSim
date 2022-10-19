@@ -211,6 +211,7 @@ class L2GenericHeatController(cp.Component):
         """ Prepares the simulation. """
         pass
 
+
     def control_cooling(self, t_control: float, t_min_cooling: Optional[float], t_max_cooling: Optional[float]) -> None:
         """ Controls the cooling. """
         if t_min_cooling is None:

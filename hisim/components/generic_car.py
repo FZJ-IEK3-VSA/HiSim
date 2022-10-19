@@ -165,8 +165,8 @@ class Car(cp.Component):
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio]))  # sum
                 location_list = car_location[i * steps_ratio: (i + 1) * steps_ratio]  # extract list
-                location_counts: Counter = Counter(location_list)  # count occurances
-                self.car_location.append(max(location_list, key=location_counts.get))  # extract most common
+                occurence_count: Counter = Counter(location_list)  # extract most common
+                self.car_location.append(occurence_count.most_common(1)[0][0])  
 
             # save data in cache
             data = np.transpose([self.car_location,

@@ -90,18 +90,12 @@ class Battery(Component):
 
         # Define component outputs
         if config.ev:
-            self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
-                                                         field_name=self.AcBatteryPower,
-                                                         load_type=LoadTypes.ELECTRICITY,
-                                                         unit=Units.WATT,
-                                                         postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.CAR_BATTERY])
+            postprocessing_flag = [InandOutputType.CHARGE_DISCHARGE, ComponentType.CAR_BATTERY]
         else:
-            self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
-                                                         field_name=self.AcBatteryPower,
-                                                         load_type=LoadTypes.ELECTRICITY,
-                                                         unit=Units.WATT,
-                                                         postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY])
+            postprocessing_flag = [InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY]
             
+        self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.AcBatteryPower, load_type=LoadTypes.ELECTRICITY,
+                                                     unit=Units.WATT, postprocessing_flag=postprocessing_flag)
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
@@ -127,7 +121,7 @@ class Battery(Component):
             ev=ev)
         return config
 
-    def get_charge_controller_default_connections(self) -> None:
+    def get_charge_controller_default_connections(self) -> Any:
         log.information("setting ev charge controller default connections in car battery")
         connections: List[ComponentConnection] = []
         ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname( )

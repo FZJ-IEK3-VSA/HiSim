@@ -160,17 +160,20 @@ class L1Controller(cp.Component):
 
             stsv.set_output_value(self.p_set, self.state.power)
 
-    def build(self, config: ChargingStationConfig, my_simulation_parameters: SimulationParameters):
+    def build(self, config: ChargingStationConfig, my_simulation_parameters: SimulationParameters) -> None:
         """ Translates and assigns config parameters to controller class and completes initialization. """
         self.name = config.name
         self.source_weight = config.source_weight
         # get charging station location and charging station power out of ChargingStationSet
-        charging_station_string = config.charging_station_set.Name.partition('At ')[2]
-        location = charging_station_string.partition(' with')[0]
-        if location == 'Home':
-            self.charging_location = 1
-        elif location == 'Work':
-            self.charging_location = 2
+        if config.charging_station_set.Name is not None:
+            charging_station_string = config.charging_station_set.Name.partition('At ')[2]
+            location = charging_station_string.partition(' with')[0]
+            if location == 'Home':
+                self.charging_location = 1
+            elif location == 'Work':
+                self.charging_location = 2
+        else:
+            log.error('Charging location not known, check the input on the charging station set. It was set to "charging at home per default.')
         power = float(charging_station_string.partition('with ')[2].partition(' kW')[0])*1e3
         self.power = power
         self.battery_set = config.battery_set
@@ -191,6 +194,6 @@ class L1Controller(cp.Component):
         lines.append("Power [kW]: {:2.1f}".format(self.power*1e-3))
         if self.charging_location == 1:
             lines.append("At Home")
-        elif self.chrging_location == 2:
+        elif self.charging_location == 2:
             lines.append("At Work")
         return lines

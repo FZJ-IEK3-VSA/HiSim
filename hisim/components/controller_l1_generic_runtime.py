@@ -116,7 +116,7 @@ class L1GenericRuntimeController(cp.Component):
 
         # add outputs
         self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY)
-        self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.l1_RunTimeSignal, LoadTypes.ANY, Units.ANY)
+        self.l1_runtime_signal: cp.ComponentOutput = self.add_output(self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY)
 
     def get_l2_controller_default_connections(self) -> List[cp.ComponentConnection]:
         """ Makes default connections to l2 smart controllers. """

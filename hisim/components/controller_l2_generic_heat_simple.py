@@ -198,17 +198,17 @@ class L2GenericHeatController(cp.Component):
         return config
 
     @staticmethod
-    def get_default_config_buffer_heating() -> L2GenericHeatConfig:
+    def get_default_config_buffer_heating(name: str) -> L2GenericHeatConfig:
         """ Default Config for the buffer temperature. """
-        config = L2GenericHeatConfig(name='L2BufferTemperatureController', source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
+        config = L2GenericHeatConfig(name='L2BufferTemperatureController_' + name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
                                      cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
                                      day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
     @staticmethod
-    def get_default_config_waterheating() -> L2GenericHeatConfig:
+    def get_default_config_waterheating(name: str) -> L2GenericHeatConfig:
         """ Generate Default Config for a DHW controller. """
-        config = L2GenericHeatConfig(name='L2DHWTemperatureController', source_weight=1, t_min_heating_in_celsius=50.0, t_max_heating_in_celsius=80.0,
+        config = L2GenericHeatConfig(name='L2DHWTemperatureController_' + name, source_weight=1, t_min_heating_in_celsius=50.0, t_max_heating_in_celsius=80.0,
                                      cooling_considered=False, t_min_cooling_in_celsius=None, t_max_cooling_in_celsius=None,
                                      day_of_heating_season_begin=None, day_of_heating_season_end=None)
         return config

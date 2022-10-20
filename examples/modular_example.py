@@ -44,11 +44,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         my_simulation_parameters.skip_finished_results = False
 
     # try to read the system config from file
@@ -61,13 +61,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     else:
         my_simulation_parameters.system_config = SystemConfig(
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
-            water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.HEAT_PUMP,
+            water_heating_system_installed=lt.HeatingSystems.HEAT_PUMP, heating_system_installed=lt.HeatingSystems.GAS_HEATING,
             mobility_set=ld.TransportationDeviceSets.Bus_and_two_30_km_h_Cars, mobility_distance=ld.TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            clever=True, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=True,
-            buffer_included=True, buffer_volume=500, battery_included=True, battery_capacity=10, chp_included=False, chp_power=10e3, h2_storage_included=False,
-            h2_storage_size=100,electrolyzer_included=False, electrolyzer_power=5e3, ev_included=True,
+            clever=False, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=False,
+            buffer_included=True, buffer_volume=500, battery_included=False, battery_capacity=10, chp_included=False, chp_power=10e3, h2_storage_included=False,
+            h2_storage_size=100,electrolyzer_included=False, electrolyzer_power=5e3, ev_included=False,
             charging_station=ld.ChargingStationSets.Charging_At_Home_with_03_7_kW)
-    ev_capacity=0
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -145,13 +144,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
         
     """CARS"""
-    if mobility_set is not None:
-        my_cars, count = component_connections.configure_cars(
-            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count, ev_included=ev_included,
-                   occupancy_config=my_occupancy_config)
-        if clever is False:
-            for car in my_cars:
-                consumption.append(car)
+    my_cars, count = component_connections.configure_cars(
+        my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count, ev_included=ev_included,
+               occupancy_config=my_occupancy_config)
+    if clever is False:
+        for car in my_cars:
+            consumption.append(car)
 
     """SMART DEVICES"""
     my_smart_devices, count = component_connections.configure_smart_devices(
@@ -160,8 +158,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if not smart_devices_included or clever is False:
         for device in my_smart_devices:
             consumption.append(device)
-
-        smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
     """SURPLUS CONTROLLER"""
     if needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):
@@ -189,34 +185,40 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     """ EV BATTERY """
     if ev_included:
-        component_connections.configure_ev_batteries(
+        ev_capacities = component_connections.configure_ev_batteries(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_cars=my_cars, charging_station_set=charging_station,
             mobility_set=mobility_set, my_electricity_controller=my_electricity_controller, clever=clever)
-        ev_cost = preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity)
+        """TODO: repair! """
+        # for capacity in ev_capacities:
+        #     print(capacity)
+        #     ev_cost = ev_cost + preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity=capacity)
     
     """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
     if smart_devices_included and clever:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices)
+        """ TODO: repair! """
+        # smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
     """WATERHEATING"""
-    count = component_connections.configure_water_heating(
-        my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
-        my_electricity_controller=my_electricity_controller, my_weather=my_weather,
-        water_heating_system_installed=water_heating_system_installed, controlable=clever,
-        count=count)
+    # count = component_connections.configure_water_heating(
+    #     my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
+    #     my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+    #     water_heating_system_installed=water_heating_system_installed, controlable=clever,
+    #     count=count)
+    
+    """TODO: add heat pump cost. """
 
     """HEATING"""
-    if heating_system_installed == lt.HeatingSystems.HEAT_PUMP or water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-        heatpump_included = True
     if buffer_included:
         if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
             my_heater, my_buffer, count = component_connections.configure_heating_with_buffer_electric(
                 my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
                 my_electricity_controller=my_electricity_controller, my_weather=my_weather, heating_system_installed=heating_system_installed,
                 buffer_volume=buffer_volume, controlable=clever, count=count)
-            heatpump_cost = preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
+            """TODO: repair! """
+            # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:
             my_heater, my_buffer, count = component_connections.configure_heating_with_buffer(
                 my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
@@ -229,7 +231,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
             my_electricity_controller=my_electricity_controller, my_weather=my_weather, heating_system_installed=heating_system_installed,
             controlable=clever, count=count)
-        heatpump_cost = preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
     heater.append(my_heater)
 
     """BATTERY"""
@@ -237,7 +238,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         count = component_connections.configure_battery(
             my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_electricity_controller=my_electricity_controller,
             battery_capacity=battery_capacity, count=count)
-        battery_cost = preprocessing.calculate_battery_investment_cost(economic_parameters, battery_included, battery_capacity)
+        """TODO: repair! """
+        # battery_cost = preprocessing.calculate_battery_investment_cost(economic_parameters, battery_included, battery_capacity)
 
     """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included and h2_storage_included and electrolyzer_included and clever:

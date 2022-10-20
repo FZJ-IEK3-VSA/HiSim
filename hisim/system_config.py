@@ -20,7 +20,7 @@ class SystemConfig:
     building_code: BuildingCodes
     water_heating_system_installed: HeatingSystems
     heating_system_installed: HeatingSystems
-    mobility_set: Optional[JsonReference]
+    mobility_set: JsonReference
     mobility_distance: Optional[JsonReference]
     clever: bool
     predictive: bool
@@ -46,7 +46,7 @@ class SystemConfig:
             building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
             water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
             heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
-            mobility_set: Optional[JsonReference] = TransportationDeviceSets.Bus_and_two_30_km_h_Cars,
+            mobility_set: JsonReference = TransportationDeviceSets.Bus_and_two_30_km_h_Cars,
             mobility_distance: Optional[JsonReference] = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             clever: bool = True, predictive: bool = False, prediction_horizon: int = 0, pv_included: bool = True,
             pv_peak_power: Optional[float] = 9000, smart_devices_included: bool = True,

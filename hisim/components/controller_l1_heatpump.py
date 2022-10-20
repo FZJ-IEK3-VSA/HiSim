@@ -32,7 +32,7 @@ __status__ = "development"
 @dataclass
 class L1HeatPumpConfig(ConfigBase):
 
-    """ L2 Controller Config. """
+    """ L1 Controller Config. """
 
     name: str
     source_weight: int
@@ -69,6 +69,13 @@ class L1HeatPumpConfig(ConfigBase):
                                   day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
+    @staticmethod
+    def get_default_config_heat_source_controller(name: str) -> Any:
+        """ Default Config for the buffer temperature. """
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
+                                  cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
+                                  day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+        return config
 
 class L1HeatPumpControllerState:
 
@@ -116,7 +123,7 @@ class L1HeatPumpController(cp.Component):
     StorageTemperatureModifier = "StorageTemperatureModifier"
     FlexibileElectricity = "FlexibleElectricity"
     # Outputs
-    HeatPumpTargetPercentage = "HeatPumpTargetPercentage"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
     OnOffState = "OnOffState"
 
     @utils.measure_execution_time
@@ -142,7 +149,7 @@ class L1HeatPumpController(cp.Component):
         self.previous_state: L1HeatPumpConfig = self.state.clone()
 
         # Component Outputs
-        self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatPumpTargetPercentage, LoadTypes.ANY, Units.PERCENT)
+        self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ANY, Units.PERCENT)
         self.on_off_channel : cp.ComponentOutput = self.add_output(self.component_name, self.OnOffState,
                                                                                        LoadTypes.ANY, Units.ANY)
 

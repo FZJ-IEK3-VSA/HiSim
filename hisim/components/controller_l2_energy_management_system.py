@@ -210,8 +210,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             stsv.set_output_value(self.flexible_electricity, flexible_electricity)
         stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)
         if flexible_electricity > 0:
-            stsv.set_output_value(self.building_temperature_modifier, 0)
-            stsv.set_output_value(self.storage_temperature_modifier, 0)
+            stsv.set_output_value(self.building_temperature_modifier, 1)
+            stsv.set_output_value(self.storage_temperature_modifier, 20)
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)

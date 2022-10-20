@@ -176,6 +176,7 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
     """
     ev_capacities = []
 
+
     if mobility_set.Name is None:
         raise Exception('For EV configuration mobility set is obligatory.')
     mobility_speed = mobility_set.Name.partition('and ')[2].partition(' ')[2].partition(' km/h')[0]
@@ -222,6 +223,8 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
 
             my_controller_carbattery.connect_dynamic_input(
                 input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget, src_object=electricity_target)
+        
+    return ev_capacities
 
     return ev_capacities
 
@@ -598,7 +601,6 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
                                                                             config=heatpump_l1_config)
     my_heatpump_controller_l1.connect_only_predefined_connections(my_buffer)
     my_sim.add_component(my_heatpump_controller_l1)
-
     my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     my_heatpump.connect_only_predefined_connections(my_weather)
     my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)

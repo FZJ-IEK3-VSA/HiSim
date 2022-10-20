@@ -157,7 +157,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         for device in my_smart_devices:
             consumption.append(device)
 
-    # """SURPLUS CONTROLLER"""
+    """SURPLUS CONTROLLER"""
     if needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
             my_simulation_parameters=my_simulation_parameters)
@@ -230,7 +230,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         else:
             my_heater, count = component_connections.configure_heating(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building, heating_system_installed=heating_system_installed, count=count)
-
     heater.append(my_heater)
 
     # """BATTERY"""

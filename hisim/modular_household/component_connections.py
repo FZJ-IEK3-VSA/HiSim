@@ -619,14 +619,14 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                                                                   source_weight=999)
 
-    my_buffer_controller_l2 = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
-                                                                                      config=building_heating_controller_config)
-    my_buffer_controller_l2.connect_only_predefined_connections(my_building)
-    my_buffer_controller_l2.connect_only_predefined_connections(my_electricity_controller)
-    my_sim.add_component(my_buffer_controller_l2)
+    my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
+                                                                                   config=building_heating_controller_config)
+    my_buffer_controller.connect_only_predefined_connections(my_building)
+    my_buffer_controller.connect_only_predefined_connections(my_electricity_controller)
+    my_sim.add_component(my_buffer_controller)
     my_buffer.connect_input(my_buffer.L1DeviceSignal,
-                            my_buffer_controller_l2.component_name,
-                            my_buffer_controller_l2.boiler_signal)
+                            my_buffer_controller.component_name,
+                            my_buffer_controller.boiler_signal)
     my_buffer.connect_only_predefined_connections(my_heatpump)
     my_building.add_component_input_and_connect(source_component_class=my_buffer, source_component_output=my_buffer.HeatToBuilding,
                                                 source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
@@ -658,13 +658,13 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
     """
     fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
                        lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
-    heater_config = generic_heat_source.HeatSource.get_default_config_heating()
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
-    heater_l1_config = controller_l1_generic_runtime.L1Config.get_default_config(heating_system_installed.value)
-    heater_l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_buffer_heating(name='BufferStorage')
-    [heater_config.source_weight, heater_l1_config.source_weight, heater_l2_config.source_weight] = [count] * 3
+    # heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_pump_controller()
+    heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(heating_system_installed.value)
+    [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
-
+    
     buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(1000)
     buffer_config.power = float(my_building.max_thermal_building_demand)
 
@@ -676,33 +676,30 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=buffer_config)
     my_sim.add_component(my_buffer)
-
-    my_heater_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(my_simulation_parameters=my_simulation_parameters,
-                                                                              config=heater_l2_config)
-    my_heater_controller_l2.connect_only_predefined_connections(my_buffer)
-    my_sim.add_component(my_heater_controller_l2)
-
-    my_heater_controller_l1 = controller_l1_generic_runtime.L1GenericRuntimeController(my_simulation_parameters=my_simulation_parameters,
+    my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                           config=heater_l1_config)
-    my_heater_controller_l1.connect_only_predefined_connections(my_heater_controller_l2)
+    my_heater_controller_l1.connect_only_predefined_connections(my_buffer)
     my_sim.add_component(my_heater_controller_l1)
-
+    
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
     my_sim.add_component(my_heater)
-
-    my_buffer_controller_l2 = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
-                                                                                      config=building_heating_controller_config)
-    my_buffer_controller_l2.connect_only_predefined_connections(my_building)
-    my_sim.add_component(my_buffer_controller_l2)
+    
+    my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
+                                                                                   config=building_heating_controller_config)
+    my_buffer_controller.connect_only_predefined_connections(my_building)
+    my_sim.add_component(my_buffer_controller)
     my_buffer.connect_input(my_buffer.L1DeviceSignal,
-                            my_buffer_controller_l2.component_name,
-                            my_buffer_controller_l2.boiler_signal)
+                            my_buffer_controller.component_name,
+                            my_buffer_controller.boiler_signal)
     my_buffer.connect_only_predefined_connections(my_heater)
+
     my_building.add_component_input_and_connect(source_component_class=my_buffer, source_component_output=my_buffer.HeatToBuilding,
                                                 source_load_type=lt.LoadTypes.HEATING, source_unit=lt.Units.WATT,
                                                 source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=count - 1)
 
+    my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
+                                                                                   config=building_heating_controller_config)
     return my_heater, my_buffer, count
 
 

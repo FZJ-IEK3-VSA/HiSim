@@ -127,7 +127,7 @@ class ModularHeatPump(cp.Component):
         self.EMS_Flexible_ElectricityC: cp.ComponentInput = self.add_input(self.component_name, self.ems_flexible_electricity,
                                                                            lt.LoadTypes.ELECTRICITY, lt.Units.WATT, mandatory=False)
 
-        self.L1HeatPumpTargetPercentage: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ANY, lt.Units.PERCENT,
+        self.L1HeatControllerTargetPercentage: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ANY, lt.Units.PERCENT,
                                                                  mandatory=True)
 
         # Outputs
@@ -165,7 +165,7 @@ class ModularHeatPump(cp.Component):
         connections = []
         controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()
         connections.append(cp.ComponentConnection(ModularHeatPump.L1DeviceSignal, controller_classname,
-                                                  controller_l1_heatpump.L1HeatPumpController.HeatPumpTargetPercentage))
+                                                  controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage))
         return connections
 
     @staticmethod
@@ -258,7 +258,7 @@ class ModularHeatPump(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
 
         # Inputs
-        target_percentage = stsv.get_input_value(self.L1HeatPumpTargetPercentage)
+        target_percentage = stsv.get_input_value(self.L1HeatControllerTargetPercentage)
 
         T_outside: float = stsv.get_input_value(self.TemperatureOutsideC)
         cop = self.cal_cop(T_outside)

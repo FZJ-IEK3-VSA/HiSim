@@ -692,10 +692,11 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
                                                                           config=heater_l1_config)
     my_heater_controller_l1.connect_only_predefined_connections(my_buffer)
     my_sim.add_component(my_heater_controller_l1)
-
+    
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
     my_sim.add_component(my_heater)
+
 
     my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
                                                                                    config=building_heating_controller_config)

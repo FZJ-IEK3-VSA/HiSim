@@ -6,7 +6,7 @@ import seaborn
 from math import pi
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Optional, List
+from typing import Optional, List, Any
 
 # Owned
 import hisim.utils as utils
@@ -40,7 +40,6 @@ class HeatPumpConfig:
     cooling_considered: bool
     heating_season_begin: Optional[int]
     heating_season_end: Optional[int]
-    P_threshold: float
 
     def __init__(self, name: str, source_weight: int, manufacturer: str, device_name: str, power_th: float, cooling_considered: bool,
                  heating_season_begin: Optional[int], heating_season_end: Optional[int]):
@@ -52,6 +51,32 @@ class HeatPumpConfig:
         self.cooling_considered = cooling_considered
         self.heating_season_begin = heating_season_begin
         self.heating_season_end = heating_season_end
+        
+    @staticmethod
+    def get_default_config_heating() -> Any:
+        config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, cooling_considered=True, heating_season_begin=270,
+                                heating_season_end=150)
+        return config
+
+    @staticmethod
+    def get_default_config_waterheating() -> Any:
+        config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, cooling_considered=False, heating_season_begin=None,
+                                heating_season_end=None)
+        return config
+
+    @staticmethod
+    def get_default_config_heating_electric() -> Any:
+        config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
+                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+        return config
+
+    @staticmethod
+    def get_default_config_waterheating_electric() -> Any:
+        config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
+                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+        return config
 
 
 class ModularHeatPumpState:
@@ -167,32 +192,6 @@ class ModularHeatPump(cp.Component):
         connections.append(cp.ComponentConnection(ModularHeatPump.L1DeviceSignal, controller_classname,
                                                   controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage))
         return connections
-
-    @staticmethod
-    def get_default_config_heating():
-        config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, cooling_considered=True, heating_season_begin=270,
-                                heating_season_end=150)
-        return config
-
-    @staticmethod
-    def get_default_config_waterheating():
-        config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, cooling_considered=False, heating_season_begin=None,
-                                heating_season_end=None)
-        return config
-
-    @staticmethod
-    def get_default_config_heating_electric():
-        config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
-        return config
-
-    @staticmethod
-    def get_default_config_waterheating_electric():
-        config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
-        return config
 
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """

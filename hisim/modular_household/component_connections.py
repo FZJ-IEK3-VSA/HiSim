@@ -35,64 +35,6 @@ from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
 from hisim import utils
 
-def initialize_heater_config(heating_system_installed: lt.HeatingSystems, configuration: str) -> Any:
-    """ Returns Config of Heating Device. """
-    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
-                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
-
-    if configuration == 'waterheating':
-        if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-            heater_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_waterheating()
-        elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
-            heater_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_waterheating_electric()
-        elif heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING]:
-            heater_config = generic_heat_source.HeatSource.get_default_config_waterheating()
-    else:
-        if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-            heater_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_heating()
-        elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
-            heater_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_heating_electric()
-        elif heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING]:
-            heater_config = generic_heat_source.HeatSource.get_default_config_heating()
-    if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING]:
-        heater_config.fuel = fuel_translator[heating_system_installed]
-    return heater_config
-
-
-def initialize_heater_l1_config(heating_system_installed: lt.HeatingSystems) -> Any:
-    """ Returns Config of L1RuntimeController for Heating. """
-    if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-        heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_pump_controller()
-    elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
-        heater_l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config()
-    elif heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING]:
-        heater_l1_config = controller_l1_generic_runtime.L1GenericRuntimeController.get_default_config()
-    return heater_l1_config
-
-
-def initialize_heater_l2_config(heating_system_installed: lt.HeatingSystems, configuration: str, controlable: bool) -> Any:
-    """ Returns Config of L2TemperatureController for Heating. """
-    if configuration == 'waterheating':
-        if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
-                or controlable is False:
-            heater_l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_waterheating('DHW')
-        else:
-            heater_l2_config = None
-    elif configuration == 'heating':
-        if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
-                or controlable is False:
-            heater_l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_heating('HeatingSystem')
-        else:
-            heater_l2_config = None
-    elif configuration == 'bufferheating':
-        if heating_system_installed in [lt.HeatingSystems.GAS_HEATING, lt.HeatingSystems.OIL_HEATING, lt.HeatingSystems.DISTRICT_HEATING] \
-                or controlable is False:
-            heater_l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_buffer_heating('BufferStorage')
-        else:
-            heater_l2_config = None
-    return heater_l2_config
-
-
 def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
                         production: List, pv_peak_power: Optional[float], count: int) -> Tuple[List, int]:
     """ Sets PV System.
@@ -357,6 +299,54 @@ def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameter
 
 
 def configure_water_heating(
+        my_sim: Any, my_simulation_parameters: SimulationParameters, my_occupancy: loadprofilegenerator_connector.Occupancy,
+        water_heating_system_installed: lt.HeatingSystems, count: int) -> int:
+    """ Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
+
+    Parameters
+    ----------
+    my_sim: str
+        filename of orginal built example.
+    my_simulation_parameters: SimulationParameters
+        The simulation parameters.
+    my_occupancy: Occupancy
+        The initialized occupancy component.
+    water_heating_system_installed: str
+        Type of installed WaterHeatingSystem
+    count: int
+        Integer tracking component hierachy for EMS.
+
+    """
+    boiler_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_boiler()
+    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
+                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
+    heater_config.fuel = fuel_translator[water_heating_system_installed]
+    heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw('DHW' + water_heating_system_installed.value)
+    [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
+    count += 1
+
+    heater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
+        (boiler_config.warm_water_temperature - boiler_config.drain_water_temperature) * 0.977 * 4.182 / 3.6
+
+    my_boiler = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=boiler_config)
+    my_boiler.connect_only_predefined_connections(my_occupancy)
+    my_sim.add_component(my_boiler)
+    
+    my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
+                                                                          config=heater_l1_config)
+    my_heater_controller_l1.connect_only_predefined_connections(my_boiler)
+    my_sim.add_component(my_heater_controller_l1)
+    
+    my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
+    my_heater.connect_only_predefined_connections(my_heater_controller_l1)
+    my_sim.add_component(my_heater)
+    my_boiler.connect_only_predefined_connections(my_heater)
+
+    return count
+
+
+def configure_water_heating_electric(
         my_sim: Any, my_simulation_parameters: SimulationParameters,
         my_occupancy: loadprofilegenerator_connector.Occupancy,
         my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
@@ -384,79 +374,105 @@ def configure_water_heating(
         Integer tracking component hierachy for EMS.
 
     """
+
     boiler_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_boiler()
-    boiler_config.name = 'DHW_Boiler'
-    heater_config = initialize_heater_config(heating_system_installed=water_heating_system_installed, configuration='waterheating')
-    heater_l1_config = initialize_heater_l1_config(heating_system_installed=water_heating_system_installed)
-    heater_l2_config = initialize_heater_l2_config(heating_system_installed=water_heating_system_installed, configuration='waterheating',
-                                                   controlable=controlable)
-    [heater_config.source_weight, boiler_config.source_weight, heater_l1_config.source_weight,
-     heater_l2_config.source_weight] = [count] * 4
+    
+    if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
+        heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+        heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw('DHWHeatPumpController')
+    elif water_heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
+        heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating_electric()
+        heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw('BoilerHeatingController')
+
+    [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
+    heatpump_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
         (boiler_config.warm_water_temperature - boiler_config.drain_water_temperature) * 0.977 * 4.182 / 3.6
-    if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-        heater_l2_config.P_threshold = heater_config.power_th / 3
-    elif water_heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
-        heater_l2_config.P_threshold = heater_config.power_th
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=boiler_config)
     my_boiler.connect_only_predefined_connections(my_occupancy)
     my_sim.add_component(my_boiler)
-
-    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] and controlable is True:
-        my_heater_controller_l2 = controller_l2_generic_heat_clever_simple.L2HeatSmartController(my_simulation_parameters=my_simulation_parameters,
-                                                                                         config=heater_l2_config)
-    else:
-        my_heater_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(my_simulation_parameters=my_simulation_parameters,
-                                                                                            config=heater_l2_config)
-    my_heater_controller_l2.connect_only_predefined_connections(my_boiler)
-    my_sim.add_component(my_heater_controller_l2)
-
-    my_heater_controller_l1 = controller_l1_generic_runtime.L1GenericRuntimeController(my_simulation_parameters=my_simulation_parameters,
-                                                                                       config=heater_l1_config)
-    my_heater_controller_l1.connect_only_predefined_connections(my_heater_controller_l2)
-
-    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
-        my_heater = generic_heat_pump_modular.ModularHeatPump(config=heater_config, my_simulation_parameters=my_simulation_parameters)
-        my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
-        my_heater.connect_only_predefined_connections(my_weather)
-        if controlable is True:
-            my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
-    else:
-        my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
-    my_heater.connect_only_predefined_connections(my_heater_controller_l1)
-
-    my_sim.add_component(my_heater)
-    my_sim.add_component(my_heater_controller_l1)
-    my_sim.add_component(my_heater_controller_l2)
-
-    my_boiler.connect_only_predefined_connections(my_heater)
-
-    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
-            and controlable is True:
-        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heater,
-                                                                  source_component_output=my_heater.ElectricityOutput,
-                                                                  source_load_type=lt.LoadTypes.ELECTRICITY,
-                                                                  source_unit=lt.Units.WATT,
+    
+    my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
+                                                                            config=heatpump_l1_config)
+    my_heatpump_controller_l1.connect_only_predefined_connections(my_boiler)
+    my_sim.add_component(my_heatpump_controller_l1)
+    
+    my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
+    my_heatpump.connect_only_predefined_connections(my_weather)
+    my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
+    my_sim.add_component(my_heatpump)
+    my_boiler.connect_only_predefined_connections(my_heatpump)
+    
+    if controlable:
+        my_heatpump_controller_l1.connect_only_predefined_connections(my_electricity_controller)
+        my_heatpump_controller_l1.connect_input(my_heatpump_controller_l1.StorageTemperatureModifier, my_electricity_controller.component_name,
+                                                my_electricity_controller.StorageTemperatureModifier)
+        my_heatpump.connect_only_predefined_connections(my_electricity_controller)  
+        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
+                                                                  source_component_output=my_heatpump.ElectricityOutput,
+                                                                  source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
                                                                   source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
-                                                                  source_weight=my_heater.source_weight)
+                                                                  source_weight=my_heatpump.source_weight)
 
-        electricity_to_heater = my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET, source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=my_heater.source_weight, source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT)
-
-        my_heater_controller_l2.connect_dynamic_input(input_fieldname=controller_l2_generic_heat_clever_simple.L2HeatSmartController.ElectricityTarget,
-                                                      src_object=electricity_to_heater)
+        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
+                                                                  source_component_output=my_heatpump.ElectricityOutput,
+                                                                  source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
+                                                                  source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
+                                                                  source_weight=my_heatpump.source_weight)
+    else:
+        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
+                                                                  source_component_output=my_heatpump.ElectricityOutput,
+                                                                  source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
+                                                                  source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                                                                  source_weight=999)
     return count
 
+def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
+                      heating_system_installed: lt.HeatingSystems, count: int) -> Tuple[Component, int]:
+    """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
-def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters,
-                      my_building: building.Building,
-                      my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                      my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems,
-                      controlable: bool, count: int) -> Tuple[Component, int]:
+    Parameters
+    ----------
+    my_sim: str
+        filename of orginal built example.
+    my_simulation_parameters: SimulationParameters
+        The simulation parameters.
+    my_building: Building
+        The initialized building component.
+    heating_system_installed: str
+        Type of installed HeatingSystem
+    count: int
+        Integer tracking component hierachy for EMS.
+
+    """
+    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
+                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
+    heater_config.fuel = fuel_translator[heating_system_installed]
+    heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(heating_system_installed.value)
+    [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
+    count += 1
+
+    heater_config.power_th = my_building.max_thermal_building_demand
+
+    my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
+                                                                          config=heater_l1_config)
+    my_heater_controller_l1.connect_only_predefined_connections(my_building)
+    my_sim.add_component(my_heater_controller_l1)
+    
+    my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
+    my_heater.connect_only_predefined_connections(my_heater_controller_l1)
+    my_sim.add_component(my_heater)
+
+    return my_heater, count
+
+
+def configure_heating_electric(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
+                               my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+                               my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, controlable: bool,
+                               count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -479,62 +495,50 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
         Integer tracking component hierachy for EMS.
 
     """
-    heater_config = initialize_heater_config(heating_system_installed=heating_system_installed, configuration='heating')
-    heater_l1_config = initialize_heater_l1_config(heating_system_installed=heating_system_installed)
-    heater_l2_config = initialize_heater_l2_config(heating_system_installed=heating_system_installed, configuration='heating',
-                                                   controlable=controlable)
-    [heater_config.source_weight, heater_l1_config.source_weight, heater_l2_config.source_weight] = [count] * 3
+    if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
+        heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating()
+        heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller('HeatigHeatPumpController')
+    elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
+        heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating_electric()
+        heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller('ElectricHeatingController')
+
+    [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_building.max_thermal_building_demand
-    if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-        heater_l2_config.P_threshold = heater_config.power_th / 3
-        heater_l2_config.cooling_considered = True
-    elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
-        heater_l2_config.P_threshold = heater_config.power_th
-
-    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] and controlable is True:
-        my_heater_controller_l2 = controller_l2_generic_heat_clever_simple.L2HeatSmartController(my_simulation_parameters=my_simulation_parameters,
-                                                                                         config=heater_l2_config)
-    else:
-        my_heater_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(my_simulation_parameters=my_simulation_parameters,
-                                                                                            config=heater_l2_config)
-    my_heater_controller_l2.connect_only_predefined_connections(my_building)
-    my_sim.add_component(my_heater_controller_l2)
-
-    my_heater_controller_l1 = controller_l1_generic_runtime.L1GenericRuntimeController(my_simulation_parameters=my_simulation_parameters,
-                                                                                       config=heater_l1_config)
-    my_heater_controller_l1.connect_only_predefined_connections(my_heater_controller_l2)
-    my_sim.add_component(my_heater_controller_l1)
-    # my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
-
-    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
-        my_heater = generic_heat_pump_modular.ModularHeatPump(config=heater_config, my_simulation_parameters=my_simulation_parameters)
-        my_heater.connect_only_predefined_connections(my_weather)
-        if controlable is True:
-            my_heater_controller_l2.connect_only_predefined_connections(my_heater_controller_l1)
-    else:
-        my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
-    my_heater.connect_only_predefined_connections(my_heater_controller_l1)
-    my_sim.add_component(my_heater)
-
-    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING] \
-            and controlable is True:
-        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heater,
-                                                                  source_component_output=my_heater.ElectricityOutput,
+    heatpump_config.power_th = my_building.max_thermal_building_demand
+        
+    my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
+                                                                            config=heatpump_l1_config)
+    my_heatpump_controller_l1.connect_only_predefined_connections(my_building)
+    my_sim.add_component(my_heatpump_controller_l1)
+    
+    my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
+    my_heatpump.connect_only_predefined_connections(my_weather)
+    my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
+    my_sim.add_component(my_heatpump)
+    
+    if controlable:
+        my_heatpump_controller_l1.connect_input(my_heatpump_controller_l1.StorageTemperatureModifier, my_electricity_controller.component_name,
+                            my_electricity_controller.BuildingTemperatureModifier)
+        my_heatpump.connect_only_predefined_connections(my_electricity_controller)  
+        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
+                                                                  source_component_output=my_heatpump.ElectricityOutput,
                                                                   source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
                                                                   source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
-                                                                  source_weight=my_heater.source_weight)
+                                                                  source_weight=my_heatpump.source_weight)
 
-        electricity_to_heatpump = my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET, source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=my_heater.source_weight, source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT)
-
-        my_heater_controller_l2.connect_dynamic_input(input_fieldname=controller_l2_generic_heat_clever_simple.L2HeatSmartController.ElectricityTarget,
-                                                      src_object=electricity_to_heatpump)
-    
-
-    return my_heater, count
+        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
+                                                                  source_component_output=my_heatpump.ElectricityOutput,
+                                                                  source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
+                                                                  source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
+                                                                  source_weight=my_heatpump.source_weight)
+    else:
+        my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
+                                                                  source_component_output=my_heatpump.ElectricityOutput,
+                                                                  source_load_type=lt.LoadTypes.ELECTRICITY, source_unit=lt.Units.WATT,
+                                                                  source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                                                                  source_weight=999)
+    return my_heatpump, count
 
 
 def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
@@ -566,24 +570,24 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
 
     """
     if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
-        heatpump_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_heating()
+        heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating()
+        heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer('BufferHeatPumpController')
     elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
-        heatpump_config = generic_heat_pump_modular.ModularHeatPump.get_default_config_heating_electric()
-    heatpump_config = initialize_heater_config(heating_system_installed=heating_system_installed, configuration='bufferheating')
-    heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_pump_controller()
+        heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating_electric()
+        heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer('BufferElectricHeatingController')
 
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
-
-    buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(1000)
-    buffer_config.power = float(my_building.max_thermal_building_demand)
+    
+    if buffer_volume is not None:
+        buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(buffer_volume)
+        buffer_config.power = float(my_building.max_thermal_building_demand)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatController.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
     heatpump_config.power_th = my_building.max_thermal_building_demand
-    heatpump_config.P_threshold = heatpump_config.power_th / 3
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=buffer_config)
     my_sim.add_component(my_buffer)
@@ -600,6 +604,8 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
 
     if controlable:
         my_heatpump_controller_l1.connect_only_predefined_connections(my_electricity_controller)
+        my_heatpump_controller_l1.connect_input(my_heatpump_controller_l1.StorageTemperatureModifier, my_electricity_controller.component_name,
+                                                my_electricity_controller.StorageTemperatureModifier)
         my_heatpump.connect_only_predefined_connections(my_electricity_controller)  
         my_electricity_controller.add_component_input_and_connect(source_component_class=my_heatpump,
                                                                   source_component_output=my_heatpump.ElectricityOutput,
@@ -665,8 +671,9 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
     
-    buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(1000)
-    buffer_config.power = float(my_building.max_thermal_building_demand)
+    if buffer_volume is not None:
+        buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(buffer_volume)
+        buffer_config.power = float(my_building.max_thermal_building_demand)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatController.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2

@@ -147,6 +147,9 @@ class L1GenericRuntimeController(cp.Component):
         """ Main simulation function. """
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
+            # states are saved after each timestep, outputs after each iteration
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to state. 
+            stsv.set_output_value(self.L1DeviceSignalC, self.state.on_off)
             return
 
         l2_devicesignal = stsv.get_input_value(self.l2_DeviceSignalC)

@@ -4,6 +4,7 @@ from hisim import component as cp
 from hisim.components import example_storage
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from hisim import log
 from tests import functions_for_testing as fft
 
 
@@ -27,61 +28,37 @@ def test_example_storage():
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_example_storage, charging_output, discharging_output])
-    stsv.values[charging_output.global_index] = 40  # charg output
+    stsv.values[charging_output.global_index] = 30  # charg output
     stsv.values[discharging_output.global_index] = -10  # discharg output
 
     timestep = 300
     # Simulate
+
+    print("\n")
+    log.information("timestep = " + str(timestep))
+    log.information("fill state (in the beginning) = " + str(my_example_storage.state.fill))
+    log.information("storage capacity = " + str(my_example_storage.capacity) + "\n")
+    log.information("charging output = " + str(stsv.values[charging_output.global_index]))
+    log.information("discharging output  = " + str(stsv.values[discharging_output.global_index]) + "\n")
+
     assert 0 == stsv.values[my_example_storage.current_fill.global_index]
     my_example_storage.i_restore_state()
     my_example_storage.i_simulate(timestep, stsv, False)
-    # my_example_storage.i_save_state()
 
-    # Charging of the storage
-    assert 40 == stsv.values[charging_output.global_index]
-    # Discharging of the storage
+    log.information("fill state (after charging and discharging) = " + str(my_example_storage.state.fill) + "\n")
+    # Charging the storage
+    assert 30 == stsv.values[charging_output.global_index]
+    # Discharging the storage
     assert -10 == stsv.values[discharging_output.global_index]
     # Result of current storage fill state
-    assert 30 == stsv.values[my_example_storage.current_fill.global_index]
+    assert 20 == stsv.values[my_example_storage.current_fill.global_index]
 
     timestep = 301
-    # my_example_storage.i_restore_state()
+    log.information("timestep = " + str(timestep))
     my_example_storage.i_simulate(timestep, stsv, False)
+    log.information("fill state (after charging and discharging) = " + str(my_example_storage.state.fill) + "\n")
     # Result of current storage fill state
     assert 40 == stsv.values[my_example_storage.current_fill.global_index]
-
-    # # Test for charging
-    # stsv.values[charging_output.global_index] = 2000  # charg output
-    # timestep = 300
-    # # Simulate for timestep 300
-    # assert my_example_storage.state.fill == 0
-    # log.information("state.fill at first " + str(my_example_storage.state.fill))
-    # my_example_storage.i_restore_state()
-    # log.information("state.fill after restore " + str(my_example_storage.state.fill))
-    # my_example_storage.i_simulate(timestep, stsv, False)
-    # log.information("state.fill after simulate " + str(my_example_storage.state.fill))
-    # assert my_example_storage.state.fill == 2000
-
-    # stsv.values[charging_output.global_index] = 2000  # charg output
-    # timestep = 301
-    # # Simulate for timestep 301
-    # my_example_storage.i_simulate(timestep, stsv, False)
-    # assert my_example_storage.state.fill == 4000  # should be two times 2000
-
-    # # Test for discharging
-    # stsv.values[discharging_output.global_index] = 2000  # discharg output
-    # timestep = 300
-    # # Simulate for timestep 300
-    # assert my_example_storage.state.fill == 4000
-    # my_example_storage.i_restore_state()
-    # my_example_storage.i_simulate(timestep, stsv, False)
-    # assert my_example_storage.state.fill == 2000
-
-    # stsv.values[discharging_output.global_index] = 2000  # discharg output
-    # timestep = 301
-    # # Simulate for timestep 301
-    # my_example_storage.i_simulate(timestep, stsv, False)
-    # assert my_example_storage.state.fill == 0   # should withdraw two times 2000 to reach 0
 
 
 if __name__ == "__main__":

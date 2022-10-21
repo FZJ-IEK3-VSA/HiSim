@@ -28,8 +28,8 @@ def test_example_storage():
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_example_storage, charging_output, discharging_output])
-    stsv.values[charging_output.global_index] = 30  # charg output
-    stsv.values[discharging_output.global_index] = -10  # discharg output
+    stsv.values[charging_output.global_index] = 30  # fake charg input
+    stsv.values[discharging_output.global_index] = -10  # fake discharg input
 
     timestep = 300
     # Simulate

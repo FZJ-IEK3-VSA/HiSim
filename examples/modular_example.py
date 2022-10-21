@@ -245,6 +245,10 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_simulation_parameters=my_simulation_parameters, my_building=my_building, my_electricity_controller=my_electricity_controller,
             chp_power=chp_power, h2_storage_size=h2_storage_size, electrolyzer_power=electrolyzer_power, count=count)
         heater.append(my_chp)
+        
+        chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
+        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
+        electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
 
 
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)

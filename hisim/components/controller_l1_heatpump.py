@@ -228,7 +228,7 @@ class L1HeatPumpController(cp.Component):
             self.state = self.processed_state.clone()
         else:
             self.calculate_state(timestep, stsv)
-            self.processed_state = self.state.clone() 
+            self.processed_state = self.state.clone()
         modulating_signal = self.state.percentage * self.state.on_off
         stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
         stsv.set_output_value(self.on_off_channel, self.state.on_off)

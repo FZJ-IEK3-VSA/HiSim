@@ -336,6 +336,7 @@ def configure_water_heating(
     my_boiler.connect_only_predefined_connections(my_occupancy)
     my_sim.add_component(my_boiler)
 
+
     my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                           config=heater_l1_config)
     my_heater_controller_l1.connect_only_predefined_connections(my_boiler)
@@ -400,16 +401,17 @@ def configure_water_heating_electric(
     my_boiler.connect_only_predefined_connections(my_occupancy)
     my_sim.add_component(my_boiler)
 
+
     my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                             config=heatpump_l1_config)
     my_heatpump_controller_l1.connect_only_predefined_connections(my_boiler)
     my_sim.add_component(my_heatpump_controller_l1)
-
     my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     my_heatpump.connect_only_predefined_connections(my_weather)
     my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
     my_sim.add_component(my_heatpump)
     my_boiler.connect_only_predefined_connections(my_heatpump)
+
 
     if controlable:
         my_heatpump_controller_l1.connect_only_predefined_connections(my_electricity_controller)
@@ -468,6 +470,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
     my_heater_controller_l1.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_heater_controller_l1)
 
+
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
     my_sim.add_component(my_heater)
@@ -510,12 +513,14 @@ def configure_heating_electric(my_sim: Any, my_simulation_parameters: Simulation
 
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
+
     heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                             config=heatpump_l1_config)
     my_heatpump_controller_l1.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_heatpump_controller_l1)
+
 
     my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     my_heatpump.connect_only_predefined_connections(my_weather)

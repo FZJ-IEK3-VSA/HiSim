@@ -184,7 +184,7 @@ class Dummy(Component):
         self.temperature = self.previous_temperature
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Passes only."""
+        """Doublechecks."""
         pass
 
     def i_simulate(

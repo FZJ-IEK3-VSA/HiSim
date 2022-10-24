@@ -114,7 +114,7 @@ class ComponentName(Component):
     #     self.factor = 1.0
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: ComponentNameConfig) -> None:
-        """Constructs all the neccessary attributes for the ExampleStorage object."""
+        """Constructs all the neccessary attributes."""
         self.componentnameconfig = config
         super().__init__(self.componentnameconfig.name, my_simulation_parameters=my_simulation_parameters)
 
@@ -148,7 +148,7 @@ class ComponentName(Component):
         self.state = deepcopy(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-        """Passes only."""
+        """Doublechecks."""
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:

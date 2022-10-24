@@ -10,7 +10,6 @@ from typing import Optional
 
 from dataclasses_json import dataclass_json
 
-from hisim.component import ConfigBase
 from hisim import utils
 from hisim import component as cp
 from hisim import log
@@ -32,7 +31,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L1BuildingHeatingConfig(ConfigBase):
+class L1BuildingHeatingConfig():
 
     """ L2 Controller Config. """
 

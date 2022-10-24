@@ -30,9 +30,7 @@ jobs:
     - name: Lint with prospector
       working-directory: ./
       run: |
-        # prospector examples/basic_household.py
         prospector examples/basic_household_only_heating.py
-        prospector examples/modular_example.py
         # prospector examples/modular_example.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
@@ -50,19 +48,12 @@ jobs:
         prospector hisim/json_generator.py
         prospector hisim/loadtypes.py
         prospector hisim/log.py
-        prospector hisim/postprocessingoptions.py
-        prospector hisim/project_code_overview_generator.py
-        prospector hisim/simulationparameters.py
-        prospector hisim/simulator.py
-        prospector hisim/sim_repository.py
-        prospector hisim/utils.py
         prospector hisim/components/controller_l1_building_heating.py
         prospector hisim/components/controller_l2_generic_heat_simple.py
         prospector hisim/components/generic_hot_water_storage_modular.py
 	prospector hisim/components/generic_car.py
 	prospector hisim/components/controller_l1_generic_ev_charge.py
         # prospector hisim/components/weather.py
-        # prospector hisim/modular_household/component_connections.py
         prospector hisim/postprocessing/chartbase.py
         prospector hisim/postprocessing/charts.py
         prospector hisim/postprocessing/chart_singleday.py
@@ -74,7 +65,7 @@ jobs:
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
         prospector tests/test_examples.py
-        #prospector hisim/modular_household/component_connections.py
+        prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/cost_file_creator.py
         prospector hisim/modular_household/economic_parameters.py
         prospector hisim/modular_household/modular_household_results.py

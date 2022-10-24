@@ -34,6 +34,7 @@ from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
 from hisim import utils
 
+
 def configure_pv_system(my_sim: Any, my_simulation_parameters: SimulationParameters, my_weather: weather.Weather,
                         production: List, pv_peak_power: Optional[float], count: int) -> Tuple[List, int]:
     """ Sets PV System.
@@ -209,7 +210,6 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
         my_sim.add_component(my_carbattery)
         my_sim.add_component(my_controller_carbattery)
 
-
         if clever:
             my_electricity_controller.add_component_input_and_connect(
                 source_component_class=my_carbattery, source_component_output=my_carbattery.AcBatteryPower,
@@ -223,7 +223,7 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
 
             my_controller_carbattery.connect_dynamic_input(
                 input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget, src_object=electricity_target)
-        
+
     return ev_capacities
 
     return ev_capacities
@@ -336,7 +336,6 @@ def configure_water_heating(
     my_boiler.connect_only_predefined_connections(my_occupancy)
     my_sim.add_component(my_boiler)
 
-
     my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                           config=heater_l1_config)
     my_heater_controller_l1.connect_only_predefined_connections(my_boiler)
@@ -401,17 +400,16 @@ def configure_water_heating_electric(
     my_boiler.connect_only_predefined_connections(my_occupancy)
     my_sim.add_component(my_boiler)
 
-
     my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                             config=heatpump_l1_config)
     my_heatpump_controller_l1.connect_only_predefined_connections(my_boiler)
     my_sim.add_component(my_heatpump_controller_l1)
+
     my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     my_heatpump.connect_only_predefined_connections(my_weather)
     my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
     my_sim.add_component(my_heatpump)
     my_boiler.connect_only_predefined_connections(my_heatpump)
-
 
     if controlable:
         my_heatpump_controller_l1.connect_only_predefined_connections(my_electricity_controller)
@@ -436,6 +434,7 @@ def configure_water_heating_electric(
                                                                   source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                                                                   source_weight=999)
     return count
+
 
 def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                       heating_system_installed: lt.HeatingSystems, count: int) -> Tuple[Component, int]:
@@ -469,7 +468,6 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
                                                                           config=heater_l1_config)
     my_heater_controller_l1.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_heater_controller_l1)
-
 
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
@@ -520,7 +518,6 @@ def configure_heating_electric(my_sim: Any, my_simulation_parameters: Simulation
                                                                             config=heatpump_l1_config)
     my_heatpump_controller_l1.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_heatpump_controller_l1)
-
 
     my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     my_heatpump.connect_only_predefined_connections(my_weather)
@@ -697,11 +694,10 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
                                                                           config=heater_l1_config)
     my_heater_controller_l1.connect_only_predefined_connections(my_buffer)
     my_sim.add_component(my_heater_controller_l1)
-    
+
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
     my_sim.add_component(my_heater)
-
 
     my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(my_simulation_parameters=my_simulation_parameters,
                                                                                    config=building_heating_controller_config)

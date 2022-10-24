@@ -32,7 +32,8 @@ class Locations(str, enum.Enum):
     """ To parse locations for climate data. """
 
     AACHEN = "Aachen"
-    
+
+  
 @enum.unique
 class ChargingLocations(str, enum.Enum):
 

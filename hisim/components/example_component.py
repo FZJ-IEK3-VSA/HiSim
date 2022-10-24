@@ -30,7 +30,7 @@ __status__ = "development"
 @dataclass
 class DummyConfig(ConfigBase):
 
-    """Configuration of the Simple Storage."""
+    """Configuration of the Dummy Component."""
 
     @classmethod
     def get_main_classname(cls):
@@ -40,6 +40,8 @@ class DummyConfig(ConfigBase):
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
+    loadtype: lt.LoadTypes
+    unit: lt.Units
     electricity: Optional[float]  # = None,
     # heat: float = 0.0,
     capacity: Optional[float]  # = None,
@@ -51,6 +53,8 @@ class DummyConfig(ConfigBase):
         return DummyConfig(
             name="Dummy",
             electricity=-1e3,
+            loadtype=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
             # heat=0.0,
             capacity=45 * 121.2,
             initial_temperature=25.0
@@ -103,7 +107,7 @@ class Dummy(Component):
         )
 
         self.thermal_energy_deliveredC: ComponentInput = self.add_input(
-            self.component_name,
+            self.dummyconfig.name,
             self.ThermalEnergyDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
@@ -124,7 +128,7 @@ class Dummy(Component):
             lt.Units.WATT,
         )
         self.stored_energyC: ComponentOutput = self.add_output(
-            self.component_name, self.StoredEnergy, lt.LoadTypes.HEATING, lt.Units.WATT
+            self.component_name, self.StoredEnergy, lt.LoadTypes.HEATING, lt.Units.WATT,
         )
         self.temperature: float = -300
 

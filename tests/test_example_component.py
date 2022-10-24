@@ -1,4 +1,4 @@
-"""Test for the example storage."""
+"""Test for the example component."""
 
 from hisim import component as cp
 from hisim.components import example_component

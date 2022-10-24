@@ -90,12 +90,12 @@ class L1Controller(cp.Component):
         self.state_of_charge: cp.ComponentInput = self.add_input(
             self.component_name, self.StateOfCharge, lt.LoadTypes.ANY, lt.Units.ANY,
             mandatory=True)
-        
+
         if self.clever:
             self.electricity_target: cp.ComponentInput = self.add_input(
                 self.component_name, self.ElectricityTarget, lt.LoadTypes.ELECTRICITY, lt.Units.WATT,
                 mandatory=True)
-            
+  
         # add outputs
         self.p_set: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ToOrFromBattery, load_type=lt.LoadTypes.ELECTRICITY,
@@ -139,14 +139,14 @@ class L1Controller(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         """ Returns battery charge and discharge (energy consumption of car) of battery at each timestep. """
-        
+
         if force_convergence:
             pass
         else:
             car_location = stsv.get_input_value(self.car_location)
             car_consumption = stsv.get_input_value(self.car_consumption)
             soc = stsv.get_input_value(self.state_of_charge)
-            
+
             if car_consumption > 0:
                 self.state.power = -car_consumption
             elif soc < self.battery_set and car_location == self.charging_location:
@@ -174,7 +174,7 @@ class L1Controller(cp.Component):
                 self.charging_location = 2
         else:
             log.error('Charging location not known, check the input on the charging station set. It was set to "charging at home per default.')
-        power = float(charging_station_string.partition('with ')[2].partition(' kW')[0])*1e3
+        power = float(charging_station_string.partition('with ')[2].partition(' kW')[0]) * 1e3
         self.power = power
         self.battery_set = config.battery_set
         self.clever = my_simulation_parameters.system_config.clever
@@ -191,7 +191,7 @@ class L1Controller(cp.Component):
         """ Writes EV charge controller values to report. """
         lines = []
         lines.append(self.name + '_w' + str(self.source_weight) + 'charging controller: ')
-        lines.append("Power [kW]: {:2.1f}".format(self.power*1e-3))
+        lines.append("Power [kW]: {:2.1f}".format(self.power * 1e-3))
         if self.charging_location == 1:
             lines.append("At Home")
         elif self.charging_location == 2:

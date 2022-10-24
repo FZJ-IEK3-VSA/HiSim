@@ -4,17 +4,18 @@ from typing import Optional, List, Any
 from os import path
 from pathlib import Path
 import json
+
+import utspclient.helpers.lpgdata as ld
+
 import hisim.log
 import hisim.utils
 import hisim.loadtypes as lt
-
-import utspclient.helpers.lpgdata as ld
 
 from hisim.modular_household import preprocessing
 from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulator import SimulationParameters
-from hisim.postprocessingoptions import PostProcessingOptions
+# from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.system_config import SystemConfig
 
 from hisim.components import loadprofilegenerator_connector
@@ -65,7 +66,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             mobility_set=ld.TransportationDeviceSets.Bus_and_two_30_km_h_Cars, mobility_distance=ld.TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             clever=False, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=False,
             buffer_included=False, buffer_volume=500, battery_included=False, battery_capacity=10, chp_included=False, chp_power=10e3, h2_storage_included=False,
-            h2_storage_size=100,electrolyzer_included=False, electrolyzer_power=5e3, ev_included=False,
+            h2_storage_size=100, electrolyzer_included=False, electrolyzer_power=5e3, ev_included=False,
             charging_station=ld.ChargingStationSets.Charging_At_Home_with_03_7_kW)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -77,7 +78,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed  # Electricity, Hydrogen or False
     heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
     mobility_set = my_simulation_parameters.system_config.mobility_set
-    mobility_distance = my_simulation_parameters.system_config.mobility_distance
+    # mobility_distance = my_simulation_parameters.system_config.mobility_distance
     clever = my_simulation_parameters.system_config.clever
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
     if pv_included:
@@ -104,7 +105,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     """BASICS"""
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(profile_name=occupancy_profile.value, name='Occupancy') # noqa: unexpected-keyword-arg
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.value)
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
@@ -142,11 +143,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         #     my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
         #     pv_peak_power=pv_peak_power, count=count)
         # pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
-        
+
     """CARS"""
     my_cars, count = component_connections.configure_cars(
         my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, count=count, ev_included=ev_included,
-               occupancy_config=my_occupancy_config)
+        occupancy_config=my_occupancy_config)
     if clever is False:
         for car in my_cars:
             consumption.append(car)
@@ -192,7 +193,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         # for capacity in ev_capacities:
         #     print(capacity)
         #     ev_cost = ev_cost + preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity=capacity)
-    
+
     """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
     if smart_devices_included and clever:
@@ -228,9 +229,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_heater, my_buffer, count = component_connections.configure_heating_with_buffer(
                 my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
                 heating_system_installed=heating_system_installed, buffer_volume=buffer_volume, count=count)
-            
+
         buffer_cost = preprocessing.calculate_buffer_investment_cost(economic_parameters, buffer_included, buffer_volume)
-        
+
     else:
         if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
             my_heater, count = component_connections.configure_heating_electric(
@@ -238,10 +239,10 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                 my_electricity_controller=my_electricity_controller, my_weather=my_weather, heating_system_installed=heating_system_installed,
                 controlable=clever, count=count)
         else:
-             my_heater, count = component_connections.configure_heating(
+            my_heater, count = component_connections.configure_heating(
                 my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
                 heating_system_installed=heating_system_installed, count=count)
-            
+
     heater.append(my_heater)
 
     """BATTERY"""
@@ -259,7 +260,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_electricity_controller=my_electricity_controller, chp_power=chp_power, h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power, count=count)
         heater.append(my_chp)
-        
+
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
         h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
         electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
@@ -274,7 +275,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                      source_tags=[lt.InandOutputType.HEAT_TO_BUILDING], source_weight=999)
 
     if needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):
-        my_sim.add_component(my_electricity_controller)        
+        my_sim.add_component(my_electricity_controller)
 
     co2_cost = 1000    # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
     injection = 1000
@@ -312,7 +313,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                           + "ev_cost" + str(ev_cost))
 
 
-def needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed): # noqa: too-many-return-statements
+def needs_ems(battery_included, chp_included, ev_included, heating_system_installed, smart_devices_included, water_heating_system_installed):  # noqa: too-many-return-statements
     """ Checks if a system needs an EMS. """
     if battery_included:
         return True

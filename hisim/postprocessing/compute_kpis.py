@@ -5,7 +5,7 @@ from typing import List, Any
 import pandas as pd
 
 import hisim.log
-from hisim.loadtypes import InandOutputType, ComponentType
+from hisim.loadtypes import InandOutputType
 from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
@@ -71,7 +71,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         injection_sum = injection[injection > 0].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
 
         battery_losses = 0
-        self_consumption_sum = production_sum - injection_sum #- battery_losses
+        self_consumption_sum = production_sum - injection_sum  # - battery_losses
     else:
         self_consumption_sum = 0
         injection_sum = 0

@@ -233,7 +233,7 @@ class L1HeatPumpController(cp.Component):
                 stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
                 stsv.set_output_value(self.on_off_channel, self.state.on_off)
             return
-        
+
         self.calculate_state(timestep, stsv)
         modulating_signal = self.state.percentage * self.state.on_off
         stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)

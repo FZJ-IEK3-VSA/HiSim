@@ -39,7 +39,7 @@ class SystemConfig:
     electrolyzer_included: bool
     electrolyzer_power: Optional[float]
     ev_included: bool
-    charging_station_set: Optional[JsonReference]
+    charging_station: Optional[JsonReference]
 
     def __init__(self, location: Locations = Locations.AACHEN,
             occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01,

@@ -47,6 +47,15 @@ class GCHPConfig:
         self.p_el = p_el
         self.p_th = p_th
         self.p_fuel = p_fuel
+        
+    @staticmethod
+    def get_default_config() -> Any:
+        config=GCHPConfig(name='CHP',
+                          source_weight=1,
+                          p_el=2000,
+                          p_th=3000,
+                          p_fuel=6000) 
+        return config
             
 class GenericCHPState:
     """
@@ -94,15 +103,6 @@ class GCHP( cp.Component ):
                                                                   lt.LoadTypes.HYDROGEN,
                                                                   lt.Units.KG_PER_SEC)
         self.add_default_connections(L1GenericCHPRuntimeController, self.get_l1_controller_default_connections())
-
-    @staticmethod
-    def get_default_config() -> GCHPConfig:
-        config=GCHPConfig(name='CHP',
-                          source_weight=1,
-                          p_el=2000,
-                          p_th=3000,
-                          p_fuel=6000) 
-        return config
     
     def build( self, config: GCHPConfig ) -> None:
         self.state = GenericCHPState()
@@ -173,6 +173,15 @@ class L1CHPConfig:
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
         self.min_h2_soc = min_h2_soc
+        
+    @staticmethod
+    def get_default_config() -> Any:
+        config = L1CHPConfig( name = 'L1CHPRunTimeController',
+                              source_weight =  1,
+                              min_operation_time = 14400,
+                              min_idle_time = 7200,
+                              min_h2_soc = 5 )
+        return config
         
 class L1GenericCHPControllerState:
     """
@@ -336,15 +345,6 @@ class L1GenericCHPRuntimeController(cp.Component):
                 self.state.activation( timestep )
             
         stsv.set_output_value( self.L1DeviceSignalC, self.state.state )
-        
-    @staticmethod
-    def get_default_config() -> L1CHPConfig:
-        config = L1CHPConfig( name = 'L1CHPRunTimeController',
-                              source_weight =  1,
-                              min_operation_time = 14400,
-                              min_idle_time = 7200,
-                              min_h2_soc = 5 )
-        return config
 
     def prin1t_outpu1t(self, t_m: float, state: L1GenericCHPControllerState) -> None:
         log.information("==========================================")

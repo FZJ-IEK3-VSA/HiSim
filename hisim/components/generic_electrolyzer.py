@@ -51,6 +51,17 @@ class GenericElectrolyzerConfig:
         self.min_hydrogen_production_rate_hour = min_hydrogen_production_rate_hour
         self.max_hydrogen_production_rate_hour = max_hydrogen_production_rate_hour
         
+    @staticmethod
+    def get_default_config() -> Any:
+        config = GenericElectrolyzerConfig(name ="Electrolyzer",
+                                           source_weight = 1,
+                                           min_power = 1200,  # [W]
+                                           max_power = 2400,  # [W]
+                                           min_hydrogen_production_rate_hour = 300,  # [Nl/h]
+                                           max_hydrogen_production_rate_hour = 5000  # [Nl/h]
+                                           )
+        return config
+        
 class ElectrolyzerState:
     """
     This data class saves the state of the electrolyzer.
@@ -103,17 +114,7 @@ class GenericElectrolyzer(cp.Component):
             object_name=self.component_name, field_name=GenericElectrolyzer.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, lt.ComponentType.ELECTROLYZER])
         self.add_default_connections(L1GenericElectrolyzerController, self.get_l1_controller_default_connections())
-        
-    @staticmethod
-    def get_default_config() -> GenericElectrolyzerConfig:
-        config = GenericElectrolyzerConfig(name ="Electrolyzer",
-                                           source_weight = 1,
-                                           min_power = 1200,  # [W]
-                                           max_power = 2400,  # [W]
-                                           min_hydrogen_production_rate_hour = 300,  # [Nl/h]
-                                           max_hydrogen_production_rate_hour = 5000  # [Nl/h]
-                                           )
-        return config
+
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
@@ -206,6 +207,16 @@ class L1ElectrolyzerConfig:
         self.min_idle_time = min_idle_time
         self.P_min_electrolyzer = P_min_electrolyzer
         self.SOC_max_H2 = SOC_max_H2
+        
+    @staticmethod
+    def get_default_config() -> Any:
+        config = L1ElectrolyzerConfig( name = 'L1ElectrolyzerRuntimeController',
+                                       source_weight =  1,
+                                       min_operation_time = 14400,
+                                       min_idle_time = 7200,
+                                       P_min_electrolyzer = 1200,
+                                       SOC_max_H2 = 96 )
+        return config
         
 class L1ElectrolyzerControllerState:
     """
@@ -359,16 +370,6 @@ class L1GenericElectrolyzerController(cp.Component):
                 pass
                 
         stsv.set_output_value( self.ElectricityTargetC, self.state.state * l2_electricity_target )
-        
-    @staticmethod
-    def get_default_config() -> L1ElectrolyzerConfig :
-        config = L1ElectrolyzerConfig( name = 'L1ElectrolyzerRuntimeController',
-                                       source_weight =  1,
-                                       min_operation_time = 14400,
-                                       min_idle_time = 7200,
-                                       P_min_electrolyzer = 1200,
-                                       SOC_max_H2 = 96 )
-        return config
 
     def prin1t_outpu1t(self, t_m: float, state: L1ElectrolyzerControllerState) -> None:
         log.information("==========================================")

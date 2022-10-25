@@ -24,10 +24,10 @@ def test_chp_system():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
-    my_chp_config = generic_CHP.GCHP.get_default_config( )
+    my_chp_config = generic_CHP.GCHPConfig.get_default_config( )
     my_chp = generic_CHP.GCHP( config = my_chp_config,
                               my_simulation_parameters = my_simulation_parameters )
-    my_chp_controller_config = generic_CHP.L1GenericCHPRuntimeController.get_default_config()
+    my_chp_controller_config = generic_CHP.L1CHPConfig.get_default_config()
     my_chp_controller = generic_CHP.L1GenericCHPRuntimeController(config = my_chp_controller_config,
                                                                   my_simulation_parameters = my_simulation_parameters)
     

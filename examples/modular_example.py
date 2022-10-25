@@ -15,7 +15,7 @@ from hisim.modular_household import preprocessing
 from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulator import SimulationParameters
-# from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.system_config import SystemConfig
 
 from hisim.components import loadprofilegenerator_connector
@@ -45,11 +45,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.skip_finished_results = False
 
     # try to read the system config from file
@@ -64,9 +64,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01, building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
             water_heating_system_installed=lt.HeatingSystems.DISTRICT_HEATING, heating_system_installed=lt.HeatingSystems.DISTRICT_HEATING,
             mobility_set=ld.TransportationDeviceSets.Bus_and_two_30_km_h_Cars, mobility_distance=ld.TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            clever=False, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=False,
+            clever=True, predictive=False, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=False,
             buffer_included=False, buffer_volume=500, battery_included=False, battery_capacity=10, chp_included=False, chp_power=10e3, h2_storage_included=False,
-            h2_storage_size=100, electrolyzer_included=False, electrolyzer_power=5e3, ev_included=False,
+            h2_storage_size=100, electrolyzer_included=False, electrolyzer_power=5e3, ev_included=True,
             charging_station=ld.ChargingStationSets.Charging_At_Home_with_03_7_kW)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)

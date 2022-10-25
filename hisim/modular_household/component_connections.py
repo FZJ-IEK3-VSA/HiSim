@@ -133,9 +133,9 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
 
     # decide if they are diesel driven or electricity driven
     if ev_included:
-        my_car_config = generic_car.Car.get_default_ev_config()
+        my_car_config = generic_car.CarConfig.get_default_ev_config()
     else:
-        my_car_config = generic_car.Car.get_default_diesel_config()
+        my_car_config = generic_car.CarConfig.get_default_diesel_config()
 
     # create all cars
     my_cars: List[generic_car.Car] = []
@@ -180,17 +180,17 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
         raise Exception('For EV configuration mobility set is obligatory.')
     mobility_speed = mobility_set.Name.partition('and ')[2].partition(' ')[2].partition(' km/h')[0]
     if mobility_speed == '30':
-        car_battery_config = advanced_battery_bslib.Battery.get_default_config(
-            e_bat_custom=30, p_inv_custom=3700, name="CarBattery", ev=True)
+        car_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(
+            e_bat_custom=30, p_inv_custom=5000, name="CarBattery", ev=True)
         ev_capacities.append(30)
     elif mobility_speed == '60':
-        car_battery_config = advanced_battery_bslib.Battery.get_default_config(
+        car_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(
             e_bat_custom=50, p_inv_custom=11000, name="CarBattery", ev=True)
         ev_capacities.append(50)
     if charging_station_set is None:
         raise Exception('For EV configuration charging station set is obligatory.')
 
-    car_battery_controller_config = controller_l1_generic_ev_charge.L1Controller.get_default_config(
+    car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
         charging_station_set=charging_station_set)
 
     if clever:
@@ -274,10 +274,10 @@ def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameter
 
     """
     if battery_capacity is not None:
-        my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config(
+        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(
             e_bat_custom=battery_capacity, p_inv_custom=battery_capacity * 0.5 * 1e3, source_weight=count, ev=False)
     else:
-        my_advanced_battery_config = advanced_battery_bslib.Battery.get_default_config(source_weight=count)
+        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(source_weight=count)
     count += 1
     my_advanced_battery = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config)
 
@@ -317,7 +317,7 @@ def configure_water_heating(
         Integer tracking component hierachy for EMS.
 
     """
-    boiler_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_boiler()
+    boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
                        lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
@@ -375,7 +375,7 @@ def configure_water_heating_electric(
 
     """
 
-    boiler_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_boiler()
+    boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
 
     if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
@@ -580,10 +580,10 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
     count += 1
 
     if buffer_volume is not None:
-        buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(buffer_volume)
+        buffer_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(buffer_volume)
         buffer_config.power = float(my_building.max_thermal_building_demand)
 
-    building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatController.get_default_config_heating("buffer")
+    building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
@@ -673,10 +673,10 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
     count += 1
 
     if buffer_volume is not None:
-        buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(buffer_volume)
+        buffer_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(buffer_volume)
         buffer_config.power = float(my_building.max_thermal_building_demand)
 
-    building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatController.get_default_config_heating("buffer")
+    building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
@@ -738,14 +738,14 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
 
     """
     # Fuel Cell default configurations
-    l2_config = controller_l2_generic_heat_simple.L2GenericHeatController.get_default_config_heating("chp")
+    l2_config = controller_l2_generic_heat_simple.L2GenericHeatConfig.get_default_config_heating("chp")
     l2_config.source_weight = count
-    l1_config = generic_CHP.L1GenericCHPRuntimeController.get_default_config()
-    l1_config.source_weight = count
+    l1_config_chp = generic_CHP.L1CHPConfig.get_default_config()
+    l1_config_chp.source_weight = count
     if chp_power is not None:
         chp_config = generic_CHP.GCHPConfig(name='CHP', source_weight=count, p_el=0.3 * chp_power, p_th=0.5 * chp_power, p_fuel=chp_power)
     else:
-        chp_config = generic_CHP.GCHP.get_default_config()
+        chp_config = generic_CHP.GCHPConfig.get_default_config()
         chp_config.source_weight = count
     count += 1
 
@@ -759,7 +759,7 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
     my_sim.add_component(my_chp_controller_l2)
 
     # run time controller of fuel cell
-    my_chp_controller_l1 = generic_CHP.L1GenericCHPRuntimeController(my_simulation_parameters=my_simulation_parameters, config=l1_config)
+    my_chp_controller_l1 = generic_CHP.L1GenericCHPRuntimeController(my_simulation_parameters=my_simulation_parameters, config=l1_config_chp)
     my_chp_controller_l1.connect_only_predefined_connections(my_chp_controller_l2)
     my_sim.add_component(my_chp_controller_l1)
     my_chp.connect_only_predefined_connections(my_chp_controller_l1)
@@ -775,14 +775,14 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
                                                src_object=electricity_from_fuelcell_target)
 
     # electrolyzer default configuration
-    l1_config = generic_electrolyzer.L1GenericElectrolyzerController.get_default_config()
-    l1_config.source_weight = count
+    l1_config_electrolyzer = generic_electrolyzer.L1ElectrolyzerConfig.get_default_config()
+    l1_config_electrolyzer.source_weight = count
     if electrolyzer_power is not None:
         electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig(
             name='Electrolyzer', source_weight=count, min_power=0.5 * electrolyzer_power, max_power=electrolyzer_power,
             min_hydrogen_production_rate_hour=0.125 * electrolyzer_power, max_hydrogen_production_rate_hour=2 * electrolyzer_power)
     else:
-        electrolyzer_config = generic_electrolyzer.GenericElectrolyzer.get_default_config()
+        electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig.get_default_config()
         electrolyzer_config.source_weight = count
     count += 1
 
@@ -791,7 +791,7 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
     my_sim.add_component(my_electrolyzer)
 
     # run time controller of electrolyzer
-    my_electrolyzer_controller_l1 = generic_electrolyzer.L1GenericElectrolyzerController(my_simulation_parameters=my_simulation_parameters, config=l1_config)
+    my_electrolyzer_controller_l1 = generic_electrolyzer.L1GenericElectrolyzerController(my_simulation_parameters=my_simulation_parameters, config=l1_config_electrolyzer)
     my_sim.add_component(my_electrolyzer_controller_l1)
     my_electrolyzer.connect_only_predefined_connections(my_electrolyzer_controller_l1)
 
@@ -807,10 +807,10 @@ def configure_elctrolysis_h2storage_chp_system(my_sim: Any, my_simulation_parame
         input_fieldname=generic_electrolyzer.L1GenericElectrolyzerController.l2_ElectricityTarget, src_object=electricity_to_electrolyzer_target)
 
     if h2_storage_size is not None:
-        h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorage.get_default_config(
+        h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
             capacity=h2_storage_size, max_charging_rate=h2_storage_size * 1e-2, max_discharging_rate=h2_storage_size * 1e-2, source_weight=count)
     else:
-        h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorage.get_default_config(source_weight=count)
+        h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(source_weight=count)
     my_h2storage = generic_hydrogen_storage.GenericHydrogenStorage(my_simulation_parameters=my_simulation_parameters, config=h2_storage_config)
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)
     my_h2storage.connect_only_predefined_connections(my_chp)

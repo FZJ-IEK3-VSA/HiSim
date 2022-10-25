@@ -45,6 +45,14 @@ class ChargingStationConfig:
         self.charging_station_set = charging_station_set
         self.battery_set = battery_set
 
+    @staticmethod
+    def get_default_config(charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW) -> Any:
+        """ Returns default configuration of charging station and desired SOC Level. """
+        config = ChargingStationConfig(
+            name='L1EVChargeControl', source_weight=1, charging_station_set=charging_station_set,
+            battery_set=0.8)
+        return config
+
 
 class L1ControllerState:
 
@@ -95,7 +103,7 @@ class L1Controller(cp.Component):
             self.electricity_target: cp.ComponentInput = self.add_input(
                 self.component_name, self.ElectricityTarget, lt.LoadTypes.ELECTRICITY, lt.Units.WATT,
                 mandatory=True)
-  
+
         # add outputs
         self.p_set: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ToOrFromBattery, load_type=lt.LoadTypes.ELECTRICITY,
@@ -178,14 +186,6 @@ class L1Controller(cp.Component):
         self.power = power
         self.battery_set = config.battery_set
         self.clever = my_simulation_parameters.system_config.clever
-
-    @staticmethod
-    def get_default_config(charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW) -> ChargingStationConfig:
-        """ Returns default configuration of charging station and desired SOC Level. """
-        config = ChargingStationConfig(
-            name='L1EVChargeControl', source_weight=1, charging_station_set=charging_station_set,
-            battery_set=0.8)
-        return config
 
     def write_to_report(self) -> List[str]:
         """ Writes EV charge controller values to report. """

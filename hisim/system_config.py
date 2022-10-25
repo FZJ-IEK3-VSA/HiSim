@@ -4,9 +4,9 @@ from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-from utspclient.helpers.lpgdata import ChargingStationSets, TransportationDeviceSets, TravelRouteSets
+from utspclient.helpers.lpgdata import ChargingStationSets, TransportationDeviceSets, TravelRouteSets, Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from hisim.loadtypes import HeatingSystems, Locations, OccupancyProfiles, BuildingCodes
+from hisim.loadtypes import HeatingSystems, Locations, BuildingCodes
 
 
 @dataclass_json
@@ -16,7 +16,7 @@ class SystemConfig:
     """ Defines the system config for the modular household. """
 
     location: Locations
-    occupancy_profile: OccupancyProfiles
+    occupancy_profile: JsonReference
     building_code: BuildingCodes
     water_heating_system_installed: HeatingSystems
     heating_system_installed: HeatingSystems
@@ -42,7 +42,7 @@ class SystemConfig:
     charging_station: Optional[JsonReference]
 
     def __init__(self, location: Locations = Locations.AACHEN,
-            occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01,
+            occupancy_profile: JsonReference = Households.CHR01_Couple_both_at_Work,
             building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002,
             water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
             heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,

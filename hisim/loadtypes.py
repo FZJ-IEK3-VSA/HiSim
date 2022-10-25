@@ -33,7 +33,7 @@ class Locations(str, enum.Enum):
 
     AACHEN = "Aachen"
 
-  
+
 @enum.unique
 class ChargingLocations(str, enum.Enum):
 

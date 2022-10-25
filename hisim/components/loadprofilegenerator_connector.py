@@ -202,8 +202,8 @@ class Occupancy(cp.Component):
         
         if self.my_simulation_parameters.system_config.predictive == True:
             last_forecast_timestep = int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep )
-            if ( last_forecast_timestep > len( self.electricity_consumption ) ):
-                last_forecast_timestep = len( self.electricity_consumption )
+            if (last_forecast_timestep > len(self.electricity_consumption)):
+                last_forecast_timestep = len(self.electricity_consumption)
             #log.information( type(self.temperature))
             demandforecast = self.electricity_consumption[ timestep : last_forecast_timestep ]
             self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )

@@ -4,9 +4,7 @@
 
 from dataclasses import dataclass
 # Owned
-from typing import List
-# Generic/Built-in
-from typing import Optional
+from typing import List, Optional, Any
 
 from dataclasses_json import dataclass_json
 
@@ -58,6 +56,14 @@ class L1BuildingHeatingConfig():
         self.t_max_cooling_in_celsius = t_max_cooling_in_celsius
         self.day_of_heating_season_begin = day_of_heating_season_begin
         self.day_of_heating_season_end = day_of_heating_season_end
+
+    @staticmethod
+    def get_default_config_heating(name: str) -> Any:
+        """ Default config for the heating controller. """
+        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
+                                         cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25, day_of_heating_season_begin=270,
+                                         day_of_heating_season_end=150)
+        return config
 
 
 class L1BuildingHeatControllerState:
@@ -201,14 +207,6 @@ class L1BuildingHeatController(cp.Component):
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
-
-    @staticmethod
-    def get_default_config_heating(name: str) -> L1BuildingHeatingConfig:
-        """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
-                                         cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25, day_of_heating_season_begin=270,
-                                         day_of_heating_season_end=150)
-        return config
 
     def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
         """ Controlls the building heating. """

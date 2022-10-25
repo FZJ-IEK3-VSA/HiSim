@@ -31,6 +31,17 @@ class BatteryConfig:
     name: str
     source_weight: int
     ev: bool  #True if battery belongs to electric vehicle, False if it is only battery
+    
+    @staticmethod
+    def get_default_config(name: str = 'Battery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1, ev: bool = False) -> Any:
+        config=BatteryConfig(
+            system_id='SG1',
+            p_inv_custom=p_inv_custom,
+            e_bat_custom=e_bat_custom,
+            name=name,
+            source_weight=source_weight,
+            ev=ev)
+        return config
 
 class Battery(Component):
     """
@@ -109,17 +120,6 @@ class Battery(Component):
                                                     postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
         
         self.add_default_connections(controller_l1_generic_ev_charge.L1Controller, self.get_charge_controller_default_connections())
-        
-    @staticmethod
-    def get_default_config(name: str = 'Battery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1, ev: bool = False) -> Any:
-        config=BatteryConfig(
-            system_id='SG1',
-            p_inv_custom=p_inv_custom,
-            e_bat_custom=e_bat_custom,
-            name=name,
-            source_weight=source_weight,
-            ev=ev)
-        return config
 
     def get_charge_controller_default_connections(self) -> Any:
         log.information("setting ev charge controller default connections in car battery")

@@ -156,6 +156,7 @@ class L1HeatPumpController(cp.Component):
             self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L1HeatPumpControllerState = L1HeatPumpControllerState(0, 0, 0)
         self.previous_state: L1HeatPumpConfig = self.state.clone()
+        self.processed_state: L1HeatPumpConfig = self.state.clone()
 
         # Component Outputs
         self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ANY, Units.PERCENT)
@@ -223,18 +224,11 @@ class L1HeatPumpController(cp.Component):
         """ Core Simulation function. """
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
-            # outputs have to be in line with states, so if convergence is forced outputs are aligned to state. 
-            # but prevent boiler from cooking or freezing if convergence is forced many times in a row
-            t_storage = stsv.get_input_value(self.storage_temperature_channel)
-            if t_storage > 85 or t_storage < 15:
-                self.calculate_state(timestep, stsv)
-            else:   
-                modulating_signal = self.state.percentage * self.state.on_off
-                stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
-                stsv.set_output_value(self.on_off_channel, self.state.on_off)
-            return
-
-        self.calculate_state(timestep, stsv)
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state. 
+            self.state = self.processed_state.clone()
+        else:
+            self.calculate_state(timestep, stsv)
+            self.processed_state = self.state.clone() 
         modulating_signal = self.state.percentage * self.state.on_off
         stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
         stsv.set_output_value(self.on_off_channel, self.state.on_off)

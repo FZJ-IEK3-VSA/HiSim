@@ -118,18 +118,6 @@ class Car(cp.Component):
             liters_used = self.meters_driven[timestep] * self.consumption_per_km * 1e-3  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    @staticmethod
-    def get_default_diesel_config() -> CarConfig:
-        """ Defines default configuration for diesel vehicle. """
-        config = CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.DIESEL, consumption_per_km=0.06)
-        return config
-
-    @staticmethod
-    def get_default_ev_config() -> CarConfig:
-        """ Defines default configuration for electric vehicle. """
-        config = CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.ELECTRICITY, consumption_per_km=0.15)
-        return config
-
     def build(self, config: CarConfig, occupancy_config: OccupancyConfig) -> None:
         """ Loads necesary data and saves config to class. """
         self.name = config.name

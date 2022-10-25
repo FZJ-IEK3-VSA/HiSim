@@ -4,6 +4,7 @@ import json
 import numpy as np
 import math as ma
 from typing import Optional, List
+from os import path
 
 # Owned
 from hisim import component as cp
@@ -154,7 +155,7 @@ class SmartDevice( cp.Component ):
 
         #load smart device profile
         smart_device_profile = [ ]
-        filepath = utils.HISIMPATH[ "smart_devices" ][ "profile_data" ] 
+        filepath = path.join(utils.HISIMPATH["results"], "FlexibilityEvents.HH1.json") 
         f = open( filepath )
         smart_device_profile = json.load( f )
         f.close()

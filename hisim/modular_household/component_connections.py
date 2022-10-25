@@ -4,7 +4,7 @@ The functions are all called in modular_household.
 """
 
 from typing import List, Optional, Tuple, Any
-from os import listdir
+from os import listdir, path
 
 import csv
 
@@ -86,7 +86,7 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         Integer tracking component hierachy for EMS.
 
     """
-    filepath = utils.HISIMPATH["smart_devices"]["device_collection"]
+    filepath = path.join(utils.HISIMPATH["results"], "FlexibilityEventsStatistics.HH1.json")
     device_collection = []
 
     with open(filepath, 'r', encoding='utf8') as file:
@@ -128,7 +128,7 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
 
     """
     # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["cars"])
+    filepaths = listdir(utils.HISIMPATH["results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(',')[0].partition('.')[2] for elem in filepaths_location]
 

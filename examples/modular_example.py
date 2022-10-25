@@ -1,14 +1,28 @@
 """Example sets up a modular household according to json input file."""
 
-import json
-from os import path
-from pathlib import Path
 from typing import Optional, List, Any
+from os import path, listdir
+from pathlib import Path
+import json
+import shutil
 
 import utspclient.helpers.lpgdata as ld
 import hisim.loadtypes as lt
 import hisim.log
 import hisim.utils
+import hisim.loadtypes as lt
+
+from hisim.modular_household import preprocessing
+from hisim.modular_household import component_connections
+from hisim.modular_household.modular_household_results import ModularHouseholdResults
+from hisim.simulator import SimulationParameters
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.system_config import SystemConfig
+
+from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
+from hisim.components import generic_price_signal
+from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_price_signal
@@ -45,8 +59,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
                                                                      seconds_per_timestep=seconds_per_timestep)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.skip_finished_results = False
 
     # try to read the system config from file
@@ -101,12 +115,21 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if ev_included:
         charging_station = my_simulation_parameters.system_config.charging_station
 
-    # """ BASICS """
-    # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
+    """BASICS"""
+    # # Build occupancy
+    # my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
+    # my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
+    
+    """TODO: pass url and api, chose bettery directory or use inputs"""
+    my_utsp_config = loadprofilegenerator_utsp_connector.UtspConnectorConfig(
+        url: str = ???, api_key: str = ???, household: JsonReference = occupancy_profile,
+        result_path: str = hisim.utils.HISIMPATH['results'], travel_route_set: Optional[JsonReference] = mobility_distance,
+        transportation_device_set: Optional[JsonReference] = mobility_set, charging_station_set: Optional[JsonReference]) = charging_station)
+    my_occupancy = loadprofilegenerator_utsp_connector.Occupancy(config=my_utsp_config, my_simulation_parameters=my_simulation_parameters)
+
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
+    
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(location_entry=location)
@@ -131,6 +154,16 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if my_simulation_parameters.system_config.predictive:
         my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
         my_sim.add_component(my_price_signal)
+        
+    # if results directory is empty: copy EV and smart devices to results directory
+    files_in_result = listdir(hisim.utils.HISIMPATH['results'])
+    if not files_in_result:
+        shutil.copyfile(hisim.utils.HISIMPATH['smart_devices']['profile_data'], path.join(hisim.utils.HISIMPATH['results'], 'FlexibilityEvents.HH1.json'))
+        shutil.copyfile(hisim.utils.HISIMPATH['smart_devices']['device_collection'], path.join(hisim.utils.HISIMPATH['results'], 'FlexibilityEventsStatistics.HH1.json'))
+        carfiles = listdir(hisim.utils.HISIMPATH['cars'])
+        for file in carfiles:
+            shutil.copyfile(path.join(hisim.utils.HISIMPATH['cars'], file), path.join(hisim.utils.HISIMPATH['results'], file))
+        
 
     # """PV"""
     if pv_included:

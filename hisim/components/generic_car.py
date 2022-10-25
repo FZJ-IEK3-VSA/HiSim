@@ -140,7 +140,7 @@ class Car(cp.Component):
             self.meters_driven = dataframe['meters_driven'].tolist()
         else:
             # load car data from LPG output
-            filepaths = listdir(utils.HISIMPATH["cars"])
+            filepaths = listdir(utils.HISIMPATH["results"])
             filepath_location = [elem for elem in filepaths if "CarLocation." + self.name in elem][0]
             filepath_meters_driven = [elem for elem in filepaths if "DrivingDistance." + self.name in elem][0]
             with open(path.join(utils.HISIMPATH["cars"], filepath_location), encoding="utf-8") as json_file:

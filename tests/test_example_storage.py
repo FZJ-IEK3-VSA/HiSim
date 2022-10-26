@@ -11,14 +11,24 @@ from tests import functions_for_testing as fft
 def test_example_storage():
     """Test for the example storage."""
 
-    mysim:  SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
     my_example_storage_config = example_storage.SimpleStorageConfig.get_default_thermal_storage()
     my_example_storage = example_storage.SimpleStorage(config=my_example_storage_config, my_simulation_parameters=mysim)
 
     # Define outputs
-    charging_output = cp.ComponentOutput(object_name="source", field_name="charging", load_type=lt.LoadTypes.WARM_WATER, unit=lt.Units.KWH)
-    discharging_output = cp.ComponentOutput(object_name="source", field_name="discharging", load_type=lt.LoadTypes.WARM_WATER, unit=lt.Units.KWH)
+    charging_output = cp.ComponentOutput(
+        object_name="source",
+        field_name="charging",
+        load_type=lt.LoadTypes.WARM_WATER,
+        unit=lt.Units.KWH,
+    )
+    discharging_output = cp.ComponentOutput(
+        object_name="source",
+        field_name="discharging",
+        load_type=lt.LoadTypes.WARM_WATER,
+        unit=lt.Units.KWH,
+    )
 
     my_example_storage.charging_input.source_output = charging_output
     my_example_storage.discharging_input.source_output = discharging_output
@@ -59,7 +69,3 @@ def test_example_storage():
     log.information("fill state (after charging and discharging) = " + str(my_example_storage.state.fill) + "\n")
     # Result of current storage fill state
     assert 40 == stsv.values[my_example_storage.current_fill.global_index]
-
-
-if __name__ == "__main__":
-    test_example_storage()

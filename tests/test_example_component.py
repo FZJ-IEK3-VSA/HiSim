@@ -11,7 +11,7 @@ from tests import functions_for_testing as fft
 def test_example_component():
     """Test for the example component."""
 
-    mysim:  SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
     my_example_component_config = example_component.DummyConfig.get_default_dummy()
     print("\n")
@@ -19,7 +19,12 @@ def test_example_component():
     my_example_component = example_component.Dummy(config=my_example_component_config, my_simulation_parameters=mysim)
 
     # Define outputs
-    thermal_energy_delivered_output = cp.ComponentOutput(object_name="source", field_name="thermal energy delivered", load_type=lt.LoadTypes.HEATING, unit=lt.Units.WATT)
+    thermal_energy_delivered_output = cp.ComponentOutput(
+        object_name="source",
+        field_name="thermal energy delivered",
+        load_type=lt.LoadTypes.HEATING,
+        unit=lt.Units.WATT,
+    )
     my_example_component.thermal_energy_deliveredC.source_output = thermal_energy_delivered_output
 
     number_of_outputs = fft.get_number_of_outputs([my_example_component, thermal_energy_delivered_output])
@@ -58,7 +63,3 @@ def test_example_component():
     assert 30 == stsv.values[my_example_component.t_mC.global_index]
     assert 0 == stsv.values[my_example_component.electricity_outputC.global_index]
     assert 606300.00 == stsv.values[my_example_component.stored_energyC.global_index]
-
-
-if __name__ == "__main__":
-    test_example_component()

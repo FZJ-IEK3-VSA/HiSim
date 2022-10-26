@@ -57,7 +57,7 @@ class DummyConfig(ConfigBase):
             unit=lt.Units.WATT,
             # heat=0.0,
             capacity=45 * 121.2,
-            initial_temperature=25.0
+            initial_temperature=25.0,
         )
 
 
@@ -65,7 +65,8 @@ class Dummy(Component):
 
     """Component component that supports multiple dummy values for fictitious scenarios.
 
-    The values passed to the constructor are taken as constants to build the load profile for the entire simulation duration.
+    The values passed to the constructor are taken as constants to build the load profile
+    for the entire simulation duration.
 
     Parameters
     ----------
@@ -97,7 +98,8 @@ class Dummy(Component):
         """Constructs all the neccessary attributes."""
         self.dummyconfig = config
         super().__init__(
-            self.dummyconfig.name, my_simulation_parameters=my_simulation_parameters,
+            self.dummyconfig.name,
+            my_simulation_parameters=my_simulation_parameters,
         )
         self.build(
             electricity=self.dummyconfig.electricity,
@@ -128,7 +130,10 @@ class Dummy(Component):
             lt.Units.WATT,
         )
         self.stored_energyC: ComponentOutput = self.add_output(
-            self.component_name, self.StoredEnergy, lt.LoadTypes.HEATING, lt.Units.WATT,
+            self.component_name,
+            self.StoredEnergy,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
         )
         self.temperature: float = -300
 
@@ -142,15 +147,10 @@ class Dummy(Component):
         # # # heat=DummyConfig.heat,
         # # capacity=DummyConfig.capacity,
         # # initial_temperature=DummyConfig.initial_temperature,
-
     ) -> None:
         """Build load profile for entire simulation duration."""
-        self.time_correction_factor: float = (
-            1 / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.seconds_per_timestep: float = (
-            self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.time_correction_factor: float = 1 / self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep: float = self.my_simulation_parameters.seconds_per_timestep
 
         if electricity is None:
             self.electricity_output: float = -1e3  # self.dummyconfig.electricity
@@ -187,9 +187,7 @@ class Dummy(Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         electricity_output: float = 0
         if 60 * 6 <= timestep < 60 * 9:  # between hour 6 and 9
@@ -204,12 +202,8 @@ class Dummy(Component):
             temperature: float = self.initial_temperature
             current_stored_energy = (self.initial_temperature + 273.15) * self.capacity
         else:
-            thermal_delivered_energy = stsv.get_input_value(
-                self.thermal_energy_deliveredC
-            )
-            previous_stored_energy = (
-                self.previous_temperature + 273.15
-            ) * self.capacity
+            thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_deliveredC)
+            previous_stored_energy = (self.previous_temperature + 273.15) * self.capacity
             current_stored_energy = previous_stored_energy + thermal_delivered_energy
             self.temperature = current_stored_energy / self.capacity - 273.15
             temperature = self.temperature

@@ -55,8 +55,8 @@ pydocstyle:
 mypy:
   run: true
 
-bandit:
-  run: true
+# bandit:
+#   run: true
 
 #frosted:
 #  run: true

@@ -1,9 +1,12 @@
-"""The ``template`` module serves as a template for creating new component modules.
+"""The ``template`` module.
 
+It serves as a template for creating new component modules.
 It shows with a simplified example which steps are necessary to create a new component.
 Additionally it contains examples for doc strings according to the sphinx format.
 
 """
+
+# clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
@@ -11,7 +14,12 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import (
+    Component,
+    ComponentInput,
+    ComponentOutput,
+    SingleTimeStepValues,
+)
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -55,12 +63,14 @@ class ComponentNameConfig(ConfigBase):
 
 class ComponentName(Component):
 
-    """To document a class, first write a summary of the class that is as accurate as possible.
+    """Some instructions to document a class.
 
-    It should contain information about what functionalities the class has and what its purpose is in the HiSim project.
+    First write a summary of the class that is as accurate as possible.
+    It should contain information about what functionalities the class has
+    and what its purpose is in the HiSim project.
 
-    This is an example class. It can be used as a template for creating new component modules.
-    Its functionalities serve no further purpose for HiSim.
+    This is an example class. It can be used as a template for creating new
+    component modules. Its functionalities serve no further purpose for HiSim.
 
     Parameters
     ----------
@@ -88,55 +98,70 @@ class ComponentName(Component):
     #     """Constructs all the neccessary attributes for the ExampleStorage object."""
     #     super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
 
-    # def __init__(self, component_name: str, my_simulation_parameters: SimulationParameters) -> None:
-    #     """Constructs all the neccessary attributes for the ExampleStorage object."""
-    #     super().__init__(name=component_name, my_simulation_parameters=my_simulation_parameters)
-
     #     # If a component requires states, this can be implemented here.
     #     self.state = ComponentNameState()
     #     self.previous_state = deepcopy(self.state)
 
-    #     self.input_from_other_component: ComponentInput = self.add_input(object_name=self.component_name,
-    #                                                                      field_name=self.InputFromOtherComponent,
-    #                                                                      load_type=LoadTypes.ELECTRICITY,
-    #                                                                      unit=Units.WATT,
-    #                                                                      mandatory=True)
+    #     self.input_from_other_component: ComponentInput = self.add_input(
+    #         object_name=self.component_name,
+    #         field_name=self.InputFromOtherComponent,
+    #         load_type=LoadTypes.ELECTRICITY,
+    #         unit=Units.WATT,
+    #         mandatory=True,
+    #     )
 
-    #     self.output_with_state: ComponentOutput = self.add_output(object_name=self.component_name,
-    #                                                               field_name=self.OutputWithState,
-    #                                                               load_type=LoadTypes.ELECTRICITY,
-    #                                                               unit=Units.WATT_HOUR)
+    #     self.output_with_state: ComponentOutput = self.add_output(
+    #         object_name=self.component_name,
+    #         field_name=self.OutputWithState,
+    #         load_type=LoadTypes.ELECTRICITY,
+    #         unit=Units.WATT_HOUR,
+    #     )
 
-    #     self.output_without_state: ComponentOutput = self.add_output(object_name=self.component_name,
-    #                                                                  field_name=self.OutputWithoutState,
-    #                                                                  load_type=LoadTypes.ELECTRICITY,
-    #                                                                  unit=Units.WATT)
+    #     self.output_without_state: ComponentOutput = self.add_output(
+    #         object_name=self.component_name,
+    #         field_name=self.OutputWithoutState,
+    #         load_type=LoadTypes.ELECTRICITY,
+    #         unit=Units.WATT,
+    #     )
     #     self.factor = 1.0
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: ComponentNameConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: ComponentNameConfig,
+    ) -> None:
         """Constructs all the neccessary attributes."""
         self.componentnameconfig = config
-        super().__init__(self.componentnameconfig.name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(
+            self.componentnameconfig.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
 
         # If a component requires states, this can be implemented here.
         self.state = ComponentNameState()
         self.previous_state = deepcopy(self.state)
 
-        self.input_from_other_component: ComponentInput = self.add_input(object_name=self.componentnameconfig.name,
-                                                                         field_name=self.InputFromOtherComponent,
-                                                                         load_type=loadtypes.LoadTypes.ELECTRICITY,
-                                                                         unit=loadtypes.Units.WATT,
-                                                                         mandatory=True)
+        self.input_from_other_component: ComponentInput = self.add_input(
+            object_name=self.componentnameconfig.name,
+            field_name=self.InputFromOtherComponent,
+            load_type=loadtypes.LoadTypes.ELECTRICITY,
+            unit=loadtypes.Units.WATT,
+            mandatory=True,
+        )
 
-        self.output_with_state: ComponentOutput = self.add_output(object_name=self.componentnameconfig.name,
-                                                                  field_name=self.OutputWithState,
-                                                                  load_type=loadtypes.LoadTypes.ELECTRICITY,
-                                                                  unit=loadtypes.Units.WATT_HOUR)
+        self.output_with_state: ComponentOutput = self.add_output(
+            object_name=self.componentnameconfig.name,
+            field_name=self.OutputWithState,
+            load_type=loadtypes.LoadTypes.ELECTRICITY,
+            unit=loadtypes.Units.WATT_HOUR,
+        )
 
-        self.output_without_state: ComponentOutput = self.add_output(object_name=self.componentnameconfig.name,
-                                                                     field_name=self.OutputWithoutState,
-                                                                     load_type=loadtypes.LoadTypes.ELECTRICITY,
-                                                                     unit=loadtypes.Units.WATT_HOUR)
+        self.output_without_state: ComponentOutput = self.add_output(
+            object_name=self.componentnameconfig.name,
+            field_name=self.OutputWithoutState,
+            load_type=loadtypes.LoadTypes.ELECTRICITY,
+            unit=loadtypes.Units.WATT_HOUR,
+        )
         self.factor = 1.0
 
     def i_save_state(self) -> None:
@@ -151,7 +176,7 @@ class ComponentName(Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # define local variables
         input_1 = stsv.get_input_value(self.input_from_other_component)
@@ -177,7 +202,8 @@ class ComponentNameState:
     Parameters
     ----------
     output_with_state : int
-        Stores the state of the output_with_state value from :py:class:`~hisim.component.ComponentName`.
+    Stores the state of the output_with_state value from
+    :py:class:`~hisim.component.ComponentName`.
 
     """
 

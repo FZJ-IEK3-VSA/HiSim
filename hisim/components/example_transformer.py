@@ -1,9 +1,12 @@
 """Transformer module."""
 
+# clean
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 # Import modules from HiSim
 from hisim.component import (
     Component,
@@ -45,7 +48,9 @@ class TransformerConfig(ConfigBase):
 
 class Transformer(Component):
 
-    """The transformer class is used to modify input values and return them as new output values.
+    """The transformer class.
+
+    It is used to modify input values and return them as new output values.
 
     Parameters
     ----------
@@ -67,12 +72,13 @@ class Transformer(Component):
     TransformerOutput = "MyTransformerOutput"
     TransformerOutput2 = "MyTransformerOutput2"
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: TransformerConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: TransformerConfig) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
-        super().__init__(self.transformerconfig.name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(
+            self.transformerconfig.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,
             Transformer.TransformerInput,
@@ -117,9 +123,7 @@ class Transformer(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the transformer."""
         startval_1 = stsv.get_input_value(self.input1)
         startval_2 = stsv.get_input_value(self.input2)

@@ -157,9 +157,7 @@ class SimpleStorage(Component):
         """Restores the previous state of the storage."""
         self.state = copy.copy(self.previous_state)
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the storage."""
 
         charging = stsv.get_input_value(self.charging_input)
@@ -167,9 +165,7 @@ class SimpleStorage(Component):
         if charging < 0:
             raise Exception("trying to charge with negative amount" + str(charging))
         if discharging > 0:
-            raise Exception(
-                "trying to discharge with positive amount: " + str(discharging)
-            )
+            raise Exception("trying to discharge with positive amount: " + str(discharging))
         charging_delta = self.state.store(charging)
         discharging_delta = self.state.withdraw(discharging * -1) * -1
         actual_delta = charging_delta + discharging_delta

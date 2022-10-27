@@ -17,7 +17,7 @@ from hisim.modular_household import component_connections
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulator import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.system_config import SystemConfig
+from building_sizer.system_config import SystemConfig
 
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -55,8 +55,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year,
-                                                                     seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
@@ -89,8 +88,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed  # Electricity, Hydrogen or False
     heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
     mobility_set = my_simulation_parameters.system_config.mobility_set
-    # mobility_distance = my_simulation_parameters.system_config.mobility_distance
-
+    mobility_distance = my_simulation_parameters.system_config.mobility_distance
     clever = my_simulation_parameters.system_config.clever
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
     if pv_included:
@@ -114,22 +112,26 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     ev_included = my_simulation_parameters.system_config.ev_included
     if ev_included:
         charging_station = my_simulation_parameters.system_config.charging_station
+    utsp_connected = my_simulation_parameters.system_config.utsp_connect
 
     """BASICS"""
-    # # Build occupancy
-    # my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
-    # my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
+    if utsp_connected:
+        my_occupancy_config = loadprofilegenerator_utsp_connector.UtspConnectorConfig(
+        url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
+        household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
+        transportation_device_set=mobility_set, charging_station_set=charging_station)
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config,
+                                                                        my_simulation_parameters=my_simulation_parameters)
+    else:
+        # Build occupancy
+        my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
+        my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     
     """TODO: pass url and api, chose bettery directory or use inputs"""
-    my_utsp_config = loadprofilegenerator_utsp_connector.UtspConnectorConfig(
-        url: str = ???, api_key: str = ???, household: JsonReference = occupancy_profile,
-        result_path: str = hisim.utils.HISIMPATH['results'], travel_route_set: Optional[JsonReference] = mobility_distance,
-        transportation_device_set: Optional[JsonReference] = mobility_set, charging_station_set: Optional[JsonReference]) = charging_station)
-    my_occupancy = loadprofilegenerator_utsp_connector.Occupancy(config=my_utsp_config, my_simulation_parameters=my_simulation_parameters)
+    
 
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
-    
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(location_entry=location)

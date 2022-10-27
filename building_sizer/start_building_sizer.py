@@ -8,8 +8,8 @@ from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 from building_sizer import BuildingSizerRequest, BuildingSizerResult
 
 # Define URL and API key for the UTSP server
-URL = "http://192.168.178.21:443/api/v1/profilerequest"
-API_KEY = ""
+URL = "http://134.94.131.167:443/api/v1/profilerequest"
+API_KEY = ''
 
 # For testing: create a random id to enforce recalculation for each request.
 # For production use, this can be left out.

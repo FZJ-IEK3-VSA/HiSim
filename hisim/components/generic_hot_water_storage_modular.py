@@ -77,7 +77,7 @@ class StorageConfig:
     @staticmethod
     def get_default_config_boiler():
         """ Returns default configuration for boiler. """
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=200,
+        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=500,
                                surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
                                efficiency=1, power=None, cooling_considered=False, heating_season_begin=None,
                                heating_season_end=None)

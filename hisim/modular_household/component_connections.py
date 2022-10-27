@@ -32,6 +32,7 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim import utils
 
 
@@ -329,8 +330,9 @@ def configure_water_heating(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
-        (boiler_config.warm_water_temperature - boiler_config.drain_water_temperature) * 0.977 * 4.182 / 3.6
+    heater_config.power_th = my_occupancy.max_hot_water_demand *  (4180 / 3600) * 0.5 \
+        * (3600 / my_simulation_parameters.seconds_per_timestep) \
+        * (HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.freshwater_temperature)
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=boiler_config)
     my_boiler.connect_only_predefined_connections(my_occupancy)
@@ -393,8 +395,9 @@ def configure_water_heating_electric(
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heatpump_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
-        (boiler_config.warm_water_temperature - boiler_config.drain_water_temperature) * 0.977 * 4.182 / 3.6
+    heatpump_config.power_th = my_occupancy.max_hot_water_demand * (4180 / 3600) * 0.5 \
+        * (3600 / my_simulation_parameters.seconds_per_timestep) \
+        * (HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.freshwater_temperature)
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=boiler_config)
     my_boiler.connect_only_predefined_connections(my_occupancy)

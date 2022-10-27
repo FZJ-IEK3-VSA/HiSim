@@ -125,10 +125,14 @@ def building_sizer_iteration(
 
     # TODO: do something here to determine which hisim simulation configs should be calculated next
     hisim_config = system_config.SystemConfig()
+    hisim_config.utsp_connect = True
+    hisim_config.url = request.url
+    hisim_config.api_key = request.api_key
+    
     hisim_config.battery_included = True
     hisim_config.battery_capacity = ra.randint(1,10)
-    hisim_configs = [hisim_config.to_json()
-    ]
+    
+    hisim_configs = [hisim_config.to_json()]
 
     # trigger the next iteration with the new hisim configurations
     next_request = trigger_next_iteration(request, hisim_configs)

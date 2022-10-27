@@ -40,6 +40,9 @@ class SystemConfig:
     electrolyzer_power: Optional[float]
     ev_included: bool
     charging_station: Optional[JsonReference]
+    utsp_connect: bool
+    url: str
+    api_key: str
 
     def __init__(self, location: Locations = Locations.AACHEN,
             occupancy_profile: JsonReference = Households.CHR01_Couple_both_at_Work,
@@ -49,11 +52,13 @@ class SystemConfig:
             mobility_set: JsonReference = TransportationDeviceSets.Bus_and_two_30_km_h_Cars,
             mobility_distance: Optional[JsonReference] = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             clever: bool = True, predictive: bool = False, prediction_horizon: int = 0, pv_included: bool = True,
-            pv_peak_power: Optional[float] = 9000, smart_devices_included: bool = True,
+            pv_peak_power: Optional[float] = 9000, smart_devices_included: bool = False,
             buffer_included: bool = True, buffer_volume: Optional[float] = 500, battery_included: bool = False, battery_capacity: Optional[float] = 5,
             chp_included: bool = False, chp_power: Optional[float] = 12, h2_storage_included: bool = True, h2_storage_size: Optional[float] = 100,
             electrolyzer_included: bool = True, electrolyzer_power: Optional[float] = 5e3, ev_included: bool = True,
-            charging_station: Optional[JsonReference] = ChargingStationSets.Charging_At_Home_with_03_7_kW):  # noqa
+            charging_station: Optional[JsonReference] = ChargingStationSets.Charging_At_Home_with_03_7_kW,
+            utsp_connect: bool = False, url: str = '', 
+            api_key: str = ''):  # noqa
         self.location = location
         self.occupancy_profile = occupancy_profile
         self.building_code = building_code
@@ -79,3 +84,15 @@ class SystemConfig:
         self.electrolyzer_power = electrolyzer_power
         self.ev_included = ev_included
         self.charging_station = charging_station
+        self.utsp_connect = utsp_connect
+        self.url = url
+        self.api_key = api_key
+        
+    def create_system_config_file() -> None:
+        """Component Cost file is created."""
+    
+        config_file = SystemConfig()
+        config_file_written = config_file.to_json()
+    
+        with open('system_config.json', 'w', encoding="utf-8") as outfile:
+            outfile.write(config_file_written)

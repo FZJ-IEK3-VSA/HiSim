@@ -2,7 +2,7 @@ strictness: veryhigh
 test-warnings: true
 doc-warnings: true
 autodetect: false
-max-line-length: 150
+max-line-length: 170
 pep8:
     full: true
 #  disable:

@@ -4,7 +4,7 @@ from hisim.component import ComponentOutput
 
 
 def get_number_of_outputs(list_of_components: list) -> int:
-    """ Calculates the number of outputs. """
+    """ Calculates the number of outputs for a list of components or individual outputs. """
     number_of_outputs = 0
     for component in list_of_components:
         if isinstance(component, ComponentOutput):

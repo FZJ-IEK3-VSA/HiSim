@@ -27,7 +27,7 @@ __status__ = "development"
 class OccupancyConfig(cp.ConfigBase):
     def get_main_classname(self):
         return Occupancy.get_full_classname()
-
+    name: str
     profile_name: str
 
     @classmethod

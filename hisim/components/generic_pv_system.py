@@ -144,6 +144,7 @@ class PVSystemConfig(ConfigBase):
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
+    name: str
     time: int
     location: str
     module_name: str

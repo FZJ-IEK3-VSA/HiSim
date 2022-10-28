@@ -1,4 +1,6 @@
-"""Test for the example transformer."""
+"""Test for the Example Transformer."""
+
+# clean
 
 from hisim import component as cp
 from hisim.components import example_transformer
@@ -9,14 +11,14 @@ from tests import functions_for_testing as fft
 
 
 def test_example_transformer():
-    """Test for the example transformer."""
+    """Test for the Example Transformer."""
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
-    my_example_transformer_config = example_transformer.TransformerConfig.get_default_transformer()
+    my_example_transformer_config = example_transformer.ExampleTransformerConfig.get_default_transformer()
     print("\n")
     log.information("default transformer config " + str(my_example_transformer_config) + "\n")
-    my_example_transformer = example_transformer.Transformer(config=my_example_transformer_config, my_simulation_parameters=mysim)
+    my_example_transformer = example_transformer.ExampleTransformer(config=my_example_transformer_config, my_simulation_parameters=mysim)
 
     # Define outputs
     transformerinput1_output = cp.ComponentOutput(

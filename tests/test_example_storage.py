@@ -1,4 +1,6 @@
-"""Test for the example storage."""
+"""Test for the Example Storage."""
+
+# clean
 
 from hisim import component as cp
 from hisim.components import example_storage
@@ -9,7 +11,7 @@ from tests import functions_for_testing as fft
 
 
 def test_example_storage():
-    """Test for the example storage."""
+    """Test for the Example Storage."""
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
@@ -42,8 +44,7 @@ def test_example_storage():
     stsv.values[discharging_output.global_index] = -10  # fake discharg input
 
     timestep = 300
-    # Simulate
-
+    
     print("\n")
     log.information("timestep = " + str(timestep))
     log.information("fill state (in the beginning) = " + str(my_example_storage.state.fill))
@@ -51,21 +52,22 @@ def test_example_storage():
     log.information("charging output = " + str(stsv.values[charging_output.global_index]))
     log.information("discharging output  = " + str(stsv.values[discharging_output.global_index]) + "\n")
 
+    # Test current storage fill state before running the simulation
     assert 0 == stsv.values[my_example_storage.current_fill.global_index]
     my_example_storage.i_restore_state()
     my_example_storage.i_simulate(timestep, stsv, False)
 
     log.information("fill state (after charging and discharging) = " + str(my_example_storage.state.fill) + "\n")
-    # Charging the storage
+    # Test charging of the storage
     assert 30 == stsv.values[charging_output.global_index]
-    # Discharging the storage
+    # Test discharging of the storage
     assert -10 == stsv.values[discharging_output.global_index]
-    # Result of current storage fill state
+    # Test current storage fill state
     assert 20 == stsv.values[my_example_storage.current_fill.global_index]
 
     timestep = 301
     log.information("timestep = " + str(timestep))
     my_example_storage.i_simulate(timestep, stsv, False)
     log.information("fill state (after charging and discharging) = " + str(my_example_storage.state.fill) + "\n")
-    # Result of current storage fill state
+    # Test current storage fill state
     assert 40 == stsv.values[my_example_storage.current_fill.global_index]

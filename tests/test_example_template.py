@@ -1,4 +1,6 @@
-"""Test for the example template."""
+"""Test for the Example Template."""
+
+# clean
 
 from hisim import component as cp
 from hisim.components import example_template
@@ -9,7 +11,7 @@ from tests import functions_for_testing as fft
 
 
 def test_example_template():
-    """Test for the example template."""
+    """Test for the Example Template."""
 
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
 
@@ -37,7 +39,7 @@ def test_example_template():
     # Test Simulation
     timestep = 10 * 60
     log.information("timestep = " + str(timestep))
-    log.information("input_from_another_component_output [W]= " + str(stsv.values[input_from_another_component_output.global_index]) + "\n")
+    log.information("input_from_another_component_output = " + str(stsv.values[input_from_another_component_output.global_index]) + "\n")
 
     my_example_template.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")
@@ -51,7 +53,7 @@ def test_example_template():
 
     timestep = 10 * 60 + 1
     log.information("timestep = " + str(timestep))
-    log.information("input_from_another_component_output [W]= " + str(stsv.values[input_from_another_component_output.global_index]) + "\n")
+    log.information("input_from_another_component_output = " + str(stsv.values[input_from_another_component_output.global_index]) + "\n")
 
     my_example_template.i_simulate(timestep, stsv, False)
     log.information("Output values after simulation: ")

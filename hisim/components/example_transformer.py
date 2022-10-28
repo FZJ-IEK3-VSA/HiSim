@@ -1,4 +1,4 @@
-"""Transformer module."""
+"""Example Transformer."""
 
 # clean
 
@@ -21,14 +21,14 @@ from hisim.component import ConfigBase
 
 @dataclass_json
 @dataclass
-class TransformerConfig(ConfigBase):
+class ExampleTransformerConfig(ConfigBase):
 
-    """Configuration of the Transformer."""
+    """Configuration of the Example Transformer."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return Transformer.get_full_classname()
+        return ExampleTransformer.get_full_classname()
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
@@ -39,16 +39,16 @@ class TransformerConfig(ConfigBase):
     @classmethod
     def get_default_transformer(cls):
         """Gets a default Transformer."""
-        return TransformerConfig(
-            name="Transformer default",
+        return ExampleTransformerConfig(
+            name="Example Transformer default",
             loadtype=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
         )
 
 
-class Transformer(Component):
+class ExampleTransformer(Component):
 
-    """The transformer class.
+    """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.
 
@@ -72,7 +72,7 @@ class Transformer(Component):
     TransformerOutput = "MyTransformerOutput"
     TransformerOutput2 = "MyTransformerOutput2"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: TransformerConfig) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: ExampleTransformerConfig) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
         super().__init__(
@@ -81,27 +81,27 @@ class Transformer(Component):
         )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,
-            Transformer.TransformerInput,
+            ExampleTransformer.TransformerInput,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             True,
         )
         self.input2: ComponentInput = self.add_input(
             self.transformerconfig.name,
-            Transformer.TransformerInput2,
+            ExampleTransformer.TransformerInput2,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             False,
         )
         self.output1: ComponentOutput = self.add_output(
             self.transformerconfig.name,
-            Transformer.TransformerOutput,
+            ExampleTransformer.TransformerOutput,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
         )
         self.output2: ComponentOutput = self.add_output(
             self.transformerconfig.name,
-            Transformer.TransformerOutput2,
+            ExampleTransformer.TransformerOutput2,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
         )
@@ -112,7 +112,6 @@ class Transformer(Component):
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublechecks."""
-
         pass
 
     def i_restore_state(self) -> None:

@@ -1,5 +1,7 @@
 """Example Storage."""
 
+# clean
+
 # Generic/Built-in
 import copy
 from dataclasses import dataclass
@@ -46,7 +48,7 @@ class ExampleStorageState:
         raise Exception("forgotten case")
 
     def withdraw(self, val: float) -> float:
-        """Returns how much is put out of the storage."""
+        """Returns how much is taken out of the storage."""
 
         if self.fill > val:
             # has enough
@@ -113,6 +115,11 @@ class SimpleStorage(Component):
             self.simplestorageconfig.name,
             my_simulation_parameters=my_simulation_parameters,
         )
+        # Initialized variables
+        self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)
+        self.capacity = self.simplestorageconfig.capacity
+        self.previous_state = copy.copy(self.state)
+
         self.charging_input: ComponentInput = self.add_input(
             self.simplestorageconfig.name,
             SimpleStorage.ChargingAmount,
@@ -145,9 +152,6 @@ class SimpleStorage(Component):
             self.simplestorageconfig.loadtype,
             lt.Units.PERCENT,
         )
-        self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)
-        self.capacity = self.simplestorageconfig.capacity
-        self.previous_state = copy.copy(self.state)
 
     def i_save_state(self) -> None:
         """Saves the current state of the storage."""

@@ -140,6 +140,8 @@ class ComponentName(Component):
         # If a component requires states, this can be implemented here.
         self.state = ComponentNameState()
         self.previous_state = deepcopy(self.state)
+        # Initialized variables
+        self.factor = 1.0
 
         self.input_from_other_component: ComponentInput = self.add_input(
             object_name=self.componentnameconfig.name,
@@ -162,7 +164,6 @@ class ComponentName(Component):
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
         )
-        self.factor = 1.0
 
     def i_save_state(self) -> None:
         """Saves the current state."""

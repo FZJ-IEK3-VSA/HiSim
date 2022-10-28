@@ -2,8 +2,7 @@ strictness: veryhigh
 test-warnings: true
 doc-warnings: true
 autodetect: false
-max-line-length: 170
-
+max-line-length: 150
 pep8:
     full: true
 #  disable:
@@ -55,8 +54,10 @@ pydocstyle:
 mypy:
   run: true
 
-# bandit:
-#   run: true
+bandit:
+  run: true
+  options:
+    config: .bandit.yml
 
 #frosted:
 #  run: true

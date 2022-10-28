@@ -1,5 +1,7 @@
 """Example Component."""
 
+# clean
+
 # Generic/Built-in
 from typing import List, Optional
 from dataclasses import dataclass
@@ -28,30 +30,30 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class DummyConfig(ConfigBase):
+class ExampleComponentConfig(ConfigBase):
 
-    """Configuration of the Dummy Component."""
+    """Configuration of the Example Component."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return Dummy.get_full_classname()
+        return ExampleComponent.get_full_classname()
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
     loadtype: lt.LoadTypes
     unit: lt.Units
-    electricity: Optional[float]  # = None,
+    electricity: Optional[float]
     # heat: float = 0.0,
-    capacity: Optional[float]  # = None,
-    initial_temperature: Optional[float]  # = None,
+    capacity: Optional[float]
+    initial_temperature: Optional[float]
 
     @classmethod
-    def get_default_dummy(cls):
-        """Gets a default Dummy."""
-        return DummyConfig(
-            name="Dummy",
+    def get_default_example_component(cls):
+        """Gets a default Example Component."""
+        return ExampleComponentConfig(
+            name="Example Component",
             electricity=-1e3,
             loadtype=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
@@ -61,10 +63,11 @@ class DummyConfig(ConfigBase):
         )
 
 
-class Dummy(Component):
+class ExampleComponent(Component):
 
-    """Component component that supports multiple dummy values for fictitious scenarios.
+    """Example Component class.
 
+    It supports multiple Example Component values for fictitious scenarios.
     The values passed to the constructor are taken as constants to build the load profile
     for the entire simulation duration.
 
@@ -93,49 +96,53 @@ class Dummy(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: DummyConfig,
+        config: ExampleComponentConfig,
     ) -> None:
         """Constructs all the neccessary attributes."""
-        self.dummyconfig = config
+        self.examplecomponentconfig = config
         super().__init__(
-            self.dummyconfig.name,
+            self.examplecomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
         )
+
+        # Initialized variables
+        self.temperature: float = -300
+        self.previous_temperature: float
+
         self.build(
-            electricity=self.dummyconfig.electricity,
-            # heat=self.dummyconfig.heat,
-            capacity=self.dummyconfig.capacity,
-            initial_temperature=self.dummyconfig.initial_temperature,
+            electricity=config.electricity,
+            # heat=config.heat,
+            capacity=config.capacity,
+            initial_temperature=config.initial_temperature,
         )
 
-        self.thermal_energy_deliveredC: ComponentInput = self.add_input(
-            self.dummyconfig.name,
+        self.thermal_energy_delivered_c: ComponentInput = self.add_input(
+            self.examplecomponentconfig.name,
             self.ThermalEnergyDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             False,
         )
 
-        self.t_mC: ComponentOutput = self.add_output(
+        self.t_m_c: ComponentOutput = self.add_output(
             self.component_name,
             self.TemperatureMean,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
         )
 
-        self.electricity_outputC: ComponentOutput = self.add_output(
+        self.electricity_output_c: ComponentOutput = self.add_output(
             self.component_name,
             self.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
         )
-        self.stored_energyC: ComponentOutput = self.add_output(
+        self.stored_energy_c: ComponentOutput = self.add_output(
             self.component_name,
             self.StoredEnergy,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
         )
-        self.temperature: float = -300
 
     def build(
         self,
@@ -143,28 +150,24 @@ class Dummy(Component):
         # heat: float,
         capacity: Optional[float],
         initial_temperature: Optional[float],
-        # # electricity=DummyConfig.electricity,
-        # # # heat=DummyConfig.heat,
-        # # capacity=DummyConfig.capacity,
-        # # initial_temperature=DummyConfig.initial_temperature,
     ) -> None:
         """Build load profile for entire simulation duration."""
         self.time_correction_factor: float = 1 / self.my_simulation_parameters.seconds_per_timestep
         self.seconds_per_timestep: float = self.my_simulation_parameters.seconds_per_timestep
 
         if electricity is None:
-            self.electricity_output: float = -1e3  # self.dummyconfig.electricity
+            self.electricity_output: float = -1e3
         else:
             self.electricity_output = -1e3 * electricity
 
         if capacity is None:
-            self.capacity = 45 * 121.2  # self.dummyconfig.capacity
+            self.capacity = 45 * 121.2
         else:
             self.capacity = capacity
 
         if initial_temperature is None:
-            self.temperature = 25.0  # self.dummyconfig.initial_temperature
-            self.initial_temperature = 25.0  # self.dummyconfig.initial_temperature
+            self.temperature = 25.0
+            self.initial_temperature = 25.0
         else:
             self.temperature = initial_temperature
             self.initial_temperature = initial_temperature
@@ -190,19 +193,19 @@ class Dummy(Component):
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         electricity_output: float = 0
-        if 60 * 6 <= timestep < 60 * 9:  # between hour 6 and 9
+        if 60 * 6 <= timestep < 60 * 9:
             electricity_output = self.electricity_output
-        elif 60 * 15 <= timestep < 60 * 18:  # between hour 15 and 18
+        elif 60 * 15 <= timestep < 60 * 18:
             electricity_output = -self.electricity_output
 
-        stsv.set_output_value(self.electricity_outputC, electricity_output)
+        stsv.set_output_value(self.electricity_output_c, electricity_output)
 
-        if timestep <= 60 * 12:  # before hour 12 (lunchtime)
+        if timestep <= 60 * 12:
             thermal_delivered_energy: float = 0
             temperature: float = self.initial_temperature
             current_stored_energy = (self.initial_temperature + 273.15) * self.capacity
         else:
-            thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_deliveredC)
+            thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_delivered_c)
             previous_stored_energy = (self.previous_temperature + 273.15) * self.capacity
             current_stored_energy = previous_stored_energy + thermal_delivered_energy
             self.temperature = current_stored_energy / self.capacity - 273.15
@@ -218,5 +221,5 @@ class Dummy(Component):
         # self.temperature = current_stored_energy / self.capacity - 273.15
         # temperature = self.temperature
 
-        stsv.set_output_value(self.stored_energyC, current_stored_energy)
-        stsv.set_output_value(self.t_mC, temperature)
+        stsv.set_output_value(self.stored_energy_c, current_stored_energy)
+        stsv.set_output_value(self.t_m_c, temperature)

@@ -1,3 +1,7 @@
+"""Simple Examples Module."""
+
+# clean
+
 # Generic
 from typing import Optional
 
@@ -6,14 +10,16 @@ from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.random_numbers import RandomNumbers
-from hisim.components.example_transformer import Transformer, TransformerConfig
+from hisim.components.example_transformer import ExampleTransformer, ExampleTransformerConfig
 from hisim.components.sumbuilder import SumBuilderForTwoInputs
 from hisim import loadtypes
-from hisim import utils
+
+# from hisim import utils
 
 
 def first_example(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-    """
+    """First Example.
+
     In this first example, a series (my_rn1) of random numbers in a range between 100 and 200 is
     summed up with a series (my_rn2) of random numbers in a range between 10 and 20. The result is
     a series (my_sum) with values between 110 and 220.
@@ -56,7 +62,8 @@ def first_example(my_sim: Simulator, my_simulation_parameters: Optional[Simulati
 
 
 def second_example(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-    """
+    """Second Example.
+
     In this second example, two series (my_rn1 and my_transformer) are summed up.
 
     The first series (my_rn1) is a series of random numbers in a range between 100 and 200.
@@ -94,7 +101,7 @@ def second_example(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Create new Transformer object
     # my_transformer = Transformer(name="MyTransformer", my_simulation_parameters=my_simulation_parameters)
-    my_transformer = Transformer(config=TransformerConfig.get_default_transformer(), my_simulation_parameters=my_simulation_parameters)
+    my_transformer = ExampleTransformer(config=ExampleTransformerConfig.get_default_transformer(), my_simulation_parameters=my_simulation_parameters)
     my_transformer.connect_input(
         input_fieldname=my_transformer.TransformerInput,  # Connect input from my transformer
         src_object_name=my_rn2.component_name,  # to output of second random number object

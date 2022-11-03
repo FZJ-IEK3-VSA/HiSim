@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Install HDF5, which is required to build h5py during the installation of the requirements
 RUN apt-get update
-RUN apt-get upgrade
+RUN apt-get -y upgrade
 RUN apt-get install libhdf5-serial-dev -y
 
 # Copy relevant files

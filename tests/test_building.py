@@ -1,3 +1,9 @@
+"""Test for building module."""
+
+# clean
+
+import datetime
+import time
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -5,92 +11,115 @@ from hisim.components import building
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-import os
 from hisim import utils
-import datetime
-import time
 from tests import functions_for_testing as fft
+
 
 @utils.measure_execution_time
 def test_building():
+    """Test function for the building module."""
     # Sets inputs
     starttime = datetime.datetime.now()
-    d4 = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.profile("Test Building start @ " + d4)
+    d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.profile("Test Building start @ " + d_four)
 
-    t1 = time.perf_counter()
-    weather_location = "Aachen"
+    t_one = time.perf_counter()
+    # weather_location = "Aachen"
     my_occupancy_profile = "CH01"
-    building_code="DE.N.SFH.05.Gen.ReEx.001.001"
-    bClass="medium"
+    building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
+    building_heat_capacity_class = "medium"
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=seconds_per_timestep)
-
+    my_simulation_parameters = SimulationParameters.full_year(
+        year=2021, seconds_per_timestep=seconds_per_timestep
+    )
 
     repo = component.SimRepository()
-    t2 = time.perf_counter()
-    log.profile("T2: " + str(t2-t1))
+    t_two = time.perf_counter()
+    log.profile(f"T2: {t_two - t_one}")
     # Set Occupancy
-    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name=my_occupancy_profile, name="Occupancy-1")
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-    my_occupancy.set_sim_repo( repo )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
+        profile_name=my_occupancy_profile, name="Occupancy-1"
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_occupancy.set_sim_repo(repo)
     my_occupancy.i_prepare_simulation()
-    t3 = time.perf_counter()
-    log.profile("T2: " + str(t3 - t2))
+    t_three = time.perf_counter()
+    log.profile(f"T2:{t_three - t_two}")
 
     # Set Weather
-    my_weather_config=weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
-    my_weather = weather.Weather(config=my_weather_config,my_simulation_parameters=my_simulation_parameters)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.Aachen
+    )
+    my_weather = weather.Weather(
+        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
+    )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    t4 = time.perf_counter()
-    log.profile("T2: " + str(t4 - t3))
+    t_four = time.perf_counter()
+    log.profile(f"T2: {t_four - t_three}")
 
     # Set Residence
-    my_residence_config=building.BuildingConfig.get_default_german_single_family_home()
-    my_residence_config.building_code=building_code
-    my_residence_config.bClass=bClass
+    my_residence_config = (
+        building.BuildingConfig.get_default_german_single_family_home()
+    )
+    my_residence_config.building_code = building_code
+    my_residence_config.building_heat_capacity_class = building_heat_capacity_class
 
-    my_residence = building.Building(config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
+    my_residence = building.Building(
+        config=my_residence_config, my_simulation_parameters=my_simulation_parameters
+    )
     my_residence.set_sim_repo(repo)
     my_residence.i_prepare_simulation()
-    # Fake energy delivered
-    thermal_energy_delivered_output = component.ComponentOutput("FakeThermalDeliveryMachine",
-                                                                "ThermalDelivery",
-                                                                LoadTypes.HEATING,
-                                                                Units.WATT)
-    t5 = time.perf_counter()
-    log.profile("T2: " + str(t4 - t5))
+    # Fake power delivered
+    thermal_power_delivered_output = component.ComponentOutput(
+        "FakeThermalDeliveryMachine", "ThermalDelivery", LoadTypes.HEATING, Units.WATT
+    )
+    t_five = time.perf_counter()
+    log.profile(f"T2: {t_four - t_five}")
 
-    number_of_outputs = fft.get_number_of_outputs([my_occupancy,my_weather,my_residence,thermal_energy_delivered_output])
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
+    number_of_outputs = fft.get_number_of_outputs(
+        [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
+    )
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
+        number_of_outputs
+    )
 
+    my_residence.temperature_outside_channel.source_output = (
+        my_weather.air_temperature_output
+    )
+    my_residence.altitude_channel.source_output = my_weather.altitude_output
+    my_residence.azimuth_channel.source_output = my_weather.azimuth_output
+    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
+    my_residence.direct_horizontal_irradiance_channel.source_output = (
+        my_weather.DHI_output
+    )
+    my_residence.occupancy_heat_gain_channel.source_output = (
+        my_occupancy.heating_by_residentsC
+    )
+    my_residence.thermal_power_delivered_channel.source_output = (
+        thermal_power_delivered_output
+    )
 
-    assert 1 == 1
-    my_residence.t_outC.source_output = my_weather.air_temperature_output
-    my_residence.altitudeC.source_output = my_weather.altitude_output
-    my_residence.azimuthC.source_output = my_weather.azimuth_output
-    my_residence.DNIC.source_output = my_weather.DNI_output
-    my_residence.DHIC.source_output = my_weather.DHI_output
-    my_residence.occupancy_heat_gainC.source_output = my_occupancy.heating_by_residentsC
-    my_residence.thermal_energy_deliveredC.source_output = thermal_energy_delivered_output
+    fft.add_global_index_of_components(
+        [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
+    )
 
-    fft.add_global_index_of_components([my_occupancy,my_weather,my_residence,thermal_energy_delivered_output])
+    # test building models for various time resolutions
+    #   -> assume weather and occupancy data from t=0 (time resolution 1 min)
+    #   -> calculate temperature of building ( with no heating considered) for varios time steps
+    #   -> check if temperature difference is proportional to time step size ( > 0.1 °C per minute)
+    t_six = time.perf_counter()
+    log.profile(f"T2: {t_six - t_five}")
+    for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
 
-    #test building models for various time resolutions 
-    #   -> assume weather and occupancy data from t=0 (time resolution 1 min )
-    #   -> calculate temperature of building ( with no heating considered ) for varios time steps
-    #   -> check if temperature difference is proportional to time step size ( > 0.1 °C per minute )
-    t6 = time.perf_counter()
-    log.profile("T2: " + str(t6 - t5))
-    for seconds_per_timestep in [ 60, 60 * 15, 60 * 60 ]:
-        
-        log.trace("Seconds per Timestep: " + str(seconds_per_timestep) )
+        log.trace("Seconds per Timestep: " + str(seconds_per_timestep))
         my_residence.seconds_per_timestep = seconds_per_timestep
-        
+
         # Simulates
-        stsv.values[my_residence.t_mC.global_index] = 23
-        #log.information(str(stsv.values))
+        stsv.values[my_residence.thermal_mass_temperature_channel.global_index] = 23
+        # log.information(str(stsv.values))
         my_weather.i_simulate(0, stsv, False)
         log.information(str(stsv.values))
         my_occupancy.i_simulate(0, stsv, False)
@@ -98,16 +127,19 @@ def test_building():
         my_residence.i_simulate(0, stsv, False)
         log.information(str(stsv.values))
 
-        log.information("Occupancy: {}\n".format(stsv.values[:4]))
-        log.information("Weather: {}\n".format(stsv.values[4:10]))
-        log.information("Residence: {}\n".format(stsv.values[10:]))
+        log.information(f"Occupancy: {stsv.values[:4]}\n")
+        log.information(f"Weather: {stsv.values[4:10]}\n")
+        log.information(f"Residence: {stsv.values[10:]}\n")
 
         log.information(str(stsv.values[11]))
         # todo: this needs to be corrected
-        assert (stsv.values[my_residence.t_mC.global_index] - 23.0) < - 0.01 * (seconds_per_timestep / 60)
-    t7 = time.perf_counter()
-    log.profile("T2: " + str(t7 - t6))
-    log.profile("T2: " + str(t7 - t6))
+        assert (
+            stsv.values[my_residence.thermal_mass_temperature_channel.global_index]
+            - 23.0
+        ) < -0.01 * (seconds_per_timestep / 60)
+    t_seven = time.perf_counter()
+    log.profile(f"T2: {t_seven - t_six}")
+    log.profile(f"T2: {t_seven - t_six}")
     starttime = datetime.datetime.now()
-    d4 = starttime.strftime("%d-%b-%Y %H:%M:%S")
-    log.profile("Finished @ " + d4)
+    d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
+    log.profile("Finished @ " + d_four)

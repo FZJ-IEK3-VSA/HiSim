@@ -1,5 +1,7 @@
 """  Basic household example. Shows how to set up a standard system. """
 
+# clean
+
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
@@ -59,8 +61,8 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
 
     # Set building
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_class = "medium"
-    initial_temperature = 23
+    building_heat_capacity_class = "medium"
+    initial_temperature_in_celsius = 23
     heating_reference_temperature = -14
 
     # Set heat pump controller
@@ -100,8 +102,9 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     my_photovoltaic_system = generic_pv_system.PVSystem(config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Building
-    my_building_config = building.BuildingConfig(building_code=building_code, bClass=building_class, initial_temperature=initial_temperature,
-                                                 heating_reference_temperature=heating_reference_temperature, name="Building1")
+    my_building_config = building.BuildingConfig(building_code=building_code, building_heat_capacity_class=building_heat_capacity_class,
+                                                 initial_internal_temperature_in_celsius=initial_temperature_in_celsius,
+                                                 heating_reference_temperature_in_celsius=heating_reference_temperature, name="Building1")
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside, my_weather.component_name, my_weather.TemperatureOutside)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance, my_weather.component_name, my_weather.DirectNormalIrradiance)

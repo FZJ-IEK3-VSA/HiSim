@@ -114,7 +114,7 @@ def basic_household_with_default_connections(my_sim: Any, my_simulation_paramete
     my_building_config = building.BuildingConfig(building_code=building_code,
                                                  bClass=building_class,
                                                  initial_temperature=initial_temperature,
-                                                 heating_reference_temperature=heating_reference_temperature, name="Building")
+                                                 heating_reference_temperature_in_celsius=heating_reference_temperature, name="Building")
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(name="BaseLoad",
                                                                       grid=[my_occupancy, "Subtract", my_photovoltaic_system ], my_simulation_parameters=my_simulation_parameters)

@@ -62,7 +62,7 @@ class WaterSlice:
         self.height = height
         self.temperature = temperature
         self.density = PhysicsConfig.water_density
-        self.specific_heat_capacity = PhysicsConfig.water_specific_heat_capacity
+        self.specific_heat_capacity = PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         self.mass = self.height * self.area * self.density  # [kg]
         # Enthalpy referencing to the temperature of 0 °C.
         # J = Ws = kg * J/kg*K * K

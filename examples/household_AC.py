@@ -136,7 +136,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_building_config=building.BuildingConfig(building_code = building_code,
                                             bClass = building_class,
                                             initial_temperature = initial_temperature,
-                                            heating_reference_temperature = heating_reference_temperature, name="Building1" )
+                                            heating_reference_temperature_in_celsius = heating_reference_temperature, name="Building1" )
 
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,

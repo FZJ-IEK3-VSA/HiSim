@@ -29,8 +29,7 @@ class WaterSlice:
             if not isinstance(value, (int, float)):
                 raise TypeError
             # if isinstance(value, bool):   # Otherwise bool results into 0 or 1
-            if type(value)==bool:
-                raise TypeError
+            #   raise TypeError
         if self.diameter <= 0 or self.temperature < 0 or self.height < 0:  # or self.temperature == 0 and self.height > 0:
             log.error("Incorrect tank diameter: " + str(self.diameter))
             log.error("Incorrect water temperature: " + str(self.temperature))
@@ -188,8 +187,7 @@ class WarmWaterStorageSimulation:
                 raise TypeError
             # if isinstance(value, bool):
                 # Otherwise bool results into 0 or 1
-            if type(value)==bool:
-                raise TypeError
+            #   raise TypeError
             if value <= 0:
                 # The tank must always have positive values. Otherwise it wouldn't be a tank
                 raise ValueError

@@ -37,7 +37,7 @@ The module contains the following classes:
     [2] I. Horvat et al. "Dynamic method for calculating energy need in HVAC systems." Transactions of Famena 40 (2016): 47-62.
 
 """
-
+# clean
 
 # Generic/Built-in
 from typing import (
@@ -110,7 +110,7 @@ def calc_solar_heat_gains(
     global_horizontal_irradiance,
     direct_normal_irradiance_extra,
     apparent_zenith,
-    alititude_tilt,
+    altitude_tilt,
     azimuth_tilt,
     reduction_factor_with_area,
 ):
@@ -129,7 +129,7 @@ def calc_solar_heat_gains(
     :rtype: float
     """
     poa_irrad = pvlib.irradiance.get_total_irradiance(
-        alititude_tilt,
+        altitude_tilt,
         azimuth_tilt,
         apparent_zenith,
         sun_azimuth,
@@ -581,7 +581,7 @@ class Building(dynamic_component.DynamicComponent):
             cp.ComponentConnection(
                 Building.Altitude,
                 weather_classname,
-                Weather.Azimuth,
+                Weather.Altitude,
             )
         )
         connections.append(
@@ -679,7 +679,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # Gets inputs
         if hasattr(self, "solar_gain_through_windows") is False:
-            # altitude = stsv.get_input_value(self.altitude_c)
+            # altitude = stsv.get_input_value(self.altitude_channel)
             azimuth = stsv.get_input_value(self.azimuth_channel)
             direct_normal_irradiance = stsv.get_input_value(self.direct_normal_irradiance_channel)
             direct_horizontal_irradiance = stsv.get_input_value(self.direct_horizontal_irradiance_channel)
@@ -1398,14 +1398,13 @@ class Building(dynamic_component.DynamicComponent):
     # @cached(cache=LRUCache(maxsize=16))
     def get_solar_heat_gain_through_windows(
         self,
-        # altitude,
         azimuth,
         direct_normal_irradiance,
         direct_horizontal_irradiance,
         global_horizontal_irradiance,
         direct_normal_irradiance_extra,
         apparent_zenith,
-    ):
+    ):  # altitude,
         """Calculates the thermal solar gain passed to the building through the windows.
 
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
@@ -1445,7 +1444,7 @@ class Building(dynamic_component.DynamicComponent):
                 global_horizontal_irradiance=global_horizontal_irradiance,
                 direct_normal_irradiance_extra=direct_normal_irradiance_extra,
                 apparent_zenith=apparent_zenith,
-                alititude_tilt=Window.alititude_tilt,
+                altitude_tilt=Window.altitude_tilt,
                 azimuth_tilt=Window.azimuth_tilt,
                 reduction_factor_with_area=Window.reduction_factor_with_area,
             )
@@ -1715,7 +1714,7 @@ class Window:
     def __init__(
         self,
         azimuth_tilt=None,
-        alititude_tilt=90,
+        altitude_tilt=90,
         area=None,
         glass_solar_transmittance=0.6,
         frame_area_fraction_reduction_factor=0.3,
@@ -1724,9 +1723,9 @@ class Window:
     ):
         """Constructs all the neccessary attributes."""
         # Angles
-        self.alititude_tilt = alititude_tilt
+        self.altitude_tilt = altitude_tilt
         self.azimuth_tilt = azimuth_tilt
-        self.alititude_tilt_rad = math.radians(alititude_tilt)
+        self.altitude_tilt_rad = math.radians(altitude_tilt)
         self.azimuth_tilt_rad = math.radians(azimuth_tilt)
 
         # Area
@@ -1785,7 +1784,7 @@ class Window:
         airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)
         # use perez model to calculate the plane of array diffuse sky radiation
         poa_sky_diffuse = pvlib.irradiance.perez(
-            self.alititude_tilt,
+            self.altitude_tilt,
             self.azimuth_tilt,
             direct_horizontal_irradiance,
             np.float64(direct_normal_irradiance),
@@ -1796,13 +1795,13 @@ class Window:
         )
         # calculate ground diffuse with specified albedo
         poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(
-            self.alititude_tilt,
+            self.altitude_tilt,
             global_horizontal_irradiance,
             albedo=albedo,
         )
         # calculate angle of incidence
         aoi = pvlib.irradiance.aoi(
-            self.alititude_tilt,
+            self.altitude_tilt,
             self.azimuth_tilt,
             apparent_zenith,
             sun_azimuth,
@@ -1849,7 +1848,7 @@ class Window:
         # sun_azimuth_rad = math.radians(sun_azimuth)
 
         aoi = pvlib.irradiance.aoi(
-            self.alititude_tilt,
+            self.altitude_tilt,
             self.azimuth_tilt,
             apparent_zenith,
             sun_azimuth,
@@ -1885,7 +1884,7 @@ class Window:
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
         """
         # Proportion of incident light on the window surface
-        return (1 + math.cos(self.alititude_tilt_rad)) / 2
+        return (1 + math.cos(self.altitude_tilt_rad)) / 2
 
 
 class BuildingController(cp.Component):

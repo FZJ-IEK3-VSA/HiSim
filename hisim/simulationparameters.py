@@ -46,7 +46,7 @@ class SimulationParameters(JSONWizard):
     start_date: datetime.datetime
     end_date: datetime.datetime
     seconds_per_timestep: int
-    post_processing_options: List[int]
+    post_processing_options: Optional[List[int]]
     logging_level: int
     result_directory: str
     skip_finished_results: bool
@@ -54,8 +54,7 @@ class SimulationParameters(JSONWizard):
 
     def __init__(self, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int,
                  result_directory: str = "",
-                 post_processing_options: List[int] = None,
-                 logging_level: int = log.LogPrio.INFORMATION,
+                 post_processing_options: List[int] = None, logging_level: int = log.LogPrio.INFORMATION,
                  skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
         """ Initializes the class. """
         self.start_date: datetime.datetime = start_date
@@ -80,8 +79,11 @@ class SimulationParameters(JSONWizard):
 
     def enable_all_options(self) -> None:
         """ Enables all the post processing options . """
-        for option in PostProcessingOptions:
-            self.post_processing_options.append(option)
+        if self.post_processing_options is None:
+            self.post_processing_options = []
+        else:
+            for option in PostProcessingOptions:
+                self.post_processing_options.append(option)
 
     @classmethod
     def full_year_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

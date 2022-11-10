@@ -68,55 +68,58 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
             # Of all specified options, select those that are allowed
-            valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
-            if len(valid_options) < len(ppdt.post_processing_options):
-                # At least one invalid option was set
-                ppdt.post_processing_options = valid_options
-                log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
+            if ppdt.post_processing_options is not None:
+                valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
+                if len(valid_options) < len(ppdt.post_processing_options):
+                    # At least one invalid option was set
+                    ppdt.post_processing_options = valid_options
+                    log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
 
         report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
         days = {"month": 0, "day": 0}
-        if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
-            log.information("Making line plots.")
-            self.make_line_plots(ppdt)
-        if PostProcessingOptions.PLOT_CARPET in ppdt.post_processing_options:
-            log.information("Making carpet plots.")
-            self.make_carpet_plots(ppdt)
-        if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
-            log.information("Making single day plots.")
-            self.make_single_day_plots(days, ppdt)
-        if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
-            log.information("Making bar charts.")
-            self.make_bar_charts(ppdt)
-        # Plot sankey
-        if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
-            log.information("Making sankey plots.")
-            self.make_sankey_plots()
-        # Export all results to CSV
-        if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
-            log.information("Making CSV exports.")
-            self.make_csv_export(ppdt)
-        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
-            log.information("Making PDF report.")
-            self.write_components_to_report(ppdt, report)
-        # Export all results to
-        if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
-            log.information("Computing KPIs")
-            self.compute_kpis(ppdt, report)
-        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
-            log.information("Computing Network Charts")
-            self.make_network_charts(ppdt)
+        if ppdt.post_processing_options is not None:
+            if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
+                log.information("Making line plots.")
+                self.make_line_plots(ppdt)
+            if PostProcessingOptions.PLOT_CARPET in ppdt.post_processing_options:
+                log.information("Making carpet plots.")
+                self.make_carpet_plots(ppdt)
+            if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
+                log.information("Making single day plots.")
+                self.make_single_day_plots(days, ppdt)
+            if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
+                log.information("Making bar charts.")
+                self.make_bar_charts(ppdt)
+            # Plot sankey
+            if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
+                log.information("Making sankey plots.")
+                self.make_sankey_plots()
+            # Export all results to CSV
+            if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
+                log.information("Making CSV exports.")
+                self.make_csv_export(ppdt)
+            if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+                log.information("Making PDF report.")
+                self.write_components_to_report(ppdt, report)
+            # Export all results to
+            if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
+                log.information("Computing KPIs")
+                self.compute_kpis(ppdt, report)
+            if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
+                log.information("Computing Network Charts")
+                self.make_network_charts(ppdt)
 
         # only a single day has been calculated. This gets special charts for debugging.
-        if PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options and len(ppdt.results) == 1440:
-            log.information("Making special single day plots for a single day calculation for testing.")
-            self.make_special_one_day_debugging_plots(ppdt)
+        if ppdt.post_processing_options is not None:
+            if PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options and len(ppdt.results) == 1440:
+                log.information("Making special single day plots for a single day calculation for testing.")
+                self.make_special_one_day_debugging_plots(ppdt)
 
-        # Open file explorer
-        if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in ppdt.post_processing_options:
-            log.information("opening the explorer.")
-            self.open_dir_in_file_explorer(ppdt)
-        log.information("Finished main post processing function")
+            # Open file explorer
+            if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in ppdt.post_processing_options:
+                log.information("opening the explorer.")
+                self.open_dir_in_file_explorer(ppdt)
+            log.information("Finished main post processing function")
 
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Generates the network charts that show the connection of the elements. """

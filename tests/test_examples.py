@@ -25,7 +25,8 @@ def test_basic_household_network_chart():
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
-    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    if mysimpar.post_processing_options is not None:
+        mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 
@@ -36,8 +37,9 @@ def test_basic_household_with_all_resultfiles():
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60)
-    for option in PostProcessingOptions:
-        mysimpar.post_processing_options.append(option)
+    if mysimpar.post_processing_options is not None:
+        for option in PostProcessingOptions:
+            mysimpar.post_processing_options.append(option)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 

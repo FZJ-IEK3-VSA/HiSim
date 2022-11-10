@@ -20,8 +20,9 @@ class ExampleConfig:
 
         # basic simulation parameters
         my_simulation_parameters = SimulationParameters.january_only(year=2022, seconds_per_timestep=60)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        jcg.set_simulation_parameters(my_simulation_parameters)
+        if my_simulation_parameters.post_processing_options is not None:
+            my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+            jcg.set_simulation_parameters(my_simulation_parameters)
 
         # Occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()

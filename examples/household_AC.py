@@ -101,7 +101,8 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     if my_simulation_parameters is None:
         #my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        if my_simulation_parameters.post_processing_options is not None:
+            my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         keystr = "ki_" + f"{ki:.3f}" + "_kp_" + f"{kp:.3f}" + "_kd_" + f"{kd:.3f}"
         my_simulation_parameters.result_directory = os.path.join("ac_results_5b", keystr)
         #my_simulation_parameters.post_processing_options.clear()

@@ -13,19 +13,6 @@ Guidelines for enum classes:
 # clean
 import enum
 
-
-@enum.unique
-class HeatingSystems(str, enum.Enum):
-
-    """ To parse heating systems in simulation inputs. """
-
-    HEAT_PUMP = "HeatPump"
-    ELECTRIC_HEATING = "ELectricHeating"
-    OIL_HEATING = "OilHeating"
-    GAS_HEATING = "GasHeating"
-    DISTRICT_HEATING = "DistrictHeating"
-
-
 @enum.unique
 class Locations(str, enum.Enum):
 

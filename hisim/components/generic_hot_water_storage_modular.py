@@ -11,8 +11,6 @@ from typing import Optional, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-import matplotlib
-import seaborn
 import numpy as np
 
 # Owned
@@ -26,11 +24,6 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_source
 from hisim.components import controller_l1_generic_runtime
 import hisim.log
-seaborn.set(style='ticks')
-font = {'family': 'normal',
-        'size': 24}
-
-matplotlib.rc('font', **font)
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

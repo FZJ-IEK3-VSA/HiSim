@@ -12,6 +12,5 @@ def test_dynamic_components_example():
     path = "../examples/dynamic_components.py"
     func = "dynamic_components_demonstration"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
-    # mysimpar.enable_all_options()
     hisim_main.main(path, func,mysimpar )
     log.information(os.getcwd())

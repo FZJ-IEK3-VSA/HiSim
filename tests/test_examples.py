@@ -31,19 +31,6 @@ def test_basic_household_network_chart():
     log.information(os.getcwd())
 
 
-# @utils.measure_execution_time
-# def test_basic_household_with_all_resultfiles():
-#     """ One day with all options. """
-#     path = "../examples/basic_household.py"
-#     func = "basic_household_explicit"
-#     mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60)
-#     if mysimpar.post_processing_options is not None:
-#         for option in PostProcessingOptions:
-#             mysimpar.post_processing_options.append(option)
-#     hisim_main.main(path, func, mysimpar)
-#     log.information(os.getcwd())
-
-
 @utils.measure_execution_time
 def test_modular_household_configurations():
     """ Tests the modular example. """

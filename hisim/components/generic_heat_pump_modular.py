@@ -18,11 +18,6 @@ from hisim.components.weather import Weather
 from hisim.components import controller_l1_heatpump
 from hisim import log
 
-seaborn.set(style='ticks')
-font = {'family': 'normal', 'size': 24}
-
-matplotlib.rc('font', **font)
-
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]

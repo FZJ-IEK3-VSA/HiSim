@@ -223,7 +223,7 @@ class Occupancy(cp.Component):
                     freshwater_temperature + temperature_difference_cold
                 )
                 ww_mass_input = energy_discharged / (
-                    PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+                    PhysicsConfig.water_specific_heat_capacity
                     * (ww_temperature_input - ww_temperature_output)
                 )
             else:

@@ -18,11 +18,6 @@ from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim import log
 
-seaborn.set(style='ticks')
-font = {'family' : 'normal',
-        'size'   : 24}
-
-matplotlib.rc('font', **font)
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

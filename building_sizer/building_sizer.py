@@ -17,7 +17,7 @@ import dataclasses_json
 from utspclient import client, result_file_filters  # type: ignore
 from utspclient.datastructures import CalculationStatus, TimeSeriesRequest  # type: ignore
 
-from hisim import system_config
+from building_sizer import system_config
 
 
 @dataclasses_json.dataclass_json

@@ -1,19 +1,16 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Thu Sep  8 12:34:27 2022
+""" EconomicParameters Class will be written to a json file."""
 
-@author: Johanna
-"""
-
-from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import json
-import hisim.loadtypes as lt
+
 
 @dataclass_json
 @dataclass()
 class EconomicParameters:
+
+    """EconomicParameter Class is created."""
+
     insulation_bought: bool = True
     insulation_threshold: float = 1e3
     pv_bought: bool = True
@@ -28,9 +25,15 @@ class EconomicParameters:
     battery_threshold: float = 1e3  # in Wh
     h2system_bought: bool = False
     h2system_threshold: float = 5e3
+    chp_bought: bool = False
+    chp_threshold: float = 5e3
+    electrolyzer_bought: bool = False
+    electrolyzer_threshold: float = 5e3
+    surpluscontroller_bought: bool = False
+    surpluscontroller_threshold: float = 5e3
     ev_bought: bool = True
     ev_threshold: float = 2e4
-    
+
 # def create_economicparameters_file(
 #         component: lt.ComponentType, capacity_unit: lt.Units, capacity_for_cost: List,
 #         cost_per_capacity: List, time: List, costfactor_per_time: List, capacity_for_co2: List,
@@ -41,7 +44,7 @@ class EconomicParameters:
 #         cost_per_capacity=cost_per_capacity, time=time, costfactor_per_time=costfactor_per_time,
 #         capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
 #     costfile = json.dumps(asdict(costfile))
-    
+
 #     with open('ComponentCost' + component.value + '.json', 'w') as outfile:
 #         outfile.write(hey)
 

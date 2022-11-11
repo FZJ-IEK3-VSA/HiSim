@@ -16,11 +16,6 @@ from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components import controller_l1_generic_runtime
 import hisim.log as log
-seaborn.set(style='ticks')
-font = {'family' : 'normal',
-        'size'   : 24}
-
-matplotlib.rc('font', **font)
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

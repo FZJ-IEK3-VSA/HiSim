@@ -9,6 +9,11 @@ import numpy as np
 from hisim import log
 from hisim.postprocessing.chartbase import Chart
 from hisim import utils
+from hisim.components import building
+from hisim.components import generic_heat_pump_modular
+from hisim.components import generic_heat_pump
+from hisim.components import advanced_heat_pump_hplib
+from hisim.components import loadprofilegenerator_connector
 mpl.rcParams['agg.path.chunksize'] = 10000
 
 
@@ -227,11 +232,11 @@ class SankeyHISIM(Chart):
 
         for _index, output_result in enumerate(data):
             if output_result.component_name == "HeatPump":
-                if "ElectricityOutput" == output_result.display_name:
+                if output_result.display_name == "ElectricityOutput":
                     electricity_consumption = sum(output_result.Results)
-                if "Heating" == output_result.display_name:
+                if output_result.display_name == "Heating":
                     heating = sum(output_result.Results)
-                if "Cooling" == output_result.display_name:
+                if output_result.display_name == "Cooling":
                     cooling = sum(output_result.Results)
         if cooling < 0:
             cooling = abs(cooling)
@@ -324,19 +329,26 @@ class SankeyHISIM(Chart):
         heating_by_residents = 0
         total_energy_to_residence = 0
         solar_gain_through_windows = 0
+        internal_loss = 0
+        stored_energy_variation = 0
+        thermal_energy_delivered = 0
         for _index, output_result in enumerate(data):
-            if output_result.component_name == "Occupancy" and "HeatingByResidents" == output_result.display_name:
+            if output_result.component_name == "Occupancy" and \
+                    output_result.display_name == loadprofilegenerator_connector.Occupancy.HeatingByResidents:
                 heating_by_residents = sum(output_result.Results)
-            if output_result.component_name == "HeatPump" and "ThermalEnergyDelivered" == output_result.display_name:
+            if output_result.component_name == "HeatPump" and (output_result.display_name in
+                                                               (generic_heat_pump_modular.ModularHeatPump.ThermalPowerDelivered,
+                                                                generic_heat_pump.GenericHeatPump.ThermalEnergyDelivered,
+                                                                advanced_heat_pump_hplib.HeatPumpHplib.ThermalOutputPower)):
                 thermal_energy_delivered = sum(output_result.Results)
             if output_result.component_name == "Building":
-                if "TotalEnergyToResidence" == output_result.display_name:
+                if output_result.display_name == building.Building.TotalEnergyToResidence:
                     total_energy_to_residence = sum(output_result.Results)
-                if "SolarGainThroughWindows" == output_result.display_name:
+                if output_result.display_name == building.Building.SolarGainThroughWindows:
                     solar_gain_through_windows = sum(output_result.Results)
-                if "InternalLoss" == output_result.display_name:
+                if output_result.display_name == building.Building.InternalLoss:
                     internal_loss = sum(output_result.Results)
-                if "StoredEnergyVariation" == output_result.display_name:
+                if output_result.display_name == building.Building.StoredEnergyVariation:
                     stored_energy_variation = sum(output_result.Results)
         if heating_by_residents == 0 or total_energy_to_residence == 0 or solar_gain_through_windows == 0:
             raise Exception("Sum of outputs has not been calculated.")

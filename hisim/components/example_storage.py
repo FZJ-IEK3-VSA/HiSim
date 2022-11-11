@@ -1,23 +1,19 @@
-"""Example Storage.
+"""Example Storage."""
 
-This module simulates the simple storage and its example storage state.
-It contains the class ExampleStorageState with the functions:
-    * _init_ - for initializing the attributes in the class.
-    * store - returns what is put in the storage
-    * withdraw - returns what is put out of the storage
-It contains the class SimpleStorage with the functions:
-    * _init_ - for initializing the attributes in the class.
-    * i_save_state -.
-    * i_restore_state -.
-    * i_simulate -.
-"""
+# clean
 
 # Generic/Built-in
 import copy
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import (
+    Component,
+    SingleTimeStepValues,
+    ComponentInput,
+    ComponentOutput,
+)
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim.component import ConfigBase
@@ -52,7 +48,7 @@ class ExampleStorageState:
         raise Exception("forgotten case")
 
     def withdraw(self, val: float) -> float:
-        """Returns how much is put out of the storage."""
+        """Returns how much is taken out of the storage."""
 
         if self.fill > val:
             # has enough
@@ -73,24 +69,29 @@ class ExampleStorageState:
 @dataclass
 class SimpleStorageConfig(ConfigBase):
 
-    """ Configuration of the Simple Storage. """
+    """Configuration of the Simple Storage."""
 
     @classmethod
     def get_main_classname(cls):
-        """ Returns the full class name of the base class. """
+        """Returns the full class name of the base class."""
         return SimpleStorage.get_full_classname()
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
-    component_name: str
+    name: str
     loadtype: lt.LoadTypes
     unit: lt.Units
     capacity: float
 
     @classmethod
     def get_default_thermal_storage(cls):
-        """ Gets a default Simple Storage. """
-        return SimpleStorageConfig(component_name="Simple Thermal Storage", loadtype=lt.LoadTypes.WARM_WATER, unit=lt.Units.KWH, capacity=50)
+        """Gets a default Simple Storage."""
+        return SimpleStorageConfig(
+            name="Simple Thermal Storage",
+            loadtype=lt.LoadTypes.WARM_WATER,
+            unit=lt.Units.KWH,
+            capacity=50,
+        )
 
 
 class SimpleStorage(Component):
@@ -103,23 +104,54 @@ class SimpleStorage(Component):
     CurrentFillLevel = "Current Fill Level Absolute"
     CurrentFillLevelPercent = "Current Fill Level Percent"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: SimpleStorageConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: SimpleStorageConfig,
+    ) -> None:
         """Constructs all the neccessary attributes for the SimpleStorage object."""
         self.simplestorageconfig = config
-        super().__init__(self.simplestorageconfig.component_name, my_simulation_parameters=my_simulation_parameters)
-        self.charging_input: ComponentInput = self.add_input(self.simplestorageconfig.component_name, SimpleStorage.ChargingAmount,
-                                                             self.simplestorageconfig.loadtype, self.simplestorageconfig.unit, True)
-        self.discharging_input: ComponentInput = self.add_input(self.simplestorageconfig.component_name, SimpleStorage.DischargingAmount,
-                                                                self.simplestorageconfig.loadtype, self.simplestorageconfig.unit, True)
-        self.actual_delta: ComponentOutput = self.add_output(self.simplestorageconfig.component_name, SimpleStorage.ActualStorageDelta,
-                                                             self.simplestorageconfig.loadtype, self.simplestorageconfig.unit)
-        self.current_fill: ComponentOutput = self.add_output(self.simplestorageconfig.component_name, SimpleStorage.CurrentFillLevel,
-                                                             self.simplestorageconfig.loadtype, self.simplestorageconfig.unit)
-        self.current_fill_percent: ComponentOutput = self.add_output(self.simplestorageconfig.component_name, SimpleStorage.CurrentFillLevelPercent,
-                                                                     self.simplestorageconfig.loadtype, lt.Units.PERCENT)
+        super().__init__(
+            self.simplestorageconfig.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        # Initialized variables
         self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)
         self.capacity = self.simplestorageconfig.capacity
         self.previous_state = copy.copy(self.state)
+
+        self.charging_input: ComponentInput = self.add_input(
+            self.simplestorageconfig.name,
+            SimpleStorage.ChargingAmount,
+            self.simplestorageconfig.loadtype,
+            self.simplestorageconfig.unit,
+            True,
+        )
+        self.discharging_input: ComponentInput = self.add_input(
+            self.simplestorageconfig.name,
+            SimpleStorage.DischargingAmount,
+            self.simplestorageconfig.loadtype,
+            self.simplestorageconfig.unit,
+            True,
+        )
+        self.actual_delta: ComponentOutput = self.add_output(
+            self.simplestorageconfig.name,
+            SimpleStorage.ActualStorageDelta,
+            self.simplestorageconfig.loadtype,
+            self.simplestorageconfig.unit,
+        )
+        self.current_fill: ComponentOutput = self.add_output(
+            self.simplestorageconfig.name,
+            SimpleStorage.CurrentFillLevel,
+            self.simplestorageconfig.loadtype,
+            self.simplestorageconfig.unit,
+        )
+        self.current_fill_percent: ComponentOutput = self.add_output(
+            self.simplestorageconfig.name,
+            SimpleStorage.CurrentFillLevelPercent,
+            self.simplestorageconfig.loadtype,
+            lt.Units.PERCENT,
+        )
 
     def i_save_state(self) -> None:
         """Saves the current state of the storage."""
@@ -129,8 +161,9 @@ class SimpleStorage(Component):
         """Restores the previous state of the storage."""
         self.state = copy.copy(self.previous_state)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the storage."""
+
         charging = stsv.get_input_value(self.charging_input)
         discharging = stsv.get_input_value(self.discharging_input)
         if charging < 0:

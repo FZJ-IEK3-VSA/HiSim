@@ -9,13 +9,14 @@ for the next Building Sizer iteration as a result to the UTSP (and therey also t
 """
 
 import dataclasses
+import random as ra
 from typing import Any, List, Optional, Tuple
 
-import random as ra
-
 import dataclasses_json
-from utspclient import client, result_file_filters  # type: ignore
-from utspclient.datastructures import CalculationStatus, TimeSeriesRequest  # type: ignore
+from utspclient import client  # type: ignore
+from utspclient.datastructures import (CalculationStatus,  # type: ignore
+                                       ResultDelivery, ResultFileRequirement,
+                                       TimeSeriesRequest)
 
 from building_sizer import system_config
 
@@ -50,7 +51,7 @@ def send_hisim_requests(
         TimeSeriesRequest(
             sim_config,
             "hisim",
-            required_result_files={"Residence_Building.csv"},
+            required_result_files={"Residence_Building.csv": ResultFileRequirement.REQUIRED},
         )
         for sim_config in hisim_configs
     ]
@@ -81,7 +82,7 @@ def send_building_sizer_request(
 
 def get_results_from_requisite_requests(
     reqisite_requests: List[TimeSeriesRequest], url: str, api_key: str = ""
-):
+) -> List[ResultDelivery]:
     """
     Collects the results from the HiSim requests sent in the previous iteration
     """
@@ -111,7 +112,7 @@ def trigger_next_iteration(
 
 def building_sizer_iteration(
     request: BuildingSizerRequest,
-) -> Tuple[Optional[str], Any]:
+) -> Tuple[Optional[TimeSeriesRequest], Any]:
     results = get_results_from_requisite_requests(
         request.requisite_requests, request.url, request.api_key
     )
@@ -132,7 +133,7 @@ def building_sizer_iteration(
     hisim_config.battery_included = True
     hisim_config.battery_capacity = ra.randint(1,10)
     
-    hisim_configs = [hisim_config.to_json()]
+    hisim_configs = [hisim_config.to_json()]  # type: ignore
 
     # trigger the next iteration with the new hisim configurations
     next_request = trigger_next_iteration(request, hisim_configs)
@@ -153,7 +154,7 @@ def main():
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
         initial_hisim_configs = [
-            system_config.SystemConfig().to_json()
+            system_config.SystemConfig().to_json()  # type: ignore
         ]
         next_request = trigger_next_iteration(request, initial_hisim_configs)
         result = "My first iteration result"

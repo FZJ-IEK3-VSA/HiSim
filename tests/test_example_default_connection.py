@@ -9,6 +9,6 @@ from hisim import utils
 def test_basic_household_with_default_connections():
     path = "../examples/default_connections.py"
     func = "basic_household_with_default_connections"
-    mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60)
+    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func,mysimpar )
     log.information(os.getcwd())

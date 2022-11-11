@@ -49,5 +49,5 @@ def test_modular_household_configurations():
     """ Tests the modular example. """
     path = "../examples/modular_example.py"
     func = "modular_household_explicit"
-    mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60 * 15)
+    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60 * 15)
     hisim_main.main(path, func, mysimpar)

@@ -40,8 +40,8 @@ while not finished:
     # Check if this was the final iteration and the building sizer is finished
     finished = building_sizer_result.finished
     # Get the building sizer configuration for the next request
-    building_sizer_request = building_sizer_result.subsequent_request
-    if building_sizer_request is not None:
+    if building_sizer_result.subsequent_request is not None:
+        building_sizer_request = building_sizer_result.subsequent_request
         # Loop detection: check if the same building sizer request has been encountered before (that would result in an endless loop)
         request_hash = building_sizer_request.get_hash()
         if request_hash in previous_iterations:

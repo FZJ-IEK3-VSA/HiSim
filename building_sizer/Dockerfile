@@ -7,6 +7,8 @@ RUN pip install git+https://github.com/FZJ-IEK3-VSA/UTSP_Client.git
 
 # Copy source code to image
 COPY building_sizer.py building_sizer.py
+COPY system_config.py system_config.py
+COPY heating_system_enums.py heating_system_enums.py
 
 # Create a folder for the input files
 RUN mkdir /input

@@ -18,7 +18,7 @@ from utspclient.datastructures import (CalculationStatus,  # type: ignore
                                        ResultDelivery, ResultFileRequirement,
                                        TimeSeriesRequest)
 
-from building_sizer import system_config
+import system_config
 
 
 @dataclasses_json.dataclass_json
@@ -51,7 +51,7 @@ def send_hisim_requests(
         TimeSeriesRequest(
             sim_config,
             "hisim",
-            required_result_files={"Residence_Building.csv": ResultFileRequirement.REQUIRED},
+            required_result_files={"KPIs.csv": ResultFileRequirement.REQUIRED},
         )
         for sim_config in hisim_configs
     ]

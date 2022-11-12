@@ -6,7 +6,7 @@ from dataclasses_json import dataclass_json
 
 from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from building_sizer.heating_system_enums import HeatingSystems
+from heating_system_enums import HeatingSystems
 
 
 @dataclass_json

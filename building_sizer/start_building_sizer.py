@@ -9,7 +9,7 @@ from building_sizer import BuildingSizerRequest, BuildingSizerResult
 
 # Define URL and API key for the UTSP server
 URL = "http://134.94.131.167:443/api/v1/profilerequest"
-API_KEY = 'OrjpZY93BcNWw8lKaMp0BEchbCc'
+API_KEY = ''
 
 # For testing: create a random id to enforce recalculation for each request.
 # For production use, this can be left out.

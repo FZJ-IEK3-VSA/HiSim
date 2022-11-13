@@ -10,9 +10,6 @@ from hisim.components import controller_pid
 from hisim.components import air_conditioner
 from hisim.components import controller_mpc
 from hisim.components import generic_price_signal
-from pympler import tracker
-from pympler import summary
-from pympler import muppy
 import os
 
 __authors__ = "Vitor Hugo Bellotto Zago"

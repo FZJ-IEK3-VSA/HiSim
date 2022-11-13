@@ -225,7 +225,7 @@ class Building(dynamic_component.DynamicComponent):
 
     @utils.measure_execution_time
     def __init__(self,
-                 my_simulation_parameters: SimulationParameters, config: BuildingConfig, my_simulation_repository : Optional[ cp.SimRepository ] ):
+                 my_simulation_parameters: SimulationParameters, config: BuildingConfig, my_simulation_repository : Optional[ cp.SimRepository ] = None):
         # dynamic
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []                                               

@@ -66,7 +66,7 @@ class PIDController(cp.Component):
     integrator = "integrator"
     FeedForwardSignal="FeedForwardSignal"
     def __init__(self, my_simulation_parameters: SimulationParameters,
-                 my_simulation_repository : Optional[ cp.SimRepository ] = None) -> None:
+                 my_simulation_repository : cp.SimRepository = None) -> None:
         super().__init__("PIDController", my_simulation_parameters=my_simulation_parameters)
         self.my_simulation_parameters=my_simulation_parameters
         self.build(my_simulation_repository)

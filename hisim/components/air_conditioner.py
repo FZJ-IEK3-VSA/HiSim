@@ -78,7 +78,7 @@ class AirConditioner(cp.Component):
                  min_operation_time: int = 60 * 60,
                  min_idle_time: int = 15 * 60,
                  control: str = "on_off",
-                 my_simulation_repository : Optional[ cp.SimRepository ] = None):
+                 my_simulation_repository : cp.SimRepository = None):
         super().__init__("AirConditioner", my_simulation_parameters=my_simulation_parameters)
         self.build(manufacturer, name, min_operation_time, min_idle_time,my_simulation_repository)
 

@@ -5,6 +5,7 @@ import json
 from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from typing import Optional
 import pandas as pd
 import numpy as np
 
@@ -79,19 +80,20 @@ class Occupancy(cp.Component):
     WaterConsumption = "WaterConsumption"
 
     Electricity_Demand_Forecast_24h = "Electricity_Demand_Forecast_24h"
+    heating_by_residents_yearly_forecast="heating_by_residents_yearly_forecast" 
 
     # Similar components to connect to:
     # None
     @utils.measure_execution_time
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
+        self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig,my_simulation_repository : Optional[ cp.SimRepository ] = None
     ) -> None:
         super().__init__(
             name="Occupancy", my_simulation_parameters=my_simulation_parameters
         )
         self.profile_name = config.profile_name
         self.occupancyConfig = config
-        self.build()
+        self.build(my_simulation_repository)
 
         # Inputs - Not Mandatories
         self.ww_mass_input: cp.ComponentInput = self.add_input(
@@ -264,7 +266,7 @@ class Occupancy(cp.Component):
                 self.Electricity_Demand_Forecast_24h, demandforecast
             )
 
-    def build(self):
+    def build(self,my_simulation_repository):
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.component_name,
             parameter_class=self.occupancyConfig,
@@ -403,6 +405,8 @@ class Occupancy(cp.Component):
             del data
             del database
             # utils.save_cache("Occupancy", parameters, database)
+        if self.my_simulation_parameters.system_config.predictive:
+            my_simulation_repository.set_entry(self.heating_by_residents_yearly_forecast, self.heating_by_residents)  
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):

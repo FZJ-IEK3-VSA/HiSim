@@ -64,8 +64,15 @@ class LocationEnum(Enum):
     Muehldorf = ("13Muehldorf", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_13", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
     Stoetten = ("14Stoetten", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_14", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
     Garmisch_Partenkirchen = ("15Garmisch Partenkirchen", "test-reference-years_2015-2045_15-locations", "data_processed", "weather_region_15", WeatherDataSourceEnum.DWD)  # noqa: invalid-name
-    Madrid = ("Madrid", "test-reference-years_2015-2045_15-locations", "NSRDB", "Madrid", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
-    Seville = ("Seville", "test-reference-years_2015-2045_15-locations", "NSRDB", "Seville", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Madrid = ("Madrid", "NSRDB", "Southern_Europe", "Madrid", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Seville = ("Seville", "NSRDB", "Southern_Europe", "Seville", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Milan = ("Milan", "NSRDB", "Southern_Europe", "Milan", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Athens = ("Athens", "NSRDB", "Southern_Europe", "Athens", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Cyprus = ("Cyprus", "NSRDB", "Southern_Europe", "Cyprus", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Belgrade = ("Belgrade", "NSRDB", "Southern_Europe", "Belgrade", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Vranje = ("Vranje", "NSRDB", "Southern_Europe", "Vranje", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Ljubljana=("Ljubljana", "NSRDB", "Southern_Europe", "Ljubljana", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
+    Sarajevo = ("Sarajevo", "NSRDB", "Southern_Europe", "Sarajevo", WeatherDataSourceEnum.NSRDB)  # noqa: invalid-name
 
 
 @dataclass
@@ -117,6 +124,7 @@ class Weather(Component):
     Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
     Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
+    Weather_Altitude_yearly_forecast="Weather_Altitude_yearly_forecast"                                                                   
 
     @utils.measure_execution_time
     def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig):
@@ -285,6 +293,7 @@ class Weather(Component):
             self.simulation_repository.set_entry(self.Weather_Azimuth_yearly_forecast, self.azimuth_list)
             self.simulation_repository.set_entry(self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list)
             self.simulation_repository.set_entry(self.Weather_WindSpeed_yearly_forecast, self.wind_speed_list)
+            self.simulation_repository.set_entry(self.Weather_Altitude_yearly_forecast, self.altitude_list)                                                                                               
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """ Interpolates a time series. """

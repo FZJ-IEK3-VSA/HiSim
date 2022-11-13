@@ -1,6 +1,6 @@
 # Generic/Built-in
 import copy
-
+from typing import Optional
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -61,6 +61,14 @@ class GenericBattery(cp.Component):
     StoredEnergy = "StoredEnergy"
     StateOfCharge = "StateOfCharge"
     ElectricityOutput = "ElectricityOutput"
+    
+    # simulation repository
+    MaximumBatteryCapacity="MaximumBatteryCapacity"
+    MinimumBatteryCapacity="MinimumBatteryCapacity"
+    MaximalChargingPower="MaximalChargingPower"
+    MaximalDischargingPower="MaximalDischargingPower"
+    BatteryEfficiency="BatteryEfficiency"
+    InverterEfficiency="InverterEfficiency"
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -82,6 +90,7 @@ class GenericBattery(cp.Component):
                                                          lt.LoadTypes.ELECTRICITY,
                                                          lt.Units.WATT,
                                                          True)
+        
         self.stateC : cp.ComponentInput = self.add_input(self.component_name,
                                                          self.State,
                                                          lt.LoadTypes.ANY,
@@ -118,10 +127,10 @@ class GenericBattery(cp.Component):
                 break
 
         if battery_found == False:
-            raise Exception("Heat pump model not registered in the database")
+            raise Exception("Battery model not registered in the database")
 
         self.max_stored_energy = battery['Capacity'] * 1E3
-        self.min_stored_energy = self.max_stored_energy * 0.0
+        self.min_stored_energy = self.max_stored_energy * 0.2    # It is common to set it greater than 0 to limit battery degradation
         self.efficiency = battery['Efficiency']
         self.efficiency_inverter = battery['Inverter Efficiency']
         self.max_var_stored_energy = battery['Maximal Charging Power'] * 1E3 * self.time_correction_factor
@@ -144,7 +153,15 @@ class GenericBattery(cp.Component):
         self.previous_state = copy.deepcopy(self.state)
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
-        pass
+        if self.my_simulation_parameters.system_config.predictive:
+            # send battery specification to the mpc controller for planning the cost optimal operation 
+            self.simulation_repository.set_entry(self.MaximumBatteryCapacity, self.max_stored_energy)
+            self.simulation_repository.set_entry(self.MinimumBatteryCapacity, self.min_stored_energy)
+            self.simulation_repository.set_entry(self.MaximalChargingPower, self.max_var_stored_energy/self.time_correction_factor)
+            self.simulation_repository.set_entry(self.MaximalDischargingPower, -self.min_var_stored_energy/self.time_correction_factor)
+            self.simulation_repository.set_entry(self.BatteryEfficiency, self.efficiency)
+            self.simulation_repository.set_entry(self.InverterEfficiency, self.efficiency_inverter)
+        
     def i_restore_state(self)-> None:
         self.state = copy.deepcopy(self.previous_state)
 
@@ -155,7 +172,7 @@ class GenericBattery(cp.Component):
         load = stsv.get_input_value(self.inputC)
         state = stsv.get_input_value(self.stateC)
 
-        load = - load / self.seconds_per_timestep
+        load =  - load  / self.seconds_per_timestep
 
         capacity = self.state.stored_energy
         max_capacity = self.max_stored_energy

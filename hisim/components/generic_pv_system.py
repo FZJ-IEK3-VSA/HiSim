@@ -144,7 +144,7 @@ class PVSystemConfig(ConfigBase):
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
-    name: str
+    name: str         
     time: int
     location: str
     module_name: str
@@ -204,6 +204,7 @@ class PVSystem(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
+    pv_forecast_yearly="pv_forecast_yearly"
 
     # Similar components to connect to:
     # 1. Weather
@@ -388,6 +389,9 @@ class PVSystem(cp.Component):
             else:
                 self.data = [0] * self.my_simulation_parameters.timesteps
                 self.data_length = self.my_simulation_parameters.timesteps
+        if self.my_simulation_parameters.system_config.predictive == True:        
+            pv_forecast_yearly=[self.output[t] * self.pvconfig.power for t in range(self.my_simulation_parameters.timesteps)]
+            self.simulation_repository.set_entry( self.pv_forecast_yearly, pv_forecast_yearly )                                                                         
 
         self.modules = pd.read_csv(os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]), index_col=0, )
 

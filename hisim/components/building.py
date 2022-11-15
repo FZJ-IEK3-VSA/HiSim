@@ -727,6 +727,7 @@ class Building(dynamic_component.DynamicComponent):
                     stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUILDING]
                 )
             )
+
         previous_thermal_mass_temperature_in_celsius = (
             self.state.thermal_mass_temperature_in_celsius
         )
@@ -749,29 +750,25 @@ class Building(dynamic_component.DynamicComponent):
             ]
 
         (
-            thermal_mass_temperature_in_celsius,
+            thermal_mass_average_bulk_temperature_in_celsius,
             heat_loss_in_watt,
         ) = self.calc_crank_nicolson(
-            energy_demand_in_watt=thermal_power_delivered_in_watt,
+            heat_demand_in_watt=thermal_power_delivered_in_watt,
             internal_heat_gains_in_watt=occupancy_heat_gain_in_watt,
             solar_heat_gains_in_watt=solar_heat_gain_through_windows,
             outside_temperature_in_celsius=temperature_outside_in_celsius,
             thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
         )
-        self.state.thermal_mass_temperature_in_celsius = (
-            thermal_mass_temperature_in_celsius
-        )
+        self.state.thermal_mass_temperature_in_celsius = thermal_mass_average_bulk_temperature_in_celsius
 
         # Returns outputs
-        # stsv.set_output_value(self.t_mC, t_air)
-        stsv.set_output_value(self.thermal_mass_temperature_channel, thermal_mass_temperature_in_celsius)
+
+        stsv.set_output_value(self.thermal_mass_temperature_channel, thermal_mass_average_bulk_temperature_in_celsius)
         # stsv.set_output_value(self.t_airC, t_air)
+        # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
         stsv.set_output_value(self.total_power_to_residence_channel, heat_loss_in_watt)
-        # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
         stsv.set_output_value(self.solar_gain_through_windows_channel, solar_heat_gain_through_windows)
-        # convert Wh back to W
         stsv.set_output_value(self.var_max_thermal_building_demand_channel, self.max_thermal_building_demand_in_watt)
-        # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
 
         # Saves solar gains cache
         if not self.is_in_cache:
@@ -1371,7 +1368,7 @@ class Building(dynamic_component.DynamicComponent):
         internal_heat_gains_in_watt,
         # this is labeled as Phi_sol in paper [1] (** Check header)
         solar_heat_gains_in_watt,
-        power_demand_in_watt,
+        # power_demand_in_watt,
     ):
         """Calculates the heat flow from the solar gains, heating/cooling system, and internal gains into the building.
 
@@ -1388,9 +1385,10 @@ class Building(dynamic_component.DynamicComponent):
 
         # Calculates the heat flows to various points of the building based on the breakdown in section C.2, formulas C.1-C.3
         # Heat flow to the air node in W, before labeled Phi_ia
-        self.heat_flux_indoor_air_in_watt = (
-            0.5 * internal_heat_gains_in_watt + power_demand_in_watt
-        )
+        # self.heat_flux_indoor_air_in_watt = (
+        #     0.5 * internal_heat_gains_in_watt + power_demand_in_watt
+        # )
+        self.heat_flux_indoor_air_in_watt = 0.5 * internal_heat_gains_in_watt
         # Heat flow to the surface node in W, before labeled Phi_st
         self.heat_flux_internal_room_surface_in_watt = (
             1
@@ -1454,7 +1452,7 @@ class Building(dynamic_component.DynamicComponent):
             )
         )
 
-    def calc_equivalent_heat_flux_in_watt(self, temperature_outside_in_celsius):
+    def calc_equivalent_heat_flux_in_watt(self, temperature_outside_in_celsius, heat_demand_in_watt):
         """Calculates a global heat transfer: Phi_m_tot.
 
         This is a definition used to simplify equation calc_t_m_next so it's not so long to write out
@@ -1477,7 +1475,7 @@ class Building(dynamic_component.DynamicComponent):
                 + self.transmission_heat_transfer_coeffcient_1_in_watt_per_kelvin
                 * (
                     (
-                        self.heat_flux_indoor_air_in_watt
+                        (self.heat_flux_indoor_air_in_watt + heat_demand_in_watt)
                         / self.thermal_conductance_by_ventilation_in_watt_per_kelvin
                     )
                     + t_supply
@@ -1486,7 +1484,7 @@ class Building(dynamic_component.DynamicComponent):
             / self.transmission_heat_transfer_coefficient_2_in_watt_per_kelvin
         )
 
-    def calc_thermal_mass_temperature_in_celsius_used_for_calculations(
+    def calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
         self,
         previous_thermal_mass_temperature_in_celsius,
     ):
@@ -1504,6 +1502,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
         temperature_outside_in_celsius,
         thermal_mass_temperature_in_celsius,
+        heat_demand_in_watt
     ):
         """Calculate the temperature of the inside room surfaces: T_s.
 
@@ -1523,7 +1522,7 @@ class Building(dynamic_component.DynamicComponent):
             + self.transmission_heat_transfer_coeffcient_1_in_watt_per_kelvin
             * (
                 t_supply
-                + self.heat_flux_indoor_air_in_watt
+                + (self.heat_flux_indoor_air_in_watt + heat_demand_in_watt)
                 / self.thermal_conductance_by_ventilation_in_watt_per_kelvin
             )
         ) / (
@@ -1536,6 +1535,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
         temperature_outside_in_celsius,
         temperature_internal_room_surfaces_in_celsius,
+        heat_demand_in_watt
     ):
         """Calculate the temperature of the air node: T_air.
 
@@ -1550,6 +1550,7 @@ class Building(dynamic_component.DynamicComponent):
             self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
             * temperature_internal_room_surfaces_in_celsius
             + self.thermal_conductance_by_ventilation_in_watt_per_kelvin * t_supply
+            + heat_demand_in_watt
             + self.heat_flux_indoor_air_in_watt
         ) / (
             self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
@@ -1558,11 +1559,11 @@ class Building(dynamic_component.DynamicComponent):
 
     def calc_crank_nicolson(
         self,
-        energy_demand_in_watt,
         internal_heat_gains_in_watt,
         solar_heat_gains_in_watt,
         outside_temperature_in_celsius,
         thermal_mass_temperature_prev_in_celsius,
+        heat_demand_in_watt
     ):
         """Determines node temperatures and computes derivation to determine the new node temperatures.
 
@@ -1576,11 +1577,10 @@ class Building(dynamic_component.DynamicComponent):
         heat_loss_in_watt = self.calc_heat_flow(
             internal_heat_gains_in_watt,
             solar_heat_gains_in_watt,
-            energy_demand_in_watt,
         )
 
         # Updates total flow
-        self.calc_equivalent_heat_flux_in_watt(outside_temperature_in_celsius)
+        self.calc_equivalent_heat_flux_in_watt(outside_temperature_in_celsius, heat_demand_in_watt)
 
         # calculates the new bulk temperature POINT from the old one # CHECKED Requires t_m_prev
         self.calc_next_thermal_mass_temperature_in_celsius(
@@ -1589,7 +1589,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # calculates the AVERAGE bulk temperature used for the remaining
         thermal_mass_average_bulk_temperature_in_celsius = (
-            self.calc_thermal_mass_temperature_in_celsius_used_for_calculations(
+            self.calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
                 thermal_mass_temperature_prev_in_celsius
             )
         )

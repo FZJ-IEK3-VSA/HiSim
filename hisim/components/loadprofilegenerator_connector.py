@@ -12,6 +12,7 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig

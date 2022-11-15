@@ -18,7 +18,9 @@ from tests import functions_for_testing as fft
 @utils.measure_execution_time
 def test_building():
     """Test function for the building module."""
+
     # Sets inputs
+    # log.LOGGING_LEVEL = 6
     starttime = datetime.datetime.now()
     d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
     log.profile("Test Building start @ " + d_four)
@@ -36,6 +38,7 @@ def test_building():
     repo = component.SimRepository()
     t_two = time.perf_counter()
     log.profile(f"T2: {t_two - t_one}")
+
     # Set Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
         profile_name=my_occupancy_profile, name="Occupancy-1"
@@ -72,6 +75,7 @@ def test_building():
     )
     my_residence.set_sim_repo(repo)
     my_residence.i_prepare_simulation()
+
     # Fake power delivered
     thermal_power_delivered_output = component.ComponentOutput(
         "FakeThermalDeliveryMachine", "ThermalDelivery", LoadTypes.HEATING, Units.WATT
@@ -85,7 +89,7 @@ def test_building():
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
         number_of_outputs
     )
-
+    log.information("Number of outputs: " + str(number_of_outputs))
     my_residence.temperature_outside_channel.source_output = (
         my_weather.air_temperature_output
     )
@@ -112,33 +116,54 @@ def test_building():
     #   -> check if temperature difference is proportional to time step size ( > 0.1 °C per minute)
     t_six = time.perf_counter()
     log.profile(f"T2: {t_six - t_five}")
+
     for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
 
         log.trace("Seconds per Timestep: " + str(seconds_per_timestep))
+        log.information("Seconds per Timestep: " + str(seconds_per_timestep) + "\n")
         my_residence.seconds_per_timestep = seconds_per_timestep
 
         # Simulates
         stsv.values[my_residence.thermal_mass_temperature_channel.global_index] = 23
-        # log.information(str(stsv.values))
-        my_weather.i_simulate(0, stsv, False)
-        log.information(str(stsv.values))
+
         my_occupancy.i_simulate(0, stsv, False)
-        log.information(str(stsv.values))
+        my_weather.i_simulate(0, stsv, False)
+        prev_temp = my_residence.state.thermal_mass_temperature_in_celsius
+        log.information(
+            "state thermal mass temp before residence simu = previous thermal mass temp "
+            + str(prev_temp)
+        )
         my_residence.i_simulate(0, stsv, False)
-        log.information(str(stsv.values))
+        next_temp = my_residence.next_thermal_mass_temperature_in_celsius
 
-        log.information(f"Occupancy: {stsv.values[:4]}\n")
-        log.information(f"Weather: {stsv.values[4:10]}\n")
-        log.information(f"Residence: {stsv.values[10:]}\n")
+        log.information("next thermal mass temp " + str(next_temp))
+        log.information(
+            "state thermal mass temp after residence simu = thermal mass average bulk temp "
+            + str(my_residence.state.thermal_mass_temperature_in_celsius)
+            + "\n"
+        )
 
-        log.information(str(stsv.values[11]))
-        # todo: this needs to be corrected
+        log.information("stsv values after simus run " + str(stsv.values) + "\n")
+
+        log.information(
+            f"Fake Residence Thermal Power Delivery Output (residence heat demand in watt): {stsv.values[0]}"
+        )
+        log.information(f"Occupancy Outputs: {stsv.values[1:5]}")
+        log.information(f"Weather Outputs: {stsv.values[5:14]}")
+        log.information(f"Residence Outputs: {stsv.values[14:18]}")
+
+        # thermal bulk temp (which is the residence output temperature) is equal to the average of the previous and next thermal mass temperatures
+        assert (
+            my_residence.state.thermal_mass_temperature_in_celsius
+            == (prev_temp + next_temp) / 2
+        )
+
         assert (
             stsv.values[my_residence.thermal_mass_temperature_channel.global_index]
             - 23.0
-        ) < -0.01 * (seconds_per_timestep / 60)
+        ) > -0.1 * (seconds_per_timestep / 60)
+
     t_seven = time.perf_counter()
-    log.profile(f"T2: {t_seven - t_six}")
     log.profile(f"T2: {t_seven - t_six}")
     starttime = datetime.datetime.now()
     d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")

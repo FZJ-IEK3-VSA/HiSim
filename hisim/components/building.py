@@ -72,12 +72,12 @@ from hisim import (
     log,
 )
 
-from hisim.components.configuration import (
-    PhysicsConfig,
-)
-from hisim.components.configuration import (
-    LoadConfig,
-)
+# from hisim.components.configuration import (
+#     PhysicsConfig,
+# )
+# from hisim.components.configuration import (
+#     LoadConfig,
+# )
 from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnector,
 )
@@ -652,81 +652,82 @@ class Building(dynamic_component.DynamicComponent):
 
         occupancy_heat_gain_in_watt = stsv.get_input_value(self.occupancy_heat_gain_channel)
         temperature_outside_in_celsius = stsv.get_input_value(self.temperature_outside_channel)
+        thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
 
-        # With Thermal Energy Storage (TES) [In Development]
-        if self.mass_input_channel.source_output is not None:
-            if force_convergence:
-                return
+        # # With Thermal Energy Storage (TES) [In Development]
+        # if self.mass_input_channel.source_output is not None:
+        #     if force_convergence:
+        #         return
 
-            thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
-            mass_input_in_kilogram_per_second = stsv.get_input_value(self.mass_input_channel)
+        #     thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
+        #     mass_input_in_kilogram_per_second = stsv.get_input_value(self.mass_input_channel)
 
-            temperature_input_in_celsius = stsv.get_input_value(self.temperature_input_channel)
+        #     temperature_input_in_celsius = stsv.get_input_value(self.temperature_input_channel)
 
-            if thermal_power_delivered_in_watt > 0 and (
-                mass_input_in_kilogram_per_second == 0
-                and temperature_input_in_celsius == 0
-            ):
-                """first iteration --> random numbers"""
-                temperature_input_in_celsius = 40.456
-                mass_input_in_kilogram_per_second = 0.0123
+        #     if thermal_power_delivered_in_watt > 0 and (
+        #         mass_input_in_kilogram_per_second == 0
+        #         and temperature_input_in_celsius == 0
+        #     ):
+        #         """first iteration --> random numbers"""
+        #         temperature_input_in_celsius = 40.456
+        #         mass_input_in_kilogram_per_second = 0.0123
 
-            if thermal_power_delivered_in_watt > 0:
+        #     if thermal_power_delivered_in_watt > 0:
 
-                massflows_possible_in_kilogram_per_second = (
-                    LoadConfig.possible_massflows_load
-                )
-                mass_flow_level = 0
-                # K = W / (J/kgK * kg/s); delta T in Kelvin = delta T in Celsius; heat capacity J/kgK = J/kg°C
-                temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
-                    PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-                    * massflows_possible_in_kilogram_per_second[mass_flow_level]
-                )
-                while temperature_delta_heat_in_kelvin > LoadConfig.delta_T:
-                    mass_flow_level += 1
-                    temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
-                        PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-                        * massflows_possible_in_kilogram_per_second[mass_flow_level]
-                    )
+        #         massflows_possible_in_kilogram_per_second = (
+        #             LoadConfig.possible_massflows_load
+        #         )
+        #         mass_flow_level = 0
+        #         # K = W / (J/kgK * kg/s); delta T in Kelvin = delta T in Celsius; heat capacity J/kgK = J/kg°C
+        #         temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
+        #             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        #             * massflows_possible_in_kilogram_per_second[mass_flow_level]
+        #         )
+        #         while temperature_delta_heat_in_kelvin > LoadConfig.delta_T:
+        #             mass_flow_level += 1
+        #             temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
+        #                 PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        #                 * massflows_possible_in_kilogram_per_second[mass_flow_level]
+        #             )
 
-                mass_input_load_in_kilogram_per_timestep = (
-                    massflows_possible_in_kilogram_per_second[mass_flow_level]
-                    * self.seconds_per_timestep
-                )
+        #         mass_input_load_in_kilogram_per_timestep = (
+        #             massflows_possible_in_kilogram_per_second[mass_flow_level]
+        #             * self.seconds_per_timestep
+        #         )
 
-                energy_demand_in_joule_per_timestep = (
-                    thermal_power_delivered_in_watt * self.seconds_per_timestep
-                )
-                enthalpy_slice_in_joule_per_timestep = (
-                    mass_input_load_in_kilogram_per_timestep
-                    * temperature_input_in_celsius
-                    * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-                )
-                enthalpy_new_in_joule_per_timestep = (
-                    enthalpy_slice_in_joule_per_timestep
-                    - energy_demand_in_joule_per_timestep
-                )
-                temperature_new_in_celsius = enthalpy_new_in_joule_per_timestep / (
-                    mass_input_load_in_kilogram_per_timestep
-                    * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-                )
+        #         energy_demand_in_joule_per_timestep = (
+        #             thermal_power_delivered_in_watt * self.seconds_per_timestep
+        #         )
+        #         enthalpy_slice_in_joule_per_timestep = (
+        #             mass_input_load_in_kilogram_per_timestep
+        #             * temperature_input_in_celsius
+        #             * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        #         )
+        #         enthalpy_new_in_joule_per_timestep = (
+        #             enthalpy_slice_in_joule_per_timestep
+        #             - energy_demand_in_joule_per_timestep
+        #         )
+        #         temperature_new_in_celsius = enthalpy_new_in_joule_per_timestep / (
+        #             mass_input_load_in_kilogram_per_timestep
+        #             * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        #         )
 
-            else:
-                # no water is flowing
-                temperature_new_in_celsius = temperature_input_in_celsius
-                mass_input_load_in_kilogram_per_timestep = 0
+        #     else:
+        #         # no water is flowing
+        #         temperature_new_in_celsius = temperature_input_in_celsius
+        #         mass_input_load_in_kilogram_per_timestep = 0
 
-            self.test_new_temperature_in_celsius = temperature_new_in_celsius
+        #     self.test_new_temperature_in_celsius = temperature_new_in_celsius
 
-        # Only with HeatPump
-        elif self.thermal_power_delivered_channel.source_output is not None:
-            thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
-        else:
-            thermal_power_delivered_in_watt = sum(
-                self.get_dynamic_inputs(
-                    stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUILDING]
-                )
-            )
+        # # Only with HeatPump
+        # elif self.thermal_power_delivered_channel.source_output is not None:
+        #     thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
+        # else:
+        #     thermal_power_delivered_in_watt = sum(
+        #         self.get_dynamic_inputs(
+        #             stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUILDING]
+        #         )
+        #     )
 
         previous_thermal_mass_temperature_in_celsius = (
             self.state.thermal_mass_temperature_in_celsius

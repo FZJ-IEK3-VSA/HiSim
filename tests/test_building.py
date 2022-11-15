@@ -89,7 +89,6 @@ def test_building():
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
         number_of_outputs
     )
-    log.information("Number of outputs: " + str(number_of_outputs))
     my_residence.temperature_outside_channel.source_output = (
         my_weather.air_temperature_output
     )
@@ -120,7 +119,7 @@ def test_building():
     for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
 
         log.trace("Seconds per Timestep: " + str(seconds_per_timestep))
-        log.information("Seconds per Timestep: " + str(seconds_per_timestep) + "\n")
+        log.information("Seconds per Timestep: " + str(seconds_per_timestep))
         my_residence.seconds_per_timestep = seconds_per_timestep
 
         # Simulates
@@ -128,35 +127,14 @@ def test_building():
 
         my_occupancy.i_simulate(0, stsv, False)
         my_weather.i_simulate(0, stsv, False)
-        prev_temp = my_residence.state.thermal_mass_temperature_in_celsius
-        log.information(
-            "state thermal mass temp before residence simu = previous thermal mass temp "
-            + str(prev_temp)
-        )
         my_residence.i_simulate(0, stsv, False)
-        next_temp = my_residence.next_thermal_mass_temperature_in_celsius
-
-        log.information("next thermal mass temp " + str(next_temp))
-        log.information(
-            "state thermal mass temp after residence simu = thermal mass average bulk temp "
-            + str(my_residence.state.thermal_mass_temperature_in_celsius)
-            + "\n"
-        )
-
-        log.information("stsv values after simus run " + str(stsv.values) + "\n")
 
         log.information(
-            f"Fake Residence Thermal Power Delivery Output (residence heat demand in watt): {stsv.values[0]}"
+            f"Fake Residence Thermal Power Delivery Output: {stsv.values[0]}"
         )
         log.information(f"Occupancy Outputs: {stsv.values[1:5]}")
         log.information(f"Weather Outputs: {stsv.values[5:14]}")
-        log.information(f"Residence Outputs: {stsv.values[14:18]}")
-
-        # thermal bulk temp (which is the residence output temperature) is equal to the average of the previous and next thermal mass temperatures
-        assert (
-            my_residence.state.thermal_mass_temperature_in_celsius
-            == (prev_temp + next_temp) / 2
-        )
+        log.information(f"Residence Outputs: {stsv.values[14:18]}\n")
 
         assert (
             stsv.values[my_residence.thermal_mass_temperature_channel.global_index]

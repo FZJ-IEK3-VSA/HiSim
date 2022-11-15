@@ -658,12 +658,12 @@ class Building(dynamic_component.DynamicComponent):
             if force_convergence:
                 return
 
-            heat_demand_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
+            thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
             mass_input_in_kilogram_per_second = stsv.get_input_value(self.mass_input_channel)
 
             temperature_input_in_celsius = stsv.get_input_value(self.temperature_input_channel)
 
-            if heat_demand_in_watt > 0 and (
+            if thermal_power_delivered_in_watt > 0 and (
                 mass_input_in_kilogram_per_second == 0
                 and temperature_input_in_celsius == 0
             ):
@@ -671,20 +671,20 @@ class Building(dynamic_component.DynamicComponent):
                 temperature_input_in_celsius = 40.456
                 mass_input_in_kilogram_per_second = 0.0123
 
-            if heat_demand_in_watt > 0:
+            if thermal_power_delivered_in_watt > 0:
 
                 massflows_possible_in_kilogram_per_second = (
                     LoadConfig.possible_massflows_load
                 )
                 mass_flow_level = 0
                 # K = W / (J/kgK * kg/s); delta T in Kelvin = delta T in Celsius; heat capacity J/kgK = J/kg°C
-                temperature_delta_heat_in_kelvin = heat_demand_in_watt / (
+                temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
                     PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
                     * massflows_possible_in_kilogram_per_second[mass_flow_level]
                 )
                 while temperature_delta_heat_in_kelvin > LoadConfig.delta_T:
                     mass_flow_level += 1
-                    temperature_delta_heat_in_kelvin = heat_demand_in_watt / (
+                    temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
                         PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
                         * massflows_possible_in_kilogram_per_second[mass_flow_level]
                     )
@@ -695,7 +695,7 @@ class Building(dynamic_component.DynamicComponent):
                 )
 
                 energy_demand_in_joule_per_timestep = (
-                    heat_demand_in_watt * self.seconds_per_timestep
+                    thermal_power_delivered_in_watt * self.seconds_per_timestep
                 )
                 enthalpy_slice_in_joule_per_timestep = (
                     mass_input_load_in_kilogram_per_timestep
@@ -753,7 +753,7 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius,
             heat_loss_in_watt,
         ) = self.calc_crank_nicolson(
-            heat_demand_in_watt=thermal_power_delivered_in_watt,
+            thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
             internal_heat_gains_in_watt=occupancy_heat_gain_in_watt,
             solar_heat_gains_in_watt=solar_heat_gain_through_windows,
             outside_temperature_in_celsius=temperature_outside_in_celsius,
@@ -1452,7 +1452,7 @@ class Building(dynamic_component.DynamicComponent):
             )
         )
 
-    def calc_equivalent_heat_flux_in_watt(self, temperature_outside_in_celsius, heat_demand_in_watt):
+    def calc_equivalent_heat_flux_in_watt(self, temperature_outside_in_celsius, thermal_power_delivered_in_watt):
         """Calculates a global heat transfer: Phi_m_tot.
 
         This is a definition used to simplify equation calc_t_m_next so it's not so long to write out
@@ -1461,6 +1461,7 @@ class Building(dynamic_component.DynamicComponent):
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
         """
         # ASSUMPTION: Supply air comes straight from the outside air
+        # here Phi_HC,nd is not heating or cooling demand but thermal power delivered
         t_supply = temperature_outside_in_celsius
 
         self.equivalent_heat_flux_in_watt = (
@@ -1475,7 +1476,7 @@ class Building(dynamic_component.DynamicComponent):
                 + self.transmission_heat_transfer_coeffcient_1_in_watt_per_kelvin
                 * (
                     (
-                        (self.heat_flux_indoor_air_in_watt + heat_demand_in_watt)
+                        (self.heat_flux_indoor_air_in_watt + thermal_power_delivered_in_watt)
                         / self.thermal_conductance_by_ventilation_in_watt_per_kelvin
                     )
                     + t_supply
@@ -1502,7 +1503,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
         temperature_outside_in_celsius,
         thermal_mass_temperature_in_celsius,
-        heat_demand_in_watt
+        thermal_power_delivered_in_watt
     ):
         """Calculate the temperature of the inside room surfaces: T_s.
 
@@ -1511,6 +1512,7 @@ class Building(dynamic_component.DynamicComponent):
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
         """
         # ASSUMPTION: Supply air comes straight from the outside air
+        # here Phi_HC,nd is not heating or cooling demand but thermal power delivered
         t_supply = temperature_outside_in_celsius
 
         return (
@@ -1522,7 +1524,7 @@ class Building(dynamic_component.DynamicComponent):
             + self.transmission_heat_transfer_coeffcient_1_in_watt_per_kelvin
             * (
                 t_supply
-                + (self.heat_flux_indoor_air_in_watt + heat_demand_in_watt)
+                + (self.heat_flux_indoor_air_in_watt + thermal_power_delivered_in_watt)
                 / self.thermal_conductance_by_ventilation_in_watt_per_kelvin
             )
         ) / (
@@ -1535,7 +1537,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
         temperature_outside_in_celsius,
         temperature_internal_room_surfaces_in_celsius,
-        heat_demand_in_watt
+        thermal_power_delivered_in_watt
     ):
         """Calculate the temperature of the air node: T_air.
 
@@ -1543,14 +1545,15 @@ class Building(dynamic_component.DynamicComponent):
         # h_ve = h_ve_adj and t_supply = t_out [9.3.2 ISO 13790]
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)
         """
-
+        # ASSUMPTION: Supply air comes straight from the outside air
+        # here Phi_HC,nd is not heating or cooling demand but thermal power delivered
         t_supply = temperature_outside_in_celsius
 
         return (
             self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
             * temperature_internal_room_surfaces_in_celsius
             + self.thermal_conductance_by_ventilation_in_watt_per_kelvin * t_supply
-            + heat_demand_in_watt
+            + thermal_power_delivered_in_watt
             + self.heat_flux_indoor_air_in_watt
         ) / (
             self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
@@ -1563,7 +1566,7 @@ class Building(dynamic_component.DynamicComponent):
         solar_heat_gains_in_watt,
         outside_temperature_in_celsius,
         thermal_mass_temperature_prev_in_celsius,
-        heat_demand_in_watt
+        thermal_power_delivered_in_watt
     ):
         """Determines node temperatures and computes derivation to determine the new node temperatures.
 
@@ -1580,7 +1583,7 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Updates total flow
-        self.calc_equivalent_heat_flux_in_watt(outside_temperature_in_celsius, heat_demand_in_watt)
+        self.calc_equivalent_heat_flux_in_watt(outside_temperature_in_celsius, thermal_power_delivered_in_watt)
 
         # calculates the new bulk temperature POINT from the old one # CHECKED Requires t_m_prev
         self.calc_next_thermal_mass_temperature_in_celsius(

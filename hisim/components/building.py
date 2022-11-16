@@ -71,7 +71,6 @@ from hisim import (
 from hisim import (
     log,
 )
-
 # from hisim.components.configuration import (
 #     PhysicsConfig,
 # )

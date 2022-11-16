@@ -1,12 +1,26 @@
 """ For setting the configuration of the household. """
 # clean
-from typing import Optional
+from typing import List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from heating_system_enums import HeatingSystems
+
+
+@dataclass_json
+@dataclass
+class Individual:
+    bool_vector: List[bool]
+    discrete_vector: List[float]
+
+
+@dataclass_json
+@dataclass
+class RatedIndividual:
+    individual: Individual
+    rating: float
 
 
 @dataclass_json
@@ -81,3 +95,16 @@ class SystemConfig:
     
         with open('system_config.json', 'w', encoding="utf-8") as outfile:
             outfile.write(config_file_written)
+
+    def get_individual(self) -> Individual:
+        bool_vector = [self.pv_included, self.battery_included]
+        discrete_vector = []
+        return Individual(bool_vector, discrete_vector)
+    
+    def create_from_individual(individual: Individual) -> "SystemConfig":
+        bool_vector = individual.bool_vector
+        system_config = SystemConfig()
+        system_config.pv_included = bool_vector[0]
+        system_config.battery_included = bool_vector[1]
+        return system_config
+        

@@ -10,13 +10,14 @@ for the next Building Sizer iteration as a result to the UTSP (and therey also t
 
 import dataclasses
 import random as ra
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import dataclasses_json
 from utspclient import client  # type: ignore
 from utspclient.datastructures import (CalculationStatus,  # type: ignore
                                        ResultDelivery, ResultFileRequirement,
                                        TimeSeriesRequest)
+from building_sizer.system_config import Individual, RatedIndividual
 
 import system_config
 
@@ -82,14 +83,15 @@ def send_building_sizer_request(
 
 def get_results_from_requisite_requests(
     reqisite_requests: List[TimeSeriesRequest], url: str, api_key: str = ""
-) -> List[ResultDelivery]:
+) -> Dict[str, ResultDelivery]:
     """
     Collects the results from the HiSim requests sent in the previous iteration
     """
-    return [
+    return {
+        request.simulation_config:
         client.request_time_series_and_wait_for_delivery(url, request, api_key)
         for request in reqisite_requests
-    ]
+    }
 
 
 def trigger_next_iteration(
@@ -116,22 +118,30 @@ def building_sizer_iteration(
     results = get_results_from_requisite_requests(
         request.requisite_requests, request.url, request.api_key
     )
+
     # Get the relevant result files from all requisite requests
-    for result in results:
+    rated_individuals = []
+    for sim_config_str, result in results.items():
         result_file = result.data["KPIs.csv"].decode()
+        # TODO: calculate rating float value from KPIs.csv
+        rating = 1.0
+        system_config: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
+        individual = system_config.get_individual()
+        r = RatedIndividual(individual, rating)
+        rated_individuals.append(r)
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:
         return None, "my final results"
 
-    # TODO: do something here to determine which hisim simulation configs should be calculated next
-    hisim_config = system_config.SystemConfig()
-    hisim_config.utsp_connect = True
-    hisim_config.url = request.url
-    hisim_config.api_key = request.api_key
-    
-    hisim_config.battery_included = True
-    hisim_config.battery_capacity = ra.randint(1,10)
+    # TODO: pass rated_individuals to genetic algorithm and receive list of new individual vectors back
+    new_vectors: List[Individual] = []
+
+    # convert individuals back to HiSim SystemConfigs
+    hisim_configs = []
+    for individual in new_vectors:
+        system_config = system_config.SystemConfig.from_individual(individual)
+        hisim_configs.append(system_config)
     
     hisim_configs = [hisim_config.to_json()]  # type: ignore
 

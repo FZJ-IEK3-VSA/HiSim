@@ -1,7 +1,9 @@
 """ For setting the configuration of the household. """
 # clean
+import random
+
 from typing import List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
 from utspclient.helpers.lpgdata import ChargingStationSets
@@ -12,9 +14,16 @@ from heating_system_enums import HeatingSystems
 @dataclass_json
 @dataclass
 class Individual:
-    bool_vector: List[bool]
-    discrete_vector: List[float]
+    bool_vector: List[bool] = field(default_factory=list)
+    discrete_vector: List[float] = field(default_factory=list)
 
+    def create_random_individual(self, probabilities: List[float]):
+        for probability in probabilities:
+            dice = random.uniform(0, 1)  # random number between zero and one
+            if dice < probability:
+                self.bool_vector.append(True)
+            else:
+                self.bool_vector.append(False)
 
 @dataclass_json
 @dataclass

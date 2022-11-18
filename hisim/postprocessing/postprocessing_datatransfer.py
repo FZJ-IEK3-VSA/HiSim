@@ -34,7 +34,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.execution_time = execution_time
         self.results_monthly = results_monthly
         self.post_processing_options = simulation_parameters.post_processing_options
-        if self.post_processing_options is not None:
-            log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
-            for option in self.post_processing_options:
-                log.information("Selected post processing option: " + str(option))
+        # if self.post_processing_options is not None:
+        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
+        for option in self.post_processing_options:
+            log.information("Selected post processing option: " + str(option))

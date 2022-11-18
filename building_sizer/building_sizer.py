@@ -8,6 +8,7 @@ To allow the client who sent the initial Building Sizer request to follow the se
 for the next Building Sizer iteration as a result to the UTSP (and therey also to the client).
 """
 
+import csv
 import dataclasses
 import random as ra
 from typing import Any, Dict, List, Optional, Tuple
@@ -111,6 +112,17 @@ def trigger_next_iteration(
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
 
+def get_kpi_from_csv(csvfile: str) -> float:
+    with open(csvfile, 'r') as file:
+        csvreader = csv.reader(file)
+        for row in csvreader:
+            if row == []:
+                pass
+            elif row[0] == 'Self consumption:':
+                return( float( row[1] ) )
+            else:
+                pass
+
 
 def building_sizer_iteration(
     request: BuildingSizerRequest,
@@ -123,8 +135,8 @@ def building_sizer_iteration(
     rated_individuals = []
     for sim_config_str, result in results.items():
         result_file = result.data["KPIs.csv"].decode()
-        # TODO: calculate rating float value from KPIs.csv
-        rating = 1.0
+        # TODO: check if rating works
+        rating = get_kpi_from_csv(result_file)
         system_config: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
         individual = system_config.get_individual()
         r = RatedIndividual(individual, rating)

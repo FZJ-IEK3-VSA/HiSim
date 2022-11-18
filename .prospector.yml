@@ -22,6 +22,9 @@ pylint:
       - too-many-statements
       - too-few-public-methods
       - unnecessary-pass
+      - too-many-lines
+      - too-many-public-methods
+      - too-many-branches
 #    disable:
 #      - too-many-locals
 #      - arguments-differ
@@ -71,3 +74,9 @@ vulture:
     - unused-variable
     - unused-function
     - unused-attribute
+
+mccabe:
+  run: true
+  disable:
+    - MC0001
+

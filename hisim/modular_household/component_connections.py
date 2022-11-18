@@ -333,7 +333,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
     [heater_config.source_weight, heater_l1_config.source_weight, heater_l2_config.source_weight] = [count] * 3
     count += 1
 
-    heater_config.power_th = my_building.max_thermal_building_demand
+    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
     if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
         heater_l2_config.P_threshold = heater_config.power_th / 3
         heater_l2_config.cooling_considered = True
@@ -417,13 +417,13 @@ def configure_heating_with_buffer(my_sim: Any,
     count += 1
 
     buffer_config = generic_hot_water_storage_modular.HotWaterStorage.get_default_config_buffer(1000)
-    buffer_config.power = float(my_building.max_thermal_building_demand)
+    buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatController.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
-    heatpump_config.power_th = my_building.max_thermal_building_demand
+    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
     heatpump_config.P_threshold = heatpump_config.power_th / 3
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=buffer_config)

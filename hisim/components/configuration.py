@@ -145,7 +145,7 @@ class ExtendedControllerConfig:
 
 class PhysicsConfig:
     water_density = 1000                                        # [kg/m^3]
-    water_specific_heat_capacity = 4_180                         # J/kgK
+    water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4_180                         # J/kgK
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
     # fuel value H2:    10.782 MJ/m³    (S.172)

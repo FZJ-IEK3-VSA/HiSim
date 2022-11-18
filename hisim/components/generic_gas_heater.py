@@ -87,7 +87,9 @@ class GasHeater(Component):
         pass
 
     def write_to_report(self) -> List[str]:
-        pass
+        """Writes a report."""
+        lines: List = []
+        return lines
 
     def i_save_state(self) -> None:
         pass

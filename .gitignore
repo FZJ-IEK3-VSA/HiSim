@@ -161,3 +161,6 @@ prospector_calls.txt
 prospector_mass_call.cmd
 flake8_mass_call.cmd
 examples/profile.json
+
+#personal file (JG)
+covert_building_sizer_to_tar_gz.py

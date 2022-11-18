@@ -28,6 +28,7 @@ from hisim.components import generic_smart_device
 from hisim.components import generic_car
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import advanced_battery_bslib
+from hisim.components import advanced_ev_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
@@ -180,12 +181,12 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
         raise Exception('For EV configuration mobility set is obligatory.')
     mobility_speed = mobility_set.Name.partition('and ')[2].partition(' ')[2].partition(' km/h')[0]
     if mobility_speed == '30':
-        car_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(
-            e_bat_custom=30, p_inv_custom=5000, name="CarBattery", ev=True)
+        car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
+            e_bat_custom=30, p_inv_custom=5000, name="CarBattery")
         ev_capacities.append(30)
     elif mobility_speed == '60':
-        car_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(
-            e_bat_custom=50, p_inv_custom=11000, name="CarBattery", ev=True)
+        car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
+            e_bat_custom=50, p_inv_custom=11000, name="CarBattery")
         ev_capacities.append(50)
     if charging_station_set is None:
         raise Exception('For EV configuration charging station set is obligatory.')
@@ -199,7 +200,7 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
     for car in my_cars:
         car_battery_config.source_weight = car.source_weight
         car_battery_controller_config.source_weight = car.source_weight
-        my_carbattery = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters, config=car_battery_config)
+        my_carbattery = advanced_ev_battery_bslib.CarBattery(my_simulation_parameters=my_simulation_parameters, config=car_battery_config)
         my_controller_carbattery = controller_l1_generic_ev_charge.L1Controller(my_simulation_parameters=my_simulation_parameters,
                                                                                 config=car_battery_controller_config)
         my_controller_carbattery.connect_only_predefined_connections(car)
@@ -275,7 +276,7 @@ def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameter
     """
     if battery_capacity is not None:
         my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(
-            e_bat_custom=battery_capacity, p_inv_custom=battery_capacity * 0.5 * 1e3, source_weight=count, ev=False)
+            e_bat_custom=battery_capacity, p_inv_custom=battery_capacity * 0.5 * 1e3, source_weight=count)
     else:
         my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config(source_weight=count)
     count += 1

@@ -13,7 +13,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
-from hisim.components import advanced_battery_bslib
+from hisim.components import advanced_ev_battery_bslib
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -110,7 +110,7 @@ class L1Controller(cp.Component):
             unit=lt.Units.WATT)
 
         self.add_default_connections(generic_car.Car, self.get_car_default_connections())
-        self.add_default_connections(advanced_battery_bslib.Battery, self.get_battery_default_connections())
+        self.add_default_connections(advanced_ev_battery_bslib.CarBattery, self.get_battery_default_connections())
 
     def get_car_default_connections(self) -> List[cp.ComponentConnection]:
         """ Default connections of car in ev charge controller. """
@@ -125,8 +125,8 @@ class L1Controller(cp.Component):
         """ Default connections of battery in ev charge controller. """
         log.information("setting battery default connections in ev charge controler")
         connections: List[cp.ComponentConnection] = []
-        battery_classname = advanced_battery_bslib.Battery.get_classname()
-        connections.append(cp.ComponentConnection(L1Controller.StateOfCharge, battery_classname, advanced_battery_bslib.Battery.StateOfCharge))
+        battery_classname = advanced_ev_battery_bslib.CarBattery.get_classname()
+        connections.append(cp.ComponentConnection(L1Controller.StateOfCharge, battery_classname, advanced_ev_battery_bslib.CarBattery.StateOfCharge))
         return connections
 
     def i_save_state(self) -> None:

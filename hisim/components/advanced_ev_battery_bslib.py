@@ -6,10 +6,13 @@ from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim import log
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, ComponentConnection
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
+from hisim.components import controller_l1_generic_ev_charge
+
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = "..."
@@ -21,16 +24,16 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class BatteryConfig:
+class CarBatteryConfig:
     system_id: str
-    p_inv_custom: float
-    e_bat_custom: float
+    p_inv_custom: float  # power in Watt
+    e_bat_custom: float  # capacity in Kilowatt
     name: str
-    source_weight : int
+    source_weight: int
     
     @staticmethod
-    def get_default_config(name: str = 'Battery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
-        config=BatteryConfig(
+    def get_default_config(name: str = 'CarBattery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
+        config=CarBatteryConfig(
             system_id='SG1',
             p_inv_custom=p_inv_custom,
             e_bat_custom=e_bat_custom,
@@ -38,7 +41,7 @@ class BatteryConfig:
             source_weight=source_weight)
         return config
 
-class Battery(Component):
+class CarBattery(Component):
     """
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
@@ -54,7 +57,7 @@ class Battery(Component):
     StateOfCharge = "StateOfCharge"             # [0..1]
 
     def __init__(self, my_simulation_parameters: SimulationParameters,
-                 config:BatteryConfig):
+                 config:CarBatteryConfig):
         """
         Loads the parameters of the specified battery storage.
 
@@ -79,7 +82,7 @@ class Battery(Component):
         self.e_bat_custom = self.battery_config.e_bat_custom
 
         # Component has states
-        self.state = BatteryState()
+        self.state = EVBatteryState()
         self.previous_state = deepcopy(self.state)
 
         # Load battery object with parameters from bslib database
@@ -95,11 +98,8 @@ class Battery(Component):
                                                     mandatory=True)
 
         # Define component outputs
-        self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name,
-                                                     field_name=self.AcBatteryPower,
-                                                     load_type=LoadTypes.ELECTRICITY,
-                                                     unit=Units.WATT,
-                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY])
+        self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.AcBatteryPower, load_type=LoadTypes.ELECTRICITY,
+                                                     unit=Units.WATT, postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.CAR_BATTERY])
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
@@ -111,15 +111,17 @@ class Battery(Component):
                                                     load_type=LoadTypes.ANY,
                                                     unit=Units.ANY,
                                                     postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
-    @staticmethod
-    def get_default_config(p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
-        config=BatteryConfig(
-            system_id='SG1',
-            p_inv_custom=p_inv_custom,
-            e_bat_custom=e_bat_custom,
-            name= "Battery",
-            source_weight=source_weight)
-        return config
+        
+        self.add_default_connections(controller_l1_generic_ev_charge.L1Controller, self.get_charge_controller_default_connections())
+
+    def get_charge_controller_default_connections(self) -> Any:
+        log.information("setting ev charge controller default connections in car battery")
+        connections: List[ComponentConnection] = []
+        ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname( )
+        connections.append(ComponentConnection(CarBattery.LoadingPowerInput, ev_charge_controller_classname, controller_l1_generic_ev_charge.L1Controller.ToOrFromBattery))
+        return connections
+        
+
     def i_save_state(self)  -> None:
         self.previous_state = deepcopy(self.state)
 
@@ -163,7 +165,7 @@ class Battery(Component):
 
 
 @dataclass
-class BatteryState:
+class EVBatteryState:
     soc: float = 0
 
 

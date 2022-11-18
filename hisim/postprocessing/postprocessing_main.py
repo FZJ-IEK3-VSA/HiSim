@@ -68,7 +68,6 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
             # Of all specified options, select those that are allowed
-            #if ppdt.post_processing_options is not None:
             valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
             if len(valid_options) < len(ppdt.post_processing_options):
                 # At least one invalid option was set
@@ -77,7 +76,6 @@ class PostProcessor:
 
         report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
         days = {"month": 0, "day": 0}
-        #if ppdt.post_processing_options is not None:
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
             self.make_line_plots(ppdt)
@@ -110,7 +108,6 @@ class PostProcessor:
             self.make_network_charts(ppdt)
 
         # only a single day has been calculated. This gets special charts for debugging.
-        #if ppdt.post_processing_options is not None:
         if PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options and len(ppdt.results) == 1440:
             log.information("Making special single day plots for a single day calculation for testing.")
             self.make_special_one_day_debugging_plots(ppdt)

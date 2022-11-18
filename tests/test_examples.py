@@ -25,8 +25,7 @@ def test_basic_household_network_chart():
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
-    if mysimpar.post_processing_options is not None:
-        mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 

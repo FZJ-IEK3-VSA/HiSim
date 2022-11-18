@@ -18,7 +18,9 @@ from utspclient import client  # type: ignore
 from utspclient.datastructures import (CalculationStatus,  # type: ignore
                                        ResultDelivery, ResultFileRequirement,
                                        TimeSeriesRequest)
-from building_sizer.system_config import Individual, RatedIndividual
+from system_config import Individual, RatedIndividual
+from evolutionary_algorithm import evolution, selection, comparison
+
 
 import system_config
 
@@ -123,7 +125,6 @@ def get_kpi_from_csv(csvfile: str) -> float:
             else:
                 pass
 
-
 def building_sizer_iteration(
     request: BuildingSizerRequest,
 ) -> Tuple[Optional[TimeSeriesRequest], Any]:
@@ -140,14 +141,26 @@ def building_sizer_iteration(
         system_config: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
         individual = system_config.get_individual()
         r = RatedIndividual(individual, rating)
-        rated_individuals.append(r)
+        rated_individuals.append(r) 
+        
+    # select best individuals
+    # TODO: population size as input
+    population_size: int = 5
+    if len(rated_individuals) > population_size:
+        parents = select(rated_individuals=rated_individuals, population_size=population_size)
+        
+    # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
+    # TODO r_cross and r_mut as inputs
+    r_cross: float = 0.2
+    r_mut: float = 0.4
+    new_vectors: List[Individual] = evolution(parents=parents, r_cross=r_cross, r_mut=r_mut9
+    
+    # TODO: combine new_vectors and rated_individuals and delete duplicates
+
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:
         return None, "my final results"
-
-    # TODO: pass rated_individuals to genetic algorithm and receive list of new individual vectors back
-    new_vectors: List[Individual] = []
 
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []

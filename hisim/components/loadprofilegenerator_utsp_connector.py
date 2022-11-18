@@ -34,7 +34,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class UtspConnectorConfig:
+class UtspLpgConnectorConfig:
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
@@ -49,10 +49,10 @@ class UtspConnectorConfig:
     @staticmethod
     def get_default_config(
         url: str = "http://localhost:443/api/v1/profilerequest", api_key: str = ""
-    ) -> "UtspConnectorConfig":
+    ) -> "UtspLpgConnectorConfig":
         """Creates a default configuration. Chooses default values for the LPG parameters."""
         result_path = os.path.join(utils.get_input_directory(), "lpg_profiles")
-        config = UtspConnectorConfig(
+        config = UtspLpgConnectorConfig(
             url,
             api_key,
             Households.CHR01_Couple_both_at_Work,
@@ -99,7 +99,7 @@ class UtspLpgConnector(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: UtspConnectorConfig,
+        config: UtspLpgConnectorConfig,
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
         super().__init__(
@@ -109,7 +109,7 @@ class UtspLpgConnector(cp.Component):
         self.utsp_config = config
         self.build()
 
-        # Inputs - Not Mandatories
+        # Inputs - Not Mandatory
         self.ww_mass_input: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WW_MassInput,
@@ -165,9 +165,7 @@ class UtspLpgConnector(cp.Component):
         """Gets called after the iterations are finished at each time step for potential debugging purposes."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Sets the current output values with data retrieved during initialization."""
         if self.ww_mass_input.source_output is not None:
             # ww demand

@@ -105,7 +105,7 @@ class SimulationParameters(JSONWizard):
         return cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 1, 8), seconds_per_timestep, "")
 
     @classmethod
-    def one_day_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+    def one_day_only(cls, year: int, seconds_per_timestep: int=60) -> SimulationParameters:
         """ Generates a parameter set for a single day, primarily for unit testing. """
         return cls(datetime.datetime(year, 1, 1), datetime.datetime(year, 1, 2), seconds_per_timestep, "")
 

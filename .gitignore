@@ -161,3 +161,6 @@ prospector_calls.txt
 prospector_mass_call.cmd
 flake8_mass_call.cmd
 examples/profile.json
+examples/mypath/Reports/FlexibilityEvents.HH1.json
+examples/mypath/Results/Carstate.Car 2, 22kW Charging Power, avg. Speed 30 km h.HH1.json
+examples/mypath/Results/DrivingDistance.Car 2, 22kW Charging Power, avg. Speed 30 km h.HH1.json

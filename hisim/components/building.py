@@ -18,7 +18,7 @@ from hisim import log
 
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import LoadConfig
-from hisim.components.loadprofilegenerator_utsp_connector import UtspConnectorConfig, UtspLpgConnector
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig, UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 from hisim.components.loadprofilegenerator_connector import Occupancy

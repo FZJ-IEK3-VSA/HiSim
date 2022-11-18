@@ -457,7 +457,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_building.max_thermal_building_demand
+    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                           config=heater_l1_config)
@@ -506,7 +506,7 @@ def configure_heating_electric(my_sim: Any, my_simulation_parameters: Simulation
 
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
-    heatpump_config.power_th = my_building.max_thermal_building_demand
+    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
                                                                             config=heatpump_l1_config)
@@ -582,13 +582,13 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
 
     if buffer_volume is not None:
         buffer_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(buffer_volume)
-        buffer_config.power = float(my_building.max_thermal_building_demand)
+        buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
-    heatpump_config.power_th = my_building.max_thermal_building_demand
+    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=buffer_config)
     my_sim.add_component(my_buffer)
@@ -675,13 +675,13 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
 
     if buffer_volume is not None:
         buffer_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(buffer_volume)
-        buffer_config.power = float(my_building.max_thermal_building_demand)
+        buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating("buffer")
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_building.max_thermal_building_demand
+    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=buffer_config)
     my_sim.add_component(my_buffer)

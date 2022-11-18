@@ -93,7 +93,7 @@ class L1GenericRuntimeController(cp.Component):
 
     # Outputs
     L1DeviceSignal = "L1DeviceSignal"
-    l1_RunTimeSignal = "l1_RunTimeSignal"
+    L1RunTimeSignal = "L1RunTimeSignal"
 
     # Similar components to connect to:
     # 1. Building
@@ -116,9 +116,7 @@ class L1GenericRuntimeController(cp.Component):
 
         # add outputs
         self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY)
-
-        if self.my_simulation_parameters.system_config.predictive == True:
-            self.l1_RunTimeSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.l1_RunTimeSignal, LoadTypes.ANY, Units.ANY)
+        self.l1_runtime_signal: cp.ComponentOutput = self.add_output(self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY)
 
     def get_l2_controller_default_connections(self) -> List[cp.ComponentConnection]:
         """ Makes default connections to l2 smart controllers. """
@@ -149,6 +147,9 @@ class L1GenericRuntimeController(cp.Component):
         """ Main simulation function. """
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
+            # states are saved after each timestep, outputs after each iteration
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to state. 
+            stsv.set_output_value(self.L1DeviceSignalC, self.state.on_off)
             return
 
         l2_devicesignal = stsv.get_input_value(self.l2_DeviceSignalC)

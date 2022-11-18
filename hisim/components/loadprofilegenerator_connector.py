@@ -223,7 +223,7 @@ class Occupancy(cp.Component):
                     freshwater_temperature + temperature_difference_cold
                 )
                 ww_mass_input = energy_discharged / (
-                    PhysicsConfig.water_specific_heat_capacity
+                    PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
                     * (ww_temperature_input - ww_temperature_output)
                 )
             else:
@@ -248,6 +248,14 @@ class Occupancy(cp.Component):
             self.electricity_outputC, self.electricity_consumption[timestep]
         )
         stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
+
+        if self.my_simulation_parameters.system_config.predictive == True:
+            last_forecast_timestep = int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep )
+            if (last_forecast_timestep > len(self.electricity_consumption)):
+                last_forecast_timestep = len(self.electricity_consumption)
+            #log.information( type(self.temperature))
+            demandforecast = self.electricity_consumption[ timestep : last_forecast_timestep ]
+            self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
 
         if self.my_simulation_parameters.system_config.predictive == True:
             last_forecast_timestep = int(

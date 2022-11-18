@@ -42,9 +42,9 @@ class UtspConnectorConfig:
     api_key: str
     household: JsonReference
     result_path: str
-    travel_route_set: Optional[JsonReference]
-    transportation_device_set: Optional[JsonReference]
-    charging_station_set: Optional[JsonReference]
+    travel_route_set: JsonReference
+    transportation_device_set: JsonReference
+    charging_station_set: JsonReference
 
     @staticmethod
     def get_default_config(
@@ -215,7 +215,7 @@ class UtspLpgConnector(cp.Component):
                     freshwater_temperature + temperature_difference_cold
                 )
                 ww_mass_input = energy_discharged / (
-                    PhysicsConfig.water_specific_heat_capacity
+                    PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
                     * (ww_temperature_input - ww_temperature_output)
                 )
             else:

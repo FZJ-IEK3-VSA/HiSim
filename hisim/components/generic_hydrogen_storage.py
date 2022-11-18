@@ -57,6 +57,20 @@ class GenericHydrogenStorageConfig:
         self.energy_for_discharge = energy_for_discharge
         self.loss_factor_per_day = loss_factor_per_day
         
+    @staticmethod
+    def get_default_config(capacity: float = 200, max_charging_rate: float = 2, max_discharging_rate: float = 2,
+                           source_weight: int = 1) -> Any:
+        config = GenericHydrogenStorageConfig(name="HydrogenStorage",
+                                              source_weight=source_weight,
+                                              min_capacity=0,
+                                              max_capacity=capacity,
+                                              max_charging_rate_hour=max_charging_rate,
+                                              max_discharging_rate_hour=max_discharging_rate,
+                                              energy_for_charge=0,
+                                              energy_for_discharge=0,
+                                              loss_factor_per_day=0)
+        return config
+        
 class GenericHydrogenStorageState:
     """
     This data class saves the state of the electrolyzer.
@@ -104,19 +118,6 @@ class GenericHydrogenStorage(cp.Component):
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
-    @staticmethod
-    def get_default_config(capacity: float = 200, max_charging_rate: float = 2, max_discharging_rate: float = 2,
-                           source_weight: int = 1) -> GenericHydrogenStorageConfig:
-        config = GenericHydrogenStorageConfig(name="HydrogenStorage",
-                                              source_weight=source_weight,
-                                              min_capacity=0,
-                                              max_capacity=capacity,
-                                              max_charging_rate_hour=max_charging_rate,
-                                              max_discharging_rate_hour=max_discharging_rate,
-                                              energy_for_charge=0,
-                                              energy_for_discharge=0,
-                                              loss_factor_per_day=0)
-        return config
     
     def get_fuelcell_default_connections( self )-> List[cp.ComponentConnection]:
         log.information("setting fuel cell default connections in generic H2 storage" )

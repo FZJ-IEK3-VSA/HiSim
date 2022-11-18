@@ -14,9 +14,9 @@ from hisim.components import sumbuilder
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
 from hisim import utils
-from pympler import tracker
-from pympler import summary
-from pympler import muppy
+# from pympler import tracker
+# from pympler import summary
+# from pympler import muppy
 import os
 
 
@@ -72,9 +72,9 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     # Set building
     building_code = "ES.ME.SFH.05.Gen.ReEx.001.003"
-    building_class = "medium"
-    initial_temperature = 19
-    heating_reference_temperature = -14
+    building_heat_capacity_class = "medium"
+    initial_internal_temperature_in_celsius = 19
+    heating_reference_temperature_in_celsius = -14
 
 
     # Set air conditioner controller
@@ -134,9 +134,9 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     # Build Building
     my_building_config=building.BuildingConfig(building_code = building_code,
-                                            bClass = building_class,
-                                            initial_temperature = initial_temperature,
-                                            heating_reference_temperature = heating_reference_temperature, name="Building1" )
+                                            building_heat_capacity_class = building_heat_capacity_class,
+                                            initial_internal_temperature_in_celsius = initial_internal_temperature_in_celsius,
+                                            heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius, name="Building1")
 
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside,
@@ -174,25 +174,25 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                         my_simulation_parameters=my_simulation_parameters)
     my_building.connect_input(my_building.Altitude,
                               my_weather.component_name,
-                              my_building.Altitude)
+                              my_weather.Altitude)
     my_building.connect_input(my_building.Azimuth,
                               my_weather.component_name,
-                              my_building.Azimuth)
+                              my_weather.Azimuth)
     my_building.connect_input(my_building.DirectNormalIrradiance,
                               my_weather.component_name,
-                              my_building.DirectNormalIrradiance)
+                              my_weather.DirectNormalIrradiance)
     my_building.connect_input(my_building.DiffuseHorizontalIrradiance,
                               my_weather.component_name,
-                              my_building.DiffuseHorizontalIrradiance)
+                              my_weather.DiffuseHorizontalIrradiance)
     my_building.connect_input(my_building.GlobalHorizontalIrradiance,
                               my_weather.component_name,
-                              my_building.GlobalHorizontalIrradiance)
+                              my_weather.GlobalHorizontalIrradiance)
     my_building.connect_input(my_building.DirectNormalIrradianceExtra,
                               my_weather.component_name,
-                              my_building.DirectNormalIrradianceExtra)
+                              my_weather.DirectNormalIrradianceExtra)
     my_building.connect_input(my_building.ApparentZenith,
                              my_weather.component_name,
-                             my_building.ApparentZenith)
+                             my_weather.ApparentZenith)
     my_building.connect_input(my_building.TemperatureOutside,
                               my_weather.component_name,
                               my_weather.TemperatureOutside)

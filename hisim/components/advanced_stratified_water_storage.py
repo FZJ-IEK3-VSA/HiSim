@@ -28,8 +28,8 @@ class WaterSlice:
         for value in (self.diameter, self.height, self.temperature):
             if not isinstance(value, (int, float)):
                 raise TypeError
-            if isinstance(value, bool):   # Otherwise bool results into 0 or 1
-                raise TypeError
+            # if isinstance(value, bool):   # Otherwise bool results into 0 or 1
+            #   raise TypeError
         if self.diameter <= 0 or self.temperature < 0 or self.height < 0:  # or self.temperature == 0 and self.height > 0:
             log.error("Incorrect tank diameter: " + str(self.diameter))
             log.error("Incorrect water temperature: " + str(self.temperature))
@@ -62,7 +62,7 @@ class WaterSlice:
         self.height = height
         self.temperature = temperature
         self.density = PhysicsConfig.water_density
-        self.specific_heat_capacity = PhysicsConfig.water_specific_heat_capacity
+        self.specific_heat_capacity = PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         self.mass = self.height * self.area * self.density  # [kg]
         # Enthalpy referencing to the temperature of 0 °C.
         # J = Ws = kg * J/kg*K * K
@@ -185,9 +185,9 @@ class WarmWaterStorageSimulation:
         for value in (self.diameter, self.height_storage, self.start_temperature):
             if not isinstance(value, (int, float)):
                 raise TypeError
-            if isinstance(value, bool):
+            # if isinstance(value, bool):
                 # Otherwise bool results into 0 or 1
-                raise TypeError
+            #   raise TypeError
             if value <= 0:
                 # The tank must always have positive values. Otherwise it wouldn't be a tank
                 raise ValueError

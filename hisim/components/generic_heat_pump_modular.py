@@ -6,7 +6,7 @@ import seaborn
 from math import pi
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Optional, List
+from typing import Optional, List, Any
 
 # Owned
 import hisim.utils as utils
@@ -40,7 +40,6 @@ class HeatPumpConfig:
     cooling_considered: bool
     heating_season_begin: Optional[int]
     heating_season_end: Optional[int]
-    P_threshold: float
 
     def __init__(self, name: str, source_weight: int, manufacturer: str, device_name: str, power_th: float, cooling_considered: bool,
                  heating_season_begin: Optional[int], heating_season_end: Optional[int]):
@@ -52,6 +51,32 @@ class HeatPumpConfig:
         self.cooling_considered = cooling_considered
         self.heating_season_begin = heating_season_begin
         self.heating_season_end = heating_season_end
+        
+    @staticmethod
+    def get_default_config_heating() -> Any:
+        config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, cooling_considered=True, heating_season_begin=270,
+                                heating_season_end=150)
+        return config
+
+    @staticmethod
+    def get_default_config_waterheating() -> Any:
+        config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, cooling_considered=False, heating_season_begin=None,
+                                heating_season_end=None)
+        return config
+
+    @staticmethod
+    def get_default_config_heating_electric() -> Any:
+        config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
+                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+        return config
+
+    @staticmethod
+    def get_default_config_waterheating_electric() -> Any:
+        config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
+                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+        return config
 
 
 class ModularHeatPumpState:
@@ -97,6 +122,7 @@ class ModularHeatPump(cp.Component):
     L1DeviceSignal = "L1DeviceSignal"
     l1_RunTimeSignal = 'l1_RunTimeSignal'
     ems_flexible_electricity = "EMS Modulating Signal"
+
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
     ElectricityOutput = "ElectricityOutput"
@@ -114,6 +140,11 @@ class ModularHeatPump(cp.Component):
         self.config = config
         self.build(config)
 
+        if my_simulation_parameters.system_config.clever:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        else:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+
         # Inputs - Mandatories
         self.TemperatureOutsideC: cp.ComponentInput = self.add_input(self.component_name, self.TemperatureOutside, lt.LoadTypes.ANY, lt.Units.CELSIUS,
                                                                      mandatory=True)
@@ -121,7 +152,7 @@ class ModularHeatPump(cp.Component):
         self.EMS_Flexible_ElectricityC: cp.ComponentInput = self.add_input(self.component_name, self.ems_flexible_electricity,
                                                                            lt.LoadTypes.ELECTRICITY, lt.Units.WATT, mandatory=False)
 
-        self.L1HeatPumpTargetPercentage: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ANY, lt.Units.PERCENT,
+        self.L1HeatControllerTargetPercentage: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ANY, lt.Units.PERCENT,
                                                                  mandatory=True)
 
         # Outputs
@@ -130,7 +161,7 @@ class ModularHeatPump(cp.Component):
                                                                           postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ElectricityOutput,
                                                                       load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                      postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
+                                                                      postprocessing_flag=postprocessing_flag)
 
         self.PowerModifierChannel: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY,postprocessing_flag=[])
@@ -159,34 +190,8 @@ class ModularHeatPump(cp.Component):
         connections = []
         controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()
         connections.append(cp.ComponentConnection(ModularHeatPump.L1DeviceSignal, controller_classname,
-                                                  controller_l1_heatpump.L1HeatPumpController.HeatPumpTargetPercentage))
+                                                  controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage))
         return connections
-
-    @staticmethod
-    def get_default_config_heating():
-        config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, cooling_considered=True, heating_season_begin=270,
-                                heating_season_end=150)
-        return config
-
-    @staticmethod
-    def get_default_config_waterheating():
-        config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, cooling_considered=False, heating_season_begin=None,
-                                heating_season_end=None)
-        return config
-
-    @staticmethod
-    def get_default_config_heating_electric():
-        config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
-        return config
-
-    @staticmethod
-    def get_default_config_waterheating_electric():
-        config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
-        return config
 
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
@@ -252,7 +257,7 @@ class ModularHeatPump(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
 
         # Inputs
-        target_percentage = stsv.get_input_value(self.L1HeatPumpTargetPercentage)
+        target_percentage = stsv.get_input_value(self.L1HeatControllerTargetPercentage)
 
         T_outside: float = stsv.get_input_value(self.TemperatureOutsideC)
         cop = self.cal_cop(T_outside)

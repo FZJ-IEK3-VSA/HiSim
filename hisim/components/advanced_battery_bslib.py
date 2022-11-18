@@ -7,7 +7,7 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
-from hisim.loadtypes import LoadTypes, Units, InandOutputType
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -27,6 +27,16 @@ class BatteryConfig:
     e_bat_custom: float
     name: str
     source_weight : int
+    
+    @staticmethod
+    def get_default_config(name: str = 'Battery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
+        config=BatteryConfig(
+            system_id='SG1',
+            p_inv_custom=p_inv_custom,
+            e_bat_custom=e_bat_custom,
+            name=name,
+            source_weight=source_weight)
+        return config
 
 class Battery(Component):
     """
@@ -89,7 +99,7 @@ class Battery(Component):
                                                      field_name=self.AcBatteryPower,
                                                      load_type=LoadTypes.ELECTRICITY,
                                                      unit=Units.WATT,
-                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE])
+                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY])
         
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,

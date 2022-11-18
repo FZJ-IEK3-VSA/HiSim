@@ -7,35 +7,8 @@ from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
 from hisim import log
+from hisim.system_config import SystemConfig
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.loadtypes import HeatingSystems, Locations, OccupancyProfiles, BuildingCodes, Cars, MobilityDistance
-
-
-@dataclass()
-class SystemConfig:
-
-    """ Defines the system config for the modular household. """
-
-    location: Locations = Locations.AACHEN
-    occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01
-    building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002
-    predictive: bool = False
-    prediction_horizon: int = 24 * 3600
-    pv_included: bool = True
-    pv_peak_power: Optional[float] = 10e3  # in Watt
-    smart_devices_included: bool = True
-    water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
-    heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
-    buffer_included: bool = True
-    buffer_volume: Optional[float] = 500  # in liter
-    battery_included: bool = False
-    battery_capacity: Optional[float] = 10e3  # in Wh
-    chp_included: bool = False
-    chp_power: Optional[float] = 10e3
-    h2_storage_size: Optional[float] = 100
-    electrolyzer_power: Optional[float] = 10e3
-    current_mobility: Cars = Cars.NO_CAR
-    mobility_distance: MobilityDistance = MobilityDistance.RURAL
 
 
 @dataclass()
@@ -54,7 +27,7 @@ class SimulationParameters(JSONWizard):
 
     def __init__(self, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int,
                  result_directory: str = "",
-                 post_processing_options: List[int] = None, logging_level: int = log.LogPrio.INFORMATION,
+                 post_processing_options: Optional[List[int]] = None, logging_level: int = log.LogPrio.INFORMATION,
                  skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
         """ Initializes the class. """
         self.start_date: datetime.datetime = start_date
@@ -120,23 +93,3 @@ class SimulationParameters(JSONWizard):
         """ Gets a unique key from a simulation parameter class. """
         return str(self.start_date) + "###" + str(self.end_date) + "###" + str(self.seconds_per_timestep) + "###" + str(
             self.year) + "###" + str(self.timesteps)
-
-    def reset_system_config(
-            self, location: Locations = Locations.AACHEN, occupancy_profile: OccupancyProfiles = OccupancyProfiles.CH01,
-            building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002, predictive: bool = True, prediction_horizon: int = 0,
-            pv_included: bool = True, pv_peak_power: Optional[float] = 9, smart_devices_included: bool = True,
-            water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
-            heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
-            buffer_included: bool = True, buffer_volume: Optional[float] = 500, battery_included: bool = False, battery_capacity: Optional[float] = 5,
-            chp_included: bool = False, chp_power: Optional[float] = 12, h2_storage_size: Optional[float] = 100,
-            electrolyzer_power: Optional[float] = 12, current_mobility: Cars = Cars.NO_CAR,
-            mobility_distance: MobilityDistance = MobilityDistance.RURAL) -> None:  # noqa
-        """ Configures a system config. """
-        self.system_config = SystemConfig(
-            location=location, occupancy_profile=occupancy_profile, building_code=building_code, predictive=predictive,
-            prediction_horizon=prediction_horizon, pv_included=pv_included, pv_peak_power=pv_peak_power,
-            smart_devices_included=smart_devices_included, water_heating_system_installed=water_heating_system_installed,
-            heating_system_installed=heating_system_installed, buffer_included=buffer_included, buffer_volume=buffer_volume,
-            battery_included=battery_included, battery_capacity=battery_capacity, chp_included=chp_included,
-            chp_power=chp_power, h2_storage_size=h2_storage_size, electrolyzer_power=electrolyzer_power,
-            current_mobility=current_mobility, mobility_distance=mobility_distance)

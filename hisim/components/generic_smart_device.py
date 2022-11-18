@@ -11,7 +11,6 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components import generic_pv_system
 from hisim.components import generic_price_signal
-#from hisim.components import controller_l3_predictive
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
@@ -88,17 +87,23 @@ class SmartDevice( cp.Component ):
     ElectricityTarget = "ElectricityTarget"
 
     def __init__( self,
-                  identifier : str,
-                  source_weight : int,
-                  my_simulation_parameters: SimulationParameters):
+                  identifier: str,
+                  source_weight: int,
+                  my_simulation_parameters: SimulationParameters,
+                  smart_devices_included: bool):
         super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + '_w' + str(source_weight), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
         
+        if my_simulation_parameters.system_config.clever and smart_devices_included:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        else:
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        
         #mandatory Output
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
+            unit=lt.Units.WATT, postprocessing_flag=postprocessing_flag)
            
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(
             object_name=self.component_name, field_name=self.ElectricityTarget,
@@ -138,14 +143,6 @@ class SmartDevice( cp.Component ):
                     
                 if timestep == activation:
                     self.state.run( timestep, self.electricity_profile[ self.state.position ] )
-                    if self.predictive == True:
-                        if self.state.position < len( self.electricity_profile ) - 1:
-                            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
-                                                                         entry = [ self.electricity_profile[ self.state.position ], self.electricity_profile[ self.state.position + 1 ] ])
-                            
-                        elif self.state.position == len( self.electricity_profile ) - 1:
-                            self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.SMART_DEVICE, source_weight = self.source_weight,
-                                                                         entry = [ self.electricity_profile[ self.state.position ], [ ] ])
         
         #run device if it was already activated
         else:
@@ -217,7 +214,6 @@ class SmartDevice( cp.Component ):
         self.electricity_profile = electricity_profile
         self.state = SmartDeviceState( )
         self.previous_state = SmartDeviceState( )
-        self.predictive = self.my_simulation_parameters.system_config.predictive
 
     def write_to_report(self) -> List[str]:
         lines: List[str] = []

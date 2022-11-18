@@ -67,21 +67,18 @@ class PriceSignal(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate( self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool ) -> None:
-        priceinjectionforecast = [ 10  ] * int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
-        pricepurchaseforecast = [ 50  ] * int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
-        # pricepurchaseforecast = [ ]
-        # for step in range( self.day ):
-        #     x = timestep % self.day
-        #     if x > self.start and x < self.end:
-        #         pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
-        #     else:
-        #         pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool) -> None:
+        if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.prediction_horizon:
+            priceinjectionforecast = [10] * int(self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+            pricepurchaseforecast = [50] * int(self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+        else:
+            priceinjectionforecast = [10]
+            pricepurchaseforecast = [50]
         
-        self.simulation_repository.set_entry( self.Price_Injection_Forecast_24h, priceinjectionforecast )
-        self.simulation_repository.set_entry( self.Price_Purchase_Forecast_24h, pricepurchaseforecast )
-        stsv.set_output_value( self.PricePurchaseC, pricepurchaseforecast[ 0 ] )
-        stsv.set_output_value( self.PriceInjectionC, priceinjectionforecast[ 0 ] )
+        self.simulation_repository.set_entry(self.Price_Injection_Forecast_24h, priceinjectionforecast)
+        self.simulation_repository.set_entry(self.Price_Purchase_Forecast_24h, pricepurchaseforecast)
+        stsv.set_output_value(self.PricePurchaseC, pricepurchaseforecast[0])
+        stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])
 
     def build_dummy( self, start : int, end: int ) -> None:
         self.start = start

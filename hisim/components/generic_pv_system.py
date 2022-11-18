@@ -213,7 +213,7 @@ class PVSystem(cp.Component):
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.data: Any
-        super().__init__(self.pvconfig.name + str(self.pvconfig.source_weight), my_simulation_parameters=my_simulation_parameters)
+        super().__init__(self.pvconfig.name + '_w' + str(self.pvconfig.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.t_outC: cp.ComponentInput = self.add_input(self.component_name, self.TemperatureOutside, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS,
                                                         True)
@@ -238,7 +238,6 @@ class PVSystem(cp.Component):
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=PVSystem.ElectricityOutput,
                                                                        load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-
         self.add_default_connections(Weather, self.get_weather_default_connections())
 
     @staticmethod
@@ -320,7 +319,7 @@ class PVSystem(cp.Component):
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.my_simulation_parameters.system_config.predictive == True and self.my_simulation_parameters.system_config.prediction_horizon:
             last_forecast_timestep = int(
                 timestep + self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
             if (last_forecast_timestep > len(self.output)):

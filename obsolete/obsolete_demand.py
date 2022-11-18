@@ -80,19 +80,19 @@ class HouseholdHeatDemand(Component):
             massflows_possible = LoadConfig.possible_massflows_load  # kg/s
             mass_flow_level = 0
             # K = W / (W/kgK * kg/s)
-            temperature_delta_heat = heat_demand / (PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
+            temperature_delta_heat = heat_demand / (PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * massflows_possible[mass_flow_level])
             while temperature_delta_heat > LoadConfig.delta_T:
                 mass_flow_level += 1
-                temperature_delta_heat = heat_demand / (PhysicsConfig.water_specific_heat_capacity * massflows_possible[mass_flow_level])
+                temperature_delta_heat = heat_demand / (PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * massflows_possible[mass_flow_level])
 
             # kg/timestep = kg/s * seconds_per_timestep
             mass_input_load = massflows_possible[mass_flow_level] * self.my_simulation_parameters.seconds_per_timestep
 
             # mass_input_load = LoadConfig.massflow_load * self.seconds_per_timestep
             energy_demand = heat_demand * self.my_simulation_parameters.seconds_per_timestep
-            enthalpy_slice = mass_input_load * temperature_input * PhysicsConfig.water_specific_heat_capacity
+            enthalpy_slice = mass_input_load * temperature_input * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
             enthalpy_new = enthalpy_slice - energy_demand
-            temperature_new = enthalpy_new / (mass_input_load * PhysicsConfig.water_specific_heat_capacity)
+            temperature_new = enthalpy_new / (mass_input_load * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin)
 
 
         else:
@@ -290,7 +290,7 @@ class HouseholdWarmWaterDemandWatt(Component):
             # heating up the freshwater. The mass is consistent
             energy_discharged = ww_energy_demand + energy_losses
             ww_temperature_output = freshwater_temperature + temperature_difference_cold
-            ww_mass_input = energy_discharged / (PhysicsConfig.water_specific_heat_capacity * (ww_temperature_input - ww_temperature_output))
+            ww_mass_input = energy_discharged / (PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * (ww_temperature_input - ww_temperature_output))
         else:
             ww_temperature_output = ww_temperature_input
             ww_mass_input = 0
@@ -408,10 +408,10 @@ class HouseholdWarmWaterDemand(Component):
         """
         if ww_volume_demand > 0:
             # heating up the freshwater. The mass is consistent
-            energy_demand = (ww_mass_demand * ww_temperature_demand - ww_mass_demand * freshwater_temperature) * PhysicsConfig.water_specific_heat_capacity
+            energy_demand = (ww_mass_demand * ww_temperature_demand - ww_mass_demand * freshwater_temperature) * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
             energy_discharged = energy_demand + energy_losses   # Joule
             ww_temperature_output = freshwater_temperature + temperature_difference_cold
-            ww_mass_input = energy_discharged / (PhysicsConfig.water_specific_heat_capacity * (ww_temperature_input - ww_temperature_output))
+            ww_mass_input = energy_discharged / (PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * (ww_temperature_input - ww_temperature_output))
         else:
             energy_demand = 0
             ww_temperature_output = ww_temperature_input

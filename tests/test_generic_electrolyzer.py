@@ -17,10 +17,10 @@ def test_chp_system():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
     
-    my_electrolyzer_config = generic_electrolyzer.GenericElectrolyzer.get_default_config()
+    my_electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig.get_default_config()
     my_electrolyzer = generic_electrolyzer.GenericElectrolyzer(config = my_electrolyzer_config,
                                                                my_simulation_parameters = my_simulation_parameters)
-    my_electrolyzer_controller_config = generic_electrolyzer.L1GenericElectrolyzerController.get_default_config()
+    my_electrolyzer_controller_config = generic_electrolyzer.L1ElectrolyzerConfig.get_default_config()
     my_electrolyzer_controller = generic_electrolyzer.L1GenericElectrolyzerController(config = my_electrolyzer_controller_config,
                                                                                       my_simulation_parameters = my_simulation_parameters)
     

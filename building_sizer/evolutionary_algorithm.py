@@ -4,7 +4,36 @@ import system_config
 from typing import List
 import random
 
-###functions for cross over
+def selection(rated_individuals: List[system_config.RatedIndividual],population_size: int):
+    """
+    Selects best individuals.
+
+    Parameters
+    ----------
+    rated_individuals : List[system_config.RatedIndividual]
+        List of all individuals
+    population_size : int
+        Amount of individuals to be selected
+
+    Returns
+    -------
+    selected_individuals : List[system_config.RatedIndividual]
+
+    """
+    # get list of scores
+    scores = [elem.rating for elem in rated_individuals]
+    
+    # get position of best scores 
+    len_scores = len(scores)
+    sorted_scores_indices = sorted(range(len_scores), key=lambda k: scores[k])
+    
+    # select individuals by positions
+    selected_individuals = []
+    for i in range(len_scores):
+        if i in sorted_scores_indices:
+            selected_individuals.append(rated_individuals[i])
+    return selected_individuals
+
 def crossover_conventional(parent1: system_config.RatedIndividual, parent2: system_config.RatedIndividual):
     """
     cross over: exchange parts of bitstring by randomly generated index
@@ -59,7 +88,7 @@ def mutation_bool(parent):
     child = system_config.Individual(bool_vector=vector_bool, discrete_vector=parent.discrete_vector)
     return child
 
-def evolution(parents: List[system_config.Individual], r_cross, r_mut ):
+def evolution(parents: List[system_config.Individual], r_cross: float, r_mut: float):
     """
     evolution step of the genetic algorithm
 

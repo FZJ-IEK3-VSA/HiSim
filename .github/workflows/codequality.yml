@@ -44,7 +44,7 @@ jobs:
         prospector hisim/project_code_overview_generator.py
         prospector hisim/postprocessingoptions.py
 	prospector hisim/system_config.py
-        prospector hisim/json_executor.py
+	prospector hisim/json_executor.py
         prospector hisim/json_generator.py
         prospector hisim/loadtypes.py
         prospector hisim/log.py
@@ -70,6 +70,7 @@ jobs:
         prospector hisim/modular_household/economic_parameters.py
         prospector hisim/modular_household/modular_household_results.py
         # prospector hisim/modular_household/preprocessing.py
+
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc
 #        # flake8 hisim/simulator.py --max-line-length 150

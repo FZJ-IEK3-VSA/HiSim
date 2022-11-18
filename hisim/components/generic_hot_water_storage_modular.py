@@ -7,7 +7,7 @@ one output: the hot water storage temperature.
 """
 # clean
 # Generic/Built-in
-from typing import Optional, List
+from typing import Optional, List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -73,6 +73,25 @@ class StorageConfig:
         self.cooling_considered = cooling_considered
         self.heating_season_begin = heating_season_begin
         self.heating_season_end = heating_season_end
+
+    @staticmethod
+    def get_default_config_boiler():
+        """ Returns default configuration for boiler. """
+        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=200,
+                               surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
+                               efficiency=1, power=None, cooling_considered=False, heating_season_begin=None,
+                               heating_season_end=None)
+        return config
+
+    @staticmethod
+    def get_default_config_buffer(volume: float = 500) -> Any:
+        """ Returns default configuration for buffer (radius:height = 1:4). """
+        radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
+        config = StorageConfig(
+            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=6 * radius * radius * np.pi, u_value=0.36,
+            warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,
+            heating_season_begin=270, heating_season_end=150)
+        return config
 
 
 class StorageState:
@@ -266,25 +285,6 @@ class HotWaterStorage(dycp.DynamicComponent):
         connections.append(cp.ComponentConnection(HotWaterStorage.ThermalPowerDelivered, heatsource_classname,
                                                   generic_heat_source.HeatSource.ThermalPowerDelivered))
         return connections
-
-    @staticmethod
-    def get_default_config_boiler():
-        """ Returns default configuration for boiler. """
-        config = StorageConfig(name='Boiler', use=lt.ComponentType.BOILER, source_weight=1, volume=200,
-                               surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
-                               efficiency=1, power=None, cooling_considered=False, heating_season_begin=None,
-                               heating_season_end=None)
-        return config
-
-    @staticmethod
-    def get_default_config_buffer(volume: float = 500) -> StorageConfig:
-        """ Returns default configuration for buffer (radius:height = 1:4). """
-        radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
-        config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=6 * radius * radius * np.pi, u_value=0.36,
-            warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,
-            heating_season_begin=270, heating_season_end=150)
-        return config
 
     def build(self, config: StorageConfig) -> None:
         """ Initializes hot water storage instance. """

@@ -19,7 +19,7 @@ from utspclient.datastructures import (CalculationStatus,  # type: ignore
                                        ResultDelivery, ResultFileRequirement,
                                        TimeSeriesRequest)
 from system_config import Individual, RatedIndividual
-from evolutionary_algorithm import evolution, selection, comparison
+from evolutionary_algorithm import evolution, selection
 
 
 import system_config
@@ -153,10 +153,14 @@ def building_sizer_iteration(
     # TODO r_cross and r_mut as inputs
     r_cross: float = 0.2
     r_mut: float = 0.4
-    new_vectors: List[Individual] = evolution(parents=parents, r_cross=r_cross, r_mut=r_mut9
+    new_vectors: List[Individual] = evolution(parents=parents, r_cross=r_cross, r_mut=r_mut)
     
-    # TODO: combine new_vectors and rated_individuals and delete duplicates
-
+    # combine new_vectors and rated_individuals (combine parents and children)
+    for elem in parents:
+        new_vectors.append(elem.individual)
+    
+    # delete duplicates
+    new_vectors = unique(individuals=new_vectors)
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:

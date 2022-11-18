@@ -46,7 +46,7 @@ class SimulationParameters(JSONWizard):
     start_date: datetime.datetime
     end_date: datetime.datetime
     seconds_per_timestep: int
-    post_processing_options: Optional[List[int]]
+    post_processing_options: List[int]
     logging_level: int
     result_directory: str
     skip_finished_results: bool
@@ -54,7 +54,7 @@ class SimulationParameters(JSONWizard):
 
     def __init__(self, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int,
                  result_directory: str = "",
-                 post_processing_options: Optional[List[int]] = None, logging_level: int = log.LogPrio.INFORMATION,
+                 post_processing_options: List[int] = [], logging_level: int = log.LogPrio.INFORMATION,
                  skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
         """ Initializes the class. """
         self.start_date: datetime.datetime = start_date
@@ -64,9 +64,7 @@ class SimulationParameters(JSONWizard):
         total_seconds = self.duration.total_seconds()
         self.timesteps: int = int(total_seconds / seconds_per_timestep)
         self.year: int = int(start_date.year)
-        if post_processing_options is None:
-            post_processing_options = []
-        self.post_processing_options: List[int] = post_processing_options
+        self.post_processing_options = post_processing_options
         self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
@@ -79,10 +77,7 @@ class SimulationParameters(JSONWizard):
 
     def enable_all_options(self) -> None:
         """ Enables all the post processing options . """
-        if self.post_processing_options is None:
-            self.post_processing_options = []
-        else:
-            for option in PostProcessingOptions:
+        for option in PostProcessingOptions:
                 self.post_processing_options.append(option)
 
     @classmethod

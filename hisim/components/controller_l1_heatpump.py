@@ -14,6 +14,7 @@ from hisim import utils
 from hisim import component as cp
 from hisim import log
 from hisim.components import generic_hot_water_storage_modular
+from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -32,7 +33,7 @@ __status__ = "development"
 @dataclass
 class L1HeatPumpConfig(ConfigBase):
 
-    """ L2 Controller Config. """
+    """ L1 Controller Config. """
 
     name: str
     source_weight: int
@@ -62,13 +63,28 @@ class L1HeatPumpConfig(ConfigBase):
         self.min_idle_time_in_seconds = min_idle_time_in_seconds
 
     @staticmethod
-    def get_default_config_heat_pump_controller() -> Any:
+    def get_default_config_heat_source_controller(name: str) -> Any:
         """ Default Config for the buffer temperature. """
-        config = L1HeatPumpConfig(name='L1HeatPumpController', source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
-                                  cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=23.0, t_max_heating_in_celsius=25.0,
+                                  cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
                                   day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
+    @staticmethod
+    def get_default_config_heat_source_controller_buffer(name: str) -> Any:
+        """ Default Config for the buffer temperature. """
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
+                                  cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
+                                  day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+        return config
+    
+    @staticmethod
+    def get_default_config_heat_source_controller_dhw(name: str) -> Any:
+        """ Default Config for the buffer temperature. """
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
+                                  cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
+                                  day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+        return config
 
 class L1HeatPumpControllerState:
 
@@ -116,7 +132,7 @@ class L1HeatPumpController(cp.Component):
     StorageTemperatureModifier = "StorageTemperatureModifier"
     FlexibileElectricity = "FlexibleElectricity"
     # Outputs
-    HeatPumpTargetPercentage = "HeatPumpTargetPercentage"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
     OnOffState = "OnOffState"
 
     @utils.measure_execution_time
@@ -140,9 +156,10 @@ class L1HeatPumpController(cp.Component):
             self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L1HeatPumpControllerState = L1HeatPumpControllerState(0, 0, 0)
         self.previous_state: L1HeatPumpConfig = self.state.clone()
+        self.processed_state: L1HeatPumpConfig = self.state.clone()
 
         # Component Outputs
-        self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatPumpTargetPercentage, LoadTypes.ANY, Units.PERCENT)
+        self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ANY, Units.PERCENT)
         self.on_off_channel : cp.ComponentOutput = self.add_output(self.component_name, self.OnOffState,
                                                                                        LoadTypes.ANY, Units.ANY)
 
@@ -156,6 +173,7 @@ class L1HeatPumpController(cp.Component):
                                                                             LoadTypes.ELECTRICITY, Units.WATT, mandatory=False)
 
         self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_buffer_default_connections())
+        self.add_default_connections(building.Building, self.get_building_default_connections())
         self.add_default_connections(controller_l2_energy_management_system.L2GenericEnergyManagementSystem, self.get_ems_default_connections())
 
     def get_ems_default_connections(self):
@@ -163,8 +181,6 @@ class L1HeatPumpController(cp.Component):
         log.information("setting building default connections in L1 building Controller")
         connections = []
         ems_classname = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
-        connections.append(cp.ComponentConnection(L1HeatPumpController.StorageTemperatureModifier, ems_classname,
-                                                  controller_l2_energy_management_system.L2GenericEnergyManagementSystem.StorageTemperatureModifier))
         connections.append(cp.ComponentConnection(L1HeatPumpController.FlexibileElectricity, ems_classname,
                                                   controller_l2_energy_management_system.L2GenericEnergyManagementSystem.FlexibleElectricity))
         return connections
@@ -177,6 +193,16 @@ class L1HeatPumpController(cp.Component):
         connections.append(cp.ComponentConnection(L1HeatPumpController.StorageTemperature, boiler_classname,
                                                   generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean))
         return connections
+    
+    def get_building_default_connections(self):
+        """ Sets default connections for the boiler. """
+        log.information("setting buffer default connections in L1 building Controller")
+        connections = []
+        building_classname = building.Building.get_classname()
+        connections.append(cp.ComponentConnection(L1HeatPumpController.StorageTemperature, building_classname,
+                                                  building.Building.TemperatureMean))
+        return connections
+
 
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
@@ -197,9 +223,12 @@ class L1HeatPumpController(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Core Simulation function. """
         if force_convergence:
-            return
-
-        self.calculate_state(timestep, stsv)
+            # states are saved after each timestep, outputs after each iteration
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state. 
+            self.state = self.processed_state.clone()
+        else:
+            self.calculate_state(timestep, stsv)
+            self.processed_state = self.state.clone() 
         modulating_signal = self.state.percentage * self.state.on_off
         stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
         stsv.set_output_value(self.on_off_channel, self.state.on_off)
@@ -235,6 +264,11 @@ class L1HeatPumpController(cp.Component):
             return
         # check signals and turn on or off if it is necessary
         t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
+        # prevent heating in summer
+        if self.cooling_considered:
+            if timestep < self.heating_season_begin and timestep > self.heating_season_end and t_storage >= t_min_target - 5:
+                self.state.deactivate(timestep)
+                return
         if t_storage < t_min_target:
             self.state.activate(timestep)
             self.calc_percentage(t_storage, temperature_modifier)

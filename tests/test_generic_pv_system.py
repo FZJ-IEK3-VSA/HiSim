@@ -14,8 +14,7 @@ def test_photovoltaic():
     repo = sim_repository.SimRepository()
 
     mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(year=2021,
-                                                                           seconds_per_timestep=seconds_per_timestep)
-    mysim.reset_system_config( predictive = True )
+                                                                         seconds_per_timestep=seconds_per_timestep)
 
     # Weather: 6 outputs
     # PVS:  1 output

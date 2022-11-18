@@ -14,8 +14,8 @@ def test_smart_device():
     Test time shifting for smart devices
     """
     #initialize simulation parameters
-    mysim: SimulationParameters = SimulationParameters.full_year( year=2021,
-                                                                 seconds_per_timestep = 60 ) 
+    mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
+                                                                 seconds_per_timestep=60) 
     #read in first available smart device
     filepath = utils.HISIMPATH[ "smart_devices" ][ "device_collection" ] 
     
@@ -28,7 +28,8 @@ def test_smart_device():
             i += 1
      
     #create smart_device        
-    my_smart_device = generic_smart_device.SmartDevice(identifier=device, source_weight=0, my_simulation_parameters=mysim)
+    my_smart_device = generic_smart_device.SmartDevice(identifier=device, source_weight=0, my_simulation_parameters=mysim,
+                                                       smart_devices_included=False)
     
     #get first activation and corrisponding profile from data (SmartDevice Class reads in data )
     activation = my_smart_device.latest_start[0]

@@ -21,8 +21,6 @@ __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
 
-
-
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     """
     Surplus electricity controller - time step based. 
@@ -122,50 +120,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def control_electricity_component(self, demand: float, stsv: cp.SingleTimeStepValues, my_component_inputs: list, my_component_outputs: list,
-                                      weight_counter: int, component_type: list, input_type: lt.InandOutputType,
-                                      output_type: lt.InandOutputType) -> Any:
-        # to do: add that to much chp-electricty is charged in Battery and doesnt go in to grid
-        for index, element in enumerate(my_component_outputs):
-            for tags in element.source_tags:
-                if tags.__class__ == lt.ComponentType and tags in component_type:
-                    if element.source_weight == weight_counter:
-                        # more electricity than needed
-                        if tags == lt.ComponentType.BATTERY:
-                            stsv.set_output_value(self.__getattribute__(element.source_component_class), demand)
-                            break
-                        elif tags == lt.ComponentType.FUEL_CELL:
-                            if demand < 0:
-                                stsv.set_output_value(self.__getattribute__(element.source_component_class), -demand)
-                            else:
-                                stsv.set_output_value(self.__getattribute__(element.source_component_class), 0)
-                            break
-            else:
-                continue
-            break
-        for index, element in enumerate(my_component_inputs):
-            for tags in element.source_tags:
-                if tags.__class__ == lt.ComponentType and tags in component_type:
-                    if element.source_weight == weight_counter:
-                        if tags == lt.ComponentType.BATTERY:
-                            demand = demand - stsv.get_input_value(self.__getattribute__(element.source_component_class))
-                            break
-                        elif tags == lt.ComponentType.FUEL_CELL:
-                            demand = demand + stsv.get_input_value(self.__getattribute__(element.source_component_class))
-                            break
-            else:
-                continue
-            break
-        return demand
-
     def control_electricity_component_iterative(self, deltademand: float, stsv: cp.SingleTimeStepValues, weight_counter: int,
                                                 component_type: lt.ComponentType) -> Any:
         is_battery = None
         # get previous signal and substract from total balance
         previous_signal = self.get_dynamic_input(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_REAL], weight_counter=weight_counter)
+        
+        if component_type == lt.ComponentType.CAR_BATTERY:
+            self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
+                                    output_value=deltademand)
+            if previous_signal > 0:
+                deltademand = deltademand - previous_signal
 
         # control from substracted balance
-        if component_type == lt.ComponentType.BATTERY:
+        elif component_type == lt.ComponentType.BATTERY:
             self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
                                     output_value=deltademand)
             deltademand = deltademand - previous_signal
@@ -199,39 +167,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                                 weight_counter=self.source_weights_sorted[ind], output_value=deltademand + previous_signal)
         return deltademand - previous_signal
 
-    def optimize_own_consumption(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
-        electricity_to_or_from_grid: float = 0
-        my_component_inputs = self.my_component_inputs
-        my_component_outputs = self.my_component_outputs
-        # Rule Battery
-        for weight_counter in range(1, len(my_component_inputs) + 1):
-            delta_demand = self.control_electricity_component(demand=delta_demand, stsv=stsv, my_component_inputs=my_component_inputs,
-                                                              my_component_outputs=my_component_outputs, weight_counter=weight_counter,
-                                                              component_type=[lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL],
-                                                              input_type=lt.InandOutputType.ELECTRICITY_REAL,
-                                                              output_type=lt.InandOutputType.ELECTRICITY_TARGET)
-
-        # more electricity than needed
-        if delta_demand > 0:
-            # Negative sign, because Electricity will flow into grid->Production of Electricity
-            electricity_to_or_from_grid = -delta_demand
-
-        # less electricity than needed
-        elif delta_demand < 0:
-            # Positive sing, because Electricity will flow out of grid->Consumption of Electricity
-            electricity_to_or_from_grid = -delta_demand
-
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
-
     def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
         skip_CHP = False
         for ind in range(len(self.source_weights_sorted)):
             component_type = self.components_sorted[ind]
             source_weight = self.source_weights_sorted[ind]
             if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
-                                  lt.ComponentType.SMART_DEVICE]:
+                                  lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
                 if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
-                                                      lt.ComponentType.SMART_DEVICE]:
+                                                      lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
                     delta_demand, is_battery = self.control_electricity_component_iterative(deltademand=delta_demand, stsv=stsv,
                                                                                             weight_counter=source_weight,
                                                                                             component_type=component_type)
@@ -241,107 +185,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 if is_battery is not None:
                     delta_demand = self.postprocess_battery(deltademand=delta_demand, stsv=stsv, ind=is_battery)
                     skip_CHP = True
-
-    # seasonal storaging is almost the same as own_consumption, but a electrolyzer is added
-    # follows strategy to first charge battery than produce H2
-    '''
-    def seasonal_storage(self, delta_demand: float, stsv: cp.SingleTimeStepValues):
-
-        electricity_to_or_from_battery_target:float = 0
-        electricity_from_chp_target:float = 0
-        electricity_to_or_from_grid:float = 0
-        electricity_to_electrolyzer_target:float = 0
-
-        # Check if Battery is Component of Simulation
-        if self.electricity_to_or_from_battery_real.SourceOutput is not None:
-            electricity_to_or_from_battery_target = delta_demand
-
-        # electricity_not_used_battery of Charge or Discharge
-        electricity_not_used_battery = electricity_to_or_from_battery_target - stsv.get_input_value(
-            self.electricity_to_or_from_battery_real)
-        # more electricity than needed
-        if delta_demand > 0:
-            # Check if enough electricity is there to charge CHP (finds real solution after 2 Iteration-Steps)
-            if self.electricity_to_electrolyzer_unused.SourceOutput is not None:
-                # possibility to  produce H2
-                electricity_to_electrolyzer_target = delta_demand - stsv.get_input_value(
-                    self.electricity_to_or_from_battery_real)
-                if electricity_to_electrolyzer_target<0:
-                    electricity_to_electrolyzer_target=0
-
-            # Negative sign, because Electricity will flow into grid->Production of Electricity
-            electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
-                self.electricity_to_or_from_battery_real) + (electricity_to_electrolyzer_target-stsv.get_input_value(self.electricity_to_electrolyzer_unused))
-
-        # less electricity than needed
-        elif delta_demand < 0:
-
-            if delta_demand - electricity_to_or_from_battery_target + electricity_not_used_battery < 0 and self.electricity_from_chp_real.SourceOutput is not None:
-                electricity_from_chp_target = -delta_demand + stsv.get_input_value(
-                    self.electricity_to_or_from_battery_real)
-
-            # Positive sing, because Electricity will flow out of grid->Consumption of Electricity
-            electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
-                self.electricity_to_or_from_battery_real) - stsv.get_input_value(self.electricity_from_chp_real)
-
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
-        stsv.set_output_value(self.electricity_from_chp_target, electricity_from_chp_target)
-        stsv.set_output_value(self.electricity_to_electrolyzer_target, electricity_to_electrolyzer_target)
-        stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
-
-
-    #peak-shaving from grid tries to reduce/shave electricity from grid to an defined boarder
-    #just used for industry, trade and service
-    #so far no chp is added. But produces elect. has to be addded to delta demand
-    def peak_shaving_from_grid(self,delta_demand:float,limit_to_shave: float,stsv: cp.SingleTimeStepValues):
-        electricity_to_or_from_battery_target:float=0
-        check_peak_shaving:float=0
-
-        # more electricity than needed
-        if delta_demand > 0:
-            electricity_to_or_from_battery_target = delta_demand
-        elif -delta_demand >  limit_to_shave:
-            check_peak_shaving=1
-            electricity_to_or_from_battery_target= delta_demand+limit_to_shave
-            if -delta_demand + limit_to_shave + stsv.get_input_value(
-                self.electricity_to_or_from_battery_real) > 0:
-                check_peak_shaving = -delta_demand + limit_to_shave + stsv.get_input_value(
-                self.electricity_to_or_from_battery_real)
-        electricity_to_or_from_grid = -delta_demand + stsv.get_input_value(
-            self.electricity_to_or_from_battery_real)
-
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
-        stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
-        stsv.set_output_value(self.check_peak_shaving, check_peak_shaving)
-
-    #peak-shaving from grid tries to reduce/shave electricity into grid to an defined boarder
-    #so far no chp is added. But produces elect. has to be addded to delta demand
-    def peak_shaving_into_grid(self,delta_demand:float,limit_to_shave: float,stsv: cp.SingleTimeStepValues):
-        #Hier delta Demand noch die Leistung aus CHP hinzufügen
-        electricity_to_or_from_battery_target:float=0
-        check_peak_shaving:float=0
-
-        if delta_demand > limit_to_shave:
-            electricity_to_or_from_battery_target=delta_demand-limit_to_shave
-
-            if delta_demand - limit_to_shave - stsv.get_input_value(
-                self.electricity_to_or_from_battery_real) > 0:
-                check_peak_shaving = delta_demand - limit_to_shave - stsv.get_input_value(
-                self.electricity_to_or_from_battery_real) # Peak Shaving didnt work
-            else:
-                check_peak_shaving = 1
-        elif delta_demand<0:
-            electricity_to_or_from_battery_target=delta_demand
-
-        electricity_to_or_from_grid=-delta_demand + stsv.get_input_value(
-            self.electricity_to_or_from_battery_real)
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
-        stsv.set_output_value(self.electricity_to_or_from_battery_target, electricity_to_or_from_battery_target)
-        stsv.set_output_value(self.check_peak_shaving, check_peak_shaving)
-    '''
-
-    # Simulates water storages and defines the control signals to heat up storages
-    # work as a 2-point Ruler with Hysteresis
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         if force_convergence:
@@ -355,7 +198,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # get production
         production = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]))
         consumption_uncontrolled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]))
-        consumption_ems_controlled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]))
+        consumption_ems_controlled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_REAL]))
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
@@ -364,11 +207,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption_iterative(delta_demand=electricity_to_grid, stsv=stsv)
             stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
-            stsv.set_output_value(self.flexible_electricity, flexible_electricity )
+            stsv.set_output_value(self.flexible_electricity, flexible_electricity)
         stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)
         if flexible_electricity > 0:
-            stsv.set_output_value(self.building_temperature_modifier, 0)
-            stsv.set_output_value(self.storage_temperature_modifier, 0)
+            stsv.set_output_value(self.building_temperature_modifier, 1)
+            stsv.set_output_value(self.storage_temperature_modifier, 10)
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)
@@ -387,12 +230,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # not perfect solution!
         '''
         if self.temperature_residence<self.min_comfortable_temperature_residence:
-
-
             #heat
             #here has to be added how "strong" HeatingWater Storage can be discharged
             #Working with upper boarder?
-
         elif self.temperature_residence > self.max_comfortable_temperature_residence:
             #cool
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:

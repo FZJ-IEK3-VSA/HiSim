@@ -4,13 +4,13 @@ import importlib
 import sys
 from datetime import datetime
 import os
-
+from typing import Optional
 from hisim import log
 import hisim.simulator as sim
 from hisim.simulationparameters import SimulationParameters
 
 
-def main(path_to_module: str, function_in_module: str, my_simulation_parameters: SimulationParameters = None) -> None:
+def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """ Core function. """
     log.information("#################################")
     log.information("starting simulation of " + path_to_module + " " + function_in_module)

@@ -11,7 +11,7 @@ from hisim import utils
 
 @utils.measure_execution_time
 def test_basic_household():
-    """ Single day with all options. """
+    """ Single day. """
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)

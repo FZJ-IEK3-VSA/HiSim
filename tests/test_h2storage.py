@@ -15,9 +15,9 @@ from hisim.components import generic_hydrogen_storage
 def test_chp_system():
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only( 2017, seconds_per_timestep )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     
-    my_h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorage.get_default_config()
+    my_h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
     my_h2_storage = generic_hydrogen_storage.GenericHydrogenStorage(config = my_h2_storage_config,
                                                                     my_simulation_parameters = my_simulation_parameters)
     

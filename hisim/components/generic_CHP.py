@@ -47,6 +47,15 @@ class GCHPConfig:
         self.p_el = p_el
         self.p_th = p_th
         self.p_fuel = p_fuel
+        
+    @staticmethod
+    def get_default_config() -> Any:
+        config=GCHPConfig(name='CHP',
+                          source_weight=1,
+                          p_el=2000,
+                          p_th=3000,
+                          p_fuel=6000) 
+        return config
             
 class GenericCHPState:
     """
@@ -85,7 +94,7 @@ class GCHP( cp.Component ):
         #Component outputs
         self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ThermalPowerDelivered, load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+            unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION])
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.FUEL_CELL])
@@ -94,15 +103,6 @@ class GCHP( cp.Component ):
                                                                   lt.LoadTypes.HYDROGEN,
                                                                   lt.Units.KG_PER_SEC)
         self.add_default_connections(L1GenericCHPRuntimeController, self.get_l1_controller_default_connections())
-
-    @staticmethod
-    def get_default_config() -> GCHPConfig:
-        config=GCHPConfig(name='CHP',
-                          source_weight=1,
-                          p_el=2000,
-                          p_th=3000,
-                          p_fuel=6000) 
-        return config
     
     def build( self, config: GCHPConfig ) -> None:
         self.state = GenericCHPState()
@@ -174,6 +174,15 @@ class L1CHPConfig:
         self.min_idle_time = min_idle_time
         self.min_h2_soc = min_h2_soc
         
+    @staticmethod
+    def get_default_config() -> Any:
+        config = L1CHPConfig( name = 'L1CHPRunTimeController',
+                              source_weight =  1,
+                              min_operation_time = 14400,
+                              min_idle_time = 7200,
+                              min_h2_soc = 5 )
+        return config
+        
 class L1GenericCHPControllerState:
     """
     This data class saves the state of the controller.
@@ -238,7 +247,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         
         self.build( config )
         
-        #add inputs
+        # add inputs
         self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name,
                                                                   self.l2_DeviceSignal,
                                                                   lt.LoadTypes.ON_OFF,
@@ -260,7 +269,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         self.add_default_connections(generic_hydrogen_storage.GenericHydrogenStorage, self.get_hydrogen_storage_default_connections())
         
         
-        #add outputs
+        # add outputs
         self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                     self.L1DeviceSignal,
                                                                     lt.LoadTypes.ON_OFF,
@@ -336,15 +345,6 @@ class L1GenericCHPRuntimeController(cp.Component):
                 self.state.activation( timestep )
             
         stsv.set_output_value( self.L1DeviceSignalC, self.state.state )
-        
-    @staticmethod
-    def get_default_config() -> L1CHPConfig:
-        config = L1CHPConfig( name = 'L1CHPRunTimeController',
-                              source_weight =  1,
-                              min_operation_time = 14400,
-                              min_idle_time = 7200,
-                              min_h2_soc = 5 )
-        return config
 
     def prin1t_outpu1t(self, t_m: float, state: L1GenericCHPControllerState) -> None:
         log.information("==========================================")

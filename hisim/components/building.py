@@ -367,11 +367,7 @@ class Building(dynamic_component.DynamicComponent):
         # reference taken from TABULA (* Check header) as Q_H_ind [kWh/m2.a], before q_h_nd_ref
         self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year: float = 0
         self.test_new_temperature_in_celsius: float
-<<<<<<< HEAD
-        self.buildingdata: dict
-=======
         self.buildingdata: Any
->>>>>>> examples_and_tests
         self.buildingcode: str
         self.windows: List[Window]
         self.windows_area: float
@@ -387,19 +383,6 @@ class Building(dynamic_component.DynamicComponent):
         # labeled as Phi_m_tot in the paper [1] (** Check header)
         self.equivalent_heat_flux_in_watt: float
         self.next_thermal_mass_temperature_in_celsius: float
-<<<<<<< HEAD
-
-        self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
-            building_code=config.building_code,
-            heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
-            initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
-        )
-        self.build(
-            config.building_heat_capacity_class,
-            config.building_code,
-        )
-
-=======
 
         self.get_building()
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
@@ -408,7 +391,6 @@ class Building(dynamic_component.DynamicComponent):
         )
         self.build()
 
->>>>>>> examples_and_tests
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
@@ -830,11 +812,6 @@ class Building(dynamic_component.DynamicComponent):
 
     def build(
         self,
-<<<<<<< HEAD
-        building_heat_capacity_class,
-        buildingcode,
-=======
->>>>>>> examples_and_tests
     ):
         """Build function.
 
@@ -845,13 +822,8 @@ class Building(dynamic_component.DynamicComponent):
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         self.timesteps = self.my_simulation_parameters.timesteps
         self.parameters = [
-<<<<<<< HEAD
-            building_heat_capacity_class,
-            buildingcode,
-=======
             self.building_heat_capacity_class,
             self.buildingcode,
->>>>>>> examples_and_tests
         ]
 
         # CONSTANTS
@@ -876,11 +848,7 @@ class Building(dynamic_component.DynamicComponent):
             "heavy": 2.6e5,
             "very heavy": 3.7e5,
         }
-<<<<<<< HEAD
-        self.building_heat_capacity_class = building_heat_capacity_class
-=======
-        # self.building_heat_capacity_class = building_heat_capacity_class
->>>>>>> examples_and_tests
+
         self.ven_method = "EPISCOPE"
 
         # Get physical parameters
@@ -891,41 +859,11 @@ class Building(dynamic_component.DynamicComponent):
 
     def calc_max_thermal_building_demand(
         self,
-<<<<<<< HEAD
-        building_code: str,
-=======
->>>>>>> examples_and_tests
         initial_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,
     ) -> Any:
         """Calculate maximal thermal building demand using TABULA data."""
 
-<<<<<<< HEAD
-        d_f = pd.read_csv(
-            utils.HISIMPATH["housing"],
-            decimal=",",
-            sep=";",
-            encoding="cp1252",
-            low_memory=False,
-        )
-        buildingdata = d_f.loc[d_f["Code_BuildingVariant"] == building_code]
-        vals1_in_watt_per_m2_per_kelvin = buildingdata["h_Transmission"].values[0]
-        if vals1_in_watt_per_m2_per_kelvin is None:
-            raise ValueError("h_Transmission was none.")
-        vals2_in_watt_per_m2_per_kelvin = buildingdata["h_Ventilation"].values[0]
-        conditioned_floor_area_in_m2 = buildingdata["A_C_Ref"].values[0]
-        # dQ/dt = h * (T2-T1) * A -> [W]
-        max_thermal_building_demand_in_watt = (
-            (vals1_in_watt_per_m2_per_kelvin + vals2_in_watt_per_m2_per_kelvin)
-            * (
-                initial_temperature_in_celsius
-                - heating_reference_temperature_in_celsius
-            )
-            * conditioned_floor_area_in_m2
-        )
-        return max_thermal_building_demand_in_watt
-
-=======
         vals1_in_watt_per_m2_per_kelvin = float(self.buildingdata["h_Transmission"].values[0])
 
         if vals1_in_watt_per_m2_per_kelvin is None:
@@ -944,7 +882,6 @@ class Building(dynamic_component.DynamicComponent):
         )
         return max_thermal_building_demand_in_watt
 
->>>>>>> examples_and_tests
     def __str__(
         self,
     ):
@@ -1295,10 +1232,6 @@ class Building(dynamic_component.DynamicComponent):
 
     def get_building(
         self,
-<<<<<<< HEAD
-        buildingcode,
-=======
->>>>>>> examples_and_tests
     ):
         """Get the building code from a TABULA building."""
         d_f = pd.read_csv(
@@ -1310,14 +1243,9 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Gets parameters from chosen building
-<<<<<<< HEAD
-        self.buildingdata = d_f.loc[d_f["Code_BuildingVariant"] == buildingcode]
-        self.buildingcode = buildingcode
-=======
         self.buildingdata = d_f.loc[d_f["Code_BuildingVariant"] == self.buildingconfig.building_code]
         self.buildingcode = self.buildingconfig.building_code
         self.building_heat_capacity_class = self.buildingconfig.building_heat_capacity_class
->>>>>>> examples_and_tests
 
     def get_windows(
         self,

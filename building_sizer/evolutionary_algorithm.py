@@ -4,7 +4,43 @@ import system_config
 from typing import List
 import random
 
-def selection(rated_individuals: List[system_config.RatedIndividual],population_size: int):
+def unique(individuals: List[system_config.Individual]):
+    """
+    Compares all individuals and deletes duplicates. 
+    
+    Parameters
+    ----------
+    rated_individuals : List[system_config.RatedIndividual]
+        List of all individuals
+    population_size : int
+        Amount of individuals to be selected
+
+    Returns
+    -------
+    selected_individuals : List[system_config.RatedIndividual]
+    
+    """
+    len_individuals = len(individuals)
+    
+    # get index of all duplicates
+    delete_index = []
+    for i in range(len_individuals):
+        for j in range(i + 1, len_individuals):
+            if individuals[i] == individuals[j]:
+                delete_index.append(j)
+    
+    # select not duplicated values
+    filtered_individuals = []
+    for i in range(len_individuals):
+        if i in delete_index:
+            pass
+        else:
+            filtered_individuals.append(individuals[i])
+    return filtered_individuals
+    
+                
+
+def selection(rated_individuals: List[system_config.RatedIndividual], population_size: int):
     """
     Selects best individuals.
 

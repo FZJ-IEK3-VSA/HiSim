@@ -136,7 +136,7 @@ inputs/cache
 
 hisim/inputs/cache
 examples/results
-results
+results/Results
 
 # simulation log
 tests\hisim_simulation.log

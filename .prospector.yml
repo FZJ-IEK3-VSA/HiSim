@@ -53,6 +53,7 @@ pydocstyle:
     - D213
     - W293
     - D211
+    - E128
 
 mypy:
   run: true

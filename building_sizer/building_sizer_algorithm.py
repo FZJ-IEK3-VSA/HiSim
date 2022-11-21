@@ -137,7 +137,8 @@ def building_sizer_iteration(
     for sim_config_str, result in results.items():
         result_file = result.data["KPIs.csv"].decode()
         # TODO: check if rating works
-        rating = get_kpi_from_csv(result_file)
+        # rating = get_kpi_from_csv(result_file)
+        rating = random.uniform(0, 1)
         system_config: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
         individual = system_config.get_individual()
         r = RatedIndividual(individual, rating)
@@ -170,9 +171,7 @@ def building_sizer_iteration(
     hisim_configs = []
     for individual in new_vectors:
         system_config = system_config.SystemConfig.from_individual(individual)
-        hisim_configs.append(system_config)
-    
-    hisim_configs = [hisim_config.to_json()]  # type: ignore
+        hisim_configs.append(system_config.to_json())
 
     # trigger the next iteration with the new hisim configurations
     next_request = trigger_next_iteration(request, hisim_configs)
@@ -191,7 +190,16 @@ def main():
         # Execute one building sizer iteration
         next_request, result = building_sizer_iteration(request)
     else:
-        # TODO: first iteration; initialize algorithm and specify initial hisim requests
+        # # TODO: first iteration; initialize algorithm and specify initial hisim requests
+        # probabilities: List[float] = [0.8, 0.4]  # probabilites to create PV and battery respectively 
+        # populations_size: int = 5  # number of individuals to be created
+
+        # initial_hisim_configs = [] # initialize system_configs
+        # for i in range(populations_size):  # create five individuals in population
+        #     individual = system_config.Individual()
+        #     individual.create_random_individual(probabilities=probabilities)
+        #     initial_hisim_configs.append(system_config.SystemConfig.create_from_individual(individual).to_json())
+        
         initial_hisim_configs = [
             system_config.SystemConfig().to_json()  # type: ignore
         ]

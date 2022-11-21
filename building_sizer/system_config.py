@@ -8,7 +8,7 @@ from dataclasses_json import dataclass_json
 
 from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from heating_system_enums import HeatingSystems
+from building_sizer.heating_system_enums import HeatingSystems
 
 
 @dataclass_json
@@ -70,8 +70,8 @@ class SystemConfig:
             chp_included: bool = False, chp_power: Optional[float] = 12, h2_storage_included: bool = True, h2_storage_size: Optional[float] = 100,
             electrolyzer_included: bool = True, electrolyzer_power: Optional[float] = 5e3, ev_included: bool = True,
             charging_station: Optional[JsonReference] = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-            utsp_connect: bool = False, url: str = '', 
-            api_key: str = ''):  # noqa
+            utsp_connect: bool = False, url: str = "http://134.94.131.167:443/api/v1/profilerequest", 
+            api_key: str = 'OrjpZY93BcNWw8lKaMp0BEchbCc'):  # noqa
         self.water_heating_system_installed = water_heating_system_installed
         self.heating_system_installed = heating_system_installed
         self.clever = clever

@@ -34,7 +34,6 @@ from hisim.modular_household import component_connections
 from hisim.modular_household import preprocessing
 from hisim.modular_household.modular_household_results import ModularHouseholdResults
 from hisim.simulator import SimulationParameters
-from hisim.system_config import SystemConfig
 
 
 def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: MC0001
@@ -46,7 +45,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     # Set simulation parameters
     year = 2018
     seconds_per_timestep = 60 * 15
-    
+
     # path of archetype config file
     arche_type_config_filename = 'arche_type_config.json'
 
@@ -73,12 +72,12 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
         hisim.log.information(f"Read system config from {system_config_filename}")
         my_simulation_parameters.system_config = system_config
-        
+
     else:
         system_config = SystemConfig()
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
-        
+
     # try to read the system config from file
     if Path(arche_type_config_filename).is_file():
         with open(arche_type_config_filename, encoding='utf8') as arche_type_config_file:
@@ -123,7 +122,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     """BASICS"""
     if utsp_connected:
-        my_occupancy_config = loadprofilegenerator_utsp_connector.UtspConnectorConfig(
+        my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
         household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
         transportation_device_set=mobility_set, charging_station_set=charging_station)
@@ -133,9 +132,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
         my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-    
+
     """TODO: pass url and api, chose bettery directory or use inputs"""
-    
+
 
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
@@ -163,7 +162,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if my_simulation_parameters.system_config.predictive:
         my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
         my_sim.add_component(my_price_signal)
-        
+
     # if results directory is empty: copy EV and smart devices to results directory
     files_in_result = listdir(hisim.utils.HISIMPATH['results'])
     if not files_in_result:
@@ -172,7 +171,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         carfiles = listdir(hisim.utils.HISIMPATH['cars'])
         for file in carfiles:
             shutil.copyfile(path.join(hisim.utils.HISIMPATH['cars'], file), path.join(hisim.utils.HISIMPATH['results'], file))
-        
+
 
     # """PV"""
     if pv_included:

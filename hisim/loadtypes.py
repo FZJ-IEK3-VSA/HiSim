@@ -31,15 +31,6 @@ class ChargingLocations(str, enum.Enum):
 
 
 @enum.unique
-class ChargingLocations(str, enum.Enum):
-
-    """ To parse locations for EV Charging. """
-
-    AT_HOME = "AtHome"
-    AT_WORK = "AtWork"
-
-
-@enum.unique
 class OccupancyProfiles(str, enum.Enum):
 
     """ To parse LPG predefined household strings. """

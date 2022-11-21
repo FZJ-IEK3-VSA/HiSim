@@ -43,6 +43,7 @@ pycodestyle:
     - N806
     - N803
     - N802
+    - E128
 
 pydocstyle:
   run: true
@@ -53,7 +54,7 @@ pydocstyle:
     - D213
     - W293
     - D211
-    - E128
+
 
 mypy:
   run: true

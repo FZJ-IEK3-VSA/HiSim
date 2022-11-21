@@ -8,7 +8,7 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.loadtypes import Locations, BuildingCodes
 
 @dataclass_json
-@dataclass()
+@dataclass
 class ArcheTypeConfig:
 
     """ Defines the system config for the modular household. """
@@ -30,10 +30,11 @@ class ArcheTypeConfig:
         self.mobility_set = mobility_set
         self.mobility_distance = mobility_distance
 
-def create_archetype_config_file(config_file: ArcheTypeConfig) -> None:
-    """Component Cost file is created."""
+# def create_archetype_config_file() -> None:
+#     """Component Cost file is created."""
 
-    config_file_written = config_file.to_json()
+#     config_file=ArcheTypeConfig()
+#     config_file_written = config_file.to_json()
 
-    with open('arche_type_config.json', 'w', encoding="utf-8") as outfile:
-        outfile.write(config_file_written)
+#     with open('arche_type_config.json', 'w', encoding="utf-8") as outfile:
+#         outfile.write(config_file_written)

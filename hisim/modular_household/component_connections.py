@@ -33,7 +33,7 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 
 
@@ -110,8 +110,9 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
 
     return my_smart_devices, count
 
+
 def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int, ev_included: bool,
-                   occupancy_config: loadprofilegenerator_connector.OccupancyConfig) -> Tuple[List[generic_car.Car], int]:
+                   occupancy_config: Any) -> Tuple[List[generic_car.Car], int]:
     """ Sets smart devices without controllers.
 
     Parameters
@@ -179,7 +180,6 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
     """
     ev_capacities = []
 
-
     if mobility_set.Name is None:
         raise Exception('For EV configuration mobility set is obligatory.')
     mobility_speed = mobility_set.Name.partition('and ')[2].partition(' ')[2].partition(' km/h')[0]
@@ -227,6 +227,7 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
                 input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget, src_object=electricity_target)
 
     return ev_capacities
+
 
 def configure_smart_controller_for_smart_devices(my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
                                                  my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:
@@ -329,7 +330,7 @@ def configure_water_heating(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_occupancy.max_hot_water_demand *  (4180 / 3600) * 0.5 \
+    heater_config.power_th = my_occupancy.max_hot_water_demand * (4180 / 3600) * 0.5 \
         * (3600 / my_simulation_parameters.seconds_per_timestep) \
         * (HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.freshwater_temperature)
 

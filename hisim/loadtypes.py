@@ -13,6 +13,7 @@ Guidelines for enum classes:
 # clean
 import enum
 
+
 @enum.unique
 class Locations(str, enum.Enum):
 

@@ -57,7 +57,7 @@ class SystemConfig:
     electrolyzer_included: bool
     electrolyzer_power: Optional[float]
     ev_included: bool
-    charging_station: Optional[JsonReference]
+    charging_station: JsonReference
     utsp_connect: bool
     url: str
     api_key: str
@@ -69,8 +69,8 @@ class SystemConfig:
             buffer_included: bool = True, buffer_volume: Optional[float] = 500, battery_included: bool = False, battery_capacity: Optional[float] = 5,
             chp_included: bool = False, chp_power: Optional[float] = 12, h2_storage_included: bool = True, h2_storage_size: Optional[float] = 100,
             electrolyzer_included: bool = True, electrolyzer_power: Optional[float] = 5e3, ev_included: bool = True,
-            charging_station: Optional[JsonReference] = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-            utsp_connect: bool = False, url: str = "http://134.94.131.167:443/api/v1/profilerequest", 
+            charging_station: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
+            utsp_connect: bool = False, url: str = "http://134.94.131.167:443/api/v1/profilerequest",
             api_key: str = 'OrjpZY93BcNWw8lKaMp0BEchbCc'):  # noqa
         self.water_heating_system_installed = water_heating_system_installed
         self.heating_system_installed = heating_system_installed
@@ -95,13 +95,13 @@ class SystemConfig:
         self.utsp_connect = utsp_connect
         self.url = url
         self.api_key = api_key
-        
+
     def create_system_config_file() -> None:
         """Component Cost file is created."""
-    
+
         config_file = SystemConfig()
         config_file_written = config_file.to_json()
-    
+
         with open('system_config.json', 'w', encoding="utf-8") as outfile:
             outfile.write(config_file_written)
 
@@ -109,11 +109,10 @@ class SystemConfig:
         bool_vector = [self.pv_included, self.battery_included]
         discrete_vector = []
         return Individual(bool_vector, discrete_vector)
-    
+
     def create_from_individual(individual: Individual) -> "SystemConfig":
         bool_vector = individual.bool_vector
         system_config = SystemConfig()
         system_config.pv_included = bool_vector[0]
         system_config.battery_included = bool_vector[1]
         return system_config
-        

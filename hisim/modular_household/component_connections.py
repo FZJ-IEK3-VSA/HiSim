@@ -228,8 +228,6 @@ def configure_ev_batteries(my_sim: Any, my_simulation_parameters: SimulationPara
 
     return ev_capacities
 
-    return ev_capacities
-
 def configure_smart_controller_for_smart_devices(my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
                                                  my_smart_devices: List[generic_smart_device.SmartDevice]) -> None:
     """ Sets l3 controller for smart devices.
@@ -346,11 +344,10 @@ def configure_water_heating(
 
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
-    
+
     my_sim.add_component(my_heater)
     my_sim.add_component(my_heater_controller_l1)
-    my_sim.add_component(my_heater_controller_l2)
-    
+
     my_boiler.connect_only_predefined_connections(my_heater)
     return count
 

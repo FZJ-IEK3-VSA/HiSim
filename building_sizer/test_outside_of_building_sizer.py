@@ -38,3 +38,22 @@ children = unique(individuals=children)
 #     rated_individuals.append(rated_individual)
     
 # selected_rated_individuals = selection(rated_individuals=rated_individuals, population_size=5)
+
+""" Creates first round of system_configs. """
+probabilities: List[float] = [0.8, 0.4]  # probabilites to create PV and battery respectively 
+populations_size: int = 5  # number of individuals to be created
+
+initial_hisim_configs = [] # initialize system_configs
+for i in range(populations_size):  # create five individuals in population
+    individual = system_config.Individual()
+    individual.create_random_individual(probabilities=probabilities)
+    initial_hisim_configs.append(system_config.SystemConfig.create_from_individual(individual).to_json())
+    
+probabilities: List[float] = [0.8, 0.4]  # probabilites to create PV and battery respectively 
+populations_size: int = 5  # number of individuals to be created
+
+initial_hisim_configs = [] # initialize system_configs
+for i in range(populations_size):  # create five individuals in population
+    individual = system_config.Individual()
+    individual.create_random_individual(probabilities=probabilities)
+    initial_hisim_configs.append(system_config.SystemConfig.create_from_individual(individual).to_json())

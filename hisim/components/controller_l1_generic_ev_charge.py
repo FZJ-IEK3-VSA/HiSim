@@ -191,7 +191,7 @@ class L1Controller(cp.Component):
         """ Writes EV charge controller values to report. """
         lines = []
         lines.append(self.name + '_w' + str(self.source_weight) + 'charging controller: ')
-        lines.append("Power [kW]: {:2.1f}".format(self.power * 1e-3))
+        lines.append(f"Power [kW]: {self.power * 1e-3:2.1f}")
         if self.charging_location == 1:
             lines.append("At Home")
         elif self.charging_location == 2:

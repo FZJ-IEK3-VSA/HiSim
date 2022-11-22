@@ -5,6 +5,7 @@ The functions are all called in modular_household.
 
 from typing import List, Optional, Tuple, Any
 from os import listdir, path
+import json
 
 import csv
 
@@ -88,16 +89,16 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         Integer tracking component hierachy for EMS.
 
     """
-    filepath = path.join(utils.HISIMPATH["results"], "FlexibilityEventsStatistics.HH1.json")
+    filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
     device_collection = []
+    jsonfile = open(filepath)
+    strfile = json.load(jsonfile)
 
-    with open(filepath, 'r', encoding='utf8') as file:
-        i = 0
-        formatreader = csv.reader(file, delimiter=';')
-        for line in formatreader:
-            if i > 1:
-                device_collection.append(line[0])
-            i += 1
+    for elem in strfile:
+        if elem['Device']['Name'] in device_collection:
+            pass
+        else:
+            device_collection.append(elem['Device']['Name'])
 
     # create all smart devices
     my_smart_devices: List[generic_smart_device.SmartDevice] = []
@@ -131,7 +132,7 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
 
     """
     # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["results"])
+    filepaths = listdir(utils.HISIMPATH["utsp_results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(',')[0].partition('.')[2] for elem in filepaths_location]
 

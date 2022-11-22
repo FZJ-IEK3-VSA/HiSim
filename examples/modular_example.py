@@ -55,7 +55,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.skip_finished_results = False
 
     # try to read the system config from file
@@ -125,6 +125,14 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
         my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
+        # copy example files for ev and smart devices to right folder
+        reportfiles = listdir(hisim.utils.HISIMPATH['utsp_example_reports'])
+        for file in reportfiles:
+            shutil.copyfile(path.join(hisim.utils.HISIMPATH['utsp_example_reports'], file), path.join(hisim.utils.HISIMPATH['utsp_reports'], file))
+        resultfiles = listdir(hisim.utils.HISIMPATH['utsp_example_results'])
+        for file in resultfiles:
+            shutil.copyfile(path.join(hisim.utils.HISIMPATH['utsp_example_results'], file), path.join(hisim.utils.HISIMPATH['utsp_results'], file))
+
     """TODO: pass url and api, chose bettery directory or use inputs"""
 
     my_sim.add_component(my_occupancy)
@@ -153,15 +161,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if my_simulation_parameters.system_config.predictive:
         my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
         my_sim.add_component(my_price_signal)
-
-    # if results directory is empty: copy EV and smart devices to results directory
-    files_in_result = listdir(hisim.utils.HISIMPATH['results'])
-    if not files_in_result:
-        shutil.copyfile(hisim.utils.HISIMPATH['smart_devices']['profile_data'], path.join(hisim.utils.HISIMPATH['results'], 'FlexibilityEvents.HH1.json'))
-        shutil.copyfile(hisim.utils.HISIMPATH['smart_devices']['device_collection'], path.join(hisim.utils.HISIMPATH['results'], 'FlexibilityEventsStatistics.HH1.json'))
-        carfiles = listdir(hisim.utils.HISIMPATH['cars'])
-        for file in carfiles:
-            shutil.copyfile(path.join(hisim.utils.HISIMPATH['cars'], file), path.join(hisim.utils.HISIMPATH['results'], file))
 
     # """PV"""
     if pv_included:

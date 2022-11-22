@@ -139,12 +139,12 @@ class Car(cp.Component):
             self.meters_driven = dataframe['meters_driven'].tolist()
         else:
             # load car data from LPG output
-            filepaths = listdir(utils.HISIMPATH["results"])
+            filepaths = listdir(utils.HISIMPATH["utsp_results"])
             filepath_location = [elem for elem in filepaths if "CarLocation." + self.name in elem][0]
             filepath_meters_driven = [elem for elem in filepaths if "DrivingDistance." + self.name in elem][0]
-            with open(path.join(utils.HISIMPATH["cars"], filepath_location), encoding="utf-8") as json_file:
+            with open(path.join(utils.HISIMPATH["utsp_results"], filepath_location), encoding="utf-8") as json_file:
                 car_location = json.load(json_file)
-            with open(path.join(utils.HISIMPATH["cars"], filepath_meters_driven), encoding="utf-8") as json_file:
+            with open(path.join(utils.HISIMPATH["utsp_results"], filepath_meters_driven), encoding="utf-8") as json_file:
                 meters_driven = json.load(json_file)
 
             # compare time resolution of LPG to time resolution of hisim

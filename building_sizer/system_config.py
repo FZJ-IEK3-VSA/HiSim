@@ -20,6 +20,7 @@ class Individual:
     def create_random_individual(self, probabilities: List[float]) -> None:
         for probability in probabilities:
             dice = random.uniform(0, 1)  # random number between zero and one
+            # TODO: include discrete vector
             if dice < probability:
                 self.bool_vector.append(True)
             else:
@@ -107,7 +108,7 @@ class SystemConfig:
 
     def get_individual(self) -> Individual:
         bool_vector = [self.pv_included, self.battery_included]
-        discrete_vector = []
+        discrete_vector : List = []
         return Individual(bool_vector, discrete_vector)
 
     def create_from_individual(individual: Individual) -> "SystemConfig":

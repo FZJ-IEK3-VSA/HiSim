@@ -100,7 +100,7 @@ def crossover_conventional(parent1: system_config.Individual, parent2: system_co
     child_bool_1 = vector_bool_1[:pt] + vector_bool_2[pt:]
     child_bool_2 = vector_bool_2[:pt] + vector_bool_1[pt:]
     child1 = system_config.Individual(bool_vector=child_bool_1)
-    child2 = system_config.Individual(bool_vector=child_bool_1)
+    child2 = system_config.Individual(bool_vector=child_bool_2)
 
     return child1, child2
 

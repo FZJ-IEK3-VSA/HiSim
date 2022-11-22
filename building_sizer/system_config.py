@@ -17,7 +17,7 @@ class Individual:
     bool_vector: List[bool] = field(default_factory=list)
     discrete_vector: List[float] = field(default_factory=list)
 
-    def create_random_individual(self, probabilities: List[float]):
+    def create_random_individual(self, probabilities: List[float]) -> None:
         for probability in probabilities:
             dice = random.uniform(0, 1)  # random number between zero and one
             if dice < probability:
@@ -71,7 +71,7 @@ class SystemConfig:
             electrolyzer_included: bool = True, electrolyzer_power: Optional[float] = 5e3, ev_included: bool = True,
             charging_station: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
             utsp_connect: bool = False, url: str = "http://134.94.131.167:443/api/v1/profilerequest",
-            api_key: str = 'OrjpZY93BcNWw8lKaMp0BEchbCc'):  # noqa
+            api_key: str = ''):  # noqa
         self.water_heating_system_installed = water_heating_system_installed
         self.heating_system_installed = heating_system_installed
         self.clever = clever

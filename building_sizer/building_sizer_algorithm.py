@@ -10,16 +10,26 @@ for the next Building Sizer iteration as a result to the UTSP (and therey also t
 
 import csv
 import dataclasses
+import io
 import random as ra
 from typing import Any, Dict, List, Optional, Tuple
 
 import dataclasses_json
 from utspclient import client  # type: ignore
-from utspclient.datastructures import (CalculationStatus,  # type: ignore
-                                       ResultDelivery, ResultFileRequirement,
-                                       TimeSeriesRequest)
-from building_sizer import system_config
-from building_sizer.evolutionary_algorithm import evolution, selection, unique
+from utspclient.datastructures import (
+    CalculationStatus,
+    ResultDelivery,
+    ResultFileRequirement,
+    TimeSeriesRequest,
+)
+from system_config import Individual, RatedIndividual
+from evolutionary_algorithm import evolution, selection
+
+import system_config
+
+
+class BuildingSizerException(Exception):
+    pass
 
 
 @dataclasses_json.dataclass_json
@@ -88,8 +98,9 @@ def get_results_from_requisite_requests(
     Collects the results from the HiSim requests sent in the previous iteration
     """
     return {
-        request.simulation_config:
-        client.request_time_series_and_wait_for_delivery(url, request, api_key)
+        request.simulation_config: client.request_time_series_and_wait_for_delivery(
+            url, request, api_key
+        )
         for request in reqisite_requests
     }
 
@@ -111,17 +122,17 @@ def trigger_next_iteration(
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
 
-def get_kpi_from_csv(csvfile: str) -> float:
-    with open(csvfile, 'r') as file:
-        csvreader = csv.reader(file)
-        for row in csvreader:
-            if row == []:
-                pass
-            elif row[0] == 'Self consumption:':
-                return( float( row[1] ) )
-            else:
-                pass
-        return(1e9)
+def get_kpi_from_csv(kpi_file_content: str) -> float:
+    csv_buffer = io.StringIO(kpi_file_content)
+    csvreader = csv.reader(csv_buffer)
+    for row in csvreader:
+        if row == []:
+            pass
+        elif row[0] == "Self consumption:":
+            return float(row[1])
+        else:
+            pass
+    raise BuildingSizerException("Invalid HiSim KPI file: KPI 'Self consumption' is missing")
 
 def building_sizer_iteration(
     request: BuildingSizerRequest,
@@ -132,7 +143,6 @@ def building_sizer_iteration(
 
     # Get the relevant result files from all requisite requests
     rated_individuals = []
-
 
     for sim_config_str, result in results.items():
         result_file = result.data["KPIs.csv"].decode()
@@ -147,7 +157,9 @@ def building_sizer_iteration(
     # TODO: population size as input
     population_size: int = 5
     if len(rated_individuals) > population_size:
-        parents = selection(rated_individuals=rated_individuals, population_size=population_size)
+        parents = select(
+            rated_individuals=rated_individuals, population_size=population_size
+        )
 
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
     # TODO r_cross and r_mut as inputs
@@ -194,14 +206,20 @@ def main():
         next_request, result = building_sizer_iteration(request)
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
-        probabilities: List[float] = [0.8, 0.4]  # probabilites to create PV and battery respectively
+
+        probabilities: List[float] = [
+            0.8,
+            0.4,
+        ]  # probabilites to create PV and battery respectively
         populations_size: int = 5  # number of individuals to be created
 
-        initial_hisim_configs = [] # initialize system_configs
+        initial_hisim_configs = []  # initialize system_configs
         for i in range(populations_size):  # create five individuals in population
             individual = system_config.Individual()
             individual.create_random_individual(probabilities=probabilities)
-            initial_hisim_configs.append(system_config.create_from_individual(individual).to_json())
+            initial_hisim_configs.append(
+                system_config.SystemConfig.create_from_individual(individual).to_json()
+            )
 
         next_request = trigger_next_iteration(request, initial_hisim_configs)
         result = "My first iteration result"

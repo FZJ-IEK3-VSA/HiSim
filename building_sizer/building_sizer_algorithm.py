@@ -2,7 +2,7 @@
 Building Sizer for use as a provider in the UTSP.
 The Buildings Sizer works iteratively. In each iteration, the results of some HiSim calculations are processed. Depending on these the
 next HiSim configurations that need to be calculated are determined and sent as requests to the UTSP. Afterwards, a new Building Sizer request
-is sent to the UTSP for the next iteration. This Building Sizer request contains all previously sent HiSim requests so it can obtain the results 
+is sent to the UTSP for the next iteration. This Building Sizer request contains all previously sent HiSim requests so it can obtain the results
 of these requests and work with them.
 To allow the client who sent the initial Building Sizer request to follow the separate Building Sizer iterations, each iteration returns the request
 for the next Building Sizer iteration as a result to the UTSP (and therey also to the client).
@@ -18,11 +18,8 @@ from utspclient import client  # type: ignore
 from utspclient.datastructures import (CalculationStatus,  # type: ignore
                                        ResultDelivery, ResultFileRequirement,
                                        TimeSeriesRequest)
-from system_config import Individual, RatedIndividual
-from evolutionary_algorithm import evolution, selection
-
-
-import system_config
+from building_sizer import system_config
+from building_sizer.evolutionary_algorithm import evolution, selection, unique
 
 
 @dataclasses_json.dataclass_json
@@ -124,6 +121,7 @@ def get_kpi_from_csv(csvfile: str) -> float:
                 return( float( row[1] ) )
             else:
                 pass
+        return(1e9)
 
 def building_sizer_iteration(
     request: BuildingSizerRequest,
@@ -134,33 +132,33 @@ def building_sizer_iteration(
 
     # Get the relevant result files from all requisite requests
     rated_individuals = []
-    
-    
+
+
     for sim_config_str, result in results.items():
         result_file = result.data["KPIs.csv"].decode()
         # TODO: check if rating works
         rating = get_kpi_from_csv(result_file)
-        system_config: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
-        individual = system_config.get_individual()
-        r = RatedIndividual(individual, rating)
-        rated_individuals.append(r) 
-        
+        system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
+        individual = system_config_instance.get_individual()
+        r = system_config.RatedIndividual(individual, rating)
+        rated_individuals.append(r)
+
     # select best individuals
     # TODO: population size as input
     population_size: int = 5
     if len(rated_individuals) > population_size:
-        parents = select(rated_individuals=rated_individuals, population_size=population_size)
-        
+        parents = selection(rated_individuals=rated_individuals, population_size=population_size)
+
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
     # TODO r_cross and r_mut as inputs
     r_cross: float = 0.2
     r_mut: float = 0.4
-    new_vectors: List[Individual] = evolution(parents=parents, r_cross=r_cross, r_mut=r_mut)
-    
+    new_vectors: List[system_config.Individual] = evolution(parents=parents, population_size=population_size, r_cross=r_cross, r_mut=r_mut)
+
     # combine new_vectors and rated_individuals (combine parents and children)
     for elem in parents:
         new_vectors.append(elem.individual)
-    
+
     # delete duplicates
     new_vectors = unique(individuals=new_vectors)
 
@@ -171,9 +169,9 @@ def building_sizer_iteration(
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []
     for individual in new_vectors:
-        system_config = system_config.SystemConfig.from_individual(individual)
-        hisim_configs.append(system_config.to_json())
-    
+        system_config_instance = system_config.create_from_individual(individual)
+        hisim_configs.append(system_config_instance.to_json())
+
     # hisim_configs = [
     #         system_config.SystemConfig().to_json()  # type: ignore
     #     ]
@@ -196,14 +194,14 @@ def main():
         next_request, result = building_sizer_iteration(request)
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
-        probabilities: List[float] = [0.8, 0.4]  # probabilites to create PV and battery respectively 
+        probabilities: List[float] = [0.8, 0.4]  # probabilites to create PV and battery respectively
         populations_size: int = 5  # number of individuals to be created
 
         initial_hisim_configs = [] # initialize system_configs
         for i in range(populations_size):  # create five individuals in population
             individual = system_config.Individual()
             individual.create_random_individual(probabilities=probabilities)
-            initial_hisim_configs.append(system_config.SystemConfig.create_from_individual(individual).to_json())
+            initial_hisim_configs.append(system_config.create_from_individual(individual).to_json())
 
         next_request = trigger_next_iteration(request, initial_hisim_configs)
         result = "My first iteration result"

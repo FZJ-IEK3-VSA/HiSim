@@ -68,9 +68,9 @@ def selection(rated_individuals: List[system_config.RatedIndividual], population
     for i in range(len_scores):
         if i in sorted_scores_indices:
             selected_individuals.append(rated_individuals[i])
-    return selected_individuals
+    return random.shuffle(selected_individuals)
 
-def crossover_conventional(parent1: system_config.RatedIndividual, parent2: system_config.RatedIndividual):
+def crossover_conventional(parent1: system_config.Individual, parent2: system_config.Individual):
     """
     cross over: exchange parts of bitstring by randomly generated index
 
@@ -124,7 +124,7 @@ def mutation_bool(parent):
     child = system_config.Individual(bool_vector=vector_bool, discrete_vector=parent.discrete_vector)
     return child
 
-def evolution(parents: List[system_config.Individual], r_cross: float, r_mut: float):
+def evolution(parents: List[system_config.Individual], population_size: int, r_cross: float, r_mut: float):
     """
     evolution step of the genetic algorithm
 
@@ -143,7 +143,6 @@ def evolution(parents: List[system_config.Individual], r_cross: float, r_mut: fl
         List of individuals unrated individuals.
 
     """
-    population_size = int(len(parents))
     #index to randomly select parents
     sel = random.randint(0, population_size - 1)
     #initialize new population

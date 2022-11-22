@@ -32,7 +32,6 @@ class RatedIndividual:
     individual: Individual
     rating: float
 
-
 @dataclass_json
 @dataclass
 class SystemConfig:
@@ -97,23 +96,23 @@ class SystemConfig:
         self.url = url
         self.api_key = api_key
 
-    def create_system_config_file() -> None:
-        """Component Cost file is created."""
-
-        config_file = SystemConfig()
-        config_file_written = config_file.to_json()
-
-        with open('system_config.json', 'w', encoding="utf-8") as outfile:
-            outfile.write(config_file_written)
-
     def get_individual(self) -> Individual:
         bool_vector = [self.pv_included, self.battery_included]
         discrete_vector : List = []
         return Individual(bool_vector, discrete_vector)
 
-    def create_from_individual(individual: Individual) -> "SystemConfig":
-        bool_vector = individual.bool_vector
-        system_config = SystemConfig()
-        system_config.pv_included = bool_vector[0]
-        system_config.battery_included = bool_vector[1]
-        return system_config
+def create_from_individual(individual: Individual) -> "SystemConfig":
+    bool_vector = individual.bool_vector
+    system_config = SystemConfig()
+    system_config.pv_included = bool_vector[0]
+    system_config.battery_included = bool_vector[1]
+    return system_config
+
+# def create_system_config_file() -> None:
+#     """System Config file is created."""
+
+#     config_file = SystemConfig()
+#     config_file_written = config_file.to_json()
+
+#     with open('system_config.json', 'w', encoding="utf-8") as outfile:
+#         outfile.write(config_file_written)

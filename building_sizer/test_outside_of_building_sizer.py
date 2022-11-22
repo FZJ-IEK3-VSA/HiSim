@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import system_config
+from building_sizer import system_config
 import csv
 import random
 from building_sizer.evolutionary_algorithm import evolution, selection

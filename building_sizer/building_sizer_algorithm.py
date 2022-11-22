@@ -22,14 +22,15 @@ from utspclient.datastructures import (
     ResultFileRequirement,
     TimeSeriesRequest,
 )
-from system_config import Individual, RatedIndividual
-from evolutionary_algorithm import evolution, selection
 
 import system_config
+import evolutionary_algorithm as evo_alg
 
 
 class BuildingSizerException(Exception):
-    pass
+    """
+    Exception for errors in the Building Sizer
+    """
 
 
 @dataclasses_json.dataclass_json
@@ -132,7 +133,9 @@ def get_kpi_from_csv(kpi_file_content: str) -> float:
             return float(row[1])
         else:
             pass
-    raise BuildingSizerException("Invalid HiSim KPI file: KPI 'Self consumption' is missing")
+    raise BuildingSizerException(
+        "Invalid HiSim KPI file: KPI 'Self consumption' is missing"
+    )
 
 def building_sizer_iteration(
     request: BuildingSizerRequest,
@@ -157,7 +160,7 @@ def building_sizer_iteration(
     # TODO: population size as input
     population_size: int = 5
     if len(rated_individuals) > population_size:
-        parents = select(
+        parents = evo_alg.selection(
             rated_individuals=rated_individuals, population_size=population_size
         )
 
@@ -165,14 +168,16 @@ def building_sizer_iteration(
     # TODO r_cross and r_mut as inputs
     r_cross: float = 0.2
     r_mut: float = 0.4
-    new_vectors: List[system_config.Individual] = evolution(parents=parents, population_size=population_size, r_cross=r_cross, r_mut=r_mut)
+    new_vectors: List[system_config.Individual] = evo_alg.evolution(
+        parents=parents, population_size=population_size, r_cross=r_cross, r_mut=r_mut
+    )
 
     # combine new_vectors and rated_individuals (combine parents and children)
     for elem in parents:
         new_vectors.append(elem.individual)
 
     # delete duplicates
-    new_vectors = unique(individuals=new_vectors)
+    new_vectors = evo_alg.unique(individuals=new_vectors)
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:
@@ -218,7 +223,7 @@ def main():
             individual = system_config.Individual()
             individual.create_random_individual(probabilities=probabilities)
             initial_hisim_configs.append(
-                system_config.SystemConfig.create_from_individual(individual).to_json()
+                system_config.SystemConfig.create_from_individual(individual).to_json()  # type: ignore
             )
 
         next_request = trigger_next_iteration(request, initial_hisim_configs)

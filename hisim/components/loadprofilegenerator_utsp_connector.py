@@ -139,7 +139,9 @@ class UtspLpgConnector(cp.Component):
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            postprocessing_flag=[
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
+            ],
         )
 
         self.water_consumption_c: cp.ComponentOutput = self.add_output(
@@ -230,7 +232,9 @@ class UtspLpgConnector(cp.Component):
         stsv.set_output_value(
             self.electricity_output_c, self.electricity_consumption[timestep]
         )
-        stsv.set_output_value(self.water_consumption_c, self.water_consumption[timestep])
+        stsv.set_output_value(
+            self.water_consumption_c, self.water_consumption[timestep]
+        )
 
         if self.my_simulation_parameters.system_config.predictive:
             last_forecast_timestep = int(
@@ -311,12 +315,14 @@ class UtspLpgConnector(cp.Component):
         }
         # Define transportation result files
         car_states = result_file_filters.LPGFilters.all_car_states_optional()
+        car_locations = result_file_filters.LPGFilters.all_car_locations_optional()
         driving_distances = (
             result_file_filters.LPGFilters.all_driving_distances_optional()
         )
         result_files: Dict[str, Optional[datastructures.ResultFileRequirement]] = {
             **required_files,
             **car_states,
+            **car_locations,
             **driving_distances,
         }
 
@@ -339,7 +345,9 @@ class UtspLpgConnector(cp.Component):
 
         # Save flexibility and transportation files
         self.save_result_file(flexibility, flexibility_file)
-        for filename in itertools.chain(car_states.keys(), driving_distances.keys()):
+        for filename in itertools.chain(
+            car_states.keys(), car_locations.keys(), driving_distances.keys()
+        ):
             if filename in result.data:
                 self.save_result_file(filename, result.data[filename].decode())
 

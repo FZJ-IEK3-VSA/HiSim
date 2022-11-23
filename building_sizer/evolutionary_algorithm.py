@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from building_sizer import system_config
 
-from typing import List
+from typing import List, Tuple
 import random
 
 
@@ -44,7 +44,7 @@ def unique(
 
 def selection(
     rated_individuals: List[system_config.RatedIndividual], population_size: int
-):
+) -> List[system_config.RatedIndividual]:
     """
     Selects best individuals.
 
@@ -72,12 +72,16 @@ def selection(
     for i in range(len_scores):
         if i in sorted_scores_indices:
             selected_individuals.append(rated_individuals[i])
-    return random.shuffle(selected_individuals)
+    # only choose the best individuals, retaining the population size
+    selected_individuals = selected_individuals[:population_size]
+    # shuffle the selected individuals to allow more variation during crossover
+    random.shuffle(selected_individuals)
+    return selected_individuals
 
 
 def crossover_conventional(
     parent1: system_config.Individual, parent2: system_config.Individual
-):
+) -> Tuple[system_config.Individual, system_config.Individual]:
     """
     cross over: exchange parts of bitstring by randomly generated index
 
@@ -112,7 +116,7 @@ def crossover_conventional(
     return child1, child2
 
 
-def mutation_bool(parent):
+def mutation_bool(parent: system_config.Individual) -> system_config.Individual:
     """
     Mutation: changing bit value at one position
 
@@ -140,7 +144,7 @@ def evolution(
     population_size: int,
     r_cross: float,
     r_mut: float,
-):
+) -> List[system_config.Individual]:
     """
     evolution step of the genetic algorithm
 

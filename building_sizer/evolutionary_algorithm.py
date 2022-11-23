@@ -108,10 +108,8 @@ def crossover_conventional(
     # create children by cross over
     child_bool_1 = vector_bool_1[:pt] + vector_bool_2[pt:]
     child_bool_2 = vector_bool_2[:pt] + vector_bool_1[pt:]
-    child_discrete_1 = vector_discrete_1[:pt] + vector_discrete_2[pt:]
-    child_discrete_2 = vector_discrete_2[:pt] + vector_discrete_1[pt:]
-    child1 = system_config.Individual(bool_vector=child_bool_1, discrete_vector=child_discrete_1)
-    child2 = system_config.Individual(bool_vector=child_bool_2, discrete_vector=child_discrete_2)
+    child1 = system_config.Individual(bool_vector=child_bool_1)
+    child2 = system_config.Individual(bool_vector=child_bool_2)
 
     return child1, child2
 
@@ -144,7 +142,6 @@ def evolution(
     population_size: int,
     r_cross: float,
     r_mut: float,
-    mode: str
 ) -> List[system_config.Individual]:
     """
     evolution step of the genetic algorithm
@@ -157,8 +154,6 @@ def evolution(
         Cross over probability.
     r_mut : float
         Mutation probability.
-    mode : str
-        Mode 'bool' for boolean variation and 'discrete' for discrete variation.
 
     Returns
     -------

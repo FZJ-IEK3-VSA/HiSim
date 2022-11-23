@@ -174,7 +174,6 @@ def building_sizer_iteration(
         population_size=population_size,
         r_cross=r_cross,
         r_mut=r_mut,
-        mode='bool'
     )
 
     # combine combine parents and children
@@ -216,11 +215,11 @@ def main():
             0.4,
         ]  # probabilites to create PV and battery respectively
         populations_size: int = 5  # number of individuals to be created
-        options = system_config.get_default_sizing_options()
+
         initial_hisim_configs = []  # initialize system_configs
         for i in range(populations_size):  # create five individuals in population
             individual = system_config.Individual()
-            individual.create_random_individual(probabilities=probabilities, options=options)
+            individual.create_random_individual(probabilities=probabilities)
             initial_hisim_configs.append(
                 system_config.SystemConfig.create_from_individual(individual).to_json()  # type: ignore
             )

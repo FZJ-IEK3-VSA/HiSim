@@ -169,12 +169,14 @@ def building_sizer_iteration(
     parent_individuals = [ri.individual for ri in parents]
     r_cross: float = 0.2
     r_mut: float = 0.4
+    options = system_config.get_default_sizing_options()
     new_individuals = evo_alg.evolution(
         parents=parent_individuals,
         population_size=population_size,
         r_cross=r_cross,
         r_mut=r_mut,
-        mode='bool'
+        mode='bool',
+        options=options
     )
 
     # combine combine parents and children
@@ -211,18 +213,14 @@ def main():
         next_request, result = building_sizer_iteration(request)
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
-        probabilities: List[float] = [
-            0.8,
-            0.4,
-        ]  # probabilites to create PV and battery respectively
         populations_size: int = 5  # number of individuals to be created
         options = system_config.get_default_sizing_options()
         initial_hisim_configs = []  # initialize system_configs
         for i in range(populations_size):  # create five individuals in population
             individual = system_config.Individual()
-            individual.create_random_individual(probabilities=probabilities, options=options)
+            individual.create_random_individual(options=options)
             initial_hisim_configs.append(
-                system_config.SystemConfig.create_from_individual(individual).to_json()  # type: ignore
+                system_config.create_from_individual(individual).to_json()  # type: ignore
             )
 
         next_request = trigger_next_iteration(request, initial_hisim_configs)

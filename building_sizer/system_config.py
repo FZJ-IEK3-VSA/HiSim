@@ -15,10 +15,14 @@ from building_sizer.heating_system_enums import HeatingSystems
 class SizingOptions:
     pv: List[float] = field(default_factory=list)
     battery: List[float] = field(default_factory=list)
+    translation: List[str] = field(default_factory=list)
+    probabilities: List[float] = field(default_factory=list)
 
 def get_default_sizing_options(pv: List[float]=[6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3],
-        battery: List[float]=[0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15]) -> SizingOptions:
-    return SizingOptions(pv=pv, battery=battery)
+        battery: List[float]=[0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15],
+        translation: List[str] = ['pv', 'battery'],
+        probabilities: List[float] = [0.8, 0.4]) -> SizingOptions:
+    return SizingOptions(pv=pv, battery=battery, translation=translation, probabilities=probabilities)
 
 @dataclass_json
 @dataclass
@@ -26,27 +30,25 @@ class Individual:
     bool_vector: List[bool] = field(default_factory=list)
     discrete_vector: List[float] = field(default_factory=list)
 
-    def create_random_individual(self, probabilities: List[float], options: SizingOptions) -> None:
+    def create_random_individual(self, options: SizingOptions) -> None:
         """ Creates random individual.
         
         Parameters:
         -----------
-        probabilities: List[float]
-            List of probabilities for each component to be included.
         options: SizingOptions
             Instance of dataclass sizing options.
             It contains a list of all available options for sizing of each component.
         """
 
-        for probability in probabilities:
+        for probability in options.probabilities:
             dice = random.uniform(0, 1)  # random number between zero and one
             # TODO: include discrete vector
             if dice < probability:
                 self.bool_vector.append(True)
             else:
                 self.bool_vector.append(False)
-        self.discrete_vector.append(random.choice(options.pv))
-        self.discrete_vector.append(random.choice(options.battery))
+        for component in options.translation:
+            self.discrete_vector.append(random.choice(getattr(options, component)))
 
 @dataclass_json
 @dataclass

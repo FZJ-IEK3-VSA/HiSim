@@ -156,11 +156,11 @@ def mutation_discrete(parent: system_config.Individual, options: system_config.S
         Encoding of first resulting child from cross over.
     """
     vector_discrete = parent.discrete_vector[:]
-    bit = random.randint(0, len(vector_bool) - 1)
+    bit = random.randint(0, len(vector_discrete) - 1)
 
-    vector_discrete[bit] = random.getattr(options, options.translation[bit])
+    vector_discrete[bit] = random.choice(getattr(options, options.translation[bit]))
     child = system_config.Individual(
-        bool_vector=vector_bool, discrete_vector=parent.discrete_vector
+        bool_vector=parent.bool_vector, discrete_vector=vector_discrete
     )
     return child
 

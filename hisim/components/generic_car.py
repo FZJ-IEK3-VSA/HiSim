@@ -15,7 +15,6 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.loadprofilegenerator_connector import OccupancyConfig
 from hisim import utils
 
 __authors__ = "Johanna Ganglbauer"
@@ -70,7 +69,7 @@ class Car(cp.Component):
     CarLocation = "CarLocation"
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config: CarConfig,
-                 occupancy_config: OccupancyConfig) -> None:
+                 occupancy_config: Any) -> None:
         """ Initializes Car. """
         super().__init__(name=config.name + '_w' + str(config.source_weight),
                          my_simulation_parameters=my_simulation_parameters)
@@ -118,7 +117,7 @@ class Car(cp.Component):
             liters_used = self.meters_driven[timestep] * self.consumption_per_km * 1e-3  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    def build(self, config: CarConfig, occupancy_config: OccupancyConfig) -> None:
+    def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """ Loads necesary data and saves config to class. """
         self.name = config.name
         self.source_weight = config.source_weight
@@ -140,12 +139,12 @@ class Car(cp.Component):
             self.meters_driven = dataframe['meters_driven'].tolist()
         else:
             # load car data from LPG output
-            filepaths = listdir(utils.HISIMPATH["cars"])
+            filepaths = listdir(utils.HISIMPATH["utsp_results"])
             filepath_location = [elem for elem in filepaths if "CarLocation." + self.name in elem][0]
             filepath_meters_driven = [elem for elem in filepaths if "DrivingDistance." + self.name in elem][0]
-            with open(path.join(utils.HISIMPATH["cars"], filepath_location), encoding="utf-8") as json_file:
+            with open(path.join(utils.HISIMPATH["utsp_results"], filepath_location), encoding="utf-8") as json_file:
                 car_location = json.load(json_file)
-            with open(path.join(utils.HISIMPATH["cars"], filepath_meters_driven), encoding="utf-8") as json_file:
+            with open(path.join(utils.HISIMPATH["utsp_results"], filepath_meters_driven), encoding="utf-8") as json_file:
                 meters_driven = json.load(json_file)
 
             # compare time resolution of LPG to time resolution of hisim

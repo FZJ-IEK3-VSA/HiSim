@@ -32,7 +32,6 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     for index, output in enumerate(all_outputs):
 
         if output.postprocessing_flag is not None:
-
             if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
                 hisim.log.information(
                     "Ich werde an die Production results Spalte angehängt:" + output.postprocessing_flag[0] + output.full_name + "INDEX:" + str(

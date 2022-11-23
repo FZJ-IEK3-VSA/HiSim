@@ -82,7 +82,7 @@ class L1HeatPumpConfig(ConfigBase):
     def get_default_config_heat_source_controller_dhw(name: str) -> Any:
         """ Default Config for the buffer temperature. """
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
-                                  cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
+                                  cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
                                   day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
@@ -90,17 +90,18 @@ class L1HeatPumpControllerState:
 
     """ Data class that saves the state of the controller. """
 
-    def __init__(self, on_off: int, activation_time_step: int, deactivation_time_step: int) -> None:
+    def __init__(self, on_off: int, activation_time_step: int, deactivation_time_step: int, percentage: float) -> None:
         """ Initializes the heat pump controller state. """
         self.on_off: int = on_off
         self.activation_time_step: int = activation_time_step
         self.deactivation_time_step: int = deactivation_time_step
-        self.percentage: float = 1
+        self.percentage: float = percentage
 
     def clone(self) -> Any:
         """ Copies the current instance. """
         return L1HeatPumpControllerState(on_off=self.on_off, activation_time_step=self.activation_time_step,
-                                         deactivation_time_step=self.deactivation_time_step)
+                                         deactivation_time_step=self.deactivation_time_step,
+                                         percentage=self.percentage)
 
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
@@ -154,7 +155,7 @@ class L1HeatPumpController(cp.Component):
                 raise ValueError("Day of heating season end was None")
             self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-        self.state: L1HeatPumpControllerState = L1HeatPumpControllerState(0, 0, 0)
+        self.state: L1HeatPumpControllerState = L1HeatPumpControllerState(0, 0, 0, 0)
         self.previous_state: L1HeatPumpConfig = self.state.clone()
         self.processed_state: L1HeatPumpConfig = self.state.clone()
 
@@ -228,7 +229,7 @@ class L1HeatPumpController(cp.Component):
             self.state = self.processed_state.clone()
         else:
             self.calculate_state(timestep, stsv)
-            self.processed_state = self.state.clone() 
+            self.processed_state = self.state.clone()
         modulating_signal = self.state.percentage * self.state.on_off
         stsv.set_output_value(self.heat_pump_target_percentage_channel, modulating_signal)
         stsv.set_output_value(self.on_off_channel, self.state.on_off)
@@ -246,13 +247,13 @@ class L1HeatPumpController(cp.Component):
             return
         t_max_target = self.config.t_min_heating_in_celsius + temperature_modifier
         if t_storage < t_max_target:
-            self.state.percentage = -1
+            self.state.percentage = 0.5
             return
 
     def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """ Calculate the heat pump state and activate / deactives. """
         t_storage = stsv.get_input_value(self.storage_temperature_channel)
-        temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)
+        temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)        
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
             # mandatory on, minimum runtime not reached

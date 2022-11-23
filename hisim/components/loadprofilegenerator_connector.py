@@ -3,6 +3,8 @@
 # Generic/Built-in
 import json
 from typing import Any
+from os import path, listdir, makedirs
+import shutil
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -278,6 +280,22 @@ class Occupancy(cp.Component):
             parameter_class=self.occupancyConfig,
             my_simulation_parameters=self.my_simulation_parameters,
         )
+
+        # create directories to put in files for cars and smart devices
+        for tag in ['utsp_reports', 'utsp_results']:
+            isExist = path.exists(utils.HISIMPATH[tag])
+            if not isExist:
+               # Create a new directory because it does not exist
+               makedirs(utils.HISIMPATH[tag])
+
+        # copy example files for ev and smart devices to right folder
+        reportfiles = listdir(utils.HISIMPATH['utsp_example_reports'])
+        for file in reportfiles:
+            shutil.copyfile(path.join(utils.HISIMPATH['utsp_example_reports'], file), path.join(utils.HISIMPATH['utsp_reports'], file))
+        resultfiles = listdir(utils.HISIMPATH['utsp_example_results'])
+        for file in resultfiles:
+            shutil.copyfile(path.join(utils.HISIMPATH['utsp_example_results'], file), path.join(utils.HISIMPATH['utsp_results'], file))
+
         if file_exists:
             dataframe = pd.read_csv(
                 cache_filepath, sep=",", decimal=".", encoding="cp1252"

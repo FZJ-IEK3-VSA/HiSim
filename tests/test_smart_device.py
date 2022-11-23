@@ -3,13 +3,10 @@ import shutil
 import json
 
 from hisim import component as cp
-from hisim.components import generic_heat_pump
 from hisim.components import generic_smart_device
-from hisim import loadtypes as lt
+from hisim.components import loadprofilegenerator_connector
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 from hisim import utils
-from tests import functions_for_testing as fft
 
 import csv
 
@@ -21,19 +18,12 @@ def test_smart_device():
     mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                  seconds_per_timestep=60)
 
-    # copy flexibilty device activation file from LPG to right location if nothing is there
-    # Check whether the results/Results folder exists or not
-    isExist = path.exists(utils.HISIMPATH['utsp_reports'])
-    if not isExist:
-       # Create a new directory because it does not exist
-       makedirs(utils.HISIMPATH['utsp_reports'])
+    # call LPF to copy flexibilty device activation file from LPG to right location if nothing is there
+    my_occupancy_profile = "CH01"
 
-    files_in_reports = listdir(utils.HISIMPATH['utsp_reports'])
-    if not files_in_reports:
-        files_to_copy = listdir(utils.HISIMPATH['utsp_example_reports'])
-        for file in files_to_copy:
-            shutil.copyfile(path.join(utils.HISIMPATH['utsp_example_reports'], file),
-                            path.join(utils.HISIMPATH['utsp_reports'], file))
+    my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config.profile_name=my_occupancy_profile
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=mysim)
 
     filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
     jsonfile = open(filepath)

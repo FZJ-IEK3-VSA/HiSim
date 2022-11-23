@@ -290,8 +290,7 @@ class Weather(Component):
         """ Interpolates a time series. """
         firstday = pd.Series([0.0], index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")])
         lastday = pd.Series(pd_database[-1], index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")])
-        pd_database = pd_database.append(firstday)
-        pd_database = pd_database.append(lastday)
+        pd_database = pd.concat([pd_database, firstday, lastday])
         pd_database = pd_database.sort_index()
         return pd_database.resample('1T').asfreq().interpolate(method='linear')
 

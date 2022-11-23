@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
 from hisim import log
-from hisim.system_config import SystemConfig
 from hisim.postprocessingoptions import PostProcessingOptions
+
+from building_sizer.system_config import SystemConfig
 
 
 @dataclass()

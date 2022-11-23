@@ -40,7 +40,7 @@ class HouseholdPVConfig:
     HouseholdType: JsonReference
     LPGUrl: str
     ResultPath: str
-    TravelRouteSet: str
+    TravelRouteSet: JsonReference
     simulation_parameters: SimulationParameters
     APIKey: str
     transportation_device_set: JsonReference
@@ -176,9 +176,8 @@ def household_pv_hp(my_sim: Any, my_simulation_parameters: Optional[SimulationPa
                                                                   my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_base_electricity_load_profile)
 
-    # Building
-    my_building_config = building.BuildingConfig(building_code=building_code, bClass=building_class, initial_temperature=initial_temperature,
-                                                 heating_reference_temperature=heating_reference_temperature, name="Building1")
+    my_building_config = building.BuildingConfig(building_code=building_code, building_heat_capacity_class=building_class, initial_internal_temperature_in_celsius=initial_temperature,
+                                                 heating_reference_temperature_in_celsius=heating_reference_temperature, name="Building1")
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_building.connect_only_predefined_connections(my_weather)
     my_building.connect_only_predefined_connections(my_occupancy)

@@ -4,11 +4,13 @@ The functions are all called in modular_household.
 """
 
 from typing import List, Optional, Tuple, Any
-from os import listdir
+from os import listdir, path
+import json
 
 import csv
 
 from utspclient.helpers.lpgpythonbindings import JsonReference
+from building_sizer.heating_system_enums import HeatingSystems
 
 import hisim.loadtypes as lt
 from hisim.component import Component
@@ -32,6 +34,7 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
 from hisim.components import generic_hydrogen_storage
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 
 
@@ -86,16 +89,16 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
         Integer tracking component hierachy for EMS.
 
     """
-    filepath = utils.HISIMPATH["smart_devices"]["device_collection"]
+    filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
     device_collection = []
+    jsonfile = open(filepath)
+    strfile = json.load(jsonfile)
 
-    with open(filepath, 'r', encoding='utf8') as file:
-        i = 0
-        formatreader = csv.reader(file, delimiter=';')
-        for line in formatreader:
-            if i > 1:
-                device_collection.append(line[0])
-            i += 1
+    for elem in strfile:
+        if elem['Device']['Name'] in device_collection:
+            pass
+        else:
+            device_collection.append(elem['Device']['Name'])
 
     # create all smart devices
     my_smart_devices: List[generic_smart_device.SmartDevice] = []
@@ -110,7 +113,7 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
 
 
 def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, count: int, ev_included: bool,
-                   occupancy_config: loadprofilegenerator_connector.OccupancyConfig) -> Tuple[List[generic_car.Car], int]:
+                   occupancy_config: Any) -> Tuple[List[generic_car.Car], int]:
     """ Sets smart devices without controllers.
 
     Parameters
@@ -126,9 +129,10 @@ def configure_cars(my_sim: Any, my_simulation_parameters: SimulationParameters, 
     occupancy_config: loadprofilegenerator_connector.OccupancyConfig
         Unique description of load profile generator call (mobility is related!)
 
+
     """
     # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["cars"])
+    filepaths = listdir(utils.HISIMPATH["utsp_results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(',')[0].partition('.')[2] for elem in filepaths_location]
 
@@ -301,7 +305,7 @@ def configure_battery(my_sim: Any, my_simulation_parameters: SimulationParameter
 
 def configure_water_heating(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_occupancy: loadprofilegenerator_connector.Occupancy,
-        water_heating_system_installed: lt.HeatingSystems, count: int) -> int:
+        water_heating_system_installed: HeatingSystems, count: int) -> int:
     """ Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
     Parameters
@@ -319,16 +323,17 @@ def configure_water_heating(
 
     """
     boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
-    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
-                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
+    fuel_translator = {HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
+                       HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
     heater_config.fuel = fuel_translator[water_heating_system_installed]
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw('DHW' + water_heating_system_installed.value)
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heater_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
-        (boiler_config.warm_water_temperature - boiler_config.drain_water_temperature) * 0.977 * 4.182 / 3.6
+    heater_config.power_th = my_occupancy.max_hot_water_demand * (4180 / 3600) * 0.5 \
+        * (3600 / my_simulation_parameters.seconds_per_timestep) \
+        * (HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.freshwater_temperature)
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=boiler_config)
     my_boiler.connect_only_predefined_connections(my_occupancy)
@@ -341,9 +346,11 @@ def configure_water_heating(
 
     my_heater = generic_heat_source.HeatSource(config=heater_config, my_simulation_parameters=my_simulation_parameters)
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
-    my_sim.add_component(my_heater)
-    my_boiler.connect_only_predefined_connections(my_heater)
 
+    my_sim.add_component(my_heater)
+    my_sim.add_component(my_heater_controller_l1)
+
+    my_boiler.connect_only_predefined_connections(my_heater)
     return count
 
 
@@ -351,7 +358,7 @@ def configure_water_heating_electric(
         my_sim: Any, my_simulation_parameters: SimulationParameters,
         my_occupancy: loadprofilegenerator_connector.Occupancy,
         my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-        my_weather: weather.Weather, water_heating_system_installed: lt.HeatingSystems,
+        my_weather: weather.Weather, water_heating_system_installed: HeatingSystems,
         controlable: bool, count: int) -> int:
     """ Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
@@ -378,18 +385,19 @@ def configure_water_heating_electric(
 
     boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
 
-    if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
+    if water_heating_system_installed == HeatingSystems.HEAT_PUMP:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
         heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw('DHWHeatPumpController')
-    elif water_heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
+    elif water_heating_system_installed == HeatingSystems.ELECTRIC_HEATING:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating_electric()
         heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw('BoilerHeatingController')
 
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
-    heatpump_config.power_th = my_occupancy.max_hot_water_demand * 0.5 *\
-        (boiler_config.warm_water_temperature - boiler_config.drain_water_temperature) * 0.977 * 4.182 / 3.6
+    heatpump_config.power_th = my_occupancy.max_hot_water_demand * (4180 / 3600) * 0.5 \
+        * (3600 / my_simulation_parameters.seconds_per_timestep) \
+        * (HouseholdWarmWaterDemandConfig.ww_temperature_demand - HouseholdWarmWaterDemandConfig.freshwater_temperature)
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(my_simulation_parameters=my_simulation_parameters, config=boiler_config)
     my_boiler.connect_only_predefined_connections(my_occupancy)
@@ -432,7 +440,7 @@ def configure_water_heating_electric(
 
 
 def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
-                      heating_system_installed: lt.HeatingSystems, count: int) -> Tuple[Component, int]:
+                      heating_system_installed: HeatingSystems, count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -449,8 +457,8 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
         Integer tracking component hierachy for EMS.
 
     """
-    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
-                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
+    fuel_translator = {HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
+                       HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(heating_system_installed.value)
@@ -473,7 +481,7 @@ def configure_heating(my_sim: Any, my_simulation_parameters: SimulationParameter
 
 def configure_heating_electric(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                                my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                               my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, controlable: bool,
+                               my_weather: weather.Weather, heating_system_installed: HeatingSystems, controlable: bool,
                                count: int) -> Tuple[Component, int]:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
@@ -497,15 +505,16 @@ def configure_heating_electric(my_sim: Any, my_simulation_parameters: Simulation
         Integer tracking component hierachy for EMS.
 
     """
-    if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
+    if heating_system_installed == HeatingSystems.HEAT_PUMP:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating()
         heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller('HeatigHeatPumpController')
-    elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
+    elif heating_system_installed == HeatingSystems.ELECTRIC_HEATING:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating_electric()
         heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller('ElectricHeatingController')
 
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
+
     heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(my_simulation_parameters=my_simulation_parameters,
@@ -544,7 +553,7 @@ def configure_heating_electric(my_sim: Any, my_simulation_parameters: Simulation
 
 def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                                            my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                                           my_weather: weather.Weather, heating_system_installed: lt.HeatingSystems, buffer_volume: Optional[float],
+                                           my_weather: weather.Weather, heating_system_installed: HeatingSystems, buffer_volume: Optional[float],
                                            controlable: bool, count: int) -> Tuple:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
@@ -570,10 +579,10 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
         Integer tracking component hierachy for EMS.
 
     """
-    if heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
+    if heating_system_installed == HeatingSystems.HEAT_PUMP:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating()
         heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer('BufferHeatPumpController')
-    elif heating_system_installed == lt.HeatingSystems.ELECTRIC_HEATING:
+    elif heating_system_installed == HeatingSystems.ELECTRIC_HEATING:
         heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating_electric()
         heatpump_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer('BufferElectricHeatingController')
 
@@ -597,7 +606,6 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
                                                                             config=heatpump_l1_config)
     my_heatpump_controller_l1.connect_only_predefined_connections(my_buffer)
     my_sim.add_component(my_heatpump_controller_l1)
-
     my_heatpump = generic_heat_pump_modular.ModularHeatPump(config=heatpump_config, my_simulation_parameters=my_simulation_parameters)
     my_heatpump.connect_only_predefined_connections(my_weather)
     my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
@@ -643,7 +651,7 @@ def configure_heating_with_buffer_electric(my_sim: Any, my_simulation_parameters
 
 
 def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
-                                  heating_system_installed: lt.HeatingSystems, buffer_volume: Optional[float], count: int) -> Tuple:
+                                  heating_system_installed: HeatingSystems, buffer_volume: Optional[float], count: int) -> Tuple:
     """ Sets Heater, L1 Controller and L2 Controller for Heating System.
 
     Parameters
@@ -664,8 +672,8 @@ def configure_heating_with_buffer(my_sim: Any, my_simulation_parameters: Simulat
         Integer tracking component hierachy for EMS.
 
     """
-    fuel_translator = {lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
-                       lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
+    fuel_translator = {HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS, HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
+                       HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING}
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
     # heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_pump_controller()

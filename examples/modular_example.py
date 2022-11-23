@@ -1,31 +1,25 @@
 """Example sets up a modular household according to json input file."""
 
-from typing import Optional, List, Any
-from os import path, listdir, makedirs
-from pathlib import Path
 import json
-import shutil
+from os import path
+from pathlib import Path
+from typing import Optional, List, Any
+
+import utspclient.helpers.lpgdata as ld
 
 import hisim.loadtypes as lt
 import hisim.log
 import hisim.utils
-
-from hisim.modular_household import preprocessing
-from hisim.modular_household import component_connections
-from hisim.modular_household.archetype_config import ArcheTypeConfig
-from hisim.modular_household.modular_household_results import ModularHouseholdResults
-from hisim.simulator import SimulationParameters
-from hisim.postprocessingoptions import PostProcessingOptions
-
-from hisim.components import loadprofilegenerator_connector
-from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import generic_price_signal
-from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
-
-from building_sizer.system_config import SystemConfig
-from building_sizer.heating_system_enums import HeatingSystems
+from hisim.components import generic_price_signal
+from hisim.components import loadprofilegenerator_connector
+from hisim.components import weather
+from hisim.modular_household import component_connections
+from hisim.modular_household import preprocessing
+from hisim.modular_household.modular_household_results import ModularHouseholdResults
+from hisim.simulator import SimulationParameters
+from hisim.system_config import SystemConfig
 
 
 def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: MC0001
@@ -38,9 +32,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     year = 2018
     seconds_per_timestep = 60 * 15
 
-    # path of archetype config file
-    arche_type_config_filename = 'arche_type_config.json'
-
     # path of system config file
     system_config_filename = "system_config.json"
 
@@ -51,10 +42,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.one_day_only(year=year,
+                                                                     seconds_per_timestep=seconds_per_timestep)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPI)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.skip_finished_results = False
 
@@ -66,27 +58,25 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         my_simulation_parameters.system_config = system_config
 
     else:
-        system_config = SystemConfig()
+        my_simulation_parameters.system_config = SystemConfig(location=lt.Locations.AACHEN, occupancy_profile=lt.OccupancyProfiles.CH01,
+            building_code=lt.BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002, water_heating_system_installed=lt.HeatingSystems.DISTRICT_HEATING,
+            heating_system_installed=lt.HeatingSystems.DISTRICT_HEATING, mobility_set=ld.TransportationDeviceSets.Bus_and_two_30_km_h_Cars,
+            mobility_distance=ld.TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance, clever=True, predictive=False,
+            prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=10e3, smart_devices_included=False, buffer_included=False,
+            buffer_volume=500, battery_included=False, battery_capacity=10, chp_included=False, chp_power=10e3, h2_storage_included=False,
+            h2_storage_size=100, electrolyzer_included=False, electrolyzer_power=5e3, ev_included=True,
+            charging_station=ld.ChargingStationSets.Charging_At_Home_with_03_7_kW)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # try to read the system config from file
-    if Path(arche_type_config_filename).is_file():
-        with open(arche_type_config_filename, encoding='utf8') as arche_type_config_file:
-            arche_type_config = ArcheTypeConfig.from_json(arche_type_config_file.read())  # type: ignore
-        hisim.log.information(f"Read arche type config from {arche_type_config_filename}")
-
-    else:
-        arche_type_config = ArcheTypeConfig()
-
     # get system configuration
-    location = weather.LocationEnum[arche_type_config.location.value]
-    occupancy_profile = arche_type_config.occupancy_profile
-    building_code = arche_type_config.building_code
+    location = weather.LocationEnum[my_simulation_parameters.system_config.location.value]
+    occupancy_profile = my_simulation_parameters.system_config.occupancy_profile
+    building_code = my_simulation_parameters.system_config.building_code
     water_heating_system_installed = my_simulation_parameters.system_config.water_heating_system_installed  # Electricity, Hydrogen or False
     heating_system_installed = my_simulation_parameters.system_config.heating_system_installed
-    mobility_set = arche_type_config.mobility_set
-    mobility_distance = arche_type_config.mobility_distance
+    mobility_set = my_simulation_parameters.system_config.mobility_set
+    # mobility_distance = my_simulation_parameters.system_config.mobility_distance
     clever = my_simulation_parameters.system_config.clever
     pv_included = my_simulation_parameters.system_config.pv_included  # True or False
     if pv_included:
@@ -110,38 +100,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     ev_included = my_simulation_parameters.system_config.ev_included
     if ev_included:
         charging_station = my_simulation_parameters.system_config.charging_station
-    utsp_connected = my_simulation_parameters.system_config.utsp_connect
 
-    """BASICS"""
-    if utsp_connected:
-        my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
-        household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
-        transportation_device_set=mobility_set, charging_station_set=charging_station)
-        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config,
-                                                                            my_simulation_parameters=my_simulation_parameters)
-    else:
-        # Build occupancy
-        my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
-        my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-
-        # create directories if they are empty
-        for tag in ['utsp_reports', 'utsp_results']:
-            isExist = path.exists(hisim.utils.HISIMPATH[tag])
-            if not isExist:
-               # Create a new directory because it does not exist
-               makedirs(hisim.utils.HISIMPATH[tag])
-
-        # copy example files for ev and smart devices to right folder
-        reportfiles = listdir(hisim.utils.HISIMPATH['utsp_example_reports'])
-        for file in reportfiles:
-            shutil.copyfile(path.join(hisim.utils.HISIMPATH['utsp_example_reports'], file), path.join(hisim.utils.HISIMPATH['utsp_reports'], file))
-        resultfiles = listdir(hisim.utils.HISIMPATH['utsp_example_results'])
-        for file in resultfiles:
-            shutil.copyfile(path.join(hisim.utils.HISIMPATH['utsp_example_results'], file), path.join(hisim.utils.HISIMPATH['utsp_results'], file))
-
-    """TODO: pass url and api, chose bettery directory or use inputs"""
-
+    # """ BASICS """
+    # Build occupancy
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.value)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
@@ -215,9 +178,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # """ EV BATTERY """
     if ev_included:
-        _ = component_connections.configure_ev_batteries(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,  # noqa
+        ev_capacities = component_connections.configure_ev_batteries(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, # noqa
             my_cars=my_cars, charging_station_set=charging_station, mobility_set=mobility_set, my_electricity_controller=my_electricity_controller,
-            clever=clever)  # could return ev_capacities if needed
+            clever=clever) # noqa
         # """TODO: repair! """
         # for capacity in ev_capacities:
         #     print(capacity)
@@ -232,13 +195,11 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         # smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
     # """WATERHEATING"""
-    if water_heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
-        count = component_connections.configure_water_heating_electric(
-            my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_occupancy=my_occupancy,
-            my_electricity_controller=my_electricity_controller, my_weather=my_weather,
-            water_heating_system_installed=water_heating_system_installed, controlable=clever,
-            count=count)
-        """TODO: add heat pump cost. """
+    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
+        count = component_connections.configure_water_heating_electric(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
+            my_occupancy=my_occupancy, my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+            water_heating_system_installed=water_heating_system_installed, controlable=clever, count=count)
+        # """TODO: add heat pump cost. """
 
     else:
         count = component_connections.configure_water_heating(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
@@ -246,13 +207,14 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
 
     # """HEATING"""
     if buffer_included:
-        if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
-            my_heater, my_buffer, count = component_connections.configure_heating_with_buffer_electric(
-                my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
-                my_electricity_controller=my_electricity_controller, my_weather=my_weather, heating_system_installed=heating_system_installed,
-                buffer_volume=buffer_volume, controlable=clever, count=count)
-            """TODO: repair! """
-            # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
+        if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
+            my_heater, my_buffer, count = component_connections.configure_heating_with_buffer_electric(my_sim=my_sim,
+                my_simulation_parameters=my_simulation_parameters, my_building=my_building, my_electricity_controller=my_electricity_controller,
+                my_weather=my_weather, heating_system_installed=heating_system_installed, buffer_volume=buffer_volume, controlable=clever,
+                count=count)
+            # """TODO: repair! """
+            # heatpump_cost = heatpump_cost +
+            # preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:
             my_heater, my_buffer, count = component_connections.configure_heating_with_buffer(my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters, my_building=my_building, heating_system_installed=heating_system_installed,
@@ -261,14 +223,14 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         buffer_cost = preprocessing.calculate_buffer_investment_cost(economic_parameters, buffer_included, buffer_volume)
 
     else:
-        if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
-            my_heater, count = component_connections.configure_heating_electric(
-                my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_building=my_building,
-                my_electricity_controller=my_electricity_controller, my_weather=my_weather, heating_system_installed=heating_system_installed,
-                controlable=clever, count=count)
+        if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
+            my_heater, count = component_connections.configure_heating_electric(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
+                my_building=my_building, my_electricity_controller=my_electricity_controller, my_weather=my_weather,
+                heating_system_installed=heating_system_installed, controlable=clever, count=count)
         else:
             my_heater, count = component_connections.configure_heating(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building, heating_system_installed=heating_system_installed, count=count)
+
     heater.append(my_heater)
 
     # """BATTERY"""
@@ -284,10 +246,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
             my_simulation_parameters=my_simulation_parameters, my_building=my_building, my_electricity_controller=my_electricity_controller,
             chp_power=chp_power, h2_storage_size=h2_storage_size, electrolyzer_power=electrolyzer_power, count=count)
         heater.append(my_chp)
-
-        chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
-        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
-        electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_included, electrolyzer_power)
 
         chp_cost = preprocessing.calculate_chp_investment_cost(economic_parameters, chp_included, chp_power)
         h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(economic_parameters, h2_storage_included, h2_storage_size)
@@ -338,8 +296,8 @@ def needs_ems(battery_included, chp_included, ev_included, heating_system_instal
         return True
     if ev_included:
         return True
-    if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
+    if heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         return True
-    if water_heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
+    if water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         return True
     return False

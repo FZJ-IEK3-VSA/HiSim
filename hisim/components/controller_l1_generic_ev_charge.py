@@ -147,6 +147,7 @@ class L1Controller(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         """ Returns battery charge and discharge (energy consumption of car) of battery at each timestep. """
+
         if force_convergence:
             pass
         else:

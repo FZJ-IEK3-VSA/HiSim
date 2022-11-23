@@ -1,4 +1,5 @@
 from os import path, listdir
+import shutil
 import json
 
 from hisim import component as cp
@@ -26,7 +27,7 @@ def test_smart_device():
         files_to_copy = listdir(utils.HISIMPATH['utsp_example_reports'])
         for file in files_to_copy:
             shutil.copyfile(path.join(utils.HISIMPATH['utsp_example_reports'], file),
-                            path.join(utils.HISIMPATH['utsp_results'], file))
+                            path.join(utils.HISIMPATH['utsp_reports'], file))
 
     filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
     jsonfile = open(filepath)

@@ -1,7 +1,7 @@
 """Example sets up a modular household according to json input file."""
 
 from typing import Optional, List, Any
-from os import path, listdir, makedirs
+from os import path, listdir
 from pathlib import Path
 import json
 import shutil
@@ -124,13 +124,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
         my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-
-        # create directories if they are empty
-        for tag in ['utsp_reports', 'utsp_results']:
-            isExist = path.exists(hisim.utils.HISIMPATH[tag])
-            if not isExist:
-               # Create a new directory because it does not exist
-               makedirs(hisim.utils.HISIMPATH[tag])
 
         # copy example files for ev and smart devices to right folder
         reportfiles = listdir(hisim.utils.HISIMPATH['utsp_example_reports'])

@@ -1,10 +1,9 @@
 """Example sets up a modular household according to json input file."""
 
 from typing import Optional, List, Any
-from os import path, listdir
+from os import path
 from pathlib import Path
 import json
-import shutil
 
 import hisim.loadtypes as lt
 import hisim.log
@@ -124,16 +123,6 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig('Occupancy', occupancy_profile.Name)
         my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
-
-        # copy example files for ev and smart devices to right folder
-        reportfiles = listdir(hisim.utils.HISIMPATH['utsp_example_reports'])
-        for file in reportfiles:
-            shutil.copyfile(path.join(hisim.utils.HISIMPATH['utsp_example_reports'], file), path.join(hisim.utils.HISIMPATH['utsp_reports'], file))
-        resultfiles = listdir(hisim.utils.HISIMPATH['utsp_example_results'])
-        for file in resultfiles:
-            shutil.copyfile(path.join(hisim.utils.HISIMPATH['utsp_example_results'], file), path.join(hisim.utils.HISIMPATH['utsp_results'], file))
-
-    """TODO: pass url and api, chose bettery directory or use inputs"""
 
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)

@@ -10,6 +10,15 @@ from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from building_sizer.heating_system_enums import HeatingSystems
 
+@dataclass_json
+@dataclass
+class SizingOptions:
+    pv: List[float] = field(default_factory=list)
+    battery: List[float] = field(default_factory=list)
+
+def get_default_sizing_options(pv: List[float]=[6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3],
+        battery: List[float]=[0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15]) -> SizingOptions:
+    return SizingOptions(pv=pv, battery=battery)
 
 @dataclass_json
 @dataclass
@@ -17,7 +26,18 @@ class Individual:
     bool_vector: List[bool] = field(default_factory=list)
     discrete_vector: List[float] = field(default_factory=list)
 
-    def create_random_individual(self, probabilities: List[float]) -> None:
+    def create_random_individual(self, probabilities: List[float], options: SizingOptions) -> None:
+        """ Creates random individual.
+        
+        Parameters:
+        -----------
+        probabilities: List[float]
+            List of probabilities for each component to be included.
+        options: SizingOptions
+            Instance of dataclass sizing options.
+            It contains a list of all available options for sizing of each component.
+        """
+
         for probability in probabilities:
             dice = random.uniform(0, 1)  # random number between zero and one
             # TODO: include discrete vector
@@ -25,6 +45,8 @@ class Individual:
                 self.bool_vector.append(True)
             else:
                 self.bool_vector.append(False)
+        self.discrete_vector.append(random.choice(options.pv))
+        self.discrete_vector.append(random.choice(options.battery))
 
 @dataclass_json
 @dataclass
@@ -98,21 +120,24 @@ class SystemConfig:
 
     def get_individual(self) -> Individual:
         bool_vector = [self.pv_included, self.battery_included]
-        discrete_vector : List = []
+        discrete_vector = [self.pv_peak_power, self.battery_capacity]
         return Individual(bool_vector, discrete_vector)
 
 def create_from_individual(individual: Individual) -> "SystemConfig":
     bool_vector = individual.bool_vector
+    discrete_vector = individual.discrete_vector
     system_config = SystemConfig()
     system_config.pv_included = bool_vector[0]
+    system_config.pv_peak_power = discrete_vector[0]
     system_config.battery_included = bool_vector[1]
+    system_config.battery_capacity = discrete_vector[1]
     return system_config
 
-# def create_system_config_file() -> None:
-#     """System Config file is created."""
+def create_system_config_file() -> None:
+    """System Config file is created."""
 
-#     config_file = SystemConfig()
-#     config_file_written = config_file.to_json()
+    config_file = SystemConfig()
+    config_file_written = config_file.to_json()  #type ignore
 
-#     with open('system_config.json', 'w', encoding="utf-8") as outfile:
-#         outfile.write(config_file_written)
+    with open('system_config.json', 'w', encoding="utf-8") as outfile:
+        outfile.write(config_file_written)

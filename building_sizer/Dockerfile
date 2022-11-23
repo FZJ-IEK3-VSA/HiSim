@@ -6,10 +6,7 @@ WORKDIR /app
 RUN pip install git+https://github.com/FZJ-IEK3-VSA/UTSP_Client.git
 
 # Copy source code to image
-COPY building_sizer_algorithm.py building_sizer_algorithm.py
-COPY evolutionary_algorithm.py evolutionary_algorithm.py
-COPY system_config.py system_config.py
-COPY heating_system_enums.py heating_system_enums.py
+COPY building_sizer.py building_sizer.py
 
 # Create a folder for the input files
 RUN mkdir /input

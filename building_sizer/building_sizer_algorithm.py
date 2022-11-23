@@ -123,6 +123,7 @@ def trigger_next_iteration(
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
 
+
 def get_kpi_from_csv(kpi_file_content: str) -> float:
     csv_buffer = io.StringIO(kpi_file_content)
     csvreader = csv.reader(csv_buffer)
@@ -137,6 +138,7 @@ def get_kpi_from_csv(kpi_file_content: str) -> float:
         "Invalid HiSim KPI file: KPI 'Self consumption' is missing"
     )
 
+
 def building_sizer_iteration(
     request: BuildingSizerRequest,
 ) -> Tuple[Optional[TimeSeriesRequest], Any]:
@@ -144,9 +146,8 @@ def building_sizer_iteration(
         request.requisite_requests, request.url, request.api_key
     )
 
-    # Get the relevant result files from all requisite requests
+    # Get the relevant result files from all requisite requests and turn them into rated individuals
     rated_individuals = []
-
     for sim_config_str, result in results.items():
         result_file = result.data["KPIs.csv"].decode()
         # TODO: check if rating works
@@ -159,25 +160,27 @@ def building_sizer_iteration(
     # select best individuals
     # TODO: population size as input
     population_size: int = 5
-    if len(rated_individuals) > population_size:
-        parents = evo_alg.selection(
-            rated_individuals=rated_individuals, population_size=population_size
-        )
+    parents = evo_alg.selection(
+        rated_individuals=rated_individuals, population_size=population_size
+    )
 
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
     # TODO r_cross and r_mut as inputs
+    parent_individuals = [ri.individual for ri in parents]
     r_cross: float = 0.2
     r_mut: float = 0.4
-    new_vectors: List[system_config.Individual] = evo_alg.evolution(
-        parents=parents, population_size=population_size, r_cross=r_cross, r_mut=r_mut
+    new_individuals = evo_alg.evolution(
+        parents=parent_individuals,
+        population_size=population_size,
+        r_cross=r_cross,
+        r_mut=r_mut,
     )
 
-    # combine new_vectors and rated_individuals (combine parents and children)
-    for elem in parents:
-        new_vectors.append(elem.individual)
+    # combine combine parents and children
+    new_individuals.extend(parent_individuals)
 
     # delete duplicates
-    new_vectors = evo_alg.unique(individuals=new_vectors)
+    new_individuals = evo_alg.unique(new_individuals)
 
     # TODO: termination condition; exit, when the overall calculation is over
     if request.remaining_iterations == 0:
@@ -185,13 +188,9 @@ def building_sizer_iteration(
 
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []
-    for individual in new_vectors:
+    for individual in new_individuals:
         system_config_instance = system_config.create_from_individual(individual)
         hisim_configs.append(system_config_instance.to_json())  # type: ignore
-
-    # hisim_configs = [
-    #         system_config.SystemConfig().to_json()  # type: ignore
-    #     ]
 
     # trigger the next iteration with the new hisim configurations
     next_request = trigger_next_iteration(request, hisim_configs)
@@ -211,7 +210,6 @@ def main():
         next_request, result = building_sizer_iteration(request)
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
-
         probabilities: List[float] = [
             0.8,
             0.4,

@@ -151,7 +151,7 @@ def building_sizer_iteration(
         result_file = result.data["KPIs.csv"].decode()
         # TODO: check if rating works
         rating = get_kpi_from_csv(result_file)
-        system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)
+        system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)  # type: ignore
         individual = system_config_instance.get_individual()
         r = system_config.RatedIndividual(individual, rating)
         rated_individuals.append(r)
@@ -187,7 +187,7 @@ def building_sizer_iteration(
     hisim_configs = []
     for individual in new_vectors:
         system_config_instance = system_config.create_from_individual(individual)
-        hisim_configs.append(system_config_instance.to_json())
+        hisim_configs.append(system_config_instance.to_json())  # type: ignore
 
     # hisim_configs = [
     #         system_config.SystemConfig().to_json()  # type: ignore

@@ -51,7 +51,7 @@ def main():
     building_sizer_config_json = initial_building_sizer_config.to_json()  # type: ignore
     # Create the initial building sizer request
     building_sizer_request = TimeSeriesRequest(
-        building_sizer_config_json, "building_sizer", guid=guid
+        building_sizer_config_json, "building_sizer-0.1.9", guid=guid
     )
 
     # Store the hash of each request in a set for loop detection

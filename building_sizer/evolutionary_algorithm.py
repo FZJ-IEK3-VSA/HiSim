@@ -118,12 +118,12 @@ def crossover_conventional(
 
 def mutation_bool(parent: system_config.Individual) -> system_config.Individual:
     """
-    Mutation: changing bit value at one position in boolean vector.
+    Mutation: changing bit value at one position
 
     Parameters
     ----------
-    parent : system_config.Individual
-        Encoding of parent used for mutation.
+    parent : system_config.RatedIndividual
+        Encoding of first parent used for cross over.
 
     Returns
     -------
@@ -138,47 +138,20 @@ def mutation_bool(parent: system_config.Individual) -> system_config.Individual:
     )
     return child
 
-def mutation_discrete(parent: system_config.Individual, options: system_config.SizingOptions) -> system_config.Individual:
-    """
-    Mutation: changing bit value at one position in discrete vector.
-
-    Parameters
-    ----------
-    parent : system_config.Individual
-        Encoding of parent for mutation.
-    options : system_config.SizingOptions
-        Instance of dataclass sizing options.
-        It contains a list of all available options for sizing of each component.
-
-    Returns
-    -------
-    child : system_config.RatedIndividual
-        Encoding of first resulting child from cross over.
-    """
-    vector_discrete = parent.discrete_vector[:]
-    bit = random.randint(0, len(vector_bool) - 1)
-
-    vector_discrete[bit] = random.getattr(options, options.translation[bit])
-    child = system_config.Individual(
-        bool_vector=vector_bool, discrete_vector=parent.discrete_vector
-    )
-    return child
-
 
 def evolution(
     parents: List[system_config.Individual],
     population_size: int,
     r_cross: float,
     r_mut: float,
-    mode: str,
-    options: system_config.SizingOptions
+    mode: str
 ) -> List[system_config.Individual]:
     """
     evolution step of the genetic algorithm
 
     Parameters
     ----------
-    parents : List[system_config.RatedIndividual]
+    paraents : List[system_config.RatedIndividual]
         List of rated individuals.
     r_cross : float
         Cross over probability.
@@ -218,12 +191,7 @@ def evolution(
             # choose individual for mutation
             parent = parents[(sel + pop) % population_size]
             # mutation
-            if mode == 'bool':
-                child = mutation_bool(parent=parent)
-            elif mode == 'discrete':
-                child = mutation_discrete(parent=parent, options=options)
-            else:
-                raise Exception('variable for mode is not defined, choose either discrete or bool.')
+            child = mutation_bool(parent=parent)
             children.append(child)
             pop = pop + 1
 

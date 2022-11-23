@@ -4,18 +4,6 @@ import csv
 import random
 from building_sizer.evolutionary_algorithm import evolution, selection
 
-# """ Initializes option dataclass"""
-# populations_size: int = 5  # number of individuals to be created
-# options = system_config.get_default_sizing_options()
-# initial_hisim_configs = []  # initialize system_configs
-# for i in range(populations_size):  # create five individuals in population
-#     individual = system_config.Individual()
-#     individual.create_random_individual(options=options)
-#     initial_hisim_configs.append(
-#         system_config.create_from_individual(individual).to_json()  # type: ignore
-#     )
-# print(initial_hisim_configs)
-
 # """ Initialize boolean vector. """
 # probabilities = [0.8, 0.4]  # probabilites to create PV and battery respectively
 

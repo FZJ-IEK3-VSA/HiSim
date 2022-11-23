@@ -35,7 +35,9 @@ def unique(
     # select not duplicated values
     filtered_individuals = []
     for i in range(len_individuals):
-        if i not in delete_index:
+        if i in delete_index:
+            pass
+        else:
             filtered_individuals.append(individuals[i])
     return filtered_individuals
 

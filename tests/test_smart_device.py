@@ -1,4 +1,4 @@
-from os import path, listdir
+from os import path, listdir, makedirs
 import shutil
 import json
 
@@ -22,6 +22,12 @@ def test_smart_device():
                                                                  seconds_per_timestep=60)
 
     # copy flexibilty device activation file from LPG to right location if nothing is there
+    # Check whether the results/Results folder exists or not
+    isExist = path.exists(utils.HISIMPATH['utsp_reports'])
+    if not isExist:
+       # Create a new directory because it does not exist
+       makedirs(utils.HISIMPATH['utsp_reports'])
+
     files_in_reports = listdir(utils.HISIMPATH['utsp_reports'])
     if not files_in_reports:
         files_to_copy = listdir(utils.HISIMPATH['utsp_example_reports'])

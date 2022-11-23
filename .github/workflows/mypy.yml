@@ -24,4 +24,3 @@ jobs:
         mypy --config-file mypy_moderate.ini examples/
         mypy --config-file mypy_moderate.ini tests/
         mypy --config-file mypy_moderate.ini building_sizer/
-	

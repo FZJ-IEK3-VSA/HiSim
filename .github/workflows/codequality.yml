@@ -43,7 +43,6 @@ jobs:
         prospector hisim/sim_repository.py
         prospector hisim/project_code_overview_generator.py
         prospector hisim/postprocessingoptions.py
-        prospector hisim/system_config.py
         prospector hisim/json_executor.py
         prospector hisim/json_generator.py
         prospector hisim/loadtypes.py
@@ -69,6 +68,8 @@ jobs:
         prospector hisim/modular_household/cost_file_creator.py
         prospector hisim/modular_household/economic_parameters.py
         prospector hisim/modular_household/modular_household_results.py
+
+	prospector building_sizer/system_config.py
         # prospector hisim/modular_household/preprocessing.py
 
 

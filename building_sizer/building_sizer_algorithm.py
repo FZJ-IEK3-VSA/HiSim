@@ -23,8 +23,8 @@ from utspclient.datastructures import (
     TimeSeriesRequest,
 )
 
-import system_config
-import evolutionary_algorithm as evo_alg
+from building_sizer import system_config
+from building_sizer import evolutionary_algorithm as evo_alg
 
 
 class BuildingSizerException(Exception):

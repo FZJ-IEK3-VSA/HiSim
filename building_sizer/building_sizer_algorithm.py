@@ -27,12 +27,6 @@ from building_sizer import system_config
 from building_sizer import evolutionary_algorithm as evo_alg
 
 
-class BuildingSizerException(Exception):
-    """
-    Exception for errors in the Building Sizer
-    """
-
-
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass
 class BuildingSizerRequest:
@@ -134,7 +128,7 @@ def get_kpi_from_csv(kpi_file_content: str) -> float:
             return float(row[1])
         else:
             pass
-    raise BuildingSizerException(
+    raise system_config.BuildingSizerException(
         "Invalid HiSim KPI file: KPI 'Self consumption' is missing"
     )
 

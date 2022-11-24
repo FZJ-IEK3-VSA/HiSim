@@ -10,6 +10,13 @@ from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from building_sizer.heating_system_enums import HeatingSystems
 
+
+class BuildingSizerException(Exception):
+    """
+    Exception for errors in the Building Sizer
+    """
+
+
 @dataclass_json
 @dataclass
 class SizingOptions:
@@ -48,7 +55,11 @@ class Individual:
             else:
                 self.bool_vector.append(False)
         for component in options.translation:
-            self.discrete_vector.append(random.choice(getattr(options, component)))
+            try:
+                attribute = getattr(options, component)
+            except Exception as e:
+                raise BuildingSizerException(f"Invalid component name: {component}\n{e}")
+            self.discrete_vector.append(random.choice(attribute))
 
 @dataclass_json
 @dataclass
@@ -129,6 +140,7 @@ def create_from_individual(individual: Individual) -> "SystemConfig":
     bool_vector = individual.bool_vector
     discrete_vector = individual.discrete_vector
     system_config = SystemConfig()
+    # TODO work with options and remove hard coded indices
     system_config.pv_included = bool_vector[0]
     system_config.pv_peak_power = discrete_vector[0]
     system_config.battery_included = bool_vector[1]

@@ -23,8 +23,8 @@ from utspclient.datastructures import (
     TimeSeriesRequest,
 )
 
-from building_sizer import system_config
-from building_sizer import evolutionary_algorithm as evo_alg
+import system_config
+import evolutionary_algorithm as evo_alg
 
 
 @dataclasses_json.dataclass_json

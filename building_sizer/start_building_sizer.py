@@ -4,14 +4,14 @@ import random
 import string
 from typing import Dict, List
 
-from building_sizer import building_sizer_algorithm
-from building_sizer.building_sizer_algorithm import BuildingSizerRequest, BuildingSizerResult
+import building_sizer_algorithm
+from building_sizer_algorithm import BuildingSizerRequest, BuildingSizerResult
 from utspclient import client  # type: ignore
 from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
 # Define URL and API key for the UTSP server
 URL = "http://134.94.131.167:443/api/v1/profilerequest"
-API_KEY = ""
+API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 
 
 def get_ratings_of_generation(
@@ -51,7 +51,7 @@ def main():
     building_sizer_config_json = initial_building_sizer_config.to_json()  # type: ignore
     # Create the initial building sizer request
     building_sizer_request = TimeSeriesRequest(
-        building_sizer_config_json, "building_sizer-0.1.9", guid=guid
+        building_sizer_config_json, "building_sizer", guid=guid
     )
 
     # Store the hash of each request in a set for loop detection

@@ -16,4 +16,4 @@ RUN mkdir /input
 # Create a folder for the result files
 RUN mkdir /results
 
-ENTRYPOINT python3 building_sizer.py
+ENTRYPOINT python3 building_sizer_algorithm.py

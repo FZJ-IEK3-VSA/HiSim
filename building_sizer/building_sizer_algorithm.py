@@ -161,17 +161,23 @@ def building_sizer_iteration(
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
     # TODO r_cross and r_mut as inputs
     parent_individuals = [ri.individual for ri in parents]
+
     r_cross: float = 0.2
     r_mut: float = 0.4
     options = system_config.get_default_sizing_options()
+
+    parent_individuals = evo_alg.complete_population(
+        original_parents=parent_individuals, population_size=population_size, options=options
+    )
     new_individuals = evo_alg.evolution(
         parents=parent_individuals,
-        population_size=population_size,
         r_cross=r_cross,
         r_mut=r_mut,
         mode='bool',
         options=options
     )
+
+
 
     # combine combine parents and children
     new_individuals.extend(parent_individuals)

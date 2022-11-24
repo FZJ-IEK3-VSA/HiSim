@@ -107,8 +107,7 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if electrolyzer_included:
         electrolyzer_power = my_simulation_parameters.system_config.electrolyzer_power
     ev_included = my_simulation_parameters.system_config.ev_included
-    if ev_included:
-        charging_station = my_simulation_parameters.system_config.charging_station
+    charging_station = my_simulation_parameters.system_config.charging_station
     utsp_connected = my_simulation_parameters.system_config.utsp_connect
 
     """BASICS"""
@@ -157,8 +156,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if pv_included:
         production, count = component_connections.configure_pv_system(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
             my_weather=my_weather, production=production, pv_peak_power=pv_peak_power, count=count)
-        pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included,
-                                                                       pv_peak_power)
+        # pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included,
+        #                                                                pv_peak_power)
         # production, count = component_connections.configure_pv_system(
         #     my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
         #     pv_peak_power=pv_peak_power, count=count)

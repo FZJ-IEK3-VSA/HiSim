@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import system_config
+from building_sizer import system_config
 
 from typing import List, Tuple
 import random
@@ -75,6 +75,15 @@ def selection(
     # shuffle the selected individuals to allow more variation during crossover
     random.shuffle(selected_individuals)
     return selected_individuals
+
+def complete_population(original_parents: List[system_config.Individual], population_size: int,
+options: system_config.SizingOptions) -> List[system_config.Individual]:
+    len_parents = len(original_parents)
+    for _ in range(population_size-len_parents):
+        individual = system_config.Individual()
+        individual.create_random_individual(options=options)
+        original_parents.append(individual)
+    return original_parents
 
 
 def crossover_conventional(
@@ -167,7 +176,6 @@ def mutation_discrete(parent: system_config.Individual, options: system_config.S
 
 def evolution(
     parents: List[system_config.Individual],
-    population_size: int,
     r_cross: float,
     r_mut: float,
     mode: str,
@@ -193,20 +201,24 @@ def evolution(
         List of individuals unrated individuals.
 
     """
+    # get array length
+    len_parents = len(parents)
     # index to randomly select parents
-    sel = random.randint(0, population_size - 1)
+    # maybe remove sel part because parents are already shuffeled (sel=0)
+    sel = random.randint(0, len_parents - 1)
     # initialize new population
     children = []
     # initialize while loop
     pop = 0
-    while pop < population_size:
+
+    while pop < len_parents:
         # randomly generate number which indicates if cross over will happen or not...
         o = random.random()
 
         if o < r_cross:
             # initilize parents
-            parent1 = parents[(sel + pop) % population_size]
-            parent2 = parents[(sel + pop + 1) % population_size]
+            parent1 = parents[(sel + pop) % len_parents]
+            parent2 = parents[(sel + pop + 1) % len_parents]
             # cross over: two children resulting from cross over are added to the family
             child1, child2 = crossover_conventional(parent1=parent1, parent2=parent2)
             # append children to new population
@@ -216,7 +228,7 @@ def evolution(
 
         elif o < (r_cross + r_mut):
             # choose individual for mutation
-            parent = parents[(sel + pop) % population_size]
+            parent = parents[(sel + pop) % len_parents]
             # mutation
             if mode == 'bool':
                 child = mutation_bool(parent=parent)

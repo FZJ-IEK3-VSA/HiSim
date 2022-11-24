@@ -8,7 +8,7 @@ from dataclasses_json import dataclass_json
 
 from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from heating_system_enums import HeatingSystems
+from building_sizer.heating_system_enums import HeatingSystems
 
 
 class BuildingSizerException(Exception):
@@ -155,3 +155,5 @@ def create_system_config_file() -> None:
 
     with open('system_config.json', 'w', encoding="utf-8") as outfile:
         outfile.write(config_file_written)
+
+pass

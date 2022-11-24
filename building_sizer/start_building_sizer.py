@@ -4,8 +4,8 @@ import random
 import string
 from typing import Dict, List
 
-import building_sizer_algorithm
-from building_sizer_algorithm import BuildingSizerRequest, BuildingSizerResult
+from building_sizer import building_sizer_algorithm
+from building_sizer.building_sizer_algorithm import BuildingSizerRequest, BuildingSizerResult
 from utspclient import client  # type: ignore
 from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
@@ -90,6 +90,10 @@ def main():
         print(
             f"Generation ratings: {list(get_ratings_of_generation(building_sizer_config).values())}"
         )
+
+        for config, rating in get_ratings_of_generation(building_sizer_config).items():
+            print(config, rating)
+            print('---')
 
     print("Finished")
 

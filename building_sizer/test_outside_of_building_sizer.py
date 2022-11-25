@@ -2,7 +2,7 @@
 from building_sizer import system_config
 import csv
 import random
-from evolutionary_algorithm import evolution, selection
+from building_sizer.evolutionary_algorithm import evolution, selection
 
 # """ Initializes option dataclass"""
 # populations_size: int = 5  # number of individuals to be created

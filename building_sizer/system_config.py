@@ -25,11 +25,17 @@ class SizingOptions:
     translation: List[str] = field(default_factory=list)
     probabilities: List[float] = field(default_factory=list)
 
-def get_default_sizing_options(pv: List[float]=[6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3],
-        battery: List[float]=[0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15],
-        translation: List[str] = ['pv', 'battery'],
-        probabilities: List[float] = [0.8, 0.4]) -> SizingOptions:
-    return SizingOptions(pv=pv, battery=battery, translation=translation, probabilities=probabilities)
+
+def get_default_sizing_options(
+    pv: List[float] = [6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3],
+    battery: List[float] = [0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15],
+    translation: List[str] = ["pv", "battery"],
+    probabilities: List[float] = [0.8, 0.4],
+) -> SizingOptions:
+    return SizingOptions(
+        pv=pv, battery=battery, translation=translation, probabilities=probabilities
+    )
+
 
 @dataclass_json
 @dataclass
@@ -38,8 +44,8 @@ class Individual:
     discrete_vector: List[float] = field(default_factory=list)
 
     def create_random_individual(self, options: SizingOptions) -> None:
-        """ Creates random individual.
-        
+        """Creates random individual.
+
         Parameters:
         -----------
         options: SizingOptions
@@ -58,8 +64,11 @@ class Individual:
             try:
                 attribute = getattr(options, component)
             except Exception as e:
-                raise BuildingSizerException(f"Invalid component name: {component}\n{e}")
+                raise BuildingSizerException(
+                    f"Invalid component name: {component}\n{e}"
+                )
             self.discrete_vector.append(random.choice(attribute))
+
 
 @dataclass_json
 @dataclass
@@ -67,11 +76,12 @@ class RatedIndividual:
     individual: Individual
     rating: float
 
+
 @dataclass_json
 @dataclass
 class SystemConfig:
 
-    """ Defines the system config for the modular household. """
+    """Defines the system config for the modular household."""
 
     water_heating_system_installed: HeatingSystems
     heating_system_installed: HeatingSystems
@@ -97,16 +107,32 @@ class SystemConfig:
     url: str
     api_key: str
 
-    def __init__(self, water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
-            heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
-            clever: bool = True, predictive: bool = False, prediction_horizon: int = 0, pv_included: bool = True,
-            pv_peak_power: Optional[float] = 9000, smart_devices_included: bool = False,
-            buffer_included: bool = True, buffer_volume: Optional[float] = 500, battery_included: bool = False, battery_capacity: Optional[float] = 5,
-            chp_included: bool = False, chp_power: Optional[float] = 12, h2_storage_included: bool = True, h2_storage_size: Optional[float] = 100,
-            electrolyzer_included: bool = True, electrolyzer_power: Optional[float] = 5e3, ev_included: bool = True,
-            charging_station: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-            utsp_connect: bool = False, url: str = "http://134.94.131.167:443/api/v1/profilerequest",
-            api_key: str = ''):  # noqa
+    def __init__(
+        self,
+        water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
+        heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP,
+        clever: bool = True,
+        predictive: bool = False,
+        prediction_horizon: int = 0,
+        pv_included: bool = True,
+        pv_peak_power: Optional[float] = 9000,
+        smart_devices_included: bool = False,
+        buffer_included: bool = True,
+        buffer_volume: Optional[float] = 500,
+        battery_included: bool = False,
+        battery_capacity: Optional[float] = 5,
+        chp_included: bool = False,
+        chp_power: Optional[float] = 12,
+        h2_storage_included: bool = True,
+        h2_storage_size: Optional[float] = 100,
+        electrolyzer_included: bool = True,
+        electrolyzer_power: Optional[float] = 5e3,
+        ev_included: bool = True,
+        charging_station: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
+        utsp_connect: bool = False,
+        url: str = "http://134.94.131.167:443/api/v1/profilerequest",
+        api_key: str = "",
+    ):  # noqa
         self.water_heating_system_installed = water_heating_system_installed
         self.heating_system_installed = heating_system_installed
         self.clever = clever
@@ -133,8 +159,9 @@ class SystemConfig:
 
     def get_individual(self) -> Individual:
         bool_vector = [self.pv_included, self.battery_included]
-        discrete_vector = [self.pv_peak_power, self.battery_capacity]
+        discrete_vector = [self.pv_peak_power or 0, self.battery_capacity or 0]
         return Individual(bool_vector, discrete_vector)
+
 
 def create_from_individual(individual: Individual) -> "SystemConfig":
     bool_vector = individual.bool_vector
@@ -147,13 +174,12 @@ def create_from_individual(individual: Individual) -> "SystemConfig":
     system_config.battery_capacity = discrete_vector[1]
     return system_config
 
+
 def create_system_config_file() -> None:
     """System Config file is created."""
 
     config_file = SystemConfig()
-    config_file_written = config_file.to_json()  #type ignore
+    config_file_written = config_file.to_json()  # type: ignore
 
-    with open('system_config.json', 'w', encoding="utf-8") as outfile:
+    with open("system_config.json", "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
-
-pass

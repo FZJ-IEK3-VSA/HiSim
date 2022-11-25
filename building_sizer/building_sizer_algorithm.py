@@ -11,7 +11,6 @@ for the next Building Sizer iteration as a result to the UTSP (and therey also t
 import csv
 import dataclasses
 import io
-import random as ra
 from typing import Any, Dict, List, Optional, Tuple
 
 import dataclasses_json
@@ -23,8 +22,8 @@ from utspclient.datastructures import (
     TimeSeriesRequest,
 )
 
-import system_config
-import evolutionary_algorithm as evo_alg
+from building_sizer import evolutionary_algorithm as evo_alg
+from building_sizer import system_config
 
 
 @dataclasses_json.dataclass_json
@@ -167,17 +166,17 @@ def building_sizer_iteration(
     options = system_config.get_default_sizing_options()
 
     parent_individuals = evo_alg.complete_population(
-        original_parents=parent_individuals, population_size=population_size, options=options
+        original_parents=parent_individuals,
+        population_size=population_size,
+        options=options,
     )
     new_individuals = evo_alg.evolution(
         parents=parent_individuals,
         r_cross=r_cross,
         r_mut=r_mut,
-        mode='bool',
-        options=options
+        mode="bool",
+        options=options,
     )
-
-
 
     # combine combine parents and children
     new_individuals.extend(parent_individuals)

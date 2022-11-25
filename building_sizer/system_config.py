@@ -134,6 +134,7 @@ class SystemConfig:
     def get_individual(self) -> Individual:
         bool_vector = [self.pv_included, self.battery_included]
         discrete_vector = [self.pv_peak_power, self.battery_capacity]
+        discrete_vector = [0 if elem is None else elem for elem in discrete_vector]
         return Individual(bool_vector, discrete_vector)
 
 def create_from_individual(individual: Individual) -> "SystemConfig":
@@ -151,7 +152,7 @@ def create_system_config_file() -> None:
     """System Config file is created."""
 
     config_file = SystemConfig()
-    config_file_written = config_file.to_json()  #type ignore
+    config_file_written = config_file.to_json()  # type ignore
 
     with open('system_config.json', 'w', encoding="utf-8") as outfile:
         outfile.write(config_file_written)

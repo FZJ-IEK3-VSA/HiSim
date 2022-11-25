@@ -159,8 +159,9 @@ class SystemConfig:
 
     def get_individual(self) -> Individual:
         bool_vector = [self.pv_included, self.battery_included]
-        discrete_vector = [self.pv_peak_power or 0, self.battery_capacity or 0]
-        return Individual(bool_vector, discrete_vector)
+        discrete_vector = [self.pv_peak_power, self.battery_capacity]
+        discrete_vector_not_none = [elem or 0 for elem in discrete_vector]
+        return Individual(bool_vector, discrete_vector_not_none)
 
 
 def create_from_individual(individual: Individual) -> "SystemConfig":

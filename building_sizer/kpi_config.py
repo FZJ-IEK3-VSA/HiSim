@@ -8,4 +8,4 @@ class KPIConfig:
     autarky_rate: float
     injection: float
     economic_cost: float
-    co2_cost: float
+    co2_cost: float  

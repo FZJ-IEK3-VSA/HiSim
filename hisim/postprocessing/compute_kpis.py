@@ -1,6 +1,7 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 from typing import List, Any
+import os
 
 import pandas as pd
 
@@ -8,6 +9,8 @@ import hisim.log
 from hisim.loadtypes import InandOutputType
 from hisim.component import ComponentOutput
 from hisim.simulationparameters import SimulationParameters
+
+from building_sizer.kpi_config import KPIConfig
 
 
 def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters) -> Any:  # noqa: MC0001
@@ -78,24 +81,23 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     h2_system_losses = 0  # explicitly compute that
 
     # Electricity Price
+    price = 0
+    co2 = 0
     if production_sum > 0:
         # evaluate electricity price
         if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in results:
-            price = - ((injection[injection < 0] * results['PriceSignal - PricePurchase [Price - Cents per kWh]'][injection < 0]).sum() + (
+            price = price - ((injection[injection < 0] * results['PriceSignal - PricePurchase [Price - Cents per kWh]'][injection < 0]).sum() + (
                 injection[injection > 0] * results['PriceSignal - PriceInjection [Price - Cents per kWh]'][injection > 0]).sum()) \
                 * simulation_parameters.seconds_per_timestep / 3.6e6
-        else:
-            price = 0
         self_consumption_rate = 100 * (self_consumption_sum / production_sum)
         autarky_rate = 100 * (self_consumption_sum / consumption_sum)
     else:
-        if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in results:
-            price = (results['consumption'] * results[
-                'PriceSignal - PricePurchase [Price - Cents per kWh]']).sum() * simulation_parameters.seconds_per_timestep / 3.6e6
-        else:
-            price = 0
         self_consumption_rate = 0
         autarky_rate = 0
+
+    if 'PriceSignal - PricePurchase [Price - Cents per kWh]' in results:
+        price = price + (results['consumption'] * results['PriceSignal - PricePurchase [Price - Cents per kWh]']).sum() \
+            * simulation_parameters.seconds_per_timestep / 3.6e6
 
     # initilize lines for report
     lines: List = []
@@ -111,10 +113,13 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append(f"Self Consumption Rate: {self_consumption_rate:3.1f} %")
     lines.append(f'Price paid for electricity: {price * 1e-2:3.0f} EUR')
 
-    # initialize list for the KPI.scv
-    kpis_list = ["Consumption:", "Production:", "Self consumption:", "Injection:", "Battery losses:", "Hydrogen system losses:", "Autarky Rate:",
-                 "Self Consumption Rate:", "Price paid for electricity:"]
-    kpis_values_list = [consumption_sum, production_sum, self_consumption_sum, injection_sum, battery_losses, h2_system_losses, autarky_rate,
-                        self_consumption_rate, price]
+    # initialize json interface to pass kpi's to building_sizer
+    kpi_config = KPIConfig(self_consumption_rate=self_consumption_rate, autarky_rate=autarky_rate,
+    injection=injection_sum, economic_cost=price, co2_cost = co2)
 
-    return lines, kpis_list, kpis_values_list
+    pathname = os.path.join(simulation_parameters.result_directory, "kpi_config.json")
+    config_file_written = kpi_config.to_json()  # type ignore
+    with open(pathname, 'w', encoding="utf-8") as outfile:
+        outfile.write(config_file_written)
+
+    return lines

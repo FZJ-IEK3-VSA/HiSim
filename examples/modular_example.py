@@ -148,9 +148,8 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     heatpump_cost, buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost = [0] * 10
 
     # add price signal
-    if my_simulation_parameters.system_config.predictive:
-        my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
-        my_sim.add_component(my_price_signal)
+    my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
+    my_sim.add_component(my_price_signal)
 
     # """PV"""
     if pv_included:

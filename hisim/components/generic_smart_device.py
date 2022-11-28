@@ -92,7 +92,7 @@ class SmartDevice( cp.Component ):
                   source_weight: int,
                   my_simulation_parameters: SimulationParameters,
                   smart_devices_included: bool):
-        super().__init__ ( name = identifier.split(' ')[0] + identifier.split(' ')[1] + '_w' + str(source_weight), my_simulation_parameters = my_simulation_parameters )
+        super().__init__ ( name = identifier.replace("/", "-") + '_w' + str(source_weight), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
 

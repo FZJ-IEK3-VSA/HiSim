@@ -1,7 +1,6 @@
 """ Main postprocessing module that starts all other modules. """
 # clean
 import os
-import csv
 import sys
 from typing import Any, Optional
 

@@ -8,9 +8,7 @@ To allow the client who sent the initial Building Sizer request to follow the se
 for the next Building Sizer iteration as a result to the UTSP (and therey also to the client).
 """
 
-import csv
 import dataclasses
-import io
 from typing import Any, Dict, List, Optional, Tuple
 
 import dataclasses_json
@@ -24,6 +22,7 @@ from utspclient.datastructures import (
 
 from building_sizer import evolutionary_algorithm as evo_alg
 from building_sizer import system_config
+from building_sizer import kpi_config
 
 
 @dataclasses_json.dataclass_json
@@ -56,7 +55,7 @@ def send_hisim_requests(
         TimeSeriesRequest(
             sim_config,
             "hisim",
-            required_result_files={"KPIs.csv": ResultFileRequirement.REQUIRED},
+            required_result_files={"kpi_config.json": ResultFileRequirement.REQUIRED},
         )
         for sim_config in hisim_configs
     ]
@@ -116,22 +115,6 @@ def trigger_next_iteration(
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
 
-
-def get_kpi_from_csv(kpi_file_content: str) -> float:
-    csv_buffer = io.StringIO(kpi_file_content)
-    csvreader = csv.reader(csv_buffer)
-    for row in csvreader:
-        if row == []:
-            pass
-        elif row[0] == "Self consumption:":
-            return float(row[1])
-        else:
-            pass
-    raise system_config.BuildingSizerException(
-        "Invalid HiSim KPI file: KPI 'Self consumption' is missing"
-    )
-
-
 def building_sizer_iteration(
     request: BuildingSizerRequest,
 ) -> Tuple[Optional[TimeSeriesRequest], Any]:
@@ -142,9 +125,9 @@ def building_sizer_iteration(
     # Get the relevant result files from all requisite requests and turn them into rated individuals
     rated_individuals = []
     for sim_config_str, result in results.items():
-        result_file = result.data["KPIs.csv"].decode()
+        result_file = result.data["kpi_config.json"].decode()
         # TODO: check if rating works
-        rating = get_kpi_from_csv(result_file)
+        rating = kpi_config.get_kpi_from_json(result_file)
         system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)  # type: ignore
         individual = system_config_instance.get_individual()
         r = system_config.RatedIndividual(individual, rating)

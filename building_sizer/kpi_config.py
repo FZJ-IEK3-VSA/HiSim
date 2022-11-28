@@ -9,3 +9,7 @@ class KPIConfig:
     injection: float
     economic_cost: float
     co2_cost: float  
+
+def get_kpi_from_json(kpi_file: str) -> float:
+    kpi_instance = KPIConfig.from_json(kpi_file) # type ignore
+    return kpi_instance.self_consumption_rate

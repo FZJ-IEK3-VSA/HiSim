@@ -5,6 +5,7 @@ import string
 from typing import Dict, List
 
 from building_sizer import building_sizer_algorithm
+from building_sizer import kpi_config
 from building_sizer.building_sizer_algorithm import (
     BuildingSizerRequest,
     BuildingSizerResult,
@@ -33,8 +34,8 @@ def get_ratings_of_generation(
     )
     # Extract the rating for each HiSim config
     ratings = {
-        config: building_sizer_algorithm.get_kpi_from_csv(
-            result.data["KPIs.csv"].decode()
+        config: kpi_config.get_kpi_from_json(
+            result.data["kpi_config.json"].decode()
         )
         for config, result in hisim_results.items()
     }

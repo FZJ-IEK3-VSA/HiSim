@@ -191,7 +191,8 @@ def building_sizer_iteration(
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []
     for individual in new_individuals:
-        system_config_instance = system_config.create_from_individual(individual)
+        system_config_instance = system_config.create_from_individual(individual=individual,
+        translation=options.translation)
         hisim_configs.append(system_config_instance.to_json())  # type: ignore
 
     # trigger the next iteration with the new hisim configurations
@@ -219,7 +220,8 @@ def main():
             individual = system_config.Individual()
             individual.create_random_individual(options=options)
             initial_hisim_configs.append(
-                system_config.create_from_individual(individual).to_json()  # type: ignore
+                system_config.create_from_individual(individual=individual,
+                translation=options.translation).to_json()  # type: ignore
             )
 
         next_request = trigger_next_iteration(request, initial_hisim_configs)

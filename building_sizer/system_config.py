@@ -12,45 +12,52 @@ from building_sizer.heating_system_enums import HeatingSystems
 
 
 class BuildingSizerException(Exception):
-    """
-    Exception for errors in the Building Sizer
-    """
+
+    """ Exception for errors in the Building Sizer. """
 
 
 @dataclass_json
 @dataclass
 class SizingOptions:
-    pv: List[float] = field(default_factory=list)
+
+    """ Conatains all relevant information to encode and decode system configs. """
+
+    photovoltaic: List[float] = field(default_factory=list)
     battery: List[float] = field(default_factory=list)
     translation: List[str] = field(default_factory=list)
     probabilities: List[float] = field(default_factory=list)
 
 
 def get_default_sizing_options(
-    pv: List[float] = [6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3],
+    photovoltaic: List[float] = [6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3],
     battery: List[float] = [0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15],
-    translation: List[str] = ["pv", "battery"],
+    translation: List[str] = ["photovoltaic", "battery"],
     probabilities: List[float] = [0.8, 0.4],
 ) -> SizingOptions:
+    """ Returns default values for SizingOptions."""
     return SizingOptions(
-        pv=pv, battery=battery, translation=translation, probabilities=probabilities
+        photovoltaic=photovoltaic, battery=battery, translation=translation, probabilities=probabilities
     )
 
 
 @dataclass_json
 @dataclass
 class Individual:
+
+    """ System config as numerical vectors."""
+
     bool_vector: List[bool] = field(default_factory=list)
     discrete_vector: List[float] = field(default_factory=list)
 
     def create_random_individual(self, options: SizingOptions) -> None:
         """Creates random individual.
 
-        Parameters:
-        -----------
+        Parameters
+        ----------
         options: SizingOptions
             Instance of dataclass sizing options.
             It contains a list of all available options for sizing of each component.
+
         """
 
         for probability in options.probabilities:
@@ -63,16 +70,19 @@ class Individual:
         for component in options.translation:
             try:
                 attribute = getattr(options, component)
-            except Exception as e:
+            except Exception as exception:
                 raise BuildingSizerException(
-                    f"Invalid component name: {component}\n{e}"
-                )
+                    f"Invalid component name: {component}\n{exception}"
+                ) from exception
             self.discrete_vector.append(random.choice(attribute))
 
 
 @dataclass_json
 @dataclass
 class RatedIndividual:
+
+    """ System config as numerical vectors with assosiated fitness function value. """
+
     individual: Individual
     rating: float
 
@@ -158,21 +168,23 @@ class SystemConfig:
         self.api_key = api_key
 
     def get_individual(self) -> Individual:
+        """ Translates system config to numerical vectors. """
         bool_vector = [self.pv_included, self.battery_included]
         discrete_vector = [self.pv_peak_power, self.battery_capacity]
         discrete_vector_not_none = [elem or 0 for elem in discrete_vector]
         return Individual(bool_vector, discrete_vector_not_none)
 
 
-def create_from_individual(individual: Individual) -> "SystemConfig":
+def create_from_individual(individual: Individual, translation: List[str]) -> "SystemConfig":
+    """ Creates system config from numerical vector. """
     bool_vector = individual.bool_vector
     discrete_vector = individual.discrete_vector
     system_config = SystemConfig()
     # TODO work with options and remove hard coded indices
-    system_config.pv_included = bool_vector[0]
-    system_config.pv_peak_power = discrete_vector[0]
-    system_config.battery_included = bool_vector[1]
-    system_config.battery_capacity = discrete_vector[1]
+    system_config.pv_included = bool_vector[translation.index("photovoltaic")]
+    system_config.pv_peak_power = discrete_vector[translation.index("photovoltaic")]
+    system_config.battery_included = bool_vector[translation.index("battery")]
+    system_config.battery_capacity = discrete_vector[translation.index("battery")]
     return system_config
 
 

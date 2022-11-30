@@ -54,7 +54,7 @@ def send_hisim_requests(
     requests = [
         TimeSeriesRequest(
             sim_config,
-            "hisim",
+            "hisim-0.1.0.test2",
             required_result_files={"kpi_config.json": ResultFileRequirement.REQUIRED},
         )
         for sim_config in hisim_configs
@@ -79,7 +79,7 @@ def send_building_sizer_request(
         request.url, request.api_key, request.remaining_iterations - 1, hisim_requests
     )
     config_json: str = subsequent_request_config.to_json()  # type: ignore
-    next_request = TimeSeriesRequest(config_json, "building_sizer")
+    next_request = TimeSeriesRequest(config_json, "building_sizer-0.1.0.test8")
     client.send_request(request.url, next_request, request.api_key)
     return next_request
 
@@ -115,6 +115,13 @@ def trigger_next_iteration(
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
 
+def decide_on_mode(iteration: int, boolean_iterations: int, discrete_iterations: int) -> str:
+    iteration_in_subiteration = iteration % (boolean_iterations + discrete_iterations)
+    if iteration_in_subiteration > discrete_iterations:
+        return 'bool'
+    else:
+        return 'discrete'
+
 def building_sizer_iteration(
     request: BuildingSizerRequest,
 ) -> Tuple[Optional[TimeSeriesRequest], Any]:
@@ -122,14 +129,21 @@ def building_sizer_iteration(
         request.requisite_requests, request.url, request.api_key
     )
 
+    boolean_iterations: int = 3
+    discrete_iterations: int = 9
+    r_cross: float = 0.2
+    r_mut: float = 0.4
+    options = system_config.get_default_sizing_options()
+
     # Get the relevant result files from all requisite requests and turn them into rated individuals
     rated_individuals = []
     for sim_config_str, result in results.items():
-        result_file = result.data["kpi_config.json"].decode()
+
+        # Extract the rating for each HiSim config
         # TODO: check if rating works
-        rating = kpi_config.get_kpi_from_json(result_file)
+        rating = kpi_config.get_kpi_from_json(result.data["kpi_config.json"].decode())
         system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)  # type: ignore
-        individual = system_config_instance.get_individual()
+        individual = system_config_instance.get_individual(translation=options.translation)
         r = system_config.RatedIndividual(individual, rating)
         rated_individuals.append(r)
 
@@ -142,22 +156,25 @@ def building_sizer_iteration(
 
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
     # TODO r_cross and r_mut as inputs
+    # TODO boolean iterations and discrete iterations as inputs
+    # TODO total iterations as input + transfer to right locations
     parent_individuals = [ri.individual for ri in parents]
 
-    r_cross: float = 0.2
-    r_mut: float = 0.4
-    options = system_config.get_default_sizing_options()
-
-    parent_individuals = evo_alg.complete_population(
+    """     parent_individuals = evo_alg.complete_population(
         original_parents=parent_individuals,
         population_size=population_size,
         options=options,
-    )
+    ) """
+    
     new_individuals = evo_alg.evolution(
         parents=parent_individuals,
         r_cross=r_cross,
         r_mut=r_mut,
-        mode="bool",
+        mode=decide_on_mode(
+            iteration=request.remaining_iterations,
+            boolean_iterations=boolean_iterations,
+            discrete_iterations=discrete_iterations
+            ),
         options=options,
     )
 

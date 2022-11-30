@@ -2,7 +2,7 @@
 # clean
 import random
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
 
@@ -167,10 +167,23 @@ class SystemConfig:
         self.url = url
         self.api_key = api_key
 
-    def get_individual(self) -> Individual:
+    def search_pair_from_translation(self, translation: str) -> Tuple[bool, float]:
+        """ Returns (bool, discrete) value pair for each component."""
+        if translation == "photovoltaic":
+            return(self.pv_included, self.pv_peak_power)
+        elif translation == "battery":
+            return(self.battery_included, self.battery_capacity)
+        else:
+            raise ValueError("Translation of element impossible.")
+
+    def get_individual(self, translation: List[str]) -> Individual:
         """ Translates system config to numerical vectors. """
-        bool_vector = [self.pv_included, self.battery_included]
-        discrete_vector = [self.pv_peak_power, self.battery_capacity]
+        bool_vector = []
+        discrete_vector = []
+        for elem in translation:
+            bool_elem, discrete_elem = self.search_pair_from_translation(translation=elem)
+            bool_vector.append(bool_elem)
+            discrete_vector.append(discrete_elem)
         discrete_vector_not_none = [elem or 0 for elem in discrete_vector]
         return Individual(bool_vector, discrete_vector_not_none)
 

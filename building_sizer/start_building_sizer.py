@@ -14,8 +14,8 @@ from utspclient import client  # type: ignore
 from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
 # Define URL and API key for the UTSP server
-URL = "http://134.94.131.167:443/api/v1/profilerequest"
-API_KEY = ""
+URL = ""
+API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 
 
 def get_ratings_of_generation(
@@ -48,14 +48,14 @@ def main():
     guid = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
     # Define the number of iterations as a dummy termination condition. Can be removed if not needed anymore.
-    num_iterations = 4
+    num_iterations = 36
 
     # Create an initial simulation configuration for the building sizer
     initial_building_sizer_config = BuildingSizerRequest(URL, API_KEY, num_iterations)
     building_sizer_config_json = initial_building_sizer_config.to_json()  # type: ignore
     # Create the initial building sizer request
     building_sizer_request = TimeSeriesRequest(
-        building_sizer_config_json, "building_sizer", guid=guid
+        building_sizer_config_json, "building_sizer-0.1.0.test8", guid=guid
     )
 
     # Store the hash of each request in a set for loop detection

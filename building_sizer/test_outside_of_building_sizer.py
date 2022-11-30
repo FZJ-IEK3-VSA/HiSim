@@ -69,3 +69,5 @@ from building_sizer.evolutionary_algorithm import evolution, selection
 #     individual = system_config.Individual()
 #     individual.create_random_individual(probabilities=probabilities)
 #     initial_hisim_configs.append(system_config.SystemConfig.create_from_individual(individual).to_json())
+
+print( [elem or 0 for elem in [5, 6, None, None, 7]])

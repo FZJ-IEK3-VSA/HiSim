@@ -58,23 +58,13 @@ def selection(
     selected_individuals : List[system_config.RatedIndividual]
 
     """
-    # get list of scores
-    scores = [elem.rating for elem in rated_individuals]
-
-    # get position of best scores
-    len_scores = len(scores)
-    sorted_scores_indices = sorted(range(len_scores), key=lambda k: scores[k])
-
-    # select individuals by positions
-    selected_individuals = []
-    for i in range(len_scores):
-        if i in sorted_scores_indices:
-            selected_individuals.append(rated_individuals[i])
-    # only choose the best individuals, retaining the population size
-    selected_individuals = selected_individuals[:population_size]
+    # Sort individuals decendingly using their rating
+    individuals = sorted(rated_individuals, key=lambda ri: ri.rating, reverse=True)
+    # Only select the best individuals, adhering to the population size
+    individuals = individuals[:population_size]
     # shuffle the selected individuals to allow more variation during crossover
-    random.shuffle(selected_individuals)
-    return selected_individuals
+    random.shuffle(individuals)
+    return individuals
 
 
 def complete_population(

@@ -1,9 +1,4 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Aug  6 23:30:41 2022
-
-@author: m.alfouly
-"""
+"""Air conditioner design."""
 from hisim import log
 import numpy as np
 from typing import Optional
@@ -18,20 +13,22 @@ import hisim.utils as utils
 
 
 class AirConditionerState:
-    """
-    This data class saves the state of the air conditioner
-    """
+
+    """This data class saves the state of the air conditioner."""
 
     def __init__(self, timestep_actual: int = -1, state: int = 0, timestep_of_last_action: int = 0):
+        """ Initializes the state of the air conditioner. """
         self.timestep_actual = timestep_actual
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
 
     def clone(self):
+        """Storing last timestep state."""
         return AirConditionerState(timestep_actual=self.timestep_actual, state=self.state,
                                    timestep_of_last_action=self.timestep_of_last_action)
 
     def is_first_iteration(self, timestep):
+        """Check if first iteration to ensure min on and off times."""
         if self.timestep_actual + 1 == timestep:
             self.timestep_actual += 1
             return True
@@ -39,18 +36,23 @@ class AirConditionerState:
             return False
 
     def activation(self, timestep):
+        """take action based on the operation time / idle time."""
         self.state = 1
         self.timestep_of_last_action = timestep
 
     def deactivation(self, timestep):
+        """take action based on the operation time / idle time."""
         self.state = 0
         self.timestep_of_last_action = timestep
 
 
 class AirConditioner(cp.Component):
+
+    """AirConditioner calss."""
+
     # inputs
     State = "State"
-    #weather 
+    #weather
     TemperatureOutside = "TemperatureOutside"
     # controller_pid
     ThermalPowerPID = "ThermalPowerPID"
@@ -59,17 +61,18 @@ class AirConditioner(cp.Component):
     GridImport="GridImport"
     PV2load="PV2load"
     Battery2Load = "Battery2Load"
-    # building 
+    # building
     TemperatureMean = "Residence Temperature"
     FeedForwardSignal="FeedForwardSignal"
-    
+
     # outputs
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
     pidManipulatedVariable="pidManipulatedVariable"
-    
+    EER="EER"
+
     cop_coef_heating="cop_coef_heating"
-    eer_coef_cooling="eer_coef_cooling"                                   
+    eer_coef_cooling="eer_coef_cooling"
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
@@ -79,6 +82,7 @@ class AirConditioner(cp.Component):
                  min_idle_time: int = 15 * 60,
                  control: str = "on_off",
                  my_simulation_repository : cp.SimRepository = None):
+        """Constructs all the neccessary attributes."""
         super().__init__("AirConditioner", my_simulation_parameters=my_simulation_parameters)
         self.build(manufacturer, name, min_operation_time, min_idle_time,my_simulation_repository)
 
@@ -91,7 +95,7 @@ class AirConditioner(cp.Component):
                                                       self.TemperatureMean,
                                                       LoadTypes.TEMPERATURE,
                                                       Units.CELSIUS,
-                                                      True)                                                                   
+                                                      True)
         self.stateC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.State,
                                                         LoadTypes.ANY,
@@ -102,19 +106,19 @@ class AirConditioner(cp.Component):
                                                                       LoadTypes.HEATING,
                                                                       Units.WATT,
                                                                       False)
-        
+
         self.thermal_power: cp.ComponentInput = self.add_input(self.component_name,
                                                                self.ThermalPowerPID,
                                                                LoadTypes.HEATING,
                                                                Units.WATT,
                                                                False)
-    
+
         self.operating_modeC: cp.ComponentInput = self.add_input(self.component_name,
                                                                  self.OperatingMode,
                                                                  LoadTypes.ANY,
                                                                  Units.ANY,
                                                                  False)
-        
+
         self.optimal_electric_power_pvC: cp.ComponentInput = self.add_input(self.component_name,
                                                                          self.PV2load,
                                                                          LoadTypes.ELECTRICITY,
@@ -130,7 +134,7 @@ class AirConditioner(cp.Component):
                                                                          LoadTypes.ELECTRICITY,
                                                                          Units.WATT,
                                                                          False)
-        
+
         self.pid_thermal_powerC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.pidManipulatedVariable,
                                                                              LoadTypes.HEATING,
@@ -145,12 +149,18 @@ class AirConditioner(cp.Component):
                                                                        LoadTypes.ELECTRICITY,
                                                                        Units.WATT)
 
+        self.cooling_eerC: cp.ComponentOutput = self.add_output(self.component_name,
+                                                                       self.EER,
+                                                                       LoadTypes.ANY,
+                                                                       Units.ANY)
+
         self.add_default_connections(Weather, self.get_weather_default_connections())
         self.add_default_connections(AirConditionercontroller, self.get_controller_default_connections())
 
         self.control = control
 
     def get_weather_default_connections(self):
+        """get default inputs from the weather component."""
         print("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
@@ -159,29 +169,30 @@ class AirConditioner(cp.Component):
         return connections
 
     def get_controller_default_connections(self):
+        """get default inputs from the on_off controller."""
         log.information("setting controller default connections in AirConditioner")
         connections = []
         controller_classname = AirConditionercontroller.get_classname()
         connections.append(
             cp.ComponentConnection(AirConditioner.State, controller_classname, AirConditionercontroller.State))
         return connections
-    
-    
+
+
     def get_PIDcontroller_default_connections(self):
+        """get default inputs from the PID controller component."""
         log.information("setting controller default connections in AirConditioner")
         connections = []
         controller_classname = AirConditionercontroller.get_classname()
         connections.append(
             cp.ComponentConnection(AirConditioner.ThermalPowerPID, controller_classname, PIDController.ThermalPowerPID))
         return connections
-    
+
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation. """
+        """ Prepares the simulation."""
         pass
 
     def build(self, manufacturer, name, min_operation_time, min_idle_time,my_simulation_repository):
-        # Simulation parameters
-
+        """Build function: The function retrieves air conditioner from databasesets sets important constants and parameters for the calculations."""
         # Retrieves air conditioner from database - BEGIN
         air_conditioners_database = utils.load_smart_appliance("Air Conditioner")
 
@@ -227,8 +238,7 @@ class AirConditioner(cp.Component):
         print(str(self.eer_ref))
         self.eer_coef = np.polyfit(self.t_out_cooling_ref, self.eer_ref, 1)
         self.cooling_capacity_coef = np.polyfit(self.t_out_cooling_ref, self.cooling_capacity_ref, 1)
-        
-        log.information('{}'.format(self.eer_coef))
+
 
         self.cop_coef = np.polyfit(self.t_out_heating_ref, self.cop_ref, 1)
         self.heating_capacity_coef = np.polyfit(self.t_out_heating_ref, self.heating_capacity_ref, 1)
@@ -236,7 +246,7 @@ class AirConditioner(cp.Component):
         # Retrieves air conditioner from database - END
 
         my_simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
-        my_simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)                                                                        
+        my_simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)
         # Sets the time operation restricitions
         self.on_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
         self.off_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
@@ -245,29 +255,37 @@ class AirConditioner(cp.Component):
         self.previous_state = AirConditionerState()
 
     def cal_eer(self, t_out):
+        """calculate cooling energy efficiency ratio as a functio of outside temperature."""
         return np.polyval(self.eer_coef, t_out)
 
     def cal_cooling_capacity(self, t_out):
+        """calculate cooling capacity as a functio of outside temperature."""
         return np.polyval(self.cooling_capacity_coef, t_out)
 
     def cal_cop(self, t_out):
+        """calculate heating coefficient of performance as a functio of outside temperature."""
         return np.polyval(self.cop_coef, t_out)
 
     def cal_heating_capacity(self, t_out):
+        """calculate heating capacity as a functio of outside temperature."""
         return np.polyval(self.heating_capacity_coef, t_out)
 
     def i_save_state(self) -> None:
+        """ Saves the internal state at the beginning of each timestep. """
         self.previous_state = self.state.clone()
-        pass
+
 
     def i_restore_state(self) -> None:
+        """ Restores the internal state after each iteration. """
         self.state = self.previous_state.clone()
-        pass
+
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """ Double check results after iteration. """
         pass
 
     def write_to_report(self):
+        """ Logs the most important config stuff to the report. """
         lines = []
         lines.append("Air conditioner")
         lines.append("Air conditioner manufacturer {}".format(self.manufacturer))
@@ -275,6 +293,7 @@ class AirConditioner(cp.Component):
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+        """ Core smulation function. """
         # Inputs
         t_out = stsv.get_input_value(self.t_outC)
         on_off_state = stsv.get_input_value(self.stateC)
@@ -317,41 +336,41 @@ class AirConditioner(cp.Component):
                 thermal_energy_delivered = 0
                 electricity_output = 0
 
-            # log.information("thermal_energy_delivered {}".format(thermal_energy_delivered))
             stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
             stsv.set_output_value(self.electricity_outputC, electricity_output)
+            stsv.set_output_value(self.cooling_eerC, eer)
 
         if self.control == "PID":
             feed_forward_signal = stsv.get_input_value(self.feed_forward_signalC)
             thermal_load = stsv.get_input_value(self.thermal_power)
-            
+
             if thermal_load > 0:
                 cop = self.cal_cop(t_out)
                 thermal_energy_delivered = thermal_load + feed_forward_signal
-                electricity_output = thermal_energy_delivered /cop 
+                electricity_output = thermal_energy_delivered /cop
             elif thermal_load < 0:
                 eer = self.cal_eer(t_out)
                 thermal_energy_delivered = thermal_load + feed_forward_signal
-                electricity_output = -thermal_energy_delivered /eer 
+                electricity_output = -thermal_energy_delivered /eer
             else:
                 thermal_energy_delivered=0
                 electricity_output = 0
-                
+
             if thermal_energy_delivered > 15000:
                 thermal_energy_delivered=15000
             elif thermal_energy_delivered <-15000:
                 thermal_energy_delivered=-15000
-    
+
             stsv.set_output_value(self.electricity_outputC, electricity_output)
             stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
-            
+
         if self.control=="MPC":
             mode = stsv.get_input_value(self.operating_modeC)
             optimal_electric_power_grid = stsv.get_input_value(self.optimal_electric_power_gridC)
             optimal_electric_power_PV = stsv.get_input_value(self.optimal_electric_power_pvC)
             optimal_electric_power_battery = stsv.get_input_value(self.optimal_electric_power_batteryC)
             optimal_electric_power_total=optimal_electric_power_grid+optimal_electric_power_PV+optimal_electric_power_battery
-            
+
             if mode==1:
                 cop = self.cal_cop(t_out)
                 thermal_energy_delivered = optimal_electric_power_total*cop
@@ -363,15 +382,17 @@ class AirConditioner(cp.Component):
             else:
                 thermal_energy_delivered = 0
                 electricity_output = 0
-                
+
             stsv.set_output_value(self.electricity_outputC, electricity_output)
             stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
-                
-            
+
+
 
 class AirConditionercontroller(cp.Component):
-    """
-    Air Conditioner Controller. It takes data from other
+
+    """Air Conditioner Controller.
+
+    It takes data from other
     components and sends signal to the air conditioner for
     activation or deactivation.
 
@@ -385,6 +406,7 @@ class AirConditionercontroller(cp.Component):
     mode : int
         Mode index for operation type for this air conditioner
     """
+
     # Inputs
     TemperatureMean = "Residence Temperature"
     ElectricityInput = "ElectricityInput"
@@ -401,6 +423,7 @@ class AirConditionercontroller(cp.Component):
                  t_air_cooling: float = 26.0,
                  offset: float = 0.0
                  ):
+        """Constructs all the neccessary attributes."""
         super().__init__("AirConditionercontroller", my_simulation_parameters=my_simulation_parameters)
         self.build(t_air_cooling=t_air_cooling, t_air_heating=t_air_heating, offset=offset)
 
@@ -422,6 +445,7 @@ class AirConditionercontroller(cp.Component):
         self.add_default_connections(Building, self.get_building_default_connections())
 
     def get_building_default_connections(self):
+        """get default inputs from the building component."""
         log.information("setting building default connections in AirConditionercontroller")
         connections = []
         building_classname = Building.get_classname()
@@ -430,9 +454,10 @@ class AirConditionercontroller(cp.Component):
         return connections
 
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation. """
-        pass                                    
+        """ Prepares the simulation."""
+        pass
     def build(self, t_air_heating, t_air_cooling, offset):
+        """build function: important settings such as comforatable temperature range and deadband width."""
         # Sth
         self.controller_ACmode = "off"
         self.previous_AC_mode = self.controller_ACmode
@@ -443,15 +468,19 @@ class AirConditionercontroller(cp.Component):
         self.offset = offset
 
     def i_save_state(self):
+        """ Saves the internal state at the beginning of each timestep. """
         self.previous_AC_mode = self.controller_ACmode
 
     def i_restore_state(self):
+        """ Restores the internal state after each iteration. """
         self.controller_ACmode = self.previous_AC_mode
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """ Double check results after iteration. """
         pass
 
     def write_to_report(self):
+        """ Logs the most important config stuff to the report. """
         lines = []
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
@@ -460,6 +489,7 @@ class AirConditionercontroller(cp.Component):
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+        """core simulation. """
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -479,6 +509,7 @@ class AirConditionercontroller(cp.Component):
         stsv.set_output_value(self.stateC, state)
 
     def conditions(self, set_temp):
+        """controller takes action to maintain defined comfort range given a certain deadband. """
         maximum_heating_set_temp = self.t_set_heating + self.offset
         minimum_heating_set_temp = self.t_set_heating
         minimum_cooling_set_temp = self.t_set_cooling - self.offset
@@ -502,6 +533,7 @@ class AirConditionercontroller(cp.Component):
                 return
 
     def prin1t_outpu1t(self, t_m, state):
+        """Not necessary."""
         log.information("==========================================")
         log.information("T m: {}".format(t_m))
         log.information("State: {}".format(state))

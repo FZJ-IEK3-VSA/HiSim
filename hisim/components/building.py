@@ -1,3 +1,4 @@
+"""Building module."""
 # Generic/Built-in
 import math
 import pvlib
@@ -172,6 +173,7 @@ class Building(dynamic_component.DynamicComponent):
     MassInput = "MassInput"  # or mass input and temperature input
     TemperatureInput = "TemperatureInput"
 
+
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
 
@@ -200,23 +202,24 @@ class Building(dynamic_component.DynamicComponent):
     CoolingEnergy="CoolingEnergy"
     HeatFluxWallNode="HeatFluxWallNode"
     HeatFluxThermalMassNode="HeatFluxThermalMassNode"
-    #simulation respirtory 
-    
+    CoolingElectricity="CoolingElectricity"
+    #simulation respirtory
+
     Heat_flux_thermal_mass_node="Heat_flux_thermal_mass_node"
     Heat_flux_surface_node="Heat_flux_surface_node"
     Heat_flux_indoor_air_node="Heat_flux_indoor_air_node"
-    # Building parameters 5R1C --> controller_mpc 
+    # Building parameters 5R1C --> controller_mpc
     Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"
     Thermal_transmission_coefficient_opaque_ms="Thermal_transmission_coefficient_opaque_ms"
     Thermal_transmission_coefficient_opaque_em="Thermal_transmission_coefficient_opaque_em"
     Thermal_transmission_coefficient_ventillation="Thermal_transmission_coefficient_ventillation"
     Thermal_transmission_Surface_IndoorAir="Thermal_transmission_Surface_IndoorAir"
     Thermal_capacity_envelope="Thermal_capacity_envelope"
-    
-    # Disturbance forecast for Model Predictive Control 
+
+    # Disturbance forecast for Model Predictive Control
     Heat_flux_thermal_mass_node_forecast="Heat_flux_thermal_mass_node_forecast"
     Heat_flux_surface_node_forecast="Heat_flux_surface_node_forecast"
-    Heat_flux_indoor_air_node_forecast="Heat_flux_indoor_air_node_forecast"                                   
+    Heat_flux_indoor_air_node_forecast="Heat_flux_indoor_air_node_forecast"
 
     # Similar components to connect to:
     # 1. Weather
@@ -228,7 +231,7 @@ class Building(dynamic_component.DynamicComponent):
                  my_simulation_parameters: SimulationParameters, config: BuildingConfig, my_simulation_repository : cp.SimRepository  = None):
         # dynamic
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
-        self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []                                               
+        self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(my_component_inputs=self.my_component_inputs,
                          my_component_outputs=self.my_component_outputs,
                          name="Building",
@@ -270,6 +273,7 @@ class Building(dynamic_component.DynamicComponent):
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT,
                                                                            False)
+
         self.mass_inputC: cp.ComponentInput = self.add_input(self.component_name,
                                                              self.MassInput,
                                                              lt.LoadTypes.WARM_WATER,
@@ -337,6 +341,7 @@ class Building(dynamic_component.DynamicComponent):
                                                                            self.CoolingEnergy,
                                                                            lt.LoadTypes.HEATING,
                                                                            lt.Units.WATT_PER_SQUARE_METER)
+
         self.total_power_to_residenceC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.TotalEnergyToResidence,
                                                                              lt.LoadTypes.HEATING,
@@ -357,7 +362,7 @@ class Building(dynamic_component.DynamicComponent):
                                                           self.HeatFluxWallNode,
                                                           lt.LoadTypes.HEATING,
                                                           lt.Units.WATT)
-        
+
         self.add_default_connections(Weather, self.get_weather_default_connections())
         self.add_default_connections(Occupancy, self.get_occupancy_default_connections())
         self.add_default_connections(UtspLpgConnector, self.get_utsp_default_connections())
@@ -501,12 +506,13 @@ class Building(dynamic_component.DynamicComponent):
             # stsv.set_output_value(self.temperature_output, temperature_new)
 
         # Only with HeatPump
+
         elif self.thermal_energy_deliveredC.source_output is not None:
             # the name thermal_energy_delivered might be misleading, because it is actually power in W
             thermal_energy_delivered = stsv.get_input_value(self.thermal_energy_deliveredC)  # W
             cooling_energy=(thermal_energy_delivered*self.seconds_per_timestep)/(3600*self.A_f*1000)
             if cooling_energy < 0:
-                stsv.set_output_value(self.cooling_energyC, cooling_energy)                                                                                        
+                stsv.set_output_value(self.cooling_energyC, cooling_energy)
         else:
             thermal_energy_delivered = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUILDING]))
         t_m_prev = self.state.t_m
@@ -578,7 +584,7 @@ class Building(dynamic_component.DynamicComponent):
             GHI_forecast = self.simulation_repository.get_entry( Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast)
             azimuth_forecast = self.simulation_repository.get_entry( Weather.Weather_Azimuth_yearly_forecast)
             apparent_zenith_forecast = self.simulation_repository.get_entry( Weather.Weather_ApparentZenith_yearly_forecast)
-            
+
             solar_gains_forecast = []
             for i in range (self.my_simulation_parameters.timesteps):
                 solar_gains_forecast_yearly = self.get_solar_gain_through_windows(altitude=altitude_forecast[i],
@@ -589,26 +595,26 @@ class Building(dynamic_component.DynamicComponent):
                                                                            dni_extra=DNIextra_forecast[i],
                                                                            apparent_zenith=apparent_zenith_forecast[i])
                 solar_gains_forecast.append(solar_gains_forecast_yearly)
-            #get internal gains forecast 
-            internal_gains_forecast = self.simulation_repository.get_entry( Occupancy.heating_by_residents_yearly_forecast) 
-            
+            #get internal gains forecast
+            internal_gains_forecast = self.simulation_repository.get_entry( Occupancy.heating_by_residents_yearly_forecast)
+
             # compute the forecast of phi_ia phi_st and phi_m
-            
+
             phi_m_forecast: list  = []
             phi_st_forecast: list = []
             phi_ia_forecast: list = []
             for i in range (self.my_simulation_parameters.timesteps):
                 phi_loss_yearly,phi_ia_yearly,phi_st_yearly,phi_m_yearly=self.calc_heat_flow(ambient_temperature_forecast[i],
-                                                                                   internal_gains_forecast[i], 
-                                                                                   solar_gains_forecast[i], 
+                                                                                   internal_gains_forecast[i],
+                                                                                   solar_gains_forecast[i],
                                                                                    0)
                 phi_m_forecast.append(phi_m_yearly)
                 phi_st_forecast.append(phi_st_yearly)
                 phi_ia_forecast.append(phi_ia_yearly)
-                
-                
-            
-            # disturbance forecast for model predictive control 
+
+
+
+            # disturbance forecast for model predictive control
             self.simulation_repository.set_entry(self.Heat_flux_thermal_mass_node_forecast, phi_m_forecast)
             self.simulation_repository.set_entry(self.Heat_flux_surface_node_forecast, phi_st_forecast)
             self.simulation_repository.set_entry(self.Heat_flux_indoor_air_node_forecast, phi_ia_forecast)
@@ -622,7 +628,7 @@ class Building(dynamic_component.DynamicComponent):
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         self.timesteps = self.my_simulation_parameters.timesteps
         self.parameters = [bClass, buildingcode]
-        self.prediction_horizon= int (self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)                                                                                                                                                  
+        self.prediction_horizon= int (self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
 
         # CONSTANTS
         self.h_ms = 9.1  # Heat transfer coefficient between nodes "m" and "s" (12.2.2 E64 P79)
@@ -655,14 +661,14 @@ class Building(dynamic_component.DynamicComponent):
         self.get_conducs()
         # if self.my_simulation_parameters.system_config.predictive:
         # send building parameters 5r1c to PID controller  and to the mpc controller  to generate an equivalent state space model
-        # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller 
-        
+        # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
+
         my_simulation_repository.set_entry(self.Thermal_transmission_coefficient_glazing, self.h_tr_w)
         my_simulation_repository.set_entry(self.Thermal_transmission_Surface_IndoorAir, self.h_tr_is)
         my_simulation_repository.set_entry(self.Thermal_transmission_coefficient_opaque_em, self.h_tr_em)
         my_simulation_repository.set_entry(self.Thermal_transmission_coefficient_opaque_ms, self.h_tr_ms)
         my_simulation_repository.set_entry(self.Thermal_transmission_coefficient_ventillation, self.h_ve_adj)
-        my_simulation_repository.set_entry(self.Thermal_capacity_envelope, self.c_m)                                                          
+        my_simulation_repository.set_entry(self.Thermal_capacity_envelope, self.c_m)
 
         # self.calc_solar_gains_jit = jit(nopython=True)(calc_solar_gains)
 

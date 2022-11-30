@@ -1,3 +1,4 @@
+"""Air-conditioned houshold."""
 from typing import Optional
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
@@ -12,7 +13,7 @@ from hisim.components import controller_mpc
 from hisim.components import generic_price_signal
 import os
 
-__authors__ = "Vitor Hugo Bellotto Zago"
+__authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
@@ -23,92 +24,93 @@ __status__ = "development"
 
 
 def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
-    """
+    """Hosuhold Model.
+
     This setup function emulates an air conditioned house. Here the residents have their electricity covered by a photovoltaic system,
-    a battery, and the electric grid. 
-    
+    a battery, and the electric grid.
+
     Thermal load of the building is covered with an air conditioner.
-    
-    Connnected Components are: 
+
+    Connnected Components are:
         - Occupancy (Residents' Demands)
         - Weather
-        - Price signal  
+        - Price signal
         - Photovoltaic System
         - Building
-        - Air conditioner 
-        - Controllers: Three options are available: on-off control / pid controller / model predictive controller. 
-        Please adjust the variable "control = .... " accordingly  
-    
-    Analyzed region: Southern Europe. 
-    
-    Represetative Locations selected according to climate zone with focus on the Mediterranean climate as it has the highest cooling 
-    demand. 
-    
-    TABULA code for the examplery single family household are chosen according to the construction year class: 
-    
+        - Air conditioner
+        - Controllers: Three options are available: on-off control / pid controller / model predictive controller.
+        Please adjust the variable "control = .... " accordingly
+
+    Analyzed region: Southern Europe.
+
+    Represetative Locations selected according to climate zone with focus on the Mediterranean climate as it has the highest cooling
+    demand.
+
+    TABULA code for the examplery single family household are chosen according to the construction year class:
+
         1. Seville: ES.ME.SFH.05.Gen.ReEx.001.001 , construction year: 1980 - 2006 okay
         2. Madrid:  ES.ME.SFH.05.Gen.ReEx.001.001 , construction year: 1980 - 2006 okay
         3. Milan: IT.MidClim.SFH.06.Gen.ReEx.001.001 , construction year: 1976 - 1990 okay
         4. Belgrade: RS.N.SFH.06.Gen.ReEx.001.002, construction year: 1981-1990 okay
-        5. Ljubljana: SI.N.SFH.04.Gen.ReEx.001.003, construction year: 1981-2001   okay       
-        
+        5. Ljubljana: SI.N.SFH.04.Gen.ReEx.001.003, construction year: 1981-2001   okay
+
         For the following two locations building were selected for a different construction class, because at earlier
         years the building are of old generation (compared to the other 5 locations)
-        
-        6. Athens: GR.ZoneB.SFH.03.Gen.ReEx.001.001 , construction year: 2001 - 2010 
-        7. Cyprus: CY.N.SFH.03.Gen.ReEx.001.003, , construction year: 2007 - 2013 
-        
-        
-    Remarks about the model predictive controller (MPC): 
-        
-        You Need to intsall HSL solvers. Please refer to https://www.hsl.rl.ac.uk/ipopt/     
-        
-        MPC applies a moving horizon principle where the optimization is excuted at each timestep. This leads to a very high 
-        simulation time. Therefore, there are two options to get the optimal solution (adjust the variable "mpc_scheme =...." 
-        to choose your desired approach): 
-            
+
+        6. Athens: GR.ZoneB.SFH.03.Gen.ReEx.001.001 , construction year: 2001 - 2010
+        7. Cyprus: CY.N.SFH.03.Gen.ReEx.001.003, , construction year: 2007 - 2013
+
+
+    Remarks about the model predictive controller (MPC):
+
+        You Need to intsall HSL solvers. Please refer to https://www.hsl.rl.ac.uk/ipopt/
+
+        MPC applies a moving horizon principle where the optimization is excuted at each timestep. This leads to a very high
+        simulation time. Therefore, there are two options to get the optimal solution (adjust the variable "mpc_scheme =...."
+        to choose your desired approach):
+
             1. 'optimization_once_aday_only': The optimization is done once each 24 hours and the optimal solution is
-            applied for the next 24 hours --> Simualtion time for building with PV and Battery is 10 min for a time_step size = 20 min 
-            
+            applied for the next 24 hours --> Simualtion time for building with PV and Battery is 10 min for a time_step size = 20 min
+
             Note: for this option it is possible to simulate hisim with timestep size of 1 minutes and adjust the sampling
-            time for optimization to a higher value e.g. 15  to reduce the computational complexitity. Disadvantage 
+            time for optimization to a higher value e.g. 15  to reduce the computational complexitity. Disadvantage
             of this option is that temperature may deviate by around 0.02 C from the set point. To use this feature please
-            adjust the sampling_rate accordingly 
-            
-            
-            2. 'moving_horizon_control': Oprtimization is done each timestep. Pros: can react to sudden disturbance, 
+            adjust the sampling_rate accordingly
+
+
+            2. 'moving_horizon_control': Oprtimization is done each timestep. Pros: can react to sudden disturbance,
             cons: very high simulation time (2 steps/s if timestep size is 20 min)
-            
+
         You can run the optimization for:
-            1. a basic case that only includes building - air conditioning. No PV or battery  
+            1. a basic case that only includes building - air conditioning. No PV or battery
             2. a building with pv generation installed
-            3. a building with PV and battery. 
-            
-        To investigate the impact of Demand response programs. Fixed and dynamic price signal are available. 
-        Please adjust the variable "pricing_scheme=..." accordingly 
-        
-        Future work: improving the implemtation with automatic scaling of the optimal control problem formulation. This (could) 
-        make a moving horizon scheme possible in reasonable time 
-        
-        
-        
+            3. a building with PV and battery.
+
+        To investigate the impact of Demand response programs. Fixed and dynamic price signal are available.
+        Please adjust the variable "pricing_scheme=..." accordingly
+
+        Future work: improving the implemtation with automatic scaling of the optimal control problem formulation. This (could)
+        make a moving horizon scheme possible in reasonable time
+
+
+
     """
-    
+
     ##### delete all files in cache:
-    # dir = '..//hisim//inputs//cache'
-    # for file in os.listdir( dir ):
-    #     os.remove( os.path.join( dir, file ) )
+    dir = '..//hisim//inputs//cache'
+    for file in os.listdir( dir ):
+        os.remove( os.path.join( dir, file ) )
 
     ##### System Parameters #####
 
     year = 2021
 
-    
-    # temperature comfort ramge  
-    
+
+    # temperature comfort ramge
+
     min_comfort_temp = 21.0
     max_comfort_temp = 24.0
-    
+
     # Set weather
     location = "Cyprus"
 
@@ -129,44 +131,44 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     occupancy_profile = "CH01"
 
     # Set building
-    building_code = "CY.N.SFH.03.Gen.ReEx.001.003" 
+    building_code = "CY.N.SFH.03.Gen.ReEx.001.003"
     building_class = "medium"
     initial_temperature = 21
     heating_reference_temperature = -14
-    
-    
+
+
     # Set Air Conditioner  on/off controller
     t_air_heating = min_comfort_temp
     t_air_cooling = max_comfort_temp
     offset = 0.5
-    
-    # MPC controller settings  
+
+    # MPC controller settings
     mpc_scheme= 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
     flexibility_element= 'PV_and_Battery'             # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
-    pricing_scheme = 'fixed'                          # The two options are: 'dynamic' or 'fixed'
-    optimizer_sampling_rate = 1                       
-    
-    # Set Air Conditioner 
-    ac_manufacturer = "Samsung"                             # Other option: "Panasonic" , Further options are avilable in the smart_devices file 
-    Model ="AC120HBHFKH/SA - AC120HCAFKH/SA"                #"AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"# 
-    hp_min_operation_time = 900                             #Unit: seconds 
-    hp_min_idle_time = 300                                  #Unit: seconds   
-    control="MPC"                                           #Avialable options are: PID or on_off or MPC
-    
-    
-    # set Battery 
+    pricing_scheme = 'dynamic'                          # The two options are: 'dynamic' or 'fixed'
+    optimizer_sampling_rate = 1
+
+    # Set Air Conditioner
+    ac_manufacturer = "Samsung"                             # Other option: "Panasonic" , Further options are avilable in the smart_devices file
+    Model ="AC120HBHFKH/SA - AC120HCAFKH/SA"                #"AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
+    hp_min_operation_time = 900                             #Unit: seconds
+    hp_min_idle_time = 300                                  #Unit: seconds
+    control="MPC"                                        #Avialable options are: PID or on_off or MPC
+
+
+    # set Battery
     batt_manufacturer = "sonnen"
     batt_model = "sonnenBatterie 10 - 5,5 kWh"
     batt_soc = 0.5 *5000
-    
-    
+
+
     # Set simulation parameters
     if control == "MPC":
         seconds_per_timestep = 60*20
     else:
         seconds_per_timestep = 60
 
-    
+
 
     ##### Build Components #####
 
@@ -175,19 +177,19 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.enable_all_options()
         if control == "MPC":
-            my_simulation_parameters.result_directory = os.path.join("ac_results_5", location+" Full year 20 min MPC controller results "+ flexibility_element + " for " + pricing_scheme + " pricing" + " for "+ mpc_scheme)
-            
+            my_simulation_parameters.result_directory = os.path.join("ac_results_5", location+" Full year " + str(seconds_per_timestep/60) + " min MPC controller results "+ flexibility_element + " for " + pricing_scheme + " pricing" + " for "+ mpc_scheme)
+
         else:
             my_simulation_parameters.result_directory = os.path.join("ac_results_5", "Full Year Simulation for " + location + " Control Type is "+ control)
 
-    if control == "MPC":    
+    if control == "MPC":
         my_simulation_parameters.reset_system_config(predictive=True, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=4e3, smart_devices_included=True,
                 battery_included=True, battery_capacity=5e3)
-    
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    
-    
-    
+
+
+
     """ Occupancy Profile """
     my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy")
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,my_simulation_repository = my_sim.simulation_repository)
@@ -212,10 +214,10 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                           name=name)
     my_photovoltaic_system=generic_pv_system.PVSystem(config=my_photovoltaic_system_config,
                                                       my_simulation_parameters=my_simulation_parameters)
-    
+
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_photovoltaic_system)
-   
+
     """Building"""
     my_building_config=building.BuildingConfig(building_code = building_code,
                                             bClass = building_class,
@@ -232,7 +234,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     """Price signal"""
     my_price_signal = generic_price_signal.PriceSignal(country="Spain", pricing_scheme = pricing_scheme, installed_capcity= power , my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_price_signal)
-    
+
     """Air Conditioner"""
     my_air_conditioner = air_conditioner.AirConditioner(manufacturer=ac_manufacturer,
                                           name=Model,
@@ -243,18 +245,18 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                           my_simulation_repository = my_sim.simulation_repository)
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureOutside,
                                      my_weather.component_name,
-                                     my_weather.TemperatureOutside)   
+                                     my_weather.TemperatureOutside)
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureMean,
                                      my_building.component_name,
                                      my_building.TemperatureMean)
-    my_sim.add_component(my_air_conditioner) 
-    
-    
-    """Generic Battery """    
+    my_sim.add_component(my_air_conditioner)
+
+
+    """Generic Battery """
     if control == "MPC":
 
         my_battery=generic_battery.GenericBattery(manufacturer=batt_manufacturer,model=batt_model, soc=batt_soc,my_simulation_parameters=my_simulation_parameters)
-        
+
         my_sim.add_component(my_battery)
 
     """Model Predictive Controller"""
@@ -266,15 +268,15 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                                         flexibility_element = flexibility_element,
                                                         optimizer_sampling_rate=optimizer_sampling_rate,
                                                         initial_state_of_charge = batt_soc,
-                                                        my_simulation_parameters=my_simulation_parameters, 
-                                                        my_simulation_repository = my_sim.simulation_repository) 
-    
+                                                        my_simulation_parameters=my_simulation_parameters,
+                                                        my_simulation_repository = my_sim.simulation_repository)
+
         my_mpc_controller.connect_input(my_mpc_controller.TemperatureMean,
                                           my_building.component_name,
                                           my_building.TemperatureMean)
-        
-        my_sim.add_component(my_mpc_controller) 
-        
+
+        my_sim.add_component(my_mpc_controller)
+
         my_battery.connect_input(my_battery.State,
                                   my_mpc_controller.component_name,
                                   my_mpc_controller.BatteryControlState)
@@ -284,10 +286,10 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_battery.connect_input(my_battery.ElectricityInput,
                                   my_mpc_controller.component_name,
                                   my_mpc_controller.Battery2Load)
-        
+
     """PID controller """
     if control=="PID":
-        
+
         pid_controller=controller_pid.PIDController(my_simulation_parameters=my_simulation_parameters,my_simulation_repository = my_sim.simulation_repository)
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                      my_building.component_name,
@@ -305,11 +307,11 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                          pid_controller.component_name,
                                          pid_controller.ThermalPowerPID)
         my_sim.add_component(pid_controller)
-        
-  
-    
+
+
+
     """Air conditioner on-off controller"""
-        
+
     if control=="on_off":
         my_air_conditioner_controller=air_conditioner.AirConditionercontroller(t_air_heating=t_air_heating,
                                                                                t_air_cooling=t_air_cooling,
@@ -318,14 +320,14 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_air_conditioner_controller.connect_input(my_air_conditioner_controller.TemperatureMean,
                                                     my_building.component_name,
                                                     my_building.TemperatureMean)
-        
+
         my_sim.add_component(my_air_conditioner_controller)
-    
+
         my_air_conditioner.connect_input(my_air_conditioner.State,
                                          my_air_conditioner_controller.component_name,
                                          my_air_conditioner_controller.State)
-        
-        
+
+
     if control == "MPC":
         my_air_conditioner.connect_input(my_air_conditioner.OperatingMode,
                                          my_mpc_controller.component_name,
@@ -339,9 +341,10 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_air_conditioner.connect_input(my_air_conditioner.Battery2Load,
                                          my_mpc_controller.component_name,
                                          my_mpc_controller.Battery2Load)
-    
+
     my_building.connect_input(my_building.ThermalEnergyDelivered,
                               my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
-            
+
+
 

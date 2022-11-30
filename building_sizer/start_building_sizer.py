@@ -63,7 +63,7 @@ def main():
 
     # Create an initial simulation configuration for the building sizer
     hisim_version = "0.1.0.test2"
-    building_sizer_version = "0.1.0.test8"
+    building_sizer_version = "0.1.1"
     initial_building_sizer_config = BuildingSizerRequest(
         URL, API_KEY, building_sizer_version, hisim_version, num_iterations
     )
@@ -81,6 +81,7 @@ def main():
     # Store all iterations of building sizer requests in order
     building_sizer_iterations: List[BuildingSizerRequest] = []
     finished = False
+    all_ratings = ""
     while not finished:
         # Wait until the request finishes and the results are delivered
         result = client.request_time_series_and_wait_for_delivery(
@@ -106,9 +107,7 @@ def main():
             building_sizer_config = BuildingSizerRequest.from_json(building_sizer_request.simulation_config)  # type: ignore
             building_sizer_iterations.append(building_sizer_config)
         print(f"Interim results: {building_sizer_result.result}")
-        print(
-            f"Generation ratings: {list(get_ratings_of_generation(building_sizer_config).values())}"
-        )
+        all_ratings += f"Generation ratings: {list(get_ratings_of_generation(building_sizer_config).values())}\n"
 
         for bs_config, rating in get_ratings_of_generation(
             building_sizer_config
@@ -117,6 +116,7 @@ def main():
             print("---")
 
     print("Finished")
+    print(all_ratings)
 
 
 if __name__ == "__main__":

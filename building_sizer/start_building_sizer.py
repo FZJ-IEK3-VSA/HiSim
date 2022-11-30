@@ -14,7 +14,7 @@ from utspclient import client  # type: ignore
 from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
 # Define URL and API key for the UTSP server
-URL = ""
+URL = "http://134.94.131.167:443/api/v1/profilerequest"
 API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 
 
@@ -34,12 +34,23 @@ def get_ratings_of_generation(
     )
     # Extract the rating for each HiSim config
     ratings = {
-        config: kpi_config.get_kpi_from_json(
-            result.data["kpi_config.json"].decode()
-        )
+        config: kpi_config.get_kpi_from_json(result.data["kpi_config.json"].decode())
         for config, result in hisim_results.items()
     }
     return ratings
+
+
+def minimize_config(hisim_config: str) -> str:
+    """
+    Helper method for testing, that extracts only the relevant fields of a system config
+    to print them in a clearer way.
+    """
+    import json
+
+    d = json.loads(hisim_config)
+    keys = ["pv_included", "pv_peak_power", "battery_included", "battery_capacity"]
+    d = {k: d[k] for k in keys}
+    return json.dumps(d)
 
 
 def main():
@@ -51,11 +62,17 @@ def main():
     num_iterations = 36
 
     # Create an initial simulation configuration for the building sizer
-    initial_building_sizer_config = BuildingSizerRequest(URL, API_KEY, num_iterations)
+    hisim_version = "0.1.0.test2"
+    building_sizer_version = "0.1.0.test8"
+    initial_building_sizer_config = BuildingSizerRequest(
+        URL, API_KEY, building_sizer_version, hisim_version, num_iterations
+    )
     building_sizer_config_json = initial_building_sizer_config.to_json()  # type: ignore
     # Create the initial building sizer request
     building_sizer_request = TimeSeriesRequest(
-        building_sizer_config_json, "building_sizer-0.1.0.test8", guid=guid
+        building_sizer_config_json,
+        f"building_sizer-{building_sizer_version}",
+        guid=guid,
     )
 
     # Store the hash of each request in a set for loop detection
@@ -96,7 +113,7 @@ def main():
         for bs_config, rating in get_ratings_of_generation(
             building_sizer_config
         ).items():
-            print(bs_config, rating)
+            print(minimize_config(bs_config), " - ", rating)
             print("---")
 
     print("Finished")

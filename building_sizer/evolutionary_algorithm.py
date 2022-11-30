@@ -76,10 +76,14 @@ def selection(
     random.shuffle(selected_individuals)
     return selected_individuals
 
-def complete_population(original_parents: List[system_config.Individual], population_size: int,
-options: system_config.SizingOptions) -> List[system_config.Individual]:
+
+def complete_population(
+    original_parents: List[system_config.Individual],
+    population_size: int,
+    options: system_config.SizingOptions,
+) -> List[system_config.Individual]:
     len_parents = len(original_parents)
-    for _ in range(population_size-len_parents):
+    for _ in range(population_size - len_parents):
         individual = system_config.Individual()
         individual.create_random_individual(options=options)
         original_parents.append(individual)
@@ -119,8 +123,12 @@ def crossover_conventional(
     child_bool_2 = vector_bool_2[:pt] + vector_bool_1[pt:]
     child_discrete_1 = vector_discrete_1[:pt] + vector_discrete_2[pt:]
     child_discrete_2 = vector_discrete_2[:pt] + vector_discrete_1[pt:]
-    child1 = system_config.Individual(bool_vector=child_bool_1, discrete_vector=child_discrete_1)
-    child2 = system_config.Individual(bool_vector=child_bool_2, discrete_vector=child_discrete_2)
+    child1 = system_config.Individual(
+        bool_vector=child_bool_1, discrete_vector=child_discrete_1
+    )
+    child2 = system_config.Individual(
+        bool_vector=child_bool_2, discrete_vector=child_discrete_2
+    )
 
     return child1, child2
 
@@ -147,7 +155,10 @@ def mutation_bool(parent: system_config.Individual) -> system_config.Individual:
     )
     return child
 
-def mutation_discrete(parent: system_config.Individual, options: system_config.SizingOptions) -> system_config.Individual:
+
+def mutation_discrete(
+    parent: system_config.Individual, options: system_config.SizingOptions
+) -> system_config.Individual:
     """
     Mutation: changing bit value at one position in discrete vector.
 
@@ -179,7 +190,7 @@ def evolution(
     r_cross: float,
     r_mut: float,
     mode: str,
-    options: system_config.SizingOptions
+    options: system_config.SizingOptions,
 ) -> List[system_config.Individual]:
     """
     evolution step of the genetic algorithm
@@ -230,12 +241,14 @@ def evolution(
             # choose individual for mutation
             parent = parents[(sel + pop) % len_parents]
             # mutation
-            if mode == 'bool':
+            if mode == "bool":
                 child = mutation_bool(parent=parent)
-            elif mode == 'discrete':
+            elif mode == "discrete":
                 child = mutation_discrete(parent=parent, options=options)
             else:
-                raise Exception('variable for mode is not defined, choose either discrete or bool.')
+                raise Exception(
+                    "variable for mode is not defined, choose either discrete or bool."
+                )
             children.append(child)
             pop = pop + 1
 

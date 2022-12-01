@@ -105,16 +105,11 @@ class SystemConfig:
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     api_key: str = ""
 
-    def search_pair_from_translation(self, translation: str) -> Tuple[bool, float]:
+    def search_pair_from_translation(self, translation: str) -> Tuple[bool, Optional[float]]:
         """ Returns (bool, discrete) value pair for each component."""
         if translation == "photovoltaic":
-            if self.pv_peak_power is None:
-                return(self.pv_included, 0)
             return(self.pv_included, self.pv_peak_power)
-
         if translation == "battery":
-            if self.battery_capacity is None:
-                return(self.battery_included, 0)
             return(self.battery_included, self.battery_capacity)
         raise ValueError("Translation of element impossible.")
 

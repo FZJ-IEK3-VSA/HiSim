@@ -37,9 +37,9 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     index: int
     output: ComponentOutput
 
-    electricity_price_consumption = pd.DataFrame()
-    electricity_price_injection = pd.DataFrame()
-    self_consumption = pd.DataFrame()
+    electricity_price_consumption = pd.Series()
+    electricity_price_injection = pd.Series()
+    self_consumption = pd.Series()
 
     price_config = FuelCost()
 
@@ -155,7 +155,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     injection=injection_sum, economic_cost=price, co2_cost = co2)
 
     pathname = os.path.join(simulation_parameters.result_directory, "kpi_config.json")
-    config_file_written = kpi_config.to_json()  # type ignore
+    config_file_written = kpi_config.to_json()  # type: ignore
     with open(pathname, 'w', encoding="utf-8") as outfile:
         outfile.write(config_file_written)
 

@@ -170,9 +170,16 @@ class SystemConfig:
     def search_pair_from_translation(self, translation: str) -> Tuple[bool, float]:
         """ Returns (bool, discrete) value pair for each component."""
         if translation == "photovoltaic":
-            return(self.pv_included, self.pv_peak_power)
+            if self.pv_peak_power is None:
+                return(self.pv_included, 0)
+            else:
+                return(self.pv_included, self.pv_peak_power)
+            
         elif translation == "battery":
-            return(self.battery_included, self.battery_capacity)
+            if self.battery_capacity is None:
+                return(self.battery_included, 0)
+            else:
+                return(self.battery_included, self.battery_capacity)
         else:
             raise ValueError("Translation of element impossible.")
 

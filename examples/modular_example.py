@@ -107,16 +107,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     if electrolyzer_included:
         electrolyzer_power = my_simulation_parameters.system_config.electrolyzer_power
     ev_included = my_simulation_parameters.system_config.ev_included
-    if ev_included:
-        charging_station = my_simulation_parameters.system_config.charging_station
+    charging_station = my_simulation_parameters.system_config.charging_station
     utsp_connected = my_simulation_parameters.system_config.utsp_connect
 
     """BASICS"""
     if utsp_connected:
         my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
-        household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
-        transportation_device_set=mobility_set, charging_station_set=charging_station)
+            url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
+            household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
+            transportation_device_set=mobility_set, charging_station_set=charging_station)
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config,
                                                                             my_simulation_parameters=my_simulation_parameters)
     else:
@@ -149,16 +148,15 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     heatpump_cost, buffer_cost, chp_cost, h2_storage_cost, electrolyzer_cost, ev_cost = [0] * 10
 
     # add price signal
-    if my_simulation_parameters.system_config.predictive:
-        my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
-        my_sim.add_component(my_price_signal)
+    my_price_signal = generic_price_signal.PriceSignal(my_simulation_parameters=my_simulation_parameters)
+    my_sim.add_component(my_price_signal)
 
     # """PV"""
     if pv_included:
         production, count = component_connections.configure_pv_system(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters,
             my_weather=my_weather, production=production, pv_peak_power=pv_peak_power, count=count)
-        pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included,
-                                                                       pv_peak_power)
+        # pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included,
+        #                                                                pv_peak_power)
         # production, count = component_connections.configure_pv_system(
         #     my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
         #     pv_peak_power=pv_peak_power, count=count)
@@ -322,8 +320,7 @@ def needs_ems(battery_included, chp_included, ev_included, heating_system_instal
         return True
     if ev_included:
         return True
-    if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
-        return True
-    if water_heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
+    if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING] or \
+            water_heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
         return True
     return False

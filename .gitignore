@@ -169,3 +169,4 @@ examples/mypath/Results/DrivingDistance.Car 2, 22kW Charging Power, avg. Speed 3
 
 #personal file (JG)
 covert_building_sizer_to_tar_gz.py
+tests/test_all_hisim_configs.py

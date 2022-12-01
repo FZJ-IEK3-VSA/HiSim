@@ -52,11 +52,21 @@ class PriceSignal(cp.Component):
         self.PricePurchaseC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                   self.PricePurchase,
                                                                   lt.LoadTypes.PRICE,
-                                                                  lt.Units.CENTS_PER_KWH)
+                                                                  lt.Units.EUR_PER_KWH,
+                                                                  postprocessing_flag = [
+                                                                    lt.LoadTypes.PRICE,
+                                                                    lt.InandOutputType.ELECTRICITY_CONSUMPTION
+                                                                    ]
+                                                                    )
         self.PriceInjectionC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                    self.PriceInjection,
                                                                    lt.LoadTypes.PRICE,
-                                                                   lt.Units.CENTS_PER_KWH)
+                                                                   lt.Units.EUR_PER_KWH,
+                                                                   postprocessing_flag=[
+                                                                    lt.LoadTypes.PRICE,
+                                                                    lt.InandOutputType.ELECTRICITY_INJECTION
+                                                                    ]
+                                                                    )
 
     def i_save_state(self) -> None:
         pass
@@ -69,11 +79,11 @@ class PriceSignal(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool) -> None:
         if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.prediction_horizon:
-            priceinjectionforecast = [10] * int(self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
-            pricepurchaseforecast = [50] * int(self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+            priceinjectionforecast = [0.1] * int(self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+            pricepurchaseforecast = [0.5] * int(self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
         else:
-            priceinjectionforecast = [10]
-            pricepurchaseforecast = [50]
+            priceinjectionforecast = [0.1]
+            pricepurchaseforecast = [0.5]
         
         self.simulation_repository.set_entry(self.Price_Injection_Forecast_24h, priceinjectionforecast)
         self.simulation_repository.set_entry(self.Price_Purchase_Forecast_24h, pricepurchaseforecast)

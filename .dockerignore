@@ -1,3 +1,6 @@
+# Warning: this .dockerignore is apparently not applied when sending a build context to the UTSP
+# and building the image there.
+
 # unnecessary and potentially large directory
 examples/results/
 # the finished.flag can prevent the calculation

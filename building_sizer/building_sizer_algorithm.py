@@ -8,10 +8,7 @@ To allow the client who sent the initial Building Sizer request to follow the se
 for the next Building Sizer iteration as a result to the UTSP (and therey also to the client).
 """
 
-import csv
 import dataclasses
-import io
-import random as ra
 from typing import Any, Dict, List, Optional, Tuple
 
 import dataclasses_json
@@ -23,47 +20,83 @@ from utspclient.datastructures import (
     TimeSeriesRequest,
 )
 
-from building_sizer import system_config
 from building_sizer import evolutionary_algorithm as evo_alg
-
-
-class BuildingSizerException(Exception):
-    """
-    Exception for errors in the Building Sizer
-    """
+from building_sizer import system_config
+from building_sizer import kpi_config
 
 
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass
 class BuildingSizerRequest:
+    """
+    A request object for the building sizer. Contains all necessary data for
+    a single building sizer iteration. Can be used to create the request object
+    for the subsequent iteration.
+    """
+
     url: str
     api_key: str = ""
+    building_sizer_version: str = ""
+    hisim_version: str = ""
     remaining_iterations: int = 3
     requisite_requests: List[TimeSeriesRequest] = dataclasses.field(
         default_factory=list
     )
 
+    def create_subsequent_request(
+        self, hisim_requests: List[TimeSeriesRequest]
+    ) -> "BuildingSizerRequest":
+        """
+        Creates a request object for the next building sizer iteration.
+        Copies all properties except for the requisite hisim requests and remaining_iterations.
+
+        :param hisim_requests: the hisim requests that are required for the next iteration
+        :type hisim_requests: List[TimeSeriesRequest]
+        :return: the request object for the next iteration
+        :rtype: BuildingSizerRequest
+        """
+        return BuildingSizerRequest(
+            self.url,
+            self.api_key,
+            self.building_sizer_version,
+            self.hisim_version,
+            self.remaining_iterations - 1,
+            hisim_requests,
+        )
+
 
 @dataclasses_json.dataclass_json
 @dataclasses.dataclass
 class BuildingSizerResult:
+    """
+    Result object of the building sizer. Contains all results of a single building
+    sizer iteration. The finished flag indicates whether it was the final iteration.
+    If not, the building sizer request for the subsequent iteration is contained in
+    the property subsequent_request.
+    """
+
     finished: bool
     subsequent_request: Optional[TimeSeriesRequest] = None
     result: Any = None
 
 
 def send_hisim_requests(
-    hisim_configs: List[str], url: str, api_key: str = ""
+    hisim_configs: List[str], url: str, api_key: str = "", hisim_version: str = ""
 ) -> List[TimeSeriesRequest]:
     """
     Creates and sends one time series request to the utsp for every passed hisim configuration
     """
+    # Determine the provider name for the hisim request
+    provider_name = "hisim"
+    if hisim_version:
+        # If a hisim version is specified, use that version
+        provider_name += f"-{hisim_version}"
     # Prepare the time series requests
     requests = [
         TimeSeriesRequest(
             sim_config,
-            "hisim",
-            required_result_files={"KPIs.csv": ResultFileRequirement.REQUIRED},
+            provider_name,
+            required_result_files={"kpi_config.json": ResultFileRequirement.REQUIRED},
         )
         for sim_config in hisim_configs
     ]
@@ -83,11 +116,14 @@ def send_building_sizer_request(
     """
     Sends the request for the next building_sizer iteration to the UTSP, including the previously sent hisim requests
     """
-    subsequent_request_config = BuildingSizerRequest(
-        request.url, request.api_key, request.remaining_iterations - 1, hisim_requests
-    )
+    subsequent_request_config = request.create_subsequent_request(hisim_requests)
     config_json: str = subsequent_request_config.to_json()  # type: ignore
-    next_request = TimeSeriesRequest(config_json, "building_sizer")
+    # Determine the provider name for the building sizer
+    provider_name = "building_sizer"
+    if request.building_sizer_version:
+        # If a building sizer version is specified, use that version
+        provider_name += f"-{request.building_sizer_version}"
+    next_request = TimeSeriesRequest(config_json, provider_name)
     client.send_request(request.url, next_request, request.api_key)
     return next_request
 
@@ -118,42 +154,61 @@ def trigger_next_iteration(
     :rtype: TimeSeriesRequest
     """
     # Send the new requests to the UTSP
-    hisim_requests = send_hisim_requests(hisim_configs, request.url, request.api_key)
+    hisim_requests = send_hisim_requests(
+        hisim_configs, request.url, request.api_key, request.hisim_version
+    )
     # Send a new building_sizer request to trigger the next building sizer iteration. This must be done after sending the
     # requisite hisim requests to guarantee that the UTSP will not be blocked.
     return send_building_sizer_request(request, hisim_requests)
 
 
-def get_kpi_from_csv(kpi_file_content: str) -> float:
-    csv_buffer = io.StringIO(kpi_file_content)
-    csvreader = csv.reader(csv_buffer)
-    for row in csvreader:
-        if row == []:
-            pass
-        elif row[0] == "Self consumption:":
-            return float(row[1])
-        else:
-            pass
-    raise BuildingSizerException(
-        "Invalid HiSim KPI file: KPI 'Self consumption' is missing"
-    )
+def decide_on_mode(
+    iteration: int, boolean_iterations: int, discrete_iterations: int
+) -> str:
+    iteration_in_subiteration = iteration % (boolean_iterations + discrete_iterations)
+    if iteration_in_subiteration > discrete_iterations:
+        return "bool"
+    else:
+        return "discrete"
 
 
 def building_sizer_iteration(
     request: BuildingSizerRequest,
 ) -> Tuple[Optional[TimeSeriesRequest], Any]:
+    """
+    Executes one iteration of the building sizer. Collects the results from all
+    requisite hisim requests, selects the best individuals, generates new individuals
+    using a genetic algorithm and finally sends the next hisim requests and building sizer
+    request to the UTSP (if not in the last iteration).
+
+    :param request: the request object for this iteration
+    :type request: BuildingSizerRequest
+    :return: the request object for the next building sizer iteration (if there is one), and
+             the result of this iteration
+    :rtype: Tuple[Optional[TimeSeriesRequest], Any]
+    """
+    pass
     results = get_results_from_requisite_requests(
         request.requisite_requests, request.url, request.api_key
     )
 
+    boolean_iterations: int = 3
+    discrete_iterations: int = 9
+    r_cross: float = 0.2
+    r_mut: float = 0.4
+    options = system_config.SizingOptions()
+
     # Get the relevant result files from all requisite requests and turn them into rated individuals
     rated_individuals = []
     for sim_config_str, result in results.items():
-        result_file = result.data["KPIs.csv"].decode()
+
+        # Extract the rating for each HiSim config
         # TODO: check if rating works
-        rating = get_kpi_from_csv(result_file)
+        rating = kpi_config.get_kpi_from_json(result.data["kpi_config.json"].decode())
         system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)  # type: ignore
-        individual = system_config_instance.get_individual()
+        individual = system_config_instance.get_individual(
+            translation=options.translation
+        )
         r = system_config.RatedIndividual(individual, rating)
         rated_individuals.append(r)
 
@@ -166,17 +221,26 @@ def building_sizer_iteration(
 
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
     # TODO r_cross and r_mut as inputs
+    # TODO boolean iterations and discrete iterations as inputs
+    # TODO total iterations as input + transfer to right locations
     parent_individuals = [ri.individual for ri in parents]
-    r_cross: float = 0.2
-    r_mut: float = 0.4
-    options = system_config.get_default_sizing_options()
+
+    """     parent_individuals = evo_alg.complete_population(
+        original_parents=parent_individuals,
+        population_size=population_size,
+        options=options,
+    ) """
+
     new_individuals = evo_alg.evolution(
         parents=parent_individuals,
-        population_size=population_size,
         r_cross=r_cross,
         r_mut=r_mut,
-        mode='bool',
-        options=options
+        mode=decide_on_mode(
+            iteration=request.remaining_iterations,
+            boolean_iterations=boolean_iterations,
+            discrete_iterations=discrete_iterations,
+        ),
+        options=options,
     )
 
     # combine combine parents and children
@@ -192,7 +256,9 @@ def building_sizer_iteration(
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []
     for individual in new_individuals:
-        system_config_instance = system_config.create_from_individual(individual)
+        system_config_instance = system_config.create_from_individual(
+            individual=individual, translation=options.translation
+        )
         hisim_configs.append(system_config_instance.to_json())  # type: ignore
 
     # trigger the next iteration with the new hisim configurations
@@ -214,13 +280,15 @@ def main():
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
         populations_size: int = 5  # number of individuals to be created
-        options = system_config.get_default_sizing_options()
+        options = system_config.SizingOptions()
         initial_hisim_configs = []  # initialize system_configs
         for i in range(populations_size):  # create five individuals in population
             individual = system_config.Individual()
             individual.create_random_individual(options=options)
             initial_hisim_configs.append(
-                system_config.create_from_individual(individual).to_json()  # type: ignore
+                system_config.create_from_individual(
+                    individual=individual, translation=options.translation
+                ).to_json()  # type: ignore
             )
 
         next_request = trigger_next_iteration(request, initial_hisim_configs)

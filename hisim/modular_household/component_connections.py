@@ -7,8 +7,6 @@ from typing import List, Optional, Tuple, Any
 from os import listdir, path
 import json
 
-import csv
-
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from building_sizer.heating_system_enums import HeatingSystems
 
@@ -91,8 +89,8 @@ def configure_smart_devices(my_sim: Any, my_simulation_parameters: SimulationPar
     """
     filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
     device_collection = []
-    jsonfile = open(filepath)
-    strfile = json.load(jsonfile)
+    with open(filepath, mode='r', encoding="utf-8") as jsonfile:
+        strfile = json.load(jsonfile)
 
     for elem in strfile:
         if elem['Device']['Name'] in device_collection:

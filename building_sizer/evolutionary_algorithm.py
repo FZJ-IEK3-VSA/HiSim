@@ -58,23 +58,26 @@ def selection(
     selected_individuals : List[system_config.RatedIndividual]
 
     """
-    # get list of scores
-    scores = [elem.rating for elem in rated_individuals]
-
-    # get position of best scores
-    len_scores = len(scores)
-    sorted_scores_indices = sorted(range(len_scores), key=lambda k: scores[k])
-
-    # select individuals by positions
-    selected_individuals = []
-    for i in range(len_scores):
-        if i in sorted_scores_indices:
-            selected_individuals.append(rated_individuals[i])
-    # only choose the best individuals, retaining the population size
-    selected_individuals = selected_individuals[:population_size]
+    # Sort individuals decendingly using their rating
+    individuals = sorted(rated_individuals, key=lambda ri: ri.rating, reverse=True)
+    # Only select the best individuals, adhering to the population size
+    individuals = individuals[:population_size]
     # shuffle the selected individuals to allow more variation during crossover
-    random.shuffle(selected_individuals)
-    return selected_individuals
+    random.shuffle(individuals)
+    return individuals
+
+
+def complete_population(
+    original_parents: List[system_config.Individual],
+    population_size: int,
+    options: system_config.SizingOptions,
+) -> List[system_config.Individual]:
+    len_parents = len(original_parents)
+    for _ in range(population_size - len_parents):
+        individual = system_config.Individual()
+        individual.create_random_individual(options=options)
+        original_parents.append(individual)
+    return original_parents
 
 
 def crossover_conventional(
@@ -110,8 +113,12 @@ def crossover_conventional(
     child_bool_2 = vector_bool_2[:pt] + vector_bool_1[pt:]
     child_discrete_1 = vector_discrete_1[:pt] + vector_discrete_2[pt:]
     child_discrete_2 = vector_discrete_2[:pt] + vector_discrete_1[pt:]
-    child1 = system_config.Individual(bool_vector=child_bool_1, discrete_vector=child_discrete_1)
-    child2 = system_config.Individual(bool_vector=child_bool_2, discrete_vector=child_discrete_2)
+    child1 = system_config.Individual(
+        bool_vector=child_bool_1, discrete_vector=child_discrete_1
+    )
+    child2 = system_config.Individual(
+        bool_vector=child_bool_2, discrete_vector=child_discrete_2
+    )
 
     return child1, child2
 
@@ -138,7 +145,10 @@ def mutation_bool(parent: system_config.Individual) -> system_config.Individual:
     )
     return child
 
-def mutation_discrete(parent: system_config.Individual, options: system_config.SizingOptions) -> system_config.Individual:
+
+def mutation_discrete(
+    parent: system_config.Individual, options: system_config.SizingOptions
+) -> system_config.Individual:
     """
     Mutation: changing bit value at one position in discrete vector.
 
@@ -167,11 +177,10 @@ def mutation_discrete(parent: system_config.Individual, options: system_config.S
 
 def evolution(
     parents: List[system_config.Individual],
-    population_size: int,
     r_cross: float,
     r_mut: float,
     mode: str,
-    options: system_config.SizingOptions
+    options: system_config.SizingOptions,
 ) -> List[system_config.Individual]:
     """
     evolution step of the genetic algorithm
@@ -193,20 +202,24 @@ def evolution(
         List of individuals unrated individuals.
 
     """
+    # get array length
+    len_parents = len(parents)
     # index to randomly select parents
-    sel = random.randint(0, population_size - 1)
+    # maybe remove sel part because parents are already shuffeled (sel=0)
+    sel = random.randint(0, len_parents - 1)
     # initialize new population
     children = []
     # initialize while loop
     pop = 0
-    while pop < population_size:
+
+    while pop < len_parents:
         # randomly generate number which indicates if cross over will happen or not...
         o = random.random()
 
         if o < r_cross:
             # initilize parents
-            parent1 = parents[(sel + pop) % population_size]
-            parent2 = parents[(sel + pop + 1) % population_size]
+            parent1 = parents[(sel + pop) % len_parents]
+            parent2 = parents[(sel + pop + 1) % len_parents]
             # cross over: two children resulting from cross over are added to the family
             child1, child2 = crossover_conventional(parent1=parent1, parent2=parent2)
             # append children to new population
@@ -216,14 +229,16 @@ def evolution(
 
         elif o < (r_cross + r_mut):
             # choose individual for mutation
-            parent = parents[(sel + pop) % population_size]
+            parent = parents[(sel + pop) % len_parents]
             # mutation
-            if mode == 'bool':
+            if mode == "bool":
                 child = mutation_bool(parent=parent)
-            elif mode == 'discrete':
+            elif mode == "discrete":
                 child = mutation_discrete(parent=parent, options=options)
             else:
-                raise Exception('variable for mode is not defined, choose either discrete or bool.')
+                raise Exception(
+                    "variable for mode is not defined, choose either discrete or bool."
+                )
             children.append(child)
             pop = pop + 1
 

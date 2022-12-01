@@ -5,7 +5,7 @@ docker build -t hisim:%hisimVersion% .
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 @REM Save the image to a tar file
-docker save -o hisim-%hisimVersion%.tar hisim:%hisimVersion%
+@REM docker save -o hisim-%hisimVersion%.tar hisim:%hisimVersion%
 
 set /p testImage="Test the newly created image (Y/[N])?"
 if /I "%testImage%" neq "y" exit /b 0
@@ -16,7 +16,7 @@ for /f %%i in ('docker create hisim:%hisimVersion%') do set "ID=%%i"
 
 docker cp examples\system_config.json %ID%:/input/request.json
 
-docker start -a %ID%
+docker start -ai %ID%
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 echo "Copying results from container to examples\results\docker_test. Please specify whether you want to clear this folder first."

@@ -67,42 +67,6 @@ def write_chp_cost_file():
         capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000])
 
 
-write_chp_cost_file()
-
-
-@dataclass_json
-@dataclass()
-class FuelCost:
-
-    """Defines economic and C02 parameters of fuels. """
-
-    fuel: lt.LoadTypes = lt.LoadTypes.GAS
-    fuel_unit: lt.Units = lt.Units.WATT_HOUR
-    price_unit: lt.Units = lt.Units.EURO
-    co2_unit: lt.Units = lt.Units.KG
-    price_per_unit_fuel: float = 1e-4
-    co2_per_unit_fuel: float = 1e-4
-
-
-def create_fuelcost_file(
-        fuel: lt.LoadTypes, fuel_unit: lt.Units, price_per_unit_fuel: float,
-        co2_per_unit_fuel: float) -> None:
-    """Fuel Cost is written to json file."""
-    costfile = FuelCost(fuel=fuel, fuel_unit=fuel_unit, price_per_unit_fuel=price_per_unit_fuel,
-                        co2_per_unit_fuel=co2_per_unit_fuel)
-    costfile_written = json.dumps(asdict(costfile))
-
-    with open("FuelCost" + fuel.value + '.json', 'w', encoding="utf-8") as outfile:
-        outfile.write(costfile_written)
-
-
-def write_electricitycost_file():
-    """Electricity Cost is written to json file."""
-    create_fuelcost_file(
-        fuel=lt.LoadTypes.ELECTRICITY, fuel_unit=lt.Units.WATT_HOUR,
-        price_per_unit_fuel=2e-4, co2_per_unit_fuel=1.5e-4)
-
-
 def create_economicparameters_file(
         insulation_bought: bool,
         insulation_threshold: float,

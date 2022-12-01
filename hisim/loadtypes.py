@@ -148,7 +148,7 @@ class Units(str, enum.Enum):
     YEARS = 'years'
 
     # Cost
-    CENTS_PER_KWH = "Cents per kWh"
+    EUR_PER_KWH = "Euros per kWh"
     EURO = "Euro"
 
     # Binary for controllers
@@ -197,6 +197,8 @@ class InandOutputType(str, enum.Enum):
 
     # Energy Management System / Postprocessing Options
     ELECTRICITY_PRODUCTION = "ElectricityProduction"
+    ELECTRICITY_INJECTION = "ElectricityInjection"
+    ELECTRICITY_CONSUMPTION = "ElectricityConsumption"
     ELECTRICITY_CONSUMPTION_EMS_CONTROLLED = "Consumption with EMS control"
     ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"

@@ -196,7 +196,7 @@ def building_sizer_iteration(
     discrete_iterations: int = 9
     r_cross: float = 0.2
     r_mut: float = 0.4
-    options = system_config.get_default_sizing_options()
+    options = system_config.SizingOptions()
 
     # Get the relevant result files from all requisite requests and turn them into rated individuals
     rated_individuals = []
@@ -280,7 +280,7 @@ def main():
     else:
         # TODO: first iteration; initialize algorithm and specify initial hisim requests
         populations_size: int = 5  # number of individuals to be created
-        options = system_config.get_default_sizing_options()
+        options = system_config.SizingOptions()
         initial_hisim_configs = []  # initialize system_configs
         for i in range(populations_size):  # create five individuals in population
             individual = system_config.Individual()

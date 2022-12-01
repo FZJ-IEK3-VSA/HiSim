@@ -1,18 +1,17 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
-from typing import List, Any
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 import os
+from dataclasses import dataclass
+from typing import Any, List
 
 import pandas as pd
-
-import hisim.log
-from hisim.loadtypes import InandOutputType, LoadTypes, ComponentType
-from hisim.component import ComponentOutput
-from hisim.simulationparameters import SimulationParameters
+from dataclasses_json import dataclass_json
 
 from building_sizer.kpi_config import KPIConfig
+from hisim.component import ComponentOutput
+from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
+from hisim.simulationparameters import SimulationParameters
+
 
 @dataclass_json
 @dataclass()
@@ -72,7 +71,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
                     results["battery_discharge"] = results["battery_discharge"] - results.iloc[:, index].clip(upper=0)
                 elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                     results["consumption"] = results["consumption"] + results.iloc[:, index].clip(lower=0)
-            
+
             elif LoadTypes.PRICE in output.postprocessing_flag:
                 if InandOutputType.ELECTRICITY_CONSUMPTION in output.postprocessing_flag:
                     electricity_price_consumption = results.iloc[:, index]
@@ -92,14 +91,14 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         # account for battery
         production_with_battery = results['production'] + results['battery_discharge']
         consumption_with_battery = results['consumption'] + results['battery_charge']
-        
+
         # evaluate injection and sum over time
         injection = (production_with_battery - consumption_with_battery)
         injection_sum = injection[injection > 0].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
 
         # evaluate self consumption and immidiately sum over time
         self_consumption = pd.concat((results["production"][results["production"] <= consumption_with_battery],
-        consumption_with_battery[consumption_with_battery < results["production"]])).groupby(level=0).sum() 
+        consumption_with_battery[consumption_with_battery < results["production"]])).groupby(level=0).sum()
         self_consumption_sum = self_consumption.sum() * simulation_parameters.seconds_per_timestep / 3.6e6
 
         battery_losses = 0
@@ -116,7 +115,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
         # evaluate electricity price
         if not electricity_price_injection.empty:
             price = price - (injection[injection > 0] * electricity_price_injection[injection > 0]).sum() \
-                    * simulation_parameters.seconds_per_timestep / 3.6e6        
+                * simulation_parameters.seconds_per_timestep / 3.6e6
         else:
             price = price - injection_sum * price_config.electricity_injection_in_euro_per_kwh
         self_consumption_rate = 100 * (self_consumption_sum / production_sum)
@@ -128,8 +127,8 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     if not electricity_price_consumption.empty:
         # substract self consumption from consumption for bill calculation
         if not self_consumption.empty:
-            results['consumption'] = results['consumption'] - self_consumption 
-        price = price + (results['consumption'] * electricity_price_consumption).sum()\
+            results['consumption'] = results['consumption'] - self_consumption
+        price = price + (results['consumption'] * electricity_price_consumption).sum() \
             * simulation_parameters.seconds_per_timestep / 3.6e6
     else:
         price = price + (consumption_sum - self_consumption_sum) * price_config.electricity_consumption_in_euro_per_kwh
@@ -152,7 +151,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(self_consumption_rate=self_consumption_rate, autarky_rate=autarky_rate,
-    injection=injection_sum, economic_cost=price, co2_cost = co2)
+    injection=injection_sum, economic_cost=price, co2_cost=co2)
 
     pathname = os.path.join(simulation_parameters.result_directory, "kpi_config.json")
     config_file_written = kpi_config.to_json()  # type: ignore

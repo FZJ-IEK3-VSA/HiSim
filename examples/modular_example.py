@@ -113,9 +113,9 @@ def modular_household_explicit(my_sim: Any, my_simulation_parameters: Optional[S
     """BASICS"""
     if utsp_connected:
         my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
-        household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
-        transportation_device_set=mobility_set, charging_station_set=charging_station)
+            url=my_simulation_parameters.system_config.url, api_key=my_simulation_parameters.system_config.api_key,
+            household=occupancy_profile, result_path=hisim.utils.HISIMPATH['results'], travel_route_set=mobility_distance,
+            transportation_device_set=mobility_set, charging_station_set=charging_station)
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config,
                                                                             my_simulation_parameters=my_simulation_parameters)
     else:
@@ -320,8 +320,7 @@ def needs_ems(battery_included, chp_included, ev_included, heating_system_instal
         return True
     if ev_included:
         return True
-    if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
-        return True
-    if water_heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
+    if heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING] or \
+            water_heating_system_installed in [HeatingSystems.HEAT_PUMP, HeatingSystems.ELECTRIC_HEATING]:
         return True
     return False

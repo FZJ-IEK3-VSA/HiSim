@@ -69,7 +69,7 @@ bandit:
 #  run: true
 
 pyroma:
-  run: true
+  run: false
 
 vulture:
   run: true

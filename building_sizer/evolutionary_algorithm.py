@@ -168,7 +168,9 @@ def mutation_discrete(
     vector_discrete = parent.discrete_vector[:]
     bit = random.randint(0, len(vector_discrete) - 1)
 
-    vector_discrete[bit] = random.choice(getattr(options, options.translation[bit]))
+    vector_discrete[bit] = random.choice(
+        getattr(options, options.discrete_attributes[bit])
+    )
     child = system_config.Individual(
         bool_vector=parent.bool_vector, discrete_vector=vector_discrete
     )

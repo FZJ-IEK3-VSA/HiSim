@@ -1,33 +1,32 @@
 """Sends a building sizer request to the UTSP and waits until the calculation is finished."""
 
-import random
-import string
-from typing import Dict, List, Iterable
-import matplotlib.pyplot as plt
-import numpy as np
+import json
+from typing import Dict, Iterable, List
 
-from building_sizer import building_sizer_algorithm
-from building_sizer import kpi_config
+import matplotlib.pyplot as plt
+import pandas as pd
+from utspclient import client  # type: ignore
+from utspclient.datastructures import TimeSeriesRequest  # type: ignore
+
+from building_sizer import building_sizer_algorithm, kpi_config, system_config
 from building_sizer.building_sizer_algorithm import (
     BuildingSizerRequest,
     BuildingSizerResult,
 )
-from utspclient import client  # type: ignore
-from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
 # Define URL and API key for the UTSP server
 URL = "http://134.94.131.167:443/api/v1/profilerequest"
-API_KEY = ""
+API_KEY = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 
 
-def plot_ratings(ratings: List[List[float]]):
+def plot_ratings(ratings: List[List[float]]) -> None:
     """
     Generate a boxplot for each generation showing the range of ratings
 
     :param ratings: nested list, creating a list of ratings for each generation
     :type ratings: List[List[float]]
     """
-    fig = plt.figure(figsize =(10, 7))
+    fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111)
     ax.set_xlabel("Iterations")
     ax.set_ylabel("self consumption rate + autarky rate [%]")
@@ -39,7 +38,7 @@ def plot_ratings(ratings: List[List[float]]):
 
 def get_ratings_of_generation(
     building_sizer_config: BuildingSizerRequest,
-) -> Dict[str, float]:
+) -> Dict[str, str]:
     """
     Returns the performance ratings for one generation of HiSim configurations
 
@@ -53,10 +52,18 @@ def get_ratings_of_generation(
     )
     # Extract the rating for each HiSim config
     ratings = {
-        config: kpi_config.get_kpi_from_json(result.data["kpi_config.json"].decode())
+        config: result.data["kpi_config.json"].decode()
         for config, result in hisim_results.items()
     }
     return ratings
+
+
+def get_rating(kpi: str) -> float:
+    return kpi_config.KPIConfig.from_json(kpi).get_kpi()  # type: ignore
+
+
+def get_ratings(kpis: Iterable[str]) -> List[float]:
+    return [get_rating(s) for s in kpis]
 
 
 def minimize_config(hisim_config: str) -> str:
@@ -75,16 +82,26 @@ def minimize_config(hisim_config: str) -> str:
 def main():
     # For testing: create a random id to enforce recalculation for each request.
     # For production use, this can be left out.
-    guid = "".join(random.choices(string.ascii_uppercase + string.digits, k=10))
+    guid = ""  # .join(random.choices(string.ascii_uppercase + string.digits, k=10))
 
-    # Define the number of iterations as a dummy termination condition. Can be removed if not needed anymore.
-    num_iterations = 12
-
-    # Create an initial simulation configuration for the building sizer
+    # Set the parameters for the building sizer
     hisim_version = "0.1.0.test2"
     building_sizer_version = "0.1.1"
+    options = system_config.SizingOptions()
+
+    # Create an initial simulation configuration for the building sizer
     initial_building_sizer_config = BuildingSizerRequest(
-        URL, API_KEY, building_sizer_version, hisim_version, num_iterations
+        URL,
+        API_KEY,
+        building_sizer_version,
+        hisim_version,
+        remaining_iterations=12,
+        boolean_iterations=3,
+        discrete_iterations=5,
+        population_size=5,
+        crossover_probability=0.2,
+        mutation_probability=0.4,
+        options=options,
     )
     building_sizer_config_json = initial_building_sizer_config.to_json()  # type: ignore
     # Create the initial building sizer request
@@ -101,6 +118,7 @@ def main():
     building_sizer_iterations: List[BuildingSizerRequest] = []
     finished = False
     all_ratings = ""
+    generations = []
     all_ratings_list = []
     while not finished:
         # Wait until the request finishes and the results are delivered
@@ -127,18 +145,41 @@ def main():
             building_sizer_config = BuildingSizerRequest.from_json(building_sizer_request.simulation_config)  # type: ignore
             building_sizer_iterations.append(building_sizer_config)
         print(f"Interim results: {building_sizer_result.result}")
-        all_ratings += f"{list(get_ratings_of_generation(building_sizer_config).values())}\n"
+        all_ratings += (
+            f"{list(get_ratings_of_generation(building_sizer_config).values())}\n"
+        )
         # store the ratings of this generation
-        all_ratings_list.append(list(get_ratings_of_generation(building_sizer_config).values()))
-        for bs_config, rating in get_ratings_of_generation(
-            building_sizer_config
-        ).items():
-            print(minimize_config(bs_config), " - ", rating)
+        generation = get_ratings_of_generation(building_sizer_config)
+        generations.append(generation)
+        all_ratings_list.append(get_ratings(generation.values()))
+        for bs_config, kpis in generation.items():
+            print(minimize_config(bs_config), " - ", get_rating(kpis))
             print("---")
 
     print("Finished")
     print(all_ratings)
     plot_ratings(all_ratings_list)
+
+    create_table(generations)
+
+
+def create_table(generations):
+    data: dict = {}
+    for iteration, generation in enumerate(generations):
+        for config, kpi in generation.items():
+            config = minimize_config(config)
+            d_config = json.loads(config)
+            d_kpi = json.loads(kpi)
+            d_total = dict(d_config, **d_kpi)
+            d_total["iteration"] = iteration
+            for name, value in d_total.items():
+                if name not in data:
+                    data[name] = []
+                data[name].append(value)
+
+    df = pd.DataFrame.from_dict(data)
+    print(df)
+    df.to_csv("./building_sizer_results.csv")
 
 
 if __name__ == "__main__":

@@ -1,38 +1,60 @@
 """ For setting the configuration of the household. """
 # clean
+import json
 import random
-
-from typing import List, Optional, Tuple
 from dataclasses import dataclass, field
-from dataclasses_json import dataclass_json
+from typing import List, Optional
 
+from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from building_sizer.heating_system_enums import HeatingSystems
 
 
 class BuildingSizerException(Exception):
 
-    """ Exception for errors in the Building Sizer. """
+    """Exception for errors in the Building Sizer."""
 
 
 @dataclass_json
 @dataclass
 class SizingOptions:
 
-    """ Conatains all relevant information to encode and decode system configs. """
+    """Contains all relevant information to encode and decode system configs."""
 
-    photovoltaic: List[float] = field(default_factory=lambda: [6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3])
-    battery: List[float] = field(default_factory=lambda: [0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15])
-    translation: List[str] = field(default_factory=lambda: ["photovoltaic", "battery"])
+    pv_peak_power: List[float] = field(
+        default_factory=lambda: [6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3]
+    )
+    battery_capcity: List[float] = field(
+        default_factory=lambda: [0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15]
+    )
+    buffer_capacity: List[float] = field(
+        default_factory=lambda: [200, 300, 500, 750, 1000, 1500, 3000]
+    )
+    # these lists define the layout of the individual vectors
+    bool_attributes: List[str] = field(
+        default_factory=lambda: ["pv_included", "battery_included"]
+    )
+    discrete_attributes: List[str] = field(
+        default_factory=lambda: ["pv_peak_power", "battery_capacity"]
+    )
+    # this list defines the probabilites of each component to be included at the beginning
     probabilities: List[float] = field(default_factory=lambda: [0.8, 0.4])
+
+    def __post_init__(self):
+        """Checks if every element of attribute list bool_attributes and list discrete_attributes
+        is also attribute of class SystemConfig."""
+        for name in SizingOptions.bool_attributes + SizingOptions.discrete_attributes:
+            if not hasattr(SystemConfig, name):
+                raise Exception(
+                    f"Invalid vector attribute: SystemConfig has no member '{name}'"
+                )
 
 
 @dataclass_json
 @dataclass
 class Individual:
 
-    """ System config as numerical vectors."""
+    """System config as numerical vectors."""
 
     bool_vector: List[bool] = field(default_factory=list)
     discrete_vector: List[float] = field(default_factory=list)
@@ -47,29 +69,21 @@ class Individual:
             It contains a list of all available options for sizing of each component.
 
         """
-
+        # randomly assign the bool attributes True or False
         for probability in options.probabilities:
             dice = random.uniform(0, 1)  # random number between zero and one
-            # TODO: include discrete vector
-            if dice < probability:
-                self.bool_vector.append(True)
-            else:
-                self.bool_vector.append(False)
-        for component in options.translation:
-            try:
-                attribute = getattr(options, component)
-            except Exception as exception:
-                raise BuildingSizerException(
-                    f"Invalid component name: {component}\n{exception}"
-                ) from exception
-            self.discrete_vector.append(random.choice(attribute))
+            self.bool_vector.append(dice < probability)
+        # randomly assign the discrete attributes depending on the allowed values
+        for component in options.discrete_attributes:
+            allowed_values = getattr(options, component)
+            self.discrete_vector.append(random.choice(allowed_values))
 
 
 @dataclass_json
 @dataclass
 class RatedIndividual:
 
-    """ System config as numerical vectors with assosiated fitness function value. """
+    """System config as numerical vectors with assosiated fitness function value."""
 
     individual: Individual
     rating: float
@@ -81,8 +95,6 @@ class SystemConfig:
 
     """Defines the system config for the modular household."""
 
-    water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
-    heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     clever: bool = True
     predictive: bool = False
     prediction_horizon: Optional[int] = 0
@@ -93,6 +105,7 @@ class SystemConfig:
     buffer_volume: Optional[float] = 500  # in liter
     battery_included: bool = False
     battery_capacity: Optional[float] = 5  # in Wh
+    heatpump_included: bool = False
     chp_included: bool = False
     chp_power: Optional[float] = 12
     h2_storage_included: bool = True
@@ -105,44 +118,60 @@ class SystemConfig:
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     api_key: str = ""
 
-    def search_pair_from_translation(self, translation: str) -> Tuple[bool, Optional[float]]:
-        """ Returns (bool, discrete) value pair for each component."""
-        if translation == "photovoltaic":
-            return(self.pv_included, self.pv_peak_power)
-        if translation == "battery":
-            return(self.battery_included, self.battery_capacity)
-        raise ValueError("Translation of element impossible.")
+    def get_individual(self, options: SizingOptions) -> Individual:
+        """Creates discrete and boolean vector from given SystemConfig."""
+        bool_vector: List[bool] = [
+            getattr(self, name) for name in options.bool_attributes
+        ]
+        discrete_vector: List[float] = [
+            getattr(self, name) for name in options.discrete_attributes
+        ]
+        return Individual(bool_vector, discrete_vector)
 
-    def get_individual(self, translation: List[str]) -> Individual:
-        """ Translates system config to numerical vectors. """
-        bool_vector = []
-        discrete_vector = []
-        for elem in translation:
-            bool_elem, discrete_elem = self.search_pair_from_translation(translation=elem)
-            bool_vector.append(bool_elem)
-            discrete_vector.append(discrete_elem)
-        discrete_vector_not_none = [elem or 0 for elem in discrete_vector]
-        return Individual(bool_vector, discrete_vector_not_none)
+    @staticmethod
+    def create_from_individual(
+        individual: Individual, options: SizingOptions
+    ) -> "SystemConfig":
+        """
+        Creates a SystemConfig object from the bool and discrete vectors of an
+        Individual object. For this, the SizingOptions object is needed.
+        """
+        # create a default SystemConfig object
+        system_config = SystemConfig()
+        # assign the bool attributes
+        assert len(options.bool_attributes) == len(
+            individual.bool_vector
+        ), "Invalid individual: wrong number of bool parameters"
+        for i, name in enumerate(options.bool_attributes):
+            setattr(system_config, name, individual.bool_vector[i])
+        # assign the discrete attributes
+        assert len(options.discrete_attributes) == len(
+            individual.discrete_vector
+        ), "Invalid individual: wrong number of discrete parameters"
+        for i, name in enumerate(options.discrete_attributes):
+            setattr(system_config, name, individual.discrete_vector[i])
+        return system_config
+
+    @staticmethod
+    def create_random_system_configs(number: int, options: SizingOptions) -> List[str]:
+        """
+        Creates the desired number of random SystemConfig objects
+        """
+        hisim_configs = []
+        for _ in range(number):
+            # Create a random Individual
+            individual = Individual()
+            individual.create_random_individual(options=options)
+            # Convert the Individual to a SystemConfig object and
+            # append it to the list
+            hisim_configs.append(
+                SystemConfig.create_from_individual(
+                    individual, options
+                ).to_json()  # type: ignore
+            )
+        return hisim_configs
 
 
-def create_from_individual(individual: Individual, translation: List[str]) -> "SystemConfig":
-    """ Creates system config from numerical vector. """
-    bool_vector = individual.bool_vector
-    discrete_vector = individual.discrete_vector
-    system_config = SystemConfig()
-    # TODO work with options and remove hard coded indices
-    system_config.pv_included = bool_vector[translation.index("photovoltaic")]
-    system_config.pv_peak_power = discrete_vector[translation.index("photovoltaic")]
-    system_config.battery_included = bool_vector[translation.index("battery")]
-    system_config.battery_capacity = discrete_vector[translation.index("battery")]
-    return system_config
-
-
-def create_system_config_file() -> None:
-    """System Config file is created."""
-
-    config_file = SystemConfig()
-    config_file_written = config_file.to_json()  # type: ignore
-
-    with open("system_config.json", "w", encoding="utf-8") as outfile:
-        outfile.write(config_file_written)
+def save_system_configs_to_file(configs: List[str]) -> None:
+    with open("./random_system_configs.json", "w") as f:
+        json.dump(configs, f)

@@ -1,11 +1,11 @@
 """
 Building Sizer for use as a provider in the UTSP.
-The Buildings Sizer works iteratively. In each iteration, the results of some HiSim calculations are processed. Depending on these the
+The Building Sizer works iteratively. In each iteration, the results of some HiSim calculations are processed. Depending on these the
 next HiSim configurations that need to be calculated are determined and sent as requests to the UTSP. Afterwards, a new Building Sizer request
 is sent to the UTSP for the next iteration. This Building Sizer request contains all previously sent HiSim requests so it can obtain the results
 of these requests and work with them.
 To allow the client who sent the initial Building Sizer request to follow the separate Building Sizer iterations, each iteration returns the request
-for the next Building Sizer iteration as a result to the UTSP (and therey also to the client).
+for the next Building Sizer iteration as a result to the UTSP (and thereby also to the client).
 """
 
 import dataclasses
@@ -39,6 +39,18 @@ class BuildingSizerRequest:
     building_sizer_version: str = ""
     hisim_version: str = ""
     remaining_iterations: int = 3
+    boolean_iterations: int = 3
+    discrete_iterations: int = 9
+
+    # parameters for the evolutionary algorithm
+    population_size: int = 5  # number of individuals to be created
+    crossover_probability: float = 0.2
+    mutation_probability: float = 0.4
+    options: system_config.SizingOptions = dataclasses.field(
+        default=system_config.SizingOptions()
+    )
+
+    # stores the HiSim requests triggered in earlier iterations
     requisite_requests: List[TimeSeriesRequest] = dataclasses.field(
         default_factory=list
     )
@@ -55,13 +67,10 @@ class BuildingSizerRequest:
         :return: the request object for the next iteration
         :rtype: BuildingSizerRequest
         """
-        return BuildingSizerRequest(
-            self.url,
-            self.api_key,
-            self.building_sizer_version,
-            self.hisim_version,
-            self.remaining_iterations - 1,
-            hisim_requests,
+        return dataclasses.replace(
+            self,
+            remaining_iterations=self.remaining_iterations - 1,
+            requisite_requests=hisim_requests,
         )
 
 
@@ -192,10 +201,6 @@ def building_sizer_iteration(
         request.requisite_requests, request.url, request.api_key
     )
 
-    boolean_iterations: int = 3
-    discrete_iterations: int = 9
-    r_cross: float = 0.2
-    r_mut: float = 0.4
     options = system_config.SizingOptions()
 
     # Get the relevant result files from all requisite requests and turn them into rated individuals
@@ -204,25 +209,19 @@ def building_sizer_iteration(
 
         # Extract the rating for each HiSim config
         # TODO: check if rating works
-        rating = kpi_config.get_kpi_from_json(result.data["kpi_config.json"].decode())
+        kpi_instance: kpi_config.KPIConfig = KPIConfig.from_json(result.data["kpi_config.json"].decode())  # type: ignore
+        rating = kpi_instance.get_kpi()
         system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)  # type: ignore
-        individual = system_config_instance.get_individual(
-            translation=options.translation
-        )
+        individual = system_config_instance.get_individual(options)
         r = system_config.RatedIndividual(individual, rating)
         rated_individuals.append(r)
 
     # select best individuals
-    # TODO: population size as input
-    population_size: int = 5
     parents = evo_alg.selection(
-        rated_individuals=rated_individuals, population_size=population_size
+        rated_individuals=rated_individuals, population_size=request.population_size
     )
 
     # pass rated_individuals to genetic algorithm and receive list of new individual vectors back
-    # TODO r_cross and r_mut as inputs
-    # TODO boolean iterations and discrete iterations as inputs
-    # TODO total iterations as input + transfer to right locations
     parent_individuals = [ri.individual for ri in parents]
 
     """     parent_individuals = evo_alg.complete_population(
@@ -233,12 +232,12 @@ def building_sizer_iteration(
 
     new_individuals = evo_alg.evolution(
         parents=parent_individuals,
-        r_cross=r_cross,
-        r_mut=r_mut,
+        r_cross=request.crossover_probability,
+        r_mut=request.mutation_probability,
         mode=decide_on_mode(
             iteration=request.remaining_iterations,
-            boolean_iterations=boolean_iterations,
-            discrete_iterations=discrete_iterations,
+            boolean_iterations=request.boolean_iterations,
+            discrete_iterations=request.discrete_iterations,
         ),
         options=options,
     )
@@ -256,8 +255,8 @@ def building_sizer_iteration(
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []
     for individual in new_individuals:
-        system_config_instance = system_config.create_from_individual(
-            individual=individual, translation=options.translation
+        system_config_instance = system_config.SystemConfig.create_from_individual(
+            individual, options
         )
         hisim_configs.append(system_config_instance.to_json())  # type: ignore
 
@@ -278,19 +277,10 @@ def main():
         # Execute one building sizer iteration
         next_request, result = building_sizer_iteration(request)
     else:
-        # TODO: first iteration; initialize algorithm and specify initial hisim requests
-        populations_size: int = 5  # number of individuals to be created
-        options = system_config.SizingOptions()
-        initial_hisim_configs = []  # initialize system_configs
-        for i in range(populations_size):  # create five individuals in population
-            individual = system_config.Individual()
-            individual.create_random_individual(options=options)
-            initial_hisim_configs.append(
-                system_config.create_from_individual(
-                    individual=individual, translation=options.translation
-                ).to_json()  # type: ignore
-            )
-
+        # First iteration; initialize algorithm and specify initial hisim requests
+        initial_hisim_configs = system_config.SystemConfig.create_random_system_configs(
+            request.population_size, request.options
+        )
         next_request = trigger_next_iteration(request, initial_hisim_configs)
         result = "My first iteration result"
 

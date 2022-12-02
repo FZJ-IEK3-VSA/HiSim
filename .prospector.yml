@@ -72,7 +72,7 @@ pyroma:
   run: false
 
 vulture:
-  run: true
+  run: false
   disable:
     - unused-variable
     - unused-function

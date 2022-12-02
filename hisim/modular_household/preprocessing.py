@@ -1,9 +1,9 @@
 """PREPROCESSING CALCULATES DIFFERENT SYSTEM VARIABLES E.G. INVESTMENT COSTS."""
+from os import path
 import json
 import scipy.interpolate
 import hisim.log
 import hisim.utils
-from os import path
 
 
 def calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power):

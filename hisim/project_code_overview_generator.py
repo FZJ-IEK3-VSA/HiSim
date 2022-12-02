@@ -157,21 +157,45 @@ class OverviewGenerator:
     def write_clean_files(self, fis: List[FileInformation]) -> None:
         """ Writes files for calling flak8e and prospector. """
         with open("../flake8_calls.txt", "w", encoding="utf8") as flake8:
-            with open("../prospector_calls.txt", "w", encoding="utf8") as prospector:
-                with open("../prospector_mass_call.cmd", "w", encoding="utf8") as prospector_cmd:
-                    with open("../flake8_mass_call.cmd", "w", encoding="utf8") as flake8_cmd:
-                        for myfi in fis:
-                            if not myfi.cleaned:
-                                continue
-                            relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
-                            relative_name_slash = relative_name.replace("\\", "/")
-                            prospector.write("        prospector " + relative_name_slash + "\n")
-                            flake8.write("        flake8 " + relative_name_slash +
-                                         " --count --select=E9,F63,F7,F82,E800 --show-source --statistics\n")
-                            prospector_cmd.write("prospector " + relative_name + "\n")
-                            prospector_cmd.write("if %errorlevel% neq 0 exit /b\n")
-                            flake8_cmd.write("flake8 " + relative_name + " --ignore=E501 --show-source \n")
-                            flake8_cmd.write("if %errorlevel% neq 0 exit /b\n")
+            for myfi in fis:
+                if not myfi.cleaned:
+                    continue
+                relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
+                relative_name_slash = relative_name.replace("\\", "/")
+                flake8.write("        flake8 " + relative_name_slash + " --count --select=E9,F63,F7,F82,E800 --show-source --statistics\n")
+        with open("../prospector_calls.txt", "w", encoding="utf8") as prospector:
+            for myfi in fis:
+                if not myfi.cleaned:
+                    continue
+                relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
+                relative_name_slash = relative_name.replace("\\", "/")
+                prospector.write("        prospector " + relative_name_slash + "\n")
+
+
+        with open("../prospector_mass_call.cmd", "w", encoding="utf8") as prospector_cmd:
+            for myfi in fis:
+                if not myfi.cleaned:
+                    continue
+                relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
+                relative_name_slash = relative_name.replace("\\", "/")
+                prospector_cmd.write("prospector " + relative_name + "\n")
+                prospector_cmd.write("if %errorlevel% neq 0 exit /b\n")
+        with open("../flake8_mass_call.cmd", "w", encoding="utf8") as flake8_cmd:
+            for myfi in fis:
+                if not myfi.cleaned:
+                    continue
+                relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
+                relative_name_slash = relative_name.replace("\\", "/")
+                flake8_cmd.write("flake8 " + relative_name + " --ignore=E501 --show-source \n")
+                flake8_cmd.write("if %errorlevel% neq 0 exit /b\n")
+        with open("../pylint_mass_call.cmd", "w", encoding="utf8") as flake8_cmd:
+            for myfi in fis:
+                if not myfi.cleaned:
+                    continue
+                relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
+                relative_name_slash = relative_name.replace("\\", "/")
+                flake8_cmd.write("pylint " + relative_name + "\n")
+                flake8_cmd.write("if %errorlevel% neq 0 exit /b\n")
 
     def write_one_file_block(self, myfi, row, worksheet1):
         """ Writes the block for a single file to excel. """
@@ -288,7 +312,7 @@ class OverviewGenerator:
             module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
             spec.loader.exec_module(module)  # type: ignore
             sys.modules[myfi.module_name] = module  # type: ignore
-        except:  # noqa
+        except Exception:  # noqa: broad-except # pylint: disable=broad-except
             module = None
         return module
 

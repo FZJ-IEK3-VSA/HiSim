@@ -77,7 +77,7 @@ class L1HeatPumpConfig(ConfigBase):
                                   cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
                                   day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
-    
+
     @staticmethod
     def get_default_config_heat_source_controller_dhw(name: str) -> Any:
         """ Default Config for the buffer temperature. """
@@ -160,7 +160,8 @@ class L1HeatPumpController(cp.Component):
         self.processed_state: L1HeatPumpConfig = self.state.clone()
 
         # Component Outputs
-        self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ANY, Units.PERCENT)
+        self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatControllerTargetPercentage,
+                                                                                       LoadTypes.ANY, Units.PERCENT)
         self.on_off_channel : cp.ComponentOutput = self.add_output(self.component_name, self.OnOffState,
                                                                                        LoadTypes.ANY, Units.ANY)
 
@@ -194,7 +195,7 @@ class L1HeatPumpController(cp.Component):
         connections.append(cp.ComponentConnection(L1HeatPumpController.StorageTemperature, boiler_classname,
                                                   generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean))
         return connections
-    
+
     def get_building_default_connections(self):
         """ Sets default connections for the boiler. """
         log.information("setting buffer default connections in L1 building Controller")
@@ -225,7 +226,7 @@ class L1HeatPumpController(cp.Component):
         """ Core Simulation function. """
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
-            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state. 
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
             self.state = self.processed_state.clone()
         else:
             self.calculate_state(timestep, stsv)
@@ -253,7 +254,7 @@ class L1HeatPumpController(cp.Component):
     def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """ Calculate the heat pump state and activate / deactives. """
         t_storage = stsv.get_input_value(self.storage_temperature_channel)
-        temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)        
+        temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
             # mandatory on, minimum runtime not reached
@@ -267,7 +268,7 @@ class L1HeatPumpController(cp.Component):
         t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
         # prevent heating in summer
         if self.cooling_considered:
-            if timestep < self.heating_season_begin and timestep > self.heating_season_end and t_storage >= t_min_target - 5:
+            if self.heating_season_begin > timestep > self.heating_season_end and t_storage >= t_min_target - 5:
                 self.state.deactivate(timestep)
                 return
         if t_storage < t_min_target:

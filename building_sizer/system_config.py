@@ -24,7 +24,7 @@ class SizingOptions:
     pv_peak_power: List[float] = field(
         default_factory=lambda: [6e2, 1.2e3, 1.8e3, 3e3, 6e3, 9e3, 12e3, 15e3]
     )
-    battery_capcity: List[float] = field(
+    battery_capacity: List[float] = field(
         default_factory=lambda: [0.3, 0.6, 1.5, 3, 5, 7.5, 10, 15]
     )
     buffer_capacity: List[float] = field(

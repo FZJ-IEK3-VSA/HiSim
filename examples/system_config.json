@@ -1,7 +1,4 @@
 {
-    "clever": true,
-    "predictive": false,
-    "prediction_horizon": 0,
     "pv_included": true,
     "pv_peak_power": 6000.0,
     "smart_devices_included": false,

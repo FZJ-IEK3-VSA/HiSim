@@ -95,9 +95,6 @@ class SystemConfig:
 
     """Defines the system config for the modular household."""
 
-    clever: bool = True
-    predictive: bool = False
-    prediction_horizon: Optional[int] = 0
     pv_included: bool = True
     pv_peak_power: Optional[float] = 9000
     smart_devices_included: bool = False

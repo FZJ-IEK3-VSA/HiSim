@@ -319,9 +319,9 @@ class PVSystem(cp.Component):
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
-        if self.my_simulation_parameters.system_config.predictive == True and self.my_simulation_parameters.system_config.prediction_horizon:
+        if self.my_simulation_parameters.predictive_control == True and self.my_simulation_parameters.prediction_horizon:
             last_forecast_timestep = int(
-                timestep + self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+                timestep + self.my_simulation_parameters.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
             if (last_forecast_timestep > len(self.output)):
                 last_forecast_timestep = len(self.output)
             pvforecast = [self.output[t] * self.pvconfig.power for t in range(timestep, last_forecast_timestep)]
@@ -362,7 +362,7 @@ class PVSystem(cp.Component):
             self.ac_power_factor = math.ceil((self.pvconfig.power * 1e3) / 250)
 
             # when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
-            if self.my_simulation_parameters.system_config.predictive:
+            if self.my_simulation_parameters.predictive_control:
                 # get yearly weather data from dictionary
                 dni_extra = self.simulation_repository.get_entry(Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast)
                 DNI = self.simulation_repository.get_entry(Weather.Weather_DirectNormalIrradiance_yearly_forecast)

@@ -9,8 +9,6 @@ from dataclass_wizard import JSONWizard
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 
-from building_sizer.system_config import SystemConfig
-
 
 @dataclass()
 class SimulationParameters(JSONWizard):
@@ -24,12 +22,15 @@ class SimulationParameters(JSONWizard):
     logging_level: int
     result_directory: str
     skip_finished_results: bool
-    system_config: SystemConfig
+    surplus_control: bool
+    predictive_control: bool
+    prediction_horizon: Optional[int]
 
     def __init__(self, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int,
                  result_directory: str = "",
                  post_processing_options: Optional[List[int]] = None, logging_level: int = log.LogPrio.INFORMATION,
-                 skip_finished_results: bool = False, system_config: SystemConfig = SystemConfig()):
+                 skip_finished_results: bool = False, surplus_control: bool =True,
+                 predictive_control: bool = False, prediction_horizon: Optional[int] = 0):
         """ Initializes the class. """
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
@@ -44,7 +45,9 @@ class SimulationParameters(JSONWizard):
         self.logging_level: int = logging_level  # Info # noqa
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
-        self.system_config = system_config  # noqa
+        self.surplus_control = surplus_control
+        self.predictive_control = predictive_control
+        self.prediction_horizon = prediction_horizon
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:

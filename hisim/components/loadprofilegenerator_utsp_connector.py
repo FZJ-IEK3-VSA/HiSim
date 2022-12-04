@@ -236,7 +236,7 @@ class UtspLpgConnector(cp.Component):
             self.water_consumption_c, self.water_consumption[timestep]
         )
 
-        if self.my_simulation_parameters.system_config.predictive:
+        if self.my_simulation_parameters.predictive_control:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep

@@ -233,7 +233,7 @@ class L3_Controller(dynamic_component.DynamicComponent):
                                                               weight_counter = weight_counter)
                     
                     #relevant timesteps
-                    horizon = int( self.my_simulation_parameters.system_config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
+                    horizon = int( self.my_simulation_parameters.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep )
                     lastactivated = max( lastactivation + len( prof_act ) - timestep, 0 )
                     
                     #initialize activation signal

@@ -96,7 +96,7 @@ class SmartDevice( cp.Component ):
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
 
-        if my_simulation_parameters.system_config.clever and smart_devices_included:
+        if my_simulation_parameters.surplus_control and smart_devices_included:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
         else:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]

@@ -106,6 +106,7 @@ def crossover_conventional(
     vector_discrete_2 = parent2.discrete_vector[:]
 
     # select cross over point, which is not exactly the end or the beginning of the string
+    # TODO: account for different lengths in discrete and bool, bool may be longer than discrete one
     pt = random.randint(1, len(vector_bool_1) - 1)
 
     # create children by cross over

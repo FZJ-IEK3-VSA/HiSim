@@ -67,7 +67,6 @@ def modular_household_explicit(
         with open(system_config_filename, encoding="utf8") as system_config_file:
             system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
         hisim.log.information(f"Read system config from {system_config_filename}")
-        my_simulation_parameters.system_config = system_config
 
     else:
         system_config = SystemConfig()
@@ -99,42 +98,40 @@ def modular_household_explicit(
     mobility_distance = arche_type_config.mobility_distance
 
     # get system configuration: technical equipment
-    heatpump_included = my_simulation_parameters.system_config.heatpump_included
+    heatpump_included = system_config.heatpump_included
     if heatpump_included:
         heating_system_installed = lt.HeatingSystems.HEAT_PUMP
         water_heating_system_installed = lt.HeatingSystems.HEAT_PUMP
-    clever = my_simulation_parameters.system_config.clever
-    pv_included = my_simulation_parameters.system_config.pv_included  # True or False
+    clever = my_simulation_parameters.surplus_control
+    pv_included = system_config.pv_included  # True or False
     if pv_included:
-        pv_peak_power = my_simulation_parameters.system_config.pv_peak_power
-    smart_devices_included = (
-        my_simulation_parameters.system_config.smart_devices_included
-    )  # True or False
-    buffer_included = my_simulation_parameters.system_config.buffer_included
+        pv_peak_power = system_config.pv_peak_power
+    smart_devices_included = (system_config.smart_devices_included)  # True or False
+    buffer_included = system_config.buffer_included
     if buffer_included:
-        buffer_volume = my_simulation_parameters.system_config.buffer_volume
-    battery_included = my_simulation_parameters.system_config.battery_included
+        buffer_volume = system_config.buffer_volume
+    battery_included = system_config.battery_included
     if battery_included:
-        battery_capacity = my_simulation_parameters.system_config.battery_capacity
-    chp_included = my_simulation_parameters.system_config.chp_included
+        battery_capacity = system_config.battery_capacity
+    chp_included = system_config.chp_included
     if chp_included:
-        chp_power = my_simulation_parameters.system_config.chp_power
-    h2_storage_included = my_simulation_parameters.system_config.h2_storage_included
+        chp_power = system_config.chp_power
+    h2_storage_included = system_config.h2_storage_included
     if h2_storage_included:
-        h2_storage_size = my_simulation_parameters.system_config.h2_storage_size
-    electrolyzer_included = my_simulation_parameters.system_config.electrolyzer_included
+        h2_storage_size = system_config.h2_storage_size
+    electrolyzer_included = system_config.electrolyzer_included
     if electrolyzer_included:
-        electrolyzer_power = my_simulation_parameters.system_config.electrolyzer_power
-    ev_included = my_simulation_parameters.system_config.ev_included
-    charging_station = my_simulation_parameters.system_config.charging_station
-    utsp_connected = my_simulation_parameters.system_config.utsp_connect
+        electrolyzer_power = system_config.electrolyzer_power
+    ev_included = system_config.ev_included
+    charging_station = system_config.charging_station
+    utsp_connected = system_config.utsp_connect
 
     """BASICS"""
     if utsp_connected:
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=my_simulation_parameters.system_config.url,
-                api_key=my_simulation_parameters.system_config.api_key,
+                url=system_config.url,
+                api_key=system_config.api_key,
                 household=occupancy_profile,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=mobility_distance,

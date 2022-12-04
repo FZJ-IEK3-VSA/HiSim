@@ -312,7 +312,7 @@ class L2HeatSmartController(cp.Component):
             return
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         T_control = stsv.get_input_value( self.ReferenceTemperatureC )  
-        # if self.my_simulation_parameters.system_config.predictive == True:
+        # if self.my_simulation_parameters.predictive_control == True:
         #     RunTimeSignal = stsv.get_input_value( self.l1_RunTimeSignalC )
         # else:
         #     RunTimeSignal = 0

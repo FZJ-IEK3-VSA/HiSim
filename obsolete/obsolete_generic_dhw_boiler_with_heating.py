@@ -287,7 +287,7 @@ class Boiler( cp.Component ):
             stsv.set_output_value( self.ElectricityOutputC, self.power * signal )
               
             #put forecast into dictionary
-            if self.my_simulation_parameters.system_config.predictive:
+            if self.my_simulation_parameters.predictive_control:
                 #only in first timestep
                 if self.state.timestep + 1 == timestep:
                     self.state.timestep += 1

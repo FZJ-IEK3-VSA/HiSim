@@ -16,11 +16,11 @@ from hisim.components import (
     weather,
 )
 from hisim.modular_household import component_connections, preprocessing
+from hisim.modular_household.interface_configs.system_config import SystemConfig
 from hisim.modular_household.interface_configs.archetype_config import ArcheTypeConfig
 from hisim.modular_household.interface_configs.modular_household_config import (
     ModularHouseholdConfig,
 )
-from hisim.modular_household.interface_configs.system_config import SystemConfig
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
@@ -38,10 +38,10 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
         )
 
     # set default configs
-    if household_config.system_config is None:
-        household_config.system_config = SystemConfig()
-    if household_config.archetype_config is None:
-        household_config.archetype_config = ArcheTypeConfig()
+    if household_config.system_config_ is None:
+        household_config.system_config_ = SystemConfig()
+    if household_config.archetype_config_ is None:
+        household_config.archetype_config_ = ArcheTypeConfig()
 
     return household_config
 
@@ -60,10 +60,10 @@ def modular_household_explicit(
 
     # read the modular household config file
     household_config = read_in_configs("modular_example_config.json")
-    assert household_config.archetype_config is not None
-    assert household_config.system_config is not None
-    arche_type_config = household_config.archetype_config
-    system_config = household_config.system_config
+    assert household_config.archetype_config_ is not None
+    assert household_config.system_config_ is not None
+    arche_type_config_ = household_config.archetype_config_
+    system_config_ = household_config.system_config_
 
     count = 1  # initialize source_weight with one
     production: List = []  # initialize list of components involved in production
@@ -86,51 +86,51 @@ def modular_household_explicit(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get archetype configuration
-    location = weather.LocationEnum[arche_type_config.location.value]
-    occupancy_profile = arche_type_config.occupancy_profile
-    building_code = arche_type_config.building_code
+    location = weather.LocationEnum[arche_type_config_.location.value]
+    occupancy_profile = arche_type_config_.occupancy_profile
+    building_code = arche_type_config_.building_code
     water_heating_system_installed = (
-        arche_type_config.water_heating_system_installed
+        arche_type_config_.water_heating_system_installed
     )  # Electricity, Hydrogen or False
-    heating_system_installed = arche_type_config.heating_system_installed
-    mobility_set = arche_type_config.mobility_set
-    mobility_distance = arche_type_config.mobility_distance
+    heating_system_installed = arche_type_config_.heating_system_installed
+    mobility_set = arche_type_config_.mobility_set
+    mobility_distance = arche_type_config_.mobility_distance
 
     # get system configuration: technical equipment
-    heatpump_included = system_config.heatpump_included
+    heatpump_included = system_config_.heatpump_included
     if heatpump_included:
         heating_system_installed = lt.HeatingSystems.HEAT_PUMP
         water_heating_system_installed = lt.HeatingSystems.HEAT_PUMP
     clever = my_simulation_parameters.surplus_control
-    pv_included = system_config.pv_included  # True or False
+    pv_included = system_config_.pv_included  # True or False
     if pv_included:
-        pv_peak_power = system_config.pv_peak_power
-    smart_devices_included = system_config.smart_devices_included  # True or False
-    buffer_included = system_config.buffer_included
+        pv_peak_power = system_config_.pv_peak_power
+    smart_devices_included = system_config_.smart_devices_included  # True or False
+    buffer_included = system_config_.buffer_included
     if buffer_included:
-        buffer_volume = system_config.buffer_volume
-    battery_included = system_config.battery_included
+        buffer_volume = system_config_.buffer_volume
+    battery_included = system_config_.battery_included
     if battery_included:
-        battery_capacity = system_config.battery_capacity
-    chp_included = system_config.chp_included
+        battery_capacity = system_config_.battery_capacity
+    chp_included = system_config_.chp_included
     if chp_included:
-        chp_power = system_config.chp_power
-    h2_storage_included = system_config.h2_storage_included
+        chp_power = system_config_.chp_power
+    h2_storage_included = system_config_.h2_storage_included
     if h2_storage_included:
-        h2_storage_size = system_config.h2_storage_size
-    electrolyzer_included = system_config.electrolyzer_included
+        h2_storage_size = system_config_.h2_storage_size
+    electrolyzer_included = system_config_.electrolyzer_included
     if electrolyzer_included:
-        electrolyzer_power = system_config.electrolyzer_power
-    ev_included = system_config.ev_included
-    charging_station = system_config.charging_station
-    utsp_connected = system_config.utsp_connect
+        electrolyzer_power = system_config_.electrolyzer_power
+    ev_included = system_config_.ev_included
+    charging_station = system_config_.charging_station
+    utsp_connected = system_config_.utsp_connect
 
     """BASICS"""
     if utsp_connected:
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=system_config.url,
-                api_key=system_config.api_key,
+                url=system_config_.url,
+                api_key=system_config_.api_key,
                 household=occupancy_profile,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=mobility_distance,

@@ -24,9 +24,9 @@ class ArcheTypeConfig:
     water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     mobility_set: JsonReference = TransportationDeviceSets.Bus_and_two_30_km_h_Cars
-    mobility_distance: Optional[
-        JsonReference
-    ] = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+    mobility_distance: JsonReference = (
+        TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+    )
 
 
 # def create_archetype_config_file() -> None:

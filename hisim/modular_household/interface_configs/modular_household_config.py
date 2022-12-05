@@ -1,9 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from hisim.modular_household.interface_configs import archetype_config, system_config
 from dataclasses_json import dataclass_json
-
-from building_sizer.interface_configs import archetype_config, system_config
 
 
 @dataclass_json

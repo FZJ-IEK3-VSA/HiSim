@@ -20,7 +20,6 @@ RUN pip install -e .
 
 # Copy source code to image
 COPY hisim hisim
-COPY building_sizer building_sizer
 
 # Copy the examples folder containing the modular_household file
 COPY examples examples 

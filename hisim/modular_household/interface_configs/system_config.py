@@ -7,6 +7,7 @@ from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import ChargingStationSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
 
+
 @dataclass_json
 @dataclass
 class SystemConfig:

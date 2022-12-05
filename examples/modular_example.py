@@ -1,45 +1,48 @@
 """Example sets up a modular household according to json input file."""
 
-from typing import Optional, List, Any
-from os import path
 import json
+from os import path
+from typing import Any, List, Optional
 
 import hisim.loadtypes as lt
 import hisim.log
-from building_sizer.interface_configs.modular_household_config import ModularHouseholdConfig
 import hisim.utils
-
-from hisim.modular_household import preprocessing
-from hisim.modular_household import component_connections
-from building_sizer.interface_configs.archetype_config import ArcheTypeConfig
-from hisim.simulator import SimulationParameters
+from hisim.components import (
+    building,
+    controller_l2_energy_management_system,
+    generic_price_signal,
+    loadprofilegenerator_connector,
+    loadprofilegenerator_utsp_connector,
+    weather,
+)
+from hisim.modular_household import component_connections, preprocessing
+from hisim.modular_household.interface_configs.archetype_config import ArcheTypeConfig
+from hisim.modular_household.interface_configs.modular_household_config import (
+    ModularHouseholdConfig,
+)
+from hisim.modular_household.interface_configs.system_config import SystemConfig
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulator import SimulationParameters
 
-from hisim.components import loadprofilegenerator_connector
-from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import generic_price_signal
-from hisim.components import weather
-from hisim.components import building
-from hisim.components import controller_l2_energy_management_system
-
-from building_sizer.interface_configs.system_config import SystemConfig
 
 def read_in_configs(pathname: str) -> ModularHouseholdConfig:
-    """ Reads in ModularHouseholdConfig file and loads default if file cannot be found. """
+    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
     try:
         with open(pathname, encoding="utf8") as config_file:
             household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore
         hisim.log.information(f"Read modular household config from {pathname}")
     except Exception:
         household_config = ModularHouseholdConfig()
-        hisim.log.warning(f"Could not read the modular household config from '{pathname}'. Using a default config instead.")
+        hisim.log.warning(
+            f"Could not read the modular household config from '{pathname}'. Using a default config instead."
+        )
 
     # set default configs
     if household_config.system_config is None:
         household_config.system_config = SystemConfig()
     if household_config.archetype_config is None:
         household_config.archetype_config = ArcheTypeConfig()
-    
+
     return household_config
 
 
@@ -57,6 +60,8 @@ def modular_household_explicit(
 
     # read the modular household config file
     household_config = read_in_configs("modular_example_config.json")
+    assert household_config.archetype_config is not None
+    assert household_config.system_config is not None
     arche_type_config = household_config.archetype_config
     system_config = household_config.system_config
 
@@ -100,7 +105,7 @@ def modular_household_explicit(
     pv_included = system_config.pv_included  # True or False
     if pv_included:
         pv_peak_power = system_config.pv_peak_power
-    smart_devices_included = (system_config.smart_devices_included)  # True or False
+    smart_devices_included = system_config.smart_devices_included  # True or False
     buffer_included = system_config.buffer_included
     if buffer_included:
         buffer_volume = system_config.buffer_volume
@@ -140,7 +145,7 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile.Name
+            "Occupancy", occupancy_profile.Name or ""
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,

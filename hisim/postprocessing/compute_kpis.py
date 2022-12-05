@@ -7,7 +7,7 @@ from typing import Any, List
 import pandas as pd
 from dataclasses_json import dataclass_json
 
-from building_sizer.kpi_config import KPIConfig
+from building_sizer.interface_configs.kpi_config import KPIConfig
 from hisim.component import ComponentOutput
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.simulationparameters import SimulationParameters

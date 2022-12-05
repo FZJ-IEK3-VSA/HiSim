@@ -20,6 +20,7 @@ from utspclient.datastructures import (
     TimeSeriesRequest,
 )
 
+from building_sizer import individual_encoding
 from building_sizer import evolutionary_algorithm as evo_alg
 from building_sizer.interface_configs import kpi_config, system_config, archetype_config, modular_household_config
 
@@ -41,16 +42,16 @@ class BuildingSizerRequest:
     boolean_iterations: int = 3
     discrete_iterations: int = 9
 
-    # parameters for HiSim
-    archetype_config: archetype_config.ArcheTypeConfig = None
-
     # parameters for the evolutionary algorithm
     population_size: int = 5  # number of individuals to be created
     crossover_probability: float = 0.2
     mutation_probability: float = 0.4
-    options: system_config.SizingOptions = dataclasses.field(
-        default=system_config.SizingOptions()
+    options: individual_encoding.SizingOptions = dataclasses.field(
+        default=individual_encoding.SizingOptions()
     )
+
+    # parameters for HiSim
+    archetype_config: archetype_config.ArcheTypeConfig = None
 
     # stores the HiSim requests triggered in earlier iterations
     requisite_requests: List[TimeSeriesRequest] = dataclasses.field(
@@ -103,7 +104,7 @@ def send_hisim_requests(system_configs: List[system_config.SystemConfig], reques
     # Create modular household configs for hisim request
     configs = [modular_household_config.ModularHouseholdConfig(system_config, request.archetype_config) for system_config in system_configs]
     # Prepare the time series requests
-    requests = [
+    hisim_requests = [
         TimeSeriesRequest(
             sim_config.to_json(),  # type: ignore
             provider_name,
@@ -112,13 +113,13 @@ def send_hisim_requests(system_configs: List[system_config.SystemConfig], reques
         for sim_config in configs
     ]
     # Send the requests
-    for request in requests:
-        reply = client.send_request(request.url, request, request.api_key)
+    for hisim_request in hisim_requests:
+        reply = client.send_request(request.url, hisim_request, request.api_key)
         assert reply.status not in [
             CalculationStatus.CALCULATIONFAILED,
             CalculationStatus.UNKNOWN,
-        ], f"Sending the following hisim request returned {reply.status}:\n{request.simulation_config}"
-    return requests
+        ], f"Sending the following hisim request returned {reply.status}:\n{hisim_request.simulation_config}"
+    return hisim_requests
 
 
 def send_building_sizer_request(
@@ -203,7 +204,7 @@ def building_sizer_iteration(
         request.requisite_requests, request.url, request.api_key
     )
 
-    options = system_config.SizingOptions()
+    options = individual_encoding.SizingOptions()
 
     # Get the relevant result files from all requisite requests and turn them into rated individuals
     rated_individuals = []
@@ -214,8 +215,8 @@ def building_sizer_iteration(
         kpi_instance: kpi_config.KPIConfig = KPIConfig.from_json(result.data["kpi_config.json"].decode())  # type: ignore
         rating = kpi_instance.get_kpi()
         system_config_instance: system_config.SystemConfig = system_config.SystemConfig.from_json(sim_config_str)  # type: ignore
-        individual = system_config_instance.get_individual(options)
-        r = system_config.RatedIndividual(individual, rating)
+        individual = individual_encoding.get_individual(system_config_instance, options)
+        r = individual_encoding.RatedIndividual(individual, rating)
         rated_individuals.append(r)
 
     # select best individuals
@@ -257,7 +258,7 @@ def building_sizer_iteration(
     # convert individuals back to HiSim SystemConfigs
     hisim_configs = []
     for individual in new_individuals:
-        system_config_instance = system_config.SystemConfig.create_from_individual(
+        system_config_instance = individual_encoding.create_from_individual(
             individual, options
         )
         hisim_configs.append(system_config_instance.to_json())  # type: ignore
@@ -280,7 +281,7 @@ def main():
         next_request, result = building_sizer_iteration(request)
     else:
         # First iteration; initialize algorithm and specify initial hisim requests
-        initial_hisim_configs = system_config.SystemConfig.create_random_system_configs(
+        initial_hisim_configs = individual_encoding.create_random_system_configs(
             request.population_size, request.options
         )
         next_request = trigger_next_iteration(request, initial_hisim_configs)

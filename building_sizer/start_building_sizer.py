@@ -8,11 +8,12 @@ import pandas as pd
 from utspclient import client  # type: ignore
 from utspclient.datastructures import TimeSeriesRequest  # type: ignore
 
-from building_sizer import building_sizer_algorithm, kpi_config, system_config
+from building_sizer import building_sizer_algorithm
 from building_sizer.building_sizer_algorithm import (
     BuildingSizerRequest,
     BuildingSizerResult,
 )
+from building_sizer.interface_configs import kpi_config, system_config
 
 # Define URL and API key for the UTSP server
 URL = "http://134.94.131.167:443/api/v1/profilerequest"
@@ -102,6 +103,7 @@ def main():
         crossover_probability=0.2,
         mutation_probability=0.4,
         options=options,
+        archetype_config=None,
     )
     building_sizer_config_json = initial_building_sizer_config.to_json()  # type: ignore
     # Create the initial building sizer request

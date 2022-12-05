@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from building_sizer import system_config
+from building_sizer.interface_configs import system_config
 
 from typing import List, Tuple
 import random

@@ -37,4 +37,4 @@ RUN mkdir /results
 WORKDIR /app/examples
 
 # Temporary solution for the custom json interface for the WHY toolkit: always uses modular_household_explicit in modular_household.py
-ENTRYPOINT mv /input/request.json system_config.json && python3 ../hisim/hisim_main.py modular_example modular_household_explicit && cd results/modular_household_explicit* && mv * /results
+ENTRYPOINT mv /input/request.json modular_example_config.json && python3 ../hisim/hisim_main.py modular_example modular_household_explicit && cd results/modular_household_explicit* && mv * /results

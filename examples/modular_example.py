@@ -2,17 +2,16 @@
 
 from typing import Optional, List, Any
 from os import path
-from pathlib import Path
 import json
 
 import hisim.loadtypes as lt
 import hisim.log
+from building_sizer.interface_configs.modular_household_config import ModularHouseholdConfig
 import hisim.utils
 
 from hisim.modular_household import preprocessing
 from hisim.modular_household import component_connections
-from hisim.modular_household.archetype_config import ArcheTypeConfig
-from hisim.modular_household.modular_household_results import ModularHouseholdResults
+from building_sizer.interface_configs.archetype_config import ArcheTypeConfig
 from hisim.simulator import SimulationParameters
 from hisim.postprocessingoptions import PostProcessingOptions
 
@@ -23,7 +22,25 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l2_energy_management_system
 
-from building_sizer.system_config import SystemConfig
+from building_sizer.interface_configs.system_config import SystemConfig
+
+def read_in_configs(pathname: str) -> ModularHouseholdConfig:
+    """ Reads in ModularHouseholdConfig file and loads default if file cannot be found. """
+    try:
+        with open(pathname, encoding="utf8") as config_file:
+            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore
+        hisim.log.information(f"Read modular household config from {pathname}")
+    except Exception:
+        household_config = ModularHouseholdConfig()
+        hisim.log.warning(f"Could not read the modular household config from '{pathname}'. Using a default config instead.")
+
+    # set default configs
+    if household_config.system_config is None:
+        household_config.system_config = SystemConfig()
+    if household_config.archetype_config is None:
+        household_config.archetype_config = ArcheTypeConfig()
+    
+    return household_config
 
 
 def modular_household_explicit(
@@ -38,11 +55,10 @@ def modular_household_explicit(
     year = 2018
     seconds_per_timestep = 60 * 15
 
-    # path of archetype config file
-    arche_type_config_filename = "arche_type_config.json"
-
-    # path of system config file
-    system_config_filename = "system_config.json"
+    # read the modular household config file
+    household_config = read_in_configs("modular_example_config.json")
+    arche_type_config = household_config.archetype_config
+    system_config = household_config.system_config
 
     count = 1  # initialize source_weight with one
     production: List = []  # initialize list of components involved in production
@@ -62,29 +78,7 @@ def modular_household_explicit(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.skip_finished_results = False
 
-    # try to read the system config from file
-    if Path(system_config_filename).is_file():
-        with open(system_config_filename, encoding="utf8") as system_config_file:
-            system_config = SystemConfig.from_json(system_config_file.read())  # type: ignore
-        hisim.log.information(f"Read system config from {system_config_filename}")
-
-    else:
-        system_config = SystemConfig()
-
     my_sim.set_simulation_parameters(my_simulation_parameters)
-
-    # try to read the system config from file
-    if Path(arche_type_config_filename).is_file():
-        with open(
-            arche_type_config_filename, encoding="utf8"
-        ) as arche_type_config_file:
-            arche_type_config = ArcheTypeConfig.from_json(arche_type_config_file.read())  # type: ignore
-        hisim.log.information(
-            f"Read arche type config from {arche_type_config_filename}"
-        )
-
-    else:
-        arche_type_config = ArcheTypeConfig()
 
     # get archetype configuration
     location = weather.LocationEnum[arche_type_config.location.value]
@@ -517,16 +511,6 @@ def modular_household_explicit(
         h2_storage_cost,
         electrolyzer_cost,
         ev_cost,
-    )
-
-    # modular_household_results = \
-    ModularHouseholdResults(
-        investment_cost=investment_cost,
-        co2_cost=co2_cost,
-        injection=injection,
-        autarky_rate=autarky_rate,
-        self_consumption_rate=self_consumption_rate,
-        terminationflag=lt.Termination.SUCCESSFUL,
     )
 
     hisim.log.information(

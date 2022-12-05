@@ -21,8 +21,7 @@ from utspclient.datastructures import (
 )
 
 from building_sizer import evolutionary_algorithm as evo_alg
-from building_sizer import system_config
-from building_sizer import kpi_config
+from building_sizer.interface_configs import kpi_config, system_config, archetype_config, modular_household_config
 
 
 @dataclasses_json.dataclass_json
@@ -41,6 +40,9 @@ class BuildingSizerRequest:
     remaining_iterations: int = 3
     boolean_iterations: int = 3
     discrete_iterations: int = 9
+
+    # parameters for HiSim
+    archetype_config: archetype_config.ArcheTypeConfig = None
 
     # parameters for the evolutionary algorithm
     population_size: int = 5  # number of individuals to be created
@@ -89,29 +91,29 @@ class BuildingSizerResult:
     result: Any = None
 
 
-def send_hisim_requests(
-    hisim_configs: List[str], url: str, api_key: str = "", hisim_version: str = ""
-) -> List[TimeSeriesRequest]:
+def send_hisim_requests(system_configs: List[system_config.SystemConfig], request: BuildingSizerRequest) -> List[TimeSeriesRequest]:
     """
     Creates and sends one time series request to the utsp for every passed hisim configuration
     """
     # Determine the provider name for the hisim request
     provider_name = "hisim"
-    if hisim_version:
+    if request.hisim_version:
         # If a hisim version is specified, use that version
-        provider_name += f"-{hisim_version}"
+        provider_name += f"-{request.hisim_version}"
+    # Create modular household configs for hisim request
+    configs = [modular_household_config.ModularHouseholdConfig(system_config, request.archetype_config) for system_config in system_configs]
     # Prepare the time series requests
     requests = [
         TimeSeriesRequest(
-            sim_config,
+            sim_config.to_json(),  # type: ignore
             provider_name,
             required_result_files={"kpi_config.json": ResultFileRequirement.REQUIRED},
         )
-        for sim_config in hisim_configs
+        for sim_config in configs
     ]
     # Send the requests
     for request in requests:
-        reply = client.send_request(url, request, api_key)
+        reply = client.send_request(request.url, request, request.api_key)
         assert reply.status not in [
             CalculationStatus.CALCULATIONFAILED,
             CalculationStatus.UNKNOWN,
@@ -164,7 +166,7 @@ def trigger_next_iteration(
     """
     # Send the new requests to the UTSP
     hisim_requests = send_hisim_requests(
-        hisim_configs, request.url, request.api_key, request.hisim_version
+        hisim_configs, request
     )
     # Send a new building_sizer request to trigger the next building sizer iteration. This must be done after sending the
     # requisite hisim requests to guarantee that the UTSP will not be blocked.

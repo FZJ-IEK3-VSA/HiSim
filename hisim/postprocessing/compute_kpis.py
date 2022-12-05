@@ -40,9 +40,9 @@ def compute_kpis(
     index: int
     output: ComponentOutput
 
-    electricity_price_consumption = pd.Series()
-    electricity_price_injection = pd.Series()
-    self_consumption = pd.Series()
+    electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype)
+    electricity_price_injection = pd.Series(dtype=pd.Float64Dtype)
+    self_consumption = pd.Series(dtype=pd.Float64Dtype)
 
     price_config = FuelCost()
 

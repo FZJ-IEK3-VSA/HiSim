@@ -1,5 +1,4 @@
-#FROM continuumio/miniconda3:4.10.3-alpine
-FROM python
+FROM python:3.9-slim
 
 WORKDIR /app
 

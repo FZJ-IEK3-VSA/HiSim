@@ -1,7 +1,7 @@
 @REM Simple script to build a hisim image and test it
 set /p hisimVersion="Enter HiSim version: "
 
-@REM docker build -t hisim:%hisimVersion% .
+docker build -t hisim:%hisimVersion% .
 if %errorlevel% neq 0 exit /b %errorlevel%
 
 @REM Save the image to a tar file

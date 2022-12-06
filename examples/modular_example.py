@@ -2,6 +2,8 @@
 
 import json
 from os import path
+import os
+import shutil
 from typing import Any, List, Optional
 
 import hisim.loadtypes as lt
@@ -46,6 +48,21 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
     return household_config
 
 
+def cleanup_old_result_folders():
+    """
+    Removes old result folders of previous modular_household_explicit
+    simulations.
+    """
+    base_path = os.path.join(
+        hisim.utils.hisim_abs_path, os.path.pardir, "examples", "results"
+    )
+    files_in_folder = os.listdir(base_path)
+    for file in files_in_folder:
+        if file.startswith("modular_household_explicit"):
+            full_path = os.path.join(base_path, file)
+            shutil.rmtree(full_path)
+
+
 def modular_household_explicit(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: MC0001
@@ -53,6 +70,7 @@ def modular_household_explicit(
 
     The configuration of the household is read in via the json input file "system_config.json".
     """
+    cleanup_old_result_folders()
 
     # Set simulation parameters
     year = 2018

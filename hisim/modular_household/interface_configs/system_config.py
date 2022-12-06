@@ -1,6 +1,6 @@
 """ For setting the configuration of the household. """
 # clean
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from dataclasses_json import dataclass_json
@@ -29,7 +29,9 @@ class SystemConfig:
     electrolyzer_included: bool = True
     electrolyzer_power: Optional[float] = 5e3
     ev_included: bool = True
-    charging_station: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW
+    charging_station: JsonReference = field(
+        default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW
+    )
     utsp_connect: bool = False
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     api_key: str = ""

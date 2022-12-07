@@ -12,8 +12,7 @@ RUN apt-get install libhdf5-serial-dev -y
 COPY setup.py setup.py
 # These files are needed by setup.py
 COPY requirements.txt requirements.txt
-COPY README.rst README.rst
-COPY HISTORY.rst HISTORY.rst
+COPY README.md README.md
 
 # Install hisim
 RUN pip install -e .

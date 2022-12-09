@@ -1,4 +1,7 @@
-<a href="https://www.fz-juelich.de/iek/iek-3/EN/Home/home_node.html"><img src="https://www.fz-juelich.de/SharedDocs/Bilder/INM/INM-1/EN/FZj_Logo.jpg?__blob=normal" alt="Forschungszentrum Juelich Logo" width="230px"></a>
+ [![PyPI Version](https://img.shields.io/pypi/v/hisim.svg)](https://pypi.python.org/pypi/hisim)
+ [![PyPI - License](https://img.shields.io/pypi/l/hisim)](LICENSE)
+ 
+ <a href="https://www.fz-juelich.de/en/iek/iek-3"><img src="https://www.fz-juelich.de/static/media/Logo.2ceb35fc.svg" alt="Forschungszentrum Juelich Logo" width="230px"></a> 
 
 # HiSim - Household Infrastructure and Building Simulator
 

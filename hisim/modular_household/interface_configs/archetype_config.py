@@ -18,7 +18,9 @@ class ArcheTypeConfig:
     """Defines the system config for the modular household."""
 
     location: Locations = Locations.AACHEN
-    occupancy_profile: JsonReference = Households.CHR01_Couple_both_at_Work
+    occupancy_profile: JsonReference = field(
+        default_factory=lambda: Households.CHR01_Couple_both_at_Work
+    )
     building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002
     water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP

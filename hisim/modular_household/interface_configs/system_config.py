@@ -19,7 +19,7 @@ class SystemConfig:
     smart_devices_included: bool = False
     buffer_included: bool = True
     buffer_volume: Optional[float] = 500  # in liter
-    battery_included: bool = False
+    battery_included: bool = True
     battery_capacity: Optional[float] = 5  # in Wh
     heatpump_included: bool = False
     chp_included: bool = False

@@ -1,0 +1,6 @@
+﻿fuel type;kgC02 per kWh;EUR per kWh;source C02;source EUR
+Gas;0.24;0.22;jrc 2017;expert knoledge
+Diesel;0.314;1.8;jrc 2017;expert knoledge
+Oil;0.32;1.5;jrc 2017;expert knoledge
+DistrictHeating;0.25;0.15;expert knowledge;expert knoledge
+Electricity;0.444;0.3;jrc 2017;expert knoledge

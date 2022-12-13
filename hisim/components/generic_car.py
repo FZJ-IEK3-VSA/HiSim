@@ -85,7 +85,9 @@ class Car(cp.Component):
         elif self.fuel == lt.LoadTypes.DIESEL:
             self.fuel_consumption: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name, field_name=self.FuelConsumption, load_type=lt.LoadTypes.DIESEL,
-                unit=lt.Units.LITER)
+                unit=lt.Units.LITER, postprocessing_flag=[
+                    lt.InandOutputType.FUEL_CONSUMPTION, lt.LoadTypes.DIESEL]
+                    )
 
     def i_save_state(self) -> None:
         """ Saves actual state. """

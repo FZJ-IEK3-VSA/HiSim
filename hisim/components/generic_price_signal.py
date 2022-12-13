@@ -58,9 +58,21 @@ class PriceSignal(cp.Component):
                                                                     lt.InandOutputType.ELECTRICITY_CONSUMPTION
                                                                     ]
                                                                     )
+                                                                  lt.Units.EUR_PER_KWH,
+                                                                  postprocessing_flag = [
+                                                                    lt.LoadTypes.PRICE,
+                                                                    lt.InandOutputType.ELECTRICITY_CONSUMPTION
+                                                                    ]
+                                                                    )
         self.PriceInjectionC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                    self.PriceInjection,
                                                                    lt.LoadTypes.PRICE,
+                                                                   lt.Units.EUR_PER_KWH,
+                                                                   postprocessing_flag=[
+                                                                    lt.LoadTypes.PRICE,
+                                                                    lt.InandOutputType.ELECTRICITY_INJECTION
+                                                                    ]
+                                                                    )
                                                                    lt.Units.EUR_PER_KWH,
                                                                    postprocessing_flag=[
                                                                     lt.LoadTypes.PRICE,
@@ -82,6 +94,8 @@ class PriceSignal(cp.Component):
             priceinjectionforecast = [0.1] * int(self.my_simulation_parameters.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
             pricepurchaseforecast = [0.5] * int(self.my_simulation_parameters.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
         else:
+            priceinjectionforecast = [0.1]
+            pricepurchaseforecast = [0.5]
             priceinjectionforecast = [0.1]
             pricepurchaseforecast = [0.5]
         

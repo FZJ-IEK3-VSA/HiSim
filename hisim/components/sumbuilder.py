@@ -1,13 +1,10 @@
-# Generic/Built-in
-import copy
-from typing import List
-# Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from typing import Any, List
+from hisim.component import Component
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
-from typing import Any, List
+
 class CalculateOperation(cp.Component):
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
     Output = "Output"
@@ -222,7 +219,7 @@ class SumBuilderForTwoInputs(Component):
     
     def write_to_report(self) -> List[str]:
         lines =[]
-        lines.append("Sumbuilder for two inputs: {}".format(self.component_name))
+        lines.append(f"Sumbuilder for two inputs: {self.component_name}")
         lines.append("Input 1: {}".format(self.input1.fullname))
         lines.append("Input 2: {}".format(self.input2.fullname))
         return lines

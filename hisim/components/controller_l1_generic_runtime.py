@@ -1,3 +1,4 @@
+""" Generic runtime controller """
 # -*- coding: utf-8 -*-
 # clean
 from dataclasses import dataclass
@@ -5,7 +6,7 @@ from typing import Any, List
 
 from dataclasses_json import dataclass_json
 
-import hisim.utils as utils
+from hisim import utils
 from hisim.component import ConfigBase
 from hisim import component as cp
 from hisim import log
@@ -41,6 +42,7 @@ class L1Config(ConfigBase):
 
     @staticmethod
     def get_default_config_heatpump(name: str) -> Any:
+        """ Gets a default config for heat pumps """
         config = L1Config(name='L1RuntimeController' + name, source_weight=1, min_operation_time_in_seconds=3600 * 3, min_idle_time_in_seconds=3600)
         return config
 
@@ -50,12 +52,13 @@ class L1GenericRuntimeControllerState:
     This data class saves the state of the controller.
     """
 
-    def __init__(self, on_off: int, activation_time_step: int, deactivation_time_step: int) -> None:
+    def __init__(self, on_off: int, activation_time_step: int = 0, deactivation_time_step: int = 0) -> None:
         self.on_off: int = on_off
-        self.activation_time_step: int = 0
-        self.deactivation_time_step: int = 0
+        self.activation_time_step: int = activation_time_step
+        self.deactivation_time_step: int = deactivation_time_step
 
     def clone(self) -> Any:
+        """ Generates a new state. """
         return L1GenericRuntimeControllerState(activation_time_step=self.activation_time_step, on_off=self.on_off,
                                                deactivation_time_step=self.deactivation_time_step)
 
@@ -64,10 +67,12 @@ class L1GenericRuntimeControllerState:
         pass
 
     def activate(self, timestep: int) -> None:
+        """ activates the controller. """
         self.on_off = 1
         self.activation_time_step = timestep
 
     def deactivate(self, timestep: int) -> None:
+        """ deactivates the controller. """
         self.on_off = 0
         self.deactivation_time_step = timestep
 
@@ -110,12 +115,12 @@ class L1GenericRuntimeController(cp.Component):
         self.state = L1GenericRuntimeControllerState(0, 0, 0)
         self.previous_state = self.state.clone()
         # add inputs
-        self.l2_DeviceSignalC: cp.ComponentInput = self.add_input(self.component_name, self.l2_DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
-                                                                  mandatory=True)
+        self.l2_device_signal_channel: cp.ComponentInput = self.add_input(self.component_name, self.l2_DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
+                                                                          mandatory=True)
         self.add_default_connections(controller_l2_generic_heat_clever_simple.L2HeatSmartController, self.get_l2_controller_default_connections())
 
         # add outputs
-        self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY)
+        self.l1_device_signal_channel: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY)
         self.l1_runtime_signal: cp.ComponentOutput = self.add_output(self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY)
 
     def get_l2_controller_default_connections(self) -> List[cp.ComponentConnection]:
@@ -148,11 +153,11 @@ class L1GenericRuntimeController(cp.Component):
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
-            # outputs have to be in line with states, so if convergence is forced outputs are aligned to state. 
-            stsv.set_output_value(self.L1DeviceSignalC, self.state.on_off)
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to state.
+            stsv.set_output_value(self.l1_device_signal_channel, self.state.on_off)
             return
 
-        l2_devicesignal = stsv.get_input_value(self.l2_DeviceSignalC)
+        l2_devicesignal = stsv.get_input_value(self.l2_device_signal_channel)
 
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
@@ -167,7 +172,7 @@ class L1GenericRuntimeController(cp.Component):
                 self.state.deactivate(timestep)
             elif l2_devicesignal == 1 and self.state.on_off == 0:
                 self.state.activate(timestep)
-        stsv.set_output_value(self.L1DeviceSignalC, self.state.on_off)
+        stsv.set_output_value(self.l1_device_signal_channel, self.state.on_off)
 
     def write_to_report(self) -> List[str]:
         """ Writes config to report. """

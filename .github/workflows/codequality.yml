@@ -21,10 +21,12 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install prospector[with_bandit]
-        pip install prospector[with_mypy]
-        pip install prospector[with_pyroma]
-        pip install prospector[with_vulture]
+        pip install prospector[with_everything]==1.7.7
+        pip install prospector[with-everything]==1.7.7
+        pip install prospector[with_bandit]==1.7.7
+        pip install prospector[with_mypy]==1.7.7
+        pip install prospector[with_pyroma]==1.7.7
+        pip install prospector[with_vulture]==1.7.7
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install -e .
     - name: Lint with prospector

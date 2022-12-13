@@ -61,7 +61,7 @@ mypy:
   run: true
 
 bandit:
-  run: true
+  run: false
   options:
     config: .bandit.yml
 
@@ -69,10 +69,10 @@ bandit:
 #  run: true
 
 pyroma:
-  run: true
+  run: false
 
 vulture:
-  run: true
+  run: false
   disable:
     - unused-variable
     - unused-function

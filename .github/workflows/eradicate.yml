@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: eradicate
+name: eradicate_flake8
 
 on:
   push:
@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
       with:
-        python-version: 3.9
+        python-version: 3.10
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -28,8 +28,12 @@ jobs:
     - name: Lint with flake8
       working-directory: ./
       run: |
+        flake8 building_sizer/system_config.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 examples/basic_household.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 examples/basic_household_only_heating.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 examples/default_connections.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 examples/dynamic_components.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 examples/simple_examples.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/component.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/component_wrapper.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/dynamic_component.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
@@ -45,18 +49,33 @@ jobs:
         flake8 hisim/simulator.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/sim_repository.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/utils.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/building.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/controller_l1_building_heating.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/controller_l1_generic_runtime.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/controller_l1_heatpump.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/controller_l2_generic_heat_simple.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/example_component.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/example_storage.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/example_template.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/components/example_transformer.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/components/generic_hot_water_storage_modular.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/chartbase.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/charts.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/chart_singleday.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
-        flake8 hisim/postprocessing/compute_kpis.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/postprocessing_datatransfer.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/postprocessing_main.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/reportgenerator.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/system_chart.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 tests/functions_for_testing.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 tests/test_advanced_battery_bslib.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 tests/test_basic_household_with_all_resultfiles.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 tests/test_building.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 tests/test_examples.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 tests/test_example_component.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 tests/test_example_storage.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 tests/test_example_template.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 tests/test_example_transformer.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+
 
 
 # reenable once all source files are fixed and no more commented out code is spread all over

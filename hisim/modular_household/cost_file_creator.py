@@ -3,7 +3,7 @@ from typing import List
 from dataclasses import dataclass, field, asdict
 import json
 from dataclasses_json import dataclass_json
-from economic_parameters import EconomicParameters
+from hisim.modular_household.economic_parameters import EconomicParameters
 import hisim.loadtypes as lt
 
 
@@ -11,7 +11,7 @@ import hisim.loadtypes as lt
 @dataclass()
 class ComponentCost:
 
-    """ Defines the investment parameters of components. """
+    """Defines the investment parameters of components."""
 
     component: lt.ComponentType = lt.ComponentType.BATTERY
     capacity_unit: lt.Units = lt.Units.WATT_HOUR
@@ -28,68 +28,101 @@ class ComponentCost:
 
 
 def create_componentcost_file(
-        component: lt.ComponentType, capacity_unit: lt.Units, capacity_for_cost: List,
-        cost_per_capacity: List, time: List, costfactor_per_time: List, capacity_for_co2: List,
-        co2_per_capacity: List) -> None:
+    component: lt.ComponentType,
+    capacity_unit: lt.Units,
+    capacity_for_cost: List,
+    cost_per_capacity: List,
+    time: List,
+    costfactor_per_time: List,
+    capacity_for_co2: List,
+    co2_per_capacity: List,
+) -> None:
     """Component Cost file is created."""
 
     costfile = ComponentCost(
-        component=component, capacity_unit=capacity_unit, capacity_for_cost=capacity_for_cost,
-        cost_per_capacity=cost_per_capacity, time=time, costfactor_per_time=costfactor_per_time,
-        capacity_for_co2=capacity_for_co2, co2_per_capacity=co2_per_capacity)
+        component=component,
+        capacity_unit=capacity_unit,
+        capacity_for_cost=capacity_for_cost,
+        cost_per_capacity=cost_per_capacity,
+        time=time,
+        costfactor_per_time=costfactor_per_time,
+        capacity_for_co2=capacity_for_co2,
+        co2_per_capacity=co2_per_capacity,
+    )
     costfile_written = json.dumps(asdict(costfile))
 
-    with open('ComponentCost' + component.value + '.json', 'w', encoding="utf-8") as outfile:
+    with open(
+        "ComponentCost" + component.value + ".json", "w", encoding="utf-8"
+    ) as outfile:
         outfile.write(costfile_written)
 
 
 def write_batterycost_file():
     """Battery Cost is written to json file."""
     create_componentcost_file(
-        component=lt.ComponentType.BATTERY, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500, 1000, 2000, 10000],
-        cost_per_capacity=[1000, 1800, 2500, 5000], time=[2022, 2030, 2050], costfactor_per_time=[100, 90, 60],
-        capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000])
+        component=lt.ComponentType.BATTERY,
+        capacity_unit=lt.Units.WATT_HOUR,
+        capacity_for_cost=[500, 1000, 2000, 10000],
+        cost_per_capacity=[1000, 1800, 2500, 5000],
+        time=[2022, 2030, 2050],
+        costfactor_per_time=[100, 90, 60],
+        capacity_for_co2=[1000, 10000],
+        co2_per_capacity=[200, 2000],
+    )
 
 
 def write_heatpump_cost_file():
     """Heatpump Cost is written to json file."""
     create_componentcost_file(
-        component=lt.ComponentType.HEAT_PUMP, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500, 1000, 2000, 10000],
-        cost_per_capacity=[1000, 1800, 2500, 5000], time=[2022, 2030, 2050], costfactor_per_time=[100, 90, 60],
-        capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000])
+        component=lt.ComponentType.HEAT_PUMP,
+        capacity_unit=lt.Units.WATT_HOUR,
+        capacity_for_cost=[500, 1000, 2000, 10000],
+        cost_per_capacity=[1000, 1800, 2500, 5000],
+        time=[2022, 2030, 2050],
+        costfactor_per_time=[100, 90, 60],
+        capacity_for_co2=[1000, 10000],
+        co2_per_capacity=[200, 2000],
+    )
 
 
 def write_chp_cost_file():
     """Chp Cost is written to json file."""
     create_componentcost_file(
-        component=lt.ComponentType.PREDICTIVE_CONTROLLER, capacity_unit=lt.Units.WATT_HOUR, capacity_for_cost=[500, 1000, 2000, 10000],
-        cost_per_capacity=[1000, 1800, 2500, 5000], time=[2022, 2030, 2050], costfactor_per_time=[100, 90, 60],
-        capacity_for_co2=[1000, 10000], co2_per_capacity=[200, 2000])
+        component=lt.ComponentType.PREDICTIVE_CONTROLLER,
+        capacity_unit=lt.Units.WATT_HOUR,
+        capacity_for_cost=[500, 1000, 2000, 10000],
+        cost_per_capacity=[1000, 1800, 2500, 5000],
+        time=[2022, 2030, 2050],
+        costfactor_per_time=[100, 90, 60],
+        capacity_for_co2=[1000, 10000],
+        co2_per_capacity=[200, 2000],
+    )
 
 
 def create_economicparameters_file(
-        insulation_bought: bool,
-        insulation_threshold: float,
-        pv_bought: bool,
-        pv_threshold: float,
-        smart_devices_bought: bool,
-        smart_devices_threshold: float,
-        heatpump_bought: bool,
-        heatpump_threshold: float,
-        buffer_bought: bool,
-        buffer_threshold: float,
-        battery_bought: bool,
-        battery_threshold: float,
-        h2system_bought: bool,
-        h2system_threshold: float,
-        chp_bought: bool,
-        chp_threshold: float,
-        electrolyzer_bought: bool,
-        electrolyzer_threshold: float,
-        surpluscontroller_bought: bool,
-        surpluscontroller_threshold: float,
-        ev_bought: bool,
-        ev_threshold: float) -> None:
+    insulation_bought: bool,
+    insulation_threshold: float,
+    pv_bought: bool,
+    pv_threshold: float,
+    smart_devices_bought: bool,
+    smart_devices_threshold: float,
+    heatpump_bought: bool,
+    heatpump_threshold: float,
+    buffer_bought: bool,
+    buffer_threshold: float,
+    battery_bought: bool,
+    battery_threshold: float,
+    h2system_bought: bool,
+    h2system_threshold: float,
+    chp_bought: bool,
+    chp_threshold: float,
+    electrolyzer_bought: bool,
+    electrolyzer_threshold: float,
+    surpluscontroller_bought: bool,
+    surpluscontroller_threshold: float,
+    ev_bought: bool,
+    ev_threshold: float,
+) -> None:
     """Economic Parameters are written to json file."""
 
     economic_parameters_file = EconomicParameters(
@@ -114,11 +147,12 @@ def create_economicparameters_file(
         surpluscontroller_bought=surpluscontroller_bought,
         surpluscontroller_threshold=surpluscontroller_threshold,
         ev_bought=ev_bought,
-        ev_threshold=ev_threshold)
-    economic_parameters_file = json.dumps(asdict(economic_parameters_file))
+        ev_threshold=ev_threshold,
+    )
+    economic_parameters_json = economic_parameters_file.to_json()  # type: ignore
 
-    with open('EconomicParameters.json', 'w', encoding="utf-8") as outfile:
-        outfile.write(economic_parameters_file)
+    with open("EconomicParameters.json", "w+") as result_file:
+        result_file.write(economic_parameters_json)
 
 
 def write_economicparameters_file():
@@ -145,4 +179,5 @@ def write_economicparameters_file():
         surpluscontroller_bought=False,
         surpluscontroller_threshold=5e3,
         ev_bought=True,
-        ev_threshold=2e4)
+        ev_threshold=2e4,
+    )

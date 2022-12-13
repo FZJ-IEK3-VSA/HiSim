@@ -198,7 +198,7 @@ class Weather(Component):
         stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
 
         # set the temperature forecast
-        if self.my_simulation_parameters.system_config.predictive:
+        if self.my_simulation_parameters.predictive_control:
             timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             last_forecast_timestep = int(timestep + timesteps_24h)
             if last_forecast_timestep > len(self.temperature_list):
@@ -276,7 +276,7 @@ class Weather(Component):
             database.to_csv(cache_filepath)
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
-        if self.my_simulation_parameters.system_config.predictive:
+        if self.my_simulation_parameters.predictive_control:
             self.simulation_repository.set_entry(self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list)
             self.simulation_repository.set_entry(self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list)
             self.simulation_repository.set_entry(self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list)

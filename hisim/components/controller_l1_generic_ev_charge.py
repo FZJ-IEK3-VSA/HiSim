@@ -184,7 +184,7 @@ class L1Controller(cp.Component):
         power = float(charging_station_string.partition('with ')[2].partition(' kW')[0]) * 1e3
         self.power = power
         self.battery_set = config.battery_set
-        self.clever = my_simulation_parameters.system_config.clever
+        self.clever = my_simulation_parameters.surplus_control
 
     def write_to_report(self) -> List[str]:
         """ Writes EV charge controller values to report. """

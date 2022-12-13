@@ -251,7 +251,7 @@ class Occupancy(cp.Component):
         )
         stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
 
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.my_simulation_parameters.predictive_control == True:
             last_forecast_timestep = int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep )
             if (last_forecast_timestep > len(self.electricity_consumption)):
                 last_forecast_timestep = len(self.electricity_consumption)
@@ -259,7 +259,7 @@ class Occupancy(cp.Component):
             demandforecast = self.electricity_consumption[ timestep : last_forecast_timestep ]
             self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
 
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.my_simulation_parameters.predictive_control == True:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep

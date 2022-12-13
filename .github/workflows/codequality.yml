@@ -70,7 +70,6 @@ jobs:
         prospector hisim/modular_household/cost_file_creator.py
         prospector hisim/modular_household/economic_parameters.py
         prospector hisim/modular_household/modular_household_results.py
-        prospector building_sizer/system_config.py
         # prospector hisim/modular_household/preprocessing.py
 
 

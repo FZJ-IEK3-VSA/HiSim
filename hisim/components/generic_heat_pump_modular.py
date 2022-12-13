@@ -140,7 +140,7 @@ class ModularHeatPump(cp.Component):
         self.config = config
         self.build(config)
 
-        if my_simulation_parameters.system_config.clever:
+        if my_simulation_parameters.surplus_control:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
         else:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
@@ -280,7 +280,7 @@ class ModularHeatPump(cp.Component):
 
         stsv.set_output_value(self.ElectricityOutputC,  electric_power * power_modifier)
 
-        # #put forecast into dictionary  # if self.my_simulation_parameters.system_config.predictive:  #     #only in first timestep  #     if self.state.timestep + 1 == timestep:  #         self.state.timestep += 1  #         self.previous_state.timestep += 1  #         runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
+        # #put forecast into dictionary  # if self.my_simulation_parameters.predictive_control:  #     #only in first timestep  #     if self.state.timestep + 1 == timestep:  #         self.state.timestep += 1  #         self.previous_state.timestep += 1  #         runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
 
         #         self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.HEAT_PUMP, source_weight = self.source_weight, entry =[self.power_th / cop] * runtime)
 

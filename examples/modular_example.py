@@ -70,7 +70,8 @@ def modular_household_explicit(
 
     The configuration of the household is read in via the json input file "system_config.json".
     """
-    cleanup_old_result_folders()
+    # TODO: does not work in docker --> commented out for now
+    # cleanup_old_result_folders()
 
     # Set simulation parameters
     year = 2018
@@ -90,7 +91,7 @@ def modular_household_explicit(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.january_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)

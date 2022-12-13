@@ -30,7 +30,7 @@ class SystemConfig:
     electrolyzer_power: Optional[float] = 5e3
     ev_included: bool = True
     charging_station: JsonReference = field(
-        default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW
+        default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )
     utsp_connect: bool = False
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"

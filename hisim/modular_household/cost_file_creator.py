@@ -149,10 +149,10 @@ def create_economicparameters_file(
         ev_bought=ev_bought,
         ev_threshold=ev_threshold,
     )
-    economic_parameters_file = json.dumps(asdict(economic_parameters_file))
+    economic_parameters_json = economic_parameters_file.to_json()  # type: ignore
 
-    with open("EconomicParameters.json", "w", encoding="utf-8") as outfile:
-        outfile.write(economic_parameters_file)
+    with open("EconomicParameters.json", "w+") as result_file:
+        result_file.write(economic_parameters_json)
 
 
 def write_economicparameters_file():

@@ -23,10 +23,10 @@ class ArcheTypeConfig:
     water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
     mobility_set: JsonReference = field(
-        default_factory=lambda: TransportationDeviceSets.Bus_and_two_30_km_h_Cars
+        default_factory=lambda: TransportationDeviceSets.Bus_and_two_30_km_h_Cars  # type: ignore
     )
     mobility_distance: JsonReference = field(
-        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance  # type: ignore
     )
 
 

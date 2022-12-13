@@ -3,12 +3,8 @@
 import os
 from dataclasses import dataclass
 from typing import Any, List
-import os
-from dataclasses import dataclass
-from typing import Any, List
 
 import pandas as pd
-from dataclasses_json import dataclass_json
 from dataclasses_json import dataclass_json
 
 from hisim.component import ComponentOutput
@@ -159,8 +155,6 @@ def compute_kpis(
     # Electricity Price
     price = 0
     co2 = 0
-    price = 0
-    co2 = 0
     if production_sum > 0:
         # evaluate electricity price
         if not electricity_price_injection.empty:
@@ -235,5 +229,4 @@ def compute_kpis(
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
 
-    return lines
     return lines

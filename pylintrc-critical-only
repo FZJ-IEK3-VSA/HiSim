@@ -167,7 +167,19 @@ disable=raw-checker-failed,
         too-many-branches,
         duplicate-code,
         fixme,
-        no-member
+        no-member,
+        invalid-name,
+        missing-function-docstring,
+        line-too-long,
+        trailing-whitespace,
+        missing-class-docstring,
+        unused-import,
+        consider-using-f-string,
+        missing-module-docstring,
+        wrong-import-order,
+        no-else-return,
+        chained-comparison
+      
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option

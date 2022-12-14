@@ -29,7 +29,7 @@ class SimulationParameters(JSONWizard):
     def __init__(self, start_date: datetime.datetime, end_date: datetime.datetime, seconds_per_timestep: int,
                  result_directory: str = "",
                  post_processing_options: Optional[List[int]] = None, logging_level: int = log.LogPrio.INFORMATION,
-                 skip_finished_results: bool = False, surplus_control: bool =True,
+                 skip_finished_results: bool = False, surplus_control: bool = True,
                  predictive_control: bool = False, prediction_horizon: Optional[int] = 0):
         """ Initializes the class. """
         self.start_date: datetime.datetime = start_date

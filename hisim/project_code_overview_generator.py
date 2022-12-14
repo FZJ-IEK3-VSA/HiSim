@@ -171,7 +171,6 @@ class OverviewGenerator:
                 relative_name_slash = relative_name.replace("\\", "/")
                 prospector.write("        prospector " + relative_name_slash + "\n")
 
-
         with open("../prospector_mass_call.cmd", "w", encoding="utf8") as prospector_cmd:
             for myfi in fis:
                 if not myfi.cleaned:

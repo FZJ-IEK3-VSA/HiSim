@@ -32,29 +32,37 @@ jobs:
     - name: Lint with prospector
       working-directory: ./
       run: |
+        prospector examples/basic_household.py
         prospector examples/basic_household_only_heating.py
-        prospector examples/modular_example.py
+        prospector examples/default_connections.py
+        prospector examples/dynamic_components.py
+        prospector examples/simple_examples.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
         prospector hisim/hisim_main.py
         prospector hisim/hisim_with_profiler.py
-        prospector hisim/utils.py
-        prospector hisim/simulator.py
-        prospector hisim/simulationparameters.py
-        prospector hisim/sim_repository.py
-        prospector hisim/project_code_overview_generator.py
-        prospector hisim/postprocessingoptions.py
         prospector hisim/json_executor.py
         prospector hisim/json_generator.py
         prospector hisim/loadtypes.py
         prospector hisim/log.py
+        prospector hisim/postprocessingoptions.py
+        prospector hisim/project_code_overview_generator.py
+        prospector hisim/simulationparameters.py
+        prospector hisim/simulator.py
+        prospector hisim/sim_repository.py
+        prospector hisim/utils.py
+        prospector hisim/components/building.py
         prospector hisim/components/controller_l1_building_heating.py
+        prospector hisim/components/controller_l1_generic_runtime.py
+        prospector hisim/components/controller_l1_heatpump.py
         prospector hisim/components/controller_l2_generic_heat_simple.py
+        prospector hisim/components/example_component.py
+        prospector hisim/components/example_storage.py
+        prospector hisim/components/example_template.py
+        prospector hisim/components/example_transformer.py
         prospector hisim/components/generic_hot_water_storage_modular.py
-        prospector hisim/components/generic_car.py
-        prospector hisim/components/controller_l1_generic_ev_charge.py
-        # prospector hisim/components/weather.py
+        prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
         prospector hisim/postprocessing/charts.py
         prospector hisim/postprocessing/chart_singleday.py
@@ -62,15 +70,16 @@ jobs:
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/postprocessing/system_chart.py
-        prospector hisim/postprocessing/compute_kpis.py
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
+        prospector tests/test_basic_household_with_all_resultfiles.py
+        prospector tests/test_building.py
         prospector tests/test_examples.py
-        prospector hisim/modular_household/component_connections.py
-        prospector hisim/modular_household/cost_file_creator.py
-        prospector hisim/modular_household/economic_parameters.py
-        prospector hisim/modular_household/modular_household_results.py
-        # prospector hisim/modular_household/preprocessing.py
+        prospector tests/test_example_component.py
+        prospector tests/test_example_storage.py
+        prospector tests/test_example_template.py
+        prospector tests/test_example_transformer.py
+
 
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc

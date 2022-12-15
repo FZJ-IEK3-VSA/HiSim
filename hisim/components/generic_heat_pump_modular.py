@@ -164,7 +164,7 @@ class ModularHeatPump(cp.Component):
         self.PowerModifierChannel: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
                                                                         load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, postprocessing_flag=[])
 
-        self.add_default_connections(self.get_weather_default_connections())
+        self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_controller_l1_heatpump())
         self.add_default_connections(self.get_default_connections_from_L2GenericEnergyManagementSystem())
 

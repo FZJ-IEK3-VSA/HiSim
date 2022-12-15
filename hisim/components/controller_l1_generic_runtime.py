@@ -1,4 +1,4 @@
-""" Generic runtime controller """
+""" Generic runtime controller. """
 # -*- coding: utf-8 -*-
 # clean
 from dataclasses import dataclass
@@ -27,7 +27,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L1Config(ConfigBase):
-    """ L1 Runtime Config """
+
+    """ L1 Runtime Config. """
 
     name: str
     source_weight: int
@@ -36,23 +37,23 @@ class L1Config(ConfigBase):
 
     @staticmethod
     def get_default_config(name: str) -> Any:
-        """ Default config """
+        """ Default config. """
         config = L1Config(name='RuntimeController_' + name, source_weight=1, min_operation_time_in_seconds=3600, min_idle_time_in_seconds=900)
         return config
 
     @staticmethod
     def get_default_config_heatpump(name: str) -> Any:
-        """ Gets a default config for heat pumps """
+        """ Gets a default config for heat pumps. """
         config = L1Config(name='L1RuntimeController' + name, source_weight=1, min_operation_time_in_seconds=3600 * 3, min_idle_time_in_seconds=3600)
         return config
 
 
 class L1GenericRuntimeControllerState:
-    """
-    This data class saves the state of the controller.
-    """
+
+    """ The data class saves the state of the controller. """
 
     def __init__(self, on_off: int, activation_time_step: int = 0, deactivation_time_step: int = 0) -> None:
+        """ Initializes the data class. """
         self.on_off: int = on_off
         self.activation_time_step: int = activation_time_step
         self.deactivation_time_step: int = deactivation_time_step
@@ -67,23 +68,25 @@ class L1GenericRuntimeControllerState:
         pass
 
     def activate(self, timestep: int) -> None:
-        """ activates the controller. """
+        """ Activates the controller. """
         self.on_off = 1
         self.activation_time_step = timestep
 
     def deactivate(self, timestep: int) -> None:
-        """ deactivates the controller. """
+        """ Activates the controller. """
         self.on_off = 0
         self.deactivation_time_step = timestep
 
 
 class L1GenericRuntimeController(cp.Component):
-    """
-    L1 Heat Pump Controller. It takes care of the operation of the heat pump only in terms of running times.
-    It gets inputs from an L2-heat controller
+
+    """ L1 Heat Pump Controller.
+
+    It takes care of the operation of the heat pump only in terms of running times.
+    It gets inputs from an L2-heat controller.
 
     Parameters
-    --------------
+    ----------
     min_running_time: int, optional
         Minimal running time of device, in seconds. The default is 3600 seconds.
     min_idle_time : int, optional
@@ -92,9 +95,11 @@ class L1GenericRuntimeController(cp.Component):
         Weight of component, relevant if there is more than one component of same type, defines hierachy in control. The default is 1.
     component type : str, optional
         Name of component to be controlled
+
     """
+
     # Inputs
-    l2_DeviceSignal = "l2_DeviceSignal"
+    L2DeviceSignal = "l2_DeviceSignal"
 
     # Outputs
     L1DeviceSignal = "L1DeviceSignal"
@@ -104,7 +109,7 @@ class L1GenericRuntimeController(cp.Component):
     # 1. Building
     @utils.measure_execution_time
     def __init__(self, my_simulation_parameters: SimulationParameters, config: L1Config) -> None:
-
+        """ Initializes the controller. """
         super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
         self.config = config
         self.name = config.name
@@ -115,7 +120,7 @@ class L1GenericRuntimeController(cp.Component):
         self.state = L1GenericRuntimeControllerState(0, 0, 0)
         self.previous_state = self.state.clone()
         # add inputs
-        self.l2_device_signal_channel: cp.ComponentInput = self.add_input(self.component_name, self.l2_DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
+        self.l2_device_signal_channel: cp.ComponentInput = self.add_input(self.component_name, self.L2DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
                                                                           mandatory=True)
         self.add_default_connections(controller_l2_generic_heat_clever_simple.L2HeatSmartController, self.get_l2_controller_default_connections())
 
@@ -128,7 +133,7 @@ class L1GenericRuntimeController(cp.Component):
         log.information("setting l2 default connections in l1")
         connections = []
         controller_classname = controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_classname()
-        connections.append(cp.ComponentConnection(L1GenericRuntimeController.l2_DeviceSignal, controller_classname,
+        connections.append(cp.ComponentConnection(L1GenericRuntimeController.L2DeviceSignal, controller_classname,
                                                   controller_l2_generic_heat_clever_simple.L2HeatSmartController.l2_DeviceSignal))
         return connections
 

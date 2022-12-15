@@ -167,14 +167,3 @@ class CarBattery(Component):
 @dataclass
 class EVBatteryState:
     soc: float = 0
-
-
-
-
-
-
-
-
-
-
-

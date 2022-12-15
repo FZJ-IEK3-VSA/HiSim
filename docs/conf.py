@@ -19,8 +19,8 @@ sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim', 'components')))
 # -- Project information -----------------------------------------------------
 
 project = 'House Infrastructure Simulator'
-copyright = '2021, Vitor Hugo Bellotto Zago'
-author = 'Vitor Hugo Bellotto Zago'
+copyright = '2020-2022, Forschungszentrum Jülich, IEK-3' # pylint: redefined-builtin
+author = 'Vitor Hugo Bellotto Zago, Noah Pflugradt'
 
 # The full version, including alpha/beta/rc tags
 release = '0.1'

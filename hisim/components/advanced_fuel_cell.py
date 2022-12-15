@@ -6,7 +6,7 @@ from hisim import utils
 #from math import pi
 #from math import floor
 from hisim.simulationparameters import SimulationParameters
-import hisim.log as log
+from hisim import log
 import pandas as pd
 import os
 from dataclasses import dataclass
@@ -205,7 +205,7 @@ class CHP(Component):
         self.number_of_cycles = self.number_of_cycles_previous
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
-         pass
+        pass
 
     def simulate_chp(self,control_signal:float,stsv: SingleTimeStepValues,timestep:int)  -> Any:
 
@@ -405,9 +405,8 @@ class CHP(Component):
         elif self.operating_mode=="both":
             control_signal=self.calculate_control_signal(stsv)
             if control_signal <= stsv.get_input_value(self.control_signal):
-                    control_signal=stsv.get_input_value(self.control_signal)
+                control_signal=stsv.get_input_value(self.control_signal)
             else:
-                control_signal=control_signal
                 if control_signal > 1 or control_signal<0:
                     control_signal=1
 
@@ -465,3 +464,4 @@ class CHP(Component):
         # todo: add more useful stuff here
         lines.append("tbd")
         return lines
+    

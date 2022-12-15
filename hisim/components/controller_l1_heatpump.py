@@ -86,6 +86,7 @@ class L1HeatPumpConfig(ConfigBase):
                                   day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
+
 class L1HeatPumpControllerState:
 
     """ Data class that saves the state of the controller. """
@@ -162,8 +163,8 @@ class L1HeatPumpController(cp.Component):
         # Component Outputs
         self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(self.component_name, self.HeatControllerTargetPercentage,
                                                                                        LoadTypes.ANY, Units.PERCENT)
-        self.on_off_channel : cp.ComponentOutput = self.add_output(self.component_name, self.OnOffState,
-                                                                                       LoadTypes.ANY, Units.ANY)
+        self.on_off_channel: cp.ComponentOutput = self.add_output(self.component_name, self.OnOffState,
+                                                                  LoadTypes.ANY, Units.ANY)
 
         # Component Inputs
         self.storage_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.StorageTemperature, LoadTypes.TEMPERATURE,
@@ -204,7 +205,6 @@ class L1HeatPumpController(cp.Component):
         connections.append(cp.ComponentConnection(L1HeatPumpController.StorageTemperature, building_classname,
                                                   building.Building.TemperatureMean))
         return connections
-
 
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """

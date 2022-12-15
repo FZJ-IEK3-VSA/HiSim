@@ -7,7 +7,7 @@ from tests import functions_for_testing as fft
 
 def test_photovoltaic():
     # Sets inputs
-    weather_location = "Aachen"
+    # weather_location = "Aachen"
     seconds_per_timestep = 60
     power = 10
 

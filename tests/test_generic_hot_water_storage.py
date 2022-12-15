@@ -86,4 +86,3 @@ def test_storage():
     assert 6.26 == stsv.values[my_storage.UA_SP_C.global_index]
     # Temperature of choosed storage (warm-Water) to be heated up
     assert stsv.values[my_storage.T_sp_C_ww.global_index] == stsv.values[my_storage.T_sp_C.global_index]
-

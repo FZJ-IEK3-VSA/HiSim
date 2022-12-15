@@ -99,7 +99,7 @@ class VehiclePure(cp.Component):
                 electric_vehicle_found = True
                 break
 
-        if electric_vehicle_found == False or electric_vehicle is None:
+        if not electric_vehicle_found or electric_vehicle is None:
             raise Exception("Electric Vehicle not registered in the database")
 
         self.max_capacity = electric_vehicle['Battery Capacity'] * 1E3
@@ -134,7 +134,7 @@ class VehiclePure(cp.Component):
             if FILEPATH is None:
                 FILEPATH = utils.HISIMPATH
 
-            ev_files = dict()
+            ev_files = {}
             filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
             list_columns = []
             list_values = []
@@ -168,7 +168,7 @@ class VehiclePure(cp.Component):
             discharge_stats = [0]
             # Gets transportation stats
             transportation_devices_stats = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDeviceStates")
-            for index, column in transportation_devices_stats.iterrows():
+            for _, column in transportation_devices_stats.iterrows():
                 if datetime.datetime.strptime(column["DateTime"], '%d/%m/%Y %H:%M') > datetime.datetime.strptime('31/12/2018 23:59', '%d/%m/%Y %H:%M'):
                     if "ParkingAndFullyCharged" in column["DeviceState"] or "ParkingAndCharging" in column["DeviceState"]:
                         car_in_charging_station.append(True)
@@ -289,7 +289,7 @@ class Vehicle(cp.Component):
                 electric_vehicle_found = True
                 break
 
-        if electric_vehicle_found == False or electric_vehicle is None:
+        if not electric_vehicle_found or electric_vehicle is None:
             raise Exception("Electric Vehicle not registered in the database")
 
         self.max_capacity = electric_vehicle['Battery Capacity'] * 1E3
@@ -551,7 +551,7 @@ class EVCharger(cp.Component):
         # Gets inputs
         charging = stsv.get_input_value(self.charging_inputC)
         state = stsv.get_input_value(self.stateC)
-        mode = stsv.get_input_value(self.modeC)
+        # mode = stsv.get_input_value(self.modeC)
         min_soc = stsv.get_input_value(self.min_socC)
 
         capacity = self.state.stored_energy

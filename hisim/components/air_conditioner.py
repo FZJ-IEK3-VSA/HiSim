@@ -94,12 +94,12 @@ class AirConditioner(cp.Component):
                                                                        LoadTypes.ELECTRICITY,
                                                                        Units.WATT)
 
-        self.add_default_connections(Weather, self.get_weather_default_connections())
-        self.add_default_connections(AirConditionercontroller, self.get_controller_default_connections())
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_air_condition_controller())
 
         self.control = control
 
-    def get_weather_default_connections(self):
+    def get_default_connections_from_weather(self):
         print("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
@@ -107,7 +107,7 @@ class AirConditioner(cp.Component):
             cp.ComponentConnection(AirConditioner.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
         return connections
 
-    def get_controller_default_connections(self):
+    def get_default_connections_from_air_condition_controller(self):
         log.information("setting controller default connections in AirConditioner")
         connections = []
         controller_classname = AirConditionercontroller.get_classname()
@@ -320,9 +320,9 @@ class AirConditionercontroller(cp.Component):
                                                           LoadTypes.ANY,
                                                           Units.ANY)
 
-        self.add_default_connections(Building, self.get_building_default_connections())
+        self.add_default_connections( self.get_default_connections_from_building())
 
-    def get_building_default_connections(self):
+    def get_default_connections_from_building(self):
         log.information("setting building default connections in AirConditionercontroller")
         connections = []
         building_classname = Building.get_classname()

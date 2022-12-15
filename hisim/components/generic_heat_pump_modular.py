@@ -164,18 +164,18 @@ class ModularHeatPump(cp.Component):
         self.PowerModifierChannel: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
                                                                         load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, postprocessing_flag=[])
 
-        self.add_default_connections(Weather, self.get_weather_default_connections())
-        self.add_default_connections(controller_l1_heatpump.L1HeatPumpController, self.get_l1_heatpump_controller_default_connections())
-        self.add_default_connections(L2GenericEnergyManagementSystem, self.get_ems_default_connections())
+        self.add_default_connections(self.get_weather_default_connections())
+        self.add_default_connections(self.get_default_connections_from_controller_l1_heatpump())
+        self.add_default_connections(self.get_default_connections_from_L2GenericEnergyManagementSystem())
 
-    def get_weather_default_connections(self):
+    def get_default_connections_from_weather(self):
         log.information("setting weather default connections in HeatPump")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(cp.ComponentConnection(ModularHeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
         return connections
 
-    def get_ems_default_connections(self):
+    def get_default_connections_from_L2GenericEnergyManagementSystem(self):
         log.information("setting weather default connections in HeatPump")
         connections = []
         ems_classname = L2GenericEnergyManagementSystem.get_classname()
@@ -183,7 +183,7 @@ class ModularHeatPump(cp.Component):
             cp.ComponentConnection(ModularHeatPump.ems_flexible_electricity, ems_classname, L2GenericEnergyManagementSystem.FlexibleElectricity))
         return connections
 
-    def get_l1_heatpump_controller_default_connections(self):
+    def get_default_connections_from_controller_l1_heatpump(self):
         log.information("setting l1 default connections in HeatPump")
         connections = []
         controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()

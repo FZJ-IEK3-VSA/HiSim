@@ -227,14 +227,12 @@ class L1BuildingHeatController(cp.Component):
             mandatory=False,
         )
 
-        self.add_default_connections(Building, self.get_building_default_connections())
+        self.add_default_connections( self.get_building_default_connections())
         self.add_default_connections(
-            generic_hot_water_storage_modular.HotWaterStorage,
-            self.get_buffer_default_connections(),
+            self.get_default_connections_from_hot_water_storage()
         )
         self.add_default_connections(
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-            self.get_ems_default_connections(),
+            self.get_default_connections_from_ems()
         )
 
     def get_building_default_connections(self):
@@ -253,7 +251,7 @@ class L1BuildingHeatController(cp.Component):
         )
         return connections
 
-    def get_ems_default_connections(self):
+    def get_default_connections_from_ems(self):
         """Sets the default connections for the building."""
         log.information(
             "setting building default connections in L1 building Controller"
@@ -271,7 +269,7 @@ class L1BuildingHeatController(cp.Component):
         )
         return connections
 
-    def get_buffer_default_connections(self):
+    def get_default_connections_from_hot_water_storage(self):
         """Sets default connections for the boiler."""
         log.information("setting buffer default connections in L1 building Controller")
         connections = []

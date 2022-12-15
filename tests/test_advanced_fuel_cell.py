@@ -13,11 +13,11 @@ def test_chp_system():
     my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
 
     # CHP-System
-    min_operation_time=60
-    min_idle_time = 15
-    gas_type = "Methan"
-    operating_mode = "electricity"
-    p_el_max=3_000
+    # min_operation_time=60
+    # min_idle_time = 15
+    # gas_type = "Methan"
+    # operating_mode = "electricity"
+    # p_el_max=3_000
 
     #===================================================================================================================
     # Set Gas Heater

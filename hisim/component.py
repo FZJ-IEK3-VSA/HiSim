@@ -176,11 +176,16 @@ class Component:
         self.simulation_repository: SimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
-    def add_default_connections(self, component: Type[Component], connections: List[ComponentConnection]) -> None:
+    def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """
-        classname: str = component.get_classname()
-        self.default_connections[classname] = connections
-        log.trace("added connections: " + str(self.default_connections))
+
+        # classname: str = component.get_classname()
+        component_name = connections[0].source_class_name
+        for connection in connections:
+            if connection.source_class_name != component_name:
+                raise ValueError("Trying to add connections to different components in one go.")
+        self.default_connections[component_name] = connections
+        log.trace("added default connections for connections from : " + component_name  + "\n"  + str(self.default_connections))
 
     def i_prepare_simulation(self) -> None:
         """ Gets called before the simulation to prepare the calculation. """

@@ -85,7 +85,7 @@ class GCHP(cp.Component):
             load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION, lt.ComponentType.FUEL_CELL])
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(self.component_name, self.FuelDelivered, lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
-        self.add_default_connections(L1GenericCHPRuntimeController, self.get_l1_controller_default_connections())
+        self.add_default_connections( self.get_default_connections_from_l1_generic_chp_runtime_controller())
         self.state: GenericCHPState
         self.previous_state: GenericCHPState
 
@@ -122,7 +122,7 @@ class GCHP(cp.Component):
         # heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
         stsv.set_output_value(self.FuelDeliveredC, self.state.state * self.p_fuel)
 
-    def get_l1_controller_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_l1_generic_chp_runtime_controller(self) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic CHP")
         connections: List[cp.ComponentConnection] = []
         controller_classname = L1GenericCHPRuntimeController.get_classname()
@@ -232,8 +232,8 @@ class L1GenericCHPRuntimeController(cp.Component):
         self.HydrogenSOCC: cp.ComponentInput = self.add_input(self.component_name, self.HydrogenSOC, lt.LoadTypes.HYDROGEN, lt.Units.PERCENT,
                                                               mandatory=True)
 
-        self.add_default_connections(controller_l2_generic_heat_simple.L2GenericHeatController, self.get_l2_controller_default_connections())
-        self.add_default_connections(generic_hydrogen_storage.GenericHydrogenStorage, self.get_hydrogen_storage_default_connections())
+        self.add_default_connections(self.get_default_connections_from_l2_generic_heat_controller())
+        self.add_default_connections(self.get_default_connections_from_generic_hydrogen_storage())
 
         # add outputs
         self.L1DeviceSignalC: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ON_OFF, lt.Units.BINARY)
@@ -241,7 +241,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         self.state: L1GenericCHPControllerState
         self.previous_state: L1GenericCHPControllerState
 
-    def get_l2_controller_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_l2_generic_heat_controller(self) -> List[cp.ComponentConnection]:
         log.information("setting l2 default connections in l1")
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l2_generic_heat_simple.L2GenericHeatController.get_classname()
@@ -249,7 +249,7 @@ class L1GenericCHPRuntimeController(cp.Component):
                                                   controller_l2_generic_heat_simple.L2GenericHeatController.l2_device_signal))
         return connections
 
-    def get_hydrogen_storage_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_hydrogen_storage(self) -> List[cp.ComponentConnection]:
         log.information("setting generic H2 storage default connections in L1 of generic CHP")
         connections: List[cp.ComponentConnection] = []
         h2storage_classname = generic_hydrogen_storage.GenericHydrogenStorage.get_classname()

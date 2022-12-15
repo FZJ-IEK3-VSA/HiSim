@@ -244,7 +244,7 @@ class PVSystem(cp.Component):
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=PVSystem.ElectricityOutput,
                                                                        load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-        self.add_default_connections(Weather, self.get_weather_default_connections())
+        self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
     def get_default_config(power: float = 10E3, source_weight: int = 1) -> Any:
@@ -253,7 +253,7 @@ class PVSystem(cp.Component):
             source_weight=source_weight)
         return config
 
-    def get_weather_default_connections(self):
+    def get_default_connections_from_weather(self):
         log.information("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()

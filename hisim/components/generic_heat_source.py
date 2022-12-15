@@ -112,9 +112,9 @@ class HeatSource(cp.Component):
         else:
             self.FuelDeliveredC.unit = lt.Units.WATT_HOUR
 
-        self.add_default_connections(controller_l1_heatpump.L1HeatPumpController, self.get_l1_controller_default_connections())
+        self.add_default_connections(self.get_default_connections_controller_l1_heatpump())
 
-    def get_l1_controller_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_controller_l1_heatpump(self) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in Generic Heat Source")
         connections = []
         controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()

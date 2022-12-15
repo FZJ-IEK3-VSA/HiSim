@@ -518,20 +518,11 @@ class Building(dynamic_component.DynamicComponent):
         # =================================================================================================================================
         # Add and get default connections
 
-        self.add_default_connections(
-            Weather,
-            self.get_weather_default_connections(),
-        )
-        self.add_default_connections(
-            Occupancy,
-            self.get_occupancy_default_connections(),
-        )
-        self.add_default_connections(
-            UtspLpgConnector,
-            self.get_utsp_default_connections(),
-        )
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_occupancy())
+        self.add_default_connections(self.get_default_connections_from_utsp())
 
-    def get_weather_default_connections(
+    def get_default_connections_from_weather(
         self,
     ):
         """Get weather default connnections."""
@@ -596,7 +587,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         return connections
 
-    def get_occupancy_default_connections(
+    def get_default_connections_from_occupancy(
         self,
     ):
         """Get occupancy default connections."""
@@ -612,7 +603,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         return connections
 
-    def get_utsp_default_connections(
+    def get_default_connections_from_utsp(
         self,
     ):
         """Gets UTSP default connections."""

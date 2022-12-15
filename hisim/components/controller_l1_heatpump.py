@@ -175,11 +175,11 @@ class L1HeatPumpController(cp.Component):
         self.flexible_electricity_input: cp.ComponentInput = self.add_input(self.component_name, self.FlexibileElectricity,
                                                                             LoadTypes.ELECTRICITY, Units.WATT, mandatory=False)
 
-        self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_buffer_default_connections())
-        self.add_default_connections(building.Building, self.get_building_default_connections())
-        self.add_default_connections(controller_l2_energy_management_system.L2GenericEnergyManagementSystem, self.get_ems_default_connections())
+        self.add_default_connections(self.get_default_connections_generic_hot_water_storage_modular())
+        self.add_default_connections(self.get_default_connections_from_building())
+        self.add_default_connections(self.get_default_connections_from_controller_l2_energy_management_system())
 
-    def get_ems_default_connections(self):
+    def get_default_connections_from_controller_l2_energy_management_system(self):
         """ Sets the default connections for the building. """
         log.information("setting building default connections in L1 building Controller")
         connections = []
@@ -188,7 +188,7 @@ class L1HeatPumpController(cp.Component):
                                                   controller_l2_energy_management_system.L2GenericEnergyManagementSystem.FlexibleElectricity))
         return connections
 
-    def get_buffer_default_connections(self):
+    def get_default_connections_generic_hot_water_storage_modular(self):
         """ Sets default connections for the boiler. """
         log.information("setting buffer default connections in L1 building Controller")
         connections = []
@@ -197,7 +197,7 @@ class L1HeatPumpController(cp.Component):
                                                   generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean))
         return connections
 
-    def get_building_default_connections(self):
+    def get_default_connections_from_building(self):
         """ Sets default connections for the boiler. """
         log.information("setting buffer default connections in L1 building Controller")
         connections = []

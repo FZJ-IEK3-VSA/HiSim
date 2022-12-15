@@ -1,10 +1,8 @@
 from os import path, listdir, makedirs
-import shutil
 import json
 
 from hisim import component as cp
 from hisim.components import generic_smart_device
-from hisim.components import loadprofilegenerator_connector
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
@@ -19,15 +17,15 @@ def test_smart_device():
                                                                  seconds_per_timestep=60)
 
     # call LPF to copy flexibilty device activation file from LPG to right location if nothing is there
-    my_occupancy_profile = "CH01"
+    # my_occupancy_profile = "CH01"
 
-    my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    my_occupancy_config.profile_name=my_occupancy_profile
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=mysim)
+    # my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    # my_occupancy_config.profile_name=my_occupancy_profile
+    # my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=mysim)
 
     filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
-    jsonfile = open(filepath)
-    strfile = json.load(jsonfile)
+    with open(filepath, encoding="utf-8") as jsonfile:
+        strfile = json.load(jsonfile)
     device = strfile[0]['Device']['Name']
 
     #create smart_device

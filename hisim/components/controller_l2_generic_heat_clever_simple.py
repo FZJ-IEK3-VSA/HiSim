@@ -175,9 +175,9 @@ class L2HeatSmartController(cp.Component):
         self.L1RunTimeSignalC: cp.ComponentInput = self.add_input(
             self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY, True)
         
-        self.add_default_connections( Building, self.get_building_default_connections( ) )
-        self.add_default_connections( generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections( ) )
-        self.add_default_connections(controller_l1_generic_runtime.L1GenericRuntimeController, self.get_l1_default_connections())
+        self.add_default_connections(self.get_default_connections_from_buildings())
+        self.add_default_connections(self.get_default_connections_from_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_controller_l1_generic_runtime())
         
         self.ElectricityTargetC: cp.ComponentInput = self.add_input( self.component_name,
                                                                       self.ElectricityTarget,
@@ -187,7 +187,7 @@ class L2HeatSmartController(cp.Component):
         self.state: Any
         self.previous_state: Any
 
-    def get_building_default_connections( self ):
+    def get_default_connections_from_buildings( self ):
         log.information("setting building default connections in L2 Controller")
         connections = [ ]
         building_classname = Building.get_classname( )
@@ -196,13 +196,13 @@ class L2HeatSmartController(cp.Component):
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
-    def get_boiler_default_connections( self ):
+    def get_default_connections_from_hot_water_storage( self ):
         log.information("setting boiler default connections in L2 Controller")
         connections = [ ]
         boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname( )
         connections.append(cp.ComponentConnection(L2HeatSmartController.ReferenceTemperature, boiler_classname, generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean))
         return connections
-    def get_l1_default_connections( self ):
+    def get_default_connections_from_controller_l1_generic_runtime( self ):
         log.information("setting L1 default connections in L2 Controller")
         connections = []
         l1_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()

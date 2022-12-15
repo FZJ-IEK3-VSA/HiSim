@@ -122,13 +122,13 @@ class L1GenericRuntimeController(cp.Component):
         # add inputs
         self.l2_device_signal_channel: cp.ComponentInput = self.add_input(self.component_name, self.L2DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
                                                                           mandatory=True)
-        self.add_default_connections(controller_l2_generic_heat_clever_simple.L2HeatSmartController, self.get_l2_controller_default_connections())
+        self.add_default_connections(self.get_default_connections_from_controller_l2_generic_heat_clever_simple())
 
         # add outputs
         self.l1_device_signal_channel: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY)
         self.l1_runtime_signal: cp.ComponentOutput = self.add_output(self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY)
 
-    def get_l2_controller_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_controller_l2_generic_heat_clever_simple(self) -> List[cp.ComponentConnection]:
         """ Makes default connections to l2 smart controllers. """
         log.information("setting l2 default connections in l1")
         connections = []

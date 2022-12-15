@@ -105,7 +105,7 @@ class GenericElectrolyzer(cp.Component):
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(object_name=self.component_name,
             field_name=GenericElectrolyzer.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, lt.ComponentType.ELECTROLYZER])
-        self.add_default_connections(L1GenericElectrolyzerController, self.get_l1_controller_default_connections())
+        self.add_default_connections(self.get_default_connections_from_L1GenericElectrolyzerController())
         self.state: ElectrolyzerState
         self.previous_state: ElectrolyzerState
 
@@ -113,7 +113,7 @@ class GenericElectrolyzer(cp.Component):
         """ Prepares the simulation. """
         pass
 
-    def get_l1_controller_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_L1GenericElectrolyzerController(self) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic electrolyzer")
         connections: List[cp.ComponentConnection] = []
         controller_classname = L1GenericElectrolyzerController.get_classname()
@@ -278,9 +278,9 @@ class L1GenericElectrolyzerController(cp.Component):
         self.ElectricityTargetC: cp.ComponentOutput = self.add_output(self.component_name, self.ElectricityTarget, lt.LoadTypes.ELECTRICITY,
                                                                       lt.Units.WATT)
 
-        self.add_default_connections(generic_hydrogen_storage.GenericHydrogenStorage, self.get_hydrogenstorage_default_connections())
+        self.add_default_connections(self.get_default_connections_from_hydrogenstorage())
 
-    def get_hydrogenstorage_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_hydrogenstorage(self) -> List[cp.ComponentConnection]:
         log.information("setting generic H2 storage default connections in L1 of generic electrolyzer")
         connections: List[cp.ComponentConnection] = []
         h2storage_classname = generic_hydrogen_storage.GenericHydrogenStorage.get_classname()

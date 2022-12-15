@@ -142,17 +142,17 @@ class GenericHeatPump(cp.Component):
 
         self.number_of_cyclesC: cp.ComponentOutput = self.add_output(self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY)
 
-        self.add_default_connections(Weather, self.get_weather_default_connections())
-        self.add_default_connections(HeatPumpController, self.get_controller_default_connections())
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_heatpump_controller())
 
-    def get_weather_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_weather(self) -> List[cp.ComponentConnection]:
         log.information("setting weather default connections in HeatPump")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(cp.ComponentConnection(GenericHeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
         return connections
 
-    def get_controller_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_heatpump_controller(self) -> List[cp.ComponentConnection]:
         log.information("setting controller default connections in HeatPump")
         connections = []
         controller_classname = HeatPumpController.get_classname()
@@ -371,11 +371,11 @@ class HeatPumpController(cp.Component):
                                                                     False)
         self.stateC: cp.ComponentOutput = self.add_output(self.component_name, self.State, LoadTypes.ANY, Units.ANY)
 
-        self.add_default_connections(Building, self.get_building_default_connections())
+        self.add_default_connections(self.get_default_connections_from_building())
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-    def get_building_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
         log.information("setting building default connections in Heatpumpcontroller")
         connections = []
         building_classname = Building.get_classname()

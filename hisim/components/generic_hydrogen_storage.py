@@ -89,8 +89,8 @@ class GenericHydrogenStorage(cp.Component):
         self.HydrogenSOCC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.HydrogenSOC,
             load_type=lt.LoadTypes.HYDROGEN, unit=lt.Units.PERCENT, postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT])
 
-        self.add_default_connections(generic_electrolyzer.GenericElectrolyzer, self.get_electrolyzer_default_connections())
-        self.add_default_connections(generic_CHP.GCHP, self.get_fuelcell_default_connections())
+        self.add_default_connections(self.get_default_connections_from_generic_electrolyzer())
+        self.add_default_connections(self.get_default_connections_from_generic_CHP())
         self.state: Any
         self.previous_state: Any
 
@@ -98,14 +98,14 @@ class GenericHydrogenStorage(cp.Component):
         """ Prepares the simulation. """
         pass
 
-    def get_fuelcell_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_CHP(self) -> List[cp.ComponentConnection]:
         log.information("setting fuel cell default connections in generic H2 storage")
         connections: List[cp.ComponentConnection] = []
         chp_classname = generic_CHP.GCHP.get_classname()
         connections.append(cp.ComponentConnection(GenericHydrogenStorage.HydrogenOutput, chp_classname, generic_CHP.GCHP.FuelDelivered))
         return connections
 
-    def get_electrolyzer_default_connections(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_electrolyzer(self) -> List[cp.ComponentConnection]:
         log.information("setting electrolyzer default connections in generic H2 storage")
         connections: List[cp.ComponentConnection] = []
         electrolyzer_classname = generic_electrolyzer.GenericElectrolyzer.get_classname()

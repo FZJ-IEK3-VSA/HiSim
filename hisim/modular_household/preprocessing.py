@@ -12,7 +12,8 @@ def calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power
         if not pv_included:
             hisim.log.information("Error: PV bought but not included")
         else:
-            ccpv = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostPV.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostPV.json'), mode='r', encoding="utf-8") as f:
+                ccpv = json.load(f)
             pv_cost = scipy.interpolate.interp1d(ccpv["capacity_for_cost"], ccpv["cost_per_capacity"])
             pv_cost = pv_cost(pv_peak_power)
     else:
@@ -26,7 +27,8 @@ def calculate_smart_devices_investment_cost(economic_parameters, smart_devices_i
         if not smart_devices_included:
             hisim.log.information("Error: Smart Devices bought but not included")
         else:
-            ccsd = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostSmartDevice.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostSmartDevice.json'), mode='r', encoding="utf-8") as f:
+                ccsd = json.load(f)
             smart_devices_cost = ccsd["smart_devices_cost"]
     else:
         smart_devices_cost = 0
@@ -36,7 +38,8 @@ def calculate_smart_devices_investment_cost(economic_parameters, smart_devices_i
 def calculate_surplus_controller_investment_cost(economic_parameters):
     """SURPLUS CONTROLLER."""
     if economic_parameters["surpluscontroller_bought"]:
-        ccsc = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostSurplusController.json'), mode='r'))
+        with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostSurplusController.json'), mode='r', encoding="utf-8") as f:
+            ccsc = json.load(f)
         surplus_controller_cost = ccsc["surplus_controller_cost"]
     else:
         surplus_controller_cost = 0
@@ -49,7 +52,8 @@ def calculate_heating_investment_cost(economic_parameters, heatpump_included, he
         if not heatpump_included:
             hisim.log.information("Error: heatpump bought but not included")
         else:
-            cchp = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostHeatPump.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostHeatPump.json'), mode='r', encoding="utf-8") as f:
+                cchp = json.load(f)
             heatpump_cost_interp = scipy.interpolate.interp1d(cchp["capacity_for_cost"], cchp["cost_per_capacity"])
             heatpump_cost = heatpump_cost_interp(heater_capacity)
     else:
@@ -63,7 +67,8 @@ def calculate_battery_investment_cost(economic_parameters, battery_included, bat
         if not battery_included:
             hisim.log.information("Error: battery bought but not included")
         else:
-            ccb = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostBattery.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostBattery.json'), encoding="utf-8", mode='r') as f:
+                ccb = json.load(f)
             battery_cost_interp = scipy.interpolate.interp1d(ccb["capacity_cost"], ccb["cost"])
             battery_cost = battery_cost_interp(battery_capacity)
     else:
@@ -77,7 +82,8 @@ def calculate_chp_investment_cost(economic_parameters, chp_included, chp_power):
         if not chp_included:
             hisim.log.information("Error: chp bought but not included")
         else:
-            ccchp = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostCHP.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostCHP.json'), encoding="utf-8", mode='r') as f:
+                ccchp = json.load(f)
             chp_cost_interp = scipy.interpolate.interp1d(ccchp["capacity_for_cost"], ccchp["cost_per_capacity"])
             chp_cost = chp_cost_interp(chp_power)
     else:
@@ -91,7 +97,8 @@ def calculate_electrolyzer_investment_cost(economic_parameters, electrolyzer_inc
         if not electrolyzer_included:
             hisim.log.information("Error: electrolyzer bought but not included")
         else:
-            ccel = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostElectrolyzer.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostElectrolyzer.json'), encoding="utf-8", mode='r') as f:
+                ccel = json.load(f)
             electrolyzer_cost_interp = scipy.interpolate.interp1d(ccel["capacity_for_cost"], ccel["cost_per_capacity"])
             electrolyzer_cost = electrolyzer_cost_interp(electrolyzer_power)
     else:
@@ -105,7 +112,8 @@ def calculate_h2storage_investment_cost(economic_parameters, h2system_included, 
         if not h2system_included:
             hisim.log.information("Error: h2system bought but not included")
         else:
-            cch2 = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostH2Storage.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostH2Storage.json'), encoding="utf-8", mode='r') as f:
+                cch2 = json.load(f)
             h2_storage_cost_interp = scipy.interpolate.interp1d(cch2["capacity_for_cost"], cch2["cost_per_capacity"])
             h2_storage_cost = h2_storage_cost_interp(h2_storage_size)
     else:
@@ -119,7 +127,8 @@ def calculate_electric_vehicle_investment_cost(economic_parameters, ev_included,
         if not ev_included:
             hisim.log.information("Error: EV bought but not included")
         else:
-            ccev = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostElectricVehicle.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostElectricVehicle.json'), encoding="utf-8", mode='r') as f:
+                ccev = json.load(f)
             ev_cost_interp = scipy.interpolate.interp1d(ccev["capacity_for_cost"], ccev["cost_per_capacity"])
             ev_cost = ev_cost_interp(ev_capacity)
     else:
@@ -133,7 +142,8 @@ def calculate_buffer_investment_cost(economic_parameters, buffer_included, buffe
         if not buffer_included:
             hisim.log.information("Error: Buffer bought but not included")
         else:
-            ccbu = json.load(open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostBuffer.json'), mode='r'))
+            with open(file=path.join(hisim.utils.HISIMPATH['modular_household'], 'ComponentCostBuffer.json'), encoding="utf-8", mode='r') as f:
+                ccbu = json.load(f)
             buffer_cost_interp = scipy.interpolate.interp1d(ccbu["capacity_for_cost"], ccbu["cost_per_capacity"])
             buffer_cost = buffer_cost_interp(buffer_volume)
     else:

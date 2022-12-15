@@ -187,10 +187,10 @@ class L2GenericHeatController(cp.Component):
         self.reference_temperature_channel: cp.ComponentInput = self.add_input(self.component_name, self.ReferenceTemperature, LoadTypes.TEMPERATURE,
                                                                                Units.CELSIUS, mandatory=True)
 
-        self.add_default_connections(Building, self.get_building_default_connections())
-        self.add_default_connections(generic_hot_water_storage_modular.HotWaterStorage, self.get_boiler_default_connections())
+        self.add_default_connections(self.get_default_connections_from_buildings())
+        self.add_default_connections(self.get_default_connections_from_generic_hot_water_storage_modular())
 
-    def get_building_default_connections(self):
+    def get_default_connections_from_buildings(self):
         """ Sets the default connections for the building. """
         log.information("setting building default connections in L2 Controller")
         connections = []
@@ -198,12 +198,12 @@ class L2GenericHeatController(cp.Component):
         connections.append(cp.ComponentConnection(L2GenericHeatController.ReferenceTemperature, building_classname, Building.TemperatureMean))
         return connections
 
-    def get_boiler_default_connections(self):
+    def get_default_connections_from_generic_hot_water_storage_modular(self):
         """ Sets default connections for the boiler. """
         log.information("setting boiler default connections in L2 Controller")
         connections = []
-        boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
-        connections.append(cp.ComponentConnection(L2GenericHeatController.ReferenceTemperature, boiler_classname,
+        hotwaterstorage_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+        connections.append(cp.ComponentConnection(L2GenericHeatController.ReferenceTemperature, hotwaterstorage_classname,
                                                   generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean))
         return connections
 

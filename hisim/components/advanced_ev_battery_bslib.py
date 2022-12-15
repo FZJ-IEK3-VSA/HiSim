@@ -112,15 +112,14 @@ class CarBattery(Component):
                                                     unit=Units.ANY,
                                                     postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
         
-        self.add_default_connections(controller_l1_generic_ev_charge.L1Controller, self.get_charge_controller_default_connections())
+        self.add_default_connections(self.get_default_connections_from_charge_controller())
 
-    def get_charge_controller_default_connections(self) -> Any:
+    def get_default_connections_from_charge_controller(self) -> Any:
         log.information("setting ev charge controller default connections in car battery")
         connections: List[ComponentConnection] = []
-        ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname( )
+        ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname()
         connections.append(ComponentConnection(CarBattery.LoadingPowerInput, ev_charge_controller_classname, controller_l1_generic_ev_charge.L1Controller.ToOrFromBattery))
         return connections
-        
 
     def i_save_state(self)  -> None:
         self.previous_state = deepcopy(self.state)

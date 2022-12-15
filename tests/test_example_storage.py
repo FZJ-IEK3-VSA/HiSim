@@ -44,7 +44,7 @@ def test_example_storage():
     stsv.values[discharging_output.global_index] = -10  # fake discharg input
 
     timestep = 300
-    
+
     print("\n")
     log.information("timestep = " + str(timestep))
     log.information("fill state (in the beginning) = " + str(my_example_storage.state.fill))

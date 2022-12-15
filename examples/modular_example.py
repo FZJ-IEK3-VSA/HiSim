@@ -399,9 +399,9 @@ def modular_household_explicit(
                 count=count,
             )
 
-        buffer_cost = preprocessing.calculate_buffer_investment_cost(
-            economic_parameters, buffer_included, buffer_volume
-        )
+        # buffer_cost = preprocessing.calculate_buffer_investment_cost(
+        #     economic_parameters, buffer_included, buffer_volume
+        # )
 
     else:
         if heating_system_installed in [
@@ -457,25 +457,15 @@ def modular_household_explicit(
         )
         heater.append(my_chp)
 
-        chp_cost = preprocessing.calculate_chp_investment_cost(
-            economic_parameters, chp_included, chp_power
-        )
-        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(
-            economic_parameters, h2_storage_included, h2_storage_size
-        )
-        electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(
-            economic_parameters, electrolyzer_included, electrolyzer_power
-        )
-
-        chp_cost = preprocessing.calculate_chp_investment_cost(
-            economic_parameters, chp_included, chp_power
-        )
-        h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(
-            economic_parameters, h2_storage_included, h2_storage_size
-        )
-        electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(
-            economic_parameters, electrolyzer_included, electrolyzer_power
-        )
+        # chp_cost = preprocessing.calculate_chp_investment_cost(
+        #     economic_parameters, chp_included, chp_power
+        # )
+        # h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(
+        #     economic_parameters, h2_storage_included, h2_storage_size
+        # )
+        # electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(
+        #     economic_parameters, electrolyzer_included, electrolyzer_power
+        # )
 
     if buffer_included:
         my_buffer.add_component_inputs_and_connect(
@@ -507,62 +497,59 @@ def modular_household_explicit(
         my_sim.add_component(my_electricity_controller)
 
     # co2_cost = 1000  # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
-    # injection = 1000
-    # autarky_rate = 1000
-    # self_consumption_rate = 1000
-    surplus_controller_cost = 400
+    # surplus_controller_cost = 400
 
-    investment_cost = preprocessing.total_investment_cost_threshold_exceedance_check(
-        economic_parameters,
-        pv_cost,
-        smart_devices_cost,
-        battery_cost,
-        surplus_controller_cost,
-        heatpump_cost,
-        buffer_cost,
-        chp_cost,
-        h2_storage_cost,
-        electrolyzer_cost,
-        ev_cost,
-    )
-    preprocessing.investment_cost_per_component_exceedance_check(
-        economic_parameters,
-        pv_cost,
-        smart_devices_cost,
-        battery_cost,
-        surplus_controller_cost,
-        heatpump_cost,
-        buffer_cost,
-        chp_cost,
-        h2_storage_cost,
-        electrolyzer_cost,
-        ev_cost,
-    )
+    # investment_cost = preprocessing.total_investment_cost_threshold_exceedance_check(
+    #     economic_parameters,
+    #     pv_cost,
+    #     smart_devices_cost,
+    #     battery_cost,
+    #     surplus_controller_cost,
+    #     heatpump_cost,
+    #     buffer_cost,
+    #     chp_cost,
+    #     h2_storage_cost,
+    #     electrolyzer_cost,
+    #     ev_cost,
+    # )
+    # preprocessing.investment_cost_per_component_exceedance_check(
+    #     economic_parameters,
+    #     pv_cost,
+    #     smart_devices_cost,
+    #     battery_cost,
+    #     surplus_controller_cost,
+    #     heatpump_cost,
+    #     buffer_cost,
+    #     chp_cost,
+    #     h2_storage_cost,
+    #     electrolyzer_cost,
+    #     ev_cost,
+    # )
 
-    hisim.log.information(
-        "total investment_cost"
-        + str(investment_cost)
-        + "pv_cost"
-        + str(pv_cost)
-        + "smart_devices_cost"
-        + str(smart_devices_cost)
-        + "battery_cost"
-        + str(battery_cost)
-        + "surplus_controller_cost"
-        + str(surplus_controller_cost)
-        + "heatpump_cost"
-        + str(heatpump_cost)
-        + "buffer_cost"
-        + str(buffer_cost)
-        + "chp_cost"
-        + str(chp_cost)
-        + "h2_storage_cost"
-        + str(h2_storage_cost)
-        + "electrolyzer_cost"
-        + str(electrolyzer_cost)
-        + "ev_cost"
-        + str(ev_cost)
-    )
+    # hisim.log.information(
+    #     "total investment_cost"
+    #     + str(investment_cost)
+    #     + "pv_cost"
+    #     + str(pv_cost)
+    #     + "smart_devices_cost"
+    #     + str(smart_devices_cost)
+    #     + "battery_cost"
+    #     + str(battery_cost)
+    #     + "surplus_controller_cost"
+    #     + str(surplus_controller_cost)
+    #     + "heatpump_cost"
+    #     + str(heatpump_cost)
+    #     + "buffer_cost"
+    #     + str(buffer_cost)
+    #     + "chp_cost"
+    #     + str(chp_cost)
+    #     + "h2_storage_cost"
+    #     + str(h2_storage_cost)
+    #     + "electrolyzer_cost"
+    #     + str(electrolyzer_cost)
+    #     + "ev_cost"
+    #     + str(ev_cost)
+    # )
 
 
 def needs_ems(

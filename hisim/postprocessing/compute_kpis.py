@@ -95,11 +95,11 @@ def compute_self_consumption_and_injection(results: pd.DataFrame) -> Tuple[pd.Se
     self_consumption = (
         pd.concat(
             (
-                results["production"][
-                    results["production"] <= consumption_with_battery
+                production_with_battery[
+                    production_with_battery <= consumption_with_battery
                 ],
                 consumption_with_battery[
-                    consumption_with_battery < results["production"]
+                    consumption_with_battery < production_with_battery
                 ],
             )
         )
@@ -230,6 +230,7 @@ def compute_kpis(
 
     co2 = co2 + (consumption_sum - self_consumption_sum) * co2_price_constant
 
+    # compute cost and co2 for LoadTypes other than electricity
     for fuel in [LoadTypes.GAS, LoadTypes.OIL,
     LoadTypes.DISTRICTHEATING, LoadTypes.DIESEL]:
         fuel_price, fuel_co2 = compute_cost_of_fuel_type(

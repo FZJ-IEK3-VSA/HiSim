@@ -43,8 +43,8 @@ https://github.com/FZJ-IEK3-VSA/tsib
 
 
 
-@lru_cache(maxsize=16)
-def simPhotovoltaicFast(temperature_model, dni_extra: Any, DNI: Any, DHI: Any, GHI: Any, azimuth: Any, apparent_zenith: Any,
+
+def simPhotovoltaicFast(temperature_model: Any, dni_extra: Any, DNI: Any, DHI: Any, GHI: Any, azimuth: Any, apparent_zenith: Any,
         temperature: Any, wind_speed: Any, surface_azimuth: float, surface_tilt: float) -> Any:
     """
     Simulates a defined PV array with the Sandia PV Array Performance Model.
@@ -54,9 +54,9 @@ def simPhotovoltaicFast(temperature_model, dni_extra: Any, DNI: Any, DHI: Any, G
     Parameters
     ----------
     surface_tilt: int or float, optional (default:30)
-        Tilt angle of of the array in degree.
+        Tilt angle of the array in degree.
     surface_azimuth: int or float, optional (default:180)
-        Azimuth angle of of the array in degree. 180 degree means south,
+        Azimuth angle of the array in degree. 180 degree means south,
         90 degree east and 270 west.
     losses: float, optional (default: 0.1)
         Losses due to soiling, mismatch, diode connections, dc wiring etc.

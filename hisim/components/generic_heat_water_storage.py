@@ -1,9 +1,7 @@
 # Generic/Built-in
-import copy
-import numpy as np
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
+from hisim.component import Component, ComponentInput, ComponentOutput
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -174,7 +172,7 @@ class HeatStorage(Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues, c_w: float) -> Any:
+    def adding_all_possible_mass_flows(self, stsv: cp.SingleTimeStepValues) -> Any:
         production:float = 0
         # function to add all possible mass flows
 
@@ -231,7 +229,7 @@ class HeatStorage(Component):
         T_sp_C = (T_sp_var_ww + T_sp_var_hw) / 2
 
         if stsv.get_input_value(self.control_signal_choose_storage) == 1:  # choose to heat up warm water storage
-            production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw)
+            production_var = self.adding_all_possible_mass_flows(stsv)
             result_ww = self.calculate_new_storage_temperature(
                 seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep, T_sp=T_sp_var_ww,
                 production=production_var, last=last_var_ww, c_w=self.cw, V_SP=self.V_SP_warm_water)
@@ -242,7 +240,7 @@ class HeatStorage(Component):
                 production=production_var, last=last_var_hw, c_w=self.cw, V_SP=self.V_SP_heating_water)
 
         elif stsv.get_input_value(self.control_signal_choose_storage) == 2:  # choose to heat up heating water storage
-            production_var = self.adding_all_possible_mass_flows(stsv, c_w=self.cw)
+            production_var = self.adding_all_possible_mass_flows(stsv)
             result_hw = self.calculate_new_storage_temperature(
                 seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep, T_sp=T_sp_var_hw,
                 production=production_var, last=last_var_hw, c_w=self.cw, V_SP=self.V_SP_heating_water)

@@ -14,7 +14,6 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -132,26 +131,26 @@ class Occupancy(cp.Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        if self.ww_mass_input.source_output is not None:
+        # if self.ww_mass_input.source_output is not None:
             # ww demand
-            ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
+            # ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
 
             # From Thermal Energy Storage
-            ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)  # kg/s
+            # ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)  # kg/s
             # ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
-            ww_mass_input: float = ww_mass_input_per_sec
-            ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)  # °C
+            # ww_mass_input: float = ww_mass_input_per_sec
+            # ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)  # °C
 
             # Information import
-            freshwater_temperature = (HouseholdWarmWaterDemandConfig.freshwater_temperature)
+            # freshwater_temperature = (HouseholdWarmWaterDemandConfig.freshwater_temperature)
             # temperature_difference_hot = (HouseholdWarmWaterDemandConfig.temperature_difference_hot)  # Grädigkeit
             # temperature_difference_cold = (HouseholdWarmWaterDemandConfig.temperature_difference_cold)
             # energy_losses_watt = HouseholdWarmWaterDemandConfig.heat_exchanger_losses
             # energy_losses = energy_losses_watt * self.seconds_per_timestep
             # energy_losses = 0
-            specific_heat = 4180 / 3600
+            # specific_heat = 4180 / 3600
 
-            ww_energy_demand = (specific_heat * self.water_consumption[timestep] * (ww_temperature_demand - freshwater_temperature))
+            # ww_energy_demand = (specific_heat * self.water_consumption[timestep] * (ww_temperature_demand - freshwater_temperature))
 
             # if (ww_temperature_input > (ww_temperature_demand + temperature_difference_hot) or ww_energy_demand == 0):
             #     demand_satisfied = 1

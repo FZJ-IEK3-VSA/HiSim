@@ -24,6 +24,7 @@ class GenericBatteryState:
         self.min_stored_energy = min_stored_energy
         self.max_var_stored_energy = max_var_stored_energy
         self.min_var_stored_energy = min_var_stored_energy
+        self.chargeWh: float
 
     def charge(self, energy):
         energy = abs(energy)
@@ -112,12 +113,13 @@ class GenericBattery(cp.Component):
         battery_database = utils.load_smart_appliance("Battery")
 
         battery_found = False
+        battery = None
         for battery in battery_database:
             if battery["Manufacturer"] == manufacturer and battery["Model"] == model:
                 battery_found = True
                 break
 
-        if battery_found == False:
+        if battery is None or not battery_found:
             raise Exception("Heat pump model not registered in the database")
 
         self.max_stored_energy = battery['Capacity'] * 1E3
@@ -218,6 +220,3 @@ class BatteryController(cp.Component):
             state = 0.0
 
         stsv.set_output_value(self.stateC, state)
-
-
-

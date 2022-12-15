@@ -183,7 +183,10 @@ disable=raw-checker-failed,
         import-error,
         ungrouped-imports,
         too-many-return-statements,
-        consider-using-enumerate
+        consider-using-enumerate,
+        consider-using-min-builtin,
+        consider-using-max-builtin
+
 
       
 

@@ -77,7 +77,7 @@ class PriceSignal(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         if self.my_simulation_parameters.predictive_control and self.my_simulation_parameters.prediction_horizon:
             priceinjectionforecast = [0.1] * int(self.my_simulation_parameters.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
             pricepurchaseforecast = [0.5] * int(self.my_simulation_parameters.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)

@@ -37,11 +37,11 @@ class SmartController(Component):
                 raise Exception("Input variable is not a component")
             has_not_been_connected = True
             for index, controller in enumerate(self.WrappedControllers):
-                for input in self.WrappedControllers[index].inputs:
-                        for output in component.outputs:
-                            if input.field_name == output.field_name:
-                                has_not_been_connected = False
-                                self.WrappedControllers[index].connect_input(self.WrappedControllers[index].field_name, component.component_name, output.field_name)
+                for input_channel in self.WrappedControllers[index].inputs:
+                    for output in component.outputs:
+                        if input_channel.field_name == output.field_name:
+                            has_not_been_connected = False
+                            self.WrappedControllers[index].connect_input(self.WrappedControllers[index].field_name, component.component_name, output.field_name)
             if has_not_been_connected:
                 raise Exception("No similar inputs from {} are compatible with the outputs of {}!".format(self.WrappedControllers[index].component_name, component.component_name))
 
@@ -76,4 +76,3 @@ class SmartController(Component):
                     raise Exception("Input Component does not have Electricity Output!")
                 self.connect_input(self.WrappedControllers[index].ELECTRICITY_INPUT, component.component_name,
                                    component.ElectricityOutput)
-

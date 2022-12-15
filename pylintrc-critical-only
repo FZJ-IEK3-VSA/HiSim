@@ -182,7 +182,8 @@ disable=raw-checker-failed,
         broad-except,
         import-error,
         ungrouped-imports,
-        too-many-return-statements
+        too-many-return-statements,
+        consider-using-enumerate
 
       
 

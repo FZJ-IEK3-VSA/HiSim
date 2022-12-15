@@ -58,7 +58,7 @@ class CalculateOperation(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         total:float = 0
         for index, input_channel in enumerate(self.inputs):
-            val1 = stsv.get_input_value(input)
+            val1 = stsv.get_input_value(input_channel)
             if index == 0:
                 total = val1
             elif self.operations[index-1] == "Sum":
@@ -141,7 +141,7 @@ class ElectricityGrid(Component):
     def connect_all(self, list_of_operations: Any) -> None:
         if isinstance(list_of_operations, list) is False:
             raise Exception("Input has to be a list!")
-        elif len(list_of_operations) % 2 == 0:
+        if len(list_of_operations) % 2 == 0:
             raise Exception("List of operations is incomplete!")
 
         for index, element in enumerate(list_of_operations):
@@ -161,8 +161,8 @@ class ElectricityGrid(Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         total:float = 0
-        for index, input in enumerate(self.inputs):
-            val1 = stsv.get_input_value(input)
+        for index, input_channel in enumerate(self.inputs):
+            val1 = stsv.get_input_value(input_channel)
             if index == 0:
                 total = val1
             elif self.operations[index-1] == "Sum":
@@ -172,11 +172,9 @@ class ElectricityGrid(Component):
             else:
                 raise Exception("Operation invalid!")
         if self.signal == "Positive":
-            if total <= 0:
-                total = 0
+            total = max(0, total)
         if self.signal == "Negative":
-            if total >= 0:
-                total = 0
+            total = min(0,total)
         stsv.set_output_value(self.electricity_outputC, total)
 
 class SumBuilderForTwoInputs(Component):

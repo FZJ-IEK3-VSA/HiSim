@@ -1,3 +1,4 @@
+# pylint: skip-file
 from copy import deepcopy
 from math import pi
 from typing import List, Any

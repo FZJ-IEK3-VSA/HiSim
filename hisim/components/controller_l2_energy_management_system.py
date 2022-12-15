@@ -52,7 +52,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_inputs,
                          name="L2EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
-
+        self.source_weights_sorted: Any
+        self.components_sorted: Any
+        self.mode: Any
         self.strategy = strategy
         self.limit_to_shave = limit_to_shave
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,

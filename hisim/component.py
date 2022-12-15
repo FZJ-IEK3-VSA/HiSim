@@ -26,9 +26,10 @@ class ConfigBase(JSONWizard):
 
     name: str
 
-    def __init__(self):
+    def __init__(self, name: str):
         """ Initializes. """
-        pass
+        self.name = name
+
 
     @classmethod
     def get_main_classname(cls):

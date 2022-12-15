@@ -6,7 +6,6 @@ from typing import List
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from typing import List
 class RandomNumbers(Component):
     RandomOutput: str = "Random Numbers"
 
@@ -16,7 +15,7 @@ class RandomNumbers(Component):
         self.minimum = minimum
         self.maximum = maximum
         number_range = maximum - minimum
-        for x in range(timesteps):
+        for _ in range(timesteps):
             number = minimum + random.random() * number_range
             self.values.append(number)
         self.output1 = self.add_output(self.component_name,

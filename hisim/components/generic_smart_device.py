@@ -1,20 +1,14 @@
 # Generic/Built-in
-import pandas as pd
 import json
-import numpy as np
 import math as ma
-from typing import Optional, List
+from typing import List
 from os import path
 
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.components import generic_pv_system
-from hisim.components import generic_price_signal
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.components.configuration import PhysicsConfig
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -95,7 +89,8 @@ class SmartDevice( cp.Component ):
         super().__init__ ( name = identifier.replace("/", "-") + '_w' + str(source_weight), my_simulation_parameters = my_simulation_parameters )
 
         self.build( identifier = identifier, source_weight = source_weight, seconds_per_timestep = my_simulation_parameters.seconds_per_timestep )
-
+        self.previous_state: SmartDeviceState
+        self.state: SmartDeviceState
         if my_simulation_parameters.surplus_control and smart_devices_included:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
         else:
@@ -111,10 +106,10 @@ class SmartDevice( cp.Component ):
             load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, mandatory=False )
 
     def i_save_state( self ) -> None:
-        self.previous_state : SmartDeviceState = self.state.clone( )
+        self.previous_state = self.state.clone( )
 
     def i_restore_state(self)  -> None:
-        self.state : SmartDeviceState = self.previous_state.clone( )
+        self.state = self.previous_state.clone( )
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues)  -> None:
         pass
@@ -123,7 +118,7 @@ class SmartDevice( cp.Component ):
         """ Prepares the simulation. """
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_conversion: bool )  -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool )  -> None:
 
         #initialize power
         self.state.actual_power = 0
@@ -156,9 +151,8 @@ class SmartDevice( cp.Component ):
         #load smart device profile
         smart_device_profile = [ ]
         filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
-        f = open( filepath )
-        smart_device_profile = json.load( f )
-        f.close()
+        with open( filepath, encoding="utf-8" ) as f:
+            smart_device_profile = json.load( f )
 
         if not smart_device_profile:
             raise NameError( 'LPG data for smart appliances is missing or located missleadingly' )

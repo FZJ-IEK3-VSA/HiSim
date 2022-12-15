@@ -5,7 +5,7 @@ import numpy as np
 from typing import Optional, Any
 
 # Owned
-import hisim.utils as utils
+from hisim import utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -184,6 +184,8 @@ class L2HeatSmartController(cp.Component):
                                                                       LoadTypes.ELECTRICITY,
                                                                       Units.WATT,
                                                                       mandatory = True)
+        self.state: Any
+        self.previous_state: Any
 
     def get_building_default_connections( self ):
         log.information("setting building default connections in L2 Controller")
@@ -290,7 +292,7 @@ class L2HeatSmartController(cp.Component):
                 #use previous state if l3 was not available
                 self.state = self.previous_state.clone( )
                 
-    def control_heating( self, T_control: float, T_min_heating: float, T_max_heating: float, l3state: Any) -> int:
+    def control_heating( self, T_control: float, T_min_heating: float, l3state: Any) -> int:
         if l3state > 0:
             T_min_heating = T_min_heating + 5
         if T_control < T_min_heating:
@@ -361,7 +363,7 @@ class L2HeatSmartController(cp.Component):
         #
         # #check out during heating season
         # else:
-        control_signal = self.control_heating( T_control = T_control, T_min_heating = self.T_min_heating, T_max_heating = self.T_max_heating, l3state = l3state )
+        control_signal = self.control_heating( T_control = T_control, T_min_heating = self.T_min_heating, l3state = l3state )
         stsv.set_output_value( self.l2_DeviceSignalC, control_signal )
         
     def write_to_report( self ):
@@ -371,4 +373,3 @@ class L2HeatSmartController(cp.Component):
         lines.append( "lower set temperature: {:4.0f} °C".format( self.T_min_heating ) )
         lines.append( "tolerance: {:4.0f} °C".format( self.T_tolerance))
         return lines
-

@@ -1,3 +1,4 @@
+# pylint: skip-file
 from typing import Any
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
 from hisim import loadtypes as lt

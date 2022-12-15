@@ -109,7 +109,7 @@ class ExtendedControllerSimulation:
             raise ValueError
 
         # get temperatures at the chosen sensors
-        for i in range(len(heights_in_tank)):
+        for i in range(len(heights_in_tank)): # pylint: consider-using-enumerate # needs to be a range
             if CHPControllerConfig.height_upper_sensor == heights_in_tank[i]:
                 temperature_upper_sensor = temperatures_in_tank[i]
             if CHPControllerConfig.height_lower_sensor == heights_in_tank[i]:
@@ -151,7 +151,7 @@ class ExtendedControllerSimulation:
                   "You tried " + str(GasControllerConfig.height_upper_sensor) + " and " + str(GasControllerConfig.height_lower_sensor))
             raise ValueError
 
-        for i in range(len(heights_in_tank)):
+        for i in range(len(heights_in_tank)): # pylint: consider-using-enumerate # needs to be a range
             if GasControllerConfig.height_upper_sensor == heights_in_tank[i]:
                 temperature_upper_sensor = temperatures_in_tank[i]
             if GasControllerConfig.height_lower_sensor == heights_in_tank[i]:

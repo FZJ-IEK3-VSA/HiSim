@@ -57,18 +57,18 @@ class CalculateOperation(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         total:float = 0
-        for index, input in enumerate(self.inputs):
+        for index_channel, input in enumerate(self.inputs):
             val1 = stsv.get_input_value(input)
             if index == 0:
                 total = val1
             elif self.operations[index-1] == "Sum":
-                    total = total + val1
+                total = total + val1
             elif self.operations[index-1] == "Subtract":
-                    total = total - val1
+                total = total - val1
             elif self.operations[index-1] == "Multiply":
-                    total = total * val1
+                total = total * val1
             elif self.operations[index-1] == "Divide":
-                    total = total / val1
+                total = total / val1
             else:
                 raise Exception("Operation invalid!")
         stsv.set_output_value(self.output1, total)
@@ -260,5 +260,3 @@ class SumBuilderForThreeInputs(Component):
         val2 = stsv.get_input_value(self.input2)
         val3 = stsv.get_input_value(self.input3)
         stsv.set_output_value(self.output1, val1+val2+val3)
-
-

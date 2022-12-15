@@ -42,13 +42,13 @@ fail-under=10
 #from-stdin=
 
 # Files or directories to be skipped. They should be base names, not paths.
-ignore=CVS
+ignore=["CVS", "conf.py", "household_AC.py"]
 
 # Add files or directories matching the regular expressions patterns to the
 # ignore-list. The regex matches against paths and can be in Posix or Windows
 # format. Because '\' represents the directory delimiter on Windows systems, it
 # can't be used as an escape character.
-ignore-paths=["^docs/conf.py", "^examples/household_AC.py"]
+ignore-paths=
 
 # Files or directories matching the regular expression patterns are skipped.
 # The regex matches against base names, not paths. The default value ignores
@@ -87,7 +87,7 @@ persistent=yes
 py-version=3.10
 
 # Discover python modules and packages in the file system subtree.
-recursive=no
+recursive=yes
 
 # When enabled, pylint would attempt to guess common misconfiguration and emit
 # user-friendly hints instead of false-positive error messages.

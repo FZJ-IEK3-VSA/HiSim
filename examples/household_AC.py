@@ -1,3 +1,4 @@
+# pylint: skip-file
 import gc
 #import objgraph
 import numpy as np

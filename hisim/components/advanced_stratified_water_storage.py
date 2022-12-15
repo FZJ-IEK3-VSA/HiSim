@@ -9,7 +9,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim.components.configuration import WarmWaterStorageConfig
-import hisim.log as log
+from hisim import log
 #from components.extended_storage import WaterSlice
 
 class WaterSlice:

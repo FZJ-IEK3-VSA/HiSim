@@ -77,7 +77,7 @@ class ControllerHeat(cp.Component):
                  my_simulation_parameters: SimulationParameters,
                  config: ControllerHeatConfig) -> None:
         super().__init__(name="ControllerHeat", my_simulation_parameters=my_simulation_parameters)
-
+        self.mode: Any
         self.temperature_storage_target_warm_water = config.temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water = config.temperature_storage_target_heating_water
         self.temperature_storage_target_hysteresis_hw = config.temperature_storage_target_hysteresis_hw
@@ -166,8 +166,6 @@ class ControllerHeat(cp.Component):
         control_signal_chp: float = 0
         control_signal_gas_heater: float = 0
         control_signal_heat_pump: float = 0
-        temperature_storage_target_C = temperature_storage_target_C
-        timestep_of_hysteresis = timestep_of_hysteresis
 
         max_temperature_limit = 5
         if temperature_storage > 0:

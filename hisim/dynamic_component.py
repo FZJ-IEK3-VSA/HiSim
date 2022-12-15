@@ -34,6 +34,18 @@ class DynamicConnectionOutput:
     source_load_type: lt.LoadTypes
     source_unit: lt.Units  # noqa
 
+def search_and_compare(weight_to_search: int, weight_of_component: int,
+    tags_to_search: List[Union[lt.ComponentType, lt.InandOutputType]],
+    tags_of_component: List[Union[lt.ComponentType, lt.InandOutputType]]) -> bool:
+    """Compares weight and tags of component inputs and outputs. """
+    if weight_to_search != weight_of_component:
+        return False
+    else:
+        for tag_search in tags_to_search:
+            if tag_search not in tags_of_component:
+                    return False
+        return True
+
 
 class DynamicComponent(Component):
 
@@ -130,7 +142,12 @@ class DynamicComponent(Component):
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if all(tag in element.source_tags for tag in tags) and weight_counter == element.source_weight:
+            if search_and_compare(
+                weight_to_search=weight_counter,
+                weight_of_component=element.source_weight,
+                tags_to_search=tags,
+                tags_of_component=element.source_tags
+                ):
                 inputvalue = stsv.get_input_value(getattr(self, element.source_component_class))
                 break
         return inputvalue

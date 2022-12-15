@@ -5,8 +5,8 @@ import os
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import utils
+
 
 @utils.measure_execution_time
 def test_basic_household_with_all_resultfiles():

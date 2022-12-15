@@ -57,7 +57,7 @@ class CalculateOperation(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool)-> None:
         total:float = 0
-        for index_channel, input in enumerate(self.inputs):
+        for index, input_channel in enumerate(self.inputs):
             val1 = stsv.get_input_value(input)
             if index == 0:
                 total = val1

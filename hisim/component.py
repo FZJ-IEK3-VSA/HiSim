@@ -30,7 +30,6 @@ class ConfigBase(JSONWizard):
         """ Initializes. """
         self.name = name
 
-
     @classmethod
     def get_main_classname(cls):
         """ Returns the fully qualified class name for the class that is getting configured. Used for Json. """

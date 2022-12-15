@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# pylint: skip-file
 """
 Created on Tue Aug  9 09:06:13 2022
 

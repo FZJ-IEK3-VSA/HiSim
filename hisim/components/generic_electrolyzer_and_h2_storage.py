@@ -53,8 +53,6 @@ class ElectrolyzerSimulation:
                  max_power: float,
                  min_power_percent: float,
                  max_power_percent: float,
-                 min_hydrogen_production_rate_hour: float,
-                 max_hydrogen_production_rate_hour: float,
                  min_hydrogen_production_rate: float,
                  max_hydrogen_production_rate: float,
                  pressure_hydrogen_output: float):
@@ -85,7 +83,7 @@ class ElectrolyzerSimulation:
         self.waste_energy = waste_energy
         self.pressure_hydrogen_output = pressure_hydrogen_output   # not used so far
 
-    def convert_electricity(self, electricity_input, seconds_per_timestep, hydrogen_not_stored ):
+    def convert_electricity(self, electricity_input, hydrogen_not_stored ):
         """
         Electricity from electricity distributor (combination of PV, Grid, CHP and demand) will be converted to hydrogen
 
@@ -126,10 +124,10 @@ class ElectrolyzerSimulation:
             oxygen_output = hydrogen_real * (88.8 / 11.2)
 
             return hydrogen_output, oxygen_output, power_level_real,electricity_input_real
-        elif hydrogen_not_stored<0:
+        if hydrogen_not_stored<0:
             log.error("Error")
             raise ValueError("hydrogen was leftover")
-        elif hydrogen_not_stored == 0:
+        if hydrogen_not_stored == 0:
             electricity_input_real=electricity_input
             return hydrogen_output, oxygen_output, power_level,electricity_input_real
 
@@ -210,8 +208,6 @@ class AdvancedElectrolyzer(Component):
                                                    max_power =config.max_power,
                                                    min_power_percent =config.min_power_percent,
                                                    max_power_percent =config.max_power_percent,
-                                                   min_hydrogen_production_rate_hour =config.min_hydrogen_production_rate_hour,
-                                                   max_hydrogen_production_rate_hour =config.max_hydrogen_production_rate_hour,
                                                    min_hydrogen_production_rate =min_hydrogen_production_rate,
                                                    max_hydrogen_production_rate =max_hydrogen_production_rate,
                                                    pressure_hydrogen_output =config.pressure_hydrogen_output)
@@ -268,7 +264,7 @@ class AdvancedElectrolyzer(Component):
             electricity_input = 0
         if electricity_input >= self.min_power:
             hydrogen_output, oxygen_output, power_level, electricity_needed = \
-                self.electrolyzer.convert_electricity( electricity_input, self.seconds_per_timestep, hydrogen_input / self.seconds_per_timestep )
+                self.electrolyzer.convert_electricity( electricity_input,  hydrogen_input / self.seconds_per_timestep )
             # the losses ae included in the efficiency providedd by supplyer and are not calculated separately
             losses_this_timestep = self.waste_energy
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
@@ -366,7 +362,7 @@ class HydrogenStorageSimulation:
             # W = kg * kWh/kg * 3600_s/h * 1000_1/k / s
             energy_demand = hydrogen_input * self.energy_to_charge * 3600 * 1000 / seconds_per_timestep
             return hydrogen_input, energy_demand, delta_not_stored
-        elif self.fill >= self.max_capacity:
+        if self.fill >= self.max_capacity:
             # tank is already full
             hydrogen_input = 0
             energy_demand = 0
@@ -575,5 +571,3 @@ class HydrogenStorage(Component):
         lines = []
         lines.append("Hydrogen Storage: " + self.component_name)
         return lines
-
-

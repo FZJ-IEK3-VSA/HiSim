@@ -47,14 +47,14 @@ class GasHeater(Component):
 
     def __init__(self, my_simulation_parameters: SimulationParameters, config : GenericGasHeaterConfig) -> None:
         super().__init__(name="GasHeater", my_simulation_parameters=my_simulation_parameters)
-        self.control_signal: ComponentInput = self.add_input(self.component_name, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
-        self.mass_inp_temp: ComponentInput = self.add_input(self.component_name, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
+        self.control_signal_channel: ComponentInput = self.add_input(self.component_name, GasHeater.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True)
+        self.mass_inp_temp_channel: ComponentInput = self.add_input(self.component_name, GasHeater.MassflowInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True)
 
 
-        self.mass_out: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
-        self.mass_out_temp: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
-        self.gas_demand: ComponentOutput = self.add_output(self.component_name, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH)
-        self.p_th: ComponentOutput = self.add_output(object_name=self.component_name,
+        self.mass_out_channel: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
+        self.mass_out_temp_channel: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
+        self.gas_demand_channel: ComponentOutput = self.add_output(self.component_name, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH)
+        self.p_th_channel: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.ThermalOutputPower,
                                                      load_type=lt.LoadTypes.HEATING,
                                                      unit=lt.Units.WATT)
@@ -101,7 +101,7 @@ class GasHeater(Component):
         pass
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        control_signal = stsv.get_input_value(self.control_signal)
+        control_signal = stsv.get_input_value(self.control_signal_channel)
         if control_signal > 1:
             raise Exception("Expected a control signal between 0 and 1")
         if control_signal < 0:
@@ -119,11 +119,11 @@ class GasHeater(Component):
 
         gas_power = maximum_power *eff_th_real* control_signal
         cw = 4182
-        mass_out_temp=self.temperaturedelta+stsv.get_input_value(self.mass_inp_temp)
+        mass_out_temp=self.temperaturedelta+stsv.get_input_value(self.mass_inp_temp_channel)
         mass_out=gas_power/(cw*self.temperaturedelta)
-        p_th=cw*mass_out*(mass_out_temp-stsv.get_input_value(self.mass_inp_temp))
+        # p_th=cw*mass_out*(mass_out_temp-stsv.get_input_value(self.mass_inp_temp_channel))
 
-        stsv.set_output_value(self.p_th, gas_power)  # efficiency
-        stsv.set_output_value(self.mass_out_temp, mass_out_temp)  # efficiency
-        stsv.set_output_value(self.mass_out, mass_out)  # efficiency
-        stsv.set_output_value(self.gas_demand, gas_power)  # gas consumption
+        stsv.set_output_value(self.p_th_channel, gas_power)  # efficiency
+        stsv.set_output_value(self.mass_out_temp_channel, mass_out_temp)  # efficiency
+        stsv.set_output_value(self.mass_out_channel, mass_out)  # efficiency
+        stsv.set_output_value(self.gas_demand_channel, gas_power)  # gas consumption

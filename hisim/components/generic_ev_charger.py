@@ -5,7 +5,6 @@ import sqlite3
 import datetime
 import os
 import pandas as pd
-from typing import List
 from hisim.simulationparameters import SimulationParameters
 # Owned
 from hisim import component as cp
@@ -40,9 +39,9 @@ class EVConfig:
                  profile_name: str) -> None:
         self.parameter_string = my_simulation_parameters.get_unique_key()
         self.profile_name = profile_name
-        manufacturer = manufacturer
-        model = model
-        soc= soc
+        self.manufacturer = manufacturer
+        self.model = model
+        self.soc= soc
 
 
 class VehiclePure(cp.Component):
@@ -94,12 +93,13 @@ class VehiclePure(cp.Component):
         electric_vehicle_database = utils.load_smart_appliance("Electric Vehicle")
 
         electric_vehicle_found = False
+        electric_vehicle = None
         for electric_vehicle in electric_vehicle_database:
             if electric_vehicle["Manufacturer"] == self.evconfig.manufacturer and electric_vehicle["Model"] == self.evconfig.model:
                 electric_vehicle_found = True
                 break
 
-        if electric_vehicle_found == False:
+        if electric_vehicle_found == False or electric_vehicle is None:
             raise Exception("Electric Vehicle not registered in the database")
 
         self.max_capacity = electric_vehicle['Battery Capacity'] * 1E3
@@ -126,7 +126,7 @@ class VehiclePure(cp.Component):
                 sql_file = sqlite3.connect(path)
                 return pd.read_sql("SELECT * FROM {};".format(table_name), sql_file)
             def open_ev_json(filepath):
-                with open(filepath) as f:
+                with open(filepath, encoding="utf-8") as f:
                     data = json.load(f)
                 return data["Values"]
 
@@ -138,7 +138,7 @@ class VehiclePure(cp.Component):
             filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
             list_columns = []
             list_values = []
-            for index, row in filepaths.iterrows():
+            for _, row in filepaths.iterrows():
                 json_info = json.loads(row["Json"])
                 if "Charging" in json_info["FileName"] and "png" not in json_info["FileName"]:
                     filepath = os.path.normpath(json_info["FullFileName"])
@@ -147,7 +147,7 @@ class VehiclePure(cp.Component):
                     list_columns.append(filepath_list[-1].split(".")[0])
                     list_values.append(open_ev_json(json_info["FullFileName"]))
             list_values = list(map(list, zip(*list_values)))
-            ev_pd = pd.DataFrame(list_values, columns=list_columns)
+            # ev_pd = pd.DataFrame(list_values, columns=list_columns)
 
 
             # Gets battery information to calculate discharging while not at home
@@ -157,7 +157,7 @@ class VehiclePure(cp.Component):
                     vehicle_info = json.loads(vehicle['Json'])
                     battery_stored_energy_meters = vehicle_info["FullRangeInMeters"]
                     convert_factor = vehicle_info["EnergyToDistanceFactor"]
-                    battery_stored_energy_wh = battery_stored_energy_meters * convert_factor
+                    # battery_stored_energy_wh = battery_stored_energy_meters * convert_factor
 
 
             convert_factor_meters_by_wh = convert_factor * 3600
@@ -283,12 +283,13 @@ class Vehicle(cp.Component):
         electric_vehicle_database = utils.load_smart_appliance("Electric Vehicle")
 
         electric_vehicle_found = False
+        electric_vehicle = None
         for electric_vehicle in electric_vehicle_database:
             if electric_vehicle["Manufacturer"] == manufacturer and electric_vehicle["Model"] == model:
                 electric_vehicle_found = True
                 break
 
-        if electric_vehicle_found == False:
+        if electric_vehicle_found == False or electric_vehicle is None:
             raise Exception("Electric Vehicle not registered in the database")
 
         self.max_capacity = electric_vehicle['Battery Capacity'] * 1E3

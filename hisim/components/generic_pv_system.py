@@ -4,9 +4,8 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Optional, Any
+from typing import Any
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pvlib
@@ -16,7 +15,6 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim import sim_repository
 from hisim import utils
 from hisim.component import ConfigBase
 from hisim.components.weather import Weather
@@ -43,12 +41,11 @@ The implementation of the tsib project can be found under the following reposito
 https://github.com/FZJ-IEK3-VSA/tsib
 """
 
-temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
 
 
 @lru_cache(maxsize=16)
-def simPhotovoltaicFast(dni_extra: Any = None, DNI: Any = None, DHI: Any = None, GHI: Any = None, azimuth: Any = None, apparent_zenith: Any = None,
-        temperature: Any = None, wind_speed: Any = None, surface_azimuth: float = 180, surface_tilt: float = 30) -> Any:
+def simPhotovoltaicFast(temperature_model, dni_extra: Any, DNI: Any, DHI: Any, GHI: Any, azimuth: Any, apparent_zenith: Any,
+        temperature: Any, wind_speed: Any, surface_azimuth: float, surface_tilt: float) -> Any:
     """
     Simulates a defined PV array with the Sandia PV Array Performance Model.
     The implementation is done in accordance with following tutorial:
@@ -69,7 +66,7 @@ def simPhotovoltaicFast(dni_extra: Any = None, DNI: Any = None, DHI: Any = None,
 
     poa_irrad = pvlib.irradiance.get_total_irradiance(surface_tilt, surface_azimuth, apparent_zenith, azimuth, DNI, GHI, DHI, dni_extra)
 
-    pvtemps = pvlib.temperature.sapm_cell(poa_irrad["poa_global"], temperature, wind_speed, **temp_model)
+    pvtemps = pvlib.temperature.sapm_cell(poa_irrad["poa_global"], temperature, wind_speed, **temperature_model)
 
     pv_dc = pvlib.pvsystem.pvwatts_dc(poa_irrad["poa_global"], temp_cell=pvtemps, pdc0=1, gamma_pdc=-0.002, temp_ref=25.0)
     if math.isnan(pv_dc):
@@ -77,7 +74,7 @@ def simPhotovoltaicFast(dni_extra: Any = None, DNI: Any = None, DHI: Any = None,
     return pv_dc
 
 
-def simPhotovoltaicSimple(dni_extra=None, DNI=None, DHI=None, GHI=None, azimuth=None, apparent_zenith=None, temperature=None, wind_speed=None,
+def simPhotovoltaicSimple(temperature_model, dni_extra=None, DNI=None, DHI=None, GHI=None, azimuth=None, apparent_zenith=None, temperature=None, wind_speed=None,
         surface_tilt=30, surface_azimuth=180, albedo=0.2):
     """
     Simulates a defined PV array with the Sandia PV Array Performance Model.
@@ -125,8 +122,8 @@ def simPhotovoltaicSimple(dni_extra=None, DNI=None, DHI=None, GHI=None, azimuth=
     # calculate plane of array irradiance
     poa_irrad = pvlib.irradiance.poa_components(aoi, np.float64(DNI), poa_sky_diffuse, poa_ground_diffuse)
     # calculate pv cell and module temperature
-    temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
-    pvtemps = pvlib.temperature.sapm_cell(poa_irrad["poa_global"], temperature, wind_speed, **temp_model)
+    # temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
+    pvtemps = pvlib.temperature.sapm_cell(poa_irrad["poa_global"], temperature, wind_speed, **temperature_model)
 
     pv_dc = pvlib.pvsystem.pvwatts_dc(poa_irrad["poa_global"], temp_cell=pvtemps, pdc0=1, gamma_pdc=-0.002, temp_ref=25.0)
     if math.isnan(pv_dc):
@@ -208,11 +205,20 @@ class PVSystem(cp.Component):
     # Similar components to connect to:
     # 1. Weather
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: PVSystemConfig,
-                 my_simulation_repository: Optional[sim_repository.SimRepository] = None) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: PVSystemConfig) -> None:
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.data: Any
+        self.cache_filepath: str
+        self.modules: Any
+        self.inverter: Any
+        self.inverters: Any
+        self.module: Any
+        self.output: Any
+        self.coordinates: Any
+        self.ac_power_factor: Any
+        self.data_length: Any
+        self.temp_model: Any = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
         super().__init__(self.pvconfig.name + '_w' + str(self.pvconfig.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.t_outC: cp.ComponentInput = self.add_input(self.component_name, self.TemperatureOutside, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS,
@@ -306,7 +312,7 @@ class PVSystem(cp.Component):
             #                                 temperature=temperature,
             #                                 wind_speed=wind_speed)
 
-            ac_power = simPhotovoltaicFast(dni_extra=dni_extra, DNI=DNI, DHI=DHI, GHI=GHI, azimuth=azimuth, apparent_zenith=apparent_zenith,
+            ac_power = simPhotovoltaicFast(temperature_model=self.temp_model, dni_extra=dni_extra, DNI=DNI, DHI=DHI, GHI=GHI, azimuth=azimuth, apparent_zenith=apparent_zenith,
                 temperature=temperature, wind_speed=wind_speed, surface_azimuth=self.pvconfig.azimuth, surface_tilt=self.pvconfig.tilt)
 
             resultingvalue = ac_power * self.pvconfig.power
@@ -375,8 +381,11 @@ class PVSystem(cp.Component):
 
                 x = []
                 for i in range(self.my_simulation_parameters.timesteps):
-                    x.append(simPhotovoltaicFast(dni_extra[i], DNI[i], DHI[i], GHI[i], azimuth[i], apparent_zenith[i], temperature[i], wind_speed[i],
-                                                 self.pvconfig.azimuth, self.pvconfig.tilt))
+                    x.append(simPhotovoltaicFast(temperature_model= self.temp_model,
+                                                 dni_extra=dni_extra[i],
+                                                 DNI= DNI[i],DHI= DHI[i],GHI= GHI[i], azimuth= azimuth[i],apparent_zenith= apparent_zenith[i],
+                                                 temperature= temperature[i],wind_speed= wind_speed[i],
+                                                 surface_azimuth= self.pvconfig.azimuth,surface_tilt= self.pvconfig.tilt))
 
                 self.output = x
 
@@ -420,7 +429,7 @@ class PVSystem(cp.Component):
     #     plt.show()
 
     def interpolate(self, pd_database: Any, year: Any) -> Any:
-        firstday = pd.Series([0.0], index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
+        # firstday = pd.Series([0.0], index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
         lastday = pd.Series(pd_database[-1], index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert("Europe/Berlin")])
         # pd_database = pd_database.append(firstday)
         pd_database = pd_database.append(lastday)

@@ -28,7 +28,6 @@ jobs:
     - name: Lint with flake8
       working-directory: ./
       run: |
-        flake8 building_sizer/system_config.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 examples/basic_household.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 examples/basic_household_only_heating.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 examples/default_connections.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
@@ -59,6 +58,7 @@ jobs:
         flake8 hisim/components/example_template.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/components/example_transformer.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/components/generic_hot_water_storage_modular.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+        flake8 hisim/modular_household/interface_configs/system_config.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/chartbase.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/charts.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 hisim/postprocessing/chart_singleday.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
@@ -75,6 +75,7 @@ jobs:
         flake8 tests/test_example_storage.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 tests/test_example_template.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
         flake8 tests/test_example_transformer.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+
 
 
 

@@ -59,4 +59,3 @@ def test_gas_heater():
     assert stsv.values[my_gas_heater.mass_out_temp.global_index] == temperaturedelta + stsv.values[mass_flow_input_temperature.global_index]
     # Real Power of GasHeater
     assert stsv.values[my_gas_heater.p_th.global_index] == 10_800
-

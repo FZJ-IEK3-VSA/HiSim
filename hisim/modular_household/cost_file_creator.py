@@ -151,7 +151,7 @@ def create_economicparameters_file(
     )
     economic_parameters_json = economic_parameters_file.to_json()  # type: ignore
 
-    with open("EconomicParameters.json", "w+") as result_file:
+    with open("EconomicParameters.json", "w+", encoding="utf-8") as result_file:
         result_file.write(economic_parameters_json)
 
 

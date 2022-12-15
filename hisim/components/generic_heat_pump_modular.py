@@ -211,7 +211,7 @@ class ModularHeatPump(cp.Component):
                 heat_pump_found = True
                 break
 
-        if heat_pump_found == False or heat_pump is None:
+        if not heat_pump_found or heat_pump is None:
             raise Exception("Heat pump model not registered in the database")
 
         # Interpolates COP data from the database

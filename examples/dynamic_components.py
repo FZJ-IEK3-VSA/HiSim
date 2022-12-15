@@ -134,8 +134,7 @@ def dynamic_components_demonstration(
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
-        my_simulation_repository=my_sim.simulation_repository,
-        config=my_photovoltaic_system_config,
+        config=my_photovoltaic_system_config
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 

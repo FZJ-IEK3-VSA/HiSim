@@ -152,7 +152,7 @@ class VehiclePure(cp.Component):
 
             # Gets battery information to calculate discharging while not at home
             transportation_devices = open_sql(FILEPATH["electric_vehicle"][0], "TransportationDevices")
-            for index, vehicle in transportation_devices.iterrows():
+            for _, vehicle in transportation_devices.iterrows():
                 if "Charging" in vehicle["Name"]:
                     vehicle_info = json.loads(vehicle['Json'])
                     battery_stored_energy_meters = vehicle_info["FullRangeInMeters"]
@@ -410,7 +410,7 @@ class SimpleStorageState:
 
     def keep_state(self, capacity: float) -> Any:
         charging_delta = 0
-        after_capacity = capacity
+        # after_capacity = capacity
         return charging_delta, capacity
 
 class EVCharger(cp.Component):
@@ -516,7 +516,7 @@ class EVCharger(cp.Component):
                 evcharger_found = True
                 break
 
-        if evcharger_found == False:
+        if not evcharger_found:
             raise Exception("EV Charging Station has not been found in the database.")
 
         self.manufacturer = manufacturer
@@ -718,7 +718,7 @@ class EVChargerController(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         # Gets inputs
-        charging = stsv.get_input_value(self.charging_inputC)
+        # charging = stsv.get_input_value(self.charging_inputC)
         state_of_charge = stsv.get_input_value(self.socC)
 
         minimum_state_of_charge = 0.1
@@ -772,9 +772,8 @@ class EVChargerController(cp.Component):
                 state = 3
         else:
             if self.mode is None:
-                raise Exception("No mode has been implemented.")
-            else:
-                raise Exception("Mode {} has not been implemented yet.".format(self.mode))
+                raise Exception("None mode is invalid.")
+            raise Exception("Mode {} has not been implemented yet.".format(self.mode))
 
         stsv.set_output_value(self.stateC, state)
         stsv.set_output_value(self.min_socC, minimum_state_of_charge)

@@ -72,7 +72,6 @@ def configure_pv_system(
     count += 1
     my_pv_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
-        my_simulation_repository=my_sim.simulation_repository,
         config=my_pv_system_config,
     )
     my_pv_system.connect_only_predefined_connections(my_weather)

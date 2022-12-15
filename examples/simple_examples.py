@@ -14,9 +14,6 @@ from hisim.components.example_transformer import ExampleTransformer, ExampleTran
 from hisim.components.sumbuilder import SumBuilderForTwoInputs
 from hisim import loadtypes
 
-# from hisim import utils
-
-
 def first_example(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """First Example.
 

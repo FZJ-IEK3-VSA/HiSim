@@ -185,7 +185,7 @@ class Component:
             if connection.source_class_name != component_name:
                 raise ValueError("Trying to add connections to different components in one go.")
         self.default_connections[component_name] = connections
-        log.trace("added default connections for connections from : " + component_name  + "\n"  + str(self.default_connections))
+        log.trace("added default connections for connections from : " + component_name + "\n" + str(self.default_connections))
 
     def i_prepare_simulation(self) -> None:
         """ Gets called before the simulation to prepare the calculation. """

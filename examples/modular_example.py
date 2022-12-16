@@ -1,5 +1,7 @@
 """Example sets up a modular household according to json input file."""
 
+# clean
+
 import json
 from os import path
 import os
@@ -504,10 +506,10 @@ def modular_household_explicit(
     ):
         my_sim.add_component(my_electricity_controller)
 
-    co2_cost = 1000  # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
-    injection = 1000
-    autarky_rate = 1000
-    self_consumption_rate = 1000
+    # co2_cost = 1000  # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
+    # injection = 1000
+    # autarky_rate = 1000
+    # self_consumption_rate = 1000
     surplus_controller_cost = 400
 
     investment_cost = preprocessing.total_investment_cost_threshold_exceedance_check(

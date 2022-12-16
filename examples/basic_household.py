@@ -63,7 +63,9 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
     building_heat_capacity_class = "medium"
     initial_temperature_in_celsius = 23
-    heating_reference_temperature = -14
+    heating_reference_temperature_in_celsius = -14
+    absolute_conditioned_floor_area_in_m2 = 121.2
+    total_base_area_in_m2 = None
 
     # Set heat pump controller
     t_air_heating = 16.0
@@ -104,7 +106,7 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     # Build Building
     my_building_config = building.BuildingConfig(building_code=building_code, building_heat_capacity_class=building_heat_capacity_class,
                                                  initial_internal_temperature_in_celsius=initial_temperature_in_celsius,
-                                                 heating_reference_temperature_in_celsius=heating_reference_temperature, name="Building1")
+                                                 heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius, name="Building1", absolute_conditioned_floor_area_in_m2= absolute_conditioned_floor_area_in_m2, total_base_area_in_m2= total_base_area_in_m2)
 
     my_photovoltaic_system.connect_input(my_photovoltaic_system.TemperatureOutside, my_weather.component_name, my_weather.TemperatureOutside)
     my_photovoltaic_system.connect_input(my_photovoltaic_system.DirectNormalIrradiance, my_weather.component_name, my_weather.DirectNormalIrradiance)

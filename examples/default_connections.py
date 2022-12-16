@@ -63,6 +63,8 @@ def basic_household_with_default_connections(
     building_heat_capacity_class = "medium"
     initial_internal_temperature_in_celsius = 23
     heating_reference_temperature_in_celsius = -14
+    absolute_conditioned_floor_area_in_m2 = 121.2
+    total_base_area_in_m2 = None
 
     # Set heat pump controller
     t_air_heating = 16.0
@@ -128,7 +130,8 @@ def basic_household_with_default_connections(
         building_heat_capacity_class=building_heat_capacity_class,
         initial_internal_temperature_in_celsius=initial_internal_temperature_in_celsius,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        name="Building",
+        name="Building", absolute_conditioned_floor_area_in_m2= absolute_conditioned_floor_area_in_m2,
+        total_base_area_in_m2=total_base_area_in_m2
     )
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(

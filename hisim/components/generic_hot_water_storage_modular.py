@@ -219,7 +219,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         elif self.use == lt.ComponentType.BUFFER:
             self.l1_device_signal_c: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ON_OFF,
                                                                         lt.Units.BINARY, mandatory=True)
-            self.add_default_connections( self.get_l1_default_connections())
+            self.add_default_connections(self.get_l1_default_connections())
         else:
             hisim.log.error('Type of hot water storage is not defined')
 

@@ -1,9 +1,9 @@
 """Test for building module."""
 
-# clean
-
 import datetime
 import time
+import numpy as np
+import pandas as pd
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -39,12 +39,30 @@ def test_building():
     t_two = time.perf_counter()
     log.profile(f"T2: {t_two - t_one}")
 
+    # # check on all TABULA buildings -> run test over all building_codes
+    # d_f = pd.read_csv(
+    #     utils.HISIMPATH["housing"],
+    #     decimal=",",
+    #     sep=";",
+    #     encoding="cp1252",
+    #     low_memory=False,
+    # )
+
+    # for building_code in d_f["Code_BuildingVariant"]:
+    #     if isinstance(building_code, str):
+    #         my_residence_config.building_code = building_code
+
+    #         my_residence = building.Building(
+    #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
+    #         log.information(building_code)
+
     # Set Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
         profile_name=my_occupancy_profile, name="Occupancy-1"
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+        config=my_occupancy_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy.set_sim_repo(repo)
     my_occupancy.i_prepare_simulation()
@@ -67,18 +85,22 @@ def test_building():
     my_residence_config = (
         building.BuildingConfig.get_default_german_single_family_home()
     )
-    my_residence_config.building_code = building_code
     my_residence_config.building_heat_capacity_class = building_heat_capacity_class
+    my_residence_config.building_code = building_code
 
     my_residence = building.Building(
-        config=my_residence_config, my_simulation_parameters=my_simulation_parameters
+        config=my_residence_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_residence.set_sim_repo(repo)
     my_residence.i_prepare_simulation()
 
     # Fake power delivered
     thermal_power_delivered_output = component.ComponentOutput(
-        "FakeThermalDeliveryMachine", "ThermalDelivery", LoadTypes.HEATING, Units.WATT
+        "FakeThermalDeliveryMachine",
+        "ThermalDelivery",
+        LoadTypes.HEATING,
+        Units.WATT,
     )
     t_five = time.perf_counter()
     log.profile(f"T2: {t_four - t_five}")
@@ -94,7 +116,9 @@ def test_building():
     )
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
+    my_residence.direct_normal_irradiance_channel.source_output = (
+        my_weather.DNI_output
+    )
     my_residence.direct_horizontal_irradiance_channel.source_output = (
         my_weather.DHI_output
     )
@@ -117,9 +141,10 @@ def test_building():
     log.profile(f"T2: {t_six - t_five}")
 
     for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
-
+    
         log.trace("Seconds per Timestep: " + str(seconds_per_timestep))
         log.information("Seconds per Timestep: " + str(seconds_per_timestep))
+
         my_residence.seconds_per_timestep = seconds_per_timestep
 
         # Simulates

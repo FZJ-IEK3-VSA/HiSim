@@ -212,13 +212,6 @@ class Building(dynamic_component.DynamicComponent):
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
-    # TemperatureAir = "TemperatureAir"
-    # StoredEnergyVariation = "StoredEnergyVariation"
-    # InternalLoss = "InternalLoss"
-    # OldStoredEnergy = "OldStoredEnergy"
-    # CurrentStoredEnergy = "CurrentStoredEnergy"
-    # MassOutput = "MassOutput"
-    # TemperatureOutput = "TemperatureOutput"
 
     @utils.measure_execution_time
     def __init__(
@@ -625,7 +618,7 @@ class Building(dynamic_component.DynamicComponent):
             self.thermal_mass_temperature_channel,
             thermal_mass_average_bulk_temperature_in_celsius,
         )
-        # stsv.set_output_value(self.t_airC, t_air)
+        # maybe later of interest: stsv.set_output_value(self.t_airC, t_air)
         # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
         stsv.set_output_value(self.total_power_to_residence_channel, heat_loss_in_watt)
         stsv.set_output_value(
@@ -968,7 +961,7 @@ class Building(dynamic_component.DynamicComponent):
             "Horizontal",
         ]
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
-        # total_wall_area = 4 * area_of_one_wall
+        # then the total_wall_area = 4 * area_of_one_wall
         total_wall_area_in_m2 = (
             4 * math.sqrt(self.conditioned_floor_area_in_m2) * self.room_height_in_m2
         )
@@ -1151,19 +1144,13 @@ class Building(dynamic_component.DynamicComponent):
         self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin = (
             0.0
         )
-        # for w_i in w_s:
-        #     self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin += float(
-        #         self.buildingdata["H_Transmission_" + w_i].values[0]
-        #     )
 
-        # modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
+        # here instead of reading H_Transmission from buildingdata it will be calculated manually using
         # input values U_Actual, A_ and b_Transmission also given by TABULA buildingdata
         for index, w_i in enumerate(self.windows_and_door):
-            # H_Tr = U * A * b_tr [W/K], here b_tr is not given in TABULA data, so it is chosen 1.0
+            # with H_Tr = U * A * b_tr [W/K], here b_tr is not given in TABULA data, so it is chosen 1.0
             h_tr_i = (
                 self.buildingdata["U_Actual_" + w_i].values[0]
-                # * self.buildingdata["A_" + w_i].values[0]
-                # * self.factor_of_absolute_floor_area_to_tabula_floor_area
                 * self.scaled_windows_and_door_envelope_areas_in_m2[index]
                 * 1.0
             )
@@ -1191,19 +1178,12 @@ class Building(dynamic_component.DynamicComponent):
         self.transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin = (
             0.0
         )
-        # for o_w in opaque_walls:
-        #     self.transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin += float(
-        #         self.buildingdata["H_Transmission_" + o_w].values[0]
-        #     )
-
-        # modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
+        # here modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
         # input values U_Actual, A_Calc and b_Transmission also given by TABULA buildingdata
         for index, o_w in enumerate(self.opaque_walls):
-            # H_Tr = U * A * b_tr [W/K]
+            # with H_Tr = U * A * b_tr [W/K]
             h_tr_i = (
                 self.buildingdata["U_Actual_" + o_w].values[0]
-                # * self.buildingdata["A_" + o_w].values[0]
-                # * self.factor_of_absolute_floor_area_to_tabula_floor_area
                 * self.scaled_opaque_surfaces_envelope_area_in_m2[index]
                 * self.buildingdata["b_Transmission_" + o_w].values[0]
             )
@@ -1314,7 +1294,6 @@ class Building(dynamic_component.DynamicComponent):
 
         return poa_irrad["poa_direct"] * reduction_factor_with_area
 
-    # @cached(cache=LRUCache(maxsize=16))
     def get_solar_heat_gain_through_windows(
         self,
         azimuth,
@@ -1361,7 +1340,6 @@ class Building(dynamic_component.DynamicComponent):
         internal_heat_gains_in_watt,
         # this is labeled as Phi_sol in paper [1] (** Check header)
         solar_heat_gains_in_watt,
-        # power_demand_in_watt,
     ):
         """Calculates the heat flow from the solar gains, heating/cooling system, and internal gains into the building.
 
@@ -1378,9 +1356,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # Calculates the heat flows to various points of the building based on the breakdown in section C.2, formulas C.1-C.3
         # Heat flow to the air node in W, before labeled Phi_ia
-        # self.heat_flux_indoor_air_in_watt = (
-        #     0.5 * internal_heat_gains_in_watt + power_demand_in_watt
-        # )
+
         self.heat_flux_indoor_air_in_watt = 0.5 * internal_heat_gains_in_watt
         # Heat flow to the surface node in W, before labeled Phi_st
 
@@ -1596,6 +1572,7 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_temperature_prev_in_celsius
         )
 
+        # keep these calculations if later you are interested in the indoor surface or air temperature
         # # Updates internal surface temperature (t_s)
         # internal_room_surface_temperature_in_celsius = (
         #     self.calc_temperature_of_internal_room_surfaces_in_celsius(
@@ -1616,7 +1593,7 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius,
             heat_loss_in_watt,
         )
-        # return t_m, t_air, t_s, indoor_air_temperature_in_celsius,internal_room_surface_temperature_in_celsius,
+        # then return t_m, t_air, t_s, indoor_air_temperature_in_celsius,internal_room_surface_temperature_in_celsius,
 
     # =====================================================================================================================================
     # Calculation of maximal thermal building heat demand according to TABULA (* Check header).
@@ -1637,7 +1614,7 @@ class Building(dynamic_component.DynamicComponent):
             self.buildingdata["h_Ventilation"].values[0]
         )
 
-        # dQ/dt = h * (T2-T1) * A -> [W]
+        # with dQ/dt = h * (T2-T1) * A -> [W]
         max_thermal_building_demand_in_watt = (
             (vals1_in_watt_per_m2_per_kelvin + vals2_in_watt_per_m2_per_kelvin)
             * (

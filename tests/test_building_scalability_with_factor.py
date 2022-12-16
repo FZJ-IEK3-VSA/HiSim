@@ -5,9 +5,7 @@ divided by the conditioned floor area given by TABULA.
 The window areas are scaled via the ratio of window area to wall area.
 """
 
-import datetime
 import numpy as np
-import pandas as pd
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -34,7 +32,7 @@ def test_building_scalability():
 
     repo = component.SimRepository()
             
-    # # check on all TABULA buildings -> run test over all building_codes
+    # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
     #     utils.HISIMPATH["housing"],
     #     decimal=",",
@@ -45,6 +43,7 @@ def test_building_scalability():
 
     # for building_code in d_f["Code_BuildingVariant"]:
     #     if isinstance(building_code, str):
+
     # Set Residence
     my_residence_config = (
         building.BuildingConfig.get_default_german_single_family_home()
@@ -116,8 +115,8 @@ def test_building_scalability():
         )
 
     my_residence.seconds_per_timestep = seconds_per_timestep
-    # Simulates
 
+    # Simulates
     my_occupancy.i_simulate(0, stsv, False)
     my_weather.i_simulate(0, stsv, False)
     my_residence.i_simulate(0, stsv, False)

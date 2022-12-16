@@ -13,7 +13,6 @@ from hisim import utils
 from hisim import log
 
 building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
-# building_code = "SI.N.SFH-TH.05-06.Gen.SyAv.001.001"
 building_heat_capacity_class = "medium"
 seconds_per_timestep = 60
 my_simulation_parameters = SimulationParameters.one_day_only(
@@ -29,7 +28,7 @@ my_residence_config.building_heat_capacity_class = building_heat_capacity_class
 my_residence = building.Building(
             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
 
-# # check on all TABULA buildings -> run test over all building_codes
+# # in case you want to check on all TABULA buildings -> run test over all building_codes
 # d_f = pd.read_csv(
 #     utils.HISIMPATH["housing"],
 #     decimal=",",
@@ -75,7 +74,6 @@ def test_building_thermal_conductance_calculation():
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    # assert list_H_tr_window == list_H_tr_window_calculated
     np.testing.assert_allclose(list_H_tr_window, list_H_tr_window_calculated, atol=0.02)
 
     # builing function: get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin
@@ -95,7 +93,7 @@ def test_building_thermal_conductance_calculation():
         list_H_tr_opaque.append(
             my_residence.buildingdata["H_Transmission_" + o_p].values[0]
         )
-        # H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
+        # by calculating H_tr manually one can later scale this up by scaling up A_Calc -> H_Tr = U * A * b_tr [W/K]
         H_tr_i = (my_residence.buildingdata["U_Actual_" + o_p].values[0]
             * my_residence.buildingdata["A_" + o_p].values[0]
             * my_residence.buildingdata["b_Transmission_" + o_p].values[0]
@@ -105,5 +103,4 @@ def test_building_thermal_conductance_calculation():
         k = k + 1
 
     # check if calculated H_tr is equal to H_tr which was read from buildingdata directly
-    # assert list_H_tr_opaque == list_H_tr_opaque_calculated
     np.testing.assert_allclose(list_H_tr_window, list_H_tr_window_calculated, atol=0.02)

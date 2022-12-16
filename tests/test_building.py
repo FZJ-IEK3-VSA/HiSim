@@ -1,9 +1,9 @@
 """Test for building module."""
 
+# clean
+
 import datetime
 import time
-import numpy as np
-import pandas as pd
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -141,7 +141,7 @@ def test_building():
     log.profile(f"T2: {t_six - t_five}")
 
     for seconds_per_timestep in [60, 60 * 15, 60 * 60]:
-    
+
         log.trace("Seconds per Timestep: " + str(seconds_per_timestep))
         log.information("Seconds per Timestep: " + str(seconds_per_timestep))
 

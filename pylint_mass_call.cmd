@@ -80,7 +80,7 @@ pylint C:\Users\k.rieck\HiSim\tests\test_advanced_battery_bslib.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_basic_household_with_all_resultfiles.py
 if %errorlevel% neq 0 exit /b
-pylint C:\Users\k.rieck\HiSim\tests\test_building.py
+pylint C:\Users\k.rieck\HiSim\tests\test_building_manual_calculation_thermal_conductances.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_examples.py
 if %errorlevel% neq 0 exit /b

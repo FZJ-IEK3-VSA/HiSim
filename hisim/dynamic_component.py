@@ -155,10 +155,10 @@ class DynamicComponent(Component):
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
             if search_and_compare(
-                    weight_to_search=weight_counter,
-                    weight_of_component=element.source_weight,
-                    tags_to_search=tags,
-                    tags_of_component=element.source_tags
+                weight_to_search=weight_counter,
+                weight_of_component=element.source_weight,
+                tags_to_search=tags,
+                tags_of_component=element.source_tags
                                  ):
                 inputvalue = stsv.get_input_value(getattr(self, element.source_component_class))
                 break
@@ -172,8 +172,8 @@ class DynamicComponent(Component):
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
             if tags_search_and_compare(
-                    tags_to_search=tags,
-                    tags_of_component=element.source_tags
+                tags_to_search=tags,
+                tags_of_component=element.source_tags
                                       ):
                 inputvalues.append(stsv.get_input_value(getattr(self, element.source_component_class)))
             else:
@@ -189,10 +189,10 @@ class DynamicComponent(Component):
         # check if component of component type is available
         for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
             if search_and_compare(
-                    weight_to_search=weight_counter,
-                    weight_of_component=element.source_weight,
-                    tags_to_search=tags,
-                    tags_of_component=element.source_tags
+                weight_to_search=weight_counter,
+                weight_of_component=element.source_weight,
+                tags_to_search=tags,
+                tags_of_component=element.source_tags
                                  ):
                 stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:

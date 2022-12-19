@@ -3,11 +3,9 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union
 
 import pandas as pd
-from dataclasses_json import dataclass_json
 
 from hisim.component import ComponentOutput
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
@@ -23,7 +21,7 @@ def read_in_fuel_costs() -> pd.DataFrame:
     price_frame.drop(columns=["fuel type"], inplace=True)
     return price_frame
 
-def get_euro_and_co2(fuel_costs: pd.DataFrame, fuel: LoadTypes) -> Tuple[float, float]:
+def get_euro_and_co2(fuel_costs: pd.DataFrame, fuel: Union[LoadTypes, InandOutputType]) -> Tuple[float, float]:
     """ Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel. """
     column = fuel_costs.iloc[fuel_costs.index == fuel.value]
     return( float(column['EUR per kWh']), float(column['kgC02 per kWh']))
@@ -212,6 +210,7 @@ def compute_kpis(
 
     # Electricity Price
     electricity_price_constant, co2_price_constant = get_euro_and_co2(fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY)
+    electricity_inj_price_constant, _ = get_euro_and_co2(fuel_costs=price_frame, fuel=InandOutputType.ELECTRICITY_INJECTION)
 
     if production_sum > 0:
         # evaluate electricity price
@@ -220,17 +219,22 @@ def compute_kpis(
                 power_timeseries = injection[injection > 0] * electricity_price_injection[injection > 0],
                 timeresolution=simulation_parameters.seconds_per_timestep
             )
+            price = price + compute_energy_from_power(
+               power_timeseries = results["consumption"] - self_consumption,
+                timeresolution=simulation_parameters.seconds_per_timestep 
+            )
         else:
-            price = price - injection_sum * electricity_price_constant
-
-    if not electricity_price_consumption.empty:
-        # substract self consumption from consumption for bill calculation
-        price = price + compute_energy_from_power(
-            power_timeseries=(results["consumption"] - self_consumption) * electricity_price_consumption,
+            price = price - injection_sum * electricity_inj_price_constant + (consumption_sum - self_consumption_sum) * electricity_price_constant
+    
+    else:
+        if not electricity_price_consumption.empty:
+            # substract self consumption from consumption for bill calculation
+            price = price + compute_energy_from_power(
+                power_timeseries=results["consumption"] * electricity_price_consumption,
             timeresolution=simulation_parameters.seconds_per_timestep
         )
-    else:
-        price = price + (consumption_sum - self_consumption_sum) * electricity_price_constant
+        else:
+            price = price + consumption_sum * electricity_price_constant
 
     co2 = co2 + (consumption_sum - self_consumption_sum) * co2_price_constant
 

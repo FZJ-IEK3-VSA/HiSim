@@ -6,11 +6,9 @@ Therefore some functions must be adjusted which are tested here before."""
 # clean
 
 import numpy as np
-import pandas as pd
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
-from hisim import log
 
 building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
 building_heat_capacity_class = "medium"
@@ -64,7 +62,7 @@ def test_building_thermal_conductance_calculation():
         list_H_tr_window.append(
             my_residence.buildingdata["H_Transmission_" + w_i].values[0]
         )
-        # H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
+        # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
         H_tr_i = (
             my_residence.buildingdata["U_Actual_" + w_i].values[0]
             * my_residence.buildingdata["A_" + w_i].values[0]
@@ -93,7 +91,7 @@ def test_building_thermal_conductance_calculation():
         list_H_tr_opaque.append(
             my_residence.buildingdata["H_Transmission_" + o_p].values[0]
         )
-        # by calculating H_tr manually one can later scale this up by scaling up A_Calc -> H_Tr = U * A * b_tr [W/K]
+        # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
         H_tr_i = (my_residence.buildingdata["U_Actual_" + o_p].values[0]
             * my_residence.buildingdata["A_" + o_p].values[0]
             * my_residence.buildingdata["b_Transmission_" + o_p].values[0]

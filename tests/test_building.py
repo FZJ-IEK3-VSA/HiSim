@@ -19,14 +19,12 @@ from tests import functions_for_testing as fft
 def test_building():
     """Test function for the building module."""
 
-    # Sets inputs
-    # log.LOGGING_LEVEL = 6
     starttime = datetime.datetime.now()
     d_four = starttime.strftime("%d-%b-%Y %H:%M:%S")
     log.profile("Test Building start @ " + d_four)
 
     t_one = time.perf_counter()
-    # weather_location = "Aachen"
+
     my_occupancy_profile = "CH01"
     building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
     building_heat_capacity_class = "medium"
@@ -133,7 +131,7 @@ def test_building():
         [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
     )
 
-    # test building models for various time resolutions
+    # Test building models for various time resolutions
     #   -> assume weather and occupancy data from t=0 (time resolution 1 min)
     #   -> calculate temperature of building ( with no heating considered) for varios time steps
     #   -> check if temperature difference is proportional to time step size ( > 0.1 °C per minute)

@@ -1,3 +1,5 @@
+# clean
+
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os

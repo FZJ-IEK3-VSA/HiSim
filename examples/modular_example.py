@@ -200,18 +200,18 @@ def modular_household_explicit(
     )
     with open(file=economic_parameters_file, mode="r", encoding="utf-8") as inputfile:
         economic_parameters = json.load(inputfile)
-    (
-        pv_cost,
-        smart_devices_cost,
-        battery_cost,
-        surplus_controller_cost,
-        heatpump_cost,
-        buffer_cost,
-        chp_cost,
-        h2_storage_cost,
-        electrolyzer_cost,
-        ev_cost,
-    ) = [0] * 10
+    # (
+    #     pv_cost,
+    #     smart_devices_cost,
+    #     battery_cost,
+    #     surplus_controller_cost,
+    #     heatpump_cost,
+    #     buffer_cost,
+    #     chp_cost,
+    #     h2_storage_cost,
+    #     electrolyzer_cost,
+    #     ev_cost,
+    # ) = [0] * 10
 
     # add price signal
     my_price_signal = generic_price_signal.PriceSignal(

@@ -26,7 +26,7 @@ def read_in_fuel_costs() -> pd.DataFrame:
 def get_euro_and_co2(fuel_costs: pd.DataFrame, fuel: LoadTypes) -> Tuple[float, float]:
     """ Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel. """
     column = fuel_costs.iloc[fuel_costs.index == fuel.value]
-    return [float(column['EUR per kWh']), float(column['kgC02 per kWh'])]
+    return( float(column['EUR per kWh']), float(column['kgC02 per kWh']))
 
 def compute_consumption_production(all_outputs: List, results: pd.DataFrame) -> pd.DataFrame:
     """ Computes electricity consumption and production based on results of hisim simulation. """
@@ -172,8 +172,8 @@ def compute_kpis(
 ) -> Any:  # noqa: MC0001
     """Calculation of several KPIs."""
     # initialize prices
-    price = 0
-    co2 = 0
+    price = 0.0
+    co2 = 0.0
 
     price_frame = read_in_fuel_costs()
 

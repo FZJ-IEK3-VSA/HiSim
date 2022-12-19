@@ -3,6 +3,7 @@
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
 # clean
+# needs to be developed still and checked
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather

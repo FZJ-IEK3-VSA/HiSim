@@ -1,9 +1,6 @@
 # Generic/Built-in
-from dataclasses import dataclass
 from typing import Any
 from typing import List
-
-from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import dynamic_component
@@ -93,8 +90,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False)
 
     def sort_source_weights_and_components(self) -> None:
-        SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs]
-        SourceWeights = [elem.source_weight for elem in self.my_component_outputs]
+        SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs if (isinstance(elem, dynamic_component.DynamicConnectionInput) and elem.source_weight != 999)]
+        SourceWeights = [elem.source_weight for elem in self.my_component_inputs if (isinstance(elem, dynamic_component.DynamicConnectionInput) and elem.source_weight != 999)]
         sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
         self.source_weights_sorted = [SourceWeights[i] for i in sortindex]
         self.components_sorted = [SourceTags[i] for i in sortindex]

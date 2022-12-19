@@ -3,7 +3,7 @@
 Here are functions added that were used in the buildig module before.
 
 """
-
+#  clean
 # Generic/Built-in
 
 import math
@@ -20,47 +20,47 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-def get_thermal_conductance_ventilation_in_watt_per_kelvin(
-    self,
-):
-    """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
-    # Long from for H_ve_adj: Ventilation
-    # Determine the ventilation conductance
-    # Building volume (TABULA: Conditioned building volume)
-    room_volume_in_m3 = float(self.buildingdata["V_C"].values[0])
-    ven_method = "RC_BuildingSimulator"
-    if ven_method == "RC_BuildingSimulator":
-        """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
-        air_changes_per_hour_through_ventilation = 1.5
-        air_changes_per_hour_through_infiltration = 0.5
-        # The efficiency of the heat recovery system for ventilation. Set to 0 if there is no heat recovery
-        ventilation_efficiency_of_the_heat_recovery_system = 0.6
-        heat_capacity_of_air_per_volume_in_joule_per_m3_per_kelvin = 1200
+# def get_thermal_conductance_ventilation_in_watt_per_kelvin(
+#     self,
+# ):
+#     """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
+# Long from for H_ve_adj: Ventilation
+# Determine the ventilation conductance
+# Building volume (TABULA: Conditioned building volume)
+# room_volume_in_m3 = float(self.buildingdata["V_C"].values[0])
+# ven_method = "RC_BuildingSimulator"
+# if ven_method == "RC_BuildingSimulator":
+#     """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
+#     air_changes_per_hour_through_ventilation = 1.5
+#     air_changes_per_hour_through_infiltration = 0.5
+#     # The efficiency of the heat recovery system for ventilation. Set to 0 if there is no heat recovery
+#     # ventilation_efficiency_of_the_heat_recovery_system = 0.6
+#     # heat_capacity_of_air_per_volume_in_joule_per_m3_per_kelvin = 1200
 
-        total_air_changes_per_hour = (
-            air_changes_per_hour_through_infiltration
-            + air_changes_per_hour_through_ventilation
-        )
+#     total_air_changes_per_hour = (
+#         air_changes_per_hour_through_infiltration
+#         + air_changes_per_hour_through_ventilation
+#     )
 
-        # Fraction of the considered air flow that goes through the heat recovery system
-        fraction_of_air_flow_through_heat_recovery_system = (
-            air_changes_per_hour_through_ventilation / total_air_changes_per_hour
-        )
+# Fraction of the considered air flow that goes through the heat recovery system
+# fraction_of_air_flow_through_heat_recovery_system = (
+#     air_changes_per_hour_through_ventilation / total_air_changes_per_hour
+# )
 
-        # Temperature adjustment factor taking ventilation and infiltration
-        # [ISO: 9.3.2.8]
-        temperature_adjustment_factor_for_air_flow_from_a_heat_recovery_system = (
-            1
-            - fraction_of_air_flow_through_heat_recovery_system
-            * ventilation_efficiency_of_the_heat_recovery_system
-        )
-        # [ISO: 9.3.1]
-        thermal_conductance_by_ventilation_in_watt_per_kelvin = float(
-            heat_capacity_of_air_per_volume_in_joule_per_m3_per_kelvin
-            * temperature_adjustment_factor_for_air_flow_from_a_heat_recovery_system
-            * room_volume_in_m3
-            * (total_air_changes_per_hour / 3600)
-        )
+# Temperature adjustment factor taking ventilation and infiltration
+# [ISO: 9.3.2.8]
+# temperature_adjustment_factor_for_air_flow_from_a_heat_recovery_system = (
+#     1
+#     - fraction_of_air_flow_through_heat_recovery_system
+#     * ventilation_efficiency_of_the_heat_recovery_system
+# )
+# # [ISO: 9.3.1]
+# thermal_conductance_by_ventilation_in_watt_per_kelvin = float(
+#     heat_capacity_of_air_per_volume_in_joule_per_m3_per_kelvin
+#     * temperature_adjustment_factor_for_air_flow_from_a_heat_recovery_system
+#     * room_volume_in_m3
+#     * (total_air_changes_per_hour / 3600)
+# )
 
 
 class WindowObsolete:

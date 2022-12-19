@@ -92,14 +92,16 @@ def compute_self_consumption_and_injection(results: pd.DataFrame) -> Tuple[pd.Se
     injection = production_with_battery - consumption_with_battery
 
     # evaluate self consumption and immidiately sum over time
+    # battery is charged (counting to consumption) and discharged (counting to production) -> only one direction can be counted, otherwise the self-consumption can be greater than 100.
+    # Here the production side is counted (battery_discharge).
     self_consumption = (
         pd.concat(
             (
                 production_with_battery[
-                    production_with_battery <= consumption_with_battery
+                    production_with_battery <= results['consumption']
                 ],
-                consumption_with_battery[
-                    consumption_with_battery < production_with_battery
+                results['consumption'][
+                    results['consumption'] < production_with_battery
                 ],
             )
         )

@@ -166,13 +166,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                                 weight_counter=self.source_weights_sorted[ind], output_value=deltademand + previous_signal)
         return deltademand - previous_signal
 
-    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues, timestep: int) -> None:
+    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
         skip_CHP = False
         for ind in range(len(self.source_weights_sorted)):
             component_type = self.components_sorted[ind]
             source_weight = self.source_weights_sorted[ind]
-            if timestep == 48:
-                print(delta_demand, component_type)
             if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
                                   lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
                 if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
@@ -205,10 +203,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # Consumption of Electricity negative sign
         flexible_electricity = production - consumption_uncontrolled
         electricity_to_grid = production - consumption_uncontrolled - consumption_ems_controlled
-        if timestep==48:
-            print(timestep, production, flexible_electricity, electricity_to_grid)
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv, timestep=timestep)
+            self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv)
             stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
             stsv.set_output_value(self.flexible_electricity, flexible_electricity)
         stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)

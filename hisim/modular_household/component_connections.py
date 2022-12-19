@@ -335,10 +335,12 @@ def configure_smart_controller_for_smart_devices(
             source_unit=lt.Units.WATT,
         )
 
+        print(my_electricity_controller.my_component_inputs, '1')
         elem.connect_dynamic_input(
             input_fieldname=generic_smart_device.SmartDevice.ElectricityTarget,
             src_object=electricity_to_smart_device,
         )
+        print(my_electricity_controller.my_component_inputs, '2')
 
 
 def configure_battery(
@@ -597,17 +599,17 @@ def configure_water_heating_electric(
             source_weight=my_heatpump.source_weight,
         )
 
-        my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
-            source_component_output=my_heatpump.ElectricityOutput,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             source_weight=my_heatpump.source_weight,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
         )
+
     else:
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,
@@ -757,16 +759,15 @@ def configure_heating_electric(
             source_weight=my_heatpump.source_weight,
         )
 
-        my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
-            source_component_output=my_heatpump.ElectricityOutput,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             source_weight=my_heatpump.source_weight,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
         )
     else:
         my_electricity_controller.add_component_input_and_connect(
@@ -890,17 +891,17 @@ def configure_heating_with_buffer_electric(
             source_weight=my_heatpump.source_weight,
         )
 
-        my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
-            source_component_output=my_heatpump.ElectricityOutput,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             source_weight=my_heatpump.source_weight,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
         )
+
     else:
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,

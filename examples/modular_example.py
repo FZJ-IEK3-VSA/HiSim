@@ -96,12 +96,12 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.january_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_KPI
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.skip_finished_results = False
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -495,6 +495,8 @@ def modular_household_explicit(
         water_heating_system_installed,
     ):
         my_sim.add_component(my_electricity_controller)
+
+    print( my_electricity_controller.my_component_inputs)
 
     # co2_cost = 1000  # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
     # surplus_controller_cost = 400

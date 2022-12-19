@@ -1,3 +1,5 @@
+# clean
+
 """ Contains functions for initializing and connecting components.
 
 The functions are all called in modular_household.

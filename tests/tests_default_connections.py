@@ -1,8 +1,5 @@
-import os
-
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
-import shutil
 
 def test_basic_household_with_default_connections():
     #if os.path.isdir("../hisim/inputs/cache"):

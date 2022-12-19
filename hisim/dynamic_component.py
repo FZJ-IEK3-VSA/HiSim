@@ -39,13 +39,16 @@ def search_and_compare(weight_to_search: int, weight_of_component: int,
         tags_to_search: List[Union[lt.ComponentType, lt.InandOutputType]],
         tags_of_component: List[Union[lt.ComponentType, lt.InandOutputType]]) -> bool:
     """Compares weight and tags of component inputs and outputs. """
+
     if weight_to_search != weight_of_component:
         return False
-    else:
-        for tag_search in tags_to_search:
-            if tag_search not in tags_of_component:
-                return False
-        return True
+
+    for tag_search in tags_to_search:
+        if tag_search not in tags_of_component:
+            return False
+
+    return True
+
 
 def tags_search_and_compare(tags_to_search: List[Union[lt.ComponentType, lt.InandOutputType]],
         tags_of_component: List[Union[lt.ComponentType, lt.InandOutputType]]) -> bool:
@@ -156,7 +159,7 @@ class DynamicComponent(Component):
                     weight_of_component=element.source_weight,
                     tags_to_search=tags,
                     tags_of_component=element.source_tags
-                    ):
+                                 ):
                 inputvalue = stsv.get_input_value(getattr(self, element.source_component_class))
                 break
         return inputvalue
@@ -171,7 +174,7 @@ class DynamicComponent(Component):
             if tags_search_and_compare(
                     tags_to_search=tags,
                     tags_of_component=element.source_tags
-                    ):
+                                      ):
                 inputvalues.append(stsv.get_input_value(getattr(self, element.source_component_class)))
             else:
                 continue
@@ -190,7 +193,7 @@ class DynamicComponent(Component):
                     weight_of_component=element.source_weight,
                     tags_to_search=tags,
                     tags_of_component=element.source_tags
-                    ):
+                                 ):
                 stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:
                 continue

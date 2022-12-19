@@ -132,6 +132,8 @@ def search_electricity_prices_in_results(all_outputs: List, results: pd.DataFram
     return electricity_price_consumption, electricity_price_injection
 
 def compute_energy_from_power(power_timeseries: pd.Series, timeresolution: int) -> float:
+    if power_timeseries.empty:
+        return 0.0
     return power_timeseries.sum() * timeresolution / 3.6e6
 
 def compute_cost_of_fuel_type(results: pd.DataFrame, all_outputs: List, timeresolution: int,

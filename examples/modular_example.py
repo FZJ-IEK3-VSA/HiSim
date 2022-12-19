@@ -291,11 +291,11 @@ def modular_household_explicit(
             source_weight=999,
         )
 
-        surplus_controller_cost = (
-            preprocessing.calculate_surplus_controller_investment_cost(
-                economic_parameters
-            )
-        )
+        # surplus_controller_cost = (
+        #     preprocessing.calculate_surplus_controller_investment_cost(
+        #         economic_parameters
+        #     )
+        # )
 
     if not needs_ems(
         battery_included,

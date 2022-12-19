@@ -1,6 +1,6 @@
 """L2 Smart Controller Module."""
 
-#  clean
+# clean
 # Generic/Built-in
 
 # Owned
@@ -18,7 +18,7 @@ class SmartController(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        controllers: Dict[Any, Any] = None,
+        controllers: Dict[str, list[str]],
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
@@ -28,7 +28,7 @@ class SmartController(Component):
         self.wrapped_controllers: List[Any] = []
         self.build(controllers)
 
-    def build(self, controllers: Dict[Any, Any]) -> None:
+    def build(self, controllers: Dict[str, list[str]]) -> None:
         """Build wrapped controllers."""
         for controller_name in controllers:
             if "HeatPump" in controller_name:

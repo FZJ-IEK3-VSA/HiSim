@@ -40,6 +40,7 @@ class OccupancyProfiles(str, enum.Enum):
 
 
 class BuildingCodes(str, enum.Enum):
+    # TODO: Discussed DN & JG: don't use enums for building types. Raise exception in building component if code doesn't exist.
 
     """To parse predefined house types from tabula."""
 

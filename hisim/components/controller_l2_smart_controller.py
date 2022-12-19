@@ -10,7 +10,7 @@ from hisim.simulationparameters import SimulationParameters
 
 class SmartController(Component):
 
-    def __init__(self,my_simulation_parameters: SimulationParameters, controllers: Dict[Any,Any] = {"HeatPump":["mode"], "EVCharger":["mode"]})  -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, controllers: Dict = {"HeatPump":["mode"], "EVCharger":["mode"]})  -> None:
         super().__init__(name="SmartController", my_simulation_parameters=my_simulation_parameters)
         self.WrappedControllers:List[Any] = []
         self.build(controllers)

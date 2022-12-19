@@ -19,7 +19,7 @@ from hisim.components import (
     loadprofilegenerator_utsp_connector,
     weather,
 )
-from hisim.modular_household import component_connections, preprocessing
+from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.system_config import SystemConfig
 from hisim.modular_household.interface_configs.archetype_config import ArcheTypeConfig
 from hisim.modular_household.interface_configs.modular_household_config import (
@@ -93,7 +93,7 @@ def modular_household_explicit(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)

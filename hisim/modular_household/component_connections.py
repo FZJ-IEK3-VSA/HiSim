@@ -335,12 +335,11 @@ def configure_smart_controller_for_smart_devices(
             source_unit=lt.Units.WATT,
         )
 
-        print(my_electricity_controller.my_component_inputs, '1')
+        
         elem.connect_dynamic_input(
             input_fieldname=generic_smart_device.SmartDevice.ElectricityTarget,
             src_object=electricity_to_smart_device,
         )
-        print(my_electricity_controller.my_component_inputs, '2')
 
 
 def configure_battery(

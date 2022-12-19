@@ -96,7 +96,7 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.january_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_KPI

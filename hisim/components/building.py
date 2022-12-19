@@ -121,7 +121,7 @@ class BuildingConfig(cp.ConfigBase):
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,
             heating_reference_temperature_in_celsius=-14,
-            absolute_conditioned_floor_area_in_m2=300.0,
+            absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
         )
         return config

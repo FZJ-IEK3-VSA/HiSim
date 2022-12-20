@@ -1007,7 +1007,9 @@ class Building(dynamic_component.DynamicComponent):
         lines.append(f"Building Name: {self.component_name}")
         lines.append(f"Building Code from TABULA: {self.buildingcode}")
 
-        lines.append("-------------------------------------------------------------------------------------------")
+        lines.append(
+            "-------------------------------------------------------------------------------------------"
+        )
         lines.append("Building Thermal Conductances:")
         lines.append("--------------------------------------------")
         lines.append(
@@ -1033,14 +1035,24 @@ class Building(dynamic_component.DynamicComponent):
             f"Thermal Conductance by Ventilation, TABULA Reference Value (H_ve) [W/K]: {self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
         )
 
-        lines.append("-------------------------------------------------------------------------------------------")
+        lines.append(
+            "-------------------------------------------------------------------------------------------"
+        )
         lines.append("Building Areas:")
         lines.append("--------------------------------------------")
-        lines.append(f"Conditioned Floor Area (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}")
-        lines.append(f"Effective Mass Area (A_m) [m2]: {self.effective_mass_area_in_m2:.2f}")
-        lines.append(f"Total Internal Surface Area (A_t) [m2]: {self.total_internal_surface_area_in_m2:.2f}")
+        lines.append(
+            f"Conditioned Floor Area (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
+        )
+        lines.append(
+            f"Effective Mass Area (A_m) [m2]: {self.effective_mass_area_in_m2:.2f}"
+        )
+        lines.append(
+            f"Total Internal Surface Area (A_t) [m2]: {self.total_internal_surface_area_in_m2:.2f}"
+        )
 
-        lines.append("-------------------------------------------------------------------------------------------")
+        lines.append(
+            "-------------------------------------------------------------------------------------------"
+        )
         lines.append("Building Thermal Capacitances:")
         lines.append("--------------------------------------------")
         lines.append(
@@ -1067,7 +1079,9 @@ class Building(dynamic_component.DynamicComponent):
             f"{(self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin * self.scaled_conditioned_floor_area_in_m2 / 3600):.2f}"
         )
 
-        lines.append("-------------------------------------------------------------------------------------------")
+        lines.append(
+            "-------------------------------------------------------------------------------------------"
+        )
         lines.append("Building Heat Transfers:")
         lines.append("--------------------------------------------")
         lines.append(
@@ -1265,51 +1279,6 @@ class Building(dynamic_component.DynamicComponent):
         self.get_thermal_conductance_ventilation_in_watt_per_kelvin()
 
     # =====================================================================================================================================
-    # Calculate solar heat gain through windows.
-    # (** Check header)
-
-    @lru_cache(maxsize=16)
-    def calc_solar_heat_gains(
-        self,
-        sun_azimuth,
-        direct_normal_irradiance,
-        direct_horizontal_irradiance,
-        global_horizontal_irradiance,
-        direct_normal_irradiance_extra,
-        apparent_zenith,
-        window_tilt_angle,
-        window_azimuth_angle,
-        reduction_factor_with_area,
-    ):
-        """Calculate the Solar Gains in the building zone through the set Window.
-
-        :param sun_altitude: Altitude Angle of the Sun in Degrees
-        :type sun_altitude: float
-        :param sun_azimuth: Azimuth angle of the sun in degrees
-        :type sun_azimuth: float
-        :param normal_direct_radiation: Normal Direct Radiation from weather file
-        :type normal_direct_radiation: float
-        :param horizontal_diffuse_radiation: Horizontal Diffuse Radiation from weather file
-        :type horizontal_diffuse_radiation: float
-        :return: self.incident_solar, Incident Solar Radiation on window
-        :return: self.solar_gains - Solar gains in building after transmitting through the window
-        :rtype: float
-        """
-        poa_irrad = pvlib.irradiance.get_total_irradiance(
-            window_tilt_angle,
-            window_azimuth_angle,
-            apparent_zenith,
-            sun_azimuth,
-            direct_normal_irradiance,
-            global_horizontal_irradiance,
-            direct_horizontal_irradiance,
-            direct_normal_irradiance_extra,
-        )
-
-        if math.isnan(poa_irrad["poa_direct"]):
-            return 0
-
-        return poa_irrad["poa_direct"] * reduction_factor_with_area
 
     def get_solar_heat_gain_through_windows(
         self,
@@ -1333,7 +1302,8 @@ class Building(dynamic_component.DynamicComponent):
         ):
 
             for window in self.windows:
-                solar_heat_gain = self.calc_solar_heat_gains(
+                solar_heat_gain = Window.calc_solar_heat_gains(
+                    self,
                     sun_azimuth=azimuth,
                     direct_normal_irradiance=direct_normal_irradiance,
                     direct_horizontal_irradiance=direct_horizontal_irradiance,
@@ -1727,3 +1697,49 @@ class Window:
         self.window_tilt_angle_rad = math.radians(self.window_tilt_angle)
         # Proportion of incident light on the window surface
         return (1 + math.cos(self.window_tilt_angle_rad)) / 2
+
+    # Calculate solar heat gain through windows.
+    # (** Check header)
+
+    @lru_cache(maxsize=16)
+    def calc_solar_heat_gains(
+        self,
+        sun_azimuth,
+        direct_normal_irradiance,
+        direct_horizontal_irradiance,
+        global_horizontal_irradiance,
+        direct_normal_irradiance_extra,
+        apparent_zenith,
+        window_tilt_angle,
+        window_azimuth_angle,
+        reduction_factor_with_area,
+    ):
+        """Calculate the Solar Gains in the building zone through the set Window.
+
+        :param sun_altitude: Altitude Angle of the Sun in Degrees
+        :type sun_altitude: float
+        :param sun_azimuth: Azimuth angle of the sun in degrees
+        :type sun_azimuth: float
+        :param normal_direct_radiation: Normal Direct Radiation from weather file
+        :type normal_direct_radiation: float
+        :param horizontal_diffuse_radiation: Horizontal Diffuse Radiation from weather file
+        :type horizontal_diffuse_radiation: float
+        :return: self.incident_solar, Incident Solar Radiation on window
+        :return: self.solar_gains - Solar gains in building after transmitting through the window
+        :rtype: float
+        """
+        poa_irrad = pvlib.irradiance.get_total_irradiance(
+            window_tilt_angle,
+            window_azimuth_angle,
+            apparent_zenith,
+            sun_azimuth,
+            direct_normal_irradiance,
+            global_horizontal_irradiance,
+            direct_horizontal_irradiance,
+            direct_normal_irradiance_extra,
+        )
+
+        if math.isnan(poa_irrad["poa_direct"]):
+            return 0
+
+        return poa_irrad["poa_direct"] * reduction_factor_with_area

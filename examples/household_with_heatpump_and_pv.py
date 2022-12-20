@@ -106,27 +106,19 @@ def household_pv_hp(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Weather
-    location = "Aachen"
+    # Set Occupancy
+    url = my_config.lpg_url
+    api_key = my_config.api_key
+    household = my_config.household_type
+    result_path = my_config.result_path
+    travel_route_set = my_config.travel_route_set
+    transportation_device_set = my_config.transportation_device_set
+    charging_station_set = my_config.charging_station_set
 
     # Set Photovoltaic System
-    time = 2019
     power = my_config.pv_power
-    load_module_data = False
-    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
-    integrate_inverter = True
-    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
-    name = "PVSystem"
     azimuth = my_config.pv_azimuth
     tilt = my_config.tilt
-    source_weight = -1
-
-    # Set Building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_class = "medium"
-    initial_temperature = 23
-    heating_reference_temperature = -14
-    absolute_conditioned_floor_area = None
 
     # Set Heat Pump Controller
     t_air_heating = 16.0
@@ -152,13 +144,13 @@ def household_pv_hp(
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=my_config.lpg_url,
-        api_key=my_config.api_key,
-        household=my_config.household_type,
-        result_path=my_config.result_path,
-        travel_route_set=my_config.travel_route_set,
-        transportation_device_set=my_config.transportation_device_set,
-        charging_station_set=my_config.charging_station_set,
+        url=url,
+        api_key=api_key,
+        household=household,
+        result_path=result_path,
+        travel_route_set=travel_route_set,
+        transportation_device_set=transportation_device_set,
+        charging_station_set=charging_station_set,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -166,27 +158,14 @@ def household_pv_hp(
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+                                 my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
-        time=time,
-        location=location,
-        power=power,
-        load_module_data=load_module_data,
-        module_name=module_name,
-        integrate_inverter=integrate_inverter,
-        tilt=tilt,
-        azimuth=azimuth,
-        inverter_name=inverter_name,
-        source_weight=source_weight,
-        name=name,
-    )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_PV_system()
+    my_photovoltaic_system_config.power = power
+    my_photovoltaic_system_config.azimuth = azimuth
+    my_photovoltaic_system_config.tilt = tilt
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -200,18 +179,8 @@ def household_pv_hp(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_class,
-        initial_internal_temperature_in_celsius=initial_temperature,
-        heating_reference_temperature_in_celsius=heating_reference_temperature,
-        name="Building1",
-        total_base_area_in_m2=my_config.total_base_area_in_m2,
-        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area,
-    )
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
+                                    my_simulation_parameters=my_simulation_parameters)
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(

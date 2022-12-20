@@ -109,12 +109,14 @@ def household_gas_heater(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_class = "medium"
-    initial_temperature = 23
-    heating_reference_temperature = -14
-    absolute_conditioned_floor_area = None
+    # Set Occupancy
+    url = my_config.lpg_url
+    api_key = my_config.api_key
+    household = my_config.household_type
+    result_path = my_config.result_path
+    travel_route_set = my_config.travel_route_set
+    transportation_device_set = my_config.transportation_device_set
+    charging_station_set = my_config.charging_station_set
 
     # =================================================================================================================================
     # Build Components
@@ -128,39 +130,25 @@ def household_gas_heater(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=my_config.lpg_url,
-        api_key=my_config.api_key,
-        household=my_config.household_type,
-        result_path=my_config.result_path,
-        travel_route_set=my_config.travel_route_set,
-        transportation_device_set=my_config.transportation_device_set,
-        charging_station_set=my_config.charging_station_set,
+        url=url,
+        api_key=api_key,
+        household=household,
+        result_path=result_path,
+        travel_route_set=travel_route_set,
+        transportation_device_set=transportation_device_set,
+        charging_station_set=charging_station_set,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+                                 my_simulation_parameters=my_simulation_parameters)
 
     # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_class,
-        initial_internal_temperature_in_celsius=initial_temperature,
-        heating_reference_temperature_in_celsius=heating_reference_temperature,
-        name="Building1",
-        total_base_area_in_m2=my_config.total_base_area_in_m2,
-        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area,
-    )
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
+                                    my_simulation_parameters=my_simulation_parameters)
 
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(

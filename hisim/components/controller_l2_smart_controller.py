@@ -13,16 +13,14 @@ from hisim.simulationparameters import SimulationParameters
 
 class SmartController(Component):
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, components: List[str] = ['HeatPump, EVCharger'],
-        modes: List[List[str]]=[['mode'], ['mode']]) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, controllers: Dict[str, List[str]] = {})  -> None:
         super().__init__(name="SmartController", my_simulation_parameters=my_simulation_parameters)
-
-        
-        controllers: Dict[str, List[str]] = {components[i]: modes[i] for i in range(len(components))}
+        if not controllers:  # set default values
+            controllers = {"HeatPump":["mode"], "EVCharger":["mode"]}
         self.WrappedControllers:List[Any] = []
         self.build(controllers)
 
-    def build(self, controllers: Dict[str, List[str]]) -> None:
+    def build(self, controllers: Dict[str, str[str]]) -> None:
         """Build wrapped controllers."""
         for controller_name in controllers:
             if "HeatPump" in controller_name:

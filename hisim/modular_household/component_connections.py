@@ -484,7 +484,6 @@ def configure_water_heating(
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
 
     my_sim.add_component(my_heater)
-    my_sim.add_component(my_heater_controller_l1)
 
     my_boiler.connect_only_predefined_connections(my_heater)
     return count

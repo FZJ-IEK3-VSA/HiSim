@@ -2,6 +2,7 @@
 # clean
 from typing import Optional, Any
 from pathlib import Path
+
 # from dataclasses import dataclass
 # from dataclasses_json import dataclass_json
 # from utspclient.helpers.lpgdata import (
@@ -182,12 +183,11 @@ def household_gas_heater(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_building.connect_only_predefined_connections(my_weather)
-    my_building.connect_only_predefined_connections(my_occupancy)
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
         my_building.ThermalEnergyDelivered,
-        my_gasheater.component_name,
-        my_gasheater.thermal_output_power_channel,
+        my_heat_water_storage.component_name,
+        my_heat_water_storage.RealHeatForBuilding,
     )
 
     my_gasheater.connect_input(
@@ -201,13 +201,27 @@ def household_gas_heater(
         my_heat_water_storage.WaterOutputStorageforHeaters,
     )
 
-    # my_heat_water_storage.connect_input(my_heat_water_storage.ThermalInputPower1, my_gasheater.component_name, my_gasheater.ThermalOutputPower)
-    # my_heat_water_storage.connect_input(my_heat_water_storage.ControlSignalChooseStorage, my_controller_heat.component_name,
-    #                                       my_controller_heat.ControlSignalChooseStorage)
-    # my_controller_heat.connect_input(my_controller_heat.StorageTemperatureHeatingWater, my_heat_water_storage.component_name,
-    #                                  my_heat_water_storage.WaterOutputTemperatureHeatingWater)
+    my_heat_water_storage.connect_input(
+        my_heat_water_storage.ThermalInputPower1,
+        my_gasheater.component_name,
+        my_gasheater.ThermalOutputPower,
+    )
+    my_heat_water_storage.connect_input(
+        my_heat_water_storage.ControlSignalChooseStorage,
+        my_controller_heat.component_name,
+        my_controller_heat.ControlSignalChooseStorage,
+    )
 
-    # my_controller_heat.connect_input(my_controller_heat.ResidenceTemperature, my_building.component_name, my_building.TemperatureMean)
+    my_controller_heat.connect_input(
+        my_controller_heat.StorageTemperatureHeatingWater,
+        my_heat_water_storage.component_name,
+        my_heat_water_storage.WaterOutputTemperatureHeatingWater,
+    )
+    my_controller_heat.connect_input(
+        my_controller_heat.ResidenceTemperature,
+        my_building.component_name,
+        my_building.TemperatureMean,
+    )
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

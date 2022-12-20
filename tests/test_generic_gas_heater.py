@@ -58,4 +58,4 @@ def test_gas_heater():
     # Temperature of Water out of GasHeater
     assert stsv.values[my_gas_heater.mass_out_temp_channel.global_index] == temperaturedelta + stsv.values[mass_flow_input_temperature.global_index]
     # Real Power of GasHeater
-    assert stsv.values[my_gas_heater.p_th_channel.global_index] == 10_800
+    assert stsv.values[my_gas_heater.thermal_output_power_channel.global_index] == 10_800

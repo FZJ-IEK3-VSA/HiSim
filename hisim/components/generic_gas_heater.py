@@ -54,7 +54,7 @@ class GasHeater(Component):
         self.mass_out_channel: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC)
         self.mass_out_temp_channel: ComponentOutput = self.add_output(self.component_name, GasHeater.MassflowOutputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS)
         self.gas_demand_channel: ComponentOutput = self.add_output(self.component_name, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH)
-        self.p_th_channel: ComponentOutput = self.add_output(object_name=self.component_name,
+        self.thermal_output_power_channel: ComponentOutput = self.add_output(object_name=self.component_name,
                                                      field_name=self.ThermalOutputPower,
                                                      load_type=lt.LoadTypes.HEATING,
                                                      unit=lt.Units.WATT)
@@ -123,7 +123,7 @@ class GasHeater(Component):
         mass_out=gas_power/(cw*self.temperaturedelta)
         # p_th=cw*mass_out*(mass_out_temp-stsv.get_input_value(self.mass_inp_temp_channel))
 
-        stsv.set_output_value(self.p_th_channel, gas_power)  # efficiency
+        stsv.set_output_value(self.thermal_output_power_channel, gas_power)  # efficiency
         stsv.set_output_value(self.mass_out_temp_channel, mass_out_temp)  # efficiency
         stsv.set_output_value(self.mass_out_channel, mass_out)  # efficiency
         stsv.set_output_value(self.gas_demand_channel, gas_power)  # gas consumption

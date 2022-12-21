@@ -1013,26 +1013,23 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Thermal Conductances:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Transmission for Windows and Doors (H_tr_w) [W/K]: {self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin:.2f}"
+            f"Transmission for Windows and Doors, based on ISO 13790 (H_tr_w) [W/K]: "
+            f"{self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin:.2f}"
         )
         lines.append(
-            f"External Part of Transmission for Opaque Surfaces (H_tr_em) [W/K]: "
+            f"External Part of Transmission for Opaque Surfaces, based on ISO 13790 (H_tr_em) [W/K]: "
             f"{self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin:.2f}"
         )
         lines.append(
-            f"Internal Part of Transmission for Opaque Surfaces (H_tr_ms) [W/K]: "
+            f"Internal Part of Transmission for Opaque Surfaces, based on ISO 13790 (H_tr_ms) [W/K]: "
             f"{self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin:.2f}"
         )
         lines.append(
-            f"Transmission between Indoor Air and Internal Surface (H_tr_is) [W/K]: "
+            f"Transmission between Indoor Air and Internal Surface, based on ISO 13790 (H_tr_is) [W/K]: "
             f"{self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin:.2f}"
         )
-
         lines.append(
-            f"Thermal Conductance by Ventilation (H_ve_adj) [W/K]: {self.thermal_conductance_by_ventilation_in_watt_per_kelvin:.2f}"
-        )
-        lines.append(
-            f"Thermal Conductance by Ventilation, TABULA Reference Value (H_ve) [W/K]: {self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
+            f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: {self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
         )
 
         lines.append(
@@ -1041,13 +1038,13 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Areas:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Conditioned Floor Area (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
+            f"Conditioned Floor Area, based on TABULA (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
         )
         lines.append(
-            f"Effective Mass Area (A_m) [m2]: {self.effective_mass_area_in_m2:.2f}"
+            f"Effective Mass Area (A_m), based on ISO 13790 [m2]: {self.effective_mass_area_in_m2:.2f}"
         )
         lines.append(
-            f"Total Internal Surface Area (A_t) [m2]: {self.total_internal_surface_area_in_m2:.2f}"
+            f"Total Internal Surface Area, based on ISO 13790 (A_t) [m2]: {self.total_internal_surface_area_in_m2:.2f}"
         )
 
         lines.append(
@@ -1056,64 +1053,32 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Thermal Capacitances:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Floor Related Thermal Capacitance of Thermal Mass [kWh/m2.K]: "
+            f"Floor Related Thermal Capacitance of Thermal Mass, based on ISO 13790 [kWh/m2.K]: "
             f"{(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin * 3600 / (1000 *self.scaled_conditioned_floor_area_in_m2)):.2f}"
         )
         lines.append(
-            f"Thermal Capacitance of Thermal Mass [kWh/K]: {(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin * 3600 / 1000):.2f}"
-        )
-        lines.append(
-            f"Thermal Capacitance of Thermal Mass [kJ/K]: {(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin / 1000):.2f}"
-        )
-
-        lines.append(
-            f"Floor Related Thermal Capacitance of Thermal Mass, TABULA Reference Value [kWh/m2.K]: "
+            f"Floor Related Thermal Capacitance of Thermal Mass, based on TABULA [kWh/m2.K]: "
             f"{(self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin / 1000):.2f}"
         )
-        lines.append(
-            f"Thermal Capacitance of Thermal Mass, TABULA Reference Value [kWh/K]: "
-            f"{(self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin * self.scaled_conditioned_floor_area_in_m2 / 1000):.2f}"
-        )
-        lines.append(
-            f"Thermal Capacitance of Thermal Mass, TABULA Reference Value [J/K]: "
-            f"{(self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin * self.scaled_conditioned_floor_area_in_m2 / 3600):.2f}"
-        )
-
         lines.append(
             "-------------------------------------------------------------------------------------------"
         )
         lines.append("Building Heat Transfers:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Annual Floor Related Total Heat Loss, TABULA Reference Value (Q_ht) [kWh/m2.a]: {self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year:.2f}"
+            f"Annual Floor Related Total Heat Loss, based on TABULA (Q_ht) [kWh/m2.a]: {self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
         lines.append(
-            f"Annual Total Heat Loss, TABULA Reference Value (Q_ht) [kWh/a]: "
-            f"{(self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year * self.scaled_conditioned_floor_area_in_m2):.2f}"
-        )
-        lines.append(
-            f"Annual Floor Related Internal Heat Gain, TABULA Reference Value (Q_int) [kWh/m2.a]: "
+            f"Annual Floor Related Internal Heat Gain, based on TABULA (Q_int) [kWh/m2.a]: "
             f"{self.internal_heat_sources_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
         lines.append(
-            f"Annual Internal Heat Gain, TABULA Reference Value (Q_int) [kWh/a]: "
-            f"{(self.internal_heat_sources_reference_in_kilowatthour_per_m2_per_year * self.scaled_conditioned_floor_area_in_m2):.2f}"
-        )
-        lines.append(
-            f"Annual Floor Related Solar Heat Gain, TABULA Reference Value (Q_sol) [kWh/m2.a]: "
+            f"Annual Floor Related Solar Heat Gain, based on TABULA (Q_sol) [kWh/m2.a]: "
             f"{self.solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
         lines.append(
-            f"Annual Solar Heat Gain, TABULA Reference Value (Q_sol) [kWh/a]: "
-            f"{(self.solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year * self.scaled_conditioned_floor_area_in_m2):.2f}"
-        )
-        lines.append(
-            f"Annual Floor Related Heating Demand, TABULA Reference Value (Q_h_nd) [kWh/m2.a]: "
+            f"Annual Floor Related Heating Demand, based on TABULA (Q_h_nd) [kWh/m2.a]: "
             f"{self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year:.2f}"
-        )
-        lines.append(
-            f"Annual Heating Demand, TABULA Reference Value (Q_h_nd) [kWh/a]: "
-            f"{(self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year * self.scaled_conditioned_floor_area_in_m2):.2f}"
         )
         return lines
 

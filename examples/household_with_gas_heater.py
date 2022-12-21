@@ -89,6 +89,7 @@ def household_gas_heater(
         - Building
         - Gas Heater
         - Heat Water Storage
+        - Heat Water Storage Controller
         - Heat Controller
     """
 
@@ -107,7 +108,7 @@ def household_gas_heater(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 15
 
     # Set Occupancy
     url = my_config.lpg_url
@@ -143,12 +144,16 @@ def household_gas_heater(
     )
 
     # Build Weather
-    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
-                                 my_simulation_parameters=my_simulation_parameters)
+    my_weather = weather.Weather(
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build Building
-    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
-                                    my_simulation_parameters=my_simulation_parameters)
+    my_building = building.Building(
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(
@@ -156,9 +161,13 @@ def household_gas_heater(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Water Storage
+    # Build Heat Water Storage und Heat Water Storage Controller
     my_heat_water_storage = generic_heat_water_storage.HeatStorage(
         config=generic_heat_water_storage.HeatStorage.get_default_config(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_heat_water_storage_controller = generic_heat_water_storage.HeatStorageController(
+        config=generic_heat_water_storage.HeatStorageController.get_default_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -200,6 +209,28 @@ def household_gas_heater(
         my_controller_heat.ControlSignalChooseStorage,
     )
 
+    my_heat_water_storage.connect_input(
+        my_heat_water_storage.ThermalDemandHeatingWater,
+        my_heat_water_storage_controller.component_name,
+        my_heat_water_storage_controller.RealThermalDemandHeatingWater,
+    )
+
+    my_heat_water_storage_controller.connect_input(
+        my_heat_water_storage_controller.TemperatureHeatingStorage,
+        my_heat_water_storage.component_name,
+        my_heat_water_storage.WaterOutputTemperatureHeatingWater,
+    )
+    my_heat_water_storage_controller.connect_input(
+        my_heat_water_storage_controller.BuildingTemperature,
+        my_building.component_name,
+        my_building.TemperatureMean,
+    )
+    my_heat_water_storage_controller.connect_input(
+        my_heat_water_storage_controller.ReferenceMaxHeatBuildingDemand,
+        my_building.component_name,
+        my_building.ReferenceMaxHeatBuildingDemand,
+    )
+
     my_controller_heat.connect_input(
         my_controller_heat.StorageTemperatureHeatingWater,
         my_heat_water_storage.component_name,
@@ -219,4 +250,5 @@ def household_gas_heater(
     my_sim.add_component(my_gasheater)
 
     my_sim.add_component(my_heat_water_storage)
+    my_sim.add_component(my_heat_water_storage_controller)
     my_sim.add_component(my_controller_heat)

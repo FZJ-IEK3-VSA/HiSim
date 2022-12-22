@@ -20,15 +20,15 @@ class SystemConfig:
     buffer_included: bool = True
     buffer_volume: Optional[float] = 500  # in liter
     battery_included: bool = True
-    battery_capacity: Optional[float] = 4.0  # in kWh
-    heatpump_included: bool = False
+    battery_capacity: Optional[float] = 20.0  # in kWh
+    heatpump_included: bool = True
     chp_included: bool = False
     chp_power: Optional[float] = 12
     h2_storage_included: bool = True
     h2_storage_size: Optional[float] = 100
     electrolyzer_included: bool = True
     electrolyzer_power: Optional[float] = 5e3
-    ev_included: bool = False
+    ev_included: bool = True
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )

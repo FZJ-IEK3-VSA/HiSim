@@ -1,6 +1,5 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List, Any
-from copy import deepcopy
 from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
@@ -83,7 +82,7 @@ class CarBattery(Component):
 
         # Component has states
         self.state = EVBatteryState()
-        self.previous_state = deepcopy(self.state)
+        self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
         self.BAT = bsl.ACBatMod(system_id=self.system_id,
@@ -122,10 +121,10 @@ class CarBattery(Component):
         return connections
 
     def i_save_state(self)  -> None:
-        self.previous_state = deepcopy(self.state)
+        self.previous_state = self.state.clone()
 
     def i_restore_state(self)  -> None:
-        self.state = deepcopy(self.previous_state)
+        self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues) -> None:
         pass
@@ -166,3 +165,6 @@ class CarBattery(Component):
 @dataclass
 class EVBatteryState:
     soc: float = 0
+
+    def clone(self):
+        return EVBatteryState(soc=self.soc)

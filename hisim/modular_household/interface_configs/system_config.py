@@ -18,8 +18,8 @@ class SystemConfig:
     pv_peak_power: Optional[float] = 9e3
     smart_devices_included: bool = False
     buffer_included: bool = True
-    buffer_volume: Optional[float] = 500  # in liter
-    battery_included: bool = True
+    buffer_volume: Optional[float] = 80  # in liter
+    battery_included: bool = False
     battery_capacity: Optional[float] = 20.0  # in kWh
     heatpump_included: bool = True
     chp_included: bool = False
@@ -28,7 +28,7 @@ class SystemConfig:
     h2_storage_size: Optional[float] = 100
     electrolyzer_included: bool = True
     electrolyzer_power: Optional[float] = 5e3
-    ev_included: bool = True
+    ev_included: bool = False
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )

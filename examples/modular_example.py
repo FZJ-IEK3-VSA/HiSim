@@ -93,7 +93,7 @@ def modular_household_explicit(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
@@ -187,7 +187,7 @@ def modular_household_explicit(
 
     # Build building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_config.building_code = building_code.value
+    my_building_config.building_code = building_code
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

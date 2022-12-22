@@ -139,14 +139,6 @@ def test_building_heat_demand():
         LoadTypes.HEATING,
         Units.WATT,
     )
-
-    # Fake outside temperature from weather
-    air_outside_temperature_output = component.ComponentOutput(
-        "FakeOutsideAirTemp",
-        "AirTemp",
-        LoadTypes.TEMPERATURE,
-        Units.CELSIUS,
-    )
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
     # Set stsv
     number_of_outputs = fft.get_number_of_outputs(
@@ -155,7 +147,6 @@ def test_building_heat_demand():
             my_weather,
             my_residence,
             thermal_power_delivered_output,
-            air_outside_temperature_output,
         ]
     )
 
@@ -165,11 +156,8 @@ def test_building_heat_demand():
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
     # Set source outputs for my residence
 
-    # my_residence.temperature_outside_channel.source_output = (
-    #     my_weather.air_temperature_output
-    # )
     my_residence.temperature_outside_channel.source_output = (
-        air_outside_temperature_output
+        my_weather.air_temperature_output
     )
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
@@ -191,7 +179,6 @@ def test_building_heat_demand():
             my_weather,
             my_residence,
             thermal_power_delivered_output,
-            air_outside_temperature_output,
         ]
     )
 
@@ -206,12 +193,8 @@ def test_building_heat_demand():
         "internal (occupancy) heat gains [W] "
         + str(my_residence.internal_heat_gains_through_occupancy_in_watt)
     )
-    # log.information("outside temp (weather) [°C] " + str(stsv.values[my_weather.air_temperature_output.global_index])+ "\n")
-    log.information(
-        "outside temp (set fake) [°C] "
-        + str(stsv.values[air_outside_temperature_output.global_index])
-        + "\n"
-    )
+    log.information("outside temp (weather) [°C] " + str(stsv.values[my_weather.air_temperature_output.global_index])+ "\n")
+
     log.information(
         "thermal mass bulk temperature [°C] "
         + str(stsv.values[my_residence.thermal_mass_temperature_channel.global_index])
@@ -239,8 +222,6 @@ def test_building_heat_demand():
         + "\n"
     )
 
-    # stsv.values[my_weather.air_temperature_output.global_index] = 4.4
-    stsv.values[air_outside_temperature_output.global_index] = 4.4
     stsv.values[thermal_power_delivered_output.global_index] = 0
     # Simulation
     my_occupancy.i_simulate(0, stsv, False)
@@ -259,12 +240,7 @@ def test_building_heat_demand():
         "internal (occupancy) heat gains [W] "
         + str(my_residence.internal_heat_gains_through_occupancy_in_watt)
     )
-    # log.information("outside temp (weather) [°C] " + str(stsv.values[my_weather.air_temperature_output.global_index])+ "\n")
-    log.information(
-        "outside temp (set fake) [°C] "
-        + str(stsv.values[air_outside_temperature_output.global_index])
-        + "\n"
-    )
+
     log.information(
         "thermal mass bulk temperature [°C]  "
         + str(stsv.values[my_residence.thermal_mass_temperature_channel.global_index])

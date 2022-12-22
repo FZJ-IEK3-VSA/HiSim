@@ -49,7 +49,6 @@ def household_fake_heating(my_sim: Any, my_simulation_parameters: Optional[Simul
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    repo = component.SimRepository()
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
                                                             my_simulation_parameters=my_simulation_parameters)
@@ -63,53 +62,51 @@ def household_fake_heating(my_sim: Any, my_simulation_parameters: Optional[Simul
     my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
                                     my_simulation_parameters=my_simulation_parameters)
 
-    # Build Fake Heating
-    # Fake power delivered component 
-    fake_heater = component.Component(name= "FakeHeaterComponent", my_simulation_parameters=my_simulation_parameters)
-    fake_heater.set_sim_repo(repo)
-    fake_heater = fake_heater.i_prepare_simulation()
-    fake_thermal_power_delivered_output_channel = fake_heater.add_output(object_name=fake_heater.component_name, field_name="ThermalDelivery", load_type=LoadTypes.HEATING, unit=Units.WATT)
+    # Build Fake Heating Component Class
+    class FakeHeater(component.Component):
 
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Set stsv
-    number_of_outputs = fft.get_number_of_outputs(
-        [
-            my_occupancy,
-            my_weather,
-            my_building,
-            fake_thermal_power_delivered_output_channel,
-        ]
-    )
+        # Outputs
+        ThermalDelivery = "ThermalDelivery"
+        def __init__(self, my_simulation_parameters: SimulationParameters) -> None:
+            super().__init__(name= "FakeHeaterComponent", my_simulation_parameters=my_simulation_parameters)
 
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
+            # Output
+            self.fake_thermal_power_delivered_output_channel: component.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ThermalDelivery, load_type=LoadTypes.HEATING, unit=Units.WATT)
+        def i_save_state(self) -> None:
+            pass
+
+        def i_restore_state(self) -> None:
+            pass
+
+        def i_prepare_simulation(self) -> None:
+            pass
+
+        def i_doublecheck(self, timestep: int, stsv: component.SingleTimeStepValues) -> None:
+            pass
+
+        def i_simulate(self, timestep: int, stsv: component.SingleTimeStepValues, force_convergence: bool) -> None:
+            self.fake_thermal_output_in_watt = 1000
+            stsv.set_output_value(self.fake_thermal_power_delivered_output_channel, self.fake_thermal_output_in_watt)
+
+        def write_to_report(self):
+            lines = []
+            lines.append(f"Name Heater: {self.component_name}")
+            lines.append(f"Heating Output [W]: {self.fake_thermal_output_in_watt}")
+            return lines
+
+    # # Fake power delivered component 
+    # fake_heater = component.Component(name= "FakeHeaterComponent", my_simulation_parameters=my_simulation_parameters)
+    # fake_heater.set_sim_repo(repo)
+    # fake_heater.i_prepare_simulation()
+    # fake_thermal_power_delivered_output_channel = fake_heater.add_output(object_name=fake_heater.component_name, field_name="ThermalDelivery", load_type=LoadTypes.HEATING, unit=Units.WATT)
+
+    my_fake_heater = FakeHeater(my_simulation_parameters=my_simulation_parameters)
+
     # Connect Inputs
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(my_building.ThermalEnergyDelivered, fake_heater.component_name,fake_thermal_power_delivered_output_channel.field_name)
-
-    my_building.thermal_power_delivered_channel.source_output = (
-        fake_thermal_power_delivered_output_channel
-    )
-
-    fft.add_global_index_of_components(
-        [
-            my_occupancy,
-            my_weather,
-            my_building,
-            fake_thermal_power_delivered_output_channel,
-        ]
-    )
-
-    log.information(
-        "fake thermal power delivered Q_H_nd [W]  "
-        + str(stsv.values[fake_thermal_power_delivered_output_channel.global_index])
-        + "\n"
-    )
-
-    stsv.values[fake_thermal_power_delivered_output_channel.global_index] = 0
+    my_building.connect_input(my_building.ThermalEnergyDelivered, my_fake_heater.component_name, my_fake_heater.ThermalDelivery)
 
     my_sim.add_component(my_building)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
-    my_sim.add_component(fake_heater)
+    my_sim.add_component(my_fake_heater)

@@ -15,13 +15,13 @@ class SystemConfig:
     """Defines the system config for the modular household."""
 
     pv_included: bool = True
-    pv_peak_power: Optional[float] = 9e3
+    pv_peak_power: Optional[float] = 5e3
     smart_devices_included: bool = False
-    buffer_included: bool = True
-    buffer_volume: Optional[float] = 80  # in liter
+    buffer_included: bool = False
+    buffer_volume: Optional[float] = 150  # in liter
     battery_included: bool = False
     battery_capacity: Optional[float] = 20.0  # in kWh
-    heatpump_included: bool = True
+    heatpump_included: bool = False
     chp_included: bool = False
     chp_power: Optional[float] = 12
     h2_storage_included: bool = True

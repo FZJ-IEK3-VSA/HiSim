@@ -11,4 +11,3 @@ sphinx-rtd-theme
 dataclasses_json
 hplib==1.9
 bslib==0.6
-mathjax

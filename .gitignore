@@ -139,4 +139,4 @@ examples/results
 
 # simulation log
 tests\hisim_simulation.log
-hisim/inputs/cfg.json
+hisim/inputs/*

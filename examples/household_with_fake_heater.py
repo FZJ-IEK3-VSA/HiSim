@@ -8,7 +8,6 @@ from hisim.components import building
 from hisim import component
 from hisim.loadtypes import LoadTypes, Units
 from hisim import log
-from tests import functions_for_testing as fft
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3"
@@ -18,95 +17,195 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
+# =========================================================================================================================================================
+# Build Fake Heating Component Class
 
-def household_fake_heating(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
-    """ Gas heater + buffer storage.
 
-    This setup function emulates an household including
-    the basic components. Here the residents have their
-    heating needs covered by a gas heater and a heating
-    water storage. The controller_l2_ems controls according
-    to the storage tempreature the gas heater.
+class FakeHeater(component.Component):
+
+    # Inputs
+    TemperatureInput = "TemperatureInput"
+    # Outputs
+    ThermalDelivery = "ThermalDelivery"
+
+    def __init__(self, my_simulation_parameters: SimulationParameters) -> None:
+        super().__init__(
+            name="FakeHeaterComponent",
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        # Input
+        self.input_temperature_channel: component.ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureInput,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=True,
+        )
+        # Output
+        self.fake_thermal_power_delivered_output_channel: component.ComponentOutput = (
+            self.add_output(
+                object_name=self.component_name,
+                field_name=self.ThermalDelivery,
+                load_type=LoadTypes.HEATING,
+                unit=Units.WATT,
+            )
+        )
+
+        self.fake_thermal_output_in_watt: float = 0
+        self.input_temperture_in_celsius: float = 0
+        self.day: int = 0
+        self.heating_days: list = []
+
+    def i_save_state(self) -> None:
+        pass
+
+    def i_restore_state(self) -> None:
+        pass
+
+    def i_prepare_simulation(self) -> None:
+        pass
+
+    def i_doublecheck(
+        self, timestep: int, stsv: component.SingleTimeStepValues
+    ) -> None:
+        pass
+
+    def i_simulate(
+        self,
+        timestep: int,
+        stsv: component.SingleTimeStepValues,
+        force_convergence: bool,
+    ) -> None:
+        self.input_temperture_in_celsius = stsv.get_input_value(
+            self.input_temperature_channel
+        )
+        log.information("input temp [°C] " + str(self.input_temperture_in_celsius))
+
+        # if 19.5 < self.input_temperture_in_celsius < 20.5:
+        #     self.fake_thermal_output_in_watt += 0
+        if self.input_temperture_in_celsius < 20:
+            self.fake_thermal_output_in_watt += 40
+            self.heating_days.append(self.day)
+        log.information("heating day " + str(self.heating_days))
+        # elif self.input_temperture_in_celsius > 20 + 0.5:
+        #     self.fake_thermal_output_in_watt += -100000
+
+        stsv.set_output_value(
+            self.fake_thermal_power_delivered_output_channel,
+            self.fake_thermal_output_in_watt,
+        )
+        log.information("fake thermal output " + str(self.fake_thermal_output_in_watt))
+
+
+            
+        self.day = int(timestep / (60*24))
+        log.information("timestep and day " + str(timestep) + " " + str(self.day))
+
+    def write_to_report(self):
+        lines = []
+        lines.append(f"Name Heater: {self.component_name}")
+        lines.append(f"Heating Output [W]: {self.fake_thermal_output_in_watt}")
+        return lines
+
+
+# =========================================================================================================================================================
+def household_fake_heating(
+    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+) -> None:
+    """Household with a fake heating.
 
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)
         - Weather
-        - GasHeater
-        - HeatingStorage
-        - Controller2EMS
+        - Fake Heater
     """
+    # =========================================================================================================================================================
+    # Set System Parameters
 
-    # System Parameters #
-
-    # Set simulation parameters
-    year = 2021
+    # Set Simulation Parameters
+    year = 2019
     seconds_per_timestep = 60
 
-    # Build Components #
+    # =========================================================================================================================================================
+    # Build Components
 
-    # Build system parameters
+    # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
+
     # Build occupancy
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
-                                                            my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build Weather
-    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
-                                 my_simulation_parameters=my_simulation_parameters)
+    my_weather = weather.Weather(
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
- 
     # Build Building
-    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
-                                    my_simulation_parameters=my_simulation_parameters)
+    my_building = building.Building(
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
-    # Build Fake Heating Component Class
-    class FakeHeater(component.Component):
-
-        # Outputs
-        ThermalDelivery = "ThermalDelivery"
-        def __init__(self, my_simulation_parameters: SimulationParameters) -> None:
-            super().__init__(name= "FakeHeaterComponent", my_simulation_parameters=my_simulation_parameters)
-
-            # Output
-            self.fake_thermal_power_delivered_output_channel: component.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ThermalDelivery, load_type=LoadTypes.HEATING, unit=Units.WATT)
-        def i_save_state(self) -> None:
-            pass
-
-        def i_restore_state(self) -> None:
-            pass
-
-        def i_prepare_simulation(self) -> None:
-            pass
-
-        def i_doublecheck(self, timestep: int, stsv: component.SingleTimeStepValues) -> None:
-            pass
-
-        def i_simulate(self, timestep: int, stsv: component.SingleTimeStepValues, force_convergence: bool) -> None:
-            self.fake_thermal_output_in_watt = 1000
-            stsv.set_output_value(self.fake_thermal_power_delivered_output_channel, self.fake_thermal_output_in_watt)
-
-        def write_to_report(self):
-            lines = []
-            lines.append(f"Name Heater: {self.component_name}")
-            lines.append(f"Heating Output [W]: {self.fake_thermal_output_in_watt}")
-            return lines
-
-    # # Fake power delivered component 
-    # fake_heater = component.Component(name= "FakeHeaterComponent", my_simulation_parameters=my_simulation_parameters)
-    # fake_heater.set_sim_repo(repo)
-    # fake_heater.i_prepare_simulation()
-    # fake_thermal_power_delivered_output_channel = fake_heater.add_output(object_name=fake_heater.component_name, field_name="ThermalDelivery", load_type=LoadTypes.HEATING, unit=Units.WATT)
-
+    # Build Fake Heater from Fake Heater Class
     my_fake_heater = FakeHeater(my_simulation_parameters=my_simulation_parameters)
 
+    # =========================================================================================================================================================
     # Connect Inputs
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(my_building.ThermalEnergyDelivered, my_fake_heater.component_name, my_fake_heater.ThermalDelivery)
+    my_building.connect_input(
+        my_building.ThermalEnergyDelivered,
+        my_fake_heater.component_name,
+        my_fake_heater.ThermalDelivery,
+    )
 
+    my_fake_heater.connect_input(
+        my_fake_heater.TemperatureInput,
+        my_building.component_name,
+        my_building.TemperatureMean,
+    )
+    # =========================================================================================================================================================
+    # Add Components to Simulation
     my_sim.add_component(my_building)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_fake_heater)
+
+    # =========================================================================================================================================================
+    # This part is for testing the building heating demand
+    tabula_conditioned_floor_area_in_m2 = my_building.buildingdata["A_C_Ref"].values[0]
+    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # Check values from TABULA
+    # in tabula energy need for heating is given as q_h_nd, it is related to the conditioned floor area
+    q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year = my_building.buildingdata[
+        "q_h_nd"
+    ].values[0]
+
+    log.information(
+        "Tabula Q-h-nd " + str(q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year)
+    )
+    # # Tabula formular for energy need for heating is given by q_h_nd = q_ht - eta_h_gn * (q_sol + q_int)
+    # log.information("after simulation run:")
+    # for i in my_sim.all_outputs:
+    #     i = i.get_pretty_name()
+    #     log.information("all outputs " + str(i))
+
+    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # Compare Fake Thermal delivery (Q_h_nd, fake) with Q_h_nd, from tabula
+    log.information(
+        "-----------------------------------------------------------------------------------------------------------------------------------------"
+    )
+
+    # np.testing.assert_allclose(
+    #     q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year,
+    #     my_fake_heater.fake_thermal_output_in_watt,
+    #     rtol=0.1,
+    # )

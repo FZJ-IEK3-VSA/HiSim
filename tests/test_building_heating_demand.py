@@ -13,17 +13,25 @@ from hisim import utils
 from examples import household_with_fake_heater
 
 
+# @utils.measure_execution_time
+# def test_basic_household():
+#     """ Single day. """
+#     path = "../examples/household_with_fake_heater.py"
+#     func = "household_fake_heating"
+#     mysimpar = SimulationParameters.full_year_all_options(year=2019, seconds_per_timestep=60)
+#     hisim_main.main(path, func, mysimpar)
+#     log.information(os.getcwd())
+#     log.information("after simulation run:")
+
+
 @utils.measure_execution_time
 def test_basic_household():
     """ Single day. """
-    path = "../examples/household_with_fake_heater.py"
-    func = "household_fake_heating"
+    path = "../examples/household_for_test_building_heat_demand.py"
+    func = "bla"
     mysimpar = SimulationParameters.full_year_all_options(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
-    log.information("after simulation run:")
-    # hn = household_with_fake_heater.household_fake_heating(my_simulation_parameters=mysimpar)
-    # hn.my
 
 
 

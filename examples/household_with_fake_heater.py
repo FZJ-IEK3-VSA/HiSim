@@ -80,14 +80,12 @@ class FakeHeater(component.Component):
         self.input_temperture_in_celsius = stsv.get_input_value(
             self.input_temperature_channel
         )
-        log.information("input temp [°C] " + str(self.input_temperture_in_celsius))
-        # self.fake_thermal_output_in_watt = 0
-        if self.input_temperture_in_celsius < 20 + 0.5:
-            self.fake_thermal_output_in_watt = 10000
+        #log.information("input temp [°C] " + str(self.input_temperture_in_celsius))
+        self.fake_thermal_output_in_watt = 0
+        if self.input_temperture_in_celsius < 20:
+            self.fake_thermal_output_in_watt = 10
             self.heating_days.append(self.day)
-        # if self.input_temperture_in_celsius > 21:
-        #     self.fake_thermal_output_in_watt - 10000
- 
+
         # log.information("heating days " + str(set(self.heating_days)))
 
         stsv.set_output_value(
@@ -95,13 +93,13 @@ class FakeHeater(component.Component):
             self.fake_thermal_output_in_watt,
         )
         self.fake_thermal_output_sum += self.fake_thermal_output_in_watt
-        log.information("fake thermal output per iteration " +str(self.fake_thermal_output_in_watt))
+        #log.information("fake thermal output per iteration " +str(self.fake_thermal_output_in_watt))
         # log.information("fake thermal output sum " + str(self.fake_thermal_output_sum))
 
 
             
         self.day = int(timestep / (60*24))
-        log.information("timestep and day " + str(timestep) + " " + str(self.day))
+        #log.information("timestep and day " + str(timestep) + " " + str(self.day))
 
     def write_to_report(self):
         lines = []

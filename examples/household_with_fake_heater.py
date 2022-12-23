@@ -52,6 +52,7 @@ class FakeHeater(component.Component):
         )
 
         self.fake_thermal_output_in_watt: float = 0
+        self.fake_thermal_output_sum: float = 0
         self.input_temperture_in_celsius: float = 0
         self.day: int = 0
         self.heating_days: list = []
@@ -80,21 +81,22 @@ class FakeHeater(component.Component):
             self.input_temperature_channel
         )
         log.information("input temp [°C] " + str(self.input_temperture_in_celsius))
-
-        # if 19.5 < self.input_temperture_in_celsius < 20.5:
-        #     self.fake_thermal_output_in_watt += 0
-        if self.input_temperture_in_celsius < 20:
-            self.fake_thermal_output_in_watt += 40
+        # self.fake_thermal_output_in_watt = 0
+        if self.input_temperture_in_celsius < 20 + 0.5:
+            self.fake_thermal_output_in_watt = 10000
             self.heating_days.append(self.day)
-        log.information("heating day " + str(self.heating_days))
-        # elif self.input_temperture_in_celsius > 20 + 0.5:
-        #     self.fake_thermal_output_in_watt += -100000
+        # if self.input_temperture_in_celsius > 21:
+        #     self.fake_thermal_output_in_watt - 10000
+ 
+        # log.information("heating days " + str(set(self.heating_days)))
 
         stsv.set_output_value(
             self.fake_thermal_power_delivered_output_channel,
             self.fake_thermal_output_in_watt,
         )
-        log.information("fake thermal output " + str(self.fake_thermal_output_in_watt))
+        self.fake_thermal_output_sum += self.fake_thermal_output_in_watt
+        log.information("fake thermal output per iteration " +str(self.fake_thermal_output_in_watt))
+        # log.information("fake thermal output sum " + str(self.fake_thermal_output_sum))
 
 
             
@@ -104,7 +106,8 @@ class FakeHeater(component.Component):
     def write_to_report(self):
         lines = []
         lines.append(f"Name Heater: {self.component_name}")
-        lines.append(f"Heating Output [W]: {self.fake_thermal_output_in_watt}")
+        lines.append(f"Heating Output Sum [kW]: {self.fake_thermal_output_sum / 1000}")
+        lines.append(f"Heating Days : {len(set(self.heating_days))}")
         return lines
 
 
@@ -189,9 +192,9 @@ def household_fake_heating(
         "q_h_nd"
     ].values[0]
 
-    log.information(
-        "Tabula Q-h-nd " + str(q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year)
-    )
+    # log.information(
+    #     "Tabula Q-h-nd [kWh/m2.a] " + str(q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year)
+    # )
     # # Tabula formular for energy need for heating is given by q_h_nd = q_ht - eta_h_gn * (q_sol + q_int)
     # log.information("after simulation run:")
     # for i in my_sim.all_outputs:
@@ -200,9 +203,6 @@ def household_fake_heating(
 
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
     # Compare Fake Thermal delivery (Q_h_nd, fake) with Q_h_nd, from tabula
-    log.information(
-        "-----------------------------------------------------------------------------------------------------------------------------------------"
-    )
 
     # np.testing.assert_allclose(
     #     q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year,

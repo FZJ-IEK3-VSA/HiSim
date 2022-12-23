@@ -1005,7 +1005,11 @@ class Building(dynamic_component.DynamicComponent):
         """Write important variables to a report."""
         lines = []
         lines.append(f"Building Name: {self.component_name}")
-        lines.append(f"Building Code from TABULA: {self.buildingcode}")
+        lines.append(f"Building Code: {self.buildingconfig.building_code}")
+        lines.append(f"Building Heat Capacity Class: {self.buildingconfig.building_heat_capacity_class}")
+        lines.append(f"Building Absolute Conditioned Floor Area [m2]: {self.buildingconfig.absolute_conditioned_floor_area_in_m2}")
+        lines.append(f"Building Initial Internal Temperature [°C]: {self.buildingconfig.initial_internal_temperature_in_celsius}")
+        lines.append(f"Building Heating Reference Temperature [°C]: {self.buildingconfig.heating_reference_temperature_in_celsius}")
 
         lines.append(
             "-------------------------------------------------------------------------------------------"
@@ -1038,7 +1042,7 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Areas:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Conditioned Floor Area, based on TABULA (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
+            f"Conditioned Floor Area (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
         )
         lines.append(
             f"Effective Mass Area (A_m), based on ISO 13790 [m2]: {self.effective_mass_area_in_m2:.2f}"

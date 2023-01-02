@@ -98,7 +98,9 @@ class GenericHeatPump(cp.Component):
     def __init__(self, my_simulation_parameters: SimulationParameters, manufacturer: str = "Viessmann Werke GmbH & Co KG",
                  name: str = "Vitocal 300-A AWO-AC 301.B07", min_operation_time: int = 60 * 60, min_idle_time: int = 15 * 60) -> None:
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
-
+        self.sum_thermal_output_in_watt: float = 0
+        self.heating_hours: float = 0
+        self.heating_energy_in_watt_hour: float = 0
         self.build(manufacturer, name, min_operation_time, min_idle_time)
 
         self.number_of_cycles = 0
@@ -201,9 +203,6 @@ class GenericHeatPump(cp.Component):
         self.min_operation_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
         self.min_idle_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
 
-        self.sum_thermal_output_in_watt: float = 0
-        self.heating_hours: float = 0
-        self.heating_energy_in_watt_hour: float = 0
         # Writes info to report
         self.write_to_report()
 

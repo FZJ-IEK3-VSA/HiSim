@@ -7,7 +7,6 @@ from hisim.components import weather
 from hisim.components import building
 from hisim import component
 from hisim.loadtypes import LoadTypes, Units
-from hisim import log
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3"
@@ -23,12 +22,15 @@ __status__ = "development"
 
 class FakeHeater(component.Component):
 
+    """Fake Heater class."""
+
     # Inputs
     TemperatureInput = "TemperatureInput"
     # Outputs
     ThermalDelivery = "ThermalDelivery"
 
     def __init__(self, my_simulation_parameters: SimulationParameters) -> None:
+        """Construct all the neccessary attributes."""
         super().__init__(
             name="FakeHeaterComponent",
             my_simulation_parameters=my_simulation_parameters,
@@ -58,17 +60,21 @@ class FakeHeater(component.Component):
         self.heating_days: list = []
 
     def i_save_state(self) -> None:
+        """Save the current state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restore the previous state."""
         pass
 
     def i_prepare_simulation(self) -> None:
+        """Prepare the simulation."""
         pass
 
     def i_doublecheck(
         self, timestep: int, stsv: component.SingleTimeStepValues
     ) -> None:
+        """Doublecheck."""
         pass
 
     def i_simulate(
@@ -77,10 +83,11 @@ class FakeHeater(component.Component):
         stsv: component.SingleTimeStepValues,
         force_convergence: bool,
     ) -> None:
+        """Simulate the fake heater."""
         self.input_temperture_in_celsius = stsv.get_input_value(
             self.input_temperature_channel
         )
-        #log.information("input temp [°C] " + str(self.input_temperture_in_celsius))
+        # log.information("input temp [°C] " + str(self.input_temperture_in_celsius))
         self.fake_thermal_output_in_watt = 0
         if self.input_temperture_in_celsius < 20:
             self.fake_thermal_output_in_watt = 10
@@ -93,15 +100,14 @@ class FakeHeater(component.Component):
             self.fake_thermal_output_in_watt,
         )
         self.fake_thermal_output_sum += self.fake_thermal_output_in_watt
-        #log.information("fake thermal output per iteration " +str(self.fake_thermal_output_in_watt))
+        # log.information("fake thermal output per iteration " +str(self.fake_thermal_output_in_watt))
         # log.information("fake thermal output sum " + str(self.fake_thermal_output_sum))
 
-
-            
-        self.day = int(timestep / (60*24))
-        #log.information("timestep and day " + str(timestep) + " " + str(self.day))
+        self.day = int(timestep / (60 * 24))
+        # log.information("timestep and day " + str(timestep) + " " + str(self.day))
 
     def write_to_report(self):
+        """Write important variables to report."""
         lines = []
         lines.append(f"Name Heater: {self.component_name}")
         lines.append(f"Heating Output Sum [kW]: {self.fake_thermal_output_sum / 1000}")
@@ -182,13 +188,13 @@ def household_fake_heating(
 
     # =========================================================================================================================================================
     # This part is for testing the building heating demand
-    tabula_conditioned_floor_area_in_m2 = my_building.buildingdata["A_C_Ref"].values[0]
+    # tabula_conditioned_floor_area_in_m2 = my_building.buildingdata["A_C_Ref"].values[0]
     # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
     # Check values from TABULA
     # in tabula energy need for heating is given as q_h_nd, it is related to the conditioned floor area
-    q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year = my_building.buildingdata[
-        "q_h_nd"
-    ].values[0]
+    # q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year = my_building.buildingdata[
+    #     "q_h_nd"
+    # ].values[0]
 
     # log.information(
     #     "Tabula Q-h-nd [kWh/m2.a] " + str(q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year)

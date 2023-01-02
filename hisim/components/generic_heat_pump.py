@@ -56,7 +56,6 @@ class GenericHeatPumpState:
     def clone(self) -> Any:
         return GenericHeatPumpState(self.start_timestep, self.thermal_energy_delivered, self.cop, self.cycle_number)
 
-
 class GenericHeatPump(cp.Component):
     """
     Heat pump implementation. It does support a
@@ -202,6 +201,9 @@ class GenericHeatPump(cp.Component):
         self.min_operation_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
         self.min_idle_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
 
+        self.sum_thermal_output_in_watt: float = 0
+        self.heating_hours: float = 0
+        self.heating_energy_in_watt_hour: float = 0
         # Writes info to report
         self.write_to_report()
 
@@ -238,8 +240,8 @@ class GenericHeatPump(cp.Component):
     def write_to_report(self) -> List[str]:
         lines: List[str] = []
         lines.append("Name: {}".format("Heat Pump"))
-        lines.append("Max power: {:4.0f} kW".format((self.max_heating_power) * 1E-3))
-        lines.append("Max power var: {:4.0f}".format(self.max_heating_power_var))
+        lines.append("Max heating power: {:4.3f} kW".format((self.max_heating_power) * 1E-3))
+        lines.append("Max heating power var: {:4.3f}".format(self.max_heating_power_var))
         # lines = []
         # lines.append([self.ComponentName,""])
         # lines.append(["Max power:","{:4.2f}".format(self.max_heating_power)])
@@ -307,6 +309,10 @@ class GenericHeatPump(cp.Component):
             stsv.set_output_value(self.coolingC, self.state.cooling)
             stsv.set_output_value(self.electricity_outputC, self.state.electricity_in)
             stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
+            self.sum_thermal_output_in_watt += self.state.heating
+            # divide by max heating power/minute (7420 W), per iterations/minute (3) and minutes/hour (60)
+            self.heating_hours = self.sum_thermal_output_in_watt / (self.max_heating_power * 3 * 60)
+            self.heating_energy_in_watt_hour = self.heating_hours * self.max_heating_power
             return
 
         ### Heat Pump is Off
@@ -321,13 +327,16 @@ class GenericHeatPump(cp.Component):
                 self.state = GenericHeatPumpState(start_timestep=timestep, thermal_energy_delivered=self.max_cooling_power, cop=self.cal_cop(t_out),
                                                   cycle_number=number_of_cycles)
 
-        # log.information(self.state.thermal_energy_delivered)
         # Outputs
         stsv.set_output_value(self.thermal_energy_deliveredC, self.state.thermal_energy_delivered)
         stsv.set_output_value(self.heatingC, self.state.heating)
         stsv.set_output_value(self.coolingC, self.state.cooling)
         stsv.set_output_value(self.electricity_outputC, self.state.electricity_in)
         stsv.set_output_value(self.number_of_cyclesC, self.number_of_cycles)
+        self.sum_thermal_output_in_watt += self.state.heating
+        # divide by max heating power/minute (7420 W), per iterations/minute (3) and minutes/hour (60)
+        self.heating_hours = self.sum_thermal_output_in_watt / (self.max_heating_power * 3 * 60)
+        self.heating_energy_in_watt_hour = self.heating_hours * self.max_heating_power
 
     def process_thermal(self, ws_in: float) -> None:
         pass  # temperature_max = 55  # heat_capacity = PhysicsConfig.water_specific_heat_capacity  # thermal_energy_to_add = self.max_heating_power  # ws_out_mass = ws_in.mass  # try:  #    ws_out_temperature = ws_in.temperature + thermal_energy_to_add / (heat_capacity * ws_out_mass)  # except ZeroDivisionError:  #    log.information(heat_capacity)  #    log.information(ws_out_mass)  #    log.information(ws_in.mass)  #    raise ValueError  # wasted_energy = 0  # if ws_out_temperature > temperature_max:  #    delta_T = ws_out_temperature - temperature_max  #    wasted_energy = (delta_T * ws_out_mass * PhysicsConfig.water_specific_heat_capacity)  #    ws_out_temperature = temperature_max  # ws_out_enthalpy = ws_in.enthalpy + thermal_energy_to_add  # ws_in.change_slice_parameters(new_temperature=ws_out_temperature, new_enthalpy=ws_out_enthalpy, new_mass=ws_out_mass)  # return ws_in, wasted_energy, thermal_energy_to_add

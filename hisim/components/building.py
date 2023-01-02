@@ -1002,7 +1002,7 @@ class Building(dynamic_component.DynamicComponent):
     def write_to_report(
         self,
     ):
-        """Write important variables to a report."""
+        """Write important variables to report."""
         lines = []
         lines.append(f"Building Name: {self.component_name}")
         lines.append(f"Building Code: {self.buildingconfig.building_code}")

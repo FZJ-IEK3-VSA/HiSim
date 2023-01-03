@@ -88,7 +88,7 @@ def basic_household_only_heating(my_sim: Any, my_simulation_parameters: Optional
     my_storage_controller.connect_input(my_storage_controller.ReferenceMaxHeatBuildingDemand, my_building.component_name,
                                         my_building.ReferenceMaxHeatBuildingDemand)
 
-    my_building.connect_input(my_building.ThermalEnergyDelivered, my_storage.component_name, my_storage.RealHeatForBuilding)
+    my_building.connect_input(my_building.ThermalPowerDelivered, my_storage.component_name, my_storage.RealHeatForBuilding)
 
     my_controller_heat.connect_input(my_controller_heat.StorageTemperatureHeatingWater, my_storage.component_name,
                                      my_storage.WaterOutputTemperatureHeatingWater)

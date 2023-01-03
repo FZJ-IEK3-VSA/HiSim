@@ -338,7 +338,7 @@ class SankeyHISIM(Chart):
                 heating_by_residents = sum(output_result.Results)
             if output_result.component_name == "HeatPump" and (output_result.display_name in
                                                                (generic_heat_pump_modular.ModularHeatPump.ThermalPowerDelivered,
-                                                                generic_heat_pump.GenericHeatPump.ThermalEnergyDelivered,
+                                                                generic_heat_pump.GenericHeatPump.ThermalPowerDelivered,
                                                                 advanced_heat_pump_hplib.HeatPumpHplib.ThermalOutputPower)):
                 thermal_energy_delivered = sum(output_result.Results)
             if output_result.component_name == "Building":

@@ -121,7 +121,7 @@ class GenericHeatPump(cp.Component):
     # WaterOutput_temperature = "WaterOutput_temperature"             # °C
     # WastedEnergyMaxTemperature = "Wasted Energy Max Temperature"    # W
 
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ThermalPowerDelivered = "ThermalPowerDelivered"
     Heating = "Heating"
     Cooling = "Cooling"
     ElectricityOutput = "ElectricityOutput"
@@ -201,7 +201,7 @@ class GenericHeatPump(cp.Component):
 
         self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.ThermalEnergyDelivered,
+            self.ThermalPowerDelivered,
             LoadTypes.HEATING,
             Units.WATT,
         )

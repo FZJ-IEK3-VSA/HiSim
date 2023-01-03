@@ -192,7 +192,7 @@ class Building(dynamic_component.DynamicComponent):
     """
 
     # Inputs -> heating device
-    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ThermalPowerDelivered = "ThermalPowerDelivered"
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
@@ -342,7 +342,7 @@ class Building(dynamic_component.DynamicComponent):
 
         self.thermal_power_delivered_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.ThermalEnergyDelivered,
+            self.ThermalPowerDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             False,

@@ -169,7 +169,7 @@ def household_fake_heating(
     # Connect Inputs
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_fake_heater.component_name,
         my_fake_heater.ThermalDelivery,
     )

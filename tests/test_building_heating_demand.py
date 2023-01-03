@@ -289,9 +289,9 @@ def test_house_with_pv_and_hp_for_heating_test(
         my_occupancy.HeatingByResidents,
     )
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
-        my_heat_pump.ThermalEnergyDelivered,
+        my_heat_pump.ThermalPowerDelivered,
     )
 
     # Heat Pump

@@ -268,7 +268,7 @@ def basic_household_explicit(
     my_sim.add_component(my_heat_pump)
 
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
-        my_heat_pump.ThermalEnergyDelivered,
+        my_heat_pump.ThermalPowerDelivered,
     )

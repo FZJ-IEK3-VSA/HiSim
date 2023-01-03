@@ -149,7 +149,7 @@ class BuildingState:
     def calc_stored_thermal_power_in_watt(
         self,
     ) -> float:
-        """Calculate the thermal energy stored by the thermal mass per second (thermal power)."""
+        """Calculate the thermal power stored by the thermal mass per second."""
         return (
             self.thermal_mass_temperature_in_celsius
             * self.thermal_capacitance_in_joule_per_kelvin

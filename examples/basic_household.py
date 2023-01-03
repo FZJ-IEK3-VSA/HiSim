@@ -70,8 +70,8 @@ def basic_household_explicit(
     total_base_area_in_m2 = None
 
     # Set heat pump controller
-    t_air_heating = 16.0
-    t_air_cooling = 24.0
+    temperature_air_heating_in_celsius = 16.0
+    temperature_air_cooling_in_celsius = 24.0
     offset = 0.5
     hp_mode = 2
 
@@ -229,8 +229,8 @@ def basic_household_explicit(
     my_sim.add_component(my_building)
 
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(
-        t_air_heating=t_air_heating,
-        t_air_cooling=t_air_cooling,
+        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
         mode=hp_mode,
         my_simulation_parameters=my_simulation_parameters,

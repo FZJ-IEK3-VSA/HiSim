@@ -2,7 +2,7 @@
 
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
-
+# clean
 import os
 from typing import Optional
 import numpy as np
@@ -99,8 +99,8 @@ def test_house_with_pv_and_hp_for_heating_test(
     total_base_area_in_m2 = None
 
     # Set Heat Pump Controller
-    t_air_heating = 18
-    t_air_cooling = 21
+    temperature_air_heating_in_celsius = 18
+    temperature_air_cooling_in_celsius = 21
     offset = 0.5
     hp_mode = 2
 
@@ -199,8 +199,8 @@ def test_house_with_pv_and_hp_for_heating_test(
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(
-        t_air_heating=t_air_heating,
-        t_air_cooling=t_air_cooling,
+        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
         mode=hp_mode,
         my_simulation_parameters=my_simulation_parameters,

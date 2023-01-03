@@ -17,8 +17,8 @@ def test_heat_pump():
     heat_pump_power = 7420.0
 
     # Heat Pump Controller
-    t_air_heating = 18.0
-    t_air_cooling = 28.0
+    temperature_air_heating_in_celsius = 18.0
+    temperature_air_cooling_in_celsius = 28.0
     offset = 1
     hp_mode = 1
 
@@ -33,8 +33,8 @@ def test_heat_pump():
                                                      min_idle_time=minimum_operation_time, my_simulation_parameters=my_simulation_parameters)
 
     # Set Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(t_air_heating=t_air_heating,
-                                                               t_air_cooling=t_air_cooling,
+    my_heat_pump_controller = generic_heat_pump.HeatPumpController(temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+                                                               temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
                                                                offset=offset,
                                                                mode=hp_mode,
                                                            my_simulation_parameters=my_simulation_parameters)
@@ -49,22 +49,22 @@ def test_heat_pump():
                               lt.LoadTypes.TEMPERATURE,
                               lt.Units.WATT)
 
-    my_heat_pump_controller.t_mC.source_output = t_mC
+    my_heat_pump_controller.temperature_mean_channel.source_output = t_mC
 
-    my_heat_pump.t_outC.source_output = t_air_outdoorC
-    my_heat_pump.stateC.source_output = my_heat_pump_controller.stateC
+    my_heat_pump.temperature_outside_channel.source_output = t_air_outdoorC
+    my_heat_pump.state_channel.source_output = my_heat_pump_controller.state_channel
 
     # Link inputs and outputs
     t_mC.global_index = 0
     stsv.values[0] = 10
 
-    my_heat_pump_controller.stateC.global_index = 1
+    my_heat_pump_controller.state_channel.global_index = 1
 
-    my_heat_pump.thermal_energy_deliveredC.global_index = 2
-    my_heat_pump.heatingC.global_index = 3
-    my_heat_pump.coolingC.global_index = 4
-    my_heat_pump.electricity_outputC.global_index = 5
-    my_heat_pump.number_of_cyclesC.global_index = 6
+    my_heat_pump.thermal_power_delivered_channel.global_index = 2
+    my_heat_pump.heating_channel.global_index = 3
+    my_heat_pump.cooling_channel.global_index = 4
+    my_heat_pump.electricity_output_channel.global_index = 5
+    my_heat_pump.number_of_cycles_channel.global_index = 6
     t_air_outdoorC.global_index = 7
     j = 60
     # Simulate

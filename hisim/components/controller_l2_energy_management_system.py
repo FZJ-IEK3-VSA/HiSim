@@ -1,9 +1,6 @@
 # Generic/Built-in
-from dataclasses import dataclass
 from typing import Any
 from typing import List
-
-from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import dynamic_component
@@ -50,7 +47,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                  limit_to_shave: float = 0):
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
-        super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_inputs,
+        super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
                          name="L2EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
         self.source_weights_sorted: Any
         self.components_sorted: Any
@@ -93,8 +90,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False)
 
     def sort_source_weights_and_components(self) -> None:
-        SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs]
-        SourceWeights = [elem.source_weight for elem in self.my_component_outputs]
+        SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs if elem.source_weight != 999]
+        SourceWeights = [elem.source_weight for elem in self.my_component_inputs if elem.source_weight != 999]
         sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
         self.source_weights_sorted = [SourceWeights[i] for i in sortindex]
         self.components_sorted = [SourceTags[i] for i in sortindex]
@@ -207,7 +204,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         flexible_electricity = production - consumption_uncontrolled
         electricity_to_grid = production - consumption_uncontrolled - consumption_ems_controlled
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(delta_demand=electricity_to_grid, stsv=stsv)
+            self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv)
             stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
             stsv.set_output_value(self.flexible_electricity, flexible_electricity)
         stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)

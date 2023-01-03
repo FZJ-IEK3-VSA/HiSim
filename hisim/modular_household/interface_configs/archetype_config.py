@@ -22,8 +22,8 @@ class ArcheTypeConfig:
         default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
     )
     building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002
-    water_heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
-    heating_system_installed: HeatingSystems = HeatingSystems.HEAT_PUMP
+    water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
+    heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     mobility_set: JsonReference = field(
         default_factory=lambda: TransportationDeviceSets.Bus_and_two_30_km_h_Cars  # type: ignore
     )

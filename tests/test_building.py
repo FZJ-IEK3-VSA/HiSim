@@ -26,8 +26,6 @@ def test_building():
     t_one = time.perf_counter()
 
     my_occupancy_profile = "CH01"
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
-    building_heat_capacity_class = "medium"
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
@@ -83,8 +81,6 @@ def test_building():
     my_residence_config = (
         building.BuildingConfig.get_default_german_single_family_home()
     )
-    my_residence_config.building_heat_capacity_class = building_heat_capacity_class
-    my_residence_config.building_code = building_code
 
     my_residence = building.Building(
         config=my_residence_config,

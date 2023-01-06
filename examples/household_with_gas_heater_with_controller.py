@@ -103,8 +103,8 @@ def household_gas_heater(
     )
 
     # Build Gasheater
-    my_gasheater = generic_gas_heater_with_controller.GasHeater(
-        config=generic_gas_heater_with_controller.GenericGasHeaterConfig.get_default_gasheater_config(),
+    my_gasheater = generic_gas_heater_with_controller.GasHeaterWithController(
+        config=generic_gas_heater_with_controller.GenericGasHeaterWithControllerConfig.get_default_gasheater_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

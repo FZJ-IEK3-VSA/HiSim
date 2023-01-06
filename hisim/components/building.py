@@ -421,7 +421,7 @@ class Building(dynamic_component.DynamicComponent):
             self.InitialInternalTemperature,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
-        )   
+        )
 
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -625,7 +625,10 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Returns outputs
-        stsv.set_output_value(self.initial_internal_temperature_channel, self.buildingconfig.initial_internal_temperature_in_celsius)
+        stsv.set_output_value(
+            self.initial_internal_temperature_channel,
+            self.buildingconfig.initial_internal_temperature_in_celsius,
+        )
         stsv.set_output_value(
             self.thermal_mass_temperature_channel,
             thermal_mass_average_bulk_temperature_in_celsius,

@@ -29,14 +29,14 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericGasHeaterConfig(cp.ConfigBase):
+class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
 
     """Configuration of the GasHeater class."""
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
-        return GasHeater.get_full_classname()
+        return GasHeaterWithController.get_full_classname()
 
     name: str
     is_modulating: bool
@@ -52,7 +52,7 @@ class GenericGasHeaterConfig(cp.ConfigBase):
         cls,
     ) -> Any:
         """Get a default gasheater config."""
-        config = GenericGasHeaterConfig(
+        config = GenericGasHeaterWithControllerConfig(
             name="Gasheater",
             temperature_delta_in_celsius=10,
             is_modulating=True,
@@ -108,7 +108,7 @@ class GenericGasHeaterConfig(cp.ConfigBase):
 #         )
 
 
-class GasHeater(cp.Component):
+class GasHeaterWithController(cp.Component):
 
     """GasHeater class.
 
@@ -133,7 +133,7 @@ class GasHeater(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericGasHeaterConfig,
+        config: GenericGasHeaterWithControllerConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
@@ -191,7 +191,7 @@ class GasHeater(cp.Component):
         # Output channels
         self.water_boiler_temperature_output_channel: ComponentOutput = self.add_output(
             self.component_name,
-            GasHeater.WaterBoilerTemperatureOutput,
+            self.WaterBoilerTemperatureOutput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
         )
@@ -199,7 +199,7 @@ class GasHeater(cp.Component):
         self.initial_water_boiler_temperature_output_channel: ComponentOutput = (
             self.add_output(
                 self.component_name,
-                GasHeater.InitialWaterBoilerTemperatureOutput,
+                self.InitialWaterBoilerTemperatureOutput,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
             )
@@ -232,7 +232,7 @@ class GasHeater(cp.Component):
         controller_classname = GasHeaterController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GasHeater.State, controller_classname, GasHeaterController.State
+                self.State, controller_classname, GasHeaterController.State
             )
         )
         return connections

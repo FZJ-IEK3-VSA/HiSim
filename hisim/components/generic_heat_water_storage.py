@@ -284,7 +284,6 @@ class HeatStorageController(cp.Component):
     # Outputs
     RealThermalDemandHeatingWater = "RealThermalDemandHeatingWater"
 
-
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: HeatStorageControllerConfig
@@ -313,7 +312,7 @@ class HeatStorageController(cp.Component):
                                                            self.RealHeatBuildingDemand,
                                                            lt.LoadTypes.HEATING,
                                                            lt.Units.WATT,
-                                                           False)
+                                                           True)
         # Outputs
         self.real_thermal_demand_heating_water: ComponentOutput = self.add_output(self.component_name,
                                                                                   self.RealThermalDemandHeatingWater,

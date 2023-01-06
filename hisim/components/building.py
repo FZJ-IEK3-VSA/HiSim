@@ -208,7 +208,8 @@ class Building(dynamic_component.DynamicComponent):
     TemperatureOutside = "TemperatureOutside"
 
     # Outputs
-    TemperatureMean = "Residence Temperature"
+    InitialInternalTemperature = "InitialInternalTemperature"
+    TemperatureMean = "ResidenceTemperature"
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
@@ -219,7 +220,6 @@ class Building(dynamic_component.DynamicComponent):
         my_simulation_parameters: SimulationParameters,
         config: BuildingConfig,
     ):
-        """Construct all the neccessary attributes."""
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
         # dynamic
@@ -415,6 +415,13 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Output channels
+
+        self.initial_internal_temperature_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.InitialInternalTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+        )   
 
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -618,7 +625,7 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Returns outputs
-
+        stsv.set_output_value(self.initial_internal_temperature_channel, self.buildingconfig.initial_internal_temperature_in_celsius)
         stsv.set_output_value(
             self.thermal_mass_temperature_channel,
             thermal_mass_average_bulk_temperature_in_celsius,

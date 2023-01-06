@@ -312,7 +312,7 @@ class HeatStorageController(cp.Component):
                                                            self.RealHeatBuildingDemand,
                                                            lt.LoadTypes.HEATING,
                                                            lt.Units.WATT,
-                                                           True)
+                                                           False)
         # Outputs
         self.real_thermal_demand_heating_water: ComponentOutput = self.add_output(self.component_name,
                                                                                   self.RealThermalDemandHeatingWater,

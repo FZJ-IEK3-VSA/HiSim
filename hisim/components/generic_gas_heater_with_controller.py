@@ -120,11 +120,11 @@ class GasHeaterWithController(cp.Component):
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     InitialResidenceTemperature = "InitialResidenceTemperature"
     ResidenceTemperature = "Residence Temperature"
-    # MassflowInputTemperature = "MassflowInputTemperature"
+    CooledWaterTemperatureBoilerInput = "CooledWaterTemperatureBoilerInput"
 
     # Output
-    InitialWaterBoilerTemperatureOutput = "InitialWaterBoilerTemperatureOutput"
-    WaterBoilerTemperatureOutput = "WaterBoilerTemperatureOutput"
+    MeanWaterTemperatureBoilerOutput = "MeanWaterTemperatureBoilerOutput"
+    HeatedWaterTemperatureBoilerOutput = "HeatedWaterTemperatureBoilerOutput"
     GasPower = "GasPower"
     ThermalPowerDelivered = "ThermalPowerDelivered"
     MaxMassFlow = "MaxMassFlow"
@@ -142,14 +142,13 @@ class GasHeaterWithController(cp.Component):
         # =================================================================================================================================
         # Initialization of variables
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = 4184
-        self.mass_flow_output_in_kg: float = 0
-        self.state_controller: float = 0
         self.max_mass_flow_in_kg_per_second: float = 0
         self.initial_temperature_water_boiler_in_celsius: float = 35
         self.rest_temperature_return_to_water_boiler_in_celsius = (
             self.initial_temperature_water_boiler_in_celsius
         )
-
+        self.mean_water_temperature_in_boiler_in_celsius: float = self.initial_temperature_water_boiler_in_celsius
+        self.state_controller: float = 0
         self.initial_temperature_building_in_celsius: float = 0.0
         self.mean_temperature_building_in_celsius: float = 0.0
         self.ref_max_thermal_building_demand_in_watt: float = 0.0
@@ -165,7 +164,13 @@ class GasHeaterWithController(cp.Component):
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
-
+        self.cooled_water_temperature_boiler_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.CooledWaterTemperatureBoilerInput,
+            lt.LoadTypes.WATER,
+            lt.Units.CELSIUS,
+            True,
+        )
         self.initial_temperature_building_channel: ComponentInput = self.add_input(
             self.component_name,
             self.InitialResidenceTemperature,
@@ -189,17 +194,17 @@ class GasHeaterWithController(cp.Component):
         )
 
         # Output channels
-        self.water_boiler_temperature_output_channel: ComponentOutput = self.add_output(
+        self.heated_water_temperature_boiler_output_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterBoilerTemperatureOutput,
+            self.HeatedWaterTemperatureBoilerOutput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
         )
 
-        self.initial_water_boiler_temperature_output_channel: ComponentOutput = (
+        self.mean_water_temperature_boiler_output_channel: ComponentOutput = (
             self.add_output(
                 self.component_name,
-                self.InitialWaterBoilerTemperatureOutput,
+                self.MeanWaterTemperatureBoilerOutput,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
             )
@@ -262,6 +267,7 @@ class GasHeaterWithController(cp.Component):
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the gas heater."""
+        self.rest_temperature_return_to_water_boiler_in_celsius = stsv.get_input_value(self.cooled_water_temperature_boiler_input_channel)
         self.state_controller = stsv.get_input_value(self.state_channel)
         self.initial_temperature_building_in_celsius = stsv.get_input_value(
             self.initial_temperature_building_channel
@@ -287,67 +293,41 @@ class GasHeaterWithController(cp.Component):
         stsv.set_output_value(
             self.max_mass_flow_channel, self.max_mass_flow_in_kg_per_second
         )
-        stsv.set_output_value(
-            self.initial_water_boiler_temperature_output_channel,
-            self.initial_temperature_water_boiler_in_celsius,
-        )
 
         # -----------------------------------------------------------------------------------
 
         # gas valve open or closed
         if self.state_controller == 1:
             gas_power_in_watt = self.maximal_thermal_power_in_watt
-            # log.information("gas power " + str(gas_power_in_watt))
-
-            temperature_gain_in_celsius = gas_power_in_watt / (
-                self.max_mass_flow_in_kg_per_second
-                * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            )
-
-            final_temperature_water_boiler_in_celsius = (
-                self.rest_temperature_return_to_water_boiler_in_celsius
-                + temperature_gain_in_celsius
-            )
-
-            stsv.set_output_value(
-                self.water_boiler_temperature_output_channel,
-                final_temperature_water_boiler_in_celsius,
-            )
-
-            stsv.set_output_value(self.gas_power_channel, gas_power_in_watt)
-
-            # log.information(
-            #     "water temp "
-            #     + str(self.rest_temperature_return_to_water_boiler_in_celsius)
-            # )
-            # log.information("temperature gain " + str(temperature_gain_in_celsius))
-            # log.information(
-            #     "final temp water " + str(final_temperature_water_boiler_in_celsius)
-            # )
 
         elif self.state_controller == 0:
             gas_power_in_watt = 0
-            temperature_gain_in_celsius = gas_power_in_watt / (
-                self.max_mass_flow_in_kg_per_second
-                * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+
+    
+        temperature_gain_in_celsius = gas_power_in_watt / (
+            self.max_mass_flow_in_kg_per_second
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+        )
+
+        final_temperature_water_boiler_in_celsius = (
+            self.mean_water_temperature_in_boiler_in_celsius
+            + temperature_gain_in_celsius
+        )
+
+        self.mean_water_temperature_in_boiler_in_celsius = (
+            (self.rest_temperature_return_to_water_boiler_in_celsius
+            + final_temperature_water_boiler_in_celsius)
+            / 2
             )
-
-            final_temperature_water_boiler_in_celsius = (
-                self.rest_temperature_return_to_water_boiler_in_celsius
-                + temperature_gain_in_celsius
-            )
-
-            stsv.set_output_value(
-                self.water_boiler_temperature_output_channel,
-                final_temperature_water_boiler_in_celsius,
-            )
-
-            stsv.set_output_value(self.gas_power_channel, gas_power_in_watt)
-
-            # log.information("temperature gain " + str(temperature_gain_in_celsius))
-            # log.information(
-            #     "final temp water " + str(final_temperature_water_boiler_in_celsius)
-            # )
+        stsv.set_output_value(
+            self.heated_water_temperature_boiler_output_channel,
+            final_temperature_water_boiler_in_celsius,
+        )
+        stsv.set_output_value(
+            self.mean_water_temperature_boiler_output_channel,
+            self.mean_water_temperature_in_boiler_in_celsius,
+        )
+        stsv.set_output_value(self.gas_power_channel, gas_power_in_watt)
 
 
 class GasHeaterController(cp.Component):
@@ -358,21 +338,10 @@ class GasHeaterController(cp.Component):
     components and sends signal to the gas heater for
     activation or deactivation.
 
-    Parameters
-    ----------
-    t_air_heating: float
-        Minimum comfortable temperature for residents
-    offset: float
-        Temperature offset to compensate the hysteresis
-        correction for the building temperature change
-    mode : int
-        Mode index for operation type for this gas heater
-
     """
 
     # Inputs
-    ResidenceTemperature = "ResidenceTemperature"
-    WaterBoilerTemperatureInput = "WaterBoilerTemperatureInput"
+    HeatedWaterTemperatureGasHeaterControllerInput = "HeatedWaterTemperatureGasHeaterControllerInput"
     # Outputs
     State = "State"
 
@@ -382,7 +351,6 @@ class GasHeaterController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_heating_temperature_building_in_celsius: float = 0.0,
         set_heating_temperature_water_boiler_in_celsius: float = 0.0,
         offset: float = 0.0,
         mode: int = 1,
@@ -393,22 +361,14 @@ class GasHeaterController(cp.Component):
         )
         self.state_controller: int = 0
         self.build(
-            set_heating_temperature_residence_in_celsius=set_heating_temperature_building_in_celsius,
             set_heating_temperature_water_boiler_in_celsius=set_heating_temperature_water_boiler_in_celsius,
             offset=offset,
             mode=mode,
         )
 
-        self.mean_residence_temperature_channel: cp.ComponentInput = self.add_input(
+        self.heated_water_temperature_gas_heater_controller_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.ResidenceTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            True,
-        )
-        self.water_boiler_temperature_input_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterBoilerTemperatureInput,
+            self.HeatedWaterTemperatureGasHeaterControllerInput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
             True,
@@ -416,28 +376,12 @@ class GasHeaterController(cp.Component):
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
         )
-
-        self.add_default_connections(self.get_default_connections_from_building())
         self.controller_gas_valve_mode: str = "close"
         self.previous_controller_gas_valve_mode: str = "close"
 
-    def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
-        """Get building default connections."""
-        log.information("setting building default connections in Heatpumpcontroller")
-        connections = []
-        building_classname = Building.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                GasHeaterController.ResidenceTemperature,
-                building_classname,
-                Building.TemperatureMean,
-            )
-        )
-        return connections
 
     def build(
         self,
-        set_heating_temperature_residence_in_celsius: float,
         set_heating_temperature_water_boiler_in_celsius: float,
         offset: float,
         mode: float,
@@ -451,9 +395,6 @@ class GasHeaterController(cp.Component):
         self.previous_controller_gas_valve_mode = self.controller_gas_valve_mode
 
         # Configuration
-        self.set_heating_temperature_residence_in_celsius = (
-            set_heating_temperature_residence_in_celsius
-        )
         self.set_temperature_water_boiler_in_celsius = (
             set_heating_temperature_water_boiler_in_celsius
         )
@@ -492,19 +433,12 @@ class GasHeaterController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            mean_residence_temperature_in_celsius = stsv.get_input_value(
-                self.mean_residence_temperature_channel
-            )
             water_boiler_temperature_in_celsius = stsv.get_input_value(
-                self.water_boiler_temperature_input_channel
+                self.heated_water_temperature_gas_heater_controller_input_channel
             )
-            # log.information(
-            #     "residence temp " + str(mean_residence_temperature_in_celsius)
-            # )
             # mode = [1,2] for different controller modes, here mode only 1
             if self.mode == 1:
                 self.conditions_for_opening_or_shutting_gas_valve(
-                    mean_residence_temperature_in_celsius,
                     water_boiler_temperature_in_celsius,
                 )
 
@@ -513,35 +447,25 @@ class GasHeaterController(cp.Component):
         if self.controller_gas_valve_mode == "close":
             self.state_controller = 0
         stsv.set_output_value(self.state_channel, self.state_controller)
-        # log.information("gas valve" + self.controller_gas_valve_mode)
+
 
     def conditions_for_opening_or_shutting_gas_valve(
         self,
-        residence_temperature: float,
         water_boiler_temperature: float,
     ) -> None:
         """Set conditions for the gas valve in gas heater."""
         # offset to close gas valve even before max heating temp is reached (try to imitate anticipator resistor)
-        maximum_residence_set_temperature = (
-            self.set_heating_temperature_residence_in_celsius
-        )
         maxium_water_boiler_set_temperature = (
             self.set_temperature_water_boiler_in_celsius
         )
-
         if self.controller_gas_valve_mode == "open":
-            if (
-                residence_temperature >= maximum_residence_set_temperature - self.offset
-                or water_boiler_temperature
-                >= maxium_water_boiler_set_temperature - self.offset
-            ):
+            if water_boiler_temperature >= maxium_water_boiler_set_temperature - self.offset:
                 self.controller_gas_valve_mode = "close"
                 return
 
         if self.controller_gas_valve_mode == "close":
             if (
-                residence_temperature < maximum_residence_set_temperature
-                and water_boiler_temperature < maxium_water_boiler_set_temperature
+                water_boiler_temperature < maxium_water_boiler_set_temperature
             ):
                 self.controller_gas_valve_mode = "open"
             else:

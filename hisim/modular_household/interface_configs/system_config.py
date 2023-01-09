@@ -16,7 +16,7 @@ class SystemConfig:
 
     pv_included: bool = True
     pv_peak_power: Optional[float] = 5e3
-    smart_devices_included: bool = False
+    smart_devices_included: bool = True
     buffer_included: bool = False
     buffer_volume: Optional[float] = 150  # in liter
     battery_included: bool = False

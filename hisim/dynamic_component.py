@@ -175,7 +175,7 @@ class DynamicComponent(Component):
                                                                            source_tags=source_tags,
                                                                            source_weight=source_weight))
 
-    def get_dynamic_input(self, stsv: SingleTimeStepValues,
+    def obsolete_get_dynamic_input_value(self, stsv: SingleTimeStepValues,
                           tags: List[Union[lt.ComponentType, lt.InandOutputType]],
                           weight_counter: int) -> Any:
         """ Returns input value from first dynamic input with component type and weight. """
@@ -192,7 +192,7 @@ class DynamicComponent(Component):
                 break
         return inputvalue
 
-    def get_dynamic_inputs(self, stsv: SingleTimeStepValues,
+    def obsolete_get_dynamic_input_values(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List:
         """ Returns input values from all dynamic inputs with component type and weight. """
         inputvalues = []
@@ -206,6 +206,20 @@ class DynamicComponent(Component):
             else:
                 continue
         return inputvalues
+
+    def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List:
+        """ Returns inputs from all dynamic inputs with component type and weight. """
+        inputs = []
+
+        # check if component of component type is available
+        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
+            if tags_search_and_compare(
+                    tags_to_search=tags,
+                    tags_of_component=element.source_tags):
+                inputs.append(getattr(self, element.source_component_class))
+            else:
+                continue
+        return inputs
 
     def set_dynamic_output(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]],

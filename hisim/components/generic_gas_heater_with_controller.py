@@ -1,4 +1,4 @@
-"""Gas Heater Module."""
+"""Gas Heater Module with Controller."""
 # clean
 # Owned
 from typing import List, Any
@@ -10,8 +10,6 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
 )
-
-# from hisim.components.building import Building
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
@@ -40,13 +38,10 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
         return GasHeaterWithController.get_full_classname()
 
     name: str
-    is_modulating: bool
-    minimal_thermal_power_in_watt: float  # [W]
-    maximal_thermal_power_in_watt: float  # [W]
-    delta_temperature_in_celsius: float  # [°C]
-    maximal_mass_flow_in_kilogram_per_second: float  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
-    maximal_temperature_in_celsius: float  # [°C]
-    temperature_delta_in_celsius: float  # [°C]
+    min_operation_time: int
+    min_idle_time: int
+    maximal_thermal_power_in_watt: float
+    maximal_temperature_in_celsius: float
 
     @classmethod
     def get_default_gasheater_config(
@@ -55,58 +50,12 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
         """Get a default gasheater config."""
         config = GenericGasHeaterWithControllerConfig(
             name="Gasheater",
-            temperature_delta_in_celsius=10,
-            is_modulating=True,
-            minimal_thermal_power_in_watt=1_000,  # [W]
-            maximal_thermal_power_in_watt=12_000,  # [W]
-            delta_temperature_in_celsius=25,
-            maximal_mass_flow_in_kilogram_per_second=12_000
-            / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
-            maximal_temperature_in_celsius=80,  # [°C])
+            min_operation_time=30,
+            min_idle_time=10,
+            maximal_thermal_power_in_watt=12_000,
+            maximal_temperature_in_celsius=80,
         )
         return config
-
-
-# class GenericGasHeaterState:
-
-#     """Gas Heater State class.
-
-#     It determines the state of the gas heater.
-
-#     """
-
-#     def __init__(
-#         self,
-#         start_timestep: int = 0,
-#         thermal_power_delivered_in_watt: float = 0.0,
-#         # cop: float = 1.0,
-#         # cycle_number: Optional[int] = None,
-#     ) -> None:
-#         """Contruct all the necessary attributes."""
-#         self.start_timestep = start_timestep
-#         self.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
-#         # self.cycle_number = cycle_number
-#         if thermal_power_delivered_in_watt == 0.0:
-#             self.activation = 0
-#             self.heating_power_in_watt = 0.0
-#             # self.cop = 1.0
-#             # self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
-#         elif self.thermal_power_delivered_in_watt > 0.0:
-#             self.activation = -1
-#             self.heating_power_in_watt = self.thermal_power_delivered_in_watt
-#             # self.cop = cop
-#             # self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
-#         else:
-#             raise Exception("Impossible Gas Heater State.")
-
-#     def clone(self) -> Any:
-#         """Clone gas heater state."""
-#         return GenericGasHeaterState(
-#             self.start_timestep,
-#             self.thermal_power_delivered_in_watt,
-#             # self.cop,
-#             # self.cycle_number,
-#         )
 
 
 class GasHeaterWithController(cp.Component):
@@ -124,6 +73,7 @@ class GasHeaterWithController(cp.Component):
     CooledWaterTemperatureBoilerInput = "CooledWaterTemperatureBoilerInput"
 
     # Output
+    ControlSignalfromHeaterToDistribution = "ControlSignalfromHeaterToDistribution"
     MeanWaterTemperatureBoilerOutput = "MeanWaterTemperatureBoilerOutput"
     HeatedWaterTemperatureBoilerOutput = "HeatedWaterTemperatureBoilerOutput"
     GasPower = "GasPower"
@@ -142,10 +92,11 @@ class GasHeaterWithController(cp.Component):
         )
         # =================================================================================================================================
         # Initialization of variables
+        self.start_timestep_gas_heater: int = 0
         self.max_mass_flow_in_kg_per_second: float = 0
         self.initial_temperature_water_boiler_in_celsius: float = 35.0
         self.initial_temperature_building_in_celsius: float = 0.0
-
+        self.control_signal_from_heater_to_heat_distribution: int = 0
         self.temperature_gain_in_celsius: float = 0.0
         self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
             self.initial_temperature_water_boiler_in_celsius
@@ -160,12 +111,10 @@ class GasHeaterWithController(cp.Component):
         self.ref_max_thermal_building_demand_in_watt: float = 0.0
 
         # Config Values
-        self.minimal_thermal_power_in_watt = config.minimal_thermal_power_in_watt
         self.maximal_thermal_power_in_watt = config.maximal_thermal_power_in_watt
         self.maximal_temperature_in_celsius = config.maximal_temperature_in_celsius
-        self.temperature_delta_in_celsius = config.temperature_delta_in_celsius
 
-        self.build()
+        self.build(config.min_operation_time, config.min_idle_time)
         # =================================================================================================================================
         # Input channels
         self.state_channel: cp.ComponentInput = self.add_input(
@@ -203,6 +152,13 @@ class GasHeaterWithController(cp.Component):
         )
 
         # Output channels
+
+        self.control_signal_from_heater_to_heat_distribution_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ControlSignalfromHeaterToDistribution,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+        )
         self.heated_water_temperature_boiler_output_channel: ComponentOutput = (
             self.add_output(
                 self.component_name,
@@ -278,77 +234,75 @@ class GasHeaterWithController(cp.Component):
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the gas heater."""
-        if timestep > 60:
-            # Get inputs --------------------------------------------------------------------------------------------------------
-            self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
-                stsv.get_input_value(self.cooled_water_temperature_boiler_input_channel)
-            )
-            self.state_gas_controller = stsv.get_input_value(self.state_channel)
-            self.initial_temperature_building_in_celsius = stsv.get_input_value(
-                self.initial_temperature_building_channel
-            )
-            self.mean_temperature_building_in_celsius = stsv.get_input_value(
-                self.temperature_mean_building_channel
-            )
-            self.ref_max_thermal_building_demand_in_watt = stsv.get_input_value(
-                self.ref_max_thermal_building_demand_channel
-            )
 
-            # Calculations ------------------------------------------------------------------------------------------------------
-            self.calculate_max_mass_flow()
+        # Get inputs --------------------------------------------------------------------------------------------------------
+        self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
+            stsv.get_input_value(self.cooled_water_temperature_boiler_input_channel)
+        )
+        self.state_gas_controller = stsv.get_input_value(self.state_channel)
+        self.initial_temperature_building_in_celsius = stsv.get_input_value(
+            self.initial_temperature_building_channel
+        )
+        self.mean_temperature_building_in_celsius = stsv.get_input_value(
+            self.temperature_mean_building_channel
+        )
+        self.ref_max_thermal_building_demand_in_watt = stsv.get_input_value(
+            self.ref_max_thermal_building_demand_channel
+        )
 
-            # Gas valve open or closed
-            if self.state_gas_controller == 1:
-                gas_power_in_watt = self.maximal_thermal_power_in_watt
+        # Calculations ------------------------------------------------------------------------------------------------------
+        self.calculate_max_mass_flow()
 
-            elif self.state_gas_controller == 0:
-                gas_power_in_watt = 0
+        # Open Gas valve
+        if self.state_gas_controller == 1:
+            gas_power_in_watt = self.maximal_thermal_power_in_watt
 
-            self.calculate_temperature_gain_from_heating(gas_power_in_watt)
+            # when operation time is reached and gas heater has heated long enough so heat distribution can open valve
+            if timestep >= self.start_timestep_gas_heater + self.min_operation_time:
+                self.control_signal_from_heater_to_heat_distribution = 1
+                self.start_timestep_gas_heater = timestep
 
-            self.calculate_temperature_of_heated_water()
+            if timestep >= self.start_timestep_gas_heater + self.min_idle_time:
+                self.control_signal_from_heater_to_heat_distribution = 0
 
-            self.calculate_mean_water_temperature_in_water_boiler(
-                self.cooled_water_temperature_return_to_water_boiler_in_celsius
-            )
+        if self.state_gas_controller == 0:
+            gas_power_in_watt = 0
 
-            # Set outputs -------------------------------------------------------------------------------------------------------
-            stsv.set_output_value(
-                self.max_mass_flow_channel, self.max_mass_flow_in_kg_per_second
-            )
-            stsv.set_output_value(
-                self.heated_water_temperature_boiler_output_channel,
-                self.heated_water_temperature_in_boiler_in_celsius,
-            )
-            stsv.set_output_value(
-                self.mean_water_temperature_boiler_output_channel,
-                self.mean_water_temperature_in_boiler_in_celsius,
-            )
-            stsv.set_output_value(self.gas_power_channel, gas_power_in_watt)
+        self.calculate_temperature_gain_from_heating(gas_power_in_watt)
 
-            log.information(" timestep " + str(timestep))
-            log.information(" state gas controller " + str(self.state_gas_controller))
-            log.information(" gas power " + str(gas_power_in_watt))
-            log.information(
-                " cooled water temp from distribution "
-                + str(self.cooled_water_temperature_return_to_water_boiler_in_celsius)
-            )
-            log.information(
-                " heated water boiler temp "
-                + str(self.heated_water_temperature_in_boiler_in_celsius)
-            )
-            log.information(
-                " mean water temp "
-                + str(self.mean_water_temperature_in_boiler_in_celsius)
-                + "\n"
-            )
+        self.calculate_temperature_of_heated_water()
 
-    def build(self):
+        self.calculate_mean_water_temperature_in_water_boiler(
+            self.cooled_water_temperature_return_to_water_boiler_in_celsius
+        )
+
+        # Set outputs -------------------------------------------------------------------------------------------------------
+
+        stsv.set_output_value(
+            self.control_signal_from_heater_to_heat_distribution_channel,
+            self.control_signal_from_heater_to_heat_distribution,
+        )
+        stsv.set_output_value(
+            self.max_mass_flow_channel, self.max_mass_flow_in_kg_per_second
+        )
+        stsv.set_output_value(
+            self.heated_water_temperature_boiler_output_channel,
+            self.heated_water_temperature_in_boiler_in_celsius,
+        )
+        stsv.set_output_value(
+            self.mean_water_temperature_boiler_output_channel,
+            self.mean_water_temperature_in_boiler_in_celsius,
+        )
+        stsv.set_output_value(self.gas_power_channel, gas_power_in_watt)
+
+    def build(self, min_operation_time, min_idle_time):
         """Build function.
 
         The function sets important constants an parameters for the calculations.
         """
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = 4184
+        self.min_operation_time = min_operation_time
+        self.min_idle_time = min_idle_time
 
     def calculate_max_mass_flow(self):
         """Calculate maximal water mass flow of the water boiler of the gas heater."""
@@ -449,7 +403,6 @@ class GasHeaterController(cp.Component):
 
         The function sets important constants and parameters for the calculations.
         """
-        # Sth
         self.controller_gas_valve_mode = "off"
         self.previous_controller_gas_valve_mode = self.controller_gas_valve_mode
 
@@ -488,9 +441,7 @@ class GasHeaterController(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the gas heater controller."""
-        # if force_convergence:
-        #     pass
-        # else:
+
         # Retrieves inputs
         water_boiler_temperature_in_celsius = stsv.get_input_value(
             self.mean_water_temperature_gas_heater_controller_input_channel
@@ -515,12 +466,11 @@ class GasHeaterController(cp.Component):
         maxium_water_boiler_set_temperature = (
             self.set_temperature_water_boiler_in_celsius
         )
-        # if self.controller_gas_valve_mode == "open":
+
         if water_boiler_temperature >= maxium_water_boiler_set_temperature - 2.0:
             self.controller_gas_valve_mode = "close"
             return
 
-        # if self.controller_gas_valve_mode == "close":
         if water_boiler_temperature < maxium_water_boiler_set_temperature:
             self.controller_gas_valve_mode = "open"
             return

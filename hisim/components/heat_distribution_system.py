@@ -162,7 +162,7 @@ class HeatDistribution(cp.Component):
     ) -> None:
         """Simulate the heat distribution system."""
 
-        # Get inputs
+        # Get inputs ------------------------------------------------------------------------------------------------------------
         self.state_controller = stsv.get_input_value(self.state_channel)
         self.gas_power_in_watt = stsv.get_input_value(self.gas_power_channel)
         self.mean_residence_temperature_in_celsius = stsv.get_input_value(
@@ -179,7 +179,7 @@ class HeatDistribution(cp.Component):
         self.max_mass_flow_in_kg_per_second = stsv.get_input_value(
             self.max_mass_flow_channel
         )
-        # Calculations ---------------------------------------------------------------------------------------------------------
+        # Calculations ----------------------------------------------------------------------------------------------------------
 
         if self.state_controller == 1:
 
@@ -212,20 +212,6 @@ class HeatDistribution(cp.Component):
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
             self.heat_gain_for_building_in_watt,
-        )
-
-        log.information("timestep " + str(timestep))
-        log.information(
-            "input mean residence temp "
-            + str(self.mean_residence_temperature_in_celsius)
-        )
-        log.information("state distribution controller " + str(self.state_controller))
-        log.information(
-            "cooled water temp "
-            + str(self.cooled_water_temperature_return_to_water_boiler_in_celsius)
-        )
-        log.information(
-            "thermal power delivered " + str(self.heat_gain_for_building_in_watt)
         )
 
     def calculate_heat_gain_for_building(
@@ -278,8 +264,8 @@ class HeatDistributionController(cp.Component):
     """
 
     # Inputs
+    ControlSignalFromHeater = "ControlSignalFromHeater"
     ResidenceTemperature = "ResidenceTemperature"
-    # HeatedWaterTemperatureDistributionControllerInput = "HeatedWaterTemperatureDistributionControllerInput"
     # Outputs
     State = "State"
 
@@ -289,8 +275,7 @@ class HeatDistributionController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_heating_temperature_building_in_celsius: float = 0.0,
-        # set_heating_temperature_water_distribution_in_celsius: float = 0.0,
+        min_heating_temperature_building_in_celsius: float = 0.0,
         mode: int = 1,
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -299,12 +284,18 @@ class HeatDistributionController(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state_controller: int = 0
+        self.start_timestep: int = 0
         self.build(
-            set_heating_temperature_residence_in_celsius=set_heating_temperature_building_in_celsius,
-            # set_heating_temperature_water_boiler_in_celsius=set_heating_temperature_water_distribution_in_celsius,
+            set_min_heating_temperature_residence_in_celsius=min_heating_temperature_building_in_celsius,
             mode=mode,
         )
-
+        self.control_signal_from_heater_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ControlSignalFromHeater,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            True,
+        )
         self.mean_residence_temperature_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ResidenceTemperature,
@@ -312,13 +303,6 @@ class HeatDistributionController(cp.Component):
             lt.Units.CELSIUS,
             True,
         )
-        # self.water_boiler_temperature_input_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.HeatedWaterTemperatureDistributionControllerInput,
-        #     lt.LoadTypes.WATER,
-        #     lt.Units.CELSIUS,
-        #     True,
-        # )
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
         )
@@ -345,8 +329,7 @@ class HeatDistributionController(cp.Component):
 
     def build(
         self,
-        set_heating_temperature_residence_in_celsius: float,
-        # set_heating_temperature_water_boiler_in_celsius: float,
+        set_min_heating_temperature_residence_in_celsius: float,
         mode: int,
     ) -> None:
         """Build function.
@@ -358,12 +341,9 @@ class HeatDistributionController(cp.Component):
         self.previous_controller_gas_valve_mode = self.controller_heat_distribution_mode
 
         # Configuration
-        self.set_heating_temperature_residence_in_celsius = (
-            set_heating_temperature_residence_in_celsius
+        self.set_min_heating_temperature_residence_in_celsius = (
+            set_min_heating_temperature_residence_in_celsius
         )
-        # self.set_temperature_water_boiler_in_celsius = (
-        #     set_heating_temperature_water_boiler_in_celsius
-        # )
         self.mode = mode
 
     def i_prepare_simulation(self) -> None:
@@ -394,57 +374,41 @@ class HeatDistributionController(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the heat distribution controller."""
-        # if force_convergence:
-        #     pass
-        # else:
         # Retrieves inputs
         mean_residence_temperature_in_celsius = stsv.get_input_value(
             self.mean_residence_temperature_channel
         )
-        # water_boiler_temperature_in_celsius = stsv.get_input_value(
-        #     self.water_boiler_temperature_input_channel
-        # )
+
+        control_signal_from_heater = stsv.get_input_value(
+            self.control_signal_from_heater_channel
+        )
+
         if self.mode == 1:
             self.conditions_for_opening_or_shutting_heat_distribution(
-                mean_residence_temperature_in_celsius,
-                # water_boiler_temperature_in_celsius,
+                mean_residence_temperature_in_celsius
             )
 
-        if self.controller_heat_distribution_mode == "open":
-            self.state_controller = 1
-        if self.controller_heat_distribution_mode == "close":
-            self.state_controller = 0
+        if control_signal_from_heater == 1:
+            if self.controller_heat_distribution_mode == "open":
+                self.state_controller = 1
 
+        else:
+            self.state_controller = 0
         stsv.set_output_value(self.state_channel, self.state_controller)
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
-        residence_temperature: float,
-        # water_boiler_temperature: float,
+        mean_residence_temperature: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
-        maximum_residence_set_temperature = (
-            self.set_heating_temperature_residence_in_celsius
+        min_residence_set_temperature = (
+            self.set_min_heating_temperature_residence_in_celsius
         )
-        # maxium_water_boiler_set_temperature = (
-        #     self.set_temperature_water_boiler_in_celsius
-        # )
 
-        # if self.controller_heat_distribution_mode == "open":
-        if (
-            residence_temperature
-            >= maximum_residence_set_temperature
-            # or water_boiler_temperature
-            # >= maxium_water_boiler_set_temperature
-        ):
+        if mean_residence_temperature >= min_residence_set_temperature:
             self.controller_heat_distribution_mode = "close"
             return
 
-        # if self.controller_heat_distribution_mode == "close":
-        if (
-            residence_temperature
-            < maximum_residence_set_temperature - 0.5
-            # and water_boiler_temperature < maxium_water_boiler_set_temperature
-        ):
+        if mean_residence_temperature < min_residence_set_temperature:
             self.controller_heat_distribution_mode = "open"
             return

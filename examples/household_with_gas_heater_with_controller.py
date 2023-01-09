@@ -111,7 +111,7 @@ def household_gas_heater(
     # Build Gas Heater Controller
     my_gasheater_controller = generic_gas_heater_with_controller.GasHeaterController(
         my_simulation_parameters=my_simulation_parameters,
-        set_heating_temperature_water_boiler_in_celsius=80.0,
+        set_heating_temperature_water_boiler_in_celsius=60.0,
         offset=1.0,
         mode=1,
     )
@@ -123,8 +123,7 @@ def household_gas_heater(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        set_heating_temperature_building_in_celsius=18.0,
-        # set_heating_temperature_water_distribution_in_celsius = 80.0,
+        min_heating_temperature_building_in_celsius=20.0,
         mode=1,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -207,15 +206,16 @@ def household_gas_heater(
         my_building.TemperatureMean,
     )
 
-    # my_heat_distribution_controller.connect_input(
-    #     my_heat_distribution_controller.HeatedWaterTemperatureDistributionControllerInput,
-    #     my_gasheater.component_name,
-    #     my_gasheater.HeatedWaterTemperatureBoilerOutput,
-    # )
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.ResidenceTemperature,
         my_building.component_name,
         my_building.TemperatureMean,
+    )
+
+    my_heat_distribution_controller.connect_input(
+        my_heat_distribution_controller.ControlSignalFromHeater,
+        my_gasheater.component_name,
+        my_gasheater.ControlSignalfromHeaterToDistribution,
     )
 
     # =================================================================================================================================

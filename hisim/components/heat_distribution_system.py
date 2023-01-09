@@ -58,7 +58,8 @@ class HeatDistribution(cp.Component):
         self.heated_water_temperature_distribution_input_in_celsius: float = 35.0
         self.max_mass_flow_in_kg_per_second: float = 0.0
         self.heat_gain_for_building_in_watt: float = 0.0
-        self.rest_temperature_return_to_water_boiler_in_celsius: float = 35.0
+        self.remaining_thermal_power_in_water_in_watt: float = 0.0
+        self.cooled_water_temperature_return_to_water_boiler_in_celsius: float = 35.0
         self.build()
 
         # Inputs
@@ -160,10 +161,8 @@ class HeatDistribution(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the heat distribution system."""
-        # if force_convergence:
-        #     pass
-        # else:
-        # Retrieves inputs
+
+        # Get inputs
         self.state_controller = stsv.get_input_value(self.state_channel)
         self.gas_power_in_watt = stsv.get_input_value(self.gas_power_channel)
         self.mean_residence_temperature_in_celsius = stsv.get_input_value(
@@ -180,48 +179,41 @@ class HeatDistribution(cp.Component):
         self.max_mass_flow_in_kg_per_second = stsv.get_input_value(
             self.max_mass_flow_channel
         )
-        # calculations --------------------------------------------------------------------------------
+        # Calculations ---------------------------------------------------------------------------------------------------------
 
         if self.state_controller == 1:
-            self.heat_gain_for_building_in_watt = (
-                self.max_mass_flow_in_kg_per_second
-                * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                * (
-                    self.heated_water_temperature_distribution_input_in_celsius
-                    - self.mean_residence_temperature_in_celsius
-                )
+
+            self.calculate_heat_gain_for_building(
+                self.max_mass_flow_in_kg_per_second,
+                self.heated_water_temperature_distribution_input_in_celsius,
+                self.mean_residence_temperature_in_celsius,
             )
 
-            left_thermal_power_in_water_in_watt = (
-                self.gas_power_in_watt - self.heat_gain_for_building_in_watt
+            self.calculate_remaining_thermal_power()
+
+            self.calculate_cooled_water_temperature_after_heat_exchange_with_building(
+                self.max_mass_flow_in_kg_per_second,
+                self.mean_water_temperature_distribution_input_in_celsius,
             )
 
-            # calculate water temperature after heat exchange with building (use left_power = mass_flow * heat-capacity * (rest_temp_water - initial_temp_water))
-            self.rest_temperature_return_to_water_boiler_in_celsius = (
-                left_thermal_power_in_water_in_watt
-                / (
-                    self.max_mass_flow_in_kg_per_second
-                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                )
-            ) + self.mean_water_temperature_distribution_input_in_celsius
-
-            stsv.set_output_value(
-                self.cooled_water_temperature_distribution_output_channel,
-                self.rest_temperature_return_to_water_boiler_in_celsius,
-            )
-            stsv.set_output_value(
-                self.thermal_power_delivered_channel,
-                self.heat_gain_for_building_in_watt,
-            )
         elif self.state_controller == 0:
-            self.rest_temperature_return_to_water_boiler_in_celsius = (
+
+            self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
                 self.heated_water_temperature_distribution_input_in_celsius
             )
-            stsv.set_output_value(
-                self.cooled_water_temperature_distribution_output_channel,
-                self.rest_temperature_return_to_water_boiler_in_celsius,
-            )
-            stsv.set_output_value(self.thermal_power_delivered_channel, 0.0)
+
+            self.heat_gain_for_building_in_watt = 0.0
+
+        # Set outputs -----------------------------------------------------------------------------------------------------------
+        stsv.set_output_value(
+            self.cooled_water_temperature_distribution_output_channel,
+            self.cooled_water_temperature_return_to_water_boiler_in_celsius,
+        )
+        stsv.set_output_value(
+            self.thermal_power_delivered_channel,
+            self.heat_gain_for_building_in_watt,
+        )
+
         log.information("timestep " + str(timestep))
         log.information(
             "input mean residence temp "
@@ -230,11 +222,49 @@ class HeatDistribution(cp.Component):
         log.information("state distribution controller " + str(self.state_controller))
         log.information(
             "cooled water temp "
-            + str(self.rest_temperature_return_to_water_boiler_in_celsius)
+            + str(self.cooled_water_temperature_return_to_water_boiler_in_celsius)
         )
         log.information(
-            "thermal power delivered " + str(self.heat_gain_for_building_in_watt) + "\n"
+            "thermal power delivered " + str(self.heat_gain_for_building_in_watt)
         )
+
+    def calculate_heat_gain_for_building(
+        self,
+        max_water_mass_flow_in_kg_per_second,
+        heated_water_temperature_in_celsius,
+        mean_residence_temperature_in_celsius,
+    ):
+        """Calculate heat gain for the building from heat distribution system."""
+        self.heat_gain_for_building_in_watt = (
+            max_water_mass_flow_in_kg_per_second
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            * (
+                heated_water_temperature_in_celsius
+                - mean_residence_temperature_in_celsius
+            )
+        )
+
+    def calculate_remaining_thermal_power(self):
+        """Calculate the thermal power of the water that is left after the heat exchange with the building."""
+
+        self.remaining_thermal_power_in_water_in_watt = (
+            self.gas_power_in_watt - self.heat_gain_for_building_in_watt
+        )
+
+    def calculate_cooled_water_temperature_after_heat_exchange_with_building(
+        self, max_water_mass_flow_in_kg_per_second, mean_water_temperature_in_celsius
+    ):
+        """Calculate cooled water temperature after heat exchange between heat distribution system and building.
+
+        Based on the formular remaining_power = max_mass_flow * heat_capacity * (remaining_water_temperature - initial_water_temperature).
+        """
+        self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
+            self.remaining_thermal_power_in_water_in_watt
+            / (
+                max_water_mass_flow_in_kg_per_second
+                * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            )
+        ) + mean_water_temperature_in_celsius
 
 
 class HeatDistributionController(cp.Component):

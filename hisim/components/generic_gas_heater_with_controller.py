@@ -10,6 +10,7 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
 )
+
 # from hisim.components.building import Building
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -141,17 +142,20 @@ class GasHeaterWithController(cp.Component):
         )
         # =================================================================================================================================
         # Initialization of variables
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = 4184
         self.max_mass_flow_in_kg_per_second: float = 0
         self.initial_temperature_water_boiler_in_celsius: float = 35.0
-        self.rest_temperature_return_to_water_boiler_in_celsius = (
+        self.initial_temperature_building_in_celsius: float = 0.0
+
+        self.temperature_gain_in_celsius: float = 0.0
+        self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
             self.initial_temperature_water_boiler_in_celsius
         )
+        self.heated_water_temperature_in_boiler_in_celsius: float = 0.0
         self.mean_water_temperature_in_boiler_in_celsius: float = (
             self.initial_temperature_water_boiler_in_celsius
         )
-        self.state_controller: float = 0
-        self.initial_temperature_building_in_celsius: float = 0.0
+        self.state_gas_controller: float = 0
+
         self.mean_temperature_building_in_celsius: float = 0.0
         self.ref_max_thermal_building_demand_in_watt: float = 0.0
 
@@ -161,6 +165,7 @@ class GasHeaterWithController(cp.Component):
         self.maximal_temperature_in_celsius = config.maximal_temperature_in_celsius
         self.temperature_delta_in_celsius = config.temperature_delta_in_celsius
 
+        self.build()
         # =================================================================================================================================
         # Input channels
         self.state_channel: cp.ComponentInput = self.add_input(
@@ -274,10 +279,11 @@ class GasHeaterWithController(cp.Component):
     ) -> None:
         """Simulate the gas heater."""
         if timestep > 60:
-            self.rest_temperature_return_to_water_boiler_in_celsius = (
+            # Get inputs --------------------------------------------------------------------------------------------------------
+            self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
                 stsv.get_input_value(self.cooled_water_temperature_boiler_input_channel)
             )
-            self.state_controller = stsv.get_input_value(self.state_channel)
+            self.state_gas_controller = stsv.get_input_value(self.state_channel)
             self.initial_temperature_building_in_celsius = stsv.get_input_value(
                 self.initial_temperature_building_channel
             )
@@ -287,66 +293,99 @@ class GasHeaterWithController(cp.Component):
             self.ref_max_thermal_building_demand_in_watt = stsv.get_input_value(
                 self.ref_max_thermal_building_demand_channel
             )
-            # calculate max mas flow -------------------------------------------------------
 
-            self.max_mass_flow_in_kg_per_second = self.ref_max_thermal_building_demand_in_watt / (
-                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-                * (
-                    self.initial_temperature_water_boiler_in_celsius
-                    - self.initial_temperature_building_in_celsius
-                )
+            # Calculations ------------------------------------------------------------------------------------------------------
+            self.calculate_max_mass_flow()
+
+            # Gas valve open or closed
+            if self.state_gas_controller == 1:
+                gas_power_in_watt = self.maximal_thermal_power_in_watt
+
+            elif self.state_gas_controller == 0:
+                gas_power_in_watt = 0
+
+            self.calculate_temperature_gain_from_heating(gas_power_in_watt)
+
+            self.calculate_temperature_of_heated_water()
+
+            self.calculate_mean_water_temperature_in_water_boiler(
+                self.cooled_water_temperature_return_to_water_boiler_in_celsius
             )
+
+            # Set outputs -------------------------------------------------------------------------------------------------------
             stsv.set_output_value(
                 self.max_mass_flow_channel, self.max_mass_flow_in_kg_per_second
             )
-
-            # -----------------------------------------------------------------------------------
-
-            # gas valve open or closed
-            if self.state_controller == 1:
-                gas_power_in_watt = self.maximal_thermal_power_in_watt
-
-            elif self.state_controller == 0:
-                gas_power_in_watt = 0
-
-            temperature_gain_in_celsius = gas_power_in_watt / (
-                self.max_mass_flow_in_kg_per_second
-                * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            )
-
-            final_temperature_water_boiler_in_celsius = (
-                self.mean_water_temperature_in_boiler_in_celsius
-                + temperature_gain_in_celsius
-            )
-
-            self.mean_water_temperature_in_boiler_in_celsius = (
-                self.rest_temperature_return_to_water_boiler_in_celsius
-                + final_temperature_water_boiler_in_celsius
-            ) / 2
             stsv.set_output_value(
                 self.heated_water_temperature_boiler_output_channel,
-                final_temperature_water_boiler_in_celsius,
+                self.heated_water_temperature_in_boiler_in_celsius,
             )
             stsv.set_output_value(
                 self.mean_water_temperature_boiler_output_channel,
                 self.mean_water_temperature_in_boiler_in_celsius,
             )
             stsv.set_output_value(self.gas_power_channel, gas_power_in_watt)
+
             log.information(" timestep " + str(timestep))
-            log.information(" state gas controller " + str(self.state_controller))
+            log.information(" state gas controller " + str(self.state_gas_controller))
             log.information(" gas power " + str(gas_power_in_watt))
             log.information(
                 " cooled water temp from distribution "
-                + str(self.rest_temperature_return_to_water_boiler_in_celsius)
+                + str(self.cooled_water_temperature_return_to_water_boiler_in_celsius)
             )
             log.information(
                 " heated water boiler temp "
-                + str(final_temperature_water_boiler_in_celsius)
+                + str(self.heated_water_temperature_in_boiler_in_celsius)
             )
             log.information(
                 " mean water temp "
                 + str(self.mean_water_temperature_in_boiler_in_celsius)
+                + "\n"
             )
+
+    def build(self):
+        """Build function.
+
+        The function sets important constants an parameters for the calculations.
+        """
+        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = 4184
+
+    def calculate_max_mass_flow(self):
+        """Calculate maximal water mass flow of the water boiler of the gas heater."""
+
+        self.max_mass_flow_in_kg_per_second = (
+            self.ref_max_thermal_building_demand_in_watt
+            / (
+                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                * (
+                    self.initial_temperature_water_boiler_in_celsius
+                    - self.initial_temperature_building_in_celsius
+                )
+            )
+        )
+
+    def calculate_temperature_gain_from_heating(self, gas_power_in_watt):
+        """Calculate temperature delta after heating the water in the boiler with a certain gas power."""
+        self.temperature_gain_in_celsius = gas_power_in_watt / (
+            self.max_mass_flow_in_kg_per_second
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+        )
+
+    def calculate_temperature_of_heated_water(self):
+        """Calculate the temperature of the heated water in the boiler after heating with certain gas power."""
+        self.heated_water_temperature_in_boiler_in_celsius = (
+            self.mean_water_temperature_in_boiler_in_celsius
+            + self.temperature_gain_in_celsius
+        )
+
+    def calculate_mean_water_temperature_in_water_boiler(
+        self, cooled_water_temperature_in_celsius
+    ):
+        """Calculate the mean temperature of the water in the water boiler."""
+        self.mean_water_temperature_in_boiler_in_celsius = (
+            cooled_water_temperature_in_celsius
+            + self.heated_water_temperature_in_boiler_in_celsius
+        ) / 2
 
 
 class GasHeaterController(cp.Component):

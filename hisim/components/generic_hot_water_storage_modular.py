@@ -250,7 +250,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Sets occupancy default connections in hot water storage. """
         hisim.log.information("setting utsp default connections in hot water storage")
         connections = []
-        utsp_classname = Occupancy.get_classname()
+        utsp_classname = UtspLpgConnector.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.WaterConsumption, utsp_classname,
                                                   UtspLpgConnector.WaterConsumption))
         return connections

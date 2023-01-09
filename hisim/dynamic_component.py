@@ -249,6 +249,5 @@ class DynamicComponent(Component):
                     weight_of_component=element.source_weight,
                     tags_to_search=tags,
                     tags_of_component=element.source_tags):
-                print(getattr(self, element.source_component_class))
                 return getattr(self, element.source_component_class)
         return None

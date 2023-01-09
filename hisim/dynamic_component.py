@@ -2,7 +2,7 @@
 # clean
 
 from dataclasses import dataclass
-from typing import Any, List, Union
+from typing import Any, List, Union, Optional
 
 import hisim.loadtypes as lt
 from hisim import log
@@ -207,21 +207,7 @@ class DynamicComponent(Component):
                 continue
         return inputvalues
 
-    def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List:
-        """ Returns inputs from all dynamic inputs with component type and weight. """
-        inputs = []
-
-        # check if component of component type is available
-        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if tags_search_and_compare(
-                    tags_to_search=tags,
-                    tags_of_component=element.source_tags):
-                inputs.append(getattr(self, element.source_component_class))
-            else:
-                continue
-        return inputs
-
-    def set_dynamic_output(self, stsv: SingleTimeStepValues,
+    def obsolete_set_dynamic_output_value(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]],
                            weight_counter: int,
                            output_value: float) -> None:
@@ -237,3 +223,32 @@ class DynamicComponent(Component):
                 stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:
                 continue
+
+    def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List[ComponentInput]:
+        """ Returns inputs from all dynamic inputs with component type and weight. """
+        inputs = []
+
+        # check if component of component type is available
+        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
+            if tags_search_and_compare(
+                    tags_to_search=tags,
+                    tags_of_component=element.source_tags):
+                inputs.append(getattr(self, element.source_component_class))
+            else:
+                continue
+        return inputs
+
+    def get_dynamic_output(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]],
+                           weight_counter: int) -> Any:
+        """ Sets all output values with given component type and weight. """
+
+        # check if component of component type is available
+        for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
+            if search_and_compare(
+                    weight_to_search=weight_counter,
+                    weight_of_component=element.source_weight,
+                    tags_to_search=tags,
+                    tags_of_component=element.source_tags):
+                print(getattr(self, element.source_component_class))
+                return getattr(self, element.source_component_class)
+        return None

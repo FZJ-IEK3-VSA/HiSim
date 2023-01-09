@@ -41,7 +41,6 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
     min_operation_time: int
     min_idle_time: int
     maximal_thermal_power_in_watt: float
-    maximal_temperature_in_celsius: float
 
     @classmethod
     def get_default_gasheater_config(
@@ -53,7 +52,6 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
             min_operation_time=30,
             min_idle_time=10,
             maximal_thermal_power_in_watt=12_000,
-            maximal_temperature_in_celsius=80,
         )
         return config
 
@@ -112,7 +110,6 @@ class GasHeaterWithController(cp.Component):
 
         # Config Values
         self.maximal_thermal_power_in_watt = config.maximal_thermal_power_in_watt
-        self.maximal_temperature_in_celsius = config.maximal_temperature_in_celsius
 
         self.build(config.min_operation_time, config.min_idle_time)
         # =================================================================================================================================
@@ -216,6 +213,10 @@ class GasHeaterWithController(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write a report."""
         lines: List = []
+        lines.append("Gas Heater")
+        lines.append("Max Thermal Power [W]: " + str(self.maximal_thermal_power_in_watt))
+        lines.append("Operation Time [min]: " + str(self.min_operation_time))
+        lines.append("Idle Time [min]: " + str(self.min_idle_time))
         return lines
 
     def i_save_state(self) -> None:
@@ -262,6 +263,7 @@ class GasHeaterWithController(cp.Component):
                 self.control_signal_from_heater_to_heat_distribution = 1
                 self.start_timestep_gas_heater = timestep
 
+            # control signal to heat distribution is turned off after some idle time
             if timestep >= self.start_timestep_gas_heater + self.min_idle_time:
                 self.control_signal_from_heater_to_heat_distribution = 0
 
@@ -433,8 +435,8 @@ class GasHeaterController(cp.Component):
         """Write important variables to report."""
         lines = []
         lines.append("Gas Heater Controller")
+        lines.append("Set Temperature of Water [°C]: " + str(self.set_temperature_water_boiler_in_celsius))
         # todo: add more useful stuff here
-        lines.append("tbd")
         return lines
 
     def i_simulate(
@@ -466,8 +468,8 @@ class GasHeaterController(cp.Component):
         maxium_water_boiler_set_temperature = (
             self.set_temperature_water_boiler_in_celsius
         )
-
-        if water_boiler_temperature >= maxium_water_boiler_set_temperature - 2.0:
+        # gas is turned off a little before maximum water temp is reached
+        if water_boiler_temperature >= maxium_water_boiler_set_temperature - self.offset:
             self.controller_gas_valve_mode = "close"
             return
 

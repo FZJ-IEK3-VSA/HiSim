@@ -35,9 +35,9 @@ def household_gas_heater(
         - Weather
         - Building
         - Gas Heater
-        - Heat Water Storage
-        - Heat Water Storage Controller
-        - Heat Controller
+        - Gas Heater Controller
+        - Heat Distribution System
+        - Heat Distribution System Controller
     """
 
     config_filename = "pv_hp_config.json"
@@ -112,7 +112,7 @@ def household_gas_heater(
     my_gasheater_controller = generic_gas_heater_with_controller.GasHeaterController(
         my_simulation_parameters=my_simulation_parameters,
         set_heating_temperature_water_boiler_in_celsius=60.0,
-        offset=1.0,
+        offset=2.0,
         mode=1,
     )
 

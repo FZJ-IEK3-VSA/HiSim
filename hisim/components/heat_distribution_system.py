@@ -153,8 +153,6 @@ class HeatDistribution(cp.Component):
         """Write important variables to report."""
         lines = []
         lines.append("Heat Distribution System")
-        # todo: add more useful stuff here
-        lines.append("tbd")
         return lines
 
     def i_simulate(
@@ -367,7 +365,7 @@ class HeatDistributionController(cp.Component):
         lines = []
         lines.append("Heat Distribution Controller")
         # todo: add more useful stuff here
-        lines.append("tbd")
+        lines.append("Set Temperature of Residence [°C]: " + str(self.set_min_heating_temperature_residence_in_celsius))
         return lines
 
     def i_simulate(

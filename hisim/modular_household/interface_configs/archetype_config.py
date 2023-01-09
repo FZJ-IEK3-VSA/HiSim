@@ -8,7 +8,7 @@ from utspclient.helpers.lpgdata import (
     Households,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from hisim.loadtypes import Locations, BuildingCodes, HeatingSystems
+from hisim.loadtypes import Locations, HeatingSystems
 
 
 @dataclass_json
@@ -21,7 +21,7 @@ class ArcheTypeConfig:
     occupancy_profile: JsonReference = field(
         default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
     )
-    building_code: BuildingCodes = BuildingCodes.DE_N_SFH_05_GEN_REEX_001_002
+    building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"
     water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     mobility_set: JsonReference = field(

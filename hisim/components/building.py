@@ -976,7 +976,6 @@ class Building(dynamic_component.DynamicComponent):
         ]
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
         # then the total_wall_area = 4 * area_of_one_wall
-        # then the total_wall_area = 4 * area_of_one_wall
         total_wall_area_in_m2 = (
             4 * math.sqrt(self.conditioned_floor_area_in_m2) * self.room_height_in_m2
         )
@@ -1191,7 +1190,6 @@ class Building(dynamic_component.DynamicComponent):
         self.transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin = (
             0.0
         )
-        # here modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
         # here modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
         # input values U_Actual, A_Calc and b_Transmission also given by TABULA buildingdata
         for index, o_w in enumerate(self.opaque_walls):

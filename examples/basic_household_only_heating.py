@@ -85,7 +85,7 @@ def basic_household_only_heating(my_sim: Any, my_simulation_parameters: Optional
     # Connect Component Inputs with Outputs
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(my_building.ThermalEnergyDelivered, my_storage.component_name, my_storage.RealHeatForBuilding)
+    my_building.connect_input(my_building.ThermalPowerDelivered, my_storage.component_name, my_storage.RealHeatForBuilding)
 
     my_storage.connect_input(my_storage.ThermalDemandHeatingWater, my_storage_controller.component_name,
                              my_storage_controller.RealThermalDemandHeatingWater)

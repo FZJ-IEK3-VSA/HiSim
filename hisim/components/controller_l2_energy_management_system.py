@@ -1,11 +1,13 @@
-# Generic/Built-in
-from typing import Any
-from typing import List
+""" Iterative Energy Surplus Controller. """
+# clean
+
+from typing import Any, List
 
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim.component import (ComponentInput, ComponentOutput)
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Maximilian Hillen"
@@ -27,7 +29,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     dynamic In- and Outputs.
     """
     # Inputs
-
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
 
     # Outputs
@@ -49,11 +50,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
                          name="L2EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
-        self.source_weights_sorted: Any
-        self.components_sorted: Any
+
+        self.components_sorted: List[lt.ComponentType] = []
+        self.inputs_sorted: List[ComponentInput] = []
+        self.outputs_sorted: List[ComponentOutput] = []
+        self.production_inputs: List[ComponentInput] = []
+        self.consumption_uncontrolled_inputs: List[ComponentInput] = []
+        self.consumption_ems_controlled_inputs: List[ComponentInput] = []
+
         self.mode: Any
         self.strategy = strategy
         self.limit_to_shave = limit_to_shave
+
+        # Inputs
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,
                                                                                     field_name=self.ElectricityToElectrolyzerUnused,
                                                                                     load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
@@ -90,17 +99,26 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                                                                       load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False)
 
     def sort_source_weights_and_components(self) -> None:
-        SourceTags = [elem.source_tags[0] for elem in self.my_component_inputs if elem.source_weight != 999]
-        SourceWeights = [elem.source_weight for elem in self.my_component_inputs if elem.source_weight != 999]
+        """ Sorts dynamic Inputs and Outputs according to source weights. """
+        Inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
+        SourceTags = [elem.source_tags[0] for elem in Inputs]
+        SourceWeights = [elem.source_weight for elem in Inputs]
         sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
-        self.source_weights_sorted = [SourceWeights[i] for i in sortindex]
+        SourceWeights = [SourceWeights[i] for i in sortindex]
         self.components_sorted = [SourceTags[i] for i in sortindex]
+        self.inputs_sorted = [getattr(self, Inputs[i].source_component_class) for i in sortindex]
+        self.outputs_sorted = []
+        for ind in range(len(SourceWeights)):
+            output = self.get_dynamic_output(tags=[self.components_sorted[ind], lt.InandOutputType.ELECTRICITY_TARGET],
+            weight_counter=SourceWeights[ind])
+            if output is not None:
+                self.outputs_sorted.append(output)
+            else:
+                raise Exception("Danamic input is not conncted to dynamic output")
 
-    def get_entries_of_type(self, component_type: lt.ComponentType) -> Any:
-        return self.components_sorted.index(component_type)
-
-    def build(self, mode: Any) -> None:
-        self.mode = mode
+        self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+        self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED])
+        self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
 
     def write_to_report(self) -> None:
         pass
@@ -119,68 +137,58 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def control_electricity_component_iterative(self, deltademand: float, stsv: cp.SingleTimeStepValues, weight_counter: int,
-                                                component_type: lt.ComponentType) -> Any:
+    def control_electricity_component_iterative(self, deltademand: float, stsv: cp.SingleTimeStepValues,
+                                                component_type: lt.ComponentType, input: cp.ComponentInput,
+                                                output: cp.ComponentOutput) -> Any:
         is_battery = None
         # get previous signal and substract from total balance
-        previous_signal = self.get_dynamic_input(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_REAL], weight_counter=weight_counter)
-        
-        if component_type == lt.ComponentType.CAR_BATTERY:
-            self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
-                                    output_value=deltademand)
-            if previous_signal > 0:
-                deltademand = deltademand - previous_signal
+        previous_signal = stsv.get_input_value(component_input=input)
 
         # control from substracted balance
-        elif component_type == lt.ComponentType.BATTERY:
-            self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
-                                    output_value=deltademand)
+        if component_type == lt.ComponentType.BATTERY:
+            stsv.set_output_value(output=output, value=deltademand)
             deltademand = deltademand - previous_signal
 
         elif component_type == lt.ComponentType.FUEL_CELL:
             if deltademand < 0:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
-                                        output_value=-deltademand)
+                stsv.set_output_value(output=output, value=deltademand)
                 deltademand = deltademand + previous_signal
                 if deltademand > 0:
-                    is_battery = self.get_entries_of_type(lt.ComponentType.BATTERY)
+                    is_battery = self.components_sorted.index(lt.ComponentType.BATTERY)
             else:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
-                                        output_value=0)
+                stsv.set_output_value(output=output, value=0)
 
-        elif component_type in [lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP, lt.ComponentType.SMART_DEVICE]:
+        elif component_type in [lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP, lt.ComponentType.SMART_DEVICE,
+        lt.ComponentType.CAR_BATTERY]:
 
             if deltademand > 0:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
-                                        output_value=deltademand)
+                stsv.set_output_value(output=output, value=deltademand)
                 deltademand = deltademand - previous_signal
             else:
-                self.set_dynamic_output(stsv=stsv, tags=[component_type, lt.InandOutputType.ELECTRICITY_TARGET], weight_counter=weight_counter,
-                                        output_value=0)
+                stsv.set_output_value(output=output, value=deltademand)
 
         return deltademand, is_battery
 
     def postprocess_battery(self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int) -> Any:
-        previous_signal = self.get_dynamic_input(stsv=stsv, tags=[self.components_sorted[ind]], weight_counter=self.source_weights_sorted[ind])
-        self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-                                weight_counter=self.source_weights_sorted[ind], output_value=deltademand + previous_signal)
+        previous_signal = stsv.get_input_value(component_input=self.inputs_sorted[ind])
+        stsv.set_output_value(output=self.outputs_sorted[ind], value=deltademand + previous_signal)
         return deltademand - previous_signal
 
     def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
         skip_CHP = False
-        for ind in range(len(self.source_weights_sorted)):
+        for ind in range(len(self.inputs_sorted)):
             component_type = self.components_sorted[ind]
-            source_weight = self.source_weights_sorted[ind]
+            input = self.inputs_sorted[ind]
+            output = self.outputs_sorted[ind]
             if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
                                   lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
                 if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
                                                       lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
                     delta_demand, is_battery = self.control_electricity_component_iterative(deltademand=delta_demand, stsv=stsv,
-                                                                                            weight_counter=source_weight,
-                                                                                            component_type=component_type)
+                                                                                            component_type=component_type,
+                                                                                            input=input, output=output)
                 else:
-                    self.set_dynamic_output(stsv=stsv, tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_TARGET],
-                                            weight_counter=source_weight, output_value=0)
+                    stsv.set_output_value(output=output, value=0)
                 if is_battery is not None:
                     delta_demand = self.postprocess_battery(deltademand=delta_demand, stsv=stsv, ind=is_battery)
                     skip_CHP = True
@@ -195,9 +203,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         ###ELECTRICITY#####
 
         # get production
-        production = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]))
-        consumption_uncontrolled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]))
-        consumption_ems_controlled = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.ELECTRICITY_REAL]))
+        production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        consumption_uncontrolled = sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs])
+        consumption_ems_controlled = sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_ems_controlled_inputs])
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign

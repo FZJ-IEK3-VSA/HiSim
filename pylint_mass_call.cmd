@@ -1,3 +1,5 @@
+pylint C:\Users\k.rieck\HiSim\setup.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\basic_household.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\basic_household_only_heating.py
@@ -5,6 +7,14 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\default_connections.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\dynamic_components.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\household_with_gas_heater.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\household_with_gas_heater_with_controller.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\household_with_heatpump_and_pv.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\modular_example.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\simple_examples.py
 if %errorlevel% neq 0 exit /b
@@ -48,6 +58,8 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l1_heatpump.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l2_generic_heat_simple.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l2_smart_controller.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\example_component.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\example_storage.py
@@ -56,7 +68,17 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\example_template.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\example_transformer.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater_with_controller.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\generic_heat_pump.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_hot_water_storage_modular.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\heat_distribution_system.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\modular_household\component_connections.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\modular_household\interface_configs\system_config.py
 if %errorlevel% neq 0 exit /b
@@ -65,6 +87,8 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\charts.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\chart_singleday.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\compute_kpis.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\postprocessing_datatransfer.py
 if %errorlevel% neq 0 exit /b
@@ -80,7 +104,13 @@ pylint C:\Users\k.rieck\HiSim\tests\test_advanced_battery_bslib.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_basic_household_with_all_resultfiles.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_building.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_building_heating_demand.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_building_manual_calculation_thermal_conductances.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_building_scalability_with_factor.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_examples.py
 if %errorlevel% neq 0 exit /b
@@ -91,4 +121,6 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_example_template.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_example_transformer.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_generic_gas_heater.py
 if %errorlevel% neq 0 exit /b

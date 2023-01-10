@@ -2,11 +2,13 @@
 # clean
 
 from dataclasses import dataclass
-from typing import List, Union, Any
-from hisim import log
+from typing import Any, List, Union, Optional
 
 import hisim.loadtypes as lt
-from hisim.component import Component, ComponentInput, SingleTimeStepValues, ComponentOutput
+from hisim import log
+from hisim.component import (Component, ComponentInput, ComponentOutput,
+                             SingleTimeStepValues)
+from hisim.simulationparameters import SimulationParameters
 
 
 @dataclass
@@ -63,12 +65,39 @@ class DynamicComponent(Component):
 
     """ Class for components with a dynamic number of inputs and outputs. """
 
-    def __init__(self, my_component_inputs, my_component_outputs, name, my_simulation_parameters):
+    def __init__(self, my_component_inputs: List[DynamicConnectionInput],
+    my_component_outputs: List[DynamicConnectionOutput], name: str, my_simulation_parameters: SimulationParameters):
         """ Initializes a dynamic component. """
         super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
 
         self.my_component_inputs = my_component_inputs
         self.my_component_outputs = my_component_outputs
+
+    def add_component_output(self, source_output_name: str,
+                             source_tags: list,
+                             source_load_type: lt.LoadTypes,
+                             source_unit: lt.Units,
+                             source_weight: int) -> ComponentOutput:
+        """ Adds an output channel to a component. """
+        # Label Output and generate variable
+        num_inputs = len(self.outputs)
+        label = f"Output{num_inputs + 1}"
+        vars(self)[label] = label
+
+        # Define Output as Component Input and add it to inputs
+        myoutput = ComponentOutput(object_name=self.component_name, field_name=source_output_name + label, load_type=source_load_type,
+                                   unit=source_unit, sankey_flow_direction=True)
+        self.outputs.append(myoutput)
+        setattr(self, label, myoutput)
+
+        # Define Output as DynamicConnectionOutput
+        self.my_component_outputs.append(DynamicConnectionOutput(source_component_class=label,
+                                                                 source_output_name=source_output_name + label,
+                                                                 source_tags=source_tags,
+                                                                 source_load_type=source_load_type,
+                                                                 source_unit=source_unit,
+                                                                 source_weight=source_weight))
+        return myoutput
 
     def add_component_input_and_connect(self,
                                         source_component_class: Component,
@@ -146,7 +175,7 @@ class DynamicComponent(Component):
                                                                            source_tags=source_tags,
                                                                            source_weight=source_weight))
 
-    def get_dynamic_input(self, stsv: SingleTimeStepValues,
+    def obsolete_get_dynamic_input_value(self, stsv: SingleTimeStepValues,
                           tags: List[Union[lt.ComponentType, lt.InandOutputType]],
                           weight_counter: int) -> Any:
         """ Returns input value from first dynamic input with component type and weight. """
@@ -163,7 +192,7 @@ class DynamicComponent(Component):
                 break
         return inputvalue
 
-    def get_dynamic_inputs(self, stsv: SingleTimeStepValues,
+    def obsolete_get_dynamic_input_values(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List:
         """ Returns input values from all dynamic inputs with component type and weight. """
         inputvalues = []
@@ -178,7 +207,7 @@ class DynamicComponent(Component):
                 continue
         return inputvalues
 
-    def set_dynamic_output(self, stsv: SingleTimeStepValues,
+    def obsolete_set_dynamic_output_value(self, stsv: SingleTimeStepValues,
                            tags: List[Union[lt.ComponentType, lt.InandOutputType]],
                            weight_counter: int,
                            output_value: float) -> None:
@@ -195,28 +224,30 @@ class DynamicComponent(Component):
             else:
                 continue
 
-    def add_component_output(self, source_output_name: str,
-                             source_tags: list,
-                             source_load_type: lt.LoadTypes,
-                             source_unit: lt.Units,
-                             source_weight: int) -> ComponentOutput:
-        """ Adds an output channel to a component. """
-        # Label Output and generate variable
-        num_inputs = len(self.outputs)
-        label = f"Output{num_inputs + 1}"
-        vars(self)[label] = label
+    def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List[ComponentInput]:
+        """ Returns inputs from all dynamic inputs with component type and weight. """
+        inputs = []
 
-        # Define Output as Component Input and add it to inputs
-        myoutput = ComponentOutput(object_name=self.component_name, field_name=source_output_name + label, load_type=source_load_type,
-                                   unit=source_unit, sankey_flow_direction=True)
-        self.outputs.append(myoutput)
-        setattr(self, label, myoutput)
+        # check if component of component type is available
+        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
+            if tags_search_and_compare(
+                    tags_to_search=tags,
+                    tags_of_component=element.source_tags):
+                inputs.append(getattr(self, element.source_component_class))
+            else:
+                continue
+        return inputs
 
-        # Define Output as DynamicConnectionInput
-        self.my_component_outputs.append(DynamicConnectionOutput(source_component_class=label,
-                                                                 source_output_name=source_output_name + label,
-                                                                 source_tags=source_tags,
-                                                                 source_load_type=source_load_type,
-                                                                 source_unit=source_unit,
-                                                                 source_weight=source_weight))
-        return myoutput
+    def get_dynamic_output(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]],
+                           weight_counter: int) -> Any:
+        """ Sets all output values with given component type and weight. """
+
+        # check if component of component type is available
+        for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
+            if search_and_compare(
+                    weight_to_search=weight_counter,
+                    weight_of_component=element.source_weight,
+                    tags_to_search=tags,
+                    tags_of_component=element.source_tags):
+                return getattr(self, element.source_component_class)
+        return None

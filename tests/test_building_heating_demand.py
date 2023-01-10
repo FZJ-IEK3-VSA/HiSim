@@ -247,6 +247,8 @@ def test_house_with_pv_and_hp_for_heating_test(
         my_weather.component_name,
         my_weather.WindSpeed,
     )
+    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    # Set source outputs for my residence
 
     # Building
     my_building.connect_input(

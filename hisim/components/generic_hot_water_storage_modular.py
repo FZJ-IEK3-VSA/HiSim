@@ -205,6 +205,9 @@ class HotWaterStorage(dycp.DynamicComponent):
 
         self.build(config)
 
+        # collect all heat inputs
+        self.heat_to_buffer_inputs: List[cp.ComponentInput]
+
         # initialize Boiler State
         self.state = StorageState(volume_in_l=config.volume, temperature_in_kelvin=273 + 60)
         self.previous_state = self.state.clone()
@@ -250,7 +253,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Sets occupancy default connections in hot water storage. """
         hisim.log.information("setting utsp default connections in hot water storage")
         connections = []
-        utsp_classname = Occupancy.get_classname()
+        utsp_classname = UtspLpgConnector.get_classname()
         connections.append(cp.ComponentConnection(HotWaterStorage.WaterConsumption, utsp_classname,
                                                   UtspLpgConnector.WaterConsumption))
         return connections
@@ -285,6 +288,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         connections.append(cp.ComponentConnection(HotWaterStorage.ThermalPowerDelivered, heatsource_classname,
                                                   generic_heat_source.HeatSource.ThermalPowerDelivered))
         return connections
+
+    def collect_heat_to_buffer_inputs(self):
+        self.heat_to_buffer_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_TO_BUFFER])
 
     def build(self, config: StorageConfig) -> None:
         """ Initializes hot water storage instance. """
@@ -329,7 +335,9 @@ class HotWaterStorage(dycp.DynamicComponent):
             thermal_power_delivered = stsv.get_input_value(self.thermal_power_delivered_c)\
                 * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
         else:
-            thermal_power_delivered = sum(self.get_dynamic_inputs(stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUFFER])) \
+            if timestep == 0:
+                self.collect_heat_to_buffer_inputs()
+            thermal_power_delivered = sum(stsv.get_input_value(component_input=elem) for elem in self.heat_to_buffer_inputs) \
                 * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
         heatconsumption: float = self.calculate_heat_consumption(stsv, thermal_power_delivered, timestep)
         stsv.set_output_value(self.heat_to_building_c, heatconsumption)

@@ -254,12 +254,12 @@ class HeatingComponent(dynamic_component.DynamicComponent):
         # Only with HeatPump
         elif self.thermal_power_delivered_channel.source_output is not None:
             thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
-        else:
-            thermal_power_delivered_in_watt = sum(
-                self.get_dynamic_inputs(
-                    stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUILDING]
-                )
-            )
+        # else:
+        #     thermal_power_delivered_in_watt = sum(
+        #         self.get_dynamic_inputs(
+        #             tags=[lt.InandOutputType.HEAT_TO_BUILDING]
+        #         )
+        #     )
 
     # =================================================================================================================================
 

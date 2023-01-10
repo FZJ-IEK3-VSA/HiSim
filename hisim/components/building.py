@@ -280,7 +280,6 @@ class Building(dynamic_component.DynamicComponent):
         self.conditioned_floor_area_in_m2: float = 0
         self.scaled_conditioned_floor_area_in_m2: float = 0
         self.scaling_factor: float = 1
-        self.scaling_factor: float = 1
         # before labeled as a_m
         self.effective_mass_area_in_m2: float = 0
         # before labeled as a_t
@@ -769,30 +768,24 @@ class Building(dynamic_component.DynamicComponent):
             * self.ratio_between_internal_surface_area_and_floor_area
         )
         # Reference properties from TABULA, but not used in the model (scaling factor added in case floor area is different to tabula floor area A_C_ref)
-        # Reference properties from TABULA, but not used in the model (scaling factor added in case floor area is different to tabula floor area A_C_ref)
         # Floor area related heat load during heating season
         self.solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year = float(
-            (self.buildingdata["q_sol"].values[0]) * (1 / self.scaling_factor)
             (self.buildingdata["q_sol"].values[0]) * (1 / self.scaling_factor)
         )
         # Floor area related internal heat sources during heating season
         self.internal_heat_sources_reference_in_kilowatthour_per_m2_per_year = float(
             self.buildingdata["q_int"].values[0] * (1 / self.scaling_factor)
-            self.buildingdata["q_int"].values[0] * (1 / self.scaling_factor)
         )
         # Floor area related annual losses
         self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year = float(
-            self.buildingdata["q_ht"].values[0] * (1 / self.scaling_factor)
             self.buildingdata["q_ht"].values[0] * (1 / self.scaling_factor)
         )
         # Energy need for heating
         self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year = float(
             self.buildingdata["q_h_nd"].values[0] * (1 / self.scaling_factor)
-            self.buildingdata["q_h_nd"].values[0] * (1 / self.scaling_factor)
         )
         # Internal heat capacity per m2 reference area [Wh/(m^2.K)] (TABULA: Internal heat capacity)
         self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin = float(
-            self.buildingdata["c_m"].values[0] * (1 / self.scaling_factor)
             self.buildingdata["c_m"].values[0] * (1 / self.scaling_factor)
         )
 
@@ -942,7 +935,6 @@ class Building(dynamic_component.DynamicComponent):
                     * factor_of_absolute_floor_area_to_tabula_floor_area
                 )
             self.scaling_factor = factor_of_absolute_floor_area_to_tabula_floor_area
-            self.scaling_factor = factor_of_absolute_floor_area_to_tabula_floor_area
 
         elif self.buildingconfig.total_base_area_in_m2 is not None:
 
@@ -963,17 +955,14 @@ class Building(dynamic_component.DynamicComponent):
                     * factor_of_total_base_area_to_tabula_floor_area
                 )
             self.scaling_factor = factor_of_total_base_area_to_tabula_floor_area
-            self.scaling_factor = factor_of_total_base_area_to_tabula_floor_area
 
         for w_i in self.windows_and_door:
             self.scaled_windows_and_door_envelope_areas_in_m2.append(
-                self.buildingdata["A_" + w_i].values[0] * self.scaling_factor
                 self.buildingdata["A_" + w_i].values[0] * self.scaling_factor
             )
 
         for o_w in self.opaque_walls:
             self.scaled_opaque_surfaces_envelope_area_in_m2.append(
-                self.buildingdata["A_" + o_w].values[0] * self.scaling_factor
                 self.buildingdata["A_" + o_w].values[0] * self.scaling_factor
             )
 
@@ -1036,10 +1025,7 @@ class Building(dynamic_component.DynamicComponent):
 
         lines.append(
             "-------------------------------------------------------------------------------------------"
-            "-------------------------------------------------------------------------------------------"
         )
-        lines.append("Building Thermal Conductances:")
-        lines.append("--------------------------------------------")
         lines.append("Building Thermal Conductances:")
         lines.append("--------------------------------------------")
         lines.append(
@@ -1065,7 +1051,6 @@ class Building(dynamic_component.DynamicComponent):
 
         lines.append(
             "-------------------------------------------------------------------------------------------"
-            "-------------------------------------------------------------------------------------------"
         )
         lines.append("Building Areas:")
         lines.append("--------------------------------------------")
@@ -1080,7 +1065,6 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         lines.append(
-            "-------------------------------------------------------------------------------------------"
             "-------------------------------------------------------------------------------------------"
         )
         lines.append("Building Thermal Capacitances:")
@@ -1301,8 +1285,6 @@ class Building(dynamic_component.DynamicComponent):
         ):
 
             for window in self.windows:
-                solar_heat_gain = Window.calc_solar_heat_gains(
-                    self,
                 solar_heat_gain = Window.calc_solar_heat_gains(
                     self,
                     sun_azimuth=azimuth,
@@ -1595,13 +1577,11 @@ class Building(dynamic_component.DynamicComponent):
         vals1_in_watt_per_m2_per_kelvin = float(
             self.buildingdata["h_Transmission"].values[0]
         ) * (1 / self.scaling_factor)
-        ) * (1 / self.scaling_factor)
 
         if vals1_in_watt_per_m2_per_kelvin is None:
             raise ValueError("h_Transmission was none.")
         vals2_in_watt_per_m2_per_kelvin = float(
             self.buildingdata["h_Ventilation"].values[0]
-        ) * (1 / self.scaling_factor)
         ) * (1 / self.scaling_factor)
 
         # with with dQ/dt = h * (T2-T1) * A -> [W]
@@ -1703,53 +1683,6 @@ class Window:
 
     # Calculate solar heat gain through windows.
     # (** Check header)
-
-    @lru_cache(maxsize=16)
-    def calc_solar_heat_gains(
-        self,
-        sun_azimuth,
-        direct_normal_irradiance,
-        direct_horizontal_irradiance,
-        global_horizontal_irradiance,
-        direct_normal_irradiance_extra,
-        apparent_zenith,
-        window_tilt_angle,
-        window_azimuth_angle,
-        reduction_factor_with_area,
-    ):
-        """Calculate the Solar Gains in the building zone through the set Window.
-
-        :param sun_altitude: Altitude Angle of the Sun in Degrees
-        :type sun_altitude: float
-        :param sun_azimuth: Azimuth angle of the sun in degrees
-        :type sun_azimuth: float
-        :param normal_direct_radiation: Normal Direct Radiation from weather file
-        :type normal_direct_radiation: float
-        :param horizontal_diffuse_radiation: Horizontal Diffuse Radiation from weather file
-        :type horizontal_diffuse_radiation: float
-        :return: self.incident_solar, Incident Solar Radiation on window
-        :return: self.solar_gains - Solar gains in building after transmitting through the window
-        :rtype: float
-        """
-        poa_irrad = pvlib.irradiance.get_total_irradiance(
-            window_tilt_angle,
-            window_azimuth_angle,
-            apparent_zenith,
-            sun_azimuth,
-            direct_normal_irradiance,
-            global_horizontal_irradiance,
-            direct_horizontal_irradiance,
-            direct_normal_irradiance_extra,
-        )
-
-        if math.isnan(poa_irrad["poa_direct"]):
-            return 0
-
-        return poa_irrad["poa_direct"] * reduction_factor_with_area
-
-    # Calculate solar heat gain through windows.
-    # (** Check header)
-
     @lru_cache(maxsize=16)
     def calc_solar_heat_gains(
         self,

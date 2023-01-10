@@ -18,8 +18,8 @@ def test_heat_pump():
     heat_pump_power = 7420.0
 
     # Heat Pump Controller
-    t_air_heating = 18.0
-    t_air_cooling = 28.0
+    temperature_air_heating_in_celsius = 18.0
+    temperature_air_cooling_in_celsius = 28.0
     offset = 1
     hp_mode = 1
 
@@ -33,8 +33,8 @@ def test_heat_pump():
                                                      min_idle_time=minimum_operation_time, my_simulation_parameters=my_simulation_parameters)
 
     # Set Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(t_air_heating=t_air_heating,
-                                                               t_air_cooling=t_air_cooling,
+    my_heat_pump_controller = generic_heat_pump.HeatPumpController(temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+                                                               temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
                                                                offset=offset,
                                                                mode=hp_mode,
                                                            my_simulation_parameters=my_simulation_parameters)
@@ -49,10 +49,10 @@ def test_heat_pump():
                               lt.LoadTypes.TEMPERATURE,
                               lt.Units.WATT)
 
-    my_heat_pump_controller.t_mC.source_output = t_mC
+    my_heat_pump_controller.temperature_mean_channel.source_output = t_mC
 
-    my_heat_pump.t_outC.source_output = t_air_outdoorC
-    my_heat_pump.stateC.source_output = my_heat_pump_controller.stateC
+    my_heat_pump.temperature_outside_channel.source_output = t_air_outdoorC
+    my_heat_pump.state_channel.source_output = my_heat_pump_controller.state_channel
 
     number_of_outputs = fft.get_number_of_outputs([t_air_outdoorC,t_mC,my_heat_pump,my_heat_pump_controller])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
@@ -72,6 +72,6 @@ def test_heat_pump():
     my_heat_pump.i_simulate(timestep, stsv, False)
 
     # Check if there is a signal to heat up the house
-    assert 1 == stsv.values[my_heat_pump_controller.stateC.global_index]
+    assert 1 == stsv.values[my_heat_pump_controller.state_channel.global_index]
     # Check if the delivered heat is indeed that corresponded to the heat pump model
-    assert heat_pump_power == stsv.values[my_heat_pump.thermal_energy_deliveredC.global_index]
+    assert heat_pump_power == stsv.values[my_heat_pump.thermal_power_delivered_channel.global_index]

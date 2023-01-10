@@ -208,7 +208,8 @@ class Building(dynamic_component.DynamicComponent):
     TemperatureOutside = "TemperatureOutside"
 
     # Outputs
-    TemperatureMean = "Residence Temperature"
+    InitialInternalTemperature = "InitialInternalTemperature"
+    TemperatureMean = "ResidenceTemperature"
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
@@ -415,6 +416,13 @@ class Building(dynamic_component.DynamicComponent):
 
         # Output channels
 
+        self.initial_internal_temperature_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.InitialInternalTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+        )
+
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TemperatureMean,
@@ -617,7 +625,10 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Returns outputs
-
+        stsv.set_output_value(
+            self.initial_internal_temperature_channel,
+            self.buildingconfig.initial_internal_temperature_in_celsius,
+        )
         stsv.set_output_value(
             self.thermal_mass_temperature_channel,
             thermal_mass_average_bulk_temperature_in_celsius,
@@ -965,6 +976,7 @@ class Building(dynamic_component.DynamicComponent):
         ]
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
         # then the total_wall_area = 4 * area_of_one_wall
+        # then the total_wall_area = 4 * area_of_one_wall
         total_wall_area_in_m2 = (
             4 * math.sqrt(self.conditioned_floor_area_in_m2) * self.room_height_in_m2
         )
@@ -1179,7 +1191,7 @@ class Building(dynamic_component.DynamicComponent):
         # here instead of reading H_Transmission from buildingdata it will be calculated manually using
         # input values U_Actual, A_ and b_Transmission also given by TABULA buildingdata
         for index, w_i in enumerate(self.windows_and_door):
-            # with H_Tr = U * A * b_tr [W/K], here b_tr is not given in TABULA data, so it is chosen 1.0
+            # with with H_Tr = U * A * b_tr [W/K], here b_tr is not given in TABULA data, so it is chosen 1.0
             h_tr_i = (
                 self.buildingdata["U_Actual_" + w_i].values[0]
                 * self.scaled_windows_and_door_envelope_areas_in_m2[index]
@@ -1210,9 +1222,10 @@ class Building(dynamic_component.DynamicComponent):
             0.0
         )
         # here modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
+        # here modification for scalability: instead of reading H_Transmission from buildingdata it will be calculated manually using
         # input values U_Actual, A_Calc and b_Transmission also given by TABULA buildingdata
         for index, o_w in enumerate(self.opaque_walls):
-            # with H_Tr = U * A * b_tr [W/K]
+            # with with H_Tr = U * A * b_tr [W/K]
             h_tr_i = (
                 self.buildingdata["U_Actual_" + o_w].values[0]
                 * self.scaled_opaque_surfaces_envelope_area_in_m2[index]
@@ -1580,7 +1593,7 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius,
             heat_loss_in_watt,
         )
-        # then return t_m, t_air, t_s, indoor_air_temperature_in_celsius,internal_room_surface_temperature_in_celsius,
+        # then then return t_m, t_air, t_s, indoor_air_temperature_in_celsius,internal_room_surface_temperature_in_celsius,
 
     # =====================================================================================================================================
     # Calculation of maximal thermal building heat demand according to TABULA (* Check header).
@@ -1601,7 +1614,7 @@ class Building(dynamic_component.DynamicComponent):
             self.buildingdata["h_Ventilation"].values[0]
         ) * (1 / self.scaling_factor)
 
-        # with dQ/dt = h * (T2-T1) * A -> [W]
+        # with with dQ/dt = h * (T2-T1) * A -> [W]
         max_thermal_building_demand_in_watt = (
             (vals1_in_watt_per_m2_per_kelvin + vals2_in_watt_per_m2_per_kelvin)
             * (

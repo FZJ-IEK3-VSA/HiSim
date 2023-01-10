@@ -186,8 +186,6 @@ def household_pv_hp(
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(
         temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
         temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
         mode=hp_mode,
         my_simulation_parameters=my_simulation_parameters,

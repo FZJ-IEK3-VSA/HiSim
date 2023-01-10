@@ -449,7 +449,7 @@ class GenericHeatPump(cp.Component):
             )
             stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
             self.sum_thermal_output_in_watt += self.state.heating_power_in_watt
-            # divide by max heating power/minute (7420 W), per iterations/minute (3) and minutes/hour (60)
+            # divide by max heating power/iteration (7420 W), per iterations/minute (3) and minutes/hour (60)
             self.heating_hours = self.sum_thermal_output_in_watt / (
                 self.max_heating_power_in_watt * 3 * 60
             )

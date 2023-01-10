@@ -7,7 +7,7 @@ import os
 from typing import Optional
 import numpy as np
 
-# from hisim import hisim_main
+from hisim import hisim_main
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
@@ -16,6 +16,7 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import sumbuilder
+from hisim import utils
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -33,18 +34,11 @@ __status__ = "development"
 #     func = "household_fake_heating"
 #     mysimpar = SimulationParameters.full_year_all_options(year=2019, seconds_per_timestep=60)
 #     hisim_main.main(path, func, mysimpar)
-#     log.information(os.getcwd())
-#     log.information("after simulation run:")
 
 
-# @utils.measure_execution_time
-# def test_basic_household():
-#     """ Single day. """
+# the PATH is fake, only to run this example for test
 PATH = "../examples/household_for_test_building_heat_demand.py"
 FUNC = "house_with_pv_and_hp_for_heating_test"
-#     mysimpar = SimulationParameters.full_year(year=2019, seconds_per_timestep=60)
-#     hisim_main.main(path, func, mysimpar)
-#     log.information(os.getcwd())
 
 
 def test_house_with_pv_and_hp_for_heating_test(

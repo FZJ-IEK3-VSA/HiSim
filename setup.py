@@ -32,6 +32,7 @@ setup(
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
     ],
     description="HiSim is a house infrastructure simulator",
     entry_points={
@@ -49,7 +50,7 @@ setup(
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
-    url='https://github.com/audreyr/hisim',
+    url='https://github.com/FZJ-IEK3-VSA/HiSim',
     version='0.1.0',
     zip_safe=False,
 )

@@ -18,9 +18,6 @@ COPY HISTORY.rst HISTORY.rst
 # Copy source code to image
 COPY hisim hisim
 
-# Copy modular_household.py
-COPY examples/modular_household.py modular_household.py
-
 # Install hisim
 RUN pip install -e . 
 
@@ -28,6 +25,3 @@ RUN pip install -e .
 RUN mkdir /input
 # Create a folder for the result files
 RUN mkdir /results
-
-# Temporary solution for the custom json interface for the WHY toolkit: always uses modular_household_explicit in modular_household.py
-ENTRYPOINT mv /input/request.json system_config.json && python3 hisim/hisim_main.py modular_household modular_household_explicit && cd results/modular_household_explicit* && mv *.csv /results

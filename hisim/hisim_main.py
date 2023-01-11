@@ -4,7 +4,6 @@ from datetime import datetime
 from hisim import log
 import hisim.simulator as sim
 import os
-#from hisim.postprocessing import postprocessing_main as pp
 
 def main(path_to_module: str, function_in_module: str, my_simulation_parameters = None):
     log.information("#################################")
@@ -22,8 +21,6 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters 
         if os.path.isdir(path_to_be_added):
             # Add current path to PYTHONPATH
             sys.path.append(path_to_be_added)
-            #for dirs in os.walk(path_to_be_added):
-            #    sys.path.append(dirs)
         else:
             raise ValueError("Directory location of module location is nonexistent!\nDirectory entered: {}".format(path_to_be_added))
     suffix =module_filename[-3:]

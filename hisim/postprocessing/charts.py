@@ -1,13 +1,8 @@
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-#from matplotlib.sankey import Sankey
 import matplotlib as mpl
-from matplotlib.dates import DateFormatter
 import matplotlib
-import seaborn
 import numpy as np
-import pandas as pd
 from hisim import log
 import warnings
 
@@ -37,9 +32,7 @@ class Carpet(Chart):
             database = database * 1E-3
             self.units = "k{}".format(self.units)
         plot_data = np.flip(database.transpose(), axis=0)
-        # plot_data = database
 
-        # sns.set(font_scale=float(1.5))
         fig = plt.figure(figsize=(10, 5), dpi=500)
 
         ax = fig.add_subplot(111)
@@ -65,15 +58,9 @@ class Carpet(Chart):
         # setting axis of the plot
         ax.set_ylabel('Daytime [h]')
         ax.set_xlabel('Month of the year')
-        #plt.title(self.title)
-        # ax.set_ylabel('Daytime [h]', fontdict={'size': 14})
-        # ax.set_xlabel('Month of the year', fontsize=14)
 
-        # plt.show()
-#        log.information("finished carpet plot: " + self.filepath)
         plt.savefig(self.filepath, bbox_inches='tight')
-        plt.close()
-        
+        plt.close()       
 
 class Line(Chart):
     def __init__(self, output, data , units, directorypath, time_correction_factor):
@@ -110,7 +97,6 @@ class Line(Chart):
         plt.savefig(self.filepath)
         plt.close()
 
-
 class Bar(Chart):
 
     def __init__(self, output, data , units, dirpath, time_correction_factor):
@@ -136,8 +122,6 @@ class Bar(Chart):
 
         plt.title("{} Monthly".format(self.title))
         plt.grid()
-        # seaborn.despine(ax=ax, offset=0)  # the important part here
-        # autolabel(rect)
         plt.tight_layout()
         plt.ylabel(self.units)
         plt.legend(loc='best')
@@ -194,7 +178,6 @@ class SankeyHISIM(Chart):
                     i_negative = 0
 
             pathlengths = 0.4
-            #plt.rcParams['font.size'] = 12
             fig = plt.figure(figsize=[10, 10])
             ax = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
@@ -237,8 +220,6 @@ class SankeyHISIM(Chart):
         orientations = [1, -1, 0]
         pathlengths = 0.25
 
-
-        #plt.rcParams['font.size'] = 12
         fig = plt.figure(figsize=[10,10])
         ax = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 

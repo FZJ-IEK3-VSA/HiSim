@@ -70,20 +70,6 @@ class Report:
             story.append(Paragraph(ptext, self.styles["Normal"]))
         story.append(Spacer(1, 12))
 
-        # Inserts configuration setup
-        #config = ["Setup function: {}".format(self.setup.function),
-        #          "Mode: {}".format(self.setup.mode)]
-        #for part in config:
-        #    ptext = '<font size="12">%s</font>' % part.strip()
-        #    story.append(Paragraph(ptext, self.styles["Normal"]))
-        #story.append(Spacer(1, 12))
-
-        # Inserts
-        #ptext = '<font size="12">Mode description: {}</font>'.format(self.setup.get_description())
-        ## self.setup.description
-        #story.append(Paragraph(ptext, self.styles["Justify"]))
-        #story.append(Spacer(1, 12))
-
         # Inserts time
         formatted_time = time.ctime()
         ptext = '<font size="12">%s</font>' % formatted_time

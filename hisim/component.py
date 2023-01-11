@@ -1,5 +1,4 @@
 # Generic
-
 from typing import List, Optional, Any, Dict, Union
 import typing
 from hisim.simulationparameters import SimulationParameters
@@ -8,6 +7,7 @@ from hisim import loadtypes as lt
 import dataclasses as dc
 from dataclasses import dataclass
 from hisim import log
+
 @dataclass
 class ComponentConnection:
     TargetInputName: str
@@ -80,10 +80,6 @@ class SingleTimeStepValues:
             if abs(previous_values.values[i] - self.values[i]) > 0.0001:
                 error_msg += outputs[i].get_pretty_name() + " previously: " + str(previous_values.values[i]) + " currently: " + str(self.values[i])
         return error_msg
-
-    #def prin1t(self):
-     #   prin1t()
-      #  prin1t(*self.values, sep=", ")
 
 
 class SimRepository:

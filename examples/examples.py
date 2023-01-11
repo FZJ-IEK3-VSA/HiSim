@@ -1,6 +1,3 @@
-# Generic
-import numpy as np
-
 # Owned
 from hisim import log
 from hisim.simulator import Simulator
@@ -9,7 +6,6 @@ from hisim.components.random_numbers import RandomNumbers
 from hisim.components.example_transformer import Transformer
 from hisim.components.sumbuilder import SumBuilderForTwoInputs
 from hisim import loadtypes
-from hisim import utils
 
 def first_example(my_sim: Simulator, my_simulation_parameters):
     """

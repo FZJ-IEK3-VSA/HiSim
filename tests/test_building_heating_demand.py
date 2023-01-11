@@ -275,4 +275,3 @@ def test_house_with_pv_and_hp_for_heating_test(
         energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2,
         rtol=0.3,
     )
-

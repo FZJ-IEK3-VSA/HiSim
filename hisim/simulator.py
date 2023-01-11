@@ -44,6 +44,7 @@ class Simulator:
         self.all_outputs: List[cp.ComponentOutput] = []
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
+        self.results_data_frame: pd.DataFrame
 
     def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """

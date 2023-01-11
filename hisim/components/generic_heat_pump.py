@@ -141,9 +141,7 @@ class GenericHeatPump(cp.Component):
     ) -> None:
         """Construct all the necessary attributes."""
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
-        self.sum_thermal_output_in_watt: float = 0
-        self.heating_hours: float = 0
-        self.heating_energy_in_watt_hour: float = 0
+
         self.build(manufacturer, name, min_operation_time, min_idle_time)
 
         self.number_of_cycles = 0
@@ -437,7 +435,6 @@ class GenericHeatPump(cp.Component):
                 self.state = GenericHeatPumpState(
                     start_timestep=timestep, cycle_number=number_of_cycles
                 )
-
             stsv.set_output_value(
                 self.thermal_power_delivered_channel,
                 self.state.thermal_power_delivered_in_watt,
@@ -448,14 +445,6 @@ class GenericHeatPump(cp.Component):
                 self.electricity_output_channel, self.state.electricity_input_in_watt
             )
             stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
-            self.sum_thermal_output_in_watt += self.state.heating_power_in_watt
-            # divide by max heating power/iteration (7420 W), per iterations/minute (3) and minutes/hour (60)
-            self.heating_hours = self.sum_thermal_output_in_watt / (
-                self.max_heating_power_in_watt * 3 * 60
-            )
-            self.heating_energy_in_watt_hour = (
-                self.heating_hours * self.max_heating_power_in_watt
-            )
             return
 
         # Heat Pump is Off
@@ -472,6 +461,7 @@ class GenericHeatPump(cp.Component):
                     cop=self.calc_cop(temperature_outside),
                     cycle_number=number_of_cycles,
                 )
+
             else:
                 self.state = GenericHeatPumpState(
                     start_timestep=timestep,
@@ -490,12 +480,6 @@ class GenericHeatPump(cp.Component):
             self.electricity_output_channel, self.state.electricity_input_in_watt
         )
         stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
-        self.sum_thermal_output_in_watt += self.state.heating_power_in_watt
-        # get approximation of heating hours by dividing total sum thermal output by max heating power (7420 W), per iterations/minute (3) and minutes/hour (60)
-        self.heating_hours = self.sum_thermal_output_in_watt / (
-            self.max_heating_power_in_watt * 3 * 60
-        )
-        self.heating_energy_in_watt_hour = self.heating_hours * self.max_heating_power_in_watt
 
     def process_thermal(self, ws_in: float) -> None:
         """Process thermal."""

@@ -86,9 +86,12 @@ class StorageConfig:
     @staticmethod
     def get_default_config_buffer(volume: float = 500) -> Any:
         """ Returns default configuration for buffer (radius:height = 1:4). """
-        radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)
+        # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
+        radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)  # l to m^3 so that radius is given in m
+        # cylinder surface area = floor and ceiling area + lateral surface
+        surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius) 
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=6 * radius * radius * np.pi, u_value=0.36,
+            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=surface, u_value=0.36,
             warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,
             heating_season_begin=270, heating_season_end=150)
         return config

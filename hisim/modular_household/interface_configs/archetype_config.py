@@ -22,6 +22,7 @@ class ArcheTypeConfig:
         default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
     )
     building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"
+    absolute_conditioned_floor_area: float = 121.2
     water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     mobility_set: JsonReference = field(

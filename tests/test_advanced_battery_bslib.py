@@ -1,15 +1,9 @@
 from hisim import component as cp
-#import components as cps
-#import components
 from hisim.components import advanced_battery_bslib
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
-
-import os
-from hisim import utils
-import numpy as np
 
 def test_advanced_battery_bslib():
 
@@ -20,7 +14,7 @@ def test_advanced_battery_bslib():
     #===================================================================================================================
     # Set Advanced Battery
     system_id = 'SG1'   # Generic ac coupled battery storage system
-    p_inv_custom = 5    # kW
+    p_inv_custom = 5000 # W
     e_bat_custom = 10   # kWh
     name = "Battery"
     source_weight = 1
@@ -56,7 +50,6 @@ def test_advanced_battery_bslib():
 
     # Check if the delivered electricity indeed that corresponded to the battery model
     # Not all Elect could be charged
-    assert stsv.values[my_advanced_battery.p_bs.GlobalIndex] == 3998.0
-    assert stsv.values[my_advanced_battery.p_bat.GlobalIndex] == 3959.5306911168
-    assert stsv.values[my_advanced_battery.soc.GlobalIndex] == 0.006432121891379126
-
+    assert stsv.values[my_advanced_battery.p_bs.GlobalIndex] == 4000
+    assert stsv.values[my_advanced_battery.p_bat.GlobalIndex] == 3807.546
+    assert stsv.values[my_advanced_battery.soc.GlobalIndex] == 0.006185227970066665

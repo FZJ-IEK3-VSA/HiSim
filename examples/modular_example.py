@@ -68,7 +68,7 @@ def cleanup_old_result_folders():
 def get_heating_reference_temperature_from_location(location: str) -> float:
     converting_data = pd.read_csv(hisim.utils.HISIMPATH['housing_reference_temperatures'])
     converting_data.index = converting_data['Location']
-    return converting_data.loc[location]['HeatingReferenceTemperature']
+    return float(converting_data.loc[location]['HeatingReferenceTemperature'])
 
 def modular_household_explicit(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None

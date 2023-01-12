@@ -3,7 +3,6 @@
 # -*- coding: utf-8 -*-
 from typing import List, Any
 from os import listdir, path
-from collections import Counter
 from dataclasses import dataclass
 import datetime as dt
 import json
@@ -57,6 +56,18 @@ class CarConfig:
         """ Defines default configuration for electric vehicle. """
         config = CarConfig(name='Car', source_weight=1, fuel=lt.LoadTypes.ELECTRICITY, consumption_per_km=0.15)
         return config
+
+
+def most_frequent(input_list: List) -> int:
+    counter = 0
+    num = input_list[0]
+
+    for i in input_list:
+        curr_frequency = input_list.count(i)
+        if(curr_frequency> counter):
+            counter = curr_frequency
+            num = i
+    return num
 
 
 class Car(cp.Component):
@@ -166,8 +177,8 @@ class Car(cp.Component):
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio]))  # sum
                 location_list = car_location[i * steps_ratio: (i + 1) * steps_ratio]  # extract list
-                occurence_count: Counter = Counter(location_list)  # extract most common
-                self.car_location.append(occurence_count.most_common(1)[0][0])
+                occurence_count = most_frequent(input_list=location_list)  # extract most common
+                self.car_location.append(occurence_count)
 
             # save data in cache
             data = np.transpose([self.car_location,

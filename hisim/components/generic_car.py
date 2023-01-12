@@ -58,7 +58,7 @@ class CarConfig:
         return config
 
 
-def most_frequent(input_list: List) -> int:
+def most_frequent(input_list: List) -> Any:
     counter = 0
     num = input_list[0]
 

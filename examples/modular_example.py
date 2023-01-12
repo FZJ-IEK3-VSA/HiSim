@@ -65,10 +65,14 @@ def cleanup_old_result_folders():
             full_path = os.path.join(base_path, file)
             shutil.rmtree(full_path)
 
+
 def get_heating_reference_temperature_from_location(location: str) -> float:
-    converting_data = pd.read_csv(hisim.utils.HISIMPATH['housing_reference_temperatures'])
-    converting_data.index = converting_data['Location']
-    return float(converting_data.loc[location]['HeatingReferenceTemperature'])
+    converting_data = pd.read_csv(
+        hisim.utils.HISIMPATH["housing_reference_temperatures"]
+    )
+    converting_data.index = converting_data["Location"]
+    return float(converting_data.loc[location]["HeatingReferenceTemperature"])
+
 
 def modular_household_explicit(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
@@ -81,7 +85,7 @@ def modular_household_explicit(
     # cleanup_old_result_folders()
 
     # Set simulation parameters
-    year = 2018
+    year = 2019
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
@@ -185,21 +189,30 @@ def modular_household_explicit(
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum[location])
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum[location]
+    )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_weather)
 
     # Build building
-    heating_reference_temperature = get_heating_reference_temperature_from_location(location=location)
+    heating_reference_temperature = get_heating_reference_temperature_from_location(
+        location=location
+    )
     my_building_config = building.BuildingConfig(
-        name='Building_1',
+        name="Building_1",
         heating_reference_temperature_in_celsius=heating_reference_temperature,
-        building_code=building_code, building_heat_capacity_class = 'medium',
-        initial_internal_temperature_in_celsius=23, absolute_conditioned_floor_area_in_m2=floor_area,
-        total_base_area_in_m2=None)
-    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
+        building_code=building_code,
+        building_heat_capacity_class="medium",
+        initial_internal_temperature_in_celsius=23,
+        absolute_conditioned_floor_area_in_m2=floor_area,
+        total_base_area_in_m2=None,
+    )
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 

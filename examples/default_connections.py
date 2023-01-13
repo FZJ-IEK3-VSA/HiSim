@@ -180,7 +180,7 @@ def basic_household_with_default_connections(
 
     # depending on type of heating device, hard to define default connections
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
         my_heat_pump.ThermalPowerDelivered,
     )

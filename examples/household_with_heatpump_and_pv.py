@@ -207,7 +207,7 @@ def household_pv_hp(
     my_building.connect_only_predefined_connections(my_weather)
     my_building.connect_only_predefined_connections(my_occupancy)
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
         my_heat_pump.ThermalPowerDelivered,
     )

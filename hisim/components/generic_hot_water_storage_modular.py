@@ -290,6 +290,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         return connections
 
     def collect_heat_to_buffer_inputs(self):
+        """Collect heat to buffer inputs."""
         self.heat_to_buffer_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_TO_BUFFER])
 
     def build(self, config: StorageConfig) -> None:

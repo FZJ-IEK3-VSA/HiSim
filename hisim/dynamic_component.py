@@ -2,7 +2,7 @@
 # clean
 
 from dataclasses import dataclass
-from typing import Any, List, Union, Optional
+from typing import Any, List, Union
 
 import hisim.loadtypes as lt
 from hisim import log
@@ -176,8 +176,8 @@ class DynamicComponent(Component):
                                                                            source_weight=source_weight))
 
     def obsolete_get_dynamic_input_value(self, stsv: SingleTimeStepValues,
-                          tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-                          weight_counter: int) -> Any:
+            tags: List[Union[lt.ComponentType, lt.InandOutputType]],
+            weight_counter: int) -> Any:
         """ Returns input value from first dynamic input with component type and weight. """
         inputvalue = None
 
@@ -208,9 +208,9 @@ class DynamicComponent(Component):
         return inputvalues
 
     def obsolete_set_dynamic_output_value(self, stsv: SingleTimeStepValues,
-                           tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-                           weight_counter: int,
-                           output_value: float) -> None:
+            tags: List[Union[lt.ComponentType, lt.InandOutputType]],
+            weight_counter: int,
+            output_value: float) -> None:
         """ Sets all output values with given component type and weight. """
 
         # check if component of component type is available

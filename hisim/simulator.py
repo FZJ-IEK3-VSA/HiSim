@@ -44,6 +44,7 @@ class Simulator:
         self.all_outputs: List[cp.ComponentOutput] = []
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
+        self.results_data_frame: pd.DataFrame
 
     def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """ Sets the simulation parameters and the logging level at the same time. """
@@ -131,7 +132,6 @@ class Simulator:
 
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
-
         return (stsv, iterative_tries)
 
     def prepare_simulation_directory(self):
@@ -201,7 +201,6 @@ class Simulator:
                 lastmessage = self.show_progress(starttime, step, total_iteration_tries_since_last_msg, last_step)
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
-
         postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
         log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
@@ -234,17 +233,16 @@ class Simulator:
             column_name = entry.get_pretty_name()
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
-        results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
+        self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
         # todo: fix this constant
-        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(results_data_frame), freq="T")
-        results_data_frame.index = df_index
+        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T")
+        self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:4.0f}s")
-        results_merged = self.get_std_results(results_data_frame)
-
+        results_merged = self.get_std_results(self.results_data_frame)
         ppdt = PostProcessingDataTransfer(
-            results=results_data_frame,
+            results=self.results_data_frame,
             all_outputs=self.all_outputs,
             simulation_parameters=self._simulation_parameters,
             wrapped_components=self.wrapped_components,

@@ -41,7 +41,6 @@ def test_building_scalability():
 
     # for building_code in d_f["Code_BuildingVariant"]:
     #     if isinstance(building_code, str):
-
     # Set Residence
     my_residence_config = (
         building.BuildingConfig.get_default_german_single_family_home()

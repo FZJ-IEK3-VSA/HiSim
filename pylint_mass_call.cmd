@@ -8,6 +8,8 @@ pylint C:\Users\k.rieck\HiSim\examples\default_connections.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\dynamic_components.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\household_with_fake_heater.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\household_with_gas_heater.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\household_with_gas_heater_with_controller.py
@@ -55,6 +57,8 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l1_generic_runtime.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l1_heatpump.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l2_energy_management_system.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\controller_l2_generic_heat_simple.py
 if %errorlevel% neq 0 exit /b

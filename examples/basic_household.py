@@ -249,7 +249,7 @@ def basic_household_explicit(
         my_occupancy.HeatingByResidents,
     )
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
         my_heat_pump.ThermalPowerDelivered,
     )

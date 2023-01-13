@@ -31,23 +31,19 @@ class HeatSourceConfig:
     source_weight: int
     fuel: lt.LoadTypes
     power_th: float
+    water_vs_heating: lt.InandOutputType
     efficiency: float
-
-    def __init__(self, name: str, source_weight: int, fuel: lt.LoadTypes, power_th: float, efficiency: float) -> None:
-        self.name = name
-        self.source_weight = source_weight
-        self.fuel = fuel
-        self.power_th = power_th
-        self.efficiency = efficiency
 
     @staticmethod
     def get_default_config_heating() -> Any:
-        config = HeatSourceConfig(name='HeatingHeatSource', source_weight=1, fuel=lt.LoadTypes.DISTRICTHEATING, power_th=6200, efficiency=1.0)
+        config = HeatSourceConfig(name='HeatingHeatSource', source_weight=1, fuel=lt.LoadTypes.DISTRICTHEATING, power_th=6200, 
+        water_vs_heating=lt.InandOutputType.HEATING, efficiency=1.0)
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> Any:
-        config = HeatSourceConfig(name='DHWHeatSource', source_weight=1, fuel=lt.LoadTypes.DISTRICTHEATING, power_th=3000, efficiency=1.0)
+        config = HeatSourceConfig(name='DHWHeatSource', source_weight=1, fuel=lt.LoadTypes.DISTRICTHEATING, power_th=3000,
+        water_vs_heating=lt.InandOutputType.WATER_HEATING, efficiency=1.0)
         return config
 
 
@@ -105,7 +101,8 @@ class HeatSource(cp.Component):
         self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ThermalPowerDelivered,
             load_type=lt.LoadTypes.HEATING, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION])
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.FuelDelivered, load_type=self.fuel,
-            unit=lt.Units.ANY, postprocessing_flag=[lt.InandOutputType.FUEL_CONSUMPTION, config.fuel])
+                unit=lt.Units.ANY, postprocessing_flag=[lt.InandOutputType.FUEL_CONSUMPTION, config.fuel, config.water_vs_heating])
+
 
         if config.fuel == lt.LoadTypes.OIL:
             self.FuelDeliveredC.unit = lt.Units.LITER

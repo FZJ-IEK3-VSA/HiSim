@@ -89,7 +89,7 @@ class Car(cp.Component):
         if self.fuel == lt.LoadTypes.ELECTRICITY:
             self.electricity_output: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name, field_name=self.ElectricityOutput, load_type=lt.LoadTypes.ELECTRICITY,
-                unit=lt.Units.WATT)
+                unit=lt.Units.WATT, postprocessing_flag = [lt.ComponentType.CAR])
             self.car_location_output: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name, field_name=self.CarLocation, load_type=lt.LoadTypes.ANY,
                 unit=lt.Units.ANY)
@@ -97,7 +97,7 @@ class Car(cp.Component):
             self.fuel_consumption: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name, field_name=self.FuelConsumption, load_type=lt.LoadTypes.DIESEL,
                 unit=lt.Units.LITER, postprocessing_flag=[
-                    lt.InandOutputType.FUEL_CONSUMPTION, lt.LoadTypes.DIESEL]
+                    lt.InandOutputType.FUEL_CONSUMPTION, lt.LoadTypes.DIESEL, lt.ComponetType.CAR]
                     )
 
     def i_save_state(self) -> None:

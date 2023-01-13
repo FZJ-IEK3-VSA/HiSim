@@ -104,8 +104,8 @@ class PostProcessor:
             log.information("Computing KPIs")
             self.compute_kpis(ppdt, report)
         if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
-            self.information("Generating csv for housing data base. ")
-            generate_csv_for_database(all_outputs=ppdt.all_outputs, results=ppdt.results)
+            log.information("Generating csv for housing data base. ")
+            generate_csv_for_database(all_outputs=ppdt.all_outputs, results=ppdt.results, simulation_parameters=ppdt.simulation_parameters)
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
             log.information("Computing Network Charts")
             self.make_network_charts(ppdt)

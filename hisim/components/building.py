@@ -593,7 +593,7 @@ class Building(dynamic_component.DynamicComponent):
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
         )
-        thermal_power_delivered_in_watt = 0
+        thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
             thermal_power_delivered_in_watt = thermal_power_delivered_in_watt \
                 + stsv.get_input_value(self.thermal_power_delivered_channel)

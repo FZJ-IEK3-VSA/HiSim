@@ -289,9 +289,6 @@ class HotWaterStorage(dycp.DynamicComponent):
         """ Prepares the simulation. """
         pass
 
-    def collect_heat_to_buffer_inputs(self):
-        self.heat_to_buffer_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_TO_BUFFER])
-
     def build(self, config: StorageConfig) -> None:
         """ Initializes hot water storage instance. """
 
@@ -331,7 +328,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Simulates iteration of hot water storage. """
 
-        thermal_energy_delivered = 0
+        thermal_energy_delivered = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
             thermal_energy_delivered = thermal_energy_delivered + stsv.get_input_value(self.thermal_power_delivered_channel)\
                 * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ

@@ -97,7 +97,7 @@ class Car(cp.Component):
             self.fuel_consumption: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name, field_name=self.FuelConsumption, load_type=lt.LoadTypes.DIESEL,
                 unit=lt.Units.LITER, postprocessing_flag=[
-                    lt.InandOutputType.FUEL_CONSUMPTION, lt.LoadTypes.DIESEL, lt.ComponetType.CAR]
+                    lt.InandOutputType.FUEL_CONSUMPTION, lt.LoadTypes.DIESEL, lt.ComponentType.CAR]
                     )
 
     def i_save_state(self) -> None:

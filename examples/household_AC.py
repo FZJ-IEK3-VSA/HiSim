@@ -256,7 +256,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_sim.add_component(pid_controller)
     my_sim.add_component(my_air_conditioner)
 
-    my_building.connect_input(my_building.ThermalEnergyDelivered,
+    my_building.connect_input(my_building.ThermalPowerDelivered,
                               my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
     

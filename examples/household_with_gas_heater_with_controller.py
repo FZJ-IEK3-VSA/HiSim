@@ -133,7 +133,7 @@ def household_gas_heater(
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_distribution.component_name,
         my_heat_distribution.ThermalPowerDelivered,
     )

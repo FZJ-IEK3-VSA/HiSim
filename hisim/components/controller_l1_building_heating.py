@@ -30,7 +30,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L1BuildingHeatingConfig():
+class L1BuildingHeatingConfig(cp.ConfigBase):
 
     """L2 Controller Config."""
 
@@ -43,29 +43,6 @@ class L1BuildingHeatingConfig():
     t_max_cooling_in_celsius: Optional[float]
     day_of_heating_season_begin: Optional[int]
     day_of_heating_season_end: Optional[int]
-
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        t_min_heating_in_celsius: float,
-        t_max_heating_in_celsius: float,
-        cooling_considered: bool,
-        t_min_cooling_in_celsius: Optional[float],
-        t_max_cooling_in_celsius: Optional[float],
-        day_of_heating_season_begin: Optional[int],
-        day_of_heating_season_end: Optional[int],
-    ):
-        """Initializes config."""
-        self.name = name
-        self.source_weight = source_weight
-        self.t_min_heating_in_celsius = t_min_heating_in_celsius
-        self.t_max_heating_in_celsius = t_max_heating_in_celsius
-        self.cooling_considered = cooling_considered
-        self.t_min_cooling_in_celsius = t_min_cooling_in_celsius
-        self.t_max_cooling_in_celsius = t_max_cooling_in_celsius
-        self.day_of_heating_season_begin = day_of_heating_season_begin
-        self.day_of_heating_season_end = day_of_heating_season_end
 
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
@@ -288,7 +265,6 @@ class L1BuildingHeatController(cp.Component):
     def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
         """ Controlls the building heating. """
         if t_control > t_max_heating:
-            # print("t_control > t_max_heating"  + str(t_control) + " " + str(t_max_heating))
             self.previous_state.state = 0
             return
         if t_control < t_min_heating:

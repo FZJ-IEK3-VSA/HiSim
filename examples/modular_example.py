@@ -98,18 +98,20 @@ def modular_household_explicit(
     count = 1  # initialize source_weight with one
     production: List = []  # initialize list of components involved in production
     consumption: List = []  # initialize list of components involved in consumption
-    heater: List = []  # initialize list of components used for heating
 
     # Build system parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_KPI
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.MAKE_NETWORK_CHARTS
         )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -344,7 +346,6 @@ def modular_household_explicit(
         )  # could return ev_capacities if needed
         # """TODO: repair! """
         # for capacity in ev_capacities:
-        #     print(capacity)
         #     ev_cost = ev_cost + preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity=capacity)
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
@@ -404,6 +405,7 @@ def modular_household_explicit(
                 controlable=clever,
                 count=count,
             )
+
             """TODO: repair! """
             # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:
@@ -447,7 +449,6 @@ def modular_household_explicit(
                 heating_system_installed=heating_system_installed,
                 count=count,
             )
-    heater.append(my_heater)
 
     # """BATTERY"""
     if battery_included and clever:
@@ -476,7 +477,14 @@ def modular_household_explicit(
             electrolyzer_power=electrolyzer_power,
             count=count,
         )
-        heater.append(my_chp)
+        if buffer_included:
+            my_buffer.connect_only_predefined_connections(my_chp)
+        else:
+            my_building.connect_input(
+                input_fieldname=my_building.ThermalPowerDelivered,
+                src_object_name=my_chp.component_name,
+                src_field_name=my_chp.ThermalPowerDelivered
+            )
 
         # chp_cost = preprocessing.calculate_chp_investment_cost(
         #     economic_parameters, chp_included, chp_power
@@ -487,25 +495,6 @@ def modular_household_explicit(
         # electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(
         #     economic_parameters, electrolyzer_included, electrolyzer_power
         # )
-
-    if buffer_included:
-        my_buffer.add_component_inputs_and_connect(
-            source_component_classes=heater,
-            outputstring="ThermalPowerDelivered",
-            source_load_type=lt.LoadTypes.HEATING,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.HEAT_TO_BUFFER],
-            source_weight=999,
-        )
-    else:
-        my_building.add_component_inputs_and_connect(
-            source_component_classes=heater,
-            outputstring="ThermalPowerDelivered",
-            source_load_type=lt.LoadTypes.HEATING,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.HEAT_TO_BUILDING],
-            source_weight=999,
-        )
 
     if needs_ems(
         battery_included,

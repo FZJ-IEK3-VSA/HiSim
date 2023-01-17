@@ -3,331 +3,275 @@
 The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
 """
 # clean
-# needs to be developed still and checked
-from hisim import component
+import os
+from typing import Optional
+import numpy as np
+# import pandas as pd
+
+import hisim.simulator as sim
+from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.loadtypes import LoadTypes, Units
-from hisim.simulationparameters import SimulationParameters
+from hisim.components import generic_heat_pump
 from hisim import log
-from hisim import utils
-from tests import functions_for_testing as fft
-import numpy as np
+# from hisim import utils
 
-seconds_per_timestep = 60
-my_simulation_parameters = SimulationParameters.full_year(
-    year=2021, seconds_per_timestep=seconds_per_timestep
-)
-my_occupancy_profile = "CH01"
+__authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
+__copyright__ = "Copyright 2022, FZJ-IEK-3"
+__credits__ = ["Noah Pflugradt"]
+__license__ = "MIT"
+__version__ = "1.0"
+__maintainer__ = "Noah Pflugradt"
+__status__ = "development"
 
-initial_internal_temperature_in_celsius = 20.0
-heating_reference_temperature_in_celsius = 12.5
-absolute_conditioned_floor_area_in_m2 = 121.2
+# PATH and FUNC needed to build simulator, PATH is fake
+PATH = "../examples/household_for_test_building_heat_demand.py"
+FUNC = "house_with_pv_and_hp_for_heating_test"
 
 
-@utils.measure_execution_time
-def test_building_heat_demand():
-    """Test function for heating demand of the building module."""
+def test_house_with_pv_and_hp_for_heating_test(
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:  # noqa: too-many-statements
+    """Test for heating energy demand.
 
-    # Set Residence
-    my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
-    )
-    my_residence_config.initial_internal_temperature_in_celsius = (
-        initial_internal_temperature_in_celsius
-    )
-    my_residence_config.heating_reference_temperature_in_celsius = (
-        heating_reference_temperature_in_celsius
-    )
-    my_residence_config.absolute_conditioned_floor_area_in_m2 = (
-        absolute_conditioned_floor_area_in_m2
-    )
-    my_residence = building.Building(
-        config=my_residence_config, my_simulation_parameters=my_simulation_parameters
-    )
+    This setup function emulates an household including the basic components. Here the residents have their
+    heating needs covered by the heat pump.
 
-    repo = component.SimRepository()
+    - Simulation Parameters
+    - Components
+        - Occupancy (Residents' Demands)
+        - Weather
+        - Building
+        - Heat Pump
+        - Heat Pump Controller
+    """
 
-    my_residence.set_sim_repo(repo)
-    my_residence.i_prepare_simulation()
+    # =========================================================================================================================================================
+    # System Parameters
 
-    tabula_conditioned_floor_area_in_m2 = my_residence.buildingdata["A_C_Ref"].values[0]
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Check values from TABULA
-    # in tabula energy need for heating is given as q_h_nd, it is related to the conditioned floor area
-    q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year = (
-        my_residence.buildingdata["q_h_nd"].values[0]
-    )
-    q_h_nd_given_directly_from_tabula_in_kWh_per_hour = (
-        q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year
-        * tabula_conditioned_floor_area_in_m2
-        / (12 * 30 * 24)
-    )
-    log.information(
-        "energy need q_h_nd for heating from tabula related to conditioned floor area [kWh/(m2*year)] "
-        + str(q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year)
-    )
-    log.information(
-        "energy need q_h_nd for heating from tabula related to conditioned floor area [kWh/(m2*hour] "
-        + str(q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year / (12 * 30 * 24))
-    )
-    log.information(
-        "energy need q_h_nd for heating from tabula related to conditioned floor area [kWh/(m2*minute] "
-        + str(
-            q_h_nd_given_directly_from_tabula_in_kWh_per_m2_per_year
-            / (12 * 30 * 24 * 60)
-        )
-    )
-    log.information(
-        "energy need q_h_nd for heating from tabula [kWh/hour] "
-        + str(q_h_nd_given_directly_from_tabula_in_kWh_per_hour)
-        + "\n"
-    )
+    # Set Simulation Parameters
+    year = 2021
+    seconds_per_timestep = 60
 
-    # Tabula formular for energy need for heating is given by q_h_nd = q_ht - eta_h_gn * (q_sol + q_int)
-    # where q_ht is the total_heat_transfer, eta_h_gn is the gain utilization factor for heating, q_sol is the solar heat load (or gain) during heating seasons
-    # and q_int are the internal heat sources (units kilowatthour per m2 per year).
-    # The variables are all related to the conditioned floor area A_C_ref.
-
-    # total_heat_transfer_in_kilowatthour_per_m2_per_year = my_residence.buildingdata["q_ht"].values[0]
-    gain_utilization_factor_for_heating = my_residence.buildingdata["eta_h_gn"].values[
-        0
-    ]
-    # solar_heat_gain_in_kilowatthour_per_m2_per_year = my_residence.buildingdata["q_sol"].values[0]
-    # internal_heat_gains_in_kilowatthour_per_m2_per_year = my_residence.buildingdata["q_int"].values[0]
-    # energy_need_for_heating_calculated_from_other_tabula_data = (
-    #     total_heat_transfer_in_kilowatthour_per_m2_per_year
-    #     - gain_utilization_factor_for_heating
-    #     * (
-    #         solar_heat_gain_in_kilowatthour_per_m2_per_year
-    #         + internal_heat_gains_in_kilowatthour_per_m2_per_year
-    #     )
-    # )
-    # log.information(str(energy_need_for_heating_calculated_from_other_tabula_data))
-
-    # # check whether the tabula data and tabula calulation are equivalent (with 1% tolerance)
-    # np.testing.assert_allclose(energy_need_for_heating_given_directly_from_tabula, energy_need_for_heating_calculated_from_other_tabula_data, rtol=0.01)
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=my_occupancy_profile, name="Occupancy-1"
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config,
+    occupancy_profile = "CH01"
+
+    # Set Building
+    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
+    building_heat_capacity_class = "medium"
+    initial_temperature_in_celsius = 23
+    heating_reference_temperature_in_celsius = -14
+    absolute_conditioned_floor_area_in_m2 = 218.9
+    total_base_area_in_m2 = None
+
+    # Set Heat Pump Controller
+    temperature_air_heating_in_celsius = 19.5
+    temperature_air_cooling_in_celsius = 20.5
+    offset = 0.5
+    hp_mode = 2
+
+    # Set Heat Pump
+    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
+    hp_name = "Vitocal 300-A AWO-AC 301.B07"
+    hp_min_operation_time = 1
+    hp_min_idle_time = 1
+
+    # =========================================================================================================================================================
+    # Build Components
+
+    # Build Simulation Parameters
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
+
+
+    # # in case ou want to check on all TABULA buildings -> run test over all building_codes
+    # d_f = pd.read_csv(
+    #     utils.HISIMPATH["housing"],
+    #     decimal=",",
+    #     sep=";",
+    #     encoding="cp1252",
+    #     low_memory=False,
+    # )
+
+    # for building_code in d_f["Code_BuildingVariant"]:
+    #     if isinstance(building_code, str):
+    #         log.information("building code " + str(building_code))
+
+    # this part is copied from hisim_main
+    # Build Simulator
+    normalized_path = os.path.normpath(PATH)
+    path_in_list = normalized_path.split(os.sep)
+    if len(path_in_list) >= 1:
+        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+
+    my_sim: sim.Simulator = sim.Simulator(
+        module_directory=path_to_be_added,
+        setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_occupancy.set_sim_repo(repo)
-    my_occupancy.i_prepare_simulation()
+    my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Set Weather
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
+        profile_name=occupancy_profile, name="Occupancy"
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.Aachen
     )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_weather.set_sim_repo(repo)
-    my_weather.i_prepare_simulation()
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Fake inputs
 
-    # Fake power delivered
-    thermal_power_delivered_output = component.ComponentOutput(
-        "FakeThermalDeliveryMachine",
-        "ThermalDelivery",
-        LoadTypes.HEATING,
-        Units.WATT,
+    # Build Building
+    my_building_config = building.BuildingConfig(
+        building_code=building_code,
+        building_heat_capacity_class=building_heat_capacity_class,
+        initial_internal_temperature_in_celsius=initial_temperature_in_celsius,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        name="Building1",
+        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
+        total_base_area_in_m2=total_base_area_in_m2,
     )
-
-    # Fake outside temperature from weather
-    air_outside_temperature_output = component.ComponentOutput(
-        "FakeOutsideAirTemp",
-        "AirTemp",
-        LoadTypes.TEMPERATURE,
-        Units.CELSIUS,
-    )
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Set stsv
-    number_of_outputs = fft.get_number_of_outputs(
-        [
-            my_occupancy,
-            my_weather,
-            my_residence,
-            thermal_power_delivered_output,
-            air_outside_temperature_output,
-        ]
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Set source outputs for my residence
-
-    # my_residence.temperature_outside_channel.source_output = (
-    #     my_weather.air_temperature_output
-    # )
-    my_residence.temperature_outside_channel.source_output = (
-        air_outside_temperature_output
-    )
-    my_residence.altitude_channel.source_output = my_weather.altitude_output
-    my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
-    my_residence.direct_horizontal_irradiance_channel.source_output = (
-        my_weather.DHI_output
-    )
-    my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residentsC
+    # Build Heat Pump
+    my_heat_pump = generic_heat_pump.GenericHeatPump(
+        manufacturer=hp_manufacturer,
+        name=hp_name,
+        min_operation_time=hp_min_operation_time,
+        min_idle_time=hp_min_idle_time,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_residence.thermal_power_delivered_channel.source_output = (
-        thermal_power_delivered_output
+    # Build Heat Pump Controller
+    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
+        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+        offset=offset,
+        mode=hp_mode,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    # =========================================================================================================================================================
+    # Connect Components
+
+    # Building
+    my_building.connect_input(
+        my_building.Altitude, my_weather.component_name, my_weather.Altitude
+    )
+    my_building.connect_input(
+        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
+    )
+    my_building.connect_input(
+        my_building.DirectNormalIrradiance,
+        my_weather.component_name,
+        my_weather.DirectNormalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.DiffuseHorizontalIrradiance,
+        my_weather.component_name,
+        my_weather.DiffuseHorizontalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.GlobalHorizontalIrradiance,
+        my_weather.component_name,
+        my_weather.GlobalHorizontalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.DirectNormalIrradianceExtra,
+        my_weather.component_name,
+        my_weather.DirectNormalIrradianceExtra,
+    )
+    my_building.connect_input(
+        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
+    )
+    my_building.connect_input(
+        my_building.TemperatureOutside,
+        my_weather.component_name,
+        my_weather.TemperatureOutside,
+    )
+    my_building.connect_input(
+        my_building.HeatingByResidents,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByResidents,
+    )
+    my_building.connect_input(
+        my_building.ThermalPowerDelivered,
+        my_heat_pump.component_name,
+        my_heat_pump.ThermalPowerDelivered,
     )
 
-    fft.add_global_index_of_components(
-        [
-            my_occupancy,
-            my_weather,
-            my_residence,
-            thermal_power_delivered_output,
-            air_outside_temperature_output,
-        ]
+    # Heat Pump
+    my_heat_pump.connect_input(
+        my_heat_pump.State,
+        my_heat_pump_controller.component_name,
+        my_heat_pump_controller.State,
+    )
+    my_heat_pump.connect_input(
+        my_heat_pump.TemperatureOutside,
+        my_weather.component_name,
+        my_weather.TemperatureOutside,
     )
 
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Show logging information of some outputs and run simulation
-    log.information(
-        "-----------------------------------------------------------------------------------------------------------------------------------------"
-    )
-    log.information("before simulation run:")
-
-    log.information(
-        "internal (occupancy) heat gains [W] "
-        + str(my_residence.internal_heat_gains_through_occupancy_in_watt)
-    )
-    # log.information("outside temp (weather) [°C] " + str(stsv.values[my_weather.air_temperature_output.global_index])+ "\n")
-    log.information(
-        "outside temp (set fake) [°C] "
-        + str(stsv.values[air_outside_temperature_output.global_index])
-        + "\n"
-    )
-    log.information(
-        "thermal mass bulk temperature [°C] "
-        + str(stsv.values[my_residence.thermal_mass_temperature_channel.global_index])
-    )
-    log.information(
-        "heat loss [W] "
-        + str(stsv.values[my_residence.total_power_to_residence_channel.global_index])
-    )
-    log.information(
-        "solar gain Q_sol [W] "
-        + str(stsv.values[my_residence.solar_gain_through_windows_channel.global_index])
-    )
-    log.information(
-        "max heat demand [W] "
-        + str(
-            stsv.values[
-                my_residence.var_max_thermal_building_demand_channel.global_index
-            ]
-        )
-        + "\n"
-    )
-    log.information(
-        "fake thermal power delivered Q_H_nd [W]  "
-        + str(stsv.values[thermal_power_delivered_output.global_index])
-        + "\n"
+    # Heat Pump Controller
+    my_heat_pump_controller.connect_input(
+        my_heat_pump_controller.TemperatureMean,
+        my_building.component_name,
+        my_building.TemperatureMean,
     )
 
-    # stsv.values[my_weather.air_temperature_output.global_index] = 4.4
-    stsv.values[air_outside_temperature_output.global_index] = 4.4
-    stsv.values[thermal_power_delivered_output.global_index] = 0
-    # Simulation
-    my_occupancy.i_simulate(0, stsv, False)
-    my_weather.i_simulate(0, stsv, False)
-    my_residence.i_simulate(0, stsv, False)
+    # =========================================================================================================================================================
+    # Add Components to Simulator and run all timesteps
 
-    log.information(
-        "-----------------------------------------------------------------------------------------------------------------------------------------"
-    )
-    log.information("after simulation run:")
-    log.information("all outputs " + str(stsv.values))
-    log.information("occupancy outputs " + str(stsv.values[2:6]))
-    log.information("weather outputs " + str(stsv.values[6:15]))
-    log.information("residence outputs " + str(stsv.values[15:]) + "\n")
-    log.information(
-        "internal (occupancy) heat gains [W] "
-        + str(my_residence.internal_heat_gains_through_occupancy_in_watt)
-    )
-    # log.information("outside temp (weather) [°C] " + str(stsv.values[my_weather.air_temperature_output.global_index])+ "\n")
-    log.information(
-        "outside temp (set fake) [°C] "
-        + str(stsv.values[air_outside_temperature_output.global_index])
-        + "\n"
-    )
-    log.information(
-        "thermal mass bulk temperature [°C]  "
-        + str(stsv.values[my_residence.thermal_mass_temperature_channel.global_index])
-    )
-    log.information(
-        "heat loss [W] "
-        + str(stsv.values[my_residence.total_power_to_residence_channel.global_index])
-    )
-    log.information(
-        "solar gain Q_sol [W] "
-        + str(stsv.values[my_residence.solar_gain_through_windows_channel.global_index])
-    )
-    log.information(
-        "max heat demand [W] "
-        + str(
-            stsv.values[
-                my_residence.var_max_thermal_building_demand_channel.global_index
-            ]
-        )
-        + "\n"
-    )
-    log.information(
-        "fake thermal power delivered Q_H_nd [W] "
-        + str(stsv.values[thermal_power_delivered_output.global_index])
-        + "\n"
+    my_sim.add_component(my_weather)
+    my_sim.add_component(my_occupancy)
+    my_sim.add_component(my_building)
+    my_sim.add_component(my_heat_pump)
+    my_sim.add_component(my_heat_pump_controller)
+
+    my_sim.run_all_timesteps()
+
+    # =========================================================================================================================================================
+    # Calculate annual heat pump heating energy
+
+    results_heatpump_heating = my_sim.results_data_frame[
+        "HeatPump - Heating [Heating - W]"
+    ]
+    sum_heating_in_watt_timestep = sum(results_heatpump_heating)
+    log.information("sum hp heating [W*timestep] " + str(sum_heating_in_watt_timestep))
+    timestep_factor = seconds_per_timestep / 3600
+    sum_heating_in_watt_hour = sum_heating_in_watt_timestep * timestep_factor
+    sum_heating_in_kilowatt_hour = sum_heating_in_watt_hour / 1000
+    # =========================================================================================================================================================
+    # Test annual floor related heating demand
+
+    energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 = (
+        my_building.buildingdata["q_h_nd"].values[0]
     )
 
-    log.information(
-        "-----------------------------------------------------------------------------------------------------------------------------------------"
-    )
-
-    # -------------------------------------------------------------------------------------------------------------------------------------------------------------------
-    # Calculate energy need from building module data and compare with tabula data
-
-    # Tabula formular for energy need for heating is given by q_h_nd = q_ht - eta_h_gn * (q_sol + q_int)
-    q_h_nd_calculated_from_building_data = stsv.values[
-        my_residence.var_max_thermal_building_demand_channel.global_index
-    ] - gain_utilization_factor_for_heating * (
-        stsv.values[my_residence.solar_gain_through_windows_channel.global_index]
-        + my_residence.internal_heat_gains_through_occupancy_in_watt
-    )
-    q_h_nd_calculated_from_building_data_in_kW = (
-        q_h_nd_calculated_from_building_data / 1000
+    energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2 = (
+        sum_heating_in_kilowatt_hour / absolute_conditioned_floor_area_in_m2
     )
     log.information(
-        "energy need Q_H_nd calculated from building data with max heat demand as Q_ht [kW] "
-        + str(q_h_nd_calculated_from_building_data_in_kW)
+        "energy need for heating from tabula [kWh/(a*m2)] "
+        + str(energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2)
     )
     log.information(
-        "energy need Q_H_nd calculated from building data with max heat demand as Q_ht divided by conditioned floor area [kW/m2] "
-        + str(
-            q_h_nd_calculated_from_building_data_in_kW
-            / tabula_conditioned_floor_area_in_m2
-        )
+        "energy need for heating from heat pump [kWh/(a*m2)] "
+        + str(energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2)
     )
-    log.information(
-        "-----------------------------------------------------------------------------------------------------------------------------------------"
-    )
-
-    # test whether energy need from tabula is equal to energy need from building module with 10% tolerance
-    # (you can maniulate the test result by changing the initial internal temperature or the heating reference temperature (see above))
+    # test whether tabula energy demand for heating is equal to energy demand for heating generated from heat pump with a tolerance of 30%
     np.testing.assert_allclose(
-        q_h_nd_given_directly_from_tabula_in_kWh_per_hour,
-        q_h_nd_calculated_from_building_data_in_kW,
-        rtol=0.1,
+        energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
+        energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2,
+        rtol=0.3,
     )

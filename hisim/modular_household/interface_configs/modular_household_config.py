@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 from hisim.modular_household.interface_configs import archetype_config, system_config
 from dataclasses_json import dataclass_json
+from hisim import log
 
 
 @dataclass_json
@@ -9,3 +10,23 @@ from dataclasses_json import dataclass_json
 class ModularHouseholdConfig:
     system_config_: Optional[system_config.SystemConfig] = None
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
+
+def read_in_configs(pathname: str) -> ModularHouseholdConfig:
+    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
+    try:
+        with open(pathname, encoding="utf8") as config_file:
+            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore
+        log.information(f"Read modular household config from {pathname}")
+    except Exception:
+        household_config = ModularHouseholdConfig()
+        log.warning(
+            f"Could not read the modular household config from '{pathname}'. Using a default config instead."
+        )
+
+    # set default configs
+    if household_config.system_config_ is None:
+        household_config.system_config_ = system_config.SystemConfig()
+    if household_config.archetype_config_ is None:
+        household_config.archetype_config_ = archetype_config.ArcheTypeConfig()
+
+    return household_config

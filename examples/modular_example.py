@@ -290,10 +290,12 @@ def modular_household_explicit(
         heating_system_installed,
         smart_devices_included,
         water_heating_system_installed,
-    ):
+    ):  
+        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_EMS()
         my_electricity_controller = (
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_electricity_controller_config
             )
         )
 

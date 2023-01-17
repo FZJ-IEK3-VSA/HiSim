@@ -22,10 +22,11 @@ class ArcheTypeConfig:
         default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
     )
     building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"
+    absolute_conditioned_floor_area: float = 121.2
     water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     mobility_set: JsonReference = field(
-        default_factory=lambda: TransportationDeviceSets.Bus_and_two_30_km_h_Cars  # type: ignore
+        default_factory=lambda: TransportationDeviceSets.Bus_and_one_30_km_h_Car  # type: ignore
     )
     mobility_distance: JsonReference = field(
         default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance  # type: ignore

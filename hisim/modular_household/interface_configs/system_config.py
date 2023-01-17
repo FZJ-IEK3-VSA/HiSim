@@ -32,6 +32,6 @@ class SystemConfig:
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )
-    utsp_connect: bool = False
+    utsp_connect: bool = True
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
-    api_key: str = ""
+    api_key: str = "limited_OXT60O84N9ITLO1CM9CJ1V393QFKOKCN"

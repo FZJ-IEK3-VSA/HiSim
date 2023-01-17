@@ -234,7 +234,6 @@ class Building(dynamic_component.DynamicComponent):
 
         # =================================================================================================================================
         # Initialization of variables
-
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
             self.buildingconfig,

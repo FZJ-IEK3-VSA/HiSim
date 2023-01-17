@@ -7,6 +7,7 @@ from os import path
 import os
 import shutil
 from typing import Any, List, Optional
+import pandas as pd
 
 import hisim.loadtypes as lt
 import hisim.log
@@ -65,6 +66,14 @@ def cleanup_old_result_folders():
             shutil.rmtree(full_path)
 
 
+def get_heating_reference_temperature_from_location(location: str) -> float:
+    converting_data = pd.read_csv(
+        hisim.utils.HISIMPATH["housing_reference_temperatures"]
+    )
+    converting_data.index = converting_data["Location"]
+    return float(converting_data.loc[location]["HeatingReferenceTemperature"])
+
+
 def modular_household_explicit(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: MC0001
@@ -76,7 +85,7 @@ def modular_household_explicit(
     # cleanup_old_result_folders()
 
     # Set simulation parameters
-    year = 2018
+    year = 2019
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
@@ -107,9 +116,10 @@ def modular_household_explicit(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get archetype configuration
-    location = weather.LocationEnum[arche_type_config_.location.value]
+    location = arche_type_config_.location.value
     occupancy_profile = arche_type_config_.occupancy_profile
     building_code = arche_type_config_.building_code
+    floor_area = arche_type_config_.absolute_conditioned_floor_area
     water_heating_system_installed = (
         arche_type_config_.water_heating_system_installed
     )  # Electricity, Hydrogen or False
@@ -179,15 +189,27 @@ def modular_household_explicit(
     consumption.append(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=location)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum[location]
+    )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_weather)
 
     # Build building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_config.building_code = building_code
+    heating_reference_temperature = get_heating_reference_temperature_from_location(
+        location=location
+    )
+    my_building_config = building.BuildingConfig(
+        name="Building_1",
+        heating_reference_temperature_in_celsius=heating_reference_temperature,
+        building_code=building_code,
+        building_heat_capacity_class="medium",
+        initial_internal_temperature_in_celsius=23,
+        absolute_conditioned_floor_area_in_m2=floor_area,
+        total_base_area_in_m2=None,
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

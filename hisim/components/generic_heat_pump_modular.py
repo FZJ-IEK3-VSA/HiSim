@@ -55,7 +55,7 @@ class HeatPumpConfig:
     @staticmethod
     def get_default_config_heating_electric() -> Any:
         config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                water_vs_heating=lt.InandOutputType.HEATING, cooling_considered=False, heating_season_begin=None,
+                                water_vs_heating=lt.InandOutputType.HEATING, cooling_considered=True, heating_season_begin=None,
                                 heating_season_end=None)
         return config
 

@@ -19,16 +19,16 @@ def compute_energy_from_power(power_timeseries: pd.Series, seconds_per_timestep:
     return float(power_timeseries.sum() * seconds_per_timestep / 3.6e6)
 
 def generate_csv_for_database(all_outputs: List, results: pd.DataFrame, simulation_parameters: SimulationParameters) -> None:
-    units_heating = ['Oil', 'Gas', 'Distributed Stream', 'Solar', 'Electricity', 'FuelCell']
-    units_air_cooling = ['Electricity']
-    units_cooking = ['Gas', 'Electricity']
-    units_mobility = ['Diesel', 'Electricity']
-    units_remaining_load = ['Electricity']
+    fuels_heating = ['Oil [l]', 'Gas [kWh]', 'Distributed Stream [kWh]', 'Solar [kWh]', 'Electricity [kWh]', 'FuelCell [kWh]']
+    fuels_air_cooling = ['Electricity [kWh]']
+    fuels_cooking = ['Gas [kWh]', 'Electricity [kWh]']
+    fuels_mobility = ['Diesel [l]', 'Electricity [kWh]']
+    fuels_remaining_load = ['Electricity [kWh]']
 
-    device_index = ['SpaceHeating'] * len(units_heating) + ['WaterHeating'] * len(units_heating) + \
-        ['AirCooling'] * len(units_air_cooling) + ['Cooking'] * len(units_cooking) + ['Transport'] * len(units_mobility) + \
-        ['RemainingLoad'] * len(units_remaining_load)
-    units = units_heating * 2 + units_air_cooling + units_cooking + units_mobility + units_remaining_load
+    device_index = ['SpaceHeating'] * len(fuels_heating) + ['WaterHeating'] * len(fuels_heating) + \
+        ['AirCooling'] * len(fuels_air_cooling) + ['Cooking'] * len(fuels_cooking) + ['Transport'] * len(fuels_mobility) + \
+        ['RemainingLoad'] * len(fuels_remaining_load)
+    units = fuels_heating * 2 + fuels_air_cooling + fuels_cooking + fuels_mobility + fuels_remaining_load
     tuples = list(zip(*[device_index, units]))
 
     csv_frame = pd.Series([0]*len(device_index), index=pd.MultiIndex.from_tuples(tuples, names=['Category', 'Fuel']))

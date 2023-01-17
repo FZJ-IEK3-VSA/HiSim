@@ -21,34 +21,9 @@ from hisim.components import (
     weather,
 )
 from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.system_config import SystemConfig
-from hisim.modular_household.interface_configs.archetype_config import ArcheTypeConfig
-from hisim.modular_household.interface_configs.modular_household_config import (
-    ModularHouseholdConfig,
-)
+from hisim.modular_household.interface_configs.modular_household_config import read_in_configs
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-
-
-def read_in_configs(pathname: str) -> ModularHouseholdConfig:
-    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
-    try:
-        with open(pathname, encoding="utf8") as config_file:
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore
-        hisim.log.information(f"Read modular household config from {pathname}")
-    except Exception:
-        household_config = ModularHouseholdConfig()
-        hisim.log.warning(
-            f"Could not read the modular household config from '{pathname}'. Using a default config instead."
-        )
-
-    # set default configs
-    if household_config.system_config_ is None:
-        household_config.system_config_ = SystemConfig()
-    if household_config.archetype_config_ is None:
-        household_config.archetype_config_ = ArcheTypeConfig()
-
-    return household_config
 
 
 def cleanup_old_result_folders():

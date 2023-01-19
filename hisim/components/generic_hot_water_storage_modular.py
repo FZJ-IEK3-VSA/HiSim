@@ -89,7 +89,7 @@ class StorageConfig:
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (volume * 1e-3 / (4 * np.pi))**(1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
-        surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius) 
+        surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
             name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=surface, u_value=0.36,
             warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,

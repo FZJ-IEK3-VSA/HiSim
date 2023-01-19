@@ -165,6 +165,7 @@ class Weather(Component):
         self.apparent_zenith_list: List[float]
         self.DHI_list: List[float]
         self.dry_bulb_list: List[float]
+        self.daily_average_outside_temperature_list_in_celsius: List[float]
 
     def write_to_report(self):
         """ Write configuration to the report. """
@@ -484,4 +485,3 @@ def calculate_direct_normal_radiation(direct_horizontal_irradation, lon, lat, ze
     if DNI.isnull().values.any():
         raise ValueError("Something went wrong...")
     return DNI
-

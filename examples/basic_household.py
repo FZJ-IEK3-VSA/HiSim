@@ -259,7 +259,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.TemperatureMean,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureIndoorAir,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,

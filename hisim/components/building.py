@@ -215,7 +215,7 @@ class Building(dynamic_component.DynamicComponent):
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
-    MaxWaterMassFlow = "MaxWaterMassFlow"
+    MaxWaterMassFlowRate = "MaxWaterMassFlow"
 
     @utils.measure_execution_time
     def __init__(
@@ -334,7 +334,7 @@ class Building(dynamic_component.DynamicComponent):
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
         )
-        self.max_water_mass_flow_in_kg_per_second = self.calc_max_water_mass_flow(
+        self.max_water_mass_flow_rate_in_kg_per_second = self.calc_max_water_mass_flow_rate(
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt)
@@ -468,10 +468,10 @@ class Building(dynamic_component.DynamicComponent):
             )
         )
 
-        self.max_water_mass_flow_channel: cp.ComponentOutput = (
+        self.max_water_mass_flow_rate_channel: cp.ComponentOutput = (
             self.add_output(
                 self.component_name,
-                self.MaxWaterMassFlow,
+                self.MaxWaterMassFlowRate,
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
             )
@@ -682,8 +682,8 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         stsv.set_output_value(
-            self.max_water_mass_flow_channel,
-            self.max_water_mass_flow_in_kg_per_second,
+            self.max_water_mass_flow_rate_channel,
+            self.max_water_mass_flow_rate_in_kg_per_second,
         )
 
         # Saves solar gains cache
@@ -1649,7 +1649,7 @@ class Building(dynamic_component.DynamicComponent):
 
     # =====================================================================================================================================
     # Calculation of maximal water mass flow for water circulation through heating distribution system and heating water storage 
-    def calc_max_water_mass_flow(
+    def calc_max_water_mass_flow_rate(
         self,
         initial_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,

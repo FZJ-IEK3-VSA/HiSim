@@ -108,6 +108,7 @@ class Weather(Component):
     ApparentZenith = "ApparentZenith"
     WindSpeed = "WindSpeed"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
+    DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
     Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
     Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
@@ -150,6 +151,10 @@ class Weather(Component):
         self.apparent_zenith_output: ComponentOutput = self.add_output(self.component_name, self.ApparentZenith, lt.LoadTypes.ANY, lt.Units.DEGREES)
 
         self.wind_speed_output: ComponentOutput = self.add_output(self.component_name, self.WindSpeed, lt.LoadTypes.SPEED, lt.Units.METER_PER_SECOND)
+
+        self.daily_average_outside_temperature_output : ComponentOutput = self.add_output(self.component_name, self.DailyAverageOutsideTemperatures, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+
+
         self.temperature_list: List[float]
         self.DNI_list: List[float]
         self.DNIextra_list: List[float]
@@ -196,6 +201,7 @@ class Weather(Component):
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
         stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
+        stsv.set_output_value(self.daily_average_outside_temperature_output, self.daily_average_outside_temperature_list_in_celsius[timestep])
 
         # set the temperature forecast
         if self.my_simulation_parameters.predictive_control:
@@ -274,6 +280,8 @@ class Weather(Component):
             database = pd.DataFrame(np.transpose(solardata),
                                     columns=['DNI', 'DHI', 'GHI', 't_out', 'altitude', 'azimuth', 'apparent_zenith', 'DryBulb', 'Wspd', 'DNIextra'])
             database.to_csv(cache_filepath)
+
+        self.calculate_daily_average_outside_temperature(temperaturelist=self.temperature_list, seconds_per_timestep=seconds_per_timestep)
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.my_simulation_parameters.predictive_control:
@@ -354,6 +362,19 @@ class Weather(Component):
     def calc_sun_position2(self, hoy: Any) -> Any:
         """ Calculates the sun position. """
         return self.altitude_list[hoy], self.azimuth_list[hoy]
+
+    def calculate_daily_average_outside_temperature(self, temperaturelist: List[float], seconds_per_timestep: int) -> List[float]:
+        """Calculate the daily average outside temperatures."""
+        timestep_24h = int(24 * 3600 / seconds_per_timestep)
+        total_number_of_timesteps_temperature_list = len(temperaturelist)
+        self.daily_average_outside_temperature_list_in_celsius = []
+        start_index = 0
+        for index in range(0,total_number_of_timesteps_temperature_list):
+            daily_average_temperature = np.mean(temperaturelist[start_index:start_index + timestep_24h])
+            if index == start_index + timestep_24h:
+                start_index = index
+            self.daily_average_outside_temperature_list_in_celsius.append(daily_average_temperature)
+        return self.daily_average_outside_temperature_list_in_celsius
 
 
 def get_coordinates(filepath: str) -> Any:
@@ -463,3 +484,4 @@ def calculate_direct_normal_radiation(direct_horizontal_irradation, lon, lat, ze
     if DNI.isnull().values.any():
         raise ValueError("Something went wrong...")
     return DNI
+

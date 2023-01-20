@@ -964,7 +964,7 @@ class Building(dynamic_component.DynamicComponent):
                 self.scaled_conditioned_floor_area_in_m2 = (
                     self.buildingconfig.absolute_conditioned_floor_area_in_m2
                 )
-                factor_of_absolute_floor_area_to_tabula_floor_area = 1
+                factor_of_absolute_floor_area_to_tabula_floor_area = 1.0
             # scaling conditioned floor area
             else:
                 factor_of_absolute_floor_area_to_tabula_floor_area = (
@@ -983,7 +983,7 @@ class Building(dynamic_component.DynamicComponent):
                 self.scaled_conditioned_floor_area_in_m2 = (
                     self.buildingconfig.total_base_area_in_m2
                 )
-                factor_of_total_base_area_to_tabula_floor_area = 1
+                factor_of_total_base_area_to_tabula_floor_area = 1.0
             # scaling conditioned floor area
             else:
                 factor_of_total_base_area_to_tabula_floor_area = (

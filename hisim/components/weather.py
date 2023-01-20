@@ -371,7 +371,7 @@ class Weather(Component):
         self.daily_average_outside_temperature_list_in_celsius = []
         start_index = 0
         for index in range(0,total_number_of_timesteps_temperature_list):
-            daily_average_temperature = np.mean(temperaturelist[start_index:start_index + timestep_24h])
+            daily_average_temperature = float(np.mean(temperaturelist[start_index:start_index + timestep_24h]))
             if index == start_index + timestep_24h:
                 start_index = index
             self.daily_average_outside_temperature_list_in_celsius.append(daily_average_temperature)

@@ -229,7 +229,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                                                 my_simulation_parameters=my_simulation_parameters)
         my_air_conditioner_controller.connect_input(my_air_conditioner_controller.TemperatureMean,
                                               my_building.component_name,
-                                              my_building.TemperatureMean)
+                                              my_building.TemperatureMeanThermalMass)
 
     my_air_conditioner = air_conditioner.AirConditioner(manufacturer=ac_manufacturer,
                                           name=Model,

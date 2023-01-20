@@ -528,7 +528,8 @@ class HeatPumpController(cp.Component):
     """
 
     # Inputs
-    TemperatureMean = "Residence Temperature"
+    # TemperatureMean = "Residence Temperature"
+    CooledWaterTemperatureFromHeatWaterStorage = "CooledWaterTemperatureFromHeatWaterStorage"
     ElectricityInput = "ElectricityInput"
     DailyAverageOutsideTemperature ="DailyAverageOutsideTemperature"
 
@@ -541,8 +542,10 @@ class HeatPumpController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_residence_temperature_heating_in_celsius: float = 18.0,
-        set_residence_temperature_cooling_in_celsius: float = 26.0,
+        # set_residence_temperature_heating_in_celsius: float = 18.0,
+        # set_residence_temperature_cooling_in_celsius: float = 26.0,
+        set_water_storage_temperature_for_heating_in_celsius: float = 50,
+        set_water_storage_temperature_for_cooling_in_celsius: float = 70,
         set_heating_threshold_temperature_in_celsius: float = 16.0,
         offset: float = 0.0,
         mode: int = 1,
@@ -552,16 +555,26 @@ class HeatPumpController(cp.Component):
             "HeatPumpController", my_simulation_parameters=my_simulation_parameters
         )
         self.build(
-            set_residence_temperature_cooling=set_residence_temperature_cooling_in_celsius,
-            set_residence_temperature_heating=set_residence_temperature_heating_in_celsius,
+            # set_residence_temperature_cooling=set_residence_temperature_cooling_in_celsius,
+            # set_residence_temperature_heating=set_residence_temperature_heating_in_celsius,
+            set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
+            set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
             set_heating_threshold_temperature=set_heating_threshold_temperature_in_celsius,
             offset=offset,
             mode=mode,
         )
 
-        self.temperature_mean_channel: cp.ComponentInput = self.add_input(
+        # self.temperature_mean_channel: cp.ComponentInput = self.add_input(
+        #     self.component_name,
+        #     self.TemperatureMeanThermalMass,
+        #     LoadTypes.TEMPERATURE,
+        #     Units.CELSIUS,
+        #     True,
+        # )
+
+        self.cooled_water_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.TemperatureMean,
+            self.CooledWaterTemperatureFromHeatWaterStorage,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
@@ -584,26 +597,31 @@ class HeatPumpController(cp.Component):
             self.component_name, self.State, LoadTypes.ANY, Units.ANY
         )
 
-        self.add_default_connections(self.get_default_connections_from_building())
+        # self.add_default_connections(self.get_default_connections_from_building())
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-    def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
-        """Get building default connections."""
-        log.information("setting building default connections in Heatpumpcontroller")
-        connections = []
-        building_classname = Building.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatPumpController.TemperatureMean,
-                building_classname,
-                Building.TemperatureMeanThermalMass,
-            )
-        )
-        return connections
+    # def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
+    #     """Get building default connections."""
+    #     log.information("setting building default connections in Heatpumpcontroller")
+    #     connections = []
+    #     building_classname = Building.get_classname()
+    #     connections.append(
+    #         cp.ComponentConnection(
+    #             HeatPumpController.TemperatureMean,
+    #             building_classname,
+    #             Building.TemperatureMeanThermalMass,
+    #         )
+    #     )
+    #     return connections
 
     def build(
-        self, set_residence_temperature_heating: float, set_residence_temperature_cooling: float, set_heating_threshold_temperature: float, offset: float, mode: float
+        self, # set_residence_temperature_heating: float, set_residence_temperature_cooling: float, 
+        set_water_storage_temperature_for_heating_in_celsius: float,
+        set_water_storage_temperature_for_cooling_in_celsius: float,
+        set_heating_threshold_temperature: float, 
+        offset: float,
+        mode: float
     ) -> None:
         """Build function.
 
@@ -614,8 +632,10 @@ class HeatPumpController(cp.Component):
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
         # Configuration
-        self.set_residence_temperature_heating = set_residence_temperature_heating
-        self.set_residence_temperature_cooling = set_residence_temperature_cooling
+        # self.set_residence_temperature_heating = set_residence_temperature_heating
+        # self.set_residence_temperature_cooling = set_residence_temperature_cooling
+        self.set_water_storage_temperature_for_heating_in_celsius = set_water_storage_temperature_for_heating_in_celsius
+        self.set_water_storage_temperature_for_cooling_in_celsius = set_water_storage_temperature_for_cooling_in_celsius
         self.set_heating_threshold_temperature = set_heating_threshold_temperature
         self.offset = offset
 
@@ -654,14 +674,17 @@ class HeatPumpController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            residence_temperature_in_celsius = stsv.get_input_value(self.temperature_mean_channel)
+            # residence_temperature_in_celsius = stsv.get_input_value(self.temperature_mean_channel)
+            cooled_water_storage_temperature_in_celsius = stsv.get_input_value(self.cooled_water_temperature_input_channel)
             electricity_input = stsv.get_input_value(self.electricity_input_channel)
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(self.daily_avg_outside_temperature_input_channel)
 
             if self.mode == 1:
-                self.conditions(residence_temperature_in_celsius=residence_temperature_in_celsius, daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius)
+                self.conditions(cooled_water_storage_temperature_in_celsius=cooled_water_storage_temperature_in_celsius, # residence_temperature_in_celsius=residence_temperature_in_celsius,
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius)
             elif self.mode == 2:
-                self.smart_conditions(residence_temperature_in_celsius, electricity_input)
+                self.smart_conditions(set_temperature=cooled_water_storage_temperature_in_celsius, # residence_temperature_in_celsius, 
+                electricity_input=electricity_input)
 
         if self.controller_heatpumpmode == "heating":
             state = 1
@@ -671,43 +694,76 @@ class HeatPumpController(cp.Component):
             state = 0
         stsv.set_output_value(self.state_channel, state)
 
-    def conditions(self, residence_temperature_in_celsius: float, daily_average_outside_temperature_in_celsius: float) -> None:
+    def conditions(self, daily_average_outside_temperature_in_celsius: float, cooled_water_storage_temperature_in_celsius: float) -> None: # residence_temperature_in_celsius: float ) -> None:
         """Set conditions for the heat pump controller mode."""
-        maximum_heating_set_temperature = self.set_residence_temperature_heating + self.offset
-        minimum_heating_set_temperature = self.set_residence_temperature_heating
-        minimum_cooling_set_temperature = self.set_residence_temperature_cooling - self.offset
-        maximum_cooling_set_temperature = self.set_residence_temperature_cooling
+        # maximum_heating_set_temperature = self.set_residence_temperature_heating + self.offset
+        # minimum_heating_set_temperature = self.set_residence_temperature_heating
+        # minimum_cooling_set_temperature = self.set_residence_temperature_cooling - self.offset
+        # maximum_cooling_set_temperature = self.set_residence_temperature_cooling
+
+        maximum_heating_set_temperature = self.set_water_storage_temperature_for_heating_in_celsius + self.offset
+        minimum_heating_set_temperature = self.set_water_storage_temperature_for_heating_in_celsius
+        minimum_cooling_set_temperature = self.set_water_storage_temperature_for_cooling_in_celsius- self.offset
+        maximum_cooling_set_temperature = self.set_water_storage_temperature_for_cooling_in_celsius
+
+
+        # if self.controller_heatpumpmode == "heating":
+        #     if residence_temperature_in_celsius > maximum_heating_set_temperature and daily_average_outside_temperature_in_celsius > self.set_heating_threshold_temperature:
+        #         self.controller_heatpumpmode = "off"
+        #         return
+        # if self.controller_heatpumpmode == "cooling":
+        #     if residence_temperature_in_celsius < minimum_cooling_set_temperature:
+        #         self.controller_heatpumpmode = "off"
+        #         return
+        # if self.controller_heatpumpmode == "off":
+        #     # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
+        #     if residence_temperature_in_celsius < minimum_heating_set_temperature and daily_average_outside_temperature_in_celsius < self.set_heating_threshold_temperature:
+        #         self.controller_heatpumpmode = "heating"
+        #         return
+        #     if residence_temperature_in_celsius > maximum_cooling_set_temperature:
+        #         return
 
         if self.controller_heatpumpmode == "heating":
-            if residence_temperature_in_celsius > maximum_heating_set_temperature and daily_average_outside_temperature_in_celsius > self.set_heating_threshold_temperature:
+            if cooled_water_storage_temperature_in_celsius > maximum_heating_set_temperature and daily_average_outside_temperature_in_celsius > self.set_heating_threshold_temperature:
                 self.controller_heatpumpmode = "off"
                 return
         if self.controller_heatpumpmode == "cooling":
-            if residence_temperature_in_celsius < minimum_cooling_set_temperature:
+            if cooled_water_storage_temperature_in_celsius < minimum_cooling_set_temperature:
                 self.controller_heatpumpmode = "off"
                 return
         if self.controller_heatpumpmode == "off":
             # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
-            if residence_temperature_in_celsius < minimum_heating_set_temperature and daily_average_outside_temperature_in_celsius < self.set_heating_threshold_temperature:
+            if cooled_water_storage_temperature_in_celsius < minimum_heating_set_temperature and daily_average_outside_temperature_in_celsius < self.set_heating_threshold_temperature:
                 self.controller_heatpumpmode = "heating"
                 return
-            if residence_temperature_in_celsius > maximum_cooling_set_temperature:
+            if cooled_water_storage_temperature_in_celsius > maximum_cooling_set_temperature:
                 return
 
     def smart_conditions(self, set_temperature: float, electricity_input: float) -> None:
         """Set smart conditions for the heat pump controller mode."""
         smart_offset_upper = 3
         smart_offset_lower = 0.5
-        maximum_heating_set_temperature = self.set_residence_temperature_heating + self.offset
+        # maximum_heating_set_temperature = self.set_residence_temperature_heating + self.offset
+        # if electricity_input < 0:
+        #     maximum_heating_set_temperature += smart_offset_upper
+        # # maximum_heating_set_temp = self.t_set_heating
+        # minimum_heating_set_temperature = self.set_residence_temperature_heating
+        # if electricity_input < 0:
+        #     minimum_heating_set_temperature += smart_offset_lower
+        # minimum_cooling_set_temperature = self.set_residence_temperature_cooling - self.offset
+        # # minimum_cooling_set_temp = self.t_set_cooling
+        # maximum_cooling_set_temperature = self.set_residence_temperature_cooling
+
+        maximum_heating_set_temperature = self.set_water_storage_temperature_for_heating_in_celsius + self.offset
         if electricity_input < 0:
             maximum_heating_set_temperature += smart_offset_upper
         # maximum_heating_set_temp = self.t_set_heating
-        minimum_heating_set_temperature = self.set_residence_temperature_heating
+        minimum_heating_set_temperature = self.set_water_storage_temperature_for_heating_in_celsius
         if electricity_input < 0:
             minimum_heating_set_temperature += smart_offset_lower
-        minimum_cooling_set_temperature = self.set_residence_temperature_cooling - self.offset
+        minimum_cooling_set_temperature = self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
         # minimum_cooling_set_temp = self.t_set_cooling
-        maximum_cooling_set_temperature = self.set_residence_temperature_cooling
+        maximum_cooling_set_temperature = self.set_water_storage_temperature_for_cooling_in_celsius
 
         if self.controller_heatpumpmode == "heating":  # and daily_avg_temp < 15:
             if set_temperature > maximum_heating_set_temperature:  # 23

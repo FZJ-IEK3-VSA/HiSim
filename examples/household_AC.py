@@ -206,7 +206,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         pid_controller=PIDcontroller.PIDController(my_simulation_parameters=my_simulation_parameters,ki=ki, kp=kp, kd=kd)
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                               my_building.component_name,
-                                              my_building.TemperatureMean)
+                                              my_building.TemperatureMeanThermalMass)
         # pid_controller.connect_input(pid_controller.TemperatureMeanPrev,
         #                                       my_building.component_name,
         #                                       my_building.TemperatureMeanPrev)

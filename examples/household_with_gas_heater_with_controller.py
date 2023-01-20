@@ -179,22 +179,11 @@ def household_gas_heater(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.MeanWaterTemperatureDistributionInput,
-        my_gasheater.component_name,
-        my_gasheater.MeanWaterTemperatureBoilerOutput,
-    )
-
-    my_heat_distribution.connect_input(
         my_heat_distribution.HeatedWaterTemperatureInput,
         my_gasheater.component_name,
         my_gasheater.HeatedWaterTemperatureBoilerOutput,
     )
 
-    my_heat_distribution.connect_input(
-        my_heat_distribution.GasPower,
-        my_gasheater.component_name,
-        my_gasheater.GasPower,
-    )
     my_heat_distribution.connect_input(
         my_heat_distribution.MaxWaterMassFlowRate,
         my_gasheater.component_name,
@@ -203,19 +192,13 @@ def household_gas_heater(
     my_heat_distribution.connect_input(
         my_heat_distribution.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureMeanThermalMass
     )
 
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMean,
-    )
-
-    my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.ControlSignalFromHeater,
-        my_gasheater.component_name,
-        my_gasheater.ControlSignalfromHeaterToDistribution,
+        my_building.TemperatureMeanThermalMass,
     )
 
     # =================================================================================================================================

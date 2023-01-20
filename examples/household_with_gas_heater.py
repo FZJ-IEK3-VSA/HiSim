@@ -196,7 +196,7 @@ def household_gas_heater(
     my_controller_heat.connect_input(
         my_controller_heat.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureMeanThermalMass,
     )
 
     # =================================================================================================================================

@@ -11,6 +11,7 @@ from hisim.component import (
     ComponentOutput,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
 # from hisim import log
@@ -228,8 +229,7 @@ class HeatingWaterStorage(cp.Component):
 
         The function sets important constants an parameters for the calculations.
         """
-        # TODO: get cw form physicsconfig
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = 4184
+        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         self.density_water_at_60_degree_celsius_in_kg_per_liter = 0.98
         self.water_mass_in_storage_in_kg = (
             self.density_water_at_60_degree_celsius_in_kg_per_liter

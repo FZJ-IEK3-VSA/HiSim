@@ -7,6 +7,7 @@ from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
+from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
@@ -157,7 +158,7 @@ class HeatDistribution(cp.Component):
 
         The function sets important constants and parameters for the calculations.
         """
-        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = 4184
+        self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

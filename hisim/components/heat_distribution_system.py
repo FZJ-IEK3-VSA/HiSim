@@ -1,7 +1,9 @@
 """Heat Distribution Module."""
 # clean
 # Owned
-from typing import List
+from typing import List, Any
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
@@ -19,6 +21,46 @@ __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
 
 
+@dataclass_json
+@dataclass
+class HeatDistributionConfig(cp.ConfigBase):
+
+    """Configuration of the HeatingWaterStorage class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return HeatDistribution.get_full_classname()
+
+    name: str
+    water_temperature_in_distribution_system_in_celsius : float
+
+    @classmethod
+    def get_default_heatdistributionsystem_config(
+        cls,
+    ) -> Any:
+        """Get a default heat distribution system config."""
+        config = HeatDistributionConfig(
+            name="HeatDistributionSystem",
+        water_temperature_in_distribution_system_in_celsius=40,
+        )
+        return config
+
+
+
+class HeatDistributionState:
+
+    """HeatDistributionState."""
+
+    def __init__(self, water_temperature_in_distribution_system_in_celsius: float) -> None:
+        """Construct all the necessary attributes."""
+        self.water_temperature_in_distribution_system_in_celsius = water_temperature_in_distribution_system_in_celsius
+    def clone(self) -> Any:
+        """Save previous state."""
+        return HeatDistributionState(water_temperature_in_distribution_system_in_celsius = self.water_temperature_in_distribution_system_in_celsius)
+
+
+
 class HeatDistribution(cp.Component):
 
     """Heat Distribution System.
@@ -29,14 +71,13 @@ class HeatDistribution(cp.Component):
 
     # Inputs
     State = "State"
-    MeanWaterTemperatureDistributionInput = "MeanWaterTemperatureDistributionInput"
     ResidenceTemperature = "ResidenceTemperature"
-    HeatedWaterTemperatureDistributionInput = "HeatedWaterTemperatureDistributionInput"
-    GasPower = "GasPower"
-    MaxMassFlow = "MaxMassFlow"
+    HeatedWaterTemperatureInput = "HeatedWaterTemperatureInput"
+    MaxWaterMassFlowRate = "MaxWaterMassFlowRate"
+
     # Outputs
-    CooledWaterTemperatureDistributionOutput = (
-        "CooledWaterTemperatureDistributionOutput"
+    CooledWaterTemperatureOutput = (
+        "CooledWaterTemperatureOutput"
     )
     ThermalPowerDelivered = "ThermalPowerDelivered"
 
@@ -45,21 +86,21 @@ class HeatDistribution(cp.Component):
     @utils.measure_execution_time
     def __init__(
         self,
+        config: HeatDistributionConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "HeatDistributionSystem", my_simulation_parameters=my_simulation_parameters
+            name=config.name, my_simulation_parameters=my_simulation_parameters
         )
+        self.heat_distribution_system_config = config
+        self.state = HeatDistributionState(self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius)
         self.state_controller: float = 0.0
-        self.gas_power_in_watt: float = 0.0
-        self.mean_residence_temperature_in_celsius: float = 0.0
-        self.mean_water_temperature_distribution_input_in_celsius: float = 35.0
-        self.heated_water_temperature_distribution_input_in_celsius: float = 35.0
-        self.max_mass_flow_in_kg_per_second: float = 0.0
+        self.residence_temperature_in_celsius: float = 0.0
+        self.heated_water_temperature_input_in_celsius: float = 0
+        self.max_water_mass_flow_rate_in_kg_per_second: float = 0.0
         self.heat_gain_for_building_in_watt: float = 0.0
-        self.remaining_thermal_power_in_water_in_watt: float = 0.0
-        self.cooled_water_temperature_return_to_water_boiler_in_celsius: float = 35.0
+        self.cooled_water_temperature_output_in_celsius: float = 0
         self.build()
 
         # Inputs
@@ -67,53 +108,33 @@ class HeatDistribution(cp.Component):
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
-
-        self.mean_water_temperature_distribution_input_channel: cp.ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.MeanWaterTemperatureDistributionInput,
-                lt.LoadTypes.TEMPERATURE,
-                lt.Units.CELSIUS,
-                True,
-            )
-        )
-
-        self.max_mass_flow_channel: cp.ComponentInput = self.add_input(
+        self.max_water_mass_flow_rate_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.MaxMassFlow,
+            self.MaxWaterMassFlowRate,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             True,
         )
-
-        self.gas_power_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.GasPower,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            True,
-        )
-
-        self.mean_residence_temperature_channel: cp.ComponentInput = self.add_input(
+        self.residence_temperature_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ResidenceTemperature,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
         )
-        self.heated_water_temperature_distribution_input_channel: cp.ComponentInput = (
+        self.heated_water_temperature_input_channel: cp.ComponentInput = (
             self.add_input(
                 self.component_name,
-                self.HeatedWaterTemperatureDistributionInput,
+                self.HeatedWaterTemperatureInput,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
                 True,
             )
         )
         # Outputs
-        self.cooled_water_temperature_distribution_output_channel: cp.ComponentOutput = self.add_output(
+        self.cooled_water_temperature_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.CooledWaterTemperatureDistributionOutput,
+            self.CooledWaterTemperatureOutput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
         )
@@ -162,61 +183,55 @@ class HeatDistribution(cp.Component):
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
         self.state_controller = stsv.get_input_value(self.state_channel)
-        self.gas_power_in_watt = stsv.get_input_value(self.gas_power_channel)
-        self.mean_residence_temperature_in_celsius = stsv.get_input_value(
-            self.mean_residence_temperature_channel
+        self.residence_temperature_in_celsius = stsv.get_input_value(
+            self.residence_temperature_channel
         )
-        self.mean_water_temperature_distribution_input_in_celsius = (
-            stsv.get_input_value(self.mean_water_temperature_distribution_input_channel)
+        self.heated_water_temperature_input_in_celsius = stsv.get_input_value(
+            self.heated_water_temperature_input_channel
         )
-        self.heated_water_temperature_distribution_input_in_celsius = (
-            stsv.get_input_value(
-                self.heated_water_temperature_distribution_input_channel
-            )
-        )
-        self.max_mass_flow_in_kg_per_second = stsv.get_input_value(
-            self.max_mass_flow_channel
+        self.max_water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
+            self.max_water_mass_flow_rate_channel
         )
         # Calculations ----------------------------------------------------------------------------------------------------------
-
+        self.state.water_temperature_in_distribution_system_in_celsius = self.heated_water_temperature_input_in_celsius
         if self.state_controller == 1:
 
             self.calculate_heat_gain_for_building(
-                self.max_mass_flow_in_kg_per_second,
-                self.heated_water_temperature_distribution_input_in_celsius,
-                self.mean_residence_temperature_in_celsius,
+                self.max_water_mass_flow_rate_in_kg_per_second,
+                self.heated_water_temperature_input_in_celsius,
+                self.residence_temperature_in_celsius,
             )
 
-            self.calculate_remaining_thermal_power()
-
-            self.calculate_cooled_water_temperature_after_heat_exchange_with_building(
-                self.max_mass_flow_in_kg_per_second,
-                self.mean_water_temperature_distribution_input_in_celsius,
+            self.determine_cooled_water_temperature_after_heat_exchange_with_building(
+                self.residence_temperature_in_celsius,
             )
 
         elif self.state_controller == 0:
 
-            self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
-                self.heated_water_temperature_distribution_input_in_celsius
+            self.cooled_water_temperature_output_in_celsius = (
+                self.heated_water_temperature_input_in_celsius
             )
 
             self.heat_gain_for_building_in_watt = 0.0
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
         stsv.set_output_value(
-            self.cooled_water_temperature_distribution_output_channel,
-            self.cooled_water_temperature_return_to_water_boiler_in_celsius,
+            self.cooled_water_temperature_output_channel,
+            self.cooled_water_temperature_output_in_celsius,
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
             self.heat_gain_for_building_in_watt,
         )
 
+        self.state.water_temperature_in_distribution_system_in_celsius = self.cooled_water_temperature_output_in_celsius
+
+
     def calculate_heat_gain_for_building(
         self,
         max_water_mass_flow_in_kg_per_second,
         heated_water_temperature_in_celsius,
-        mean_residence_temperature_in_celsius,
+        residence_temperature_in_celsius,
     ):
         """Calculate heat gain for the building from heat distribution system."""
         self.heat_gain_for_building_in_watt = (
@@ -224,31 +239,15 @@ class HeatDistribution(cp.Component):
             * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
             * (
                 heated_water_temperature_in_celsius
-                - mean_residence_temperature_in_celsius
+                - residence_temperature_in_celsius
             )
         )
 
-    def calculate_remaining_thermal_power(self):
-        """Calculate the thermal power of the water that is left after the heat exchange with the building."""
-
-        self.remaining_thermal_power_in_water_in_watt = (
-            self.gas_power_in_watt - self.heat_gain_for_building_in_watt
-        )
-
-    def calculate_cooled_water_temperature_after_heat_exchange_with_building(
-        self, max_water_mass_flow_in_kg_per_second, mean_water_temperature_in_celsius
+    def determine_cooled_water_temperature_after_heat_exchange_with_building(
+        self, residence_temperature_in_celsius
     ):
-        """Calculate cooled water temperature after heat exchange between heat distribution system and building.
-
-        Based on the formular remaining_power = max_mass_flow * heat_capacity * (remaining_water_temperature - initial_water_temperature).
-        """
-        self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
-            self.remaining_thermal_power_in_water_in_watt
-            / (
-                max_water_mass_flow_in_kg_per_second
-                * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            )
-        ) + mean_water_temperature_in_celsius
+        """Calculate cooled water temperature after heat exchange between heat distribution system and building."""
+        self.cooled_water_temperature_output_in_celsius = residence_temperature_in_celsius
 
 
 class HeatDistributionController(cp.Component):
@@ -262,7 +261,6 @@ class HeatDistributionController(cp.Component):
     """
 
     # Inputs
-    ControlSignalFromHeater = "ControlSignalFromHeater"
     ResidenceTemperature = "ResidenceTemperature"
     # Outputs
     State = "State"
@@ -287,14 +285,8 @@ class HeatDistributionController(cp.Component):
             set_min_heating_temperature_residence_in_celsius=min_heating_temperature_building_in_celsius,
             mode=mode,
         )
-        self.control_signal_from_heater_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.ControlSignalFromHeater,
-            lt.LoadTypes.ANY,
-            lt.Units.ANY,
-            True,
-        )
-        self.mean_residence_temperature_channel: cp.ComponentInput = self.add_input(
+
+        self.residence_temperature_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ResidenceTemperature,
             lt.LoadTypes.TEMPERATURE,
@@ -320,7 +312,7 @@ class HeatDistributionController(cp.Component):
             cp.ComponentConnection(
                 HeatDistributionController.ResidenceTemperature,
                 building_classname,
-                Building.TemperatureMean,
+                Building.TemperatureMeanThermalMass,
             )
         )
         return connections
@@ -339,7 +331,7 @@ class HeatDistributionController(cp.Component):
         self.previous_controller_gas_valve_mode = self.controller_heat_distribution_mode
 
         # Configuration
-        self.set_min_heating_temperature_residence_in_celsius = (
+        self.set_residence_temperature_in_celsius = (
             set_min_heating_temperature_residence_in_celsius
         )
         self.mode = mode
@@ -365,7 +357,7 @@ class HeatDistributionController(cp.Component):
         lines = []
         lines.append("Heat Distribution Controller")
         # todo: add more useful stuff here
-        lines.append("Set Temperature of Residence [°C]: " + str(self.set_min_heating_temperature_residence_in_celsius))
+        lines.append("Set Temperature of Residence [°C]: " + str(self.set_residence_temperature_in_celsius))
         return lines
 
     def i_simulate(
@@ -373,40 +365,36 @@ class HeatDistributionController(cp.Component):
     ) -> None:
         """Simulate the heat distribution controller."""
         # Retrieves inputs
-        mean_residence_temperature_in_celsius = stsv.get_input_value(
-            self.mean_residence_temperature_channel
+        residence_temperature_in_celsius = stsv.get_input_value(
+            self.residence_temperature_channel
         )
 
-        control_signal_from_heater = stsv.get_input_value(
-            self.control_signal_from_heater_channel
-        )
 
         if self.mode == 1:
             self.conditions_for_opening_or_shutting_heat_distribution(
-                mean_residence_temperature_in_celsius
+                residence_temperature_in_celsius
             )
 
-        if control_signal_from_heater == 1:
-            if self.controller_heat_distribution_mode == "open":
-                self.state_controller = 1
-
+        if self.controller_heat_distribution_mode == "open":
+            self.state_controller = 1
         else:
             self.state_controller = 0
+
         stsv.set_output_value(self.state_channel, self.state_controller)
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
-        mean_residence_temperature: float,
+        residence_temperature_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
-        min_residence_set_temperature = (
-            self.set_min_heating_temperature_residence_in_celsius
+        set_residence_temperature_in_celsius = (
+            self.set_residence_temperature_in_celsius
         )
 
-        if mean_residence_temperature >= min_residence_set_temperature:
+        if residence_temperature_in_celsius >= set_residence_temperature_in_celsius:
             self.controller_heat_distribution_mode = "close"
             return
 
-        if mean_residence_temperature < min_residence_set_temperature:
+        if residence_temperature_in_celsius < set_residence_temperature_in_celsius:
             self.controller_heat_distribution_mode = "open"
             return

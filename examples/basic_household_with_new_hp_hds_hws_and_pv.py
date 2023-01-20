@@ -22,7 +22,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def basic_household_explicit(
+def basic_household_new(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Basic household example.
@@ -79,9 +79,8 @@ def basic_household_explicit(
     # Set Heat Pump Controller
     # set_residence_temperature_heating_in_celsius = 19.0
     # set_residence_temperature_cooling_in_celsius = 24.0
-    set_water_storage_temperature_for_heating_in_celsius = 60
-    set_water_storage_temperature_for_cooling_in_celsius = 70
-    set_heating_threshold_temperature = 16.0
+    set_water_storage_temperature_for_heating_in_celsius = 55
+    set_water_storage_temperature_for_cooling_in_celsius = 65
     offset = 0.5
     hp_mode = 2
 
@@ -93,7 +92,7 @@ def basic_household_explicit(
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
-    volume_heating_water_storage_in_liter = 1000
+    volume_heating_water_storage_in_liter = 100
     water_temperature_in_storage_in_celsius = 60
 
     # Set Heat Distribution System
@@ -103,6 +102,8 @@ def basic_household_explicit(
     # Set Heat Distribution Controller
 
     min_heating_temperature_building_in_celsius = 20
+    min_heating_temperature_water_storage_in_celsius = 55
+    set_heating_threshold_temperature = 16.0
     mode = 1
 
     # =================================================================================================================================
@@ -176,7 +177,6 @@ def basic_household_explicit(
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(
         set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
-        set_heating_threshold_temperature_in_celsius=set_heating_threshold_temperature,
         offset=offset,
         mode=hp_mode,
         my_simulation_parameters=my_simulation_parameters,
@@ -218,6 +218,8 @@ def basic_household_explicit(
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         min_heating_temperature_building_in_celsius=min_heating_temperature_building_in_celsius,
+        min_heating_temperature_heat_water_storage_in_celsius=min_heating_temperature_water_storage_in_celsius,
+        set_heating_threshold_temperature_in_celsius=set_heating_threshold_temperature,
         mode=mode,
     )
     # =================================================================================================================================
@@ -317,11 +319,6 @@ def basic_household_explicit(
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.DailyAverageOutsideTemperature,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
-    )
 
     my_heat_pump.connect_input(
         my_heat_pump.State,
@@ -369,13 +366,21 @@ def basic_household_explicit(
         my_building.component_name,
         my_building.TemperatureIndoorAir,
     )
-
+    my_heat_distribution_controller.connect_input(
+        my_heat_distribution_controller.WaterTemperatureFromHeatWaterStorage,
+        my_simple_heat_water_storage.component_name,
+        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
+    )
+    my_heat_distribution_controller.connect_input(
+        my_heat_distribution_controller.DailyAverageOutsideTemperature,
+        my_weather.component_name,
+        my_weather.DailyAverageOutsideTemperatures,
+    )
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.State,
         my_heat_distribution_controller.component_name,
         my_heat_distribution_controller.State,
     )
-
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.ResidenceTemperature,
         my_building.component_name,

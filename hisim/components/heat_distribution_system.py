@@ -223,6 +223,11 @@ class HeatDistribution(cp.Component):
             self.heat_gain_for_building_in_watt = 0.0
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
+        self.state.water_temperature_in_distribution_system_in_celsius = (
+            self.cooled_water_temperature_output_in_celsius
+        )
+        # log.information("hsd cooled water temperature " + str(self.cooled_water_temperature_output_in_celsius))
+        # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt) + "\n")
         stsv.set_output_value(
             self.cooled_water_temperature_output_channel,
             self.cooled_water_temperature_output_in_celsius,
@@ -232,9 +237,7 @@ class HeatDistribution(cp.Component):
             self.heat_gain_for_building_in_watt,
         )
 
-        self.state.water_temperature_in_distribution_system_in_celsius = (
-            self.cooled_water_temperature_output_in_celsius
-        )
+
 
     def calculate_heat_gain_for_building(
         self,
@@ -270,6 +273,8 @@ class HeatDistributionController(cp.Component):
 
     # Inputs
     ResidenceTemperature = "ResidenceTemperature"
+    WaterTemperatureFromHeatWaterStorage = "WaterTemperatureFromHeatWaterStorage"
+    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
     # Outputs
     State = "State"
 
@@ -280,6 +285,8 @@ class HeatDistributionController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         min_heating_temperature_building_in_celsius: float = 0.0,
+        min_heating_temperature_heat_water_storage_in_celsius: float = 0.0,
+        set_heating_threshold_temperature_in_celsius: float = 16.0,
         mode: int = 1,
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -291,6 +298,8 @@ class HeatDistributionController(cp.Component):
         self.start_timestep: int = 0
         self.build(
             set_min_heating_temperature_residence_in_celsius=min_heating_temperature_building_in_celsius,
+            set_min_heating_temperature_water_storage_in_celsius=min_heating_temperature_heat_water_storage_in_celsius,
+            set_heating_threshold_temperature=set_heating_threshold_temperature_in_celsius,
             mode=mode,
         )
 
@@ -300,6 +309,23 @@ class HeatDistributionController(cp.Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
+        )
+
+        self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterTemperatureFromHeatWaterStorage,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+        self.daily_avg_outside_temperature_input_channel: cp.ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.DailyAverageOutsideTemperature,
+                lt.LoadTypes.TEMPERATURE,
+                lt.Units.CELSIUS,
+                False,
+            )
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
@@ -328,6 +354,8 @@ class HeatDistributionController(cp.Component):
     def build(
         self,
         set_min_heating_temperature_residence_in_celsius: float,
+        set_min_heating_temperature_water_storage_in_celsius: float,
+        set_heating_threshold_temperature: float,
         mode: int,
     ) -> None:
         """Build function.
@@ -342,6 +370,10 @@ class HeatDistributionController(cp.Component):
         self.set_residence_temperature_in_celsius = (
             set_min_heating_temperature_residence_in_celsius
         )
+        self.set_water_storage_temperature_in_celsius = (
+            set_min_heating_temperature_water_storage_in_celsius
+        )
+        self.set_heating_threshold_temperature = set_heating_threshold_temperature
         self.mode = mode
 
     def i_prepare_simulation(self) -> None:
@@ -379,10 +411,18 @@ class HeatDistributionController(cp.Component):
         residence_temperature_in_celsius = stsv.get_input_value(
             self.residence_temperature_channel
         )
+        water_temperature_input = stsv.get_input_value(
+            self.water_temperature_input_channel
+        )
+        daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
+                self.daily_avg_outside_temperature_input_channel
+            )
 
         if self.mode == 1:
             self.conditions_for_opening_or_shutting_heat_distribution(
-                residence_temperature_in_celsius
+                residence_temperature_in_celsius=residence_temperature_in_celsius,
+                water_temperature_in_celsius=water_temperature_input,
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
             )
 
         if self.controller_heat_distribution_mode == "open":
@@ -395,14 +435,18 @@ class HeatDistributionController(cp.Component):
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
         residence_temperature_in_celsius: float,
+        water_temperature_in_celsius: float,
+        daily_average_outside_temperature_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
         set_residence_temperature_in_celsius = self.set_residence_temperature_in_celsius
+        set_water_storage_temperature_in_celsius = self.set_water_storage_temperature_in_celsius
 
-        if residence_temperature_in_celsius >= set_residence_temperature_in_celsius:
-            self.controller_heat_distribution_mode = "close"
-            return
-
-        if residence_temperature_in_celsius < set_residence_temperature_in_celsius:
-            self.controller_heat_distribution_mode = "open"
-            return
+        if self.controller_heat_distribution_mode == "open": 
+            if residence_temperature_in_celsius >= set_residence_temperature_in_celsius and water_temperature_in_celsius < set_water_storage_temperature_in_celsius and daily_average_outside_temperature_in_celsius > self.set_heating_threshold_temperature:
+                self.controller_heat_distribution_mode = "close"
+                return
+        if self.controller_heat_distribution_mode == "close":
+            if residence_temperature_in_celsius < set_residence_temperature_in_celsius and water_temperature_in_celsius >= set_water_storage_temperature_in_celsius and daily_average_outside_temperature_in_celsius < self.set_heating_threshold_temperature:
+                self.controller_heat_distribution_mode = "open"
+                return

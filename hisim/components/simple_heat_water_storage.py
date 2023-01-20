@@ -14,7 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-# from hisim import log
+from hisim import log
 
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -51,7 +51,7 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
         """Get a default heatingwaterstorage config."""
         config = HeatingWaterStorageConfig(
             name="HeatingWaterStorage",
-            water_temperature_in_storage_in_celsius=40,
+            water_temperature_in_storage_in_celsius=60,
             volume_heating_water_storage_in_liter=1000,
         )
         return config
@@ -212,17 +212,16 @@ class HeatingWaterStorage(cp.Component):
             previous_mean_water_temperature_in_water_storage_in_celsius=start_water_temperature_in_storage_in_celsius,
             seconds_per_timestep=self.seconds_per_timestep,
         )
-
-        # Set outputs -------------------------------------------------------------------------------------------------------
-
-        stsv.set_output_value(
-            self.mean_water_temperature_water_storage_output_channel,
-            self.mean_water_temperature_in_water_storage_in_celsius,
-        )
-
         self.state.water_temperature_in_storage_in_celsius = (
             self.mean_water_temperature_in_water_storage_in_celsius
         )
+        # Set outputs -------------------------------------------------------------------------------------------------------
+        # log.information("hws mean water temp " + str(self.state.water_temperature_in_storage_in_celsius)  + "\n")
+        stsv.set_output_value(
+            self.mean_water_temperature_water_storage_output_channel,
+            self.state.water_temperature_in_storage_in_celsius,
+        )
+
 
     def build(self):
         """Build function.

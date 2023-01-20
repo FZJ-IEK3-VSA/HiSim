@@ -543,7 +543,9 @@ class GenericHeatPump(cp.Component):
             self.heated_water_temperature_output_channel,
             self.heated_water_temperature_in_celsius,
         )
-
+        # log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
+        # log.information("hp heating power " + str(self.state.heating_power_in_watt))
+        # log.information("hp heated water temperature " + str(self.heated_water_temperature_in_celsius) + "\n")
     def process_thermal(self, ws_in: float) -> None:
         """Process thermal."""
         pass
@@ -613,7 +615,7 @@ class HeatPumpController(cp.Component):
         "CooledWaterTemperatureFromHeatWaterStorage"
     )
     ElectricityInput = "ElectricityInput"
-    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+
 
     # Outputs
     State = "State"
@@ -628,7 +630,6 @@ class HeatPumpController(cp.Component):
         # set_residence_temperature_cooling_in_celsius: float = 26.0,
         set_water_storage_temperature_for_heating_in_celsius: float = 50,
         set_water_storage_temperature_for_cooling_in_celsius: float = 70,
-        set_heating_threshold_temperature_in_celsius: float = 16.0,
         offset: float = 0.0,
         mode: int = 1,
     ) -> None:
@@ -641,7 +642,6 @@ class HeatPumpController(cp.Component):
             # set_residence_temperature_heating=set_residence_temperature_heating_in_celsius,
             set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
             set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
-            set_heating_threshold_temperature=set_heating_threshold_temperature_in_celsius,
             offset=offset,
             mode=mode,
         )
@@ -668,15 +668,7 @@ class HeatPumpController(cp.Component):
             Units.WATT,
             False,
         )
-        self.daily_avg_outside_temperature_input_channel: cp.ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.DailyAverageOutsideTemperature,
-                LoadTypes.TEMPERATURE,
-                Units.CELSIUS,
-                False,
-            )
-        )
+
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, LoadTypes.ANY, Units.ANY
         )
@@ -703,7 +695,6 @@ class HeatPumpController(cp.Component):
         self,  # set_residence_temperature_heating: float, set_residence_temperature_cooling: float,
         set_water_storage_temperature_for_heating_in_celsius: float,
         set_water_storage_temperature_for_cooling_in_celsius: float,
-        set_heating_threshold_temperature: float,
         offset: float,
         mode: float,
     ) -> None:
@@ -724,7 +715,6 @@ class HeatPumpController(cp.Component):
         self.set_water_storage_temperature_for_cooling_in_celsius = (
             set_water_storage_temperature_for_cooling_in_celsius
         )
-        self.set_heating_threshold_temperature = set_heating_threshold_temperature
         self.offset = offset
 
         self.mode = mode
@@ -767,15 +757,11 @@ class HeatPumpController(cp.Component):
                 self.cooled_water_temperature_input_channel
             )
             electricity_input = stsv.get_input_value(self.electricity_input_channel)
-            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-                self.daily_avg_outside_temperature_input_channel
-            )
 
             if self.mode == 1:
                 self.conditions(
                     cooled_water_storage_temperature_in_celsius=cooled_water_storage_temperature_in_celsius,
                     # residence_temperature_in_celsius=residence_temperature_in_celsius,
-                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
                 )
             elif self.mode == 2:
                 self.smart_conditions(
@@ -794,7 +780,6 @@ class HeatPumpController(cp.Component):
 
     def conditions(
         self,
-        daily_average_outside_temperature_in_celsius: float,
         cooled_water_storage_temperature_in_celsius: float,
     ) -> None:  # residence_temperature_in_celsius: float ) -> None:
         """Set conditions for the heat pump controller mode."""
@@ -838,8 +823,6 @@ class HeatPumpController(cp.Component):
             if (
                 cooled_water_storage_temperature_in_celsius
                 > maximum_heating_set_temperature
-                and daily_average_outside_temperature_in_celsius
-                > self.set_heating_threshold_temperature
             ):
                 self.controller_heatpumpmode = "off"
                 return
@@ -855,8 +838,6 @@ class HeatPumpController(cp.Component):
             if (
                 cooled_water_storage_temperature_in_celsius
                 < minimum_heating_set_temperature
-                and daily_average_outside_temperature_in_celsius
-                < self.set_heating_threshold_temperature
             ):
                 self.controller_heatpumpmode = "heating"
                 return
@@ -864,6 +845,7 @@ class HeatPumpController(cp.Component):
                 cooled_water_storage_temperature_in_celsius
                 > maximum_cooling_set_temperature
             ):
+                self.controller_heatpumpmode = "cooling"
                 return
 
     def smart_conditions(

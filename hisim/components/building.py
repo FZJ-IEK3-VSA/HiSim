@@ -208,7 +208,6 @@ class Building(dynamic_component.DynamicComponent):
     TemperatureOutside = "TemperatureOutside"
 
     # Outputs
-    InitialInternalTemperature = "InitialInternalTemperature"
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
     TemperatureInternalSurface = "TemperatureInternalSurface"
     TemperatureIndoorAir = "TemperatureIndoorAir"
@@ -422,14 +421,6 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         # Output channels
-
-        self.initial_internal_temperature_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.InitialInternalTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-        )
-
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TemperatureMeanThermalMass,
@@ -654,10 +645,6 @@ class Building(dynamic_component.DynamicComponent):
 
         # Returns outputs
         stsv.set_output_value(
-            self.initial_internal_temperature_channel,
-            self.buildingconfig.initial_internal_temperature_in_celsius,
-        )
-        stsv.set_output_value(
             self.thermal_mass_temperature_channel,
             thermal_mass_average_bulk_temperature_in_celsius,
         )
@@ -699,7 +686,10 @@ class Building(dynamic_component.DynamicComponent):
                     decimal=".",
                     index=False,
                 )
-
+        # log.information("building timestep " + str(timestep))
+        # log.information("building heat loss " + str(heat_loss_in_watt))
+        # log.information("building max mass flow " + str(self.max_water_mass_flow_rate_in_kg_per_second))
+        # log.information("building indoor air temperature " + str(indoor_air_temp) + "\n")
     # =================================================================================================================================
 
     def i_save_state(

@@ -43,7 +43,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            water_temperature_in_distribution_system_in_celsius=40,
+            water_temperature_in_distribution_system_in_celsius=60,
         )
         return config
 

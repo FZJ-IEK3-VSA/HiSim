@@ -80,6 +80,7 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
+from hisim.components.configuration import PhysicsConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -1664,7 +1665,7 @@ class Building(dynamic_component.DynamicComponent):
         max_thermal_building_demand_in_watt: float,
     ) -> Any:
         """Calculate maximal water mass flow."""
-        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = 4184
+        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         max_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (
             specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
             * (

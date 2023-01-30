@@ -691,6 +691,7 @@ class Building(dynamic_component.DynamicComponent):
         # log.information("building heat loss " + str(heat_loss_in_watt))
         # log.information("building max mass flow " + str(self.max_water_mass_flow_rate_in_kg_per_second))
         # log.information("building indoor air temperature " + str(indoor_air_temp) + "\n")
+
     # =================================================================================================================================
 
     def i_save_state(
@@ -1393,7 +1394,10 @@ class Building(dynamic_component.DynamicComponent):
             - (self.effective_mass_area_in_m2 / self.total_internal_surface_area_in_m2)
             - (
                 self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
-                / (self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin * self.total_internal_surface_area_in_m2)
+                / (
+                    self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
+                    * self.total_internal_surface_area_in_m2
+                )
             )
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
@@ -1405,7 +1409,10 @@ class Building(dynamic_component.DynamicComponent):
         # Heat loss in W, before labeled Phi_loss
         self.heat_loss_in_watt = (
             self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
-            / (self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin * self.total_internal_surface_area_in_m2)
+            / (
+                self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
+                * self.total_internal_surface_area_in_m2
+            )
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
         return self.heat_loss_in_watt
 
@@ -1665,7 +1672,9 @@ class Building(dynamic_component.DynamicComponent):
         max_thermal_building_demand_in_watt: float,
     ) -> Any:
         """Calculate maximal water mass flow."""
-        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
+            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        )
         max_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (
             specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
             * (

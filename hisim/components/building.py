@@ -1392,7 +1392,7 @@ class Building(dynamic_component.DynamicComponent):
             - (self.effective_mass_area_in_m2 / self.total_internal_surface_area_in_m2)
             - (
                 self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
-                / (9.1 * self.total_internal_surface_area_in_m2)
+                / (self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin * self.total_internal_surface_area_in_m2)
             )
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
@@ -1404,7 +1404,7 @@ class Building(dynamic_component.DynamicComponent):
         # Heat loss in W, before labeled Phi_loss
         self.heat_loss_in_watt = (
             self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
-            / (9.1 * self.total_internal_surface_area_in_m2)
+            / (self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin * self.total_internal_surface_area_in_m2)
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
         return self.heat_loss_in_watt
 

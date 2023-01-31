@@ -409,31 +409,34 @@ class HeatDistributionController(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the heat distribution controller."""
-        # Retrieves inputs
-        residence_temperature_in_celsius = stsv.get_input_value(
-            self.residence_temperature_channel
-        )
-        water_temperature_input = stsv.get_input_value(
-            self.water_temperature_input_channel
-        )
-        daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
-                self.daily_avg_outside_temperature_input_channel
-            )
-
-        if self.mode == 1:
-            self.conditions_for_opening_or_shutting_heat_distribution(
-                residence_temperature_in_celsius=residence_temperature_in_celsius,
-                water_temperature_in_celsius=water_temperature_input,
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-            )
-
-        if self.controller_heat_distribution_mode == "open":
-            self.state_controller = 1
+        if force_convergence:
+            pass
         else:
-            self.state_controller = 0
+            # Retrieves inputs
+            residence_temperature_in_celsius = stsv.get_input_value(
+                self.residence_temperature_channel
+            )
+            water_temperature_input = stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
+            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
+                    self.daily_avg_outside_temperature_input_channel
+                )
 
-        # log.information("hds controller " + str(self.state_controller) + "\n")
-        stsv.set_output_value(self.state_channel, self.state_controller)
+            if self.mode == 1:
+                self.conditions_for_opening_or_shutting_heat_distribution(
+                    residence_temperature_in_celsius=residence_temperature_in_celsius,
+                    water_temperature_in_celsius=water_temperature_input,
+                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                )
+
+            if self.controller_heat_distribution_mode == "open":
+                self.state_controller = 1
+            else:
+                self.state_controller = 0
+
+            # log.information("hds controller " + str(self.state_controller) + "\n")
+            stsv.set_output_value(self.state_channel, self.state_controller)
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,

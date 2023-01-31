@@ -507,11 +507,11 @@ class GenericHeatPump(cp.Component):
             self.heated_water_temperature_output_channel,
             self.heated_water_temperature_in_celsius,
         )
-            log.information("hp timestep " + str(timestep))
-            log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
-            log.information("hp heating power " + str(self.state.heating_power_in_watt))
-            log.information("hp cooling power " + str(self.state.cooling_power_in_watt))
-            log.information("hp heated water temperature " + str(self.heated_water_temperature_in_celsius))
+            # log.information("hp timestep " + str(timestep))
+            # log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
+            # log.information("hp heating power " + str(self.state.heating_power_in_watt))
+            # log.information("hp cooling power " + str(self.state.cooling_power_in_watt))
+            # log.information("hp heated water temperature " + str(self.heated_water_temperature_in_celsius))
             return
 
         # Heat Pump is Off

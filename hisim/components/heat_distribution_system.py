@@ -78,12 +78,12 @@ class HeatDistribution(cp.Component):
     # Inputs
     State = "State"
     ResidenceTemperature = "ResidenceTemperature"
-    HeatedWaterTemperatureInput = "HeatedWaterTemperatureInput"
+    WaterTemperatureInput = "WaterTemperatureInput"
     MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
     # MaxWaterMassFlowRate = "MaxWaterMassFlowRate"
 
     # Outputs
-    CooledWaterTemperatureOutput = "CooledWaterTemperatureOutput"
+    WaterTemperatureOutput = "WaterTemperatureOutput"
     ThermalPowerDelivered = "ThermalPowerDelivered"
     FloorHeatingWaterMassFlowRate = "FloorHeatingWaterMassFlowRate"
 
@@ -105,11 +105,11 @@ class HeatDistribution(cp.Component):
         )
         self.state_controller: float = 0.0
         self.residence_temperature_in_celsius: float = 0.0
-        self.heated_water_temperature_input_in_celsius: float = 0.0
+        self.water_temperature_input_in_celsius: float = 0.0
         self.floor_heating_water_mass_flow_rate_in_kg_per_second: float = 0
         # self.max_water_mass_flow_rate_in_kg_per_second: float = 0.0
         self.heat_gain_for_building_in_watt: float = 0.0
-        self.cooled_water_temperature_output_in_celsius: float = 0.0
+        self.water_temperature_output_in_celsius: float = 0.0
         self.max_thermal_building_demand_in_watt: float = 0.0
         self.build()
 
@@ -141,18 +141,18 @@ class HeatDistribution(cp.Component):
             lt.Units.CELSIUS,
             True,
         )
-        self.heated_water_temperature_input_channel: cp.ComponentInput = self.add_input(
+        self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.HeatedWaterTemperatureInput,
+            self.WaterTemperatureInput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
             True,
         )
         # Outputs
-        self.cooled_water_temperature_output_channel: cp.ComponentOutput = (
+        self.water_temperature_output_channel: cp.ComponentOutput = (
             self.add_output(
                 self.component_name,
-                self.CooledWaterTemperatureOutput,
+                self.WaterTemperatureOutput,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
             )
@@ -215,8 +215,8 @@ class HeatDistribution(cp.Component):
         self.residence_temperature_in_celsius = stsv.get_input_value(
             self.residence_temperature_channel
         )
-        self.heated_water_temperature_input_in_celsius = stsv.get_input_value(
-            self.heated_water_temperature_input_channel
+        self.water_temperature_input_in_celsius = stsv.get_input_value(
+            self.water_temperature_input_channel
         )
         # self.max_water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
         #     self.max_water_mass_flow_rate_channel
@@ -231,36 +231,38 @@ class HeatDistribution(cp.Component):
             )
         )
         self.state.water_temperature_in_distribution_system_in_celsius = (
-            self.heated_water_temperature_input_in_celsius
+            self.water_temperature_input_in_celsius
         )
         if self.state_controller == 1:
 
-            self.cooled_water_temperature_output_in_celsius = self.determine_cooled_water_temperature_after_heat_exchange_with_building(
-                self.residence_temperature_in_celsius,
-            )
             self.calculate_heat_gain_for_building(
                 self.floor_heating_water_mass_flow_rate_in_kg_per_second,
-                self.heated_water_temperature_input_in_celsius,
+                self.water_temperature_input_in_celsius,
+                self.residence_temperature_in_celsius,
+            )
+
+            self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
                 self.residence_temperature_in_celsius,
             )
 
         elif self.state_controller == 0:
 
-            self.cooled_water_temperature_output_in_celsius = (
-                self.heated_water_temperature_input_in_celsius
+            self.heat_gain_for_building_in_watt = 0.0
+
+            self.water_temperature_output_in_celsius = (
+                self.water_temperature_input_in_celsius
             )
 
-            self.heat_gain_for_building_in_watt = 0.0
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
         self.state.water_temperature_in_distribution_system_in_celsius = (
-            self.cooled_water_temperature_output_in_celsius
+            self.water_temperature_output_in_celsius
         )
         # log.information("hsd timestep " + str(timestep))
         # log.information("hsd cooled output water temperature " + str(self.state.water_temperature_in_distribution_system_in_celsius))
         # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
         stsv.set_output_value(
-            self.cooled_water_temperature_output_channel,
+            self.water_temperature_output_channel,
             self.state.water_temperature_in_distribution_system_in_celsius,
         )
         stsv.set_output_value(
@@ -293,18 +295,18 @@ class HeatDistribution(cp.Component):
 
     def calculate_heat_gain_for_building(
         self,
-        max_water_mass_flow_in_kg_per_second,
+        water_mass_flow_in_kg_per_second,
         heated_water_temperature_in_celsius,
         residence_temperature_in_celsius,
     ):
         """Calculate heat gain for the building from heat distribution system."""
         self.heat_gain_for_building_in_watt = (
-            max_water_mass_flow_in_kg_per_second
+            water_mass_flow_in_kg_per_second
             * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
             * (heated_water_temperature_in_celsius - residence_temperature_in_celsius)
         )
 
-    def determine_cooled_water_temperature_after_heat_exchange_with_building(
+    def determine_water_temperature_output_after_heat_exchange_with_building(
         self, residence_temperature_in_celsius
     ):
         """Calculate cooled water temperature after heat exchange between heat distribution system and building."""

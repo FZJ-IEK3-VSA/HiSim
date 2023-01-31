@@ -147,7 +147,7 @@ def household_gas_heater(
     my_gasheater.connect_input(
         my_gasheater.CooledWaterTemperatureBoilerInput,
         my_heat_distribution.component_name,
-        my_heat_distribution.CooledWaterTemperatureOutput,
+        my_heat_distribution.WaterTemperatureOutput,
     )
     my_gasheater.connect_input(
         my_gasheater.ReferenceMaxHeatBuildingDemand,
@@ -179,7 +179,7 @@ def household_gas_heater(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.HeatedWaterTemperatureInput,
+        my_heat_distribution.WaterTemperatureInput,
         my_gasheater.component_name,
         my_gasheater.HeatedWaterTemperatureBoilerOutput,
     )

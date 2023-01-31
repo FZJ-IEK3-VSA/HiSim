@@ -79,8 +79,8 @@ def basic_household_new(
     # Set Heat Pump Controller
     # set_residence_temperature_heating_in_celsius = 19.0
     # set_residence_temperature_cooling_in_celsius = 24.0
-    set_water_storage_temperature_for_heating_in_celsius = 48
-    set_water_storage_temperature_for_cooling_in_celsius = 52
+    set_water_storage_temperature_for_heating_in_celsius = 50
+    set_water_storage_temperature_for_cooling_in_celsius = 55
     offset = 0.5
     hp_mode = 1
 
@@ -310,7 +310,7 @@ def basic_household_new(
     )
 
     my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.CooledWaterTemperatureFromHeatWaterStorage,
+        my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
         my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
     )
@@ -332,7 +332,7 @@ def basic_household_new(
     )
 
     my_heat_pump.connect_input(
-        my_heat_pump.CooledWaterTemperatureFromHeatWaterStorage,
+        my_heat_pump.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
         my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
     )
@@ -346,22 +346,22 @@ def basic_household_new(
     my_simple_heat_water_storage.connect_input(
         my_simple_heat_water_storage.WaterTemperatureFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
-        my_heat_distribution_system.CooledWaterTemperatureOutput,
+        my_heat_distribution_system.WaterTemperatureOutput,
     )
 
     my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.WaterTemperaturefromHeatGenerator,
+        my_simple_heat_water_storage.WaterTemperatureFromHeatGenerator,
         my_heat_pump.component_name,
-        my_heat_pump.HeatedWaterTemperature,
+        my_heat_pump.WaterTemperatureOutput,
     )
 
     my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.HeatPumpWaterMassFlowRate,
+        my_simple_heat_water_storage.WaterMassFlowRateFromHeatGenerator,
         my_heat_pump.component_name,
         my_heat_pump.HeatPumpWaterMassFlowRate,
     )
     my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.FloorHeatingWaterMassFlowRate,
+        my_simple_heat_water_storage.WaterMassFlowRateFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.FloorHeatingWaterMassFlowRate,
     )
@@ -370,11 +370,7 @@ def basic_household_new(
         my_building.component_name,
         my_building.TemperatureIndoorAir,
     )
-    my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.WaterTemperatureFromHeatWaterStorage,
-        my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
-    )
+
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.DailyAverageOutsideTemperature,
         my_weather.component_name,
@@ -397,7 +393,7 @@ def basic_household_new(
     )
 
     my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.HeatedWaterTemperatureInput,
+        my_heat_distribution_system.WaterTemperatureInput,
         my_simple_heat_water_storage.component_name,
         my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
     )

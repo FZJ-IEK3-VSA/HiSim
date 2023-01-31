@@ -56,7 +56,7 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
             mean_water_temperature_in_storage_in_celsius=50,
             cool_water_temperature_in_storage_in_celsius=30,
             hot_water_temperature_in_storage_in_celsius=70,
-            volume_heating_water_storage_in_liter=100,
+            volume_heating_water_storage_in_liter=1000,
         )
         return config
 
@@ -96,9 +96,9 @@ class HeatingWaterStorage(cp.Component):
     WaterTemperatureFromHeatDistributionSystem = (
         "WaterTemperatureFromHeatDistributionSystem"
     )
-    WaterTemperaturefromHeatGenerator = "WaterTemperaturefromHeatGenerator"
-    HeatPumpWaterMassFlowRate = "HeatPumpWaterMassFlowRate"
-    FloorHeatingWaterMassFlowRate = "FloorHeatingWaterMassFlowRate"
+    WaterTemperatureFromHeatGenerator = "WaterTemperaturefromHeatGenerator"
+    WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
+    WaterMassFlowRateFromHeatDistributionSystem = "WaterMassFlowRateFromHeatDistributionSystem"
 
     # Output
 
@@ -122,11 +122,7 @@ class HeatingWaterStorage(cp.Component):
             self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius,
             self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius,
         )
-        self.previous_state = HeatStorageState(
-            self.waterstorageconfig.mean_water_temperature_in_storage_in_celsius,
-            self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius,
-            self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius,
-        )
+        self.previous_state: Any
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.water_temperature_from_heat_distribution_system_in_celsius: float = (
             self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius
@@ -137,8 +133,8 @@ class HeatingWaterStorage(cp.Component):
         # self._water_mass_flow_rate_in_kg_per_second: float = 0
         self.mean_water_temperature_in_water_storage_in_celsius: float = 0
         # self.mix_water_temperature_from_input_flows_in_celsius: float = 0
-        self.heatpump_water_mass_flow_rate_in_kg_per_second: float = 0.0
-        self.floor_heating_water_mass_flow_rate_in_kg_per_second: float = 0.0
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second: float = 0.0
+        self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float = 0.0
 
         self.build()
 
@@ -155,27 +151,27 @@ class HeatingWaterStorage(cp.Component):
         self.water_temperature_heat_generator_input_channel: ComponentInput = (
             self.add_input(
                 self.component_name,
-                self.WaterTemperaturefromHeatGenerator,
+                self.WaterTemperatureFromHeatGenerator,
                 lt.LoadTypes.TEMPERATURE,
                 lt.Units.CELSIUS,
                 True,
             )
         )
 
-        self.heatpump_water_mass_flow_rate_input_channel: ComponentInput = (
+        self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = (
             self.add_input(
                 self.component_name,
-                self.HeatPumpWaterMassFlowRate,
+                self.WaterMassFlowRateFromHeatGenerator,
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
                 True,
             )
         )
 
-        self.floor_heating_water_mass_flow_rate_input_channel: ComponentInput = (
+        self.water_mass_flow_rate_heat_distrution_system_input_channel: ComponentInput = (
             self.add_input(
                 self.component_name,
-                self.FloorHeatingWaterMassFlowRate,
+                self.WaterMassFlowRateFromHeatDistributionSystem,
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
                 True,
@@ -230,11 +226,11 @@ class HeatingWaterStorage(cp.Component):
         self.water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
             self.water_temperature_heat_generator_input_channel
         )
-        self.heatpump_water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
-            self.heatpump_water_mass_flow_rate_input_channel
+        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+            self.water_mass_flow_rate_heat_generator_input_channel
         )
-        self.floor_heating_water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
-            self.floor_heating_water_mass_flow_rate_input_channel
+        self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = stsv.get_input_value(
+            self.water_mass_flow_rate_heat_distrution_system_input_channel
         )
         # Calculations ------------------------------------------------------------------------------------------------------
 
@@ -246,8 +242,8 @@ class HeatingWaterStorage(cp.Component):
         self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
             water_temperature_from_heat_distribution_system_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
             water_temperature_from_heat_generator_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
-            heatpump_water_mass_flow_rate_in_kg_per_second=self.heatpump_water_mass_flow_rate_in_kg_per_second,
-            floor_heating_water_mass_flow_rate_in_kg_per_second=self.floor_heating_water_mass_flow_rate_in_kg_per_second,
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second=self.water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+            water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
             water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
             previous_mean_water_temperature_in_water_storage_in_celsius=start_water_temperature_in_storage_in_celsius,
             seconds_per_timestep=self.seconds_per_timestep,
@@ -300,31 +296,31 @@ class HeatingWaterStorage(cp.Component):
         self,
         water_temperature_from_heat_distribution_system_in_celsius,
         water_temperature_from_heat_generator_in_celsius,
-        heatpump_water_mass_flow_rate_in_kg_per_second,
-        floor_heating_water_mass_flow_rate_in_kg_per_second,
+        water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+        water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
         water_mass_in_storage_in_kg,
         previous_mean_water_temperature_in_water_storage_in_celsius,
         seconds_per_timestep,
     ):
         """Calculate the mean temperature of the water in the water boiler."""
 
-        heatpump_mass_of_input_water_flows_in_kg = (
-            heatpump_water_mass_flow_rate_in_kg_per_second * seconds_per_timestep
+        mass_of_input_water_flows_from_heat_generator_in_kg = (
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second * seconds_per_timestep
         )
-        floor_heating_mass_of_input_water_flows_in_kg = (
-            floor_heating_water_mass_flow_rate_in_kg_per_second * seconds_per_timestep
+        mass_of_input_water_flows_from_heat_distribution_system_in_kg = (
+            water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second * seconds_per_timestep
         )
         self.mean_water_temperature_in_water_storage_in_celsius = (
             water_mass_in_storage_in_kg
             * previous_mean_water_temperature_in_water_storage_in_celsius
-            + heatpump_mass_of_input_water_flows_in_kg
+            + mass_of_input_water_flows_from_heat_generator_in_kg
             * water_temperature_from_heat_generator_in_celsius
-            + floor_heating_mass_of_input_water_flows_in_kg
+            + mass_of_input_water_flows_from_heat_distribution_system_in_kg
             * water_temperature_from_heat_distribution_system_in_celsius
         ) / (
             water_mass_in_storage_in_kg
-            + heatpump_mass_of_input_water_flows_in_kg
-            + floor_heating_mass_of_input_water_flows_in_kg
+            + mass_of_input_water_flows_from_heat_generator_in_kg
+            + mass_of_input_water_flows_from_heat_distribution_system_in_kg
         )
 
         return self.mean_water_temperature_in_water_storage_in_celsius

@@ -79,10 +79,10 @@ def basic_household_new(
     # Set Heat Pump Controller
     # set_residence_temperature_heating_in_celsius = 19.0
     # set_residence_temperature_cooling_in_celsius = 24.0
-    set_water_storage_temperature_for_heating_in_celsius = 55
-    set_water_storage_temperature_for_cooling_in_celsius = 65
+    set_water_storage_temperature_for_heating_in_celsius = 50
+    set_water_storage_temperature_for_cooling_in_celsius = 70
     offset = 0.5
-    hp_mode = 2
+    hp_mode = 1
 
     # Set Heat Pump
     hp_manufacturer = "Viessmann Werke GmbH & Co KG"
@@ -93,16 +93,17 @@ def basic_household_new(
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
-    water_temperature_in_storage_in_celsius = 60
+    mean_water_temperature_in_storage_in_celsius = 60
+    cool_water_temperature_in_storage_in_celsius = 30
+    hot_water_temperature_in_storage_in_celsius = 70
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
     water_temperature_in_distribution_system_in_celsius = 60
 
     # Set Heat Distribution Controller
-
     min_heating_temperature_building_in_celsius = 20
-    min_heating_temperature_water_storage_in_celsius = 55
+    min_heating_temperature_water_storage_in_celsius = 30
     set_heating_threshold_temperature = 16.0
     mode = 1
 
@@ -195,7 +196,9 @@ def basic_household_new(
     my_simple_heat_water_storage_config = simple_heat_water_storage.HeatingWaterStorageConfig(
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        water_temperature_in_storage_in_celsius=water_temperature_in_storage_in_celsius,
+        mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
+        cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
+        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius
     )
     my_simple_heat_water_storage = simple_heat_water_storage.HeatingWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -214,7 +217,6 @@ def basic_household_new(
     )
 
     # Build Heat Distribution Controller
-
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         min_heating_temperature_building_in_celsius=min_heating_temperature_building_in_celsius,

@@ -688,9 +688,10 @@ class Building(dynamic_component.DynamicComponent):
                     index=False,
                 )
         # log.information("building timestep " + str(timestep))
+        # log.information("building temperature outside " + str(temperature_outside_in_celsius))
         # log.information("building heat loss " + str(heat_loss_in_watt))
         # log.information("building max mass flow " + str(self.max_water_mass_flow_rate_in_kg_per_second))
-        # log.information("building indoor air temperature " + str(indoor_air_temp) + "\n")
+        # log.information("building indoor air temperature " + str(indoor_air_temp))
 
     # =================================================================================================================================
 

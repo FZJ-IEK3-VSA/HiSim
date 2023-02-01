@@ -670,6 +670,12 @@ def configure_heating(
     my_heater.connect_only_predefined_connections(my_heater_controller_l1)
     my_sim.add_component(my_heater)
 
+    my_building.connect_input(
+        input_fieldname=my_building.ThermalPowerDelivered,
+        src_object_name=my_heater.component_name,
+        src_field_name=my_heater.ThermalPowerDelivered
+    )
+
     return my_heater, count
 
 
@@ -776,6 +782,13 @@ def configure_heating_electric(
             source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             source_weight=999,
         )
+
+    my_building.connect_input(
+        input_fieldname=my_building.ThermalPowerDelivered,
+        src_object_name=my_heatpump.component_name,
+        src_field_name=my_heatpump.ThermalPowerDelivered
+    )
+
     return my_heatpump, count
 
 
@@ -923,13 +936,10 @@ def configure_heating_with_buffer_electric(
         my_buffer_controller.boiler_signal,
     )
     my_buffer.connect_only_predefined_connections(my_heatpump)
-    my_building.add_component_input_and_connect(
-        source_component_class=my_buffer,
-        source_component_output=my_buffer.HeatToBuilding,
-        source_load_type=lt.LoadTypes.HEATING,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.HEAT_TO_BUILDING],
-        source_weight=count - 1,
+    my_building.connect_input(
+        input_fieldname=my_building.ThermalPowerDelivered,
+        src_object_name=my_buffer.component_name,
+        src_field_name=my_buffer.PowerToBuilding
     )
 
     return my_heatpump, my_buffer, count
@@ -1023,20 +1033,12 @@ def configure_heating_with_buffer(
         my_buffer_controller.boiler_signal,
     )
     my_buffer.connect_only_predefined_connections(my_heater)
-
-    my_building.add_component_input_and_connect(
-        source_component_class=my_buffer,
-        source_component_output=my_buffer.HeatToBuilding,
-        source_load_type=lt.LoadTypes.HEATING,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.HEAT_TO_BUILDING],
-        source_weight=count - 1,
+    my_building.connect_input(
+        input_fieldname=my_building.ThermalPowerDelivered,
+        src_object_name=my_buffer.component_name,
+        src_field_name=my_buffer.PowerToBuilding
     )
 
-    my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=building_heating_controller_config,
-    )
     return my_heater, my_buffer, count
 
 

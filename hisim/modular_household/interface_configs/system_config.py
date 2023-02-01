@@ -21,7 +21,7 @@ class SystemConfig:
     buffer_volume: Optional[float] = 150  # in liter
     battery_included: bool = False
     battery_capacity: Optional[float] = 20.0  # in kWh
-    heatpump_included: bool = False
+    heatpump_included: bool = True
     chp_included: bool = False
     chp_power: Optional[float] = 12
     h2_storage_included: bool = True

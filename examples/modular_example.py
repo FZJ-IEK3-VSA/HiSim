@@ -21,34 +21,9 @@ from hisim.components import (
     weather,
 )
 from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.system_config import SystemConfig
-from hisim.modular_household.interface_configs.archetype_config import ArcheTypeConfig
-from hisim.modular_household.interface_configs.modular_household_config import (
-    ModularHouseholdConfig,
-)
+from hisim.modular_household.interface_configs.modular_household_config import read_in_configs
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-
-
-def read_in_configs(pathname: str) -> ModularHouseholdConfig:
-    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
-    try:
-        with open(pathname, encoding="utf8") as config_file:
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore
-        hisim.log.information(f"Read modular household config from {pathname}")
-    except Exception:
-        household_config = ModularHouseholdConfig()
-        hisim.log.warning(
-            f"Could not read the modular household config from '{pathname}'. Using a default config instead."
-        )
-
-    # set default configs
-    if household_config.system_config_ is None:
-        household_config.system_config_ = SystemConfig()
-    if household_config.archetype_config_ is None:
-        household_config.archetype_config_ = ArcheTypeConfig()
-
-    return household_config
 
 
 def cleanup_old_result_folders():
@@ -98,20 +73,21 @@ def modular_household_explicit(
     count = 1  # initialize source_weight with one
     production: List = []  # initialize list of components involved in production
     consumption: List = []  # initialize list of components involved in consumption
-    heater: List = []  # initialize list of components used for heating
 
     # Build system parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_KPI
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.skip_finished_results = False
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.MAKE_NETWORK_CHARTS
+        )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -289,10 +265,12 @@ def modular_household_explicit(
         heating_system_installed,
         smart_devices_included,
         water_heating_system_installed,
-    ):
+    ):  
+        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_EMS()
         my_electricity_controller = (
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_electricity_controller_config
             )
         )
 
@@ -345,7 +323,6 @@ def modular_household_explicit(
         )  # could return ev_capacities if needed
         # """TODO: repair! """
         # for capacity in ev_capacities:
-        #     print(capacity)
         #     ev_cost = ev_cost + preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity=capacity)
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
@@ -405,6 +382,7 @@ def modular_household_explicit(
                 controlable=clever,
                 count=count,
             )
+
             """TODO: repair! """
             # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:
@@ -448,7 +426,6 @@ def modular_household_explicit(
                 heating_system_installed=heating_system_installed,
                 count=count,
             )
-    heater.append(my_heater)
 
     # """BATTERY"""
     if battery_included and clever:
@@ -477,7 +454,14 @@ def modular_household_explicit(
             electrolyzer_power=electrolyzer_power,
             count=count,
         )
-        heater.append(my_chp)
+        if buffer_included:
+            my_buffer.connect_only_predefined_connections(my_chp)
+        else:
+            my_building.connect_input(
+                input_fieldname=my_building.ThermalPowerDelivered,
+                src_object_name=my_chp.component_name,
+                src_field_name=my_chp.ThermalPowerDelivered
+            )
 
         # chp_cost = preprocessing.calculate_chp_investment_cost(
         #     economic_parameters, chp_included, chp_power
@@ -488,25 +472,6 @@ def modular_household_explicit(
         # electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(
         #     economic_parameters, electrolyzer_included, electrolyzer_power
         # )
-
-    if buffer_included:
-        my_buffer.add_component_inputs_and_connect(
-            source_component_classes=heater,
-            outputstring="ThermalPowerDelivered",
-            source_load_type=lt.LoadTypes.HEATING,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.HEAT_TO_BUFFER],
-            source_weight=999,
-        )
-    else:
-        my_building.add_component_inputs_and_connect(
-            source_component_classes=heater,
-            outputstring="ThermalPowerDelivered",
-            source_load_type=lt.LoadTypes.HEATING,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.HEAT_TO_BUILDING],
-            source_weight=999,
-        )
 
     if needs_ems(
         battery_included,

@@ -30,49 +30,40 @@ __status__ = "development"
 class HeatPumpConfig:
     name: str
     source_weight: int
-    parameter_string: str
     manufacturer: str
     device_name: str
     power_th: float
+    water_vs_heating: lt.InandOutputType
     cooling_considered: bool
     heating_season_begin: Optional[int]
     heating_season_end: Optional[int]
 
-    def __init__(self, name: str, source_weight: int, manufacturer: str, device_name: str, power_th: float, cooling_considered: bool,
-                 heating_season_begin: Optional[int], heating_season_end: Optional[int]):
-        self.name = name
-        self.source_weight = source_weight
-        self.manufacturer = manufacturer
-        self.device_name = device_name
-        self.power_th = power_th
-        self.cooling_considered = cooling_considered
-        self.heating_season_begin = heating_season_begin
-        self.heating_season_end = heating_season_end
-
     @staticmethod
     def get_default_config_heating() -> Any:
         config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, cooling_considered=True, heating_season_begin=270,
-                                heating_season_end=150)
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING,
+                                cooling_considered=True, heating_season_begin=270, heating_season_end=150)
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> Any:
         config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, cooling_considered=False, heating_season_begin=None,
-                                heating_season_end=None)
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING,
+                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
         return config
 
     @staticmethod
     def get_default_config_heating_electric() -> Any:
         config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+                                water_vs_heating=lt.InandOutputType.HEATING, cooling_considered=True, heating_season_begin=None,
+                                heating_season_end=None)
         return config
 
     @staticmethod
     def get_default_config_waterheating_electric() -> Any:
         config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+                                water_vs_heating=lt.InandOutputType.WATER_HEATING, cooling_considered=False, heating_season_begin=None,
+                                heating_season_end=None)
         return config
 
 
@@ -138,9 +129,9 @@ class ModularHeatPump(cp.Component):
         self.build(config)
 
         if my_simulation_parameters.surplus_control:
-            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, self.config.water_vs_heating]
         else:
-            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, ]
         self.state: ModularHeatPumpState
         self.previous_state: ModularHeatPumpState
         # Inputs - Mandatories

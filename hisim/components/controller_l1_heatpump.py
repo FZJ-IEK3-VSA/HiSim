@@ -65,7 +65,7 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> Any:
         """ Default Config for the buffer temperature. """
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=23.0, t_max_heating_in_celsius=25.0,
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
                                   cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
                                   day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
@@ -73,9 +73,10 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller_buffer(name: str) -> Any:
         """ Default Config for the buffer temperature. """
+        # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
                                   cooling_considered=True, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25,
-                                  day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+                                  day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150, min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
     @staticmethod
@@ -268,7 +269,7 @@ class L1HeatPumpController(cp.Component):
         t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
         # prevent heating in summer
         if self.cooling_considered:
-            if self.heating_season_begin > timestep > self.heating_season_end and t_storage >= t_min_target - 5:
+            if self.heating_season_begin > timestep > self.heating_season_end and t_storage >= t_min_target - 40:
                 self.state.deactivate(timestep)
                 return
         if t_storage < t_min_target:

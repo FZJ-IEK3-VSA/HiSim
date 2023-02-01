@@ -460,8 +460,23 @@ class CHP(Component):
 
     def write_to_report(self) -> List[str]:
         lines = []
-        lines.append("CHP")
-        # todo: add more useful stuff here
-        lines.append("tbd")
+        lines.append("Component Name: " + str(self.component_name))
+        lines.append("Name: CHP")
+        lines.append("Min Operation Time [Sec]: " + str(self.min_operation_time))
+        lines.append("Min Idle Time [Sec]: " + str(self.min_idle_time))
+        lines.append("Gas Type: " + str(self.gas_type))
+        lines.append("Operating Mode: " + str(self.operating_mode))
+        lines.append("P_el_max [P]: " + str(self.P_el_max))
+        lines.append("P_el_min [P]: " + str(self.P_el_min))
+        lines.append("Eff_el_min: " + str(self.eff_el_min))
+        lines.append("Eff_el_max: " + str(self.eff_el_max))
+        lines.append("Mass Flow Max: " + str(self.mass_flow_max))
+        lines.append("P_th_min [P]: " + str(self.P_th_min))
+        lines.append("P_th_max [P]: " + str(self.P_th_max))
+        lines.append("Eff_th_min: " + str(self.eff_th_min))
+        lines.append("Eff_th_max: " + str(self.eff_th_max))
+        lines.append("Max Temperature [°C]: " + str(self.temperature_max))
+        lines.append("Delta T [°C]: " + str(self.delta_T))
+
         return lines
     

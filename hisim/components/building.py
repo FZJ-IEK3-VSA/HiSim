@@ -1025,13 +1025,14 @@ class Building(dynamic_component.DynamicComponent):
     ):
         """Write important variables to report."""
         lines = []
-        lines.append(f"Building Name: {self.component_name}")
-        lines.append(f"Building Code: {self.buildingconfig.building_code}")
-        lines.append(f"Building Heat Capacity Class: {self.buildingconfig.building_heat_capacity_class}")
-        lines.append(f"Building Absolute Conditioned Floor Area [m2]: {self.buildingconfig.absolute_conditioned_floor_area_in_m2}")
-        lines.append(f"Building Initial Internal Temperature [°C]: {self.buildingconfig.initial_internal_temperature_in_celsius}")
-        lines.append(f"Building Heating Reference Temperature [°C]: {self.buildingconfig.heating_reference_temperature_in_celsius}")
-
+        lines.append(f"Name: {self.buildingconfig.name}")
+        lines.append(f"Code: {self.buildingconfig.building_code}")
+        lines.append(f"Heat Capacity Class: {self.buildingconfig.building_heat_capacity_class}")
+        lines.append(f"Absolute Conditioned Floor Area [m2]: {self.buildingconfig.absolute_conditioned_floor_area_in_m2}")
+        lines.append(f"Total Base Area [m2]: {self.buildingconfig.total_base_area_in_m2}")
+        lines.append(f"Initial Internal Temperature [°C]: {self.buildingconfig.initial_internal_temperature_in_celsius}")
+        lines.append(f"Heating Reference Temperature [°C]: {self.buildingconfig.heating_reference_temperature_in_celsius}")
+        lines.append(f"Max Thermal Demand [W]: {self.max_thermal_building_demand_in_watt}")
         lines.append(
             "-------------------------------------------------------------------------------------------"
         )

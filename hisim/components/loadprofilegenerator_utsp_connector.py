@@ -573,4 +573,10 @@ class UtspLpgConnector(cp.Component):
         """Adds a report entry for this component."""
         lines = []
         lines.append(f"Name: {self.component_name}")
+        lines.append("URL: " + str(self.utsp_config.url))
+        lines.append("Household: " + str(self.utsp_config.household))
+        lines.append("Result Path: " + str(self.utsp_config.result_path))
+        lines.append("Travel Route Set: " + str(self.utsp_config.travel_route_set))
+        lines.append("Transportation Device Set: " + str(self.utsp_config.transportation_device_set))
+        lines.append("TCharging Station Set: " + str(self.utsp_config.charging_station_set))
         return lines

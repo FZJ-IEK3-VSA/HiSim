@@ -145,7 +145,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
 
     def write_to_report(self) -> None:
-        pass
+        lines = []
+        lines.append("Name: L2EMSElectricityController")
+        lines.append(f"Mode: {self.mode}")
+        lines.append(f"Strategy: {self.strategy}")
+        lines.append(f"Limit to Shave: {self.limit_to_shave}")
+        lines.append(f"Building Temperature Offset Value: {self.building_temperature_offset_value}")
+        lines.append(f"Storage Temperature Offset Value: {self.storage_temperature_offset_value}")
+        return
 
     def i_save_state(self) -> None:
         # abändern, siehe Storage

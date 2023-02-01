@@ -141,8 +141,11 @@ class GenericHeatPump(cp.Component):
     ) -> None:
         """Construct all the necessary attributes."""
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
-
-        self.build(manufacturer, name, min_operation_time, min_idle_time)
+        self.manufacturer = manufacturer
+        self.heatpump_name = name
+        self.min_operation_time = min_operation_time
+        self.min_idle_time = min_idle_time
+        self.build(self.manufacturer, self.heatpump_name, self.min_operation_time, self.min_idle_time)
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
@@ -361,12 +364,12 @@ class GenericHeatPump(cp.Component):
         """Write important variables to report."""
         lines: List[str] = []
         lines.append("Name: Heat Pump")
-        lines.append(f"Max heating power: {(self.max_heating_power_in_watt) * 1e-3:4.3f} kW")
-        lines.append(f"Max heating power variation restriction: {self.max_heating_power_variation_restriction_in_watt:4.3f} W")
-        # lines = []
-        # lines.append([self.ComponentName,""])
-        # lines.append(["Max power:","{:4.2f}".format(self.max_heating_power)])
-        # lines.append(["Max power var:","{:4.2f}".format(self.max_heating_power_var)])
+        lines.append(f"Heat Pump Name: {self.heatpump_name}")
+        lines.append(f"Manufacturer: {self.manufacturer}")
+        lines.append(f"Min Operation Time [Sec]: {self.min_operation_time}")
+        lines.append(f"Min Idle Time [Sec]: {self.min_idle_time}")
+        lines.append(f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}")
+        lines.append(f"Max Peating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}")
         return lines
 
     def i_simulate(
@@ -629,9 +632,11 @@ class HeatPumpController(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        lines.append("Heat Pump Controller")
-        # todo: add more useful stuff here
-        lines.append("tbd")
+        lines.append("Name: Heat Pump Controller")
+        lines.append(f"Set Temperature for Heating [°C]: {self.temperature_set_heating}")
+        lines.append(f"Set Temperature for Cooling [°C]: {self.temperature_set_cooling}")
+        lines.append(f"Offset [°C]: {self.offset}")
+        lines.append(f"Mode: {self.mode}")
         return lines
 
     def i_simulate(

@@ -170,8 +170,11 @@ class Weather(Component):
     def write_to_report(self):
         """ Write configuration to the report. """
         lines = []
-        lines.append("Weather")
-        lines.append(self.weather_config.get_string_dict())  # type: ignore
+        lines.append("Name: " + str(self.weather_config.name))
+        lines.append("Location: " + str(self.weather_config.location))
+        lines.append("Source Path: " + str(self.weather_config.source_path))
+        lines.append("Data Source: " + str(self.weather_config.data_source))
+        # lines.append(self.weather_config.get_string_dict())  # type: ignore
         return lines
 
     def i_save_state(self) -> None:

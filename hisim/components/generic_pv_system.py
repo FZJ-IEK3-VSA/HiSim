@@ -272,10 +272,17 @@ class PVSystem(cp.Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Name: {}".format(self.component_name))
-        lines.append("Power: {:3.0f} kWp".format(self.pvconfig.power * 1E-3))
-        lines.append("Module: {}".format(self.pvconfig.module_name))
-        lines.append("Inverter: {}".format(self.pvconfig.inverter_name))
+        lines.append(f"Name: {self.pvconfig.name}")
+        lines.append(f"Time: {self.pvconfig.time}")
+        lines.append(f"Location: {self.pvconfig.location}")
+        lines.append(f"Power [kWp]: {self.pvconfig.power * 1E-3:3.0f}")
+        lines.append(f"Load Module Data: {self.pvconfig.load_module_data}")
+        lines.append(f"Module Name: {self.pvconfig.module_name}")
+        lines.append(f"Integrate Inverter: {self.pvconfig.integrate_inverter}")
+        lines.append(f"Inverter Name: {self.pvconfig.inverter_name}")
+        lines.append(f"Azimuth: {self.pvconfig.azimuth}")
+        lines.append(f"Tilt: {self.pvconfig.tilt}")
+        lines.append(f"Source Weight: {self.pvconfig.source_weight}")
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:

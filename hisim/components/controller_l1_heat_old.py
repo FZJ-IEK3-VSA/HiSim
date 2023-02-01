@@ -143,7 +143,13 @@ class ControllerHeat(cp.Component):
         self.mode = mode
 
     def write_to_report(self) -> None:
-        pass
+        lines = []
+        lines.append("Name: ControllerHeat")
+        lines.append(f"Target Temperature Warm Water Storage [°C]: {self.temperature_storage_target_warm_water}")
+        lines.append(f"Target Temperature Heat Water Storage [°C]: {self.temperature_storage_target_heating_water}")
+        lines.append(f"Target Temperature Warm Water Storage Hystersis [°C]: {self.temperature_storage_target_hysteresis_ww}")
+        lines.append(f"Target Temperature Hot Water Storage Hystersis [°C]: {self.temperature_storage_target_hysteresis_hw}")
+        return
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass

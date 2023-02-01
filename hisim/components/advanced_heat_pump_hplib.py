@@ -160,6 +160,16 @@ class HeatPumpHplib(Component):
                                     t_out_val= -300,
                                     p_th_set= -30)
         return config
+    
+    def write_to_report(self):
+        """ Write configuration to the report. """
+        lines = []
+        lines.append("Name: " + str(self.component_name))
+        lines.append("Model: " + str(self.model))
+        lines.append("T_in: " + str(self.t_in))
+        lines.append("T_out_val: " + str(self.t_out_val))
+        lines.append("P_th_set: " + str(self.p_th_set))
+        return lines
     def i_save_state(self) -> None:
         self.previous_state = deepcopy(self.state)
 

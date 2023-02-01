@@ -132,6 +132,9 @@ class AirConditioner(cp.Component):
 
         self.manufacturer = manufacturer
         self.model = name
+        self.min_operation_time = min_operation_time
+        self.min_idle_time = min_idle_time
+
         # Interpolates COP, cooling capacities, power input data from the database
         self.eer_ref = []
         self.t_out_cooling_ref = []
@@ -170,8 +173,8 @@ class AirConditioner(cp.Component):
         # Retrieves air conditioner from database - END
 
         # Sets the time operation restricitions
-        self.on_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
-        self.off_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+        self.on_time = self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+        self.off_time = self.min_idle_time / self.my_simulation_parameters.seconds_per_timestep
 
         self.state = AirConditionerState()
         self.previous_state = AirConditionerState()
@@ -201,9 +204,12 @@ class AirConditioner(cp.Component):
 
     def write_to_report(self):
         lines = []
-        lines.append("Air conditioner")
-        lines.append("Air conditioner manufacturer {}".format(self.manufacturer))
-        lines.append("Air conditioner model {}".format(self.model))
+        lines.append("Name: Air Conditioner")
+        lines.append(f"Manufacturer: {self.manufacturer}")
+        lines.append(f"Model {self.model}")
+        lines.append(f"Min Operation Time [Sec]: {self.min_operation_time}")
+        lines.append(f"Min Idle Time [Sec]: {self.min_idle_time}")
+        lines.append(f"Control: {self.control}")
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:

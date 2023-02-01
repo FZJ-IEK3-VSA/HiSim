@@ -71,11 +71,13 @@ class HeatStorage(Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: HeatStorageConfig) -> None:
-        super().__init__(name="HeatStorage", my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name="HeatWaterStorage", my_simulation_parameters=my_simulation_parameters)
         self.V_SP_heating_water = config.V_SP_heating_water
         self.V_SP_warm_water = config.V_SP_warm_water
         self.temperature_of_warm_water_extratcion = config.temperature_of_warm_water_extratcion
         self.ambient_temperature = config.ambient_temperature
+        self.T_sp_ww = config.T_sp_ww
+        self.T_sp_hw = config.T_sp_hw
         self.cw = 4812
 
         self.state = HeatStorageState(config.T_sp_ww, config.T_sp_hw)
@@ -159,7 +161,15 @@ class HeatStorage(Component):
                 T_sp_hw=40)
         return config
     def write_to_report(self) -> None:
-        pass
+        lines = []
+        lines.append("Name: HeatWaterStorage")
+        lines.append(f"Volume Warm Water Storage [L]: {self.V_SP_warm_water}")
+        lines.append(f"Volume Heat Water Storage [L]: {self.V_SP_heating_water}")
+        lines.append(f"Temperature of Warm Water Extraction [°C]: {self.temperature_of_warm_water_extratcion}")
+        lines.append(f"Ambient Temperature [°C]: {self.ambient_temperature}")
+        lines.append(f"Temperature Warm Water Storage [°C]: {self.T_sp_ww}")
+        lines.append(f"temperature Heat Water Storage [°C]: {self.T_sp_hw}")
+        return
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
@@ -331,7 +341,10 @@ class HeatStorageController(cp.Component):
         pass
 
     def write_to_report(self) -> None:
-        pass
+        lines = []
+        lines.append("Name: HeatWaterStorage Controller")
+        lines.append(f"Initial Temperature Building [°C]: {self.initial_temperature_building}")
+        lines.appendf(f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}")
 
     def i_save_state(self) -> None:
         pass

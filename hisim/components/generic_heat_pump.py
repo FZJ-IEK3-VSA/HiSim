@@ -542,7 +542,8 @@ class GenericHeatPump(cp.Component):
             # log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
             # log.information("hp heating power " + str(self.state.heating_power_in_watt))
             # log.information("hp cooling power " + str(self.state.cooling_power_in_watt))
-            # log.information("hp heated water temperature " + str(self.heated_water_temperature_in_celsius))
+            # log.information("hp waster mass flow rate " + str(self.heatpump_water_mass_flow_rate_in_kg_per_second))
+            # log.information("hp water temperature output " + str(self.water_temperature_output_in_celsius))
             return
 
         # Heat Pump is Off
@@ -597,7 +598,8 @@ class GenericHeatPump(cp.Component):
         # log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
         # log.information("hp heating power " + str(self.state.heating_power_in_watt))
         # log.information("hp cooling power " + str(self.state.cooling_power_in_watt))
-        # log.information("hp heated water temperature " + str(self.heated_water_temperature_in_celsius))
+        # log.information("hp waster mass flow rate " + str(self.heatpump_water_mass_flow_rate_in_kg_per_second))
+        # log.information("hp water temperature output " + str(self.water_temperature_output_in_celsius))
 
     def process_thermal(self, ws_in: float) -> None:
         """Process thermal."""
@@ -848,9 +850,9 @@ class HeatPumpController(cp.Component):
             if self.controller_heatpumpmode == "off":
                 state = 0
 
-            # log.information("hp timestep " + str(timestep))
-            # log.information("hp input cool water temp " + str(cooled_water_storage_temperature_in_celsius))
-            # log.information("hp controller " + str(state))
+            # log.information("hp controller timestep " + str(timestep))
+            # log.information("hp controller input water temp from hws " + str(water_temperature_input_from_heat_water_storage_in_celsius))
+            # log.information("hp controller state " + str(state))
 
             stsv.set_output_value(self.state_channel, state)
 

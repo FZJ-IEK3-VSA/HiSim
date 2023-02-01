@@ -215,7 +215,7 @@ class Building(dynamic_component.DynamicComponent):
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
-    MaxWaterMassFlowRate = "MaxWaterMassFlow"
+    # MaxWaterMassFlowRate = "MaxWaterMassFlow"
 
     @utils.measure_execution_time
     def __init__(
@@ -334,11 +334,11 @@ class Building(dynamic_component.DynamicComponent):
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
         )
-        self.max_water_mass_flow_rate_in_kg_per_second = self.calc_max_water_mass_flow_rate(
-            heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
-            initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
-            max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt,
-        )
+        # self.max_water_mass_flow_rate_in_kg_per_second = self.calc_max_water_mass_flow_rate(
+        #     heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
+        #     initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
+        #     max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt,
+        # )
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
@@ -461,12 +461,12 @@ class Building(dynamic_component.DynamicComponent):
             )
         )
 
-        self.max_water_mass_flow_rate_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.MaxWaterMassFlowRate,
-            lt.LoadTypes.WARM_WATER,
-            lt.Units.KG_PER_SEC,
-        )
+        # self.max_water_mass_flow_rate_channel: cp.ComponentOutput = self.add_output(
+        #     self.component_name,
+        #     self.MaxWaterMassFlowRate,
+        #     lt.LoadTypes.WARM_WATER,
+        #     lt.Units.KG_PER_SEC,
+        # )
 
         # =================================================================================================================================
         # Add and get default connections
@@ -668,10 +668,10 @@ class Building(dynamic_component.DynamicComponent):
             self.max_thermal_building_demand_in_watt,
         )
 
-        stsv.set_output_value(
-            self.max_water_mass_flow_rate_channel,
-            self.max_water_mass_flow_rate_in_kg_per_second,
-        )
+        # stsv.set_output_value(
+        #     self.max_water_mass_flow_rate_channel,
+        #     self.max_water_mass_flow_rate_in_kg_per_second,
+        # )
 
         # Saves solar gains cache
         if not self.is_in_cache:
@@ -690,7 +690,7 @@ class Building(dynamic_component.DynamicComponent):
         # log.information("building timestep " + str(timestep))
         # log.information("building temperature outside " + str(temperature_outside_in_celsius))
         # log.information("building heat loss " + str(heat_loss_in_watt))
-        # log.information("building max mass flow " + str(self.max_water_mass_flow_rate_in_kg_per_second))
+        # log.information("building max demand " + str(self.max_thermal_building_demand_in_watt))
         # log.information("building indoor air temperature " + str(indoor_air_temp))
 
     # =================================================================================================================================
@@ -1664,26 +1664,26 @@ class Building(dynamic_component.DynamicComponent):
         )
         return max_thermal_building_demand_in_watt
 
-    # =====================================================================================================================================
-    # Calculation of maximal water mass flow for water circulation through heating distribution system and heating water storage
-    def calc_max_water_mass_flow_rate(
-        self,
-        initial_temperature_in_celsius: float,
-        heating_reference_temperature_in_celsius: float,
-        max_thermal_building_demand_in_watt: float,
-    ) -> Any:
-        """Calculate maximal water mass flow."""
-        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-        )
-        max_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (
-            specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-            * (
-                initial_temperature_in_celsius
-                - heating_reference_temperature_in_celsius
-            )
-        )
-        return max_water_mass_flow_in_kg_per_second
+    # # =====================================================================================================================================
+    # # Calculation of maximal water mass flow for water circulation through heating distribution system and heating water storage
+    # def calc_max_water_mass_flow_rate(
+    #     self,
+    #     initial_temperature_in_celsius: float,
+    #     heating_reference_temperature_in_celsius: float,
+    #     max_thermal_building_demand_in_watt: float,
+    # ) -> Any:
+    #     """Calculate maximal water mass flow."""
+    #     specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
+    #         PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+    #     )
+    #     max_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (
+    #         specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
+    #         * (
+    #             initial_temperature_in_celsius
+    #             - heating_reference_temperature_in_celsius
+    #         )
+    #     )
+    #     return max_water_mass_flow_in_kg_per_second
 
 
 # =====================================================================================================================================

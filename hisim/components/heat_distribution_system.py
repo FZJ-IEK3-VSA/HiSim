@@ -259,8 +259,10 @@ class HeatDistribution(cp.Component):
             self.water_temperature_output_in_celsius
         )
         # log.information("hsd timestep " + str(timestep))
-        # log.information("hsd cooled output water temperature " + str(self.state.water_temperature_in_distribution_system_in_celsius))
+        # log.information("hsd water temperature output " + str(self.state.water_temperature_in_distribution_system_in_celsius))
+        # log.information("hsd water mass flow rate "  + str(self.floor_heating_water_mass_flow_rate_in_kg_per_second))
         # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
+
         stsv.set_output_value(
             self.water_temperature_output_channel,
             self.state.water_temperature_in_distribution_system_in_celsius,
@@ -487,7 +489,7 @@ class HeatDistributionController(cp.Component):
             ):
                 self.controller_heat_distribution_mode = "close"
                 return
-        if self.controller_heat_distribution_mode == "close":
+        elif self.controller_heat_distribution_mode == "close":
             if (
                 residence_temperature_in_celsius < set_residence_temperature_in_celsius
                 and daily_average_outside_temperature_in_celsius
@@ -495,3 +497,5 @@ class HeatDistributionController(cp.Component):
             ):
                 self.controller_heat_distribution_mode = "open"
                 return
+        else:
+            raise ValueError("unknown mode")

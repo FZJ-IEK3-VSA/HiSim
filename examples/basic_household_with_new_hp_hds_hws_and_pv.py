@@ -80,7 +80,7 @@ def basic_household_new(
     # set_residence_temperature_heating_in_celsius = 19.0
     # set_residence_temperature_cooling_in_celsius = 24.0
     set_water_storage_temperature_for_heating_in_celsius = 50
-    set_water_storage_temperature_for_cooling_in_celsius = 55
+    set_water_storage_temperature_for_cooling_in_celsius = 70
     offset = 0.5
     hp_mode = 1
 
@@ -94,8 +94,8 @@ def basic_household_new(
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
     mean_water_temperature_in_storage_in_celsius = 50
-    cool_water_temperature_in_storage_in_celsius = 30
-    hot_water_temperature_in_storage_in_celsius = 70
+    cool_water_temperature_in_storage_in_celsius = 40
+    hot_water_temperature_in_storage_in_celsius = 60
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"

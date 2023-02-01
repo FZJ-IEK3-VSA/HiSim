@@ -54,9 +54,9 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
         config = HeatingWaterStorageConfig(
             name="HeatingWaterStorage",
             mean_water_temperature_in_storage_in_celsius=50,
-            cool_water_temperature_in_storage_in_celsius=30,
-            hot_water_temperature_in_storage_in_celsius=70,
-            volume_heating_water_storage_in_liter=1000,
+            cool_water_temperature_in_storage_in_celsius=40,
+            hot_water_temperature_in_storage_in_celsius=60,
+            volume_heating_water_storage_in_liter=500,
         )
         return config
 
@@ -259,9 +259,12 @@ class HeatingWaterStorage(cp.Component):
         )
         # Set outputs -------------------------------------------------------------------------------------------------------
         # log.information("hws timestep " + str(timestep))
-        # log.information("hws cool water  " + str(self.cooled_water_temperature_from_heat_distribution_system_in_celsius))
-        # log.information("hws hot water " + str(self.heated_water_temperature_from_heat_generator_in_celsius))
+        # log.information("hws water temp from hds " + str(self.water_temperature_from_heat_distribution_system_in_celsius))
+        # log.information("hws flow rate from hds " + str(self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second))
+        # log.information("hws water temp from hp " + str(self.water_temperature_from_heat_generator_in_celsius))
+        # log.information("hws flow rate from hp " + str(self.water_mass_flow_rate_from_heat_generator_in_kg_per_second))
         # log.information("hws mean water temp " + str(self.state.mean_water_temperature_in_storage_in_celsius))
+
         stsv.set_output_value(
             self.mean_water_temperature_water_storage_output_channel,
             self.state.mean_water_temperature_in_storage_in_celsius,

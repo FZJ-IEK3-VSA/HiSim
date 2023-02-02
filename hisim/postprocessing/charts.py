@@ -21,9 +21,10 @@ class Carpet(Chart):  # noqa: too-few-public-methods
 
     """ Class for carpet plots. """
 
-    def __init__(self, output: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
+    def __init__(self, output: Any, output_name: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
         """ Initalizes a carpot plot. """
         super().__init__(output=output,
+                         output_name=output_name,
                          chart_type="Carpet",
                          units=units,
                          directory_path=directorypath,
@@ -70,7 +71,8 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         axis.set_xlabel('Month of the year')
 
         log.trace("finished carpet plot: " + self.filepath)
-        plt.savefig(self.filepath, bbox_inches='tight')
+        # plt.savefig(self.filepath, bbox_inches='tight')
+        plt.savefig(self.filepath2, bbox_inches='tight', format="pdf")
         plt.close()
 
 
@@ -79,9 +81,9 @@ class Line(Chart):  # noqa: too-few-public-methods
     """ Makes a line chart. """
 
     # @utils.measure_memory_leak
-    def __init__(self, output, units, directorypath, time_correction_factor):
+    def __init__(self, output, output_name, units, directorypath, time_correction_factor):
         """ Initializes a line chart. """
-        super().__init__(output, "line", units, directorypath, time_correction_factor)
+        super().__init__(output, output_name, "line", units, directorypath, time_correction_factor)
 
     @utils.measure_memory_leak
     def plot(self, data, units):
@@ -108,7 +110,8 @@ class Line(Chart):  # noqa: too-few-public-methods
         plt.xlabel("Time", fontsize=all_font_size)
         plt.grid()
         axis.set_xlim(xmin=x_zero[0])
-        plt.savefig(self.filepath)
+        # plt.savefig(self.filepath)
+        plt.savefig(self.filepath2, format="pdf")
         plt.cla()
         plt.clf()
         plt.close("all")
@@ -122,9 +125,9 @@ class BarChart(Chart):  # noqa: too-few-public-methods
 
     original = [385.66, 484.01, 981.05, 1096.7, 1157, 1299.9, 1415.3, 1266.1, 1075.8, 714.44, 422.51, 366.83]
 
-    def __init__(self, output, units, dirpath, time_correction_factor):
+    def __init__(self, output, output_name, units, dirpath, time_correction_factor):
         """ Initializes the classes. """
-        super().__init__(output, "Bar", units, dirpath, time_correction_factor)
+        super().__init__(output, output_name, "Bar", units, dirpath, time_correction_factor)
         self.filename = f"monthly_{self.output}.png"
 
     def plot(self, data):
@@ -151,7 +154,8 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         plt.tight_layout()
         plt.ylabel(self.units)
         plt.legend(loc='best')
-        plt.savefig(self.filepath, bbox_inches='tight')
+        # plt.savefig(self.filepath, bbox_inches='tight')
+        plt.savefig(self.filepath2, bbox_inches='tight', format="pdf")
         plt.close()
 
 
@@ -161,11 +165,13 @@ class SankeyHISIM(Chart):
 
     def __init__(self,
                  name,
+                 output_name,
                  units,
                  directorypath,
                  time_correction_factor):
         """ Initializes the Sankey chart. """
         super().__init__(output=name,
+                         output_name=output_name,
                          chart_type="Sankey",
                          units=units,
                          directory_path=directorypath,
@@ -204,7 +210,8 @@ class SankeyHISIM(Chart):
         sankey.finish()
         plt.title(self.title, fontsize=18)
         plt.axis("off")
-        plt.savefig(self.filepath)
+        # plt.savefig(self.filepath)
+        plt.savefig(self.filepath2, format="pdf")
         plt.close()
 
     def make_orientations(self, flows):
@@ -264,7 +271,8 @@ class SankeyHISIM(Chart):
         sankey.finish()
         plt.title("Heap Pump Energy Equilibrium", fontsize=18)
         plt.axis("off")
-        plt.savefig(self.filepath)
+        # plt.savefig(self.filepath)
+        plt.savefig(self.filepath2, format="pdf")
         plt.close()
 
     def plot_building(self, data):
@@ -313,7 +321,8 @@ class SankeyHISIM(Chart):
         sankey.finish()
         plt.title("Residence Annual Thermal Equilibrium [kWh]", fontsize=18)
         plt.axis("off")
-        plt.savefig(self.filepath)
+        # plt.savefig(self.filepath)
+        plt.savefig(self.filepath2, format="pdf")
         plt.close()
 
         flows = [heating_by_residents * 1E-3,

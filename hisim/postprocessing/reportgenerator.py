@@ -12,7 +12,7 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Table
 
 from hisim import utils
-
+from hisim import log
 
 class ReportGenerator:
 
@@ -26,6 +26,7 @@ class ReportGenerator:
         self.filepath = os.path.join(dirpath, "report.pdf")
         self.open()
         self.write_preamble()
+        # self.write_figures_to_report()
         self.close()
 
     def open(self):
@@ -109,3 +110,14 @@ class ReportGenerator:
         """ Closes the report. """
         story = copy.deepcopy(self.story)
         self.doc.build(story)
+
+
+    def write_figures_to_report(self, component_name: str, directory_path: str):
+        "Adds component figures to the report."
+
+        component_figures_directory = os.path.join(directory_path, component_name)
+        for filename in component_figures_directory:
+            filename_dir = os.path.join(component_figures_directory, filename)
+            # image = Image(filename_dir)
+            # self.story.append(image)
+            log.information(filename_dir)

@@ -131,6 +131,7 @@ class PostProcessor:
         for index, output in enumerate(ppdt.all_outputs):
             if output.full_name == "Dummy # Residence Temperature":
                 my_days = ChartSingleDay(output=output.full_name,
+                                         output_name=output.component_name,
                                          units=output.unit,
                                          directorypath=ppdt.simulation_parameters.result_directory,
                                          time_correction_factor=ppdt.time_correction_factor,
@@ -140,6 +141,7 @@ class PostProcessor:
                                          output2=ppdt.results.iloc[:, 11])
             else:
                 my_days = ChartSingleDay(output=output.full_name,
+                                         output_name=output.component_name,
                                          units=output.unit,
                                          directorypath=ppdt.simulation_parameters.result_directory,
                                          time_correction_factor=ppdt.time_correction_factor,
@@ -162,9 +164,9 @@ class PostProcessor:
         """ Make bar charts. """
         for index, output in enumerate(ppdt.all_outputs):
             my_bar = charts.BarChart(output=output.full_name,
-
+                                     output_name=output.component_name,
                                      units=output.unit,
-                                     dirpath=ppdt.simulation_parameters.result_directory,
+                                     dirpath=os.path.join(ppdt.simulation_parameters.result_directory),
                                      time_correction_factor=ppdt.time_correction_factor)
             my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
 
@@ -172,6 +174,7 @@ class PostProcessor:
         """ Makes plots for selected days. """
         for index, output in enumerate(ppdt.all_outputs):
             my_days = ChartSingleDay(output=output.full_name,
+                                     output_name=output.component_name,
                                      units=output.unit,
                                      directorypath=ppdt.simulation_parameters.result_directory,
                                      time_correction_factor=ppdt.time_correction_factor,
@@ -185,7 +188,7 @@ class PostProcessor:
         for index, output in enumerate(ppdt.all_outputs):
             log.trace("Making carpet plots")
             my_carpet = charts.Carpet(output=output.full_name,
-
+                                      output_name=output.component_name,
                                       units=output.unit,
                                       directorypath=ppdt.simulation_parameters.result_directory,
                                       time_correction_factor=ppdt.time_correction_factor)
@@ -197,6 +200,7 @@ class PostProcessor:
         """ Makes the line plots."""
         for index, output in enumerate(ppdt.all_outputs):
             my_line = charts.Line(output=output.full_name,
+                                  output_name=output.component_name,
                                   units=output.unit,
                                   directorypath=ppdt.simulation_parameters.result_directory,
                                   time_correction_factor=ppdt.time_correction_factor)
@@ -240,6 +244,8 @@ class PostProcessor:
             if isinstance(component_content, str) is True:
                 component_content = [component_content]
             report.write(component_content)
+            # TODO: report write pdf charts of the components
+            report.write_figures_to_report(component_name=wrapped_component.my_component.component_name, directory_path=ppdt.simulation_parameters.result_directory)
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:

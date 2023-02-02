@@ -11,12 +11,12 @@ class ChartSingleDay(Chart):
 
     """ For making visualisations for a single day. """
 
-    def __init__(self, output, units, directorypath, time_correction_factor, data, day=None, month=None, output2=None):
+    def __init__(self, output, output_name, units, directorypath, time_correction_factor, data, day=None, month=None, output2=None):
         """ Initializes the class. """
         if output2 is not None:
-            super().__init__(output, "days", units, directorypath, time_correction_factor, output2)
+            super().__init__(output, output_name, "days", units, directorypath, time_correction_factor, output2)
         else:
-            super().__init__(output, "days", units, directorypath, time_correction_factor)
+            super().__init__(output, output_name, "days", units, directorypath, time_correction_factor)
         self.axis: plt.axis
         self.ax2: plt.axis
         self.line2: plt.axis
@@ -76,6 +76,7 @@ class ChartSingleDay(Chart):
         if hasattr(self, "line2"):
             self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         plt.savefig(self.filepath)
+        plt.savefig(self.filepath2)
         plt.close()
 
     def plot(self, close):

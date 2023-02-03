@@ -6,7 +6,7 @@ import os
 from typing import Any
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import Table
@@ -114,10 +114,17 @@ class ReportGenerator:
 
     def write_figures_to_report(self, component_name: str, directory_path: str):
         "Adds component figures to the report."
-
+        # directory of component output figures
         component_figures_directory = os.path.join(directory_path, component_name)
-        for filename in component_figures_directory:
-            filename_dir = os.path.join(component_figures_directory, filename)
-            # image = Image(filename_dir)
-            # self.story.append(image)
-            log.information(filename_dir)
+        # iterate over files in that directory
+        for filename in os.listdir(component_figures_directory):
+            file= os.path.join(component_figures_directory, filename)
+            # checking if file exists
+            if os.path.isfile(file):
+                image = Image(file, 4 * inch, 3 * inch)
+                self.story.append(image)
+                self.story.append(Spacer(1, 12))
+            else: 
+                raise ValueError("no files found")
+        
+        self.story.append(PageBreak())

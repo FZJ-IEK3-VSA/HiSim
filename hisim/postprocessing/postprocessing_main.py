@@ -244,7 +244,6 @@ class PostProcessor:
             if isinstance(component_content, str) is True:
                 component_content = [component_content]
             report.write(component_content)
-            # TODO: report write pdf charts of the components
             report.write_figures_to_report(component_name=wrapped_component.my_component.component_name, directory_path=ppdt.simulation_parameters.result_directory)
         all_output_names = []
         output: ComponentOutput

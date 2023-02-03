@@ -72,7 +72,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
 
         log.trace("finished carpet plot: " + self.filepath)
         # plt.savefig(self.filepath, bbox_inches='tight')
-        plt.savefig(self.filepath2, bbox_inches='tight', format="pdf")
+        plt.savefig(self.filepath2, bbox_inches='tight')
         plt.close()
 
 
@@ -111,7 +111,7 @@ class Line(Chart):  # noqa: too-few-public-methods
         plt.grid()
         axis.set_xlim(xmin=x_zero[0])
         # plt.savefig(self.filepath)
-        plt.savefig(self.filepath2, format="pdf")
+        plt.savefig(self.filepath2)
         plt.cla()
         plt.clf()
         plt.close("all")
@@ -155,7 +155,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         plt.ylabel(self.units)
         plt.legend(loc='best')
         # plt.savefig(self.filepath, bbox_inches='tight')
-        plt.savefig(self.filepath2, bbox_inches='tight', format="pdf")
+        plt.savefig(self.filepath2, bbox_inches='tight')
         plt.close()
 
 
@@ -211,7 +211,7 @@ class SankeyHISIM(Chart):
         plt.title(self.title, fontsize=18)
         plt.axis("off")
         # plt.savefig(self.filepath)
-        plt.savefig(self.filepath2, format="pdf")
+        plt.savefig(self.filepath2)
         plt.close()
 
     def make_orientations(self, flows):
@@ -272,7 +272,7 @@ class SankeyHISIM(Chart):
         plt.title("Heap Pump Energy Equilibrium", fontsize=18)
         plt.axis("off")
         # plt.savefig(self.filepath)
-        plt.savefig(self.filepath2, format="pdf")
+        plt.savefig(self.filepath2)
         plt.close()
 
     def plot_building(self, data):
@@ -322,7 +322,7 @@ class SankeyHISIM(Chart):
         plt.title("Residence Annual Thermal Equilibrium [kWh]", fontsize=18)
         plt.axis("off")
         # plt.savefig(self.filepath)
-        plt.savefig(self.filepath2, format="pdf")
+        plt.savefig(self.filepath2)
         plt.close()
 
         flows = [heating_by_residents * 1E-3,

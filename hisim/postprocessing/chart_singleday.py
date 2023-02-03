@@ -26,7 +26,9 @@ class ChartSingleDay(Chart):
         self.plot_title: str
         self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m" \
                         f"{self.month}_d{self.day}.png"
+        self.filefolder = os.path.join(self.directorypath, self.output_name)
         self.filepath = os.path.join(self.directorypath, self.filename)
+        self.filepath2 = os.path.join(self.filefolder, self.filename)
 
     def get_day_data(self):
         """ Extracts data for a single day. """
@@ -75,7 +77,7 @@ class ChartSingleDay(Chart):
         self.axis.set_ylabel(f"{self.property} [{self.ylabel}]", fontsize=18)
         if hasattr(self, "line2"):
             self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        plt.savefig(self.filepath)
+        # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)
         plt.close()
 

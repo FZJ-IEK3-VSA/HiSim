@@ -53,11 +53,11 @@ class Chart:  # noqa: too-few-public-methods
         if output2 is not None:
             self.output2 = output2
             self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
-            self.filename_pdf = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.pdf"
+            #self.filename_pdf = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.pdf"
         else:
             self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
-            self.filename_pdf = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.pdf"
+            #self.filename_pdf = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.pdf"
         self.filepath = os.path.join(self.directorypath, self.filename)
-        self.filepath2 = os.path.join(self.filefolder, self.filename_pdf)
+        self.filepath2 = os.path.join(self.filefolder, self.filename)
 
 

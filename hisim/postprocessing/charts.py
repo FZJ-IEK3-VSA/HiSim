@@ -45,31 +45,34 @@ class Carpet(Chart):  # noqa: too-few-public-methods
             self.units = f"k{self.units}"
         plot_data = np.flip(database.transpose(), axis=0)
 
-        fig = plt.figure(figsize=(10, 5), dpi=500)
+        fig = plt.figure(figsize=(13, 9), dpi=500)
 
         axis = fig.add_subplot(111)
         mycolors = 'viridis'
         color_map = plt.cm.get_cmap(mycolors)
 
         plot = axis.pcolormesh(plot_data, cmap=color_map)
-        plt.colorbar(plot).set_label(self.units)
+        plt.colorbar(plot).set_label(self.units, fontsize=30)
 
         y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
-        axis.set_yticks(y_ticks)
+        axis.set_yticks(y_ticks, fontsize=35)
+        plt.yticks(fontsize=25)
         y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
         axis.set_yticklabels([str(i) for i in y_ticks_labels])
 
         if xdims == 365:
             x_ticks = np.arange(15, 346, 30).tolist()
-            axis.set_xticks(x_ticks)
+            axis.set_xticks(x_ticks, fontsize=25)
             axis.set_xticklabels([str(i) for i in self.months_abbrev_uppercase])
 
         # optimizing fonts
         fig.autofmt_xdate(rotation=45)
         # setting axis of the plot
-        axis.set_ylabel('Daytime [h]')
-        axis.set_xlabel('Month of the year')
-
+        axis.set_ylabel('Daytime [h]', fontsize=30)
+        axis.set_xlabel('Month of the year', fontsize=30)  
+        plt.title(self.title, fontsize=40)
+        plt.xticks(fontsize=25)
+        plt.yticks(fontsize=25)
         log.trace("finished carpet plot: " + self.filepath)
         # plt.savefig(self.filepath, bbox_inches='tight')
         plt.savefig(self.filepath2, bbox_inches='tight')
@@ -88,16 +91,14 @@ class Line(Chart):  # noqa: too-few-public-methods
     @utils.measure_memory_leak
     def plot(self, data, units):
         """ Makes a line plot. """
-        all_font_size = 40
-        size_1 = 20
-        size_2 = 18
+        size_1 = 13
+        size_2 = 9
         mpl.use('Agg')
 
-        ylabel = units
         _fig, axis = plt.subplots(figsize=(size_1, size_2))
         x_zero = data.index
-        plt.xticks(fontsize=35, rotation=20)
-        plt.yticks(fontsize=35)
+        plt.xticks(fontsize=25, rotation=20)
+        plt.yticks(fontsize=25)
 
         # Rescale values in case they are too high
         if max(abs(data)) > 1.5E3 and units != "-":
@@ -105,10 +106,11 @@ class Line(Chart):  # noqa: too-few-public-methods
             units = f"k{units}"
 
         plt.plot(x_zero, data, color="green", linewidth=6.0)
-        plt.ylabel(ylabel, fontsize=all_font_size)
-        plt.ylabel(f"[{units}]", fontsize=40)
-        plt.xlabel("Time", fontsize=all_font_size)
+        #plt.ylabel(ylabel, fontsize=all_font_size)
+        plt.ylabel(f"[{units}]", fontsize=30)
+        plt.xlabel("Time", fontsize=30)
         plt.grid()
+        plt.title(self.title, fontsize=40)
         axis.set_xlim(xmin=x_zero[0])
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)
@@ -143,16 +145,16 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         # Width of a bar
         width = 0.4
 
-        plt.subplots()
+        plt.subplots(figsize=(13, 9))
         plt.bar(ind, data * 1E-3, width, label="HiSim")
         plt.bar(ind + width, self.original, width, label="PVSOL")
 
-        plt.xticks(ind + width / 2)
-
-        plt.title(f"{self.title} Monthly")
+        plt.xticks(ind + width / 2, fontsize=25)
+        plt.yticks(fontsize=25)
+        plt.title(f"{self.title} Monthly", fontsize=40)
         plt.grid()
         plt.tight_layout()
-        plt.ylabel(self.units)
+        plt.ylabel(self.units, fontsize=30)
         plt.legend(loc='best')
         # plt.savefig(self.filepath, bbox_inches='tight')
         plt.savefig(self.filepath2, bbox_inches='tight')
@@ -199,7 +201,7 @@ class SankeyHISIM(Chart):
         orientations = self.make_orientations(flows)
 
         pathlengths = 0.4
-        fig = plt.figure(figsize=[10, 10])
+        fig = plt.figure(figsize=[13, 9])
         axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
         sankey = mpl.sankey.Sankey(ax=axis, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
@@ -208,7 +210,9 @@ class SankeyHISIM(Chart):
                    orientations=orientations,
                    pathlengths=pathlengths)
         sankey.finish()
-        plt.title(self.title, fontsize=18)
+        plt.title(self.title, fontsize=40)
+        plt.xticks(fontsize=25)
+        plt.yticks(fontisze=25)
         plt.axis("off")
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)
@@ -260,7 +264,7 @@ class SankeyHISIM(Chart):
         orientations = [1, -1, 0]
         pathlengths = 0.25
 
-        fig = plt.figure(figsize=[10, 10])
+        fig = plt.figure(figsize=[13, 9])
         axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
         sankey = mpl.sankey.Sankey(ax=axis, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
@@ -269,7 +273,9 @@ class SankeyHISIM(Chart):
                    orientations=orientations,
                    pathlengths=pathlengths)
         sankey.finish()
-        plt.title("Heap Pump Energy Equilibrium", fontsize=18)
+        plt.title("Heap Pump Energy Equilibrium", fontsize=40)
+        plt.xticks(fontsize=25)
+        plt.yticks(fontisze=25)
         plt.axis("off")
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)
@@ -310,7 +316,7 @@ class SankeyHISIM(Chart):
             orientations = [1, 0, -1, -1, 1]
         pathlengths = 0.4
 
-        fig = plt.figure(figsize=[10, 10])
+        fig = plt.figure(figsize=[13, 9])
         axis = fig.add_subplot(1, 1, 1, xticks=[], yticks=[])
 
         sankey = mpl.sankey.Sankey(ax=axis, scale=5E-5, offset=3E-1, head_angle=100, margin=0.4)
@@ -319,7 +325,7 @@ class SankeyHISIM(Chart):
                    orientations=orientations,
                    pathlengths=pathlengths)
         sankey.finish()
-        plt.title("Residence Annual Thermal Equilibrium [kWh]", fontsize=18)
+        plt.title("Residence Annual Thermal Equilibrium [kWh]", fontsize=40)
         plt.axis("off")
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)

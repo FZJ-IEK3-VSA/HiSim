@@ -229,7 +229,11 @@ class PostProcessor:
         """ Computes KPI's and writes them to report and csv. """
         kpi_compute_return = compute_kpis(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
         lines = kpi_compute_return
-        self.write_to_report(text=lines, report=report)
+        report.open()
+        report.write_heading(["### KPIs"])
+        report.write(lines)
+        report.close()
+
 
     def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """
@@ -249,7 +253,7 @@ class PostProcessor:
         output: ComponentOutput
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
-        report.write(["### All Outputs"])
+        report.write_heading(["### All Outputs"])
         report.write(all_output_names)
         report.close()
 

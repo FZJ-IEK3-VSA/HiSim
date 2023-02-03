@@ -58,6 +58,12 @@ class ReportGenerator:
         story.append(report_table)
         story.append(Spacer(1, 24))
 
+        # Insert Title
+        titel = "HiSim Simulation Report"
+        ptext = f'<font size="18">{titel}</font>'
+        story.append(Paragraph(ptext, self.styles["Title"]))
+        story.append(Spacer(1, 200))
+
         # Inserts authors
         authors = ["Developers: Dr. Noah Pflugradt",
                    "Vitor Hugo Bellotto Zago"]
@@ -89,7 +95,6 @@ class ReportGenerator:
             ptext = f'<font size="12">{formatted_time}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))
             story.append(Spacer(1, 12))
-
         self.story = story
 
     def write(self, text):
@@ -108,12 +113,19 @@ class ReportGenerator:
 
     def close(self):
         """ Closes the report. """
+        self.story.append(PageBreak())
         story = copy.deepcopy(self.story)
         self.doc.build(story)
+        
 
 
     def write_figures_to_report(self, component_name: str, directory_path: str):
         "Adds component figures to the report."
+        bar_string = "=============================================================="
+        self.story.append(Paragraph(bar_string, self.styles["Normal"]))
+        text = f'<font size="12">{component_name} Outputs </font>'
+        self.story.append(Paragraph(text, self.styles["Heading1"]))
+        self.story.append(Spacer(1, 12))
         # directory of component output figures
         component_figures_directory = os.path.join(directory_path, component_name)
         # iterate over files in that directory
@@ -121,10 +133,22 @@ class ReportGenerator:
             file= os.path.join(component_figures_directory, filename)
             # checking if file exists
             if os.path.isfile(file):
-                image = Image(file, 4 * inch, 3 * inch)
+                image = Image(file, 5 * inch, 4 * inch)
+                image.hAlign = "CENTER"
                 self.story.append(image)
-                self.story.append(Spacer(1, 12))
+                self.story.append(Spacer(0, 20))
             else: 
                 raise ValueError("no files found")
         
         self.story.append(PageBreak())
+
+
+    def write_heading(self, text):
+        """ Writes text as heading. """
+        if len(text) != 0:
+            bar_string = "=============================================================="
+            self.story.append(Paragraph(bar_string, self.styles["Normal"]))
+            for part in text:
+                ptext = f'<font size="12">{part}</font>'
+                self.story.append(Paragraph(ptext, self.styles["Heading1"]))
+            self.story.append(Spacer(1, 12))

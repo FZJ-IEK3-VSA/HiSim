@@ -8,7 +8,7 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.simulationparameters import SimulationParameters
 
 
-class PostProcessingDataTransfer:  # noqa: too-few-public-methods
+class  PostProcessingDataTransfer:  # noqa: too-few-public-methods
 
     """ Data class for transfering the result data to this class. """
 

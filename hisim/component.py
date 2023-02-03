@@ -271,7 +271,7 @@ class Component:
     def get_outputs(self) -> List[ComponentOutput]:
         """ Delivers a list of outputs. """
         if len(self.outputs) == 0:
-            raise Exception("Error: Component " + self.component_name + " has no outputs defined")
+            raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
     def i_save_state(self) -> None:

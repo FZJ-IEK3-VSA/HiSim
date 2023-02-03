@@ -167,13 +167,11 @@ class SankeyHISIM(Chart):
 
     def __init__(self,
                  name,
-                 output_name,
                  units,
                  directorypath,
                  time_correction_factor):
         """ Initializes the Sankey chart. """
         super().__init__(output=name,
-                         output_name=output_name,
                          chart_type="Sankey",
                          units=units,
                          directory_path=directorypath,

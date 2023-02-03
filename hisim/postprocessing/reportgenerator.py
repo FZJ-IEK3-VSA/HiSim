@@ -118,7 +118,6 @@ class ReportGenerator:
         self.doc.build(story)
         
 
-
     def write_figures_to_report(self, component_name: str, directory_path: str):
         "Adds component figures to the report."
         bar_string = "=============================================================="

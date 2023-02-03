@@ -344,7 +344,7 @@ class HeatStorageController(cp.Component):
         lines = []
         lines.append("Name: HeatWaterStorage Controller")
         lines.append(f"Initial Temperature Building [°C]: {self.initial_temperature_building}")
-        lines.appendf(f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}")
+        lines.append(f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}")
 
     def i_save_state(self) -> None:
         pass

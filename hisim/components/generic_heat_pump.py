@@ -265,8 +265,8 @@ class GenericHeatPump(cp.Component):
         self,
         manufacturer: str,
         name: str,
-        min_operation_time: float,
-        min_idle_time: float,
+        min_operation_time: int,
+        min_idle_time: int,
     ) -> None:
         """Build function.
 

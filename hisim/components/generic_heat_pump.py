@@ -136,8 +136,8 @@ class GenericHeatPump(cp.Component):
         my_simulation_parameters: SimulationParameters,
         manufacturer: str = "Viessmann Werke GmbH & Co KG",
         name: str = "Vitocal 300-A AWO-AC 301.B07",
-        min_operation_time: int = 60 * 60,
-        min_idle_time: int = 15 * 60,
+        min_operation_time: float = 60 * 60,
+        min_idle_time: float = 15 * 60,
     ) -> None:
         """Construct all the necessary attributes."""
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
@@ -265,8 +265,8 @@ class GenericHeatPump(cp.Component):
         self,
         manufacturer: str,
         name: str,
-        min_operation_time: int,
-        min_idle_time: int,
+        min_operation_time: float,
+        min_idle_time: float,
     ) -> None:
         """Build function.
 

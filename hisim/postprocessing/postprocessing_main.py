@@ -38,18 +38,21 @@ class PostProcessor:
         """ For plotting the sankeys. """
         for i_display_name in [name for name, display_name in lt.DisplayNames.__members__.items()]:
             my_sankey = charts.SankeyHISIM(name=i_display_name,
+                                           output_name=i_display_name,
                                            units=lt.Units.ANY,
                                            directorypath=ppdt.simulation_parameters.result_directory,
                                            time_correction_factor=ppdt.time_correction_factor)
             my_sankey.plot(data=ppdt.all_outputs)
         if any(component_output.component_name == "HeatPump" for component_output in ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="HeatPump",
+                                           output_name="HeatPump",
                                            units=lt.Units.ANY,
                                            directorypath=ppdt.simulation_parameters.result_directory,
                                            time_correction_factor=ppdt.time_correction_factor)
             my_sankey.plot_heat_pump(data=ppdt.all_outputs)
         if any(component_output.component_name == "Building" for component_output in ppdt.all_outputs):
             my_sankey = charts.SankeyHISIM(name="Building",
+                                           output_name="Building",
                                            units=lt.Units.ANY,
                                            directorypath=ppdt.simulation_parameters.result_directory,
                                            time_correction_factor=ppdt.time_correction_factor)

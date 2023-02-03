@@ -118,7 +118,7 @@ class ReportGenerator:
         self.doc.build(story)
         
 
-    def write_figures_to_report(self, component_name: str, directory_path: str):
+    def write_figures_to_report(self, component_name: str, directory_path: str) -> None:
         "Adds component figures to the report."
         bar_string = "=============================================================="
         self.story.append(Paragraph(bar_string, self.styles["Normal"]))

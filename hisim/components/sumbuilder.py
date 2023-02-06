@@ -88,8 +88,8 @@ class ElectricityGridConfig(cp.ConfigBase):
     signal: Optional[str]
 
     @classmethod
-    def get_default_PV_system(cls):
-        """ Gets a default PV system. """
+    def get_default_electricity_grid(cls):
+        """ Gets a default Electricity Grid. """
         return ElectricityGridConfig(name="ElectrcityGrid_BaseLoad", grid=None, signal=None)
     
 class ElectricityGrid(Component):

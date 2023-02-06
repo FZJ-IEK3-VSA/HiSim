@@ -11,8 +11,9 @@ This module contains the following classes:
 # Generic/Built-in
 import copy
 from typing import List, Any, Optional
-
 import numpy as np
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
 
 from hisim import component as cp
 from hisim import log
@@ -37,6 +38,24 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+@dataclass_json
+@dataclass
+class GenericHeatPumpConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """ Returns the full class name of the base class. """
+        return GenericHeatPump.get_full_classname()
+
+    name: str
+    manufacturer: str
+    heat_pump_name: str
+    min_operation_time: float
+    min_idle_time: float
+
+    @classmethod
+    def get_default_generic_heat_pump(cls):
+        """ Gets a default Generic Heat Pump. """
+        return GenericHeatPumpConfig(name="HeatPump", heat_pump_name="Vitocal 300-A AWO-AC 301.B07", manufacturer="Viessmann Werke GmbH & Co KG", min_operation_time=60 * 60, min_idle_time=15 * 60)
 
 class GenericHeatPumpState:
 
@@ -134,17 +153,15 @@ class GenericHeatPump(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        manufacturer: str = "Viessmann Werke GmbH & Co KG",
-        name: str = "Vitocal 300-A AWO-AC 301.B07",
-        min_operation_time: float = 60 * 60,
-        min_idle_time: float = 15 * 60,
+        config: GenericHeatPumpConfig
     ) -> None:
         """Construct all the necessary attributes."""
-        super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
-        self.manufacturer = manufacturer
-        self.heatpump_name = name
-        self.min_operation_time = min_operation_time
-        self.min_idle_time = min_idle_time
+        self.heatpump_config = config
+        super().__init__(self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters)
+        self.manufacturer = self.heatpump_config.manufacturer
+        self.heatpump_name = self.heatpump_config.heat_pump_name
+        self.min_operation_time = self.heatpump_config.min_operation_time
+        self.min_idle_time = self.heatpump_config.min_idle_time
         self.build(self.manufacturer, self.heatpump_name, self.min_operation_time, self.min_idle_time)
 
         self.number_of_cycles = 0
@@ -362,7 +379,9 @@ class GenericHeatPump(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
-        lines: List[str] = []
+        lines = []
+        for config_string in self.heatpump_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Name: Heat Pump")
         lines.append(f"Heat Pump Name: {self.heatpump_name}")
         lines.append(f"Manufacturer: {self.manufacturer}")

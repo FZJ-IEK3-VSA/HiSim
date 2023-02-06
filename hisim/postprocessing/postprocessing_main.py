@@ -2,7 +2,7 @@
 # clean
 import os
 import sys
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
@@ -16,6 +16,7 @@ from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+from hisim.postprocessing.report_image_entries import ReportImageEntry
 
 
 class PostProcessor:
@@ -26,7 +27,7 @@ class PostProcessor:
     def __init__(self):
         """ Initializes the post processing. """
         self.dirname: str
-
+        self.report_image_entries = []
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """ Sets the results directory. """
         if dirname is None:
@@ -101,7 +102,7 @@ class PostProcessor:
             self.make_csv_export(ppdt)
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information("Making PDF report.")
-            self.write_components_to_report(ppdt, report)
+            self.write_components_to_report(ppdt, report, self.report_image_entries)
         # Export all results to
         if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
             log.information("Computing KPIs")
@@ -191,12 +192,15 @@ class PostProcessor:
         for index, output in enumerate(ppdt.all_outputs):
             log.trace("Making carpet plots")
             my_carpet = charts.Carpet(output=output.full_name,
-                                      output_name=output.component_name,
+                                      component_name=output.component_name,
                                       units=output.unit,
                                       directorypath=ppdt.simulation_parameters.result_directory,
                                       time_correction_factor=ppdt.time_correction_factor)
-            my_carpet.plot(xdims=int(
+            
+            my_entry = my_carpet.plot(xdims=int(
                 (ppdt.simulation_parameters.end_date - ppdt.simulation_parameters.start_date).days), data=ppdt.results.iloc[:, index])
+            self.report_image_entries.append(my_entry)
+
 
     @utils.measure_memory_leak
     def make_line_plots(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -238,20 +242,62 @@ class PostProcessor:
         report.close()
 
 
-    def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
+    def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator, report_image_entries: List[ReportImageEntry]) -> None:
         """ Writes information about the components used in the simulation to the simulation report. """
         report.open()
-        for wrapped_component in ppdt.wrapped_components:
-            if hasattr(wrapped_component.my_component, "write_to_report"):
-                component_content = wrapped_component.my_component.write_to_report()
-            else:
-                raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
-            if isinstance(component_content, list) is False:
-                component_content = [component_content]
-            if isinstance(component_content, str) is True:
-                component_content = [component_content]
-            report.write(component_content)
-            report.write_figures_to_report(component_name=wrapped_component.my_component.component_name, directory_path=ppdt.simulation_parameters.result_directory)
+        # sort report image entries
+        component_names = []
+        for x in report_image_entries:
+            if not x.component_name in component_names:
+                component_names.append(x.component_name)
+        log.information("component names " + str(component_names))
+        output_types = []
+        paths = []
+        for component in component_names:
+            for x in report_image_entries:
+                if x.component_name==component:
+                    if not x.output_type in output_types:
+                        output_types.append(x.output_type)
+                    if not x.path in paths:
+                        paths.append(x.path)
+        log.information("paths und len " + str(paths) + " " + str(len(paths)))
+
+        for index, component_name in enumerate(component_names):
+            # here write chapter start and description of component and its outputs
+            
+            for wrapped_component in ppdt.wrapped_components:
+                if wrapped_component.my_component.component_name == component_name:
+                    component_content = wrapped_component.my_component.write_to_report()
+                    # if wrapped_component.my_component.component_name == component:
+                    #     log.information("wrapped compoennt name " + str(wrapped_component.my_component.component_name))
+                    #     if hasattr(wrapped_component.my_component, "write_to_report"):
+                    #         component_content = wrapped_component.my_component.write_to_report()
+                    # else:
+                    #     raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
+                    # if isinstance(component_content, list) is False:
+                    #     component_content = [component_content]
+                    # if isinstance(component_content, str) is True:
+                    #     component_content = [component_content]
+                    report.write(component_content)
+                    for x in report_image_entries:
+                        if x.component_name == component_name:
+                            log.information("component " + str(x.component_name))
+                            log.information("output type " + str(x.output_type))
+                            log.information("path " + str(x.path))
+                            report.write_figures_to_report(component_name=x.component_name, output_type=x.output_type, path=x.path)
+
+
+        # for wrapped_component in ppdt.wrapped_components:
+        #     if hasattr(wrapped_component.my_component, "write_to_report"):
+        #         component_content = wrapped_component.my_component.write_to_report()
+        #     else:
+        #         raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
+        #     if isinstance(component_content, list) is False:
+        #         component_content = [component_content]
+        #     if isinstance(component_content, str) is True:
+        #         component_content = [component_content]
+        #     report.write(component_content)
+        #     report.write_figures_to_report(component_name=x.component_name, path=x.path)
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:

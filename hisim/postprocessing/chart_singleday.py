@@ -26,7 +26,7 @@ class ChartSingleDay(Chart):
         self.plot_title: str
         self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m" \
                         f"{self.month}_d{self.day}.png"
-        self.filefolder = os.path.join(self.directorypath, self.output_name)
+        self.filefolder = os.path.join(self.directorypath, self.component_name)
         self.filepath = os.path.join(self.directorypath, self.filename)
         self.filepath2 = os.path.join(self.filefolder, self.filename)
 

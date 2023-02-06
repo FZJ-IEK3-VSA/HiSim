@@ -3,7 +3,7 @@
 import copy
 import time
 import os
-from typing import Any
+from typing import Any, List
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
@@ -13,6 +13,7 @@ from reportlab.platypus import Table
 
 from hisim import utils
 from hisim import log
+from hisim.postprocessing.report_image_entries import ReportImageEntry
 
 class ReportGenerator:
 
@@ -118,26 +119,34 @@ class ReportGenerator:
         self.doc.build(story)
         
 
-    def write_figures_to_report(self, component_name: str, directory_path: str) -> None:
+    def write_figures_to_report(self, component_name: str, output_type: str, path:str) -> None:
         "Adds component figures to the report."
+        # component_names = []
+        # for x in report_image_entries:
+        #     if not x.component_name in component_names:
+        #         component_names.append(x.component_name)
+        # for component in component_names:
+        #     # hier brauchst du dein kapitel beginn (kompnente und beschreibungstext)
+        #     outputs = []
+        #     for x in report_image_entries:
+        #         if x.component_name==component:
+        #             if not x.output_name in outputs:
+        #                 outputs.append(x.output_name)
+
         bar_string = "=============================================================="
         self.story.append(Paragraph(bar_string, self.styles["Normal"]))
         text = f'<font size="12">{component_name} Outputs </font>'
         self.story.append(Paragraph(text, self.styles["Heading1"]))
         self.story.append(Spacer(1, 12))
-        # directory of component output figures
-        component_figures_directory = os.path.join(directory_path, component_name)
-        # iterate over files in that directory
-        for filename in os.listdir(component_figures_directory):
-            file= os.path.join(component_figures_directory, filename)
-            # checking if file exists
-            if os.path.isfile(file):
-                image = Image(file, 5 * inch, 4 * inch)
-                image.hAlign = "CENTER"
-                self.story.append(image)
-                self.story.append(Spacer(0, 20))
-            else: 
-                raise ValueError("no files found")
+
+        # checking if file exists
+        if os.path.isfile(path):
+            image = Image(path, 5 * inch, 4 * inch)
+            image.hAlign = "CENTER"
+            self.story.append(image)
+            self.story.append(Spacer(0, 20))
+        else: 
+            raise ValueError("no files found")
         
         self.story.append(PageBreak())
 

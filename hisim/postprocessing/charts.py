@@ -14,6 +14,7 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_pump
 from hisim.components import advanced_heat_pump_hplib
 from hisim.components import loadprofilegenerator_connector
+from hisim.postprocessing.report_image_entries import ReportImageEntry
 mpl.rcParams['agg.path.chunksize'] = 10000
 
 
@@ -21,16 +22,18 @@ class Carpet(Chart):  # noqa: too-few-public-methods
 
     """ Class for carpet plots. """
 
-    def __init__(self, output: Any, output_name: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
+    def __init__(self, output: Any, component_name: Any, units: Any, directorypath: str, time_correction_factor: float) -> None:
         """ Initalizes a carpot plot. """
         super().__init__(output=output,
-                         output_name=output_name,
+                         component_name=component_name,
                          chart_type="Carpet",
                          units=units,
                          directory_path=directorypath,
                          time_correction_factor=time_correction_factor)
 
-    def plot(self, xdims: int, data: Any) -> None:
+ 
+
+    def plot(self, xdims: int, data: Any) -> ReportImageEntry:
         """ Makes a carpet plot. """
         log.trace("starting carpet plots")
         ydims = int(len(data) / xdims)  # number of calculated timesteps per day
@@ -77,6 +80,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         # plt.savefig(self.filepath, bbox_inches='tight')
         plt.savefig(self.filepath2, bbox_inches='tight')
         plt.close()
+        return ReportImageEntry(category=None, description=None, path=self.filepath2, unit=self.units, component_name=self.component_name, output_type=self.output_type)
 
 
 class Line(Chart):  # noqa: too-few-public-methods
@@ -173,7 +177,7 @@ class SankeyHISIM(Chart):
                  time_correction_factor):
         """ Initializes the Sankey chart. """
         super().__init__(output=name,
-                         output_name=output_name,
+                         component_name=output_name,
                          chart_type="Sankey",
                          units=units,
                          directory_path=directorypath,

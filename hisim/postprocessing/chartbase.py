@@ -12,10 +12,10 @@ class Chart:  # noqa: too-few-public-methods
     label_months_lowercase = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
                               'August', 'September', 'October', 'November', 'December']
 
-    def __init__(self, output, output_name, chart_type, units, directory_path, time_correction_factor, output2=None):
+    def __init__(self, output, component_name, chart_type, units, directory_path, time_correction_factor, output2=None):
         """ Initializes the base class. """
         self.output = output
-        self.output_name = output_name
+        self.component_name = component_name
         self.type = chart_type
         if hasattr(units, "value"):
             self.units = units.value
@@ -45,16 +45,19 @@ class Chart:  # noqa: too-few-public-methods
             else:
                 self.title = f"{self.title} {single_match}"
         self.directorypath = directory_path
-        self.filefolder = os.path.join(self.directorypath, self.output_name)
-        os.makedirs(self.filefolder, exist_ok=True)
+        self.output_type = self.output.split(' # ', 2)[1]
+        self.component_output_folder = os.path.join(self.directorypath, self.component_name, self.output_type)
+        os.makedirs(self.component_output_folder, exist_ok=True)
         self.object_name = " "
         self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
+            # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double.png"
         else:
-            self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
+            # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}.png"
         self.filepath = os.path.join(self.directorypath, self.filename)
-        self.filepath2 = os.path.join(self.filefolder, self.filename)
+        self.filepath2 = os.path.join(self.component_output_folder, self.filename)
 
 

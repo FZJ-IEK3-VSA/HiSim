@@ -343,6 +343,7 @@ class PostProcessor:
 
         output_types = []
         file_paths = []
+        component_output_folder_paths = []
         for component in component_names:
             for report_image_entry in report_image_entries:
                 if report_image_entry.component_name == component:
@@ -350,28 +351,37 @@ class PostProcessor:
                         output_types.append(report_image_entry.output_type)
                     if report_image_entry.file_path not in file_paths:
                         file_paths.append(report_image_entry.file_path)
+                    if report_image_entry.component_output_folder_path not in component_output_folder_paths:
+                        component_output_folder_paths.append(report_image_entry.component_output_folder_path)
 
-        for component_name in component_names:
-            # write component information
-            report.write_heading([component_name])
-            for wrapped_component in ppdt.wrapped_components:
-                if wrapped_component.my_component.component_name == component_name:
-                    component_content = wrapped_component.my_component.write_to_report()
-                    report.write(component_content)
+        # for component_name in component_names:
+        #     # write component information
+        #     report.write_heading([component_name])
+        #     for wrapped_component in ppdt.wrapped_components:
+        #         if wrapped_component.my_component.component_name == component_name:
+        #             component_content = wrapped_component.my_component.write_to_report()
+        #             report.write(component_content)
 
-            # write respective component output figures
-            for output_type in output_types:
-                for report_image_entry in report_image_entries:
-                    if (
-                        report_image_entry.component_name == component_name
-                        and report_image_entry.output_type == output_type
-                    ):
-                        # report.write_heading([f"{component_name} Outputs"])
-                        # report.write([output_type])
-                        report.write_figures_to_report(
-                            file_path=report_image_entry.file_path,
-                        )
-            report.page_break()
+        #     # write respective component output figures
+        #     for output_type in output_types:
+        #         for report_image_entry in report_image_entries:
+        #             if (
+        #                 report_image_entry.component_name == component_name
+        #                 and report_image_entry.output_type == output_type
+        #             ):
+        #                 # report.write_heading([f"{component_name} Outputs"])
+        #                 # report.write([output_type])
+        #                 report.write_figures_to_report(
+        #                     file_path=report_image_entry.file_path,
+        #                 )
+        #     report.page_break()
+
+        for component_output_folder_path in component_output_folder_paths:
+            log.information("folder " + str(component_output_folder_path))
+            folder_path = os.path.normpath(component_output_folder_path)
+            component_name = folder_path.split(os.sep)[-2]
+            output_type = folder_path.split(os.sep)[-1]
+            report.write_all_figures_of_one_output_type_to_report(component_name=component_name, output_type=output_type, component_output_folder_path=component_output_folder_path)
 
         # for wrapped_component in ppdt.wrapped_components:
         #     if hasattr(wrapped_component.my_component, "write_to_report"):

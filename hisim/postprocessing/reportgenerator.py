@@ -125,7 +125,7 @@ class ReportGenerator:
         self.doc.build(story)
 
     def write_figures_to_report(self, file_path: str) -> None:
-        """Add all figures of one component and one output type to the report."""
+        """Add figure to the report."""
 
         if os.path.isfile(file_path):
             image = Image(file_path, 4 * inch, 3 * inch)
@@ -134,6 +134,33 @@ class ReportGenerator:
             self.story.append(Spacer(0, 20))
         else:
             raise ValueError("no files found")
+
+    def write_all_figures_of_one_output_type_to_report(self, component_output_folder_path: str, component_name: str, output_type: str) -> None:
+        """Add all figures of one component and one output type to the report."""
+
+        bar_string = (
+                "=============================================================="
+            )
+        self.story.append(Paragraph(bar_string, self.styles["Normal"]))
+
+        text = f'<font size="12">{component_name}</font>'
+        self.story.append(Paragraph(text, self.styles["Heading1"]))
+        text1 = f'<font size="12">{output_type}</font>'
+        self.story.append(Paragraph(text1, self.styles["Normal"]))
+        self.story.append(Spacer(1, 12))
+
+        for file in os.listdir(component_output_folder_path):
+            file_path = os.path.join(component_output_folder_path, file)
+            if os.path.isfile(file_path):
+                image = Image(file_path, 4 * inch, 3 * inch)
+                image.hAlign = "CENTER"
+                self.story.append(image)
+                self.story.append(Spacer(0, 20))
+            else:
+                raise ValueError("no files found")
+            
+        self.story.append(PageBreak())
+
 
     def write_heading(self, text):
         """Write text as heading."""

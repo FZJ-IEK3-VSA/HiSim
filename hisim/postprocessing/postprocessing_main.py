@@ -12,7 +12,9 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import compute_kpis
-from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
+from hisim.postprocessing.generate_csv_for_housing_database import (
+    generate_csv_for_database,
+)
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -21,48 +23,63 @@ from hisim.postprocessing.report_image_entries import ReportImageEntry
 
 class PostProcessor:
 
-    """ Core Post processor class. """
+    """Core Post processor class."""
 
     @utils.measure_execution_time
     def __init__(self):
-        """ Initializes the post processing. """
+        """Initializes the post processing."""
         self.dirname: str
         self.report_image_entries = []
+
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
-        """ Sets the results directory. """
+        """Sets the results directory."""
         if dirname is None:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
 
     @utils.measure_execution_time
     def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ For plotting the sankeys. """
-        for i_display_name in [name for name, display_name in lt.DisplayNames.__members__.items()]:
-            my_sankey = charts.SankeyHISIM(name=i_display_name,
-                                           output_name=i_display_name,
-                                           units=lt.Units.ANY,
-                                           directorypath=ppdt.simulation_parameters.result_directory,
-                                           time_correction_factor=ppdt.time_correction_factor)
+        """For plotting the sankeys."""
+        for i_display_name in [
+            name for name, display_name in lt.DisplayNames.__members__.items()
+        ]:
+            my_sankey = charts.SankeyHISIM(
+                name=i_display_name,
+                output_name=i_display_name,
+                units=lt.Units.ANY,
+                directorypath=ppdt.simulation_parameters.result_directory,
+                time_correction_factor=ppdt.time_correction_factor,
+            )
             my_sankey.plot(data=ppdt.all_outputs)
-        if any(component_output.component_name == "HeatPump" for component_output in ppdt.all_outputs):
-            my_sankey = charts.SankeyHISIM(name="HeatPump",
-                                           output_name="HeatPump",
-                                           units=lt.Units.ANY,
-                                           directorypath=ppdt.simulation_parameters.result_directory,
-                                           time_correction_factor=ppdt.time_correction_factor)
+        if any(
+            component_output.component_name == "HeatPump"
+            for component_output in ppdt.all_outputs
+        ):
+            my_sankey = charts.SankeyHISIM(
+                name="HeatPump",
+                output_name="HeatPump",
+                units=lt.Units.ANY,
+                directorypath=ppdt.simulation_parameters.result_directory,
+                time_correction_factor=ppdt.time_correction_factor,
+            )
             my_sankey.plot_heat_pump(data=ppdt.all_outputs)
-        if any(component_output.component_name == "Building" for component_output in ppdt.all_outputs):
-            my_sankey = charts.SankeyHISIM(name="Building",
-                                           output_name="Building",
-                                           units=lt.Units.ANY,
-                                           directorypath=ppdt.simulation_parameters.result_directory,
-                                           time_correction_factor=ppdt.time_correction_factor)
+        if any(
+            component_output.component_name == "Building"
+            for component_output in ppdt.all_outputs
+        ):
+            my_sankey = charts.SankeyHISIM(
+                name="Building",
+                output_name="Building",
+                units=lt.Units.ANY,
+                directorypath=ppdt.simulation_parameters.result_directory,
+                time_correction_factor=ppdt.time_correction_factor,
+            )
             my_sankey.plot_building(data=ppdt.all_outputs)
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
     def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
-        """ Runs the main post processing. """
+        """Runs the main post processing."""
         # Define the directory name
         log.information("Main post processing function")
 
@@ -70,15 +87,24 @@ class PostProcessor:
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
         if docker_flag.lower() in ("true", "yes", "y", "1"):
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
-            allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
+            allowed_options_for_docker = {
+                PostProcessingOptions.EXPORT_TO_CSV,
+                PostProcessingOptions.COMPUTE_KPI,
+            }
             # Of all specified options, select those that are allowed
-            valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
+            valid_options = list(
+                set(ppdt.post_processing_options) & allowed_options_for_docker
+            )
             if len(valid_options) < len(ppdt.post_processing_options):
                 # At least one invalid option was set
                 ppdt.post_processing_options = valid_options
-                log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
+                log.warning(
+                    "Hisim is running in a docker container. Disabled invalid postprocessing options."
+                )
 
-        report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
+        report = reportgenerator.ReportGenerator(
+            dirpath=ppdt.simulation_parameters.result_directory
+        )
         days = {"month": 0, "day": 0}
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
@@ -107,185 +133,245 @@ class PostProcessor:
         if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
             log.information("Computing KPIs")
             self.compute_kpis(ppdt, report)
-        if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
+        if (
+            PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
+            in ppdt.post_processing_options
+        ):
             log.information("Generating csv for housing data base. ")
-            generate_csv_for_database(all_outputs=ppdt.all_outputs, results=ppdt.results, simulation_parameters=ppdt.simulation_parameters)
+            generate_csv_for_database(
+                all_outputs=ppdt.all_outputs,
+                results=ppdt.results,
+                simulation_parameters=ppdt.simulation_parameters,
+            )
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
             log.information("Computing Network Charts")
             self.make_network_charts(ppdt)
 
         # only a single day has been calculated. This gets special charts for debugging.
-        if PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options and len(ppdt.results) == 1440:
-            log.information("Making special single day plots for a single day calculation for testing.")
+        if (
+            PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY
+            in ppdt.post_processing_options
+            and len(ppdt.results) == 1440
+        ):
+            log.information(
+                "Making special single day plots for a single day calculation for testing."
+            )
             self.make_special_one_day_debugging_plots(ppdt)
 
         # Open file explorer
-        if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in ppdt.post_processing_options:
+        if (
+            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+            in ppdt.post_processing_options
+        ):
             log.information("opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function")
 
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Generates the network charts that show the connection of the elements. """
+        """Generates the network charts that show the connection of the elements."""
         systemchart = SystemChart(ppdt)
         systemchart.make_chart()
 
-    def make_special_one_day_debugging_plots(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Makes special plots for debugging if only a single day was calculated."""
+    def make_special_one_day_debugging_plots(
+        self, ppdt: PostProcessingDataTransfer
+    ) -> None:
+        """Makes special plots for debugging if only a single day was calculated."""
         for index, output in enumerate(ppdt.all_outputs):
             if output.full_name == "Dummy # Residence Temperature":
-                my_days = ChartSingleDay(output=output.full_name,
-                                         output_name=output.component_name,
-                                         units=output.unit,
-                                         directorypath=ppdt.simulation_parameters.result_directory,
-                                         time_correction_factor=ppdt.time_correction_factor,
-                                         data=ppdt.results.iloc[:, index],
-                                         day=0,
-                                         month=0,
-                                         output2=ppdt.results.iloc[:, 11])
+                my_days = ChartSingleDay(
+                    output=output.full_name,
+                    output_name=output.component_name,
+                    units=output.unit,
+                    directorypath=ppdt.simulation_parameters.result_directory,
+                    time_correction_factor=ppdt.time_correction_factor,
+                    data=ppdt.results.iloc[:, index],
+                    day=0,
+                    month=0,
+                    output2=ppdt.results.iloc[:, 11],
+                )
             else:
-                my_days = ChartSingleDay(output=output.full_name,
-                                         output_name=output.component_name,
-                                         units=output.unit,
-                                         directorypath=ppdt.simulation_parameters.result_directory,
-                                         time_correction_factor=ppdt.time_correction_factor,
-                                         data=ppdt.results.iloc[:, index],
-                                         day=0,
-                                         month=0)
+                my_days = ChartSingleDay(
+                    output=output.full_name,
+                    output_name=output.component_name,
+                    units=output.unit,
+                    directorypath=ppdt.simulation_parameters.result_directory,
+                    time_correction_factor=ppdt.time_correction_factor,
+                    data=ppdt.results.iloc[:, index],
+                    day=0,
+                    month=0,
+                )
             my_days.plot(close=True)
 
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Exports all data to CSV. """
+        """Exports all data to CSV."""
         log.information("exporting to csv")
         self.export_results_to_csv(ppdt)
 
     def make_sankey_plots(self) -> None:
-        """ Makes Sankey plots. Needs work. """
+        """Makes Sankey plots. Needs work."""
         log.information("plotting sankeys")
         # TODO:   self.plot_sankeys()
 
     def make_bar_charts(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Make bar charts. """
+        """Make bar charts."""
         for index, output in enumerate(ppdt.all_outputs):
-            my_bar = charts.BarChart(output=output.full_name,
-                                     output_name=output.component_name,
-                                     units=output.unit,
-                                     dirpath=os.path.join(ppdt.simulation_parameters.result_directory),
-                                     time_correction_factor=ppdt.time_correction_factor)
-            my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
+            my_bar = charts.BarChart(
+                output=output.full_name,
+                output_name=output.component_name,
+                units=output.unit,
+                dirpath=os.path.join(ppdt.simulation_parameters.result_directory),
+                time_correction_factor=ppdt.time_correction_factor,
+            )
+            my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
+            self.report_image_entries.append(my_entry)
 
-    def make_single_day_plots(self, days: Any, ppdt: PostProcessingDataTransfer) -> None:
-        """ Makes plots for selected days. """
+    def make_single_day_plots(
+        self, days: Any, ppdt: PostProcessingDataTransfer
+    ) -> None:
+        """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):
-            my_days = ChartSingleDay(output=output.full_name,
-                                     output_name=output.component_name,
-                                     units=output.unit,
-                                     directorypath=ppdt.simulation_parameters.result_directory,
-                                     time_correction_factor=ppdt.time_correction_factor,
-                                     day=days["day"],
-                                     month=days["month"],
-                                     data=ppdt.results.iloc[:, index])
+            my_days = ChartSingleDay(
+                output=output.full_name,
+                output_name=output.component_name,
+                units=output.unit,
+                directorypath=ppdt.simulation_parameters.result_directory,
+                time_correction_factor=ppdt.time_correction_factor,
+                day=days["day"],
+                month=days["month"],
+                data=ppdt.results.iloc[:, index],
+            )
             my_days.plot(close=True)
 
     def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Make carpet plots. """
+        """Make carpet plots."""
         for index, output in enumerate(ppdt.all_outputs):
             log.trace("Making carpet plots")
-            my_carpet = charts.Carpet(output=output.full_name,
-                                      component_name=output.component_name,
-                                      units=output.unit,
-                                      directorypath=ppdt.simulation_parameters.result_directory,
-                                      time_correction_factor=ppdt.time_correction_factor)
-            
-            my_entry = my_carpet.plot(xdims=int(
-                (ppdt.simulation_parameters.end_date - ppdt.simulation_parameters.start_date).days), data=ppdt.results.iloc[:, index])
-            self.report_image_entries.append(my_entry)
+            my_carpet = charts.Carpet(
+                output=output.full_name,
+                component_name=output.component_name,
+                units=output.unit,
+                directorypath=ppdt.simulation_parameters.result_directory,
+                time_correction_factor=ppdt.time_correction_factor,
+            )
 
+            my_entry = my_carpet.plot(
+                xdims=int(
+                    (
+                        ppdt.simulation_parameters.end_date
+                        - ppdt.simulation_parameters.start_date
+                    ).days
+                ),
+                data=ppdt.results.iloc[:, index],
+            )
+            self.report_image_entries.append(my_entry)
 
     @utils.measure_memory_leak
     def make_line_plots(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Makes the line plots."""
+        """Makes the line plots."""
         for index, output in enumerate(ppdt.all_outputs):
-            my_line = charts.Line(output=output.full_name,
-                                  output_name=output.component_name,
-                                  units=output.unit,
-                                  directorypath=ppdt.simulation_parameters.result_directory,
-                                  time_correction_factor=ppdt.time_correction_factor)
-            my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
+            my_line = charts.Line(
+                output=output.full_name,
+                output_name=output.component_name,
+                units=output.unit,
+                directorypath=ppdt.simulation_parameters.result_directory,
+                time_correction_factor=ppdt.time_correction_factor,
+            )
+            my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
+            self.report_image_entries.append(my_entry)
             del my_line
 
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Exports the results to a CSV file. """
+        """Exports the results to a CSV file."""
         for column in ppdt.results:
-            ppdt.results[column].to_csv(os.path.join(ppdt.simulation_parameters.result_directory,
-                                                     f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv"), sep=",", decimal=".")
+            ppdt.results[column].to_csv(
+                os.path.join(
+                    ppdt.simulation_parameters.result_directory,
+                    f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv",
+                ),
+                sep=",",
+                decimal=".",
+            )
         for column in ppdt.results_monthly:
-            csvfilename = os.path.join(ppdt.simulation_parameters.result_directory,
-                                       f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv")
-            header = [f"{column.split('[', 1)[0]} - monthly ["f"{column.split('[', 1)[1]}"]
-            ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
+            csvfilename = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv",
+            )
+            header = [
+                f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"
+            ]
+            ppdt.results_monthly[column].to_csv(
+                csvfilename, sep=",", decimal=".", header=header
+            )
 
-    def write_to_report(self, text: Any, report: reportgenerator.ReportGenerator) -> None:
-        """ Writes a single line to the report. """
+    def write_to_report(
+        self, text: Any, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Writes a single line to the report."""
         report.open()
         report.write(text)
         report.close()
 
-    def compute_kpis(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
-        """ Computes KPI's and writes them to report and csv. """
-        kpi_compute_return = compute_kpis(results=ppdt.results, all_outputs=ppdt.all_outputs, simulation_parameters=ppdt.simulation_parameters)
+    def compute_kpis(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes KPI's and writes them to report and csv."""
+        kpi_compute_return = compute_kpis(
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
         lines = kpi_compute_return
         report.open()
         report.write_heading(["### KPIs"])
         report.write(lines)
         report.close()
 
-
-    def write_components_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator, report_image_entries: List[ReportImageEntry]) -> None:
-        """ Writes information about the components used in the simulation to the simulation report. """
+    def write_components_to_report(
+        self,
+        ppdt: PostProcessingDataTransfer,
+        report: reportgenerator.ReportGenerator,
+        report_image_entries: List[ReportImageEntry],
+    ) -> None:
+        """Writes information about the components used in the simulation to the simulation report."""
         report.open()
         # sort report image entries
         component_names = []
-        for x in report_image_entries:
-            if not x.component_name in component_names:
-                component_names.append(x.component_name)
-        log.information("component names " + str(component_names))
-        output_types = []
-        paths = []
-        for component in component_names:
-            for x in report_image_entries:
-                if x.component_name==component:
-                    if not x.output_type in output_types:
-                        output_types.append(x.output_type)
-                    if not x.path in paths:
-                        paths.append(x.path)
-        log.information("paths und len " + str(paths) + " " + str(len(paths)))
+        for report_image_entry in report_image_entries:
+            if report_image_entry.component_name not in component_names:
+                component_names.append(report_image_entry.component_name)
 
-        for index, component_name in enumerate(component_names):
-            # here write chapter start and description of component and its outputs
-            
+        output_types = []
+        file_paths = []
+        for component in component_names:
+            for report_image_entry in report_image_entries:
+                if report_image_entry.component_name == component:
+                    if report_image_entry.output_type not in output_types:
+                        output_types.append(report_image_entry.output_type)
+                    if report_image_entry.file_path not in file_paths:
+                        file_paths.append(report_image_entry.file_path)
+
+        for component_name in component_names:
+            # write component information
+            report.write_heading([component_name])
             for wrapped_component in ppdt.wrapped_components:
                 if wrapped_component.my_component.component_name == component_name:
                     component_content = wrapped_component.my_component.write_to_report()
-                    # if wrapped_component.my_component.component_name == component:
-                    #     log.information("wrapped compoennt name " + str(wrapped_component.my_component.component_name))
-                    #     if hasattr(wrapped_component.my_component, "write_to_report"):
-                    #         component_content = wrapped_component.my_component.write_to_report()
-                    # else:
-                    #     raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
-                    # if isinstance(component_content, list) is False:
-                    #     component_content = [component_content]
-                    # if isinstance(component_content, str) is True:
-                    #     component_content = [component_content]
                     report.write(component_content)
-                    for x in report_image_entries:
-                        if x.component_name == component_name:
-                            log.information("component " + str(x.component_name))
-                            log.information("output type " + str(x.output_type))
-                            log.information("path " + str(x.path))
-                            report.write_figures_to_report(component_name=x.component_name, output_type=x.output_type, path=x.path)
 
+            # write respective component output figures
+            for output_type in output_types:
+                for report_image_entry in report_image_entries:
+                    if (
+                        report_image_entry.component_name == component_name
+                        and report_image_entry.output_type == output_type
+                    ):
+                        # report.write_heading([f"{component_name} Outputs"])
+                        # report.write([output_type])
+                        report.write_figures_to_report(
+                            file_path=report_image_entry.file_path,
+                        )
+            report.page_break()
 
         # for wrapped_component in ppdt.wrapped_components:
         #     if hasattr(wrapped_component.my_component, "write_to_report"):
@@ -298,6 +384,7 @@ class PostProcessor:
         #         component_content = [component_content]
         #     report.write(component_content)
         #     report.write_figures_to_report(component_name=x.component_name, path=x.path)
+
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:
@@ -307,18 +394,20 @@ class PostProcessor:
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Opens files in given path.
+        """Opens files in given path.
 
         The keyword darwin is used for supporting macOS,
         xdg-open will be available on any unix client running X.
         """
         if sys.platform == "win32":
-            os.startfile(os.path.realpath(ppdt.simulation_parameters.result_directory))  # noqa: B606
+            os.startfile(
+                os.path.realpath(ppdt.simulation_parameters.result_directory)
+            )  # noqa: B606
         else:
             log.information("Not on Windows. Can't open explorer.")
 
     def export_sankeys(self):
-        """ Exports Sankeys plots.
+        """Exports Sankeys plots.
 
         ToDo: implement
         """

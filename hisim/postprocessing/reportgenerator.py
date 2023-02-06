@@ -3,7 +3,7 @@
 import copy
 import time
 import os
-from typing import Any, List
+from typing import Any
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
@@ -12,34 +12,37 @@ from reportlab.lib.units import inch
 from reportlab.platypus import Table
 
 from hisim import utils
-from hisim import log
-from hisim.postprocessing.report_image_entries import ReportImageEntry
+
 
 class ReportGenerator:
 
-    """ Class for generating reports. """
+    """Class for generating reports."""
 
     def __init__(self, dirpath: str) -> None:
-        """ Initializes the pdf report. """
+        """Initialize the pdf report."""
         if dirpath is None:
             raise ValueError("Result path for the report was none.")
         self.story: Any
         self.filepath = os.path.join(dirpath, "report.pdf")
         self.open()
         self.write_preamble()
-        # self.write_figures_to_report()
         self.close()
 
     def open(self):
-        """ Opens a file. """
-        self.doc = SimpleDocTemplate(self.filepath, pagesize=letter,
-                                     rightMargin=72, leftMargin=72,
-                                     topMargin=72, bottomMargin=18)
+        """Open a file."""
+        self.doc = SimpleDocTemplate(
+            self.filepath,
+            pagesize=letter,
+            rightMargin=72,
+            leftMargin=72,
+            topMargin=72,
+            bottomMargin=18,
+        )
         self.styles = getSampleStyleSheet()
-        self.styles.add(ParagraphStyle(name='Justify', alignment=TA_JUSTIFY))
+        self.styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY))
 
     def write_preamble(self):
-        """ Writes the preamble. """
+        """Write the preamble."""
         # Configuration taken mostly from following tutorial
         # https://www.blog.pythonlibrary.org/2010/03/08/a-simple-step-by-step-reportlab-tutorial/
         story = []
@@ -66,20 +69,21 @@ class ReportGenerator:
         story.append(Spacer(1, 200))
 
         # Inserts authors
-        authors = ["Developers: Dr. Noah Pflugradt",
-                   "Vitor Hugo Bellotto Zago"]
+        authors = ["Developers: Dr. Noah Pflugradt", "Vitor Hugo Bellotto Zago"]
         for part in authors:
             ptext = f'<font size="12">{part.strip()}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))
         story.append(Spacer(1, 12))
 
         # Inserts address
-        address_parts = ["Forschungszentrum Jülich",
-                         "Institute of Energy and Climate Research",
-                         "Techno - Economic Systems Analysis (IEK - 3)",
-                         "Wilhelm - Johnen - Straße",
-                         "52428 Jülich",
-                         "Germany"]
+        address_parts = [
+            "Forschungszentrum Jülich",
+            "Institute of Energy and Climate Research",
+            "Techno - Economic Systems Analysis (IEK - 3)",
+            "Wilhelm - Johnen - Straße",
+            "52428 Jülich",
+            "Germany",
+        ]
         for part in address_parts:
             ptext = f'<font size="12">{part.strip()}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))
@@ -99,64 +103,50 @@ class ReportGenerator:
         self.story = story
 
     def write(self, text):
-        """ Writes a paragraph. """
+        """Write a paragraph."""
         if len(text) != 0:
-            bar_string = "=============================================================="
-            self.story.append(Paragraph(bar_string, self.styles["Normal"]))
+            # bar_string = (
+            #     "=============================================================="
+            # )
+            # self.story.append(Paragraph(bar_string, self.styles["Normal"]))
             for part in text:
                 ptext = f'<font size="12">{part}</font>'
                 self.story.append(Paragraph(ptext, self.styles["Normal"]))
             self.story.append(Spacer(1, 12))
 
     def get_story(self):
-        """ Gets the story. """
+        """Get the story."""
         self.story = copy.deepcopy(self.story)
 
     def close(self):
-        """ Closes the report. """
+        """Close the report."""
         self.story.append(PageBreak())
         story = copy.deepcopy(self.story)
         self.doc.build(story)
-        
 
-    def write_figures_to_report(self, component_name: str, output_type: str, path:str) -> None:
-        "Adds component figures to the report."
-        # component_names = []
-        # for x in report_image_entries:
-        #     if not x.component_name in component_names:
-        #         component_names.append(x.component_name)
-        # for component in component_names:
-        #     # hier brauchst du dein kapitel beginn (kompnente und beschreibungstext)
-        #     outputs = []
-        #     for x in report_image_entries:
-        #         if x.component_name==component:
-        #             if not x.output_name in outputs:
-        #                 outputs.append(x.output_name)
+    def write_figures_to_report(self, file_path: str) -> None:
+        """Add all figures of one component and one output type to the report."""
 
-        bar_string = "=============================================================="
-        self.story.append(Paragraph(bar_string, self.styles["Normal"]))
-        text = f'<font size="12">{component_name} Outputs </font>'
-        self.story.append(Paragraph(text, self.styles["Heading1"]))
-        self.story.append(Spacer(1, 12))
-
-        # checking if file exists
-        if os.path.isfile(path):
-            image = Image(path, 5 * inch, 4 * inch)
+        if os.path.isfile(file_path):
+            image = Image(file_path, 4 * inch, 3 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
             self.story.append(Spacer(0, 20))
-        else: 
+        else:
             raise ValueError("no files found")
-        
-        self.story.append(PageBreak())
-
 
     def write_heading(self, text):
-        """ Writes text as heading. """
+        """Write text as heading."""
         if len(text) != 0:
-            bar_string = "=============================================================="
+            bar_string = (
+                "=============================================================="
+            )
             self.story.append(Paragraph(bar_string, self.styles["Normal"]))
             for part in text:
                 ptext = f'<font size="12">{part}</font>'
                 self.story.append(Paragraph(ptext, self.styles["Heading1"]))
             self.story.append(Spacer(1, 12))
+
+    def page_break(self):
+        """Make a page break."""
+        self.story.append(PageBreak())

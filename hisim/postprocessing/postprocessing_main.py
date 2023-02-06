@@ -359,14 +359,24 @@ class PostProcessor:
                             report_image_entry.component_output_folder_path
                         )
 
-        # for component_name in component_names:
-        #     # write component information
-        #     report.write_heading([component_name])
-        #     for wrapped_component in ppdt.wrapped_components:
-        #         if wrapped_component.my_component.component_name == component_name:
-        #             component_content = wrapped_component.my_component.write_to_report()
-        #             report.write(component_content)
+        for component_name in component_names:
+            # write component information
+            report.write_heading([component_name])
+            for wrapped_component in ppdt.wrapped_components:
+                if wrapped_component.my_component.component_name == component_name:
+                    component_content = wrapped_component.my_component.write_to_report()
+                    report.write(component_content)
 
+            for component_output_folder_path in component_output_folder_paths:
+                folder_path = os.path.normpath(component_output_folder_path)
+                component_name1 = folder_path.split(os.sep)[-2]
+                output_type1 = folder_path.split(os.sep)[-1]
+                if component_name == component_name1:
+                    report.write_all_figures_of_one_output_type_to_report(
+                        component_name=component_name,
+                        output_type=output_type1,
+                        component_output_folder_path=component_output_folder_path,
+                    )
         #     # write respective component output figures
         #     for output_type in output_types:
         #         for report_image_entry in report_image_entries:
@@ -381,15 +391,15 @@ class PostProcessor:
         #                 )
         #     report.page_break()
 
-        for component_output_folder_path in component_output_folder_paths:
-            folder_path = os.path.normpath(component_output_folder_path)
-            component_name = folder_path.split(os.sep)[-2]
-            output_type = folder_path.split(os.sep)[-1]
-            report.write_all_figures_of_one_output_type_to_report(
-                component_name=component_name,
-                output_type=output_type,
-                component_output_folder_path=component_output_folder_path,
-            )
+        # for component_output_folder_path in component_output_folder_paths:
+        #     folder_path = os.path.normpath(component_output_folder_path)
+        #     component_name = folder_path.split(os.sep)[-2]
+        #     output_type = folder_path.split(os.sep)[-1]
+        #     report.write_all_figures_of_one_output_type_to_report(
+        #         component_name=component_name,
+        #         output_type=output_type,
+        #         component_output_folder_path=component_output_folder_path,
+        #     )
 
         # for wrapped_component in ppdt.wrapped_components:
         #     if hasattr(wrapped_component.my_component, "write_to_report"):

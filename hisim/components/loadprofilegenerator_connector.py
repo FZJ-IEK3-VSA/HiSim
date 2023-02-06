@@ -291,6 +291,8 @@ class Occupancy(cp.Component):
     def write_to_report(self):
         """Writes a report."""
         lines = []
+        for config_string in self.occupancyConfig.get_string_dict():
+            lines.append(config_string)
         lines.append(f"Name: {self.component_name}")
         lines.append(f"Profile: {self.profile_name}")
         return lines

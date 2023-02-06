@@ -272,6 +272,8 @@ class PVSystem(cp.Component):
 
     def write_to_report(self):
         lines = []
+        for config_string in self.pvconfig.get_string_dict():
+            lines.append(config_string)
         lines.append(f"Name: {self.pvconfig.name}")
         lines.append(f"Time: {self.pvconfig.time}")
         lines.append(f"Location: {self.pvconfig.location}")

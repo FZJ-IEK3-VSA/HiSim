@@ -34,7 +34,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class UtspLpgConnectorConfig:
+class UtspLpgConnectorConfig(cp.ConfigBase):
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
@@ -572,6 +572,8 @@ class UtspLpgConnector(cp.Component):
     def write_to_report(self):
         """Adds a report entry for this component."""
         lines = []
+        for config_string in self.utsp_config.get_string_dict():
+            lines.append(config_string)
         lines.append(f"Name: {self.component_name}")
         lines.append("URL: " + str(self.utsp_config.url))
         lines.append("Household: " + str(self.utsp_config.household))

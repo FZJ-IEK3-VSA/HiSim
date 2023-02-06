@@ -92,7 +92,7 @@ class ChartSingleDay(Chart):
         plt.savefig(self.filepath2)
         plt.close()
 
-    def plot(self, close) -> ReportImageEntry:
+    def plot(self, close: Any) -> ReportImageEntry:
         """ Plots a chart. """
         single_day_data = self.get_day_data()
         plt.rcParams['font.size'] = '30'

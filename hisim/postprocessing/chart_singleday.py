@@ -1,22 +1,33 @@
 """ Charts for a single day. """
 # clean
 import os
+from typing import Optional, Any
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 
 from hisim.postprocessing.chartbase import Chart
-
+from hisim.postprocessing.report_image_entries import ReportImageEntry
 
 class ChartSingleDay(Chart):
 
     """ For making visualisations for a single day. """
 
-    def __init__(self, output, component_name, units, directory_path, time_correction_factor, data, day=None, month=None, output2=None):
+    def __init__(self,       
+        output: Any,
+        component_name: Any,
+        units: Any,
+        directory_path: str,
+        time_correction_factor: float,
+        output_description: Optional[str],
+        data: Any,
+        day: Any = None,
+        month: Any = None,
+        output2: Any = None):
         """ Initializes the class. """
         if output2 is not None:
-            super().__init__(output, component_name, "days", units, directory_path, time_correction_factor, output2)
+            super().__init__(output=output, component_name=component_name, chart_type="days", units=units, directory_path=directory_path, time_correction_factor=time_correction_factor, output_description=output_description, output2=output2)
         else:
-            super().__init__(output=output, component_name=component_name, chart_type="days", units=units, directory_path=directory_path, time_correction_factor=time_correction_factor, output_description=None)
+            super().__init__(output=output, component_name=component_name, chart_type="days", units=units, directory_path=directory_path, time_correction_factor=time_correction_factor, output_description=output_description)
         self.axis: plt.axis
         self.ax2: plt.axis
         self.line2: plt.axis
@@ -26,9 +37,9 @@ class ChartSingleDay(Chart):
         self.plot_title: str
         self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m" \
                         f"{self.month}_d{self.day}.png"
-        self.filefolder = os.path.join(self.directorypath, self.component_name)
+
         self.filepath = os.path.join(self.directorypath, self.filename)
-        self.filepath2 = os.path.join(self.filefolder, self.filename)
+        self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 
     def get_day_data(self):
         """ Extracts data for a single day. """
@@ -81,7 +92,7 @@ class ChartSingleDay(Chart):
         plt.savefig(self.filepath2)
         plt.close()
 
-    def plot(self, close):
+    def plot(self, close) -> ReportImageEntry:
         """ Plots a chart. """
         single_day_data = self.get_day_data()
         plt.rcParams['font.size'] = '30'
@@ -101,3 +112,12 @@ class ChartSingleDay(Chart):
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         if close:
             self.close()
+        return ReportImageEntry(
+            category=None,
+            output_description=self.output_description,
+            component_output_folder_path=self.component_output_folder_path,
+            file_path=self.filepath2,
+            unit=self.units,
+            component_name=self.component_name,
+            output_type=self.output_type,
+        )

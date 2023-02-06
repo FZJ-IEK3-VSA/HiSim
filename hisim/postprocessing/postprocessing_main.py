@@ -188,6 +188,7 @@ class PostProcessor:
                     day=0,
                     month=0,
                     output2=ppdt.results.iloc[:, 11],
+                    output_description=output.output_description
                 )
             else:
                 my_days = ChartSingleDay(
@@ -199,8 +200,10 @@ class PostProcessor:
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
+                    output_description=output.output_description
                 )
-            my_days.plot(close=True)
+            my_entry = my_days.plot(close=True)
+            self.report_image_entries.append(my_entry)
 
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports all data to CSV."""
@@ -240,8 +243,10 @@ class PostProcessor:
                 day=days["day"],
                 month=days["month"],
                 data=ppdt.results.iloc[:, index],
+                output_description=output.output_description
             )
-            my_days.plot(close=True)
+            my_entry = my_days.plot(close=True)
+            self.report_image_entries.append(my_entry)
 
     def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """Make carpet plots."""

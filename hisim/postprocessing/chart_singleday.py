@@ -1,7 +1,7 @@
 """ Charts for a single day. """
 # clean
 import os
-from typing import Optional, Any
+from typing import Any
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 
@@ -14,11 +14,11 @@ class ChartSingleDay(Chart):
 
     def __init__(self,       
         output: Any,
-        component_name: Any,
+        component_name: str,
         units: Any,
         directory_path: str,
         time_correction_factor: float,
-        output_description: Optional[str],
+        output_description: str,
         data: Any,
         day: Any = None,
         month: Any = None,

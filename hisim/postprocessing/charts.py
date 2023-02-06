@@ -1,7 +1,7 @@
 """ Contains all the chart classes. """
 # clean
 import gc
-from typing import Any, Optional
+from typing import Any
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -26,11 +26,11 @@ class Carpet(Chart):  # noqa: too-few-public-methods
     def __init__(
         self,
         output: Any,
-        component_name: Any,
+        component_name: str,
         units: Any,
         directorypath: str,
         time_correction_factor: float,
-        output_description: Optional[str]
+        output_description: str
     ) -> None:
         """Initalizes a carpot plot."""
         super().__init__(
@@ -109,11 +109,11 @@ class Line(Chart):  # noqa: too-few-public-methods
     def __init__(
         self,       
         output: Any,
-        component_name: Any,
+        component_name: str,
         units: Any,
-        directorypath: str,
+        directory_path: str,
         time_correction_factor: float,
-        output_description: Optional[str]
+        output_description: str
     ):
         """Initializes a line chart."""
         super().__init__(
@@ -121,7 +121,7 @@ class Line(Chart):  # noqa: too-few-public-methods
             component_name=component_name,
             chart_type="Line",
             units=units,
-            directory_path=directorypath,
+            directory_path=directory_path,
             time_correction_factor=time_correction_factor,
             output_description=output_description
         )
@@ -189,11 +189,11 @@ class BarChart(Chart):  # noqa: too-few-public-methods
 
     def __init__(self,
         output: Any,
-        component_name: Any,
+        component_name: str,
         units: Any,
         directorypath: str,
         time_correction_factor: float,
-        output_description: Optional[str]):
+        output_description: str):
         """Initializes the classes."""
         super().__init__(
             output=output,
@@ -248,9 +248,10 @@ class SankeyHISIM(Chart):
 
     """Class for sankey charts."""
 
-    def __init__(self, name, output_name, units, directorypath, time_correction_factor):
+    def __init__(self, name, output_name, units, directorypath, time_correction_factor, output_description):
         """Initializes the Sankey chart."""
         super().__init__(
+            output_description=output_description,
             output=name,
             component_name=output_name,
             chart_type="Sankey",

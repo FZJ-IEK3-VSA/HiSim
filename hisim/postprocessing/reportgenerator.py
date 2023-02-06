@@ -105,10 +105,6 @@ class ReportGenerator:
     def write(self, text):
         """Write a paragraph."""
         if len(text) != 0:
-            # bar_string = (
-            #     "=============================================================="
-            # )
-            # self.story.append(Paragraph(bar_string, self.styles["Normal"]))
             for part in text:
                 ptext = f'<font size="12">{part}</font>'
                 self.story.append(Paragraph(ptext, self.styles["Normal"]))
@@ -135,12 +131,12 @@ class ReportGenerator:
         else:
             raise ValueError("no files found")
 
-    def write_all_figures_of_one_output_type_to_report(self, component_output_folder_path: str, component_name: str, output_type: str) -> None:
+    def write_all_figures_of_one_output_type_to_report(
+        self, component_output_folder_path: str, component_name: str, output_type: str
+    ) -> None:
         """Add all figures of one component and one output type to the report."""
 
-        bar_string = (
-                "=============================================================="
-            )
+        bar_string = "=============================================================="
         self.story.append(Paragraph(bar_string, self.styles["Normal"]))
 
         text = f'<font size="12">{component_name}</font>'
@@ -158,9 +154,8 @@ class ReportGenerator:
                 self.story.append(Spacer(0, 20))
             else:
                 raise ValueError("no files found")
-            
-        self.story.append(PageBreak())
 
+        self.story.append(PageBreak())
 
     def write_heading(self, text):
         """Write text as heading."""

@@ -14,7 +14,7 @@ class ReportImageEntry:
         component_name: str,
         output_type: str,
         file_path: str,
-        component_output_folder_path: Optional[str],
+        component_output_folder_path: str,
         category: Optional[str],
         description: Optional[str],
         unit: Optional[str],

@@ -1,7 +1,7 @@
 """ Contains all the chart classes. """
 # clean
 import gc
-from typing import Any
+from typing import Any, Optional
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,6 +30,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         units: Any,
         directorypath: str,
         time_correction_factor: float,
+        output_description: Optional[str]
     ) -> None:
         """Initalizes a carpot plot."""
         super().__init__(
@@ -39,6 +40,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
             units=units,
             directory_path=directorypath,
             time_correction_factor=time_correction_factor,
+            output_description=output_description
         )
 
     def plot(self, xdims: int, data: Any) -> ReportImageEntry:
@@ -90,7 +92,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         plt.close()
         return ReportImageEntry(
             category=None,
-            description=None,
+            output_description=self.output_description,
             component_output_folder_path=self.component_output_folder_path,
             file_path=self.filepath2,
             unit=self.units,
@@ -105,11 +107,23 @@ class Line(Chart):  # noqa: too-few-public-methods
 
     # @utils.measure_memory_leak
     def __init__(
-        self, output, output_name, units, directorypath, time_correction_factor
+        self,       
+        output: Any,
+        component_name: Any,
+        units: Any,
+        directorypath: str,
+        time_correction_factor: float,
+        output_description: Optional[str]
     ):
         """Initializes a line chart."""
         super().__init__(
-            output, output_name, "line", units, directorypath, time_correction_factor
+            output=output,
+            component_name=component_name,
+            chart_type="Line",
+            units=units,
+            directory_path=directorypath,
+            time_correction_factor=time_correction_factor,
+            output_description=output_description
         )
 
     @utils.measure_memory_leak
@@ -145,7 +159,7 @@ class Line(Chart):  # noqa: too-few-public-methods
         gc.collect(2)
         return ReportImageEntry(
             category=None,
-            description=None,
+            output_description=self.output_description,
             component_output_folder_path=self.component_output_folder_path,
             file_path=self.filepath2,
             unit=self.units,
@@ -173,10 +187,22 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         366.83,
     ]
 
-    def __init__(self, output, output_name, units, dirpath, time_correction_factor):
+    def __init__(self,
+        output: Any,
+        component_name: Any,
+        units: Any,
+        directorypath: str,
+        time_correction_factor: float,
+        output_description: Optional[str]):
         """Initializes the classes."""
         super().__init__(
-            output, output_name, "Bar", units, dirpath, time_correction_factor
+            output=output,
+            component_name=component_name,
+            chart_type="Bar",
+            units=units,
+            directory_path=directorypath,
+            time_correction_factor=time_correction_factor,
+            output_description=output_description
         )
         self.filename = f"monthly_{self.output}.png"
 
@@ -209,7 +235,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         plt.close()
         return ReportImageEntry(
             category=None,
-            description=None,
+            output_description=self.output_description,
             component_output_folder_path=self.component_output_folder_path,
             file_path=self.filepath2,
             unit=self.units,

@@ -180,9 +180,9 @@ class PostProcessor:
             if output.full_name == "Dummy # Residence Temperature":
                 my_days = ChartSingleDay(
                     output=output.full_name,
-                    output_name=output.component_name,
+                    component_name=output.component_name,
                     units=output.unit,
-                    directorypath=ppdt.simulation_parameters.result_directory,
+                    directory_path=ppdt.simulation_parameters.result_directory,
                     time_correction_factor=ppdt.time_correction_factor,
                     data=ppdt.results.iloc[:, index],
                     day=0,
@@ -192,9 +192,9 @@ class PostProcessor:
             else:
                 my_days = ChartSingleDay(
                     output=output.full_name,
-                    output_name=output.component_name,
+                    component_name=output.component_name,
                     units=output.unit,
-                    directorypath=ppdt.simulation_parameters.result_directory,
+                    directory_path=ppdt.simulation_parameters.result_directory,
                     time_correction_factor=ppdt.time_correction_factor,
                     data=ppdt.results.iloc[:, index],
                     day=0,
@@ -217,10 +217,11 @@ class PostProcessor:
         for index, output in enumerate(ppdt.all_outputs):
             my_bar = charts.BarChart(
                 output=output.full_name,
-                output_name=output.component_name,
+                component_name=output.component_name,
                 units=output.unit,
-                dirpath=os.path.join(ppdt.simulation_parameters.result_directory),
+                directorypath=os.path.join(ppdt.simulation_parameters.result_directory),
                 time_correction_factor=ppdt.time_correction_factor,
+                output_description=output.output_description
             )
             my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
             self.report_image_entries.append(my_entry)
@@ -232,9 +233,9 @@ class PostProcessor:
         for index, output in enumerate(ppdt.all_outputs):
             my_days = ChartSingleDay(
                 output=output.full_name,
-                output_name=output.component_name,
+                component_name=output.component_name,
                 units=output.unit,
-                directorypath=ppdt.simulation_parameters.result_directory,
+                directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
                 day=days["day"],
                 month=days["month"],
@@ -252,6 +253,7 @@ class PostProcessor:
                 units=output.unit,
                 directorypath=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
+                output_description=output.output_description
             )
 
             my_entry = my_carpet.plot(
@@ -271,10 +273,11 @@ class PostProcessor:
         for index, output in enumerate(ppdt.all_outputs):
             my_line = charts.Line(
                 output=output.full_name,
-                output_name=output.component_name,
+                component_name=output.component_name,
                 units=output.unit,
                 directorypath=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
+                output_description=output.output_description
             )
             my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
             self.report_image_entries.append(my_entry)
@@ -344,6 +347,7 @@ class PostProcessor:
         output_types = []
         file_paths = []
         component_output_folder_paths = []
+        output_descriptions = []
         for component in component_names:
             for report_image_entry in report_image_entries:
                 if report_image_entry.component_name == component:
@@ -358,6 +362,8 @@ class PostProcessor:
                         component_output_folder_paths.append(
                             report_image_entry.component_output_folder_path
                         )
+                    if report_image_entry.output_description not in output_descriptions:
+                        output_descriptions.append(report_image_entry.output_description)
 
         for component_name in component_names:
             # write component information
@@ -367,7 +373,10 @@ class PostProcessor:
                     component_content = wrapped_component.my_component.write_to_report()
                     report.write(component_content)
 
-            for component_output_folder_path in component_output_folder_paths:
+            for index, component_output_folder_path in enumerate(component_output_folder_paths):
+                log.information(component_output_folder_path)
+                log.information(str(index))
+                log.information(str(output_descriptions[index]))
                 folder_path = os.path.normpath(component_output_folder_path)
                 component_name1 = folder_path.split(os.sep)[-2]
                 output_type1 = folder_path.split(os.sep)[-1]
@@ -376,6 +385,7 @@ class PostProcessor:
                         component_name=component_name,
                         output_type=output_type1,
                         component_output_folder_path=component_output_folder_path,
+                        output_description=output_descriptions[index]
                     )
         #     # write respective component output figures
         #     for output_type in output_types:

@@ -428,6 +428,7 @@ class Building(dynamic_component.DynamicComponent):
             self.InitialInternalTemperature,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.InitialInternalTemperature} will follow."
         )
 
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
@@ -435,18 +436,21 @@ class Building(dynamic_component.DynamicComponent):
             self.TemperatureMean,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.TemperatureMean} will follow."
         )
         self.total_power_to_residence_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TotalEnergyToResidence,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.TotalEnergyToResidence} will follow."
         )
         self.solar_gain_through_windows_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.SolarGainThroughWindows,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.SolarGainThroughWindows} will follow."
         )
         self.var_max_thermal_building_demand_channel: cp.ComponentOutput = (
             self.add_output(
@@ -454,6 +458,7 @@ class Building(dynamic_component.DynamicComponent):
                 self.ReferenceMaxHeatBuildingDemand,
                 lt.LoadTypes.HEATING,
                 lt.Units.WATT,
+                output_description=f"here a description for {self.ReferenceMaxHeatBuildingDemand} will follow."
             )
         )
 

@@ -11,12 +11,12 @@ class ChartSingleDay(Chart):
 
     """ For making visualisations for a single day. """
 
-    def __init__(self, output, output_name, units, directorypath, time_correction_factor, data, day=None, month=None, output2=None):
+    def __init__(self, output, component_name, units, directory_path, time_correction_factor, data, day=None, month=None, output2=None):
         """ Initializes the class. """
         if output2 is not None:
-            super().__init__(output, output_name, "days", units, directorypath, time_correction_factor, output2)
+            super().__init__(output, component_name, "days", units, directory_path, time_correction_factor, output2)
         else:
-            super().__init__(output, output_name, "days", units, directorypath, time_correction_factor)
+            super().__init__(output=output, component_name=component_name, chart_type="days", units=units, directory_path=directory_path, time_correction_factor=time_correction_factor, output_description=None)
         self.axis: plt.axis
         self.ax2: plt.axis
         self.line2: plt.axis

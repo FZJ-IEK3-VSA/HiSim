@@ -41,6 +41,7 @@ class Chart:  # noqa: too-few-public-methods
         self,
         output,
         component_name,
+        output_description,
         chart_type,
         units,
         directory_path,
@@ -50,6 +51,7 @@ class Chart:  # noqa: too-few-public-methods
         """Initializes the base class."""
         self.output = output
         self.component_name = component_name
+        self.output_description = output_description
         self.type = chart_type
         if hasattr(units, "value"):
             self.units = units.value

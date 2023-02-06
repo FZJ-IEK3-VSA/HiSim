@@ -3,7 +3,7 @@
 import copy
 import time
 import os
-from typing import Any
+from typing import Any, Optional
 from reportlab.lib.enums import TA_JUSTIFY
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
@@ -132,7 +132,7 @@ class ReportGenerator:
             raise ValueError("no files found")
 
     def write_all_figures_of_one_output_type_to_report(
-        self, component_output_folder_path: str, component_name: str, output_type: str
+        self, component_output_folder_path: str, component_name: str, output_type: str, output_description: Optional[str]
     ) -> None:
         """Add all figures of one component and one output type to the report."""
 
@@ -144,7 +144,7 @@ class ReportGenerator:
         text1 = f'<font size="12">{output_type}</font>'
         self.story.append(Paragraph(text1, self.styles["Normal"]))
         self.story.append(Spacer(1, 12))
-
+        self.story.append(output_description)
         for file in os.listdir(component_output_folder_path):
             file_path = os.path.join(component_output_folder_path, file)
             if os.path.isfile(file_path):

@@ -132,7 +132,7 @@ class ReportGenerator:
             raise ValueError("no files found")
 
     def write_all_figures_of_one_output_type_to_report(
-        self, component_output_folder_path: str, component_name: str, output_type: str, output_description: str) -> None:
+        self, component_output_folder_path: str, component_name: str, output_type: str, output_description: Optional[str]) -> None:
         """Add all figures of one component and one output type to the report."""
 
         bar_string = "=============================================================="

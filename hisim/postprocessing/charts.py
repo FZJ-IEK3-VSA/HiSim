@@ -28,7 +28,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         output: Any,
         component_name: str,
         units: Any,
-        directorypath: str,
+        directory_path: str,
         time_correction_factor: float,
         output_description: str
     ) -> None:
@@ -38,7 +38,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
             component_name=component_name,
             chart_type="Carpet",
             units=units,
-            directory_path=directorypath,
+            directory_path=directory_path,
             time_correction_factor=time_correction_factor,
             output_description=output_description
         )
@@ -191,7 +191,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         output: Any,
         component_name: str,
         units: Any,
-        directorypath: str,
+        directory_path: str,
         time_correction_factor: float,
         output_description: str):
         """Initializes the classes."""
@@ -200,7 +200,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
             component_name=component_name,
             chart_type="Bar",
             units=units,
-            directory_path=directorypath,
+            directory_path=directory_path,
             time_correction_factor=time_correction_factor,
             output_description=output_description
         )
@@ -248,12 +248,12 @@ class SankeyHISIM(Chart):
 
     """Class for sankey charts."""
 
-    def __init__(self, name, output_name, units, directorypath, time_correction_factor, output_description):
+    def __init__(self, name, component_name, units, directorypath, time_correction_factor, output_description):
         """Initializes the Sankey chart."""
         super().__init__(
             output_description=output_description,
             output=name,
-            component_name=output_name,
+            component_name=component_name,
             chart_type="Sankey",
             units=units,
             directory_path=directorypath,

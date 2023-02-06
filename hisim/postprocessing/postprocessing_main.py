@@ -225,7 +225,7 @@ class PostProcessor:
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
-                directorypath=os.path.join(ppdt.simulation_parameters.result_directory),
+                directory_path=os.path.join(ppdt.simulation_parameters.result_directory),
                 time_correction_factor=ppdt.time_correction_factor,
                 output_description=output.output_description
             )
@@ -259,7 +259,7 @@ class PostProcessor:
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
-                directorypath=ppdt.simulation_parameters.result_directory,
+                directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
                 output_description=output.output_description
             )
@@ -283,7 +283,7 @@ class PostProcessor:
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
-                directorypath=ppdt.simulation_parameters.result_directory,
+                directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
                 output_description=output.output_description
             )

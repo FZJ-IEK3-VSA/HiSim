@@ -130,29 +130,29 @@ class Weather(Component):
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
         self.air_temperature_output: ComponentOutput = self.add_output(self.component_name, self.TemperatureOutside, lt.LoadTypes.TEMPERATURE,
-                                                                       lt.Units.CELSIUS)
+                                                                       lt.Units.CELSIUS, output_description="tbd")
 
         self.DNI_output: ComponentOutput = self.add_output(self.component_name, self.DirectNormalIrradiance, lt.LoadTypes.IRRADIANCE,
-                                                           lt.Units.WATT_PER_SQUARE_METER)
+                                                           lt.Units.WATT_PER_SQUARE_METER, output_description="tbd")
 
         self.DNI_extra_output: ComponentOutput = self.add_output(self.component_name, self.DirectNormalIrradianceExtra, lt.LoadTypes.IRRADIANCE,
-                                                                 lt.Units.WATT_PER_SQUARE_METER)
+                                                                 lt.Units.WATT_PER_SQUARE_METER, output_description="tbd")
 
         self.DHI_output: ComponentOutput = self.add_output(self.component_name, self.DiffuseHorizontalIrradiance, lt.LoadTypes.IRRADIANCE,
-                                                           lt.Units.WATT_PER_SQUARE_METER)
+                                                           lt.Units.WATT_PER_SQUARE_METER, output_description="tbd")
 
         self.GHI_output: ComponentOutput = self.add_output(self.component_name, self.GlobalHorizontalIrradiance, lt.LoadTypes.IRRADIANCE,
-                                                           lt.Units.WATT_PER_SQUARE_METER)
+                                                           lt.Units.WATT_PER_SQUARE_METER, output_description="tbd")
 
-        self.altitude_output: ComponentOutput = self.add_output(self.component_name, self.Altitude, lt.LoadTypes.ANY, lt.Units.DEGREES)
+        self.altitude_output: ComponentOutput = self.add_output(self.component_name, self.Altitude, lt.LoadTypes.ANY, lt.Units.DEGREES, output_description="tbd")
 
-        self.azimuth_output: ComponentOutput = self.add_output(self.component_name, self.Azimuth, lt.LoadTypes.ANY, lt.Units.DEGREES)
+        self.azimuth_output: ComponentOutput = self.add_output(self.component_name, self.Azimuth, lt.LoadTypes.ANY, lt.Units.DEGREES, output_description="tbd")
 
-        self.apparent_zenith_output: ComponentOutput = self.add_output(self.component_name, self.ApparentZenith, lt.LoadTypes.ANY, lt.Units.DEGREES)
+        self.apparent_zenith_output: ComponentOutput = self.add_output(self.component_name, self.ApparentZenith, lt.LoadTypes.ANY, lt.Units.DEGREES, output_description="tbd")
 
-        self.wind_speed_output: ComponentOutput = self.add_output(self.component_name, self.WindSpeed, lt.LoadTypes.SPEED, lt.Units.METER_PER_SECOND)
+        self.wind_speed_output: ComponentOutput = self.add_output(self.component_name, self.WindSpeed, lt.LoadTypes.SPEED, lt.Units.METER_PER_SECOND, output_description="tbd")
 
-        self.daily_average_outside_temperature_output : ComponentOutput = self.add_output(self.component_name, self.DailyAverageOutsideTemperatures, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
+        self.daily_average_outside_temperature_output : ComponentOutput = self.add_output(self.component_name, self.DailyAverageOutsideTemperatures, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, output_description="tbd")
 
 
         self.temperature_list: List[float]

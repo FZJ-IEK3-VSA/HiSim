@@ -222,6 +222,7 @@ class GenericHeatPump(cp.Component):
             self.ThermalPowerDelivered,
             LoadTypes.HEATING,
             Units.WATT,
+            output_description="tbd"
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(
@@ -229,7 +230,7 @@ class GenericHeatPump(cp.Component):
         )
 
         self.cooling_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT
+            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT, output_description="tbd"
         )
 
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
@@ -237,10 +238,11 @@ class GenericHeatPump(cp.Component):
             self.ElectricityOutput,
             LoadTypes.ELECTRICITY,
             Units.WATT,
+            output_description="tbd"
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY
+            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY, output_description="tbd"
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())

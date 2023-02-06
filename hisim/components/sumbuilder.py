@@ -112,7 +112,7 @@ class ElectricityGrid(Component):
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.ElectricityOutput,
                                                                        lt.LoadTypes.ELECTRICITY,
-                                                                       lt.Units.WATT)
+                                                                       lt.Units.WATT, output_description="tbd")
     def add_numbered_input(self) -> cp.ComponentInput:
         num_inputs = len(self.inputs)
         label = "Input{}".format(num_inputs + 1)

@@ -108,14 +108,14 @@ class Occupancy(cp.Component):
         # self.energy_discharged: cp.ComponentOutput = self.add_output(self.ComponentName, self.EnergyDischarged, lt.LoadTypes.WarmWater, lt.Units.Watt)
         # self.demand_satisfied: cp.ComponentOutput = self.add_output(self.ComponentName, self.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
-        self.number_of_residentsC: cp.ComponentOutput = self.add_output(self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY)
+        self.number_of_residentsC: cp.ComponentOutput = self.add_output(self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY, output_description="tbd")
         self.heating_by_residentsC: cp.ComponentOutput = self.add_output(self.component_name, self.HeatingByResidents, lt.LoadTypes.HEATING,
-            lt.Units.WATT, )
+            lt.Units.WATT, output_description="tbd" )
         self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ElectricityOutput,
-            load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED], )
+            load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED], output_description="tbd" )
 
         self.water_consumptionC: cp.ComponentOutput = self.add_output(self.component_name, self.WaterConsumption, lt.LoadTypes.WARM_WATER,
-            lt.Units.LITER, )
+            lt.Units.LITER, output_description="tbd" )
 
     def i_save_state(self) -> None:
         pass

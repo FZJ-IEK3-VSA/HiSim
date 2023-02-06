@@ -45,7 +45,8 @@ class PostProcessor:
         ]:
             my_sankey = charts.SankeyHISIM(
                 name=i_display_name,
-                output_name=i_display_name,
+                component_name=i_display_name,
+                output_description=None,
                 units=lt.Units.ANY,
                 directorypath=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
@@ -57,7 +58,8 @@ class PostProcessor:
         ):
             my_sankey = charts.SankeyHISIM(
                 name="HeatPump",
-                output_name="HeatPump",
+                component_name="HeatPump",
+                output_description=None,
                 units=lt.Units.ANY,
                 directorypath=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
@@ -69,7 +71,8 @@ class PostProcessor:
         ):
             my_sankey = charts.SankeyHISIM(
                 name="Building",
-                output_name="Building",
+                component_name="Building",
+                output_description=None,
                 units=lt.Units.ANY,
                 directorypath=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,

@@ -38,7 +38,7 @@ class ChartSingleDay(Chart):
         self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m" \
                         f"{self.month}_d{self.day}.png"
 
-        self.filepath = os.path.join(self.directorypath, self.filename)
+        self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 
     def get_day_data(self):
@@ -66,10 +66,10 @@ class ChartSingleDay(Chart):
 
     def __add__(self, other):
         """ Adds another chart to this one. """
-        my_double: ChartSingleDay = ChartSingleDay(self.output, self.ylabel, self.directorypath, self.time_correction_factor, self.day, self.month)
+        my_double: ChartSingleDay = ChartSingleDay(self.output, self.component_name, self.ylabel, self.directory_path, self.time_correction_factor, self.day, self.month, self.data, self.output_description)
         my_double.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}" \
                              f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}.png"
-        my_double.filepath = os.path.join(self.directorypath, my_double.filename)
+        my_double.filepath = os.path.join(self.directory_path, my_double.filename)
         my_double.plot(close=False)
 
         #  twin object for two different y-axis on the sample plot

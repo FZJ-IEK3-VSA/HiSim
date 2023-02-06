@@ -82,10 +82,10 @@ class Chart:  # noqa: too-few-public-methods
                 self.title = str(single_match)
             else:
                 self.title = f"{self.title} {single_match}"
-        self.directorypath = directory_path
+        self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = os.path.join(
-            self.directorypath, self.component_name, self.output_type
+            self.directory_path, self.component_name, self.output_type
         )
         os.makedirs(self.component_output_folder_path, exist_ok=True)
         self.object_name = " "
@@ -99,5 +99,5 @@ class Chart:  # noqa: too-few-public-methods
             self.filename = (
                 f"{self.type.lower()}_{self.component_name}_{self.output_type}.png"
             )
-        self.filepath = os.path.join(self.directorypath, self.filename)
+        self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)

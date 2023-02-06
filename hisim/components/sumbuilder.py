@@ -1,9 +1,11 @@
-from typing import Any, List
+from typing import Any, List, Optional
 from hisim.component import Component
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
 
 class CalculateOperation(cp.Component):
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
@@ -73,20 +75,39 @@ class CalculateOperation(cp.Component):
                 raise Exception("Operation invalid!")
         stsv.set_output_value(self.output1, total)
 
+
+@dataclass_json
+@dataclass
+class ElectricityGridConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """ Returns the full class name of the base class. """
+        return ElectricityGrid.get_full_classname()
+    name: str
+    grid: Optional[List]
+    signal: Optional[str]
+
+    @classmethod
+    def get_default_PV_system(cls):
+        """ Gets a default PV system. """
+        return ElectricityGridConfig(name="ElectrcityGrid_BaseLoad", grid=None, signal=None)
+    
 class ElectricityGrid(Component):
     operations_available = ["Sum", "Subtract"]
     ElectricityOutput = "ElectricityOutput"
 
     @utils.measure_execution_time
-    def __init__(self, name: str, my_simulation_parameters: SimulationParameters , grid: Any=None, signal:Any=None) -> None:
-        super().__init__(name="{}_{}".format("ElectricityGrid", name), my_simulation_parameters=my_simulation_parameters)
-        self.signal=signal
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: ElectricityGridConfig) -> None:
+        self.electricity_grid_config = config
+        super().__init__(name=self.electricity_grid_config.name, my_simulation_parameters=my_simulation_parameters)
+        self.signal = self.electricity_grid_config.signal
+        self.grid = self.electricity_grid_config.grid
         self.operations: List[str] = []
         self.loadtype = lt.LoadTypes.ELECTRICITY
         self.unit = lt.Units.WATT
 
-        if grid is not None:
-            self.connect_all(grid)
+        if self.grid is not None:
+            self.connect_all(self.grid)
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.ElectricityOutput,
@@ -110,7 +131,8 @@ class ElectricityGrid(Component):
 
     def write_to_report(self) -> List[str]:
         lines = []
-        lines.append("Electricity grid")
+        for config_string in self.electricity_grid_config.get_string_dict():
+            lines.append(config_string)
         # todo: add more useful stuff here
         lines.append("tbd")
         return lines

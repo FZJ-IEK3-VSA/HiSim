@@ -136,8 +136,7 @@ def basic_household_with_default_connections(
     )
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        name="BaseLoad",
-        grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_base_electricity_load_profile)
@@ -166,10 +165,7 @@ def basic_household_with_default_connections(
     my_sim.add_component(my_heat_pump_controller)
 
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        manufacturer=hp_manufacturer,
-        name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time,
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump(),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump.connect_only_predefined_connections(

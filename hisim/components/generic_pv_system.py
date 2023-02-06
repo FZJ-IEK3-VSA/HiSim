@@ -242,8 +242,8 @@ class PVSystem(cp.Component):
 
         self.wind_speedC: cp.ComponentInput = self.add_input(self.component_name, self.WindSpeed, lt.LoadTypes.SPEED, lt.Units.METER_PER_SECOND, True)
 
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=PVSystem.ElectricityOutput,
-                                                                       load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION], output_description="tbd")
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ElectricityOutput,
+                                                                       load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION], output_description=f"here a description for PV {self.ElectricityOutput} will follow.")
         self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod

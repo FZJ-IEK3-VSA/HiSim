@@ -374,9 +374,6 @@ class PostProcessor:
                     report.write(component_content)
 
             for index, component_output_folder_path in enumerate(component_output_folder_paths):
-                log.information(component_output_folder_path)
-                log.information(str(index))
-                log.information(str(output_descriptions[index]))
                 folder_path = os.path.normpath(component_output_folder_path)
                 component_name1 = folder_path.split(os.sep)[-2]
                 output_type1 = folder_path.split(os.sep)[-1]

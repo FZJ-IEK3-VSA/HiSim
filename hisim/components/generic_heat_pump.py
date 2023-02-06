@@ -222,15 +222,15 @@ class GenericHeatPump(cp.Component):
             self.ThermalPowerDelivered,
             LoadTypes.HEATING,
             Units.WATT,
-            output_description="tbd"
+            output_description=f"here a description for {self.ThermalPowerDelivered} will follow."
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Heating, LoadTypes.HEATING, Units.WATT
+            self.component_name, self.Heating, LoadTypes.HEATING, Units.WATT, output_description=f"here a description for {self.Heating} will follow."
         )
 
         self.cooling_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT, output_description="tbd"
+            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT, output_description=f"here a description for {self.Cooling} will follow."
         )
 
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
@@ -238,11 +238,11 @@ class GenericHeatPump(cp.Component):
             self.ElectricityOutput,
             LoadTypes.ELECTRICITY,
             Units.WATT,
-            output_description="tbd"
+            output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow."
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY, output_description="tbd"
+            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY, output_description=f"here a description for {self.NumberOfCycles} will follow."
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -595,7 +595,7 @@ class HeatPumpController(cp.Component):
             False,
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.State, LoadTypes.ANY, Units.ANY
+            self.component_name, self.State, LoadTypes.ANY, Units.ANY, output_description=f"here a description for {self.State} will follow."
         )
 
         self.add_default_connections(self.get_default_connections_from_building())

@@ -132,8 +132,7 @@ class ReportGenerator:
             raise ValueError("no files found")
 
     def write_all_figures_of_one_output_type_to_report(
-        self, component_output_folder_path: str, component_name: str, output_type: str, output_description: Optional[str]
-    ) -> None:
+        self, component_output_folder_path: str, component_name: str, output_type: str, output_description: str) -> None:
         """Add all figures of one component and one output type to the report."""
 
         bar_string = "=============================================================="
@@ -143,8 +142,10 @@ class ReportGenerator:
         self.story.append(Paragraph(text, self.styles["Heading1"]))
         text1 = f'<font size="12">{output_type}</font>'
         self.story.append(Paragraph(text1, self.styles["Normal"]))
+        text2 = f'<font size="12">{output_description}</font>'
+        self.story.append(Paragraph(text2, self.styles["Normal"]))
         self.story.append(Spacer(1, 12))
-        self.story.append(output_description)
+
         for file in os.listdir(component_output_folder_path):
             file_path = os.path.join(component_output_folder_path, file)
             if os.path.isfile(file_path):

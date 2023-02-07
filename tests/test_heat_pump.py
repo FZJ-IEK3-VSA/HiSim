@@ -11,7 +11,7 @@ def test_heat_pump():
     my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
     # Heat Pump
     manufacturer = "Viessmann Werke GmbH & Co KG"
-    name = "Vitocal 300-A AWO-AC 301.B07"
+    heat_pump_name = "Vitocal 300-A AWO-AC 301.B07"
     minimum_idle_time = 30
     minimum_operation_time = 15
     heat_pump_power = 7420.0
@@ -28,7 +28,8 @@ def test_heat_pump():
     #===================================================================================================================
     # Set Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(config=generic_heat_pump.GenericHeatPumpConfig(manufacturer=manufacturer,
-                                                     name=name,
+                                                     name="GenericHeatPump",
+                                                     heat_pump_name=heat_pump_name,
                                                      min_operation_time=minimum_idle_time,
                                                      min_idle_time=minimum_operation_time), my_simulation_parameters=my_simulation_parameters)
 

@@ -1,7 +1,7 @@
 """Gas Heater Module."""
 # clean
 # Owned
-from typing import List
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import (
@@ -9,6 +9,7 @@ from hisim.component import (
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
+    ConfigBase
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -26,10 +27,14 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericGasHeaterConfig:
+class GenericGasHeaterConfig(ConfigBase):
 
     """Configuration of the GasHeater class."""
-
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return GasHeater.get_full_classname()
+    name: str
     is_modulating: bool
     minimal_thermal_power_in_watt: float  # [W]
     maximal_thermal_power_in_watt: float  # [W]
@@ -41,6 +46,26 @@ class GenericGasHeaterConfig:
     temperature_delta_in_celsius: float  # [°C]
     maximal_power_in_watt: float  # [W]
 
+    @classmethod
+    def get_default_gasheater_config(
+        cls,
+    ) -> Any:
+        """Get a default Building."""
+        config = GenericGasHeaterConfig(
+            name = "GenericGasHeater",
+            temperature_delta_in_celsius=10,
+            maximal_power_in_watt=12_000,
+            is_modulating=True,
+            minimal_thermal_power_in_watt=1_000,  # [W]
+            maximal_thermal_power_in_watt=12_000,  # [W]
+            eff_th_min=0.60,  # [-]
+            eff_th_max=0.90,  # [-]
+            delta_temperature_in_celsius=25,
+            maximal_mass_flow_in_kilogram_per_second=12_000
+            / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
+            maximal_temperature_in_celsius=80,  # [°C])
+        )
+        return config
 
 class GasHeater(Component):
 
@@ -68,8 +93,9 @@ class GasHeater(Component):
         config: GenericGasHeaterConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
+        self.gasheater_config = config
         super().__init__(
-            name="GasHeater", my_simulation_parameters=my_simulation_parameters
+            name=self.gasheater_config.name, my_simulation_parameters=my_simulation_parameters
         )
         self.control_signal_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -91,47 +117,33 @@ class GasHeater(Component):
             GasHeater.MassflowOutput,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
+            output_description=f"here a description for {self.MassflowOutput} will follow."
         )
         self.mass_flow_output_temperature_channel: ComponentOutput = self.add_output(
             self.component_name,
             GasHeater.MassflowOutputTemperature,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.MassflowOutputTemperature} will follow."
         )
         self.gas_demand_channel: ComponentOutput = self.add_output(
-            self.component_name, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH
+            self.component_name, GasHeater.GasDemand, lt.LoadTypes.GAS, lt.Units.KWH,
+            output_description=f"here a description for {self.GasDemand} will follow."
         )
         self.thermal_output_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalOutputPower,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalOutputPower} will follow."
         )
 
-        self.minimal_thermal_power_in_watt = config.minimal_thermal_power_in_watt
-        self.maximal_thermal_power_in_watt = config.maximal_power_in_watt
-        self.eff_th_min = config.eff_th_min
-        self.eff_th_max = config.eff_th_max
-        self.maximal_temperature_in_celsius = config.maximal_temperature_in_celsius
-        self.temperature_delta_in_celsius = config.temperature_delta_in_celsius
-
-    @staticmethod
-    def get_default_config():
-        """Get a default gas heater."""
-        config = GenericGasHeaterConfig(
-            temperature_delta_in_celsius=10,
-            maximal_power_in_watt=12_000,
-            is_modulating=True,
-            minimal_thermal_power_in_watt=1_000,  # [W]
-            maximal_thermal_power_in_watt=12_000,  # [W]
-            eff_th_min=0.60,  # [-]
-            eff_th_max=0.90,  # [-]
-            delta_temperature_in_celsius=25,
-            maximal_mass_flow_in_kilogram_per_second=12_000
-            / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
-            maximal_temperature_in_celsius=80,  # [°C])
-        )
-        return config
+        self.minimal_thermal_power_in_watt = self.gasheater_config.minimal_thermal_power_in_watt
+        self.maximal_thermal_power_in_watt = self.gasheater_config.maximal_power_in_watt
+        self.eff_th_min = self.gasheater_config.eff_th_min
+        self.eff_th_max = self.gasheater_config.eff_th_max
+        self.maximal_temperature_in_celsius = self.gasheater_config.maximal_temperature_in_celsius
+        self.temperature_delta_in_celsius = self.gasheater_config.temperature_delta_in_celsius
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -139,7 +151,9 @@ class GasHeater(Component):
 
     def write_to_report(self) -> List[str]:
         """Write a report."""
-        lines: List = []
+        lines = []
+        for config_string in self.gasheater_config.get_string_dict():
+            lines.append(config_string)
         return lines
 
     def i_save_state(self) -> None:

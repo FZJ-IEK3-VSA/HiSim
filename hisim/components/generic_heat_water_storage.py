@@ -1,7 +1,7 @@
 # Generic/Built-in
 
 # Owned
-from hisim.component import Component, ComponentInput, ComponentOutput
+from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -16,9 +16,15 @@ __version__ = ""
 __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
+
 @dataclass_json
 @dataclass
-class HeatStorageConfig:
+class HeatStorageConfig(ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return HeatStorage.get_full_classname()
+    name: str
     V_SP_heating_water : float
     V_SP_warm_water : float
     temperature_of_warm_water_extratcion :float
@@ -26,11 +32,37 @@ class HeatStorageConfig:
     T_sp_ww : float
     T_sp_hw :float
 
+    @classmethod
+    def get_default_heat_storage_config(cls) -> Any:
+        config=HeatStorageConfig(
+            name="HeatStorage",
+                V_SP_heating_water = 1000,
+                V_SP_warm_water = 100,
+                temperature_of_warm_water_extratcion = 32,
+                ambient_temperature = 15,
+                T_sp_ww=40,
+                T_sp_hw=40)
+        return config
+
 @dataclass_json
 @dataclass
-class HeatStorageControllerConfig:
+class HeatStorageControllerConfig(ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return HeatStorageController.get_full_classname()
+
+    name: str
     initial_temperature_building : float
     initial_temperature_heating_storage : float
+
+    @classmethod
+    def get_default_heat_storage_controller_config(cls) -> Any:
+        config=HeatStorageControllerConfig(
+                name = "HeatStorageController",
+                initial_temperature_building = 20,
+                initial_temperature_heating_storage = 35)
+        return config
 
 class HeatStorageState:
     def __init__(self, T_sp_ww: float, T_sp_hw: float) -> None:
@@ -71,16 +103,17 @@ class HeatStorage(Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: HeatStorageConfig) -> None:
-        super().__init__(name="HeatWaterStorage", my_simulation_parameters=my_simulation_parameters)
-        self.V_SP_heating_water = config.V_SP_heating_water
-        self.V_SP_warm_water = config.V_SP_warm_water
-        self.temperature_of_warm_water_extratcion = config.temperature_of_warm_water_extratcion
-        self.ambient_temperature = config.ambient_temperature
-        self.T_sp_ww = config.T_sp_ww
-        self.T_sp_hw = config.T_sp_hw
+        self.heat_storage_config = config
+        super().__init__(self.heat_storage_config.name, my_simulation_parameters=my_simulation_parameters)
+        self.V_SP_heating_water = self.heat_storage_config.V_SP_heating_water
+        self.V_SP_warm_water = self.heat_storage_config.V_SP_warm_water
+        self.temperature_of_warm_water_extratcion = self.heat_storage_config.temperature_of_warm_water_extratcion
+        self.ambient_temperature = self.heat_storage_config.ambient_temperature
+        self.T_sp_ww = self.heat_storage_config.T_sp_ww
+        self.T_sp_hw = self.heat_storage_config.T_sp_hw
         self.cw = 4812
 
-        self.state = HeatStorageState(config.T_sp_ww, config.T_sp_hw)
+        self.state = HeatStorageState(self.heat_storage_config.T_sp_ww, self.heat_storage_config.T_sp_hw)
         self.previous_state = self.state.clone( )
 
         self.thermal_demand_heating_water: ComponentInput = self.add_input(self.component_name,
@@ -133,35 +166,33 @@ class HeatStorage(Component):
         self.T_sp_C_hw: ComponentOutput = self.add_output(self.component_name,
                                                           self.WaterOutputTemperatureHeatingWater,
                                                           lt.LoadTypes.TEMPERATURE,
-                                                          lt.Units.CELSIUS)
+                                                          lt.Units.CELSIUS,
+                                                          output_description=f"here a description for {self.WaterOutputTemperatureHeatingWater} will follow.")
         self.T_sp_C_ww: ComponentOutput = self.add_output(self.component_name,
                                                           self.WaterOutputTemperatureWarmWater,
                                                           lt.LoadTypes.TEMPERATURE,
-                                                          lt.Units.CELSIUS)
+                                                          lt.Units.CELSIUS,
+                                                          output_description=f"here a description for {self.WaterOutputTemperatureWarmWater} will follow.")
         self.UA_SP_C: ComponentOutput = self.add_output(self.component_name,
                                                         self.StorageEnergyLoss,
                                                         lt.LoadTypes.ANY,
-                                                        lt.Units.WATT)
+                                                        lt.Units.WATT,
+                                                        output_description=f"here a description for {self.StorageEnergyLoss} will follow.")
         self.T_sp_C: ComponentOutput = self.add_output(self.component_name,
                                                        self.WaterOutputStorageforHeaters,
                                                        lt.LoadTypes.TEMPERATURE,
-                                                       lt.Units.CELSIUS)
+                                                       lt.Units.CELSIUS,
+                                                       output_description=f"here a description for {self.WaterOutputStorageforHeaters} will follow.")
         self.real_heat_for_building: ComponentOutput = self.add_output(self.component_name,
                                                                        self.RealHeatForBuilding,
                                                                        lt.LoadTypes.HEATING,
-                                                                       lt.Units.WATT)
-    @staticmethod
-    def get_default_config():
-        config=HeatStorageConfig(
-                V_SP_heating_water = 1000,
-                V_SP_warm_water = 100,
-                temperature_of_warm_water_extratcion = 32,
-                ambient_temperature = 15,
-                T_sp_ww=40,
-                T_sp_hw=40)
-        return config
+                                                                       lt.Units.WATT,
+                                                                       output_description=f"here a description for {self.RealHeatForBuilding} will follow.")
+
     def write_to_report(self) -> None:
         lines = []
+        for config_string in self.heat_storage_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Name: HeatWaterStorage")
         lines.append(f"Volume Warm Water Storage [L]: {self.V_SP_warm_water}")
         lines.append(f"Volume Heat Water Storage [L]: {self.V_SP_heating_water}")
@@ -298,9 +329,10 @@ class HeatStorageController(cp.Component):
                  my_simulation_parameters: SimulationParameters,
                  config: HeatStorageControllerConfig
                  ) -> None:
-        super().__init__(name="HeatStorageController", my_simulation_parameters=my_simulation_parameters)
-        self.initial_temperature_heating_storage = config.initial_temperature_heating_storage
-        self.initial_temperature_building = config.initial_temperature_building
+        self.heatstoragecontroller_config = config
+        super().__init__(name=self.heatstoragecontroller_config.name, my_simulation_parameters=my_simulation_parameters)
+        self.initial_temperature_heating_storage = self.heatstoragecontroller_config.initial_temperature_heating_storage
+        self.initial_temperature_building = self.heatstoragecontroller_config.initial_temperature_building
         # ===================================================================================================================
         # Inputs
         self.ref_max_thermal_build_demand: ComponentInput = self.add_input(self.component_name,
@@ -327,13 +359,9 @@ class HeatStorageController(cp.Component):
         self.real_thermal_demand_heating_water: ComponentOutput = self.add_output(self.component_name,
                                                                                   self.RealThermalDemandHeatingWater,
                                                                                   lt.LoadTypes.HEATING,
-                                                                                  lt.Units.WATT)
-    @staticmethod
-    def get_default_config() -> HeatStorageControllerConfig:
-        config=HeatStorageControllerConfig(
-                initial_temperature_building = 20,
-                initial_temperature_heating_storage = 35)
-        return config
+                                                                                  lt.Units.WATT,
+                                                                                  output_description=f"here a description for {self.RealThermalDemandHeatingWater} will follow.")
+
     def i_prepare_simulation(self) -> None:
         """ Prepares the simulation. """
         pass
@@ -342,6 +370,8 @@ class HeatStorageController(cp.Component):
 
     def write_to_report(self) -> None:
         lines = []
+        for config_string in self.heatstoragecontroller_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Name: HeatWaterStorage Controller")
         lines.append(f"Initial Temperature Building [°C]: {self.initial_temperature_building}")
         lines.append(f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}")

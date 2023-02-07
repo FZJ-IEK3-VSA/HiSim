@@ -13,13 +13,37 @@ from hisim import utils
 from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 @dataclass_json
 @dataclass
-class ControllerHeatConfig:
-    temperature_storage_target_warm_water: float = 50
-    temperature_storage_target_heating_water: float = 35
-    temperature_storage_target_hysteresis_ww: float = 45
-    temperature_storage_target_hysteresis_hw: float = 35
+class ControllerHeatConfig(cp.ConfigBase):
+    """Configuration of the Controller Heat class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return ControllerHeat.get_full_classname()
+
+    name: str
+    temperature_storage_target_warm_water: float
+    temperature_storage_target_heating_water: float
+    temperature_storage_target_hysteresis_ww: float
+    temperature_storage_target_hysteresis_hw: float
+
+    @classmethod
+    def get_default_controller_heat_l1(
+        cls,
+    ) -> Any:
+        """Get a default Building."""
+        config = ControllerHeatConfig(
+            name="ControllerHeatL1",
+            temperature_storage_target_warm_water=50,
+            temperature_storage_target_heating_water=35,
+            temperature_storage_target_hysteresis_ww=45,
+            temperature_storage_target_hysteresis_hw=35,
+        )
+        return config
+
 
 
 # class ControllerState
@@ -76,12 +100,13 @@ class ControllerHeat(cp.Component):
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
                  config: ControllerHeatConfig) -> None:
-        super().__init__(name="ControllerHeat", my_simulation_parameters=my_simulation_parameters)
+        self.controller_heat_config = config
+        super().__init__(name=self.controller_heat_config.name, my_simulation_parameters=my_simulation_parameters)
         self.mode: Any
-        self.temperature_storage_target_warm_water = config.temperature_storage_target_warm_water
-        self.temperature_storage_target_heating_water = config.temperature_storage_target_heating_water
-        self.temperature_storage_target_hysteresis_hw = config.temperature_storage_target_hysteresis_hw
-        self.temperature_storage_target_hysteresis_ww = config.temperature_storage_target_hysteresis_ww
+        self.temperature_storage_target_warm_water = self.controller_heat_config.temperature_storage_target_warm_water
+        self.temperature_storage_target_heating_water = self.controller_heat_config.temperature_storage_target_heating_water
+        self.temperature_storage_target_hysteresis_hw = self.controller_heat_config.temperature_storage_target_hysteresis_hw
+        self.temperature_storage_target_hysteresis_ww = self.controller_heat_config.temperature_storage_target_hysteresis_ww
 
         self.state = ControllerState(control_signal_heat_pump=0,
                                      control_signal_gas_heater=0,
@@ -114,36 +139,34 @@ class ControllerHeat(cp.Component):
                                                                              field_name=self.ControlSignalGasHeater,
                                                                              load_type=lt.LoadTypes.ANY,
                                                                              unit=lt.Units.PERCENT,
-                                                                             sankey_flow_direction=False)
+                                                                             sankey_flow_direction=False,
+                                                                             output_description=f"here a description for {self.ControlSignalGasHeater} will follow.")
         self.control_signal_chp: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                       field_name=self.ControlSignalChp,
                                                                       load_type=lt.LoadTypes.ANY,
                                                                       unit=lt.Units.PERCENT,
-                                                                      sankey_flow_direction=False)
+                                                                      sankey_flow_direction=False,
+                                                                     output_description=f"here a description for {self.ControlSignalChp} will follow.")
         self.control_signal_heat_pump: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                             field_name=self.ControlSignalHeatPump,
                                                                             load_type=lt.LoadTypes.ANY,
                                                                             unit=lt.Units.PERCENT,
-                                                                            sankey_flow_direction=False)
+                                                                            sankey_flow_direction=False,
+                                                                            output_description=f"here a description for {self.ControlSignalHeatPump} will follow.")
         self.control_signal_choose_storage: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                                  field_name=self.ControlSignalChooseStorage,
                                                                                  load_type=lt.LoadTypes.ANY,
                                                                                  unit=lt.Units.ANY,
-                                                                                 sankey_flow_direction=False)
-
-    @staticmethod
-    def get_default_config() -> ControllerHeatConfig:
-        config = ControllerHeatConfig(temperature_storage_target_warm_water=50,
-                                      temperature_storage_target_heating_water=35,
-                                      temperature_storage_target_hysteresis_ww=45,
-                                      temperature_storage_target_hysteresis_hw=35)
-        return config
+                                                                                 sankey_flow_direction=False,
+                                                                                 output_description=f"here a description for {self.ControlSignalChooseStorage} will follow.")
 
     def build(self, mode: Any) -> None :
         self.mode = mode
 
     def write_to_report(self) -> None:
         lines = []
+        for config_string in self.controller_heat_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Name: ControllerHeat")
         lines.append(f"Target Temperature Warm Water Storage [°C]: {self.temperature_storage_target_warm_water}")
         lines.append(f"Target Temperature Heat Water Storage [°C]: {self.temperature_storage_target_heating_water}")

@@ -445,7 +445,7 @@ class HotWaterStorage(dycp.DynamicComponent):
                     / self.my_simulation_parameters.seconds_per_timestep
                 )
             else:
-                raise Exception(
+                raise ValueError(
                     "Heating season needs to be defined in config if cooling is considered"
                 )
 
@@ -532,7 +532,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             )
         if self.use == lt.ComponentType.BUFFER:
             if not isinstance(self.power, float):
-                raise Exception(
+                raise ValueError(
                     "Power for heat transfer from buffer to building needs to be defined."
                 )
             heatconsumption = (

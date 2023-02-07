@@ -138,7 +138,7 @@ def basic_household_explicit(
 
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
+        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(grid=[my_occupancy, "Subtract", my_photovoltaic_system]),
         my_simulation_parameters=my_simulation_parameters,
     )
 

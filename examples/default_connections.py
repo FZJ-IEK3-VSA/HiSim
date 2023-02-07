@@ -72,12 +72,6 @@ def basic_household_with_default_connections(
     offset = 0.5
     hp_mode = 2
 
-    # Set heat pump
-    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-    hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 60
-    hp_min_idle_time = 15
-
     # ==== Build Components ====
 
     # Build system parameters

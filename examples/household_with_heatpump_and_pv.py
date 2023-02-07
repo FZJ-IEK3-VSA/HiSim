@@ -126,12 +126,6 @@ def household_pv_hp(
     offset = 0.5
     hp_mode = 2
 
-    # Set Heat Pump
-    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-    hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 60
-    hp_min_idle_time = 15
-
     # =================================================================================================================================
     # Build Components
 
@@ -193,10 +187,7 @@ def household_pv_hp(
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        manufacturer=hp_manufacturer,
-        name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time,
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

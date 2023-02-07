@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 # pylint: skip-file
 """
@@ -21,6 +20,7 @@ from hisim.components.building import Building
 from hisim.components.PIDcontroller import PIDController
 import hisim.utils as utils
 
+
 @dataclass_json
 @dataclass
 class AirConditionerConfig(cp.ConfigBase):
@@ -38,15 +38,17 @@ class AirConditionerConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_air_conditioner_config(cls) -> Any:
-        config=AirConditionerConfig(
-                name="AirConditioner",
-                manufacturer="Panasonic",
-                model_name="CS-RE18JKE/CU-RE18JKE",
-                min_operation_time=60 * 60,
-                min_idle_time=15 * 60,
-                control="on_off")
+        config = AirConditionerConfig(
+            name="AirConditioner",
+            manufacturer="Panasonic",
+            model_name="CS-RE18JKE/CU-RE18JKE",
+            min_operation_time=60 * 60,
+            min_idle_time=15 * 60,
+            control="on_off",
+        )
         return config
-    
+
+
 @dataclass_json
 @dataclass
 class AirConditionerControllerConfig(cp.ConfigBase):
@@ -62,26 +64,33 @@ class AirConditionerControllerConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_air_conditioner_controller_config(cls) -> Any:
-        config=AirConditionerControllerConfig(
-                name="AirConditioner",
-                t_air_heating=18.0,
-                t_air_cooling=26.0,
-                offset=0.0)
+        config = AirConditionerControllerConfig(
+            name="AirConditioner", t_air_heating=18.0, t_air_cooling=26.0, offset=0.0
+        )
         return config
+
 
 class AirConditionerState:
     """
     This data class saves the state of the air conditioner
     """
 
-    def __init__(self, timestep_actual: int = -1, state: int = 0, timestep_of_last_action: int = 0):
+    def __init__(
+        self,
+        timestep_actual: int = -1,
+        state: int = 0,
+        timestep_of_last_action: int = 0,
+    ):
         self.timestep_actual = timestep_actual
         self.state = state
         self.timestep_of_last_action = timestep_of_last_action
 
     def clone(self):
-        return AirConditionerState(timestep_actual=self.timestep_actual, state=self.state,
-                                   timestep_of_last_action=self.timestep_of_last_action)
+        return AirConditionerState(
+            timestep_actual=self.timestep_actual,
+            state=self.state,
+            timestep_of_last_action=self.timestep_of_last_action,
+        )
 
     def is_first_iteration(self, timestep):
         if self.timestep_actual + 1 == timestep:
@@ -109,43 +118,60 @@ class AirConditioner(cp.Component):
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
     ElectricityOutput = "ElectricityOutput"
 
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 config: AirConditionerConfig):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: AirConditionerConfig,
+    ):
         self.air_conditioner_config = config
-        super().__init__(name=self.air_conditioner_config.name, my_simulation_parameters=my_simulation_parameters)
-        self.build(manufacturer=self.air_conditioner_config.manufacturer, model_name=self.air_conditioner_config.model_name,
-                   min_operation_time=self.air_conditioner_config.min_operation_time, min_idle_time=self.air_conditioner_config.min_idle_time)
+        super().__init__(
+            name=self.air_conditioner_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        self.build(
+            manufacturer=self.air_conditioner_config.manufacturer,
+            model_name=self.air_conditioner_config.model_name,
+            min_operation_time=self.air_conditioner_config.min_operation_time,
+            min_idle_time=self.air_conditioner_config.min_idle_time,
+        )
 
-        self.t_outC: cp.ComponentInput = self.add_input(self.component_name,
-                                                        self.TemperatureOutside,
-                                                        LoadTypes.TEMPERATURE,
-                                                        Units.CELSIUS,
-                                                        True)
-        self.stateC: cp.ComponentInput = self.add_input(self.component_name,
-                                                        self.State,
-                                                        LoadTypes.ANY,
-                                                        Units.ANY,
-                                                        False)
-        self.electric_power: cp.ComponentInput = self.add_input(self.component_name,
-                                                                self.ElectricityOutputPID,
-                                                                LoadTypes.ELECTRICITY,
-                                                                Units.WATT,
-                                                                False)
+        self.t_outC: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureOutside,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
+        )
+        self.stateC: cp.ComponentInput = self.add_input(
+            self.component_name, self.State, LoadTypes.ANY, Units.ANY, False
+        )
+        self.electric_power: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricityOutputPID,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            False,
+        )
 
-        self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                             self.ThermalEnergyDelivered,
-                                                                             LoadTypes.HEATING,
-                                                                             Units.WATT,
-                                                                             output_description=f"here a description for Air Conditioner {self.ThermalEnergyDelivered} will follow.")
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                       self.ElectricityOutput,
-                                                                       LoadTypes.ELECTRICITY,
-                                                                       Units.WATT,
-                                                                       output_description=f"here a description for Air Conditioner {self.ElectricityOutput} will follow.")
+        self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalEnergyDelivered,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for Air Conditioner {self.ThermalEnergyDelivered} will follow.",
+        )
+        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ElectricityOutput,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            output_description=f"here a description for Air Conditioner {self.ElectricityOutput} will follow.",
+        )
 
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_air_condition_controller())
+        self.add_default_connections(
+            self.get_default_connections_from_air_condition_controller()
+        )
 
         self.control = self.air_conditioner_config.control
 
@@ -154,7 +180,12 @@ class AirConditioner(cp.Component):
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
-            cp.ComponentConnection(AirConditioner.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
+            cp.ComponentConnection(
+                AirConditioner.TemperatureOutside,
+                weather_classname,
+                Weather.TemperatureOutside,
+            )
+        )
         return connections
 
     def get_default_connections_from_air_condition_controller(self):
@@ -162,7 +193,12 @@ class AirConditioner(cp.Component):
         connections = []
         controller_classname = AirConditionercontroller.get_classname()
         connections.append(
-            cp.ComponentConnection(AirConditioner.State, controller_classname, AirConditionercontroller.State))
+            cp.ComponentConnection(
+                AirConditioner.State,
+                controller_classname,
+                AirConditionercontroller.State,
+            )
+        )
         return connections
 
     def build(self, manufacturer, model_name, min_operation_time, min_idle_time):
@@ -173,7 +209,10 @@ class AirConditioner(cp.Component):
 
         air_conditioner = None
         for air_conditioner_iterator in air_conditioners_database:
-            if air_conditioner_iterator["Manufacturer"] == manufacturer and air_conditioner_iterator["Model"] == model_name:
+            if (
+                air_conditioner_iterator["Manufacturer"] == manufacturer
+                and air_conditioner_iterator["Model"] == model_name
+            ):
                 air_conditioner = air_conditioner_iterator
                 break
 
@@ -198,33 +237,45 @@ class AirConditioner(cp.Component):
 
         """
 
-        for air_conditioner_tout in air_conditioner['Outdoor temperature range - cooling']:
+        for air_conditioner_tout in air_conditioner[
+            "Outdoor temperature range - cooling"
+        ]:
             self.t_out_cooling_ref.append([air_conditioner_tout][0])
-        for air_conditioner_tout in air_conditioner['Outdoor temperature range - heating']:
+        for air_conditioner_tout in air_conditioner[
+            "Outdoor temperature range - heating"
+        ]:
             self.t_out_heating_ref.append([air_conditioner_tout][0])
 
-        for air_conditioner_eers in air_conditioner['EER W/W']:
+        for air_conditioner_eers in air_conditioner["EER W/W"]:
             self.eer_ref.append([air_conditioner_eers][0])
-        for air_conditioner_cops in air_conditioner['COP W/W']:
+        for air_conditioner_cops in air_conditioner["COP W/W"]:
             self.cop_ref.append([air_conditioner_cops][0])
 
-        for air_conditioner_cooling_capacities in air_conditioner['Cooling capacity W']:
+        for air_conditioner_cooling_capacities in air_conditioner["Cooling capacity W"]:
             self.cooling_capacity_ref.append([air_conditioner_cooling_capacities][0])
-        for air_conditioner_heating_capacities in air_conditioner['Heating capacity W']:
+        for air_conditioner_heating_capacities in air_conditioner["Heating capacity W"]:
             self.heating_capacity_ref.append([air_conditioner_heating_capacities][0])
         print(str(self.t_out_cooling_ref))
         print(str(self.eer_ref))
         self.eer_coef = np.polyfit(self.t_out_cooling_ref, self.eer_ref, 1)
-        self.cooling_capacity_coef = np.polyfit(self.t_out_cooling_ref, self.cooling_capacity_ref, 1)
+        self.cooling_capacity_coef = np.polyfit(
+            self.t_out_cooling_ref, self.cooling_capacity_ref, 1
+        )
 
         self.cop_coef = np.polyfit(self.t_out_heating_ref, self.cop_ref, 1)
-        self.heating_capacity_coef = np.polyfit(self.t_out_heating_ref, self.heating_capacity_ref, 1)
+        self.heating_capacity_coef = np.polyfit(
+            self.t_out_heating_ref, self.heating_capacity_ref, 1
+        )
 
         # Retrieves air conditioner from database - END
 
         # Sets the time operation restricitions
-        self.on_time = self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep
-        self.off_time = self.min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+        self.on_time = (
+            self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.off_time = (
+            self.min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+        )
 
         self.state = AirConditionerState()
         self.previous_state = AirConditionerState()
@@ -264,7 +315,9 @@ class AirConditioner(cp.Component):
         lines.append(f"Control: {self.control}")
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         # Inputs
         t_out = stsv.get_input_value(self.t_outC)
         on_off_state = stsv.get_input_value(self.stateC)
@@ -283,18 +336,31 @@ class AirConditioner(cp.Component):
                 self.state0 = self.state.clone()
 
             # return device on if minimum operation time is not fulfilled and device was on in previous state
-            if (self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep):
+            if (
+                self.state0.state == 1
+                and self.state0.timestep_of_last_action + self.on_time >= timestep
+            ):
                 self.state.state = 1
-            elif (self.state0.state == -1 and self.state0.timestep_of_last_action + self.on_time >= timestep):
+            elif (
+                self.state0.state == -1
+                and self.state0.timestep_of_last_action + self.on_time >= timestep
+            ):
                 self.state.state = -1
             # return device off if minimum idle time is not fulfilled and device was off in previous state
-            elif (self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep):
+            elif (
+                self.state0.state == 0
+                and self.state0.timestep_of_last_action + self.off_time >= timestep
+            ):
                 self.state.state = 0
             # check signal from l2 and turn on or off if it is necesary
             else:
-                if on_off_state == 0 and (self.state0.state == 1 or self.state0.state == -1):
+                if on_off_state == 0 and (
+                    self.state0.state == 1 or self.state0.state == -1
+                ):
                     self.state.deactivation(timestep)
-                elif (on_off_state == 1 or on_off_state == -1) and self.state0.state == 0:
+                elif (
+                    on_off_state == 1 or on_off_state == -1
+                ) and self.state0.state == 0:
                     self.state.activation(timestep)
 
             if self.state.state == 1 and on_off_state == 1:
@@ -308,7 +374,9 @@ class AirConditioner(cp.Component):
                 electricity_output = 0
 
             # log.information("thermal_energy_delivered {}".format(thermal_energy_delivered))
-            stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
+            stsv.set_output_value(
+                self.thermal_energy_deliveredC, thermal_energy_delivered
+            )
             stsv.set_output_value(self.electricity_outputC, electricity_output)
 
         if self.control == "PID":
@@ -322,7 +390,9 @@ class AirConditioner(cp.Component):
             else:
                 thermal_energy_delivered = 0
 
-            stsv.set_output_value(self.thermal_energy_deliveredC, thermal_energy_delivered)
+            stsv.set_output_value(
+                self.thermal_energy_deliveredC, thermal_energy_delivered
+            )
 
             # self.state = AirConditionerState(thermal_energy_delivered = thermal_energy_delivered)
             # stsv.set_output_value(self.copC, cop)
@@ -344,6 +414,7 @@ class AirConditionercontroller(cp.Component):
     mode : int
         Mode index for operation type for this air conditioner
     """
+
     # Inputs
     TemperatureMean = "Residence Temperature"
     ElectricityInput = "ElectricityInput"
@@ -354,38 +425,59 @@ class AirConditionercontroller(cp.Component):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__(self,
-                 my_simulation_parameters: SimulationParameters,
-                 config: AirConditionerControllerConfig
-                 ):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: AirConditionerControllerConfig,
+    ):
         self.air_conditioner_controller_config = config
-        super().__init__(name=self.air_conditioner_controller_config.name, my_simulation_parameters=my_simulation_parameters)
-        self.build(t_air_cooling=self.air_conditioner_controller_config.t_air_cooling, t_air_heating=self.air_conditioner_controller_config.t_air_heating, offset=self.air_conditioner_controller_config.offset)
+        super().__init__(
+            name=self.air_conditioner_controller_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        self.build(
+            t_air_cooling=self.air_conditioner_controller_config.t_air_cooling,
+            t_air_heating=self.air_conditioner_controller_config.t_air_heating,
+            offset=self.air_conditioner_controller_config.offset,
+        )
 
-        self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
-                                                      self.TemperatureMean,
-                                                      LoadTypes.TEMPERATURE,
-                                                      Units.CELSIUS,
-                                                      True)
-        self.electricity_inputC: cp.ComponentInput = self.add_input(self.component_name,
-                                                                    self.ElectricityInput,
-                                                                    LoadTypes.ELECTRICITY,
-                                                                    Units.WATT,
-                                                                    False)
-        self.stateC: cp.ComponentOutput = self.add_output(self.component_name,
-                                                          self.State,
-                                                          LoadTypes.ANY,
-                                                          Units.ANY,
-                                                          output_description=f"here a description for {self.State} will follow.")
+        self.t_mC: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureMean,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
+        )
+        self.electricity_inputC: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricityInput,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            False,
+        )
+        self.stateC: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.State,
+            LoadTypes.ANY,
+            Units.ANY,
+            output_description=f"here a description for {self.State} will follow.",
+        )
 
-        self.add_default_connections( self.get_default_connections_from_building())
+        self.add_default_connections(self.get_default_connections_from_building())
 
     def get_default_connections_from_building(self):
-        log.information("setting building default connections in AirConditionercontroller")
+        log.information(
+            "setting building default connections in AirConditionercontroller"
+        )
         connections = []
         building_classname = Building.get_classname()
-        connections.append(cp.ComponentConnection(AirConditionercontroller.TemperatureMean, building_classname,
-                                                  Building.TemperatureMean))
+        connections.append(
+            cp.ComponentConnection(
+                AirConditionercontroller.TemperatureMean,
+                building_classname,
+                Building.TemperatureMean,
+            )
+        )
         return connections
 
     def build(self, t_air_heating, t_air_cooling, offset):
@@ -413,11 +505,21 @@ class AirConditionercontroller(cp.Component):
             lines.append(config_string)
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
-        lines.append("Controller heating set temperature is {} Deg C \n".format(self.t_set_heating))
-        lines.append("Controller cooling set temperature is {} Deg C \n".format(self.t_set_cooling))
+        lines.append(
+            "Controller heating set temperature is {} Deg C \n".format(
+                self.t_set_heating
+            )
+        )
+        lines.append(
+            "Controller cooling set temperature is {} Deg C \n".format(
+                self.t_set_cooling
+            )
+        )
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
             pass
@@ -428,11 +530,11 @@ class AirConditionercontroller(cp.Component):
 
             self.conditions(t_m_old)
 
-        if self.controller_ACmode == 'heating':
+        if self.controller_ACmode == "heating":
             state = 1
-        if self.controller_ACmode == 'cooling':
+        if self.controller_ACmode == "cooling":
             state = -1
-        if self.controller_ACmode == 'off':
+        if self.controller_ACmode == "off":
             state = 0
 
         stsv.set_output_value(self.stateC, state)
@@ -444,21 +546,21 @@ class AirConditionercontroller(cp.Component):
         minimum_cooling_set_temp = self.t_set_cooling - self.offset
         maximum_cooling_set_temp = self.t_set_cooling
 
-        if self.controller_ACmode == 'heating':  # and daily_avg_temp < 15:
+        if self.controller_ACmode == "heating":  # and daily_avg_temp < 15:
             if set_temp > maximum_heating_set_temp:  # 16.5
-                self.controller_ACmode = 'off'
+                self.controller_ACmode = "off"
                 return
-        if self.controller_ACmode == 'cooling':
+        if self.controller_ACmode == "cooling":
             if set_temp < minimum_cooling_set_temp:  # 23.5
-                self.controller_ACmode = 'off'
+                self.controller_ACmode = "off"
                 return
-        if self.controller_ACmode == 'off':
+        if self.controller_ACmode == "off":
             # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
             if set_temp < 16:  # 21
-                self.controller_ACmode = 'heating'
+                self.controller_ACmode = "heating"
                 return
             if set_temp > 24:  # 26
-                self.controller_ACmode = 'cooling'
+                self.controller_ACmode = "cooling"
                 return
 
     def prin1t_outpu1t(self, t_m, state):

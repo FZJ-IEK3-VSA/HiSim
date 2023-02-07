@@ -10,7 +10,7 @@ from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import (ComponentInput, ComponentOutput)
+from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Maximilian Hillen"
@@ -22,11 +22,13 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
 
+
 @dataclass_json
 @dataclass
 class EMSConfig(cp.ConfigBase):
 
-    """ L1 Controller Config. """
+    """L1 Controller Config."""
+
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
@@ -40,22 +42,26 @@ class EMSConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_EMS(cls) -> Any:
-        """ Default Config for Energy Management System. """
+        """Default Config for Energy Management System."""
         config = EMSConfig(
-            name="EMS L2EMSElectricityController", strategy="optimize_own_consumption", limit_to_shave=0,
-            building_temperature_offset_value=1, storage_temperature_offset_value=10
-            )
+            name="EMS L2EMSElectricityController",
+            strategy="optimize_own_consumption",
+            limit_to_shave=0,
+            building_temperature_offset_value=1,
+            storage_temperature_offset_value=10,
+        )
         return config
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     """
-    Surplus electricity controller - time step based. 
+    Surplus electricity controller - time step based.
     Iteratively goes through hierachy of devices given by
     source weights of components and passes available surplus
-    electricity to each device. Needs to be configured with 
+    electricity to each device. Needs to be configured with
     dynamic In- and Outputs.
     """
+
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
 
@@ -71,12 +77,18 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     CheckPeakShaving = "CheckPeakShaving"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: EMSConfig):
+    def __init__(
+        self, my_simulation_parameters: SimulationParameters, config: EMSConfig
+    ):
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         self.ems_config = config
-        super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
-                         name=self.ems_config.name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(
+            my_component_inputs=self.my_component_inputs,
+            my_component_outputs=self.my_component_outputs,
+            name=self.ems_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
 
         self.components_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
@@ -88,71 +100,113 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.mode: Any
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
-        self.building_temperature_offset_value = self.ems_config.building_temperature_offset_value
-        self.storage_temperature_offset_value = self.ems_config.storage_temperature_offset_value
+        self.building_temperature_offset_value = (
+            self.ems_config.building_temperature_offset_value
+        )
+        self.storage_temperature_offset_value = (
+            self.ems_config.storage_temperature_offset_value
+        )
 
         # Inputs
-        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,
-                                                                                    field_name=self.ElectricityToElectrolyzerUnused,
-                                                                                    load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                                    mandatory=False)
+        self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.ElectricityToElectrolyzerUnused,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            mandatory=False,
+        )
 
         # Outputs
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(object_name=self.component_name,
-                                                                               field_name=self.ElectricityToOrFromGrid,
-                                                                               load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                               sankey_flow_direction=False,
-                                                                               output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.")
+        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityToOrFromGrid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.",
+        )
 
-        self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(object_name=self.component_name,
-                                                                               field_name=self.TotalElectricityConsumption,
-                                                                               load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                               sankey_flow_direction=False,
-                                                                               output_description=f"here a description for {self.TotalElectricityConsumption} will follow.")
+        self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TotalElectricityConsumption,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
+        )
 
-        self.flexible_electricity: cp.ComponentOutput = self.add_output(object_name=self.component_name,
-                                                                               field_name=self.FlexibleElectricity,
-                                                                               load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                               sankey_flow_direction=False,
-                                                                               output_description=f"here a description for {self.FlexibleElectricity} will follow.")
+        self.flexible_electricity: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.FlexibleElectricity,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.FlexibleElectricity} will follow.",
+        )
 
+        self.building_temperature_modifier: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.BuildingTemperatureModifier,
+            load_type=lt.LoadTypes.TEMPERATURE,
+            unit=lt.Units.CELSIUS,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.BuildingTemperatureModifier} will follow.",
+        )
 
-        self.building_temperature_modifier: cp.ComponentOutput = self.add_output(object_name=self.component_name,
-                                                                               field_name=self.BuildingTemperatureModifier,
-                                                                               load_type=lt.LoadTypes.TEMPERATURE, unit=lt.Units.CELSIUS,
-                                                                               sankey_flow_direction=False,
-                                                                               output_description=f"here a description for {self.BuildingTemperatureModifier} will follow.")
+        self.storage_temperature_modifier: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.StorageTemperatureModifier,
+            load_type=lt.LoadTypes.TEMPERATURE,
+            unit=lt.Units.CELSIUS,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.StorageTemperatureModifier} will follow.",
+        )
 
-        self.storage_temperature_modifier: cp.ComponentOutput = self.add_output(object_name=self.component_name,
-                                                                                 field_name=self.StorageTemperatureModifier,
-                                                                                 load_type=lt.LoadTypes.TEMPERATURE, unit=lt.Units.CELSIUS,
-                                                                                 sankey_flow_direction=False,
-                                                                                 output_description=f"here a description for {self.StorageTemperatureModifier} will follow.")
-
-        self.check_peak_shaving: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.CheckPeakShaving,
-                                                                      load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False, output_description=f"here a description for {self.CheckPeakShaving} will follow.")
+        self.check_peak_shaving: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CheckPeakShaving,
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.ANY,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.CheckPeakShaving} will follow.",
+        )
 
     def sort_source_weights_and_components(self) -> None:
-        """ Sorts dynamic Inputs and Outputs according to source weights. """
-        Inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
+        """Sorts dynamic Inputs and Outputs according to source weights."""
+        Inputs = [
+            elem for elem in self.my_component_inputs if elem.source_weight != 999
+        ]
         SourceTags = [elem.source_tags[0] for elem in Inputs]
         SourceWeights = [elem.source_weight for elem in Inputs]
         sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
         SourceWeights = [SourceWeights[i] for i in sortindex]
         self.components_sorted = [SourceTags[i] for i in sortindex]
-        self.inputs_sorted = [getattr(self, Inputs[i].source_component_class) for i in sortindex]
+        self.inputs_sorted = [
+            getattr(self, Inputs[i].source_component_class) for i in sortindex
+        ]
         self.outputs_sorted = []
         for ind in range(len(SourceWeights)):
-            output = self.get_dynamic_output(tags=[self.components_sorted[ind], lt.InandOutputType.ELECTRICITY_TARGET],
-            weight_counter=SourceWeights[ind])
+            output = self.get_dynamic_output(
+                tags=[
+                    self.components_sorted[ind],
+                    lt.InandOutputType.ELECTRICITY_TARGET,
+                ],
+                weight_counter=SourceWeights[ind],
+            )
             if output is not None:
                 self.outputs_sorted.append(output)
             else:
                 raise Exception("Danamic input is not conncted to dynamic output")
 
-        self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-        self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED])
-        self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
+        self.production_inputs = self.get_dynamic_inputs(
+            tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
+        )
+        self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
+            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        )
+        self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
+            tags=[lt.InandOutputType.ELECTRICITY_REAL]
+        )
 
     def write_to_report(self):
         lines = []
@@ -168,15 +222,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         pass  # self.state = self.previous_state
 
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation. """
+        """Prepares the simulation."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def control_electricity_component_iterative(self, deltademand: float, stsv: cp.SingleTimeStepValues,
-                                                component_type: lt.ComponentType, input: cp.ComponentInput,
-                                                output: cp.ComponentOutput) -> Any:
+    def control_electricity_component_iterative(
+        self,
+        deltademand: float,
+        stsv: cp.SingleTimeStepValues,
+        component_type: lt.ComponentType,
+        input: cp.ComponentInput,
+        output: cp.ComponentOutput,
+    ) -> Any:
         is_battery = None
         # get previous signal and substract from total balance
         previous_signal = stsv.get_input_value(component_input=input)
@@ -195,8 +254,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             else:
                 stsv.set_output_value(output=output, value=0)
 
-        elif component_type in [lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP, lt.ComponentType.SMART_DEVICE,
-        lt.ComponentType.CAR_BATTERY]:
+        elif component_type in [
+            lt.ComponentType.ELECTROLYZER,
+            lt.ComponentType.HEAT_PUMP,
+            lt.ComponentType.SMART_DEVICE,
+            lt.ComponentType.CAR_BATTERY,
+        ]:
 
             if deltademand > 0:
                 stsv.set_output_value(output=output, value=deltademand)
@@ -206,31 +269,59 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         return deltademand, is_battery
 
-    def postprocess_battery(self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int) -> Any:
+    def postprocess_battery(
+        self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int
+    ) -> Any:
         previous_signal = stsv.get_input_value(component_input=self.inputs_sorted[ind])
-        stsv.set_output_value(output=self.outputs_sorted[ind], value=deltademand + previous_signal)
+        stsv.set_output_value(
+            output=self.outputs_sorted[ind], value=deltademand + previous_signal
+        )
         return deltademand - previous_signal
 
-    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues) -> None:
+    def optimize_own_consumption_iterative(
+        self, delta_demand: float, stsv: cp.SingleTimeStepValues
+    ) -> None:
         skip_CHP = False
         for ind in range(len(self.inputs_sorted)):
             component_type = self.components_sorted[ind]
             input = self.inputs_sorted[ind]
             output = self.outputs_sorted[ind]
-            if component_type in [lt.ComponentType.BATTERY, lt.ComponentType.FUEL_CELL, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
-                                  lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
-                if not skip_CHP or component_type in [lt.ComponentType.BATTERY, lt.ComponentType.ELECTROLYZER, lt.ComponentType.HEAT_PUMP,
-                                                      lt.ComponentType.SMART_DEVICE, lt.ComponentType.CAR_BATTERY]:
-                    delta_demand, is_battery = self.control_electricity_component_iterative(deltademand=delta_demand, stsv=stsv,
-                                                                                            component_type=component_type,
-                                                                                            input=input, output=output)
+            if component_type in [
+                lt.ComponentType.BATTERY,
+                lt.ComponentType.FUEL_CELL,
+                lt.ComponentType.ELECTROLYZER,
+                lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.SMART_DEVICE,
+                lt.ComponentType.CAR_BATTERY,
+            ]:
+                if not skip_CHP or component_type in [
+                    lt.ComponentType.BATTERY,
+                    lt.ComponentType.ELECTROLYZER,
+                    lt.ComponentType.HEAT_PUMP,
+                    lt.ComponentType.SMART_DEVICE,
+                    lt.ComponentType.CAR_BATTERY,
+                ]:
+                    (
+                        delta_demand,
+                        is_battery,
+                    ) = self.control_electricity_component_iterative(
+                        deltademand=delta_demand,
+                        stsv=stsv,
+                        component_type=component_type,
+                        input=input,
+                        output=output,
+                    )
                 else:
                     stsv.set_output_value(output=output, value=0)
                 if is_battery is not None:
-                    delta_demand = self.postprocess_battery(deltademand=delta_demand, stsv=stsv, ind=is_battery)
+                    delta_demand = self.postprocess_battery(
+                        deltademand=delta_demand, stsv=stsv, ind=is_battery
+                    )
                     skip_CHP = True
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         if force_convergence:
             return
 
@@ -240,39 +331,66 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         ###ELECTRICITY#####
 
         # get production
-        production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-        consumption_uncontrolled = sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs])
-        consumption_ems_controlled = sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_ems_controlled_inputs])
+        production = sum(
+            [
+                stsv.get_input_value(component_input=elem)
+                for elem in self.production_inputs
+            ]
+        )
+        consumption_uncontrolled = sum(
+            [
+                stsv.get_input_value(component_input=elem)
+                for elem in self.consumption_uncontrolled_inputs
+            ]
+        )
+        consumption_ems_controlled = sum(
+            [
+                stsv.get_input_value(component_input=elem)
+                for elem in self.consumption_ems_controlled_inputs
+            ]
+        )
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
         flexible_electricity = production - consumption_uncontrolled
-        electricity_to_grid = production - consumption_uncontrolled - consumption_ems_controlled
+        electricity_to_grid = (
+            production - consumption_uncontrolled - consumption_ems_controlled
+        )
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv)
+            self.optimize_own_consumption_iterative(
+                delta_demand=flexible_electricity, stsv=stsv
+            )
             stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
             stsv.set_output_value(self.flexible_electricity, flexible_electricity)
-        stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)
+        stsv.set_output_value(
+            self.total_electricity_consumption_channel,
+            consumption_uncontrolled + consumption_ems_controlled,
+        )
         if flexible_electricity > 0:
-            stsv.set_output_value(self.building_temperature_modifier, self.building_temperature_offset_value)
-            stsv.set_output_value(self.storage_temperature_modifier, self.storage_temperature_offset_value)
+            stsv.set_output_value(
+                self.building_temperature_modifier,
+                self.building_temperature_offset_value,
+            )
+            stsv.set_output_value(
+                self.storage_temperature_modifier, self.storage_temperature_offset_value
+            )
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)
-        '''
+        """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)
         elif self.strategy == "peak_shaving_into_grid":
             self.peak_shaving_into_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
         elif self.strategy == "peak_shaving_from_grid":
             self.peak_shaving_from_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
-        '''
+        """
 
         #######HEAT########
         # If comftortable temperature of building is to low heat with WarmWaterStorage the building
         # Solution with Control Signal Residence
         # not perfect solution!
-        '''
+        """
         if self.temperature_residence<self.min_comfortable_temperature_residence:
             #heat
             #here has to be added how "strong" HeatingWater Storage can be discharged
@@ -280,4 +398,4 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         elif self.temperature_residence > self.max_comfortable_temperature_residence:
             #cool
         elif self.temperature_residence>self.min_comfortable_temperature_residence and self.temperature_residence<self.max_comfortable_temperature_residence:
-        '''
+        """

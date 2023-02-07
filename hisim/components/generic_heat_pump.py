@@ -38,12 +38,13 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+
 @dataclass_json
 @dataclass
 class GenericHeatPumpConfig(cp.ConfigBase):
     @classmethod
     def get_main_classname(cls):
-        """ Returns the full class name of the base class. """
+        """Returns the full class name of the base class."""
         return GenericHeatPump.get_full_classname()
 
     name: str
@@ -54,8 +55,14 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_generic_heat_pump_config(cls):
-        """ Gets a default Generic Heat Pump. """
-        return GenericHeatPumpConfig(name="HeatPump", heat_pump_name="Vitocal 300-A AWO-AC 301.B07", manufacturer="Viessmann Werke GmbH & Co KG", min_operation_time=60 * 60, min_idle_time=15 * 60)
+        """Gets a default Generic Heat Pump."""
+        return GenericHeatPumpConfig(
+            name="HeatPump",
+            heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
+            manufacturer="Viessmann Werke GmbH & Co KG",
+            min_operation_time=60 * 60,
+            min_idle_time=15 * 60,
+        )
 
 
 @dataclass_json
@@ -63,7 +70,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 class GenericHeatPumpControllerConfig(cp.ConfigBase):
     @classmethod
     def get_main_classname(cls):
-        """ Returns the full class name of the base class. """
+        """Returns the full class name of the base class."""
         return GenericHeatPumpController.get_full_classname()
 
     name: str
@@ -74,14 +81,15 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(cls):
-        """ Gets a default Generic Heat Pump Controller. """
+        """Gets a default Generic Heat Pump Controller."""
         return GenericHeatPumpControllerConfig(
-            name="HeatPumpController",    
+            name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
-            offset= 0.0,
-            mode=1)
-    
+            offset=0.0,
+            mode=1,
+        )
+
 
 class GenericHeatPumpState:
 
@@ -107,19 +115,25 @@ class GenericHeatPumpState:
             self.heating_power_in_watt = 0.0
             self.cooling_power_in_watt = 0.0
             self.cop = 1.0
-            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
+            self.electricity_input_in_watt = abs(
+                self.thermal_power_delivered_in_watt / self.cop
+            )
         elif self.thermal_power_delivered_in_watt > 0.0:
             self.activation = -1
             self.heating_power_in_watt = self.thermal_power_delivered_in_watt
             self.cooling_power_in_watt = 0.0
             self.cop = cop
-            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
+            self.electricity_input_in_watt = abs(
+                self.thermal_power_delivered_in_watt / self.cop
+            )
         elif self.thermal_power_delivered_in_watt < 0.0:
             self.activation = 1
             self.heating_power_in_watt = 0
             self.cooling_power_in_watt = self.thermal_power_delivered_in_watt
             self.cop = cop
-            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
+            self.electricity_input_in_watt = abs(
+                self.thermal_power_delivered_in_watt / self.cop
+            )
         else:
             raise Exception("Impossible Heat Pump State.")
 
@@ -179,16 +193,23 @@ class GenericHeatPump(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericHeatPumpConfig
+        config: GenericHeatPumpConfig,
     ) -> None:
         """Construct all the necessary attributes."""
         self.heatpump_config = config
-        super().__init__(self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(
+            self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters
+        )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name
         self.min_operation_time = self.heatpump_config.min_operation_time
         self.min_idle_time = self.heatpump_config.min_idle_time
-        self.build(self.manufacturer, self.heatpump_name, self.min_operation_time, self.min_idle_time)
+        self.build(
+            self.manufacturer,
+            self.heatpump_name,
+            self.min_operation_time,
+            self.min_idle_time,
+        )
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
@@ -248,15 +269,23 @@ class GenericHeatPump(cp.Component):
             self.ThermalPowerDelivered,
             LoadTypes.HEATING,
             Units.WATT,
-            output_description=f"here a description for {self.ThermalPowerDelivered} will follow."
+            output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Heating, LoadTypes.HEATING, Units.WATT, output_description=f"here a description for {self.Heating} will follow."
+            self.component_name,
+            self.Heating,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for {self.Heating} will follow.",
         )
 
         self.cooling_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT, output_description=f"here a description for {self.Cooling} will follow."
+            self.component_name,
+            self.Cooling,
+            LoadTypes.COOLING,
+            Units.WATT,
+            output_description=f"here a description for {self.Cooling} will follow.",
         )
 
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
@@ -264,11 +293,15 @@ class GenericHeatPump(cp.Component):
             self.ElectricityOutput,
             LoadTypes.ELECTRICITY,
             Units.WATT,
-            output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow."
+            output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow.",
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY, output_description=f"here a description for {self.NumberOfCycles} will follow."
+            self.component_name,
+            self.NumberOfCycles,
+            LoadTypes.ANY,
+            Units.ANY,
+            output_description=f"here a description for {self.NumberOfCycles} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -297,7 +330,9 @@ class GenericHeatPump(cp.Component):
         controller_classname = GenericHeatPumpController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHeatPump.State, controller_classname, GenericHeatPumpController.State
+                GenericHeatPump.State,
+                controller_classname,
+                GenericHeatPumpController.State,
             )
         )
         return connections
@@ -336,7 +371,9 @@ class GenericHeatPump(cp.Component):
         self.cop_ref = []
         self.temperature_outside_ref = []
         for heat_pump_cops in heat_pump["COP"]:
-            self.temperature_outside_ref.append(float([*heat_pump_cops][0][1:].split("/")[0]))
+            self.temperature_outside_ref.append(
+                float([*heat_pump_cops][0][1:].split("/")[0])
+            )
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
         self.cop_coef = np.polyfit(self.temperature_outside_ref, self.cop_ref, 1)
 
@@ -410,8 +447,12 @@ class GenericHeatPump(cp.Component):
         lines = []
         for config_string in self.heatpump_config.get_string_dict():
             lines.append(config_string)
-        lines.append(f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}")
-        lines.append(f"Max Peating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}")
+        lines.append(
+            f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}"
+        )
+        lines.append(
+            f"Max Peating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}"
+        )
         return lines
 
     def i_simulate(
@@ -484,8 +525,12 @@ class GenericHeatPump(cp.Component):
                 self.thermal_power_delivered_channel,
                 self.state.thermal_power_delivered_in_watt,
             )
-            stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
-            stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
+            stsv.set_output_value(
+                self.heating_channel, self.state.heating_power_in_watt
+            )
+            stsv.set_output_value(
+                self.cooling_channel, self.state.cooling_power_in_watt
+            )
             stsv.set_output_value(
                 self.electricity_output_channel, self.state.electricity_input_in_watt
             )
@@ -517,7 +562,8 @@ class GenericHeatPump(cp.Component):
 
         # Outputs
         stsv.set_output_value(
-            self.thermal_power_delivered_channel, self.state.thermal_power_delivered_in_watt
+            self.thermal_power_delivered_channel,
+            self.state.thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
         stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
@@ -585,12 +631,13 @@ class GenericHeatPumpController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericHeatPumpControllerConfig
+        config: GenericHeatPumpControllerConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
         super().__init__(
-            self.heatpump_controller_config.name, my_simulation_parameters=my_simulation_parameters
+            self.heatpump_controller_config.name,
+            my_simulation_parameters=my_simulation_parameters,
         )
         self.build(
             temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
@@ -614,7 +661,11 @@ class GenericHeatPumpController(cp.Component):
             False,
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.State, LoadTypes.ANY, Units.ANY, output_description=f"here a description for {self.State} will follow."
+            self.component_name,
+            self.State,
+            LoadTypes.ANY,
+            Units.ANY,
+            output_description=f"here a description for {self.State} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_building())
@@ -636,7 +687,11 @@ class GenericHeatPumpController(cp.Component):
         return connections
 
     def build(
-        self, temperature_air_heating: float, temperature_air_cooling: float, offset: float, mode: float
+        self,
+        temperature_air_heating: float,
+        temperature_air_cooling: float,
+        offset: float,
+        mode: float,
     ) -> None:
         """Build function.
 
@@ -725,7 +780,9 @@ class GenericHeatPumpController(cp.Component):
                 self.controller_heatpumpmode = "cooling"
                 return
 
-    def smart_conditions(self, set_temperature: float, electricity_input: float) -> None:
+    def smart_conditions(
+        self, set_temperature: float, electricity_input: float
+    ) -> None:
         """Set smart conditions for the heat pump controller mode."""
         smart_offset_upper = 3
         smart_offset_lower = 0.5

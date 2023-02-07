@@ -46,10 +46,18 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
-        """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
-                                         cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25, day_of_heating_season_begin=270,
-                                         day_of_heating_season_end=150)
+        """Default config for the heating controller."""
+        config = L1BuildingHeatingConfig(
+            name="L1 Building TemperatureController" + name,
+            source_weight=1,
+            t_min_heating_in_celsius=20.0,
+            t_max_heating_in_celsius=22.0,
+            cooling_considered=False,
+            t_min_cooling_in_celsius=23,
+            t_max_cooling_in_celsius=25,
+            day_of_heating_season_begin=270,
+            day_of_heating_season_end=150,
+        )
         return config
 
 
@@ -205,7 +213,9 @@ class L1BuildingHeatController(cp.Component):
         )
 
         self.add_default_connections(self.get_building_default_connections())
-        self.add_default_connections(self.get_default_connections_from_hot_water_storage())
+        self.add_default_connections(
+            self.get_default_connections_from_hot_water_storage()
+        )
         self.add_default_connections(self.get_default_connections_from_ems())
 
     def get_building_default_connections(self):
@@ -262,8 +272,10 @@ class L1BuildingHeatController(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
-        """ Controlls the building heating. """
+    def control_heating(
+        self, t_control: float, t_min_heating: float, t_max_heating: float
+    ) -> None:
+        """Controlls the building heating."""
         if t_control > t_max_heating:
             self.previous_state.state = 0
             return

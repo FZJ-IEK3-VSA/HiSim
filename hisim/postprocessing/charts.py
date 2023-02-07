@@ -511,7 +511,7 @@ class SankeyHISIM(Chart):
             or total_energy_to_residence == 0
             or solar_gain_through_windows == 0
         ):
-            raise Exception("Sum of outputs has not been calculated.")
+            raise ValueError("Sum of outputs has not been calculated.")
         return (
             heating_by_residents,
             internal_loss,

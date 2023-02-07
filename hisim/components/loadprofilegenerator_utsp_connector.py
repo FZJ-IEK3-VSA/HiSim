@@ -37,6 +37,7 @@ from hisim.simulationparameters import SimulationParameters
 class UtspLpgConnectorConfig(cp.ConfigBase):
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
+
     name: str
     url: str
     api_key: str
@@ -50,7 +51,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     def get_default_UTSP_connector_config(cls) -> Any:
 
         """Creates a default configuration. Chooses default values for the LPG parameters."""
-        
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
@@ -127,15 +127,18 @@ class UtspLpgConnector(cp.Component):
         )
 
         self.number_of_residents_c: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY,
-            output_description=f"here a description for LPG UTSP {self.NumberByResidents} will follow."
+            self.component_name,
+            self.NumberByResidents,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description=f"here a description for LPG UTSP {self.NumberByResidents} will follow.",
         )
         self.heating_by_residents_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow."
+            output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
         )
         self.electricity_output_c: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -145,7 +148,7 @@ class UtspLpgConnector(cp.Component):
             postprocessing_flag=[
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
             ],
-            output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow."
+            output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow.",
         )
 
         self.water_consumption_c: cp.ComponentOutput = self.add_output(
@@ -153,7 +156,7 @@ class UtspLpgConnector(cp.Component):
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
-            output_description=f"here a description for LPG UTSP {self.WaterConsumption} will follow."
+            output_description=f"here a description for LPG UTSP {self.WaterConsumption} will follow.",
         )
 
     def i_save_state(self) -> None:

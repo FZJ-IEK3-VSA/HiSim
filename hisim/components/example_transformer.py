@@ -72,7 +72,11 @@ class ExampleTransformer(Component):
     TransformerOutput = "MyTransformerOutput"
     TransformerOutput2 = "MyTransformerOutput2"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: ExampleTransformerConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: ExampleTransformerConfig,
+    ) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
         super().__init__(
@@ -122,7 +126,9 @@ class ExampleTransformer(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Simulates the transformer."""
         startval_1 = stsv.get_input_value(self.input1)
         startval_2 = stsv.get_input_value(self.input2)

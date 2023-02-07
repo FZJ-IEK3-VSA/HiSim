@@ -88,8 +88,8 @@ def dynamic_components_demonstration(
         config=my_advanced_battery_config_2,
     )
 
-    my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHP.get_default_config()
-    my_advanced_fuel_cell_config_2 = advanced_fuel_cell.CHP.get_default_config()
+    my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHPConfig.get_default_config()
+    my_advanced_fuel_cell_config_2 = advanced_fuel_cell.CHPConfig.get_default_config()
     my_advanced_fuel_cell_config_1.name = "CHP1"
     my_advanced_fuel_cell_config_2.name = "CHP2"
 

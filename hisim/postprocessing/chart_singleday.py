@@ -8,11 +8,13 @@ from matplotlib.dates import DateFormatter
 from hisim.postprocessing.chartbase import Chart
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 
+
 class ChartSingleDay(Chart):
 
-    """ For making visualisations for a single day. """
+    """For making visualisations for a single day."""
 
-    def __init__(self,       
+    def __init__(
+        self,
         output: Any,
         component_name: str,
         units: Any,
@@ -22,12 +24,30 @@ class ChartSingleDay(Chart):
         data: Any,
         day: Any = None,
         month: Any = None,
-        output2: Any = None):
-        """ Initializes the class. """
+        output2: Any = None,
+    ):
+        """Initializes the class."""
         if output2 is not None:
-            super().__init__(output=output, component_name=component_name, chart_type="days", units=units, directory_path=directory_path, time_correction_factor=time_correction_factor, output_description=output_description, output2=output2)
+            super().__init__(
+                output=output,
+                component_name=component_name,
+                chart_type="days",
+                units=units,
+                directory_path=directory_path,
+                time_correction_factor=time_correction_factor,
+                output_description=output_description,
+                output2=output2,
+            )
         else:
-            super().__init__(output=output, component_name=component_name, chart_type="days", units=units, directory_path=directory_path, time_correction_factor=time_correction_factor, output_description=output_description)
+            super().__init__(
+                output=output,
+                component_name=component_name,
+                chart_type="days",
+                units=units,
+                directory_path=directory_path,
+                time_correction_factor=time_correction_factor,
+                output_description=output_description,
+            )
         self.axis: plt.axis
         self.ax2: plt.axis
         self.line2: plt.axis
@@ -35,15 +55,19 @@ class ChartSingleDay(Chart):
         self.day = day
         self.data = data
         self.plot_title: str
-        self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m" \
-                        f"{self.month}_d{self.day}.png"
+        self.filename = (
+            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m"
+            f"{self.month}_d{self.day}.png"
+        )
 
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 
     def get_day_data(self):
-        """ Extracts data for a single day. """
-        firstindex = (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
+        """Extracts data for a single day."""
+        firstindex = (
+            (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
+        )
         lastindex = firstindex + 24 * int(1 / self.time_correction_factor)
         day_number = self.day + 1
         if day_number == 1:
@@ -65,23 +89,37 @@ class ChartSingleDay(Chart):
         return self.data
 
     def __add__(self, other):
-        """ Adds another chart to this one. """
-        my_double: ChartSingleDay = ChartSingleDay(self.output, self.component_name, self.ylabel, self.directory_path, self.time_correction_factor, self.day, self.month, self.data, self.output_description)
-        my_double.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}" \
-                             f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}.png"
+        """Adds another chart to this one."""
+        my_double: ChartSingleDay = ChartSingleDay(
+            self.output,
+            self.component_name,
+            self.ylabel,
+            self.directory_path,
+            self.time_correction_factor,
+            self.day,
+            self.month,
+            self.data,
+            self.output_description,
+        )
+        my_double.filename = (
+            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}"
+            f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}.png"
+        )
         my_double.filepath = os.path.join(self.directory_path, my_double.filename)
         my_double.plot(close=False)
 
         #  twin object for two different y-axis on the sample plot
         my_double.ax2 = my_double.axis.twinx()
         #  make a plot with different y-axis using second axis object
-        my_double.line2 = my_double.ax2.plot(self.data.index, other.data, label=other.property, linewidth=5)
+        my_double.line2 = my_double.ax2.plot(
+            self.data.index, other.data, label=other.property, linewidth=5
+        )
         my_double.ax2.set_ylabel(f"{other.property} [{other.ylabel}]", fontsize=18)
         my_double.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         return my_double
 
     def close(self):
-        """ Closes a chart and saves. """
+        """Closes a chart and saves."""
         plt.xticks(fontsize=25)
         plt.yticks(fontsize=25)
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
@@ -93,18 +131,24 @@ class ChartSingleDay(Chart):
         plt.close()
 
     def plot(self, close: Any) -> ReportImageEntry:
-        """ Plots a chart. """
+        """Plots a chart."""
         single_day_data = self.get_day_data()
-        plt.rcParams['font.size'] = '30'
-        plt.rcParams['agg.path.chunksize'] = 10000
+        plt.rcParams["font.size"] = "30"
+        plt.rcParams["agg.path.chunksize"] = 10000
         _fig, self.axis = plt.subplots(figsize=(13, 9))
         plt.xticks(fontsize=25)
         plt.yticks(fontsize=25)
-        if abs(max(single_day_data)) > 1.5E3:
-            single_day_data = single_day_data * 1E-3
+        if abs(max(single_day_data)) > 1.5e3:
+            single_day_data = single_day_data * 1e-3
             self.ylabel = f"k{self.ylabel}"
         plt.title(self.title, fontsize=40)
-        plt.plot(single_day_data.index, single_day_data, color="green", linewidth=5.0, label=self.property)
+        plt.plot(
+            single_day_data.index,
+            single_day_data,
+            color="green",
+            linewidth=5.0,
+            label=self.property,
+        )
         plt.grid(True)
         self.axis.set_ylabel(self.ylabel)
         plt.xlabel("Time [hours]", fontsize=30)

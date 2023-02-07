@@ -1,10 +1,8 @@
 """Report Image Entry Module."""
 
 from typing import Optional
-from dataclasses import dataclass
 
 
-# @dataclass
 class ReportImageEntry:
 
     """Class for report images."""

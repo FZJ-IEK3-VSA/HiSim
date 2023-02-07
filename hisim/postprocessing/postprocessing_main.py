@@ -191,7 +191,7 @@ class PostProcessor:
                     day=0,
                     month=0,
                     output2=ppdt.results.iloc[:, 11],
-                    output_description=output.output_description
+                    output_description=output.output_description,
                 )
             else:
                 my_days = ChartSingleDay(
@@ -203,7 +203,7 @@ class PostProcessor:
                     data=ppdt.results.iloc[:, index],
                     day=0,
                     month=0,
-                    output_description=output.output_description
+                    output_description=output.output_description,
                 )
             my_entry = my_days.plot(close=True)
             self.report_image_entries.append(my_entry)
@@ -225,9 +225,11 @@ class PostProcessor:
                 output=output.full_name,
                 component_name=output.component_name,
                 units=output.unit,
-                directory_path=os.path.join(ppdt.simulation_parameters.result_directory),
+                directory_path=os.path.join(
+                    ppdt.simulation_parameters.result_directory
+                ),
                 time_correction_factor=ppdt.time_correction_factor,
-                output_description=output.output_description
+                output_description=output.output_description,
             )
             my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
             self.report_image_entries.append(my_entry)
@@ -246,7 +248,7 @@ class PostProcessor:
                 day=days["day"],
                 month=days["month"],
                 data=ppdt.results.iloc[:, index],
-                output_description=output.output_description
+                output_description=output.output_description,
             )
             my_entry = my_days.plot(close=True)
             self.report_image_entries.append(my_entry)
@@ -261,7 +263,7 @@ class PostProcessor:
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
-                output_description=output.output_description
+                output_description=output.output_description,
             )
 
             my_entry = my_carpet.plot(
@@ -285,7 +287,7 @@ class PostProcessor:
                 units=output.unit,
                 directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
-                output_description=output.output_description
+                output_description=output.output_description,
             )
             my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
             self.report_image_entries.append(my_entry)
@@ -371,7 +373,9 @@ class PostProcessor:
                             report_image_entry.component_output_folder_path
                         )
                     if report_image_entry.output_description not in output_descriptions:
-                        output_descriptions.append(report_image_entry.output_description)
+                        output_descriptions.append(
+                            report_image_entry.output_description
+                        )
 
         for component_name in component_names:
             # write component information
@@ -381,7 +385,9 @@ class PostProcessor:
                     component_content = wrapped_component.my_component.write_to_report()
                     report.write(component_content)
 
-            for index, component_output_folder_path in enumerate(component_output_folder_paths):
+            for index, component_output_folder_path in enumerate(
+                component_output_folder_paths
+            ):
                 folder_path = os.path.normpath(component_output_folder_path)
                 component_name1 = folder_path.split(os.sep)[-2]
                 output_type1 = folder_path.split(os.sep)[-1]
@@ -390,7 +396,7 @@ class PostProcessor:
                         component_name=component_name,
                         output_type=output_type1,
                         component_output_folder_path=component_output_folder_path,
-                        output_description=output_descriptions[index]
+                        output_description=output_descriptions[index],
                     )
         #     # write respective component output figures
         #     for output_type in output_types:

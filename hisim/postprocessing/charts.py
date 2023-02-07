@@ -30,7 +30,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         units: Any,
         directory_path: str,
         time_correction_factor: float,
-        output_description: str
+        output_description: str,
     ) -> None:
         """Initalizes a carpot plot."""
         super().__init__(
@@ -40,7 +40,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
             units=units,
             directory_path=directory_path,
             time_correction_factor=time_correction_factor,
-            output_description=output_description
+            output_description=output_description,
         )
 
     def plot(self, xdims: int, data: Any) -> ReportImageEntry:
@@ -107,13 +107,13 @@ class Line(Chart):  # noqa: too-few-public-methods
 
     # @utils.measure_memory_leak
     def __init__(
-        self,       
+        self,
         output: Any,
         component_name: str,
         units: Any,
         directory_path: str,
         time_correction_factor: float,
-        output_description: str
+        output_description: str,
     ):
         """Initializes a line chart."""
         super().__init__(
@@ -123,7 +123,7 @@ class Line(Chart):  # noqa: too-few-public-methods
             units=units,
             directory_path=directory_path,
             time_correction_factor=time_correction_factor,
-            output_description=output_description
+            output_description=output_description,
         )
 
     @utils.measure_memory_leak
@@ -187,13 +187,15 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         366.83,
     ]
 
-    def __init__(self,
+    def __init__(
+        self,
         output: Any,
         component_name: str,
         units: Any,
         directory_path: str,
         time_correction_factor: float,
-        output_description: str):
+        output_description: str,
+    ):
         """Initializes the classes."""
         super().__init__(
             output=output,
@@ -202,7 +204,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
             units=units,
             directory_path=directory_path,
             time_correction_factor=time_correction_factor,
-            output_description=output_description
+            output_description=output_description,
         )
         self.filename = f"monthly_{self.output}.png"
 
@@ -248,7 +250,15 @@ class SankeyHISIM(Chart):
 
     """Class for sankey charts."""
 
-    def __init__(self, name, component_name, units, directorypath, time_correction_factor, output_description):
+    def __init__(
+        self,
+        name,
+        component_name,
+        units,
+        directorypath,
+        time_correction_factor,
+        output_description,
+    ):
         """Initializes the Sankey chart."""
         super().__init__(
             output_description=output_description,

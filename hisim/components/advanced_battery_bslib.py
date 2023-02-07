@@ -162,7 +162,6 @@ class Battery(Component):
         lines = []
         for config_string in self.battery_config.get_string_dict():
             lines.append(config_string)
-        lines.append("Advanced Battery bslib: " + self.component_name)
         return lines
 
 

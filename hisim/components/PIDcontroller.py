@@ -171,10 +171,6 @@ class PIDController(cp.Component):
         lines = []
         for config_string in self.pid_controller_config.get_string_dict():
             lines.append(config_string)
-        lines.append("PID Controller")
-        lines.append("Control algorithm of the Air conditioner is: PI \n")
-        # lines.append(f"Controller Proportional gain is {self.Kp:4.2f} \n")
-        # lines.append(f"Controller Integral gain is {self.Ki:4.2f} \n")
         return lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:

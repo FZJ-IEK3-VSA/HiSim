@@ -579,11 +579,4 @@ class UtspLpgConnector(cp.Component):
         lines = []
         for config_string in self.utsp_config.get_string_dict():
             lines.append(config_string)
-        lines.append(f"Name: {self.component_name}")
-        lines.append("URL: " + str(self.utsp_config.url))
-        lines.append("Household: " + str(self.utsp_config.household))
-        lines.append("Result Path: " + str(self.utsp_config.result_path))
-        lines.append("Travel Route Set: " + str(self.utsp_config.travel_route_set))
-        lines.append("Transportation Device Set: " + str(self.utsp_config.transportation_device_set))
-        lines.append("TCharging Station Set: " + str(self.utsp_config.charging_station_set))
         return lines

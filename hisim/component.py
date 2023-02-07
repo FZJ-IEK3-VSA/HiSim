@@ -46,7 +46,11 @@ class ConfigBase(JSONWizard):
         my_list = []
         if len(my_dict) > 0:
             for entry in my_dict.items():
-                my_list.append(entry[0] + ": " + str(entry[1]))
+                first_entry = entry[0].rsplit('_')
+                first_entry = ' '.join(first_entry)
+                first_entry = first_entry.capitalize()
+                # my_list.append(entry[0] + ": " + str(entry[1]))
+                my_list.append(first_entry + ": " + str(entry[1]))
         return my_list
 
 

@@ -123,5 +123,4 @@ class PriceSignal(cp.Component):
         lines = []
         for config_string in self.price_signal_config.get_string_dict():
             lines.append(config_string)
-        lines.append( "Price signal: {}".format( "dummy" ) )
         return lines

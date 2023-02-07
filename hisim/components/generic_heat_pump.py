@@ -410,11 +410,6 @@ class GenericHeatPump(cp.Component):
         lines = []
         for config_string in self.heatpump_config.get_string_dict():
             lines.append(config_string)
-        lines.append("Name: Heat Pump")
-        lines.append(f"Heat Pump Name: {self.heatpump_name}")
-        lines.append(f"Manufacturer: {self.manufacturer}")
-        lines.append(f"Min Operation Time [Sec]: {self.min_operation_time}")
-        lines.append(f"Min Idle Time [Sec]: {self.min_idle_time}")
         lines.append(f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}")
         lines.append(f"Max Peating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}")
         return lines
@@ -679,11 +674,6 @@ class GenericHeatPumpController(cp.Component):
         lines = []
         for config_string in self.heatpump_controller_config.get_string_dict():
             lines.append(config_string)
-        lines.append("Name: Heat Pump Controller")
-        lines.append(f"Set Temperature for Heating [°C]: {self.temperature_set_heating}")
-        lines.append(f"Set Temperature for Cooling [°C]: {self.temperature_set_cooling}")
-        lines.append(f"Offset [°C]: {self.offset}")
-        lines.append(f"Mode: {self.mode}")
         return lines
 
     def i_simulate(

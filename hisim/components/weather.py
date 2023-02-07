@@ -172,11 +172,6 @@ class Weather(Component):
         lines = []
         for config_string in self.weather_config.get_string_dict():
             lines.append(config_string)
-        lines.append("Name: " + str(self.weather_config.name))
-        lines.append("Location: " + str(self.weather_config.location))
-        lines.append("Source Path: " + str(self.weather_config.source_path))
-        lines.append("Data Source: " + str(self.weather_config.data_source))
-        # lines.append(self.weather_config.get_string_dict())  # type: ignore
         return lines
 
     def i_save_state(self) -> None:

@@ -72,10 +72,8 @@ def test_house_with_pv_and_hp_for_heating_test(
     hp_mode = 2
 
     # Set Heat Pump
-    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-    hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 1
-    hp_min_idle_time = 1
+    # hp_min_operation_time = 1
+    # hp_min_idle_time = 1
 
     # =========================================================================================================================================================
     # Build Components
@@ -146,11 +144,7 @@ def test_house_with_pv_and_hp_for_heating_test(
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig(
-        manufacturer=hp_manufacturer,
-        name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time),
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

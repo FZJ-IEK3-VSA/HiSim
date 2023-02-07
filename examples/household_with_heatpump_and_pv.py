@@ -169,7 +169,8 @@ def household_pv_hp(
     # Build Electricity Grid
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         config=sumbuilder.ElectricityGridConfig(name="BaseLoad",
-        grid=[my_occupancy, "Subtract", my_photovoltaic_system]),
+        grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+        signal=None),
         my_simulation_parameters=my_simulation_parameters,
     )
 

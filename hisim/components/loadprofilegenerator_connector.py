@@ -69,10 +69,10 @@ class Occupancy(cp.Component):
 
     # Outputs
     # output
-    WW_MassOutput = "Mass Output"  # kg/s
-    WW_TemperatureOutput = "Temperature Output"  # °C
-    EnergyDischarged = "Energy Discharged"  # W
-    DemandSatisfied = "Demand Satisfied"  # 0 or 1
+    # WW_MassOutput = "Mass Output"  # kg/s
+    # WW_TemperatureOutput = "Temperature Output"  # °C
+    # EnergyDischarged = "Energy Discharged"  # W
+    # DemandSatisfied = "Demand Satisfied"  # 0 or 1
 
     NumberByResidents = "NumberByResidents"
     HeatingByResidents = "HeatingByResidents"

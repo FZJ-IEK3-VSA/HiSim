@@ -27,6 +27,10 @@ __status__ = "development"
 class EMSConfig(cp.ConfigBase):
 
     """ L1 Controller Config. """
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return L2GenericEnergyManagementSystem.get_full_classname()
 
     name: str
     strategy: str
@@ -34,11 +38,11 @@ class EMSConfig(cp.ConfigBase):
     building_temperature_offset_value: float
     storage_temperature_offset_value: float
 
-    @staticmethod
-    def get_default_config_EMS() -> "EMSConfig":
+    @classmethod
+    def get_default_config_EMS(cls) -> Any:
         """ Default Config for Energy Management System. """
         config = EMSConfig(
-            name="EMS", strategy="optimize_own_consumption", limit_to_shave=0,
+            name="EMS L2EMSElectricityController", strategy="optimize_own_consumption", limit_to_shave=0,
             building_temperature_offset_value=1, storage_temperature_offset_value=10
             )
         return config
@@ -70,8 +74,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def __init__(self, my_simulation_parameters: SimulationParameters, config: EMSConfig):
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
+        self.ems_config = config
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
-                         name="L2EMSElectricityController", my_simulation_parameters=my_simulation_parameters)
+                         name=self.ems_config.name, my_simulation_parameters=my_simulation_parameters)
 
         self.components_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
@@ -81,10 +86,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
 
         self.mode: Any
-        self.strategy = config.strategy
-        self.limit_to_shave = config.limit_to_shave
-        self.building_temperature_offset_value = config.building_temperature_offset_value
-        self.storage_temperature_offset_value = config.storage_temperature_offset_value
+        self.strategy = self.ems_config.strategy
+        self.limit_to_shave = self.ems_config.limit_to_shave
+        self.building_temperature_offset_value = self.ems_config.building_temperature_offset_value
+        self.storage_temperature_offset_value = self.ems_config.storage_temperature_offset_value
 
         # Inputs
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,
@@ -96,31 +101,36 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                                field_name=self.ElectricityToOrFromGrid,
                                                                                load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                               sankey_flow_direction=False)
+                                                                               sankey_flow_direction=False,
+                                                                               output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.")
 
         self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                                field_name=self.TotalElectricityConsumption,
                                                                                load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                               sankey_flow_direction=False)
+                                                                               sankey_flow_direction=False,
+                                                                               output_description=f"here a description for {self.TotalElectricityConsumption} will follow.")
 
         self.flexible_electricity: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                                field_name=self.FlexibleElectricity,
                                                                                load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                               sankey_flow_direction=False)
+                                                                               sankey_flow_direction=False,
+                                                                               output_description=f"here a description for {self.FlexibleElectricity} will follow.")
 
 
         self.building_temperature_modifier: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                                field_name=self.BuildingTemperatureModifier,
                                                                                load_type=lt.LoadTypes.TEMPERATURE, unit=lt.Units.CELSIUS,
-                                                                               sankey_flow_direction=False)
+                                                                               sankey_flow_direction=False,
+                                                                               output_description=f"here a description for {self.BuildingTemperatureModifier} will follow.")
 
         self.storage_temperature_modifier: cp.ComponentOutput = self.add_output(object_name=self.component_name,
                                                                                  field_name=self.StorageTemperatureModifier,
                                                                                  load_type=lt.LoadTypes.TEMPERATURE, unit=lt.Units.CELSIUS,
-                                                                                 sankey_flow_direction=False)
+                                                                                 sankey_flow_direction=False,
+                                                                                 output_description=f"here a description for {self.StorageTemperatureModifier} will follow.")
 
         self.check_peak_shaving: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.CheckPeakShaving,
-                                                                      load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False)
+                                                                      load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY, sankey_flow_direction=False, output_description=f"here a description for {self.CheckPeakShaving} will follow.")
 
     def sort_source_weights_and_components(self) -> None:
         """ Sorts dynamic Inputs and Outputs according to source weights. """
@@ -146,7 +156,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     def write_to_report(self) -> None:
         lines = []
-        lines.append("Name: L2EMSElectricityController")
+        for config_string in self.ems_config.get_string_dict():
+            lines.append(config_string)
+        lines.append("Name: EMS L2EMSElectricityController")
         lines.append(f"Mode: {self.mode}")
         lines.append(f"Strategy: {self.strategy}")
         lines.append(f"Limit to Shave: {self.limit_to_shave}")

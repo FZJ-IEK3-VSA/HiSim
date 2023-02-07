@@ -5,7 +5,7 @@ from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, ConfigBase
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
@@ -22,7 +22,13 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class BatteryConfig:
+class BatteryConfig(ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return Battery.get_full_classname()
+
+    name: str
     system_id: str
     p_inv_custom: float  # power in Watt
     e_bat_custom: float  # capacity in Kilowatt
@@ -30,13 +36,13 @@ class BatteryConfig:
     source_weight : int
 
     @staticmethod
-    def get_default_config(name: str = 'Battery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
+    def get_default_config(cls) -> Any:
         config=BatteryConfig(
-            system_id='SG1',
-            p_inv_custom=p_inv_custom,
-            e_bat_custom=e_bat_custom,
-            name=name,
-            source_weight=source_weight)
+            name= 'Battery', 
+            p_inv_custom= 5,
+            e_bat_custom=10, 
+            source_weight=1,
+            system_id='SG1')
         return config
 
 class Battery(Component):
@@ -69,7 +75,7 @@ class Battery(Component):
             Useable battery capacity. Only for system_ids of type "Generic". [Wh]
         """
         self.battery_config = config
-        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=self.battery_config.name + '_w' + str(self.battery_config.source_weight), my_simulation_parameters=my_simulation_parameters)
 
         self.source_weight = self.battery_config.source_weight
 
@@ -100,18 +106,21 @@ class Battery(Component):
                                                      field_name=self.AcBatteryPower,
                                                      load_type=LoadTypes.ELECTRICITY,
                                                      unit=Units.WATT,
-                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY])
+                                                     postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY],
+                                                     output_description=f"here a description for {self.AcBatteryPower} will follow.")
 
         self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
                                                       field_name=self.DcBatteryPower,
                                                       load_type=LoadTypes.ELECTRICITY,
-                                                      unit=Units.WATT)
+                                                      unit=Units.WATT,
+                                                      output_description=f"here a description for {self.DcBatteryPower} will follow.")
 
         self.soc: ComponentOutput = self.add_output(object_name=self.component_name,
                                                     field_name=self.StateOfCharge,
                                                     load_type=LoadTypes.ANY,
                                                     unit=Units.ANY,
-                                                    postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
+                                                    postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
+                                                    output_description=f"here a description for {self.StateOfCharge} will follow.")
 
 
     def i_save_state(self)  -> None:
@@ -152,6 +161,8 @@ class Battery(Component):
 
     def write_to_report(self) -> List[str]:
         lines = []
+        for config_string in self.battery_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Advanced Battery bslib: " + self.component_name)
         return lines
 

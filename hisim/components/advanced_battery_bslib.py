@@ -32,10 +32,9 @@ class BatteryConfig(ConfigBase):
     system_id: str
     p_inv_custom: float  # power in Watt
     e_bat_custom: float  # capacity in Kilowatt
-    name: str
     source_weight : int
 
-    @staticmethod
+    @classmethod
     def get_default_config(cls) -> Any:
         config=BatteryConfig(
             name= 'Battery', 

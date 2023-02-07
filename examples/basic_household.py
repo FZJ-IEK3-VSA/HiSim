@@ -143,17 +143,19 @@ def basic_household_explicit(
     )
 
     # Build Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(
+        name="GenericHeatPumpController",
         temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
         temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
-        mode=hp_mode,
+        mode=hp_mode),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump(),
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

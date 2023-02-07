@@ -33,7 +33,7 @@ def test_heat_pump():
                                                      min_idle_time=minimum_operation_time), my_simulation_parameters=my_simulation_parameters)
 
     # Set Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
                                                                temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
                                                                offset=offset,
                                                                mode=hp_mode,

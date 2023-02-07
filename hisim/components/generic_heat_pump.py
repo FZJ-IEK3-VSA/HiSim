@@ -53,9 +53,35 @@ class GenericHeatPumpConfig(cp.ConfigBase):
     min_idle_time: float
 
     @classmethod
-    def get_default_generic_heat_pump(cls):
+    def get_default_generic_heat_pump_config(cls):
         """ Gets a default Generic Heat Pump. """
         return GenericHeatPumpConfig(name="HeatPump", heat_pump_name="Vitocal 300-A AWO-AC 301.B07", manufacturer="Viessmann Werke GmbH & Co KG", min_operation_time=60 * 60, min_idle_time=15 * 60)
+
+
+@dataclass_json
+@dataclass
+class GenericHeatPumpControllerConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """ Returns the full class name of the base class. """
+        return GenericHeatPumpController.get_full_classname()
+
+    name: str
+    temperature_air_heating_in_celsius: float
+    temperature_air_cooling_in_celsius: float
+    offset: float
+    mode: int
+
+    @classmethod
+    def get_default_generic_heat_pump_controller_config(cls):
+        """ Gets a default Generic Heat Pump Controller. """
+        return GenericHeatPumpControllerConfig(
+            name="HeatPumpController",    
+            temperature_air_heating_in_celsius=18.0,
+            temperature_air_cooling_in_celsius=26.0,
+            offset= 0.0,
+            mode=1)
+    
 
 class GenericHeatPumpState:
 
@@ -268,10 +294,10 @@ class GenericHeatPump(cp.Component):
         """Get heat pump controller default connections."""
         log.information("setting controller default connections in HeatPump")
         connections = []
-        controller_classname = HeatPumpController.get_classname()
+        controller_classname = GenericHeatPumpController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHeatPump.State, controller_classname, HeatPumpController.State
+                GenericHeatPump.State, controller_classname, GenericHeatPumpController.State
             )
         )
         return connections
@@ -529,7 +555,7 @@ class GenericHeatPump(cp.Component):
         # return ws_in, wasted_energy, thermal_energy_to_add
 
 
-class HeatPumpController(cp.Component):
+class GenericHeatPumpController(cp.Component):
 
     """Heat Pump Controller.
 
@@ -564,20 +590,18 @@ class HeatPumpController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        temperature_air_heating_in_celsius: float = 18.0,
-        temperature_air_cooling_in_celsius: float = 26.0,
-        offset: float = 0.0,
-        mode: int = 1,
+        config: GenericHeatPumpControllerConfig
     ) -> None:
         """Construct all the neccessary attributes."""
+        self.heatpump_controller_config = config
         super().__init__(
-            "HeatPumpController", my_simulation_parameters=my_simulation_parameters
+            self.heatpump_controller_config.name, my_simulation_parameters=my_simulation_parameters
         )
         self.build(
-            temperature_air_cooling=temperature_air_cooling_in_celsius,
-            temperature_air_heating=temperature_air_heating_in_celsius,
-            offset=offset,
-            mode=mode,
+            temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
+            temperature_air_heating=self.heatpump_controller_config.temperature_air_heating_in_celsius,
+            offset=self.heatpump_controller_config.offset,
+            mode=self.heatpump_controller_config.mode,
         )
 
         self.temperature_mean_channel: cp.ComponentInput = self.add_input(
@@ -609,7 +633,7 @@ class HeatPumpController(cp.Component):
         building_classname = Building.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HeatPumpController.TemperatureMean,
+                GenericHeatPumpController.TemperatureMean,
                 building_classname,
                 Building.TemperatureMean,
             )
@@ -653,6 +677,8 @@ class HeatPumpController(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
+        for config_string in self.heatpump_controller_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Name: Heat Pump Controller")
         lines.append(f"Set Temperature for Heating [°C]: {self.temperature_set_heating}")
         lines.append(f"Set Temperature for Cooling [°C]: {self.temperature_set_cooling}")

@@ -214,6 +214,7 @@ def modular_household_explicit(
 
     # add price signal
     my_price_signal = generic_price_signal.PriceSignal(
+        config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
         my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_price_signal)

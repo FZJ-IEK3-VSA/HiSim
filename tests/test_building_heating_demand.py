@@ -144,12 +144,12 @@ def test_house_with_pv_and_hp_for_heating_test(
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump(),
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
         temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,

@@ -35,7 +35,7 @@ class PIDControllerConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_pid_controller_config(cls) -> Any:
-        config=PIDController(
+        config=PIDControllerConfig(
                 name="PIDController",
                 ki=1,
                 kp=1,

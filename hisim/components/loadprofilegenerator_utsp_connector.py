@@ -153,7 +153,7 @@ class UtspLpgConnector(cp.Component):
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
-            f"here a description for LPG UTSP {self.WaterConsumption} will follow."
+            output_description=f"here a description for LPG UTSP {self.WaterConsumption} will follow."
         )
 
     def i_save_state(self) -> None:

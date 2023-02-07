@@ -141,11 +141,11 @@ def basic_household_with_default_connections(
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(name="GenericHeatPumpController", temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
         temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
-        mode=hp_mode,
+        mode=hp_mode),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
@@ -159,7 +159,7 @@ def basic_household_with_default_connections(
     my_sim.add_component(my_heat_pump_controller)
 
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump(),
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump.connect_only_predefined_connections(

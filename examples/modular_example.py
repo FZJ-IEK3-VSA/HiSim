@@ -136,6 +136,7 @@ def modular_household_explicit(
     if utsp_connected:
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                name="UTSPConnector",
                 url=system_config_.url,
                 api_key=system_config_.api_key,
                 household=occupancy_profile,

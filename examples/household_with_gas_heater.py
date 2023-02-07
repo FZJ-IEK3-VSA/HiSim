@@ -68,6 +68,7 @@ def household_gas_heater(
     seconds_per_timestep = 60 * 15
 
     # Set Occupancy
+    name = "UTSPConnector"
     url = my_config.lpg_url
     api_key = my_config.api_key
     household = my_config.household_type
@@ -88,6 +89,7 @@ def household_gas_heater(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+        name=name,
         url=url,
         api_key=api_key,
         household=household,

@@ -6,7 +6,7 @@ import itertools
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
 import pandas as pd
@@ -37,7 +37,7 @@ from hisim.simulationparameters import SimulationParameters
 class UtspLpgConnectorConfig(cp.ConfigBase):
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
-
+    name: str
     url: str
     api_key: str
     household: JsonReference
@@ -46,17 +46,18 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
 
-    @staticmethod
-    def get_default_config(
-        url: str = "http://localhost:443/api/v1/profilerequest", api_key: str = ""
-    ) -> "UtspLpgConnectorConfig":
+    @classmethod
+    def get_default_UTSP_connector_config(cls) -> Any:
+
         """Creates a default configuration. Chooses default values for the LPG parameters."""
-        result_path = os.path.join(utils.get_input_directory(), "lpg_profiles")
+        
+
         config = UtspLpgConnectorConfig(
-            url,
-            api_key,
-            Households.CHR01_Couple_both_at_Work,
-            result_path,
+            name="UTSPConnector",
+            url="http://localhost:443/api/v1/profilerequest",
+            api_key="",
+            household=Households.CHR01_Couple_both_at_Work,
+            result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
@@ -102,11 +103,11 @@ class UtspLpgConnector(cp.Component):
         config: UtspLpgConnectorConfig,
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
+        self.utsp_config = config
         super().__init__(
-            name=UtspLpgConnector.__name__,
+            name=self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        self.utsp_config = config
         self.build()
 
         # Inputs - Not Mandatory

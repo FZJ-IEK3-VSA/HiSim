@@ -138,6 +138,7 @@ def household_pv_hp(
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+        name="UTSPConnector",
         url=url,
         api_key=api_key,
         household=household,

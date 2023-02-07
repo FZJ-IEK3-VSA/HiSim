@@ -8,6 +8,9 @@ Created on Sat Aug  6 23:30:41 2022
 """
 from hisim import log
 import numpy as np
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
+from typing import Any
 
 # owned
 from hisim import component as cp
@@ -18,6 +21,53 @@ from hisim.components.building import Building
 from hisim.components.PIDcontroller import PIDController
 import hisim.utils as utils
 
+@dataclass_json
+@dataclass
+class AirConditionerConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return AirConditioner.get_full_classname()
+
+    name: str
+    manufacturer: str
+    model_name: str
+    min_operation_time: int
+    min_idle_time: int
+    control: str
+
+    @classmethod
+    def get_default_air_conditioner_config(cls) -> Any:
+        config=AirConditionerConfig(
+                name="AirConditioner",
+                manufacturer="Panasonic",
+                model_name="CS-RE18JKE/CU-RE18JKE",
+                min_operation_time=60 * 60,
+                min_idle_time=15 * 60,
+                control="on_off")
+        return config
+    
+@dataclass_json
+@dataclass
+class AirConditionerControllerConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return AirConditionercontroller.get_full_classname()
+
+    name: str
+    t_air_heating: float
+    t_air_cooling: float
+    offset: float
+
+    @classmethod
+    def get_default_air_conditioner_controller_config(cls) -> Any:
+        config=AirConditionerControllerConfig(
+                name="AirConditioner",
+                t_air_heating=18.0,
+                t_air_cooling=26.0,
+                offset=0.0)
+        return config
 
 class AirConditionerState:
     """
@@ -61,13 +111,11 @@ class AirConditioner(cp.Component):
 
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 manufacturer: str = "Panasonic",
-                 name: str = "CS-RE18JKE/CU-RE18JKE",
-                 min_operation_time: int = 60 * 60,
-                 min_idle_time: int = 15 * 60,
-                 control: str = "on_off"):
-        super().__init__("AirConditioner", my_simulation_parameters=my_simulation_parameters)
-        self.build(manufacturer, name, min_operation_time, min_idle_time)
+                 config: AirConditionerConfig):
+        self.air_conditioner_config = config
+        super().__init__(name=self.air_conditioner_config.name, my_simulation_parameters=my_simulation_parameters)
+        self.build(manufacturer=self.air_conditioner_config.manufacturer, model_name=self.air_conditioner_config.model_name,
+                   min_operation_time=self.air_conditioner_config.min_operation_time, min_idle_time=self.air_conditioner_config.min_idle_time)
 
         self.t_outC: cp.ComponentInput = self.add_input(self.component_name,
                                                         self.TemperatureOutside,
@@ -88,16 +136,18 @@ class AirConditioner(cp.Component):
         self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                              self.ThermalEnergyDelivered,
                                                                              LoadTypes.HEATING,
-                                                                             Units.WATT)
+                                                                             Units.WATT,
+                                                                             output_description=f"here a description for Air Conditioner {self.ThermalEnergyDelivered} will follow.")
         self.electricity_outputC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                        self.ElectricityOutput,
                                                                        LoadTypes.ELECTRICITY,
-                                                                       Units.WATT)
+                                                                       Units.WATT,
+                                                                       output_description=f"here a description for Air Conditioner {self.ElectricityOutput} will follow.")
 
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_air_condition_controller())
 
-        self.control = control
+        self.control = self.air_conditioner_config.control
 
     def get_default_connections_from_weather(self):
         print("setting weather default connections")
@@ -115,7 +165,7 @@ class AirConditioner(cp.Component):
             cp.ComponentConnection(AirConditioner.State, controller_classname, AirConditionercontroller.State))
         return connections
 
-    def build(self, manufacturer, name, min_operation_time, min_idle_time):
+    def build(self, manufacturer, model_name, min_operation_time, min_idle_time):
         # Simulation parameters
 
         # Retrieves air conditioner from database - BEGIN
@@ -123,7 +173,7 @@ class AirConditioner(cp.Component):
 
         air_conditioner = None
         for air_conditioner_iterator in air_conditioners_database:
-            if air_conditioner_iterator["Manufacturer"] == manufacturer and air_conditioner_iterator["Model"] == name:
+            if air_conditioner_iterator["Manufacturer"] == manufacturer and air_conditioner_iterator["Model"] == model_name:
                 air_conditioner = air_conditioner_iterator
                 break
 
@@ -131,7 +181,7 @@ class AirConditioner(cp.Component):
             raise Exception("Air conditioner model not registered in the database")
 
         self.manufacturer = manufacturer
-        self.model = name
+        self.model = model_name
         self.min_operation_time = min_operation_time
         self.min_idle_time = min_idle_time
 
@@ -204,6 +254,8 @@ class AirConditioner(cp.Component):
 
     def write_to_report(self):
         lines = []
+        for config_string in self.air_conditioner_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Name: Air Conditioner")
         lines.append(f"Manufacturer: {self.manufacturer}")
         lines.append(f"Model {self.model}")
@@ -304,12 +356,11 @@ class AirConditionercontroller(cp.Component):
     @utils.measure_execution_time
     def __init__(self,
                  my_simulation_parameters: SimulationParameters,
-                 t_air_heating: float = 18.0,
-                 t_air_cooling: float = 26.0,
-                 offset: float = 0.0
+                 config: AirConditionerControllerConfig
                  ):
-        super().__init__("AirConditionercontroller", my_simulation_parameters=my_simulation_parameters)
-        self.build(t_air_cooling=t_air_cooling, t_air_heating=t_air_heating, offset=offset)
+        self.air_conditioner_controller_config = config
+        super().__init__(name=self.air_conditioner_controller_config.name, my_simulation_parameters=my_simulation_parameters)
+        self.build(t_air_cooling=self.air_conditioner_controller_config.t_air_cooling, t_air_heating=self.air_conditioner_controller_config.t_air_heating, offset=self.air_conditioner_controller_config.offset)
 
         self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.TemperatureMean,
@@ -324,7 +375,8 @@ class AirConditionercontroller(cp.Component):
         self.stateC: cp.ComponentOutput = self.add_output(self.component_name,
                                                           self.State,
                                                           LoadTypes.ANY,
-                                                          Units.ANY)
+                                                          Units.ANY,
+                                                          output_description=f"here a description for {self.State} will follow.")
 
         self.add_default_connections( self.get_default_connections_from_building())
 
@@ -357,6 +409,8 @@ class AirConditionercontroller(cp.Component):
 
     def write_to_report(self):
         lines = []
+        for config_string in self.air_conditioner_controller_config.get_string_dict():
+            lines.append(config_string)
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
         lines.append("Controller heating set temperature is {} Deg C \n".format(self.t_set_heating))

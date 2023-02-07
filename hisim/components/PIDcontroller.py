@@ -6,7 +6,9 @@ Created on Tue Aug  9 09:06:13 2022
 @author: m.alfouly
 """
 #import numpy as np
-
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
+from typing import Any
 # Owned
 #from hisim.components.weather import Weather
 from hisim import component as cp
@@ -17,6 +19,28 @@ from hisim.components.building import Building
 #from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim import log
 
+
+@dataclass_json
+@dataclass
+class PIDControllerConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return PIDController.get_full_classname()
+
+    name: str
+    ki: float
+    kp: float
+    kd: float
+
+    @classmethod
+    def get_default_pid_controller_config(cls) -> Any:
+        config=PIDController(
+                name="PIDController",
+                ki=1,
+                kp=1,
+                kd=1)
+        return config
 
 class PIDState:
     """ Represents the current internal state of the PID. """
@@ -39,23 +63,24 @@ class PIDController(cp.Component):
     # ouput 
     ElectricityOutputPID = "ElectricityOutputPID"
     ThermalEnergyDelivered = "ThermalEnergyDelivered"
-    error_pvalue = "error_p_value"
-    error_dvalue = "error_d_value"
-    error_ivalue = "error_i_value"
-    error = "error_value"
-    derivator = "derivator"
-    integrator = "integrator"
+    ErrorPValue = "ErrorPValue"
+    ErrorDValue = "ErrorDValue"
+    ErrorIValue = "ErrorIValue"
+    Error = "Error"
+    Derivator = "Derivator"
+    Integrator = "Integrator"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, ki: float = 1, kp: float = 1, kd: float =1) -> None:
-        super().__init__("PIDController", my_simulation_parameters=my_simulation_parameters)
+    def __init__(self, my_simulation_parameters: SimulationParameters, config:PIDControllerConfig) -> None:
+        self.pid_controller_config = config
+        super().__init__(name=self.pid_controller_config.name, my_simulation_parameters=my_simulation_parameters)
         self.build()
         # --------------------------------------------------
         # control saturation
         self.MV_min = 0
         self.MV_max = 5000
-        self.ki = ki
-        self.kp = kp
-        self.kd = kd
+        self.ki = self.pid_controller_config.ki
+        self.kp = self.pid_controller_config.kp
+        self.kd = self.pid_controller_config.kd
         self.state = PIDState(integrator=0, derivator=0)
         self.previous_state = self.state.clone()
 
@@ -70,30 +95,33 @@ class PIDController(cp.Component):
                                                                   LoadTypes.ELECTRICITY,
                                                                   Units.WATT)
         self.error_pvalue_output: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                       self.error_pvalue,
+                                                                       self.ErrorPValue,
                                                                        LoadTypes.ELECTRICITY,
                                                                        Units.WATT)
         self.error_ivalue_output: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                       self.error_ivalue,
+                                                                       self.ErrorIValue,
                                                                        LoadTypes.ELECTRICITY,
                                                                        Units.WATT)
         self.error_dvalue_output: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                       self.error_dvalue,
+                                                                       self.ErrorDValue,
                                                                        LoadTypes.ELECTRICITY,
                                                                        Units.WATT)
         self.error_output: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                self.error,
+                                                                self.Error,
                                                                 LoadTypes.ELECTRICITY,
-                                                                Units.WATT)
+                                                                Units.WATT,
+                                                                output_description=f"here a description for {self.Error} will follow.")
 
         self.derivator_output: cp.ComponentOutput = self.add_output(self.component_name,
-                                                                self.derivator,
+                                                                self.Derivator,
                                                                 LoadTypes.ELECTRICITY,
-                                                                Units.WATT)
+                                                                Units.WATT,
+                                                                output_description=f"here a description for {self.Derivator} will follow.")
         self.integrator_output: cp.ComponentOutput = self.add_output(self.component_name,
-                                                             self.integrator,
+                                                             self.Integrator,
                                                              LoadTypes.ELECTRICITY,
-                                                             Units.WATT)
+                                                             Units.WATT,
+                                                             output_description=f"here a description for {self.Integrator} will follow.")
 
     def get_building_default_connections(self):
         log.information("setting building default connections in Heatpumpcontroller")
@@ -141,6 +169,8 @@ class PIDController(cp.Component):
     def write_to_report(self):
         """ Logs the most important config stuff to the report. """
         lines = []
+        for config_string in self.pid_controller_config.get_string_dict():
+            lines.append(config_string)
         lines.append("PID Controller")
         lines.append("Control algorithm of the Air conditioner is: PI \n")
         # lines.append(f"Controller Proportional gain is {self.Kp:4.2f} \n")

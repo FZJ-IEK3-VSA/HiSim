@@ -261,9 +261,6 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                               my_air_conditioner.ThermalEnergyDelivered)
     
 
-
-
-
 if __name__ == "__main__":
     y = np.logspace(1, 3, num=7)
     # gc.set_debug(gc.DEBUG_LEAK)

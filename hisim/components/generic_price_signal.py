@@ -1,5 +1,7 @@
 # Owned
-from typing import  List
+from typing import  List, Any
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 
@@ -14,6 +16,22 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+@dataclass_json
+@dataclass
+class PriceSignalConfig(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return PriceSignal.get_full_classname()
+    name: str
+
+
+    @classmethod
+    def get_default_price_signal_config(cls) -> Any:
+        config=PriceSignalConfig(
+            name="PriceSignal",
+)
+        return config
 
 class PriceSignal(cp.Component):
     """
@@ -42,8 +60,9 @@ class PriceSignal(cp.Component):
     PriceInjection = 'PriceInjection'
 
     def __init__( self,
-                  my_simulation_parameters: SimulationParameters ) -> None:
-        super( ).__init__( name = "PriceSignal", my_simulation_parameters = my_simulation_parameters )
+                  my_simulation_parameters: SimulationParameters, config: PriceSignalConfig ) -> None:
+        self.price_signal_config = config
+        super( ).__init__( name = self.price_signal_config.name, my_simulation_parameters = my_simulation_parameters )
 
         self.build_dummy( start = int( 10 * 3600 / my_simulation_parameters.seconds_per_timestep ), 
                           end = int( 16 * 3600 / my_simulation_parameters.seconds_per_timestep ) )
@@ -56,7 +75,8 @@ class PriceSignal(cp.Component):
                                                                   postprocessing_flag = [
                                                                     lt.LoadTypes.PRICE,
                                                                     lt.InandOutputType.ELECTRICITY_CONSUMPTION
-                                                                    ]
+                                                                    ],
+                                                                  output_description=f"here a description for {self.PricePurchase} will follow."
                                                                     )
         self.PriceInjectionC: cp.ComponentOutput = self.add_output(self.component_name,
                                                                    self.PriceInjection,
@@ -65,7 +85,9 @@ class PriceSignal(cp.Component):
                                                                    postprocessing_flag=[
                                                                     lt.LoadTypes.PRICE,
                                                                     lt.InandOutputType.ELECTRICITY_INJECTION
-                                                                    ]
+                                                                    ],
+                                                                   output_description=f"here a description for {self.PriceInjection} will follow."
+
                                                                     )
 
     def i_save_state(self) -> None:
@@ -99,5 +121,7 @@ class PriceSignal(cp.Component):
         pass
     def write_to_report(self) -> List[str]:
         lines = []
+        for config_string in self.price_signal_config.get_string_dict():
+            lines.append(config_string)
         lines.append( "Price signal: {}".format( "dummy" ) )
         return lines

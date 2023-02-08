@@ -862,6 +862,10 @@ def configure_heating_with_buffer_electric(
     count += 1
 
     heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
+    buffer_config.compute_default_volume(
+        time_in_seconds=heatpump_l1_config.min_idle_time_in_seconds,
+        temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius
+    )
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=buffer_config
@@ -980,10 +984,10 @@ def configure_heating_with_buffer(
     }
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
-    # heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_pump_controller()
-    heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(
-        heating_system_installed.value
+    heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer(
+        "Buffer" + heating_system_installed.value + "Controller"
     )
+
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
@@ -1004,6 +1008,10 @@ def configure_heating_with_buffer(
     count += 1
 
     heater_config.power_th = my_building.max_thermal_building_demand_in_watt
+    buffer_config.compute_default_volume(
+        time_in_seconds=heater_l1_config.min_idle_time_in_seconds,
+        temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius
+    )
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=buffer_config

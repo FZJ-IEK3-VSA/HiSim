@@ -80,7 +80,7 @@ def modular_household_explicit(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_KPI
@@ -387,7 +387,7 @@ def modular_household_explicit(
             # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:
             (
-                my_heater,
+                _,
                 my_buffer,
                 count,
             ) = component_connections.configure_heating_with_buffer(
@@ -408,7 +408,7 @@ def modular_household_explicit(
             lt.HeatingSystems.HEAT_PUMP,
             lt.HeatingSystems.ELECTRIC_HEATING,
         ]:
-            my_heater, count = component_connections.configure_heating_electric(
+            _, count = component_connections.configure_heating_electric(
                 my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,
@@ -419,7 +419,7 @@ def modular_household_explicit(
                 count=count,
             )
         else:
-            my_heater, count = component_connections.configure_heating(
+            _, count = component_connections.configure_heating(
                 my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,

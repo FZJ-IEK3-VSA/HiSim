@@ -44,23 +44,8 @@ class L1HeatPumpConfig(ConfigBase):
     t_max_cooling_in_celsius: Optional[float]
     day_of_heating_season_begin: Optional[int]
     day_of_heating_season_end: Optional[int]
-
-    def __init__(self, name: str, source_weight: int, t_min_heating_in_celsius: float, t_max_heating_in_celsius: float, cooling_considered: bool,
-                 t_min_cooling_in_celsius: Optional[float], t_max_cooling_in_celsius: Optional[float], day_of_heating_season_begin: Optional[int],
-                 day_of_heating_season_end: Optional[int],  min_operation_time_in_seconds: int, min_idle_time_in_seconds: int):
-        """ Initializes config. """
-        super().__init__(name=name)
-        self.name = name
-        self.source_weight = source_weight
-        self.t_min_heating_in_celsius = t_min_heating_in_celsius
-        self.t_max_heating_in_celsius = t_max_heating_in_celsius
-        self.cooling_considered = cooling_considered
-        self.t_min_cooling_in_celsius = t_min_cooling_in_celsius
-        self.t_max_cooling_in_celsius = t_max_cooling_in_celsius
-        self.day_of_heating_season_begin = day_of_heating_season_begin
-        self.day_of_heating_season_end = day_of_heating_season_end
-        self.min_operation_time_in_seconds = min_operation_time_in_seconds
-        self.min_idle_time_in_seconds = min_idle_time_in_seconds
+    min_operation_time_in_seconds: int
+    min_idle_time_in_seconds: int
 
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> Any:

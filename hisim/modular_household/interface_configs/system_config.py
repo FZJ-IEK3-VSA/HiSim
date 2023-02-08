@@ -18,10 +18,11 @@ class SystemConfig:
     pv_peak_power: Optional[float] = 5e3
     smart_devices_included: bool = False
     buffer_included: bool = True
-    buffer_volume: Optional[float] = 150  # in liter
+    buffer_volume: Optional[float] = 1  # in multiples of default
     battery_included: bool = False
     battery_capacity: Optional[float] = 20.0  # in kWh
-    heatpump_included: bool = False
+    heatpump_included: bool = True
+    heatpump_power: Optional[float] = 2 # in multiples of default
     chp_included: bool = False
     chp_power: Optional[float] = 12
     h2_storage_included: bool = True

@@ -78,9 +78,10 @@ class StorageConfig:
             heating_season_begin=270, heating_season_end=150)
         return config
 
-    def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float):
+    def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float, multiplier: float) -> None:
+        """ Computes default volume and surface from power and min idle time of heating system. """
         energy_in_kilo_joule = self.power * time_in_seconds * 1e-3
-        self.volume = energy_in_kilo_joule / (temperature_difference_in_kelvin * 0.977 * 4.182)
+        self.volume = energy_in_kilo_joule * multiplier / (temperature_difference_in_kelvin * 0.977 * 4.182)
          # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (self.volume * 1e-3 / (4 * np.pi))**(1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface

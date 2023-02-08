@@ -108,6 +108,12 @@ def modular_household_explicit(
     if heatpump_included:
         heating_system_installed = lt.HeatingSystems.HEAT_PUMP
         water_heating_system_installed = lt.HeatingSystems.HEAT_PUMP
+        heatpump_power = system_config_.heatpump_power
+        if heatpump_power is None:
+            heatpump_power = 1
+            hisim.information("Default power is used for heat pump. ")
+        if heatpump_power < 1:
+            raise Exception('Heat pump power cannot be smaller than default: choose values greater than one')
     clever = my_simulation_parameters.surplus_control
     pv_included = system_config_.pv_included  # True or False
     if pv_included:
@@ -116,6 +122,11 @@ def modular_household_explicit(
     buffer_included = system_config_.buffer_included
     if buffer_included:
         buffer_volume = system_config_.buffer_volume
+        if buffer_volume is None:
+            buffer_volume = 1
+            hisim.log.information("Default volume is used for buffer storage. ")
+        elif buffer_volume < 1:
+            raise Exception('Buffer volume cannot be smaller than default: choose values greater than one')
     battery_included = system_config_.battery_included
     if battery_included:
         battery_capacity = system_config_.battery_capacity
@@ -368,7 +379,7 @@ def modular_household_explicit(
             lt.HeatingSystems.ELECTRIC_HEATING,
         ]:
             (
-                my_heater,
+                _,
                 my_buffer,
                 count,
             ) = component_connections.configure_heating_with_buffer_electric(
@@ -378,6 +389,7 @@ def modular_household_explicit(
                 my_electricity_controller=my_electricity_controller,
                 my_weather=my_weather,
                 heating_system_installed=heating_system_installed,
+                heatpump_power=heatpump_power,
                 buffer_volume=buffer_volume,
                 controlable=clever,
                 count=count,
@@ -415,6 +427,7 @@ def modular_household_explicit(
                 my_electricity_controller=my_electricity_controller,
                 my_weather=my_weather,
                 heating_system_installed=heating_system_installed,
+                heatpump_power=heatpump_power,
                 controlable=clever,
                 count=count,
             )

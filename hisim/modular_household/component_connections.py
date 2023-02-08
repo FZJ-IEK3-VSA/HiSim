@@ -686,6 +686,7 @@ def configure_heating_electric(
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     my_weather: weather.Weather,
     heating_system_installed: lt.HeatingSystems,
+    heatpump_power: float,
     controlable: bool,
     count: int,
 ) -> Tuple[Component, int]:
@@ -705,6 +706,8 @@ def configure_heating_electric(
         The initialized Weather component.
     heating_system_installed: str
         Type of installed HeatingSystem
+    heatpump_power: float,
+        Power of heat pump in multiples of default.
     controlable: bool
         True if control of heating device is smart, False if not.
     count: int
@@ -726,10 +729,9 @@ def configure_heating_electric(
             "ElectricHeatingController"
         )
 
+    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt * heatpump_power
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
-
-    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_heatpump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters, config=heatpump_l1_config
@@ -799,7 +801,8 @@ def configure_heating_with_buffer_electric(
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     my_weather: weather.Weather,
     heating_system_installed: lt.HeatingSystems,
-    buffer_volume: Optional[float],
+    heatpump_power: float,
+    buffer_volume: float,
     controlable: bool,
     count: int,
 ) -> Tuple:
@@ -819,8 +822,10 @@ def configure_heating_with_buffer_electric(
         The initialized Weather component.
     heating_system_installed: str
         Type of installed HeatingSystem.
-    buffer_volume: float or None
-        Volume of buffer storage in liters. In case of None default is used.
+    heatpump_power: float
+        Power of heat pump in multiples of default.
+    buffer_volume: float
+        Volume of buffer storage in multiples of default.
     controlable: bool
         True if control of heating device is smart, False if not.
     count: int
@@ -842,16 +847,19 @@ def configure_heating_with_buffer_electric(
             "BufferElectricHeatingController"
         )
 
+    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt * heatpump_power
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
-    if buffer_volume is not None:
-        buffer_config = (
-            generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(
-                buffer_volume
-            )
-        )
-        buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
+    buffer_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer()
+    )
+    buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
+    buffer_config.compute_default_volume(
+        time_in_seconds=heatpump_l1_config.min_idle_time_in_seconds,
+        temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius,
+        multiplier=buffer_volume
+    )
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating(
         "buffer"
@@ -860,12 +868,6 @@ def configure_heating_with_buffer_electric(
         count
     ] * 2
     count += 1
-
-    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt
-    buffer_config.compute_default_volume(
-        time_in_seconds=heatpump_l1_config.min_idle_time_in_seconds,
-        temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius
-    )
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=buffer_config
@@ -954,7 +956,7 @@ def configure_heating_with_buffer(
     my_simulation_parameters: SimulationParameters,
     my_building: building.Building,
     heating_system_installed: lt.HeatingSystems,
-    buffer_volume: Optional[float],
+    buffer_volume: float,
     count: int,
 ) -> Tuple:
     """Sets Heater, L1 Controller and L2 Controller for Heating System.
@@ -971,8 +973,8 @@ def configure_heating_with_buffer(
         The initialized Weather component.
     heating_system_installed: str
         Type of installed HeatingSystem.
-    buffer_volume: float or None
-        Volume of buffer storage in liters. In case of None default is used.
+    buffer_volume: float
+        Volume of buffer storage in multiples of default. In case of None one is used.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -984,6 +986,7 @@ def configure_heating_with_buffer(
     }
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
+    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer(
         "Buffer" + heating_system_installed.value + "Controller"
     )
@@ -991,13 +994,15 @@ def configure_heating_with_buffer(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
-    if buffer_volume is not None:
-        buffer_config = (
-            generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(
-                buffer_volume
-            )
-        )
-        buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
+    buffer_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer()
+    )
+    buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
+    buffer_config.compute_default_volume(
+        time_in_seconds=heater_l1_config.min_idle_time_in_seconds,
+        temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius,
+        multiplier=buffer_volume
+    )
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating(
         "buffer"
@@ -1006,12 +1011,6 @@ def configure_heating_with_buffer(
         count
     ] * 2
     count += 1
-
-    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
-    buffer_config.compute_default_volume(
-        time_in_seconds=heater_l1_config.min_idle_time_in_seconds,
-        temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius
-    )
 
     my_buffer = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=buffer_config

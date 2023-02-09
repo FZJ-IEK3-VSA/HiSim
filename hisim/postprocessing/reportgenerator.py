@@ -4,13 +4,15 @@ import copy
 import time
 import os
 from typing import Any, Optional
-from reportlab.lib.enums import TA_JUSTIFY
+from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import Table
-
+from reportlab.platypus.tableofcontents import TableOfContents
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
 from hisim import utils
 
 
@@ -23,10 +25,26 @@ class ReportGenerator:
         if dirpath is None:
             raise ValueError("Result path for the report was none.")
         self.story: Any
+        self.toc = TableOfContents()
+        self.toc.levelStyles = [
+        ParagraphStyle(fontName='Times-Bold', fontSize=20, name='TOCHeading1', leftIndent=20, firstLineIndent=-20, spaceBefore=10, leading=16),
+        ParagraphStyle(fontSize=18, name='TOCHeading2', leftIndent=40, firstLineIndent=-20, spaceBefore=5, leading=12),
+        ]
         self.filepath = os.path.join(dirpath, "report.pdf")
         self.open()
         self.write_preamble()
+        self.write_table_of_content()
         self.close()
+
+
+    def addPageNumber(canvas: canvas, doc):
+        """
+        Add the page number
+        """
+        page_num = canvas.getPageNumber()
+        text = "Page #%s" % page_num
+        canvas.drawRightString(200*mm, 20*mm, text)
+        return page_num
 
     def open(self):
         """Open a file."""
@@ -40,6 +58,21 @@ class ReportGenerator:
         )
         self.styles = getSampleStyleSheet()
         self.styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY))
+        self.styles.add(ParagraphStyle(name="Normal_CENTER", parent=self.styles["Normal"], alignment=TA_CENTER))
+
+    def afterFlowable(self, flowable):
+         "Registers TOC entries."
+         if flowable.__class__.__name__ == 'Paragraph':
+             text = flowable.getPlainText()
+             style = flowable.style.name
+             if style == 'Heading1':
+                 self.notify('TOCEntry', (0, text, self.page))
+             if style == 'Heading2':
+                 self.notify('TOCEntry', (1, text, self.page))
+
+    def write_table_of_content(self):
+        """Write Table of Content."""
+        self.story.append(self.toc)
 
     def write_preamble(self):
         """Write the preamble."""
@@ -101,8 +134,9 @@ class ReportGenerator:
             story.append(Paragraph(ptext, self.styles["Normal"]))
             story.append(Spacer(1, 12))
         self.story = story
+        self.story.append(PageBreak())
 
-    def write(self, text):
+    def write_with_normal_alignment(self, text):
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
@@ -110,26 +144,31 @@ class ReportGenerator:
                 self.story.append(Paragraph(ptext, self.styles["Normal"]))
             self.story.append(Spacer(1, 12))
 
+    def write_with_center_alignment(self, text):
+        """Write a paragraph."""
+        if len(text) != 0:
+            for part in text:
+                ptext = f'<font size="12">{part}</font>'
+                paragraph = Paragraph(ptext, self.styles["Normal_CENTER"])
+                self.story.append(paragraph)
+            self.story.append(Spacer(1, 12))
+
     def get_story(self):
         """Get the story."""
         self.story = copy.deepcopy(self.story)
 
-    def close(self):
-        """Close the report."""
-        self.story.append(PageBreak())
-        story = copy.deepcopy(self.story)
-        self.doc.build(story)
 
     def write_figures_to_report(self, file_path: str) -> None:
         """Add figure to the report."""
 
         if os.path.isfile(file_path):
-            image = Image(file_path, 4 * inch, 3 * inch)
+            image = Image(file_path, 5 * inch, 3 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
-            self.story.append(Spacer(0, 20))
+            self.story.append(Spacer(1, 24))
         else:
             raise ValueError("no files found")
+        self.afterFlowable(Image)
 
     def write_all_figures_of_one_output_type_to_report(
         self,
@@ -154,10 +193,10 @@ class ReportGenerator:
         for file in os.listdir(component_output_folder_path):
             file_path = os.path.join(component_output_folder_path, file)
             if os.path.isfile(file_path):
-                image = Image(file_path, 4 * inch, 3 * inch)
+                image = Image(file_path, 5 * inch, 3 * inch)
                 image.hAlign = "CENTER"
                 self.story.append(image)
-                self.story.append(Spacer(0, 20))
+                self.story.append(Spacer(1, 24))
             else:
                 raise ValueError("no files found")
 
@@ -174,7 +213,18 @@ class ReportGenerator:
                 ptext = f'<font size="12">{part}</font>'
                 self.story.append(Paragraph(ptext, self.styles["Heading1"]))
             self.story.append(Spacer(1, 12))
+            self.toc.addEntry(text=ptext, level=1, pageNum=self.addPageNumber(canvas, self.doc))
 
     def page_break(self):
         """Make a page break."""
         self.story.append(PageBreak())
+
+    def add_spacer(self):
+        """Add spacer."""
+        self.story.append(Spacer(1,24))
+
+    def close(self):
+        """Close the report."""
+        self.story.append(PageBreak())
+        story = copy.deepcopy(self.story)
+        self.doc.multiBuild(story)

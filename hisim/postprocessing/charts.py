@@ -172,7 +172,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
 
     """Makes Bar charts."""
 
-    original = [
+    original_pv_sol = [
         385.66,
         484.01,
         981.05,
@@ -223,14 +223,14 @@ class BarChart(Chart):  # noqa: too-few-public-methods
 
         plt.subplots(figsize=(13, 9))
         plt.bar(ind, data * 1e-3, width, label="HiSim")
-        plt.bar(ind + width, self.original, width, label="PVSOL")
+        # plt.bar(ind + width, self.original_pv_sol, width, label="PVSOL")
 
         plt.xticks(ind + width / 2, fontsize=25)
         plt.yticks(fontsize=25)
         plt.title(f"{self.title} Monthly", fontsize=40)
         plt.grid()
         plt.tight_layout()
-        plt.ylabel(self.units, fontsize=30)
+        plt.ylabel(f"[{self.units}]", fontsize=30)
         plt.legend(loc="best")
         # plt.savefig(self.filepath, bbox_inches='tight')
         plt.savefig(self.filepath2, bbox_inches="tight")

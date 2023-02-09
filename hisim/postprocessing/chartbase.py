@@ -2,7 +2,7 @@
 # clean
 import os
 import re
-
+from hisim import log
 
 class Chart:  # noqa: too-few-public-methods
 
@@ -66,12 +66,13 @@ class Chart:  # noqa: too-few-public-methods
             ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output
         )
         matches = [m.group(0) for m in matches]  # type: ignore
+
         pass_sign = False
         chart_property = ""
         chart_object = ""
         for single_match in matches:
             if pass_sign:
-                chart_property = f"{chart_property} {single_match}"
+                chart_property = f"{chart_property}{single_match}"
             else:
                 chart_object = f"{chart_object}{single_match}"
 
@@ -80,8 +81,14 @@ class Chart:  # noqa: too-few-public-methods
 
             if len(self.title) == 0:
                 self.title = str(single_match)
+
             else:
-                self.title = f"{self.title} {single_match}"
+                self.title = f"{self.title}{single_match}"
+
+        self.title = self.title.replace("#", "")
+        self.title.strip()
+        # log.information(str(self.title))
+
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = os.path.join(

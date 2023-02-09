@@ -114,7 +114,7 @@ class ChartSingleDay(Chart):
         my_double.line2 = my_double.ax2.plot(
             self.data.index, other.data, label=other.property, linewidth=5
         )
-        my_double.ax2.set_ylabel(f"{other.property} [{other.ylabel}]", fontsize=18)
+        my_double.ax2.set_ylabel(f"{other.ylabel}", fontsize=18)
         my_double.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         return my_double
 
@@ -123,7 +123,7 @@ class ChartSingleDay(Chart):
         plt.xticks(fontsize=25)
         plt.yticks(fontsize=25)
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        self.axis.set_ylabel(f"{self.property} [{self.ylabel}]", fontsize=30)
+        self.axis.set_ylabel(f"[{self.ylabel}]", fontsize=30)
         if hasattr(self, "line2"):
             self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         # plt.savefig(self.filepath)
@@ -140,7 +140,7 @@ class ChartSingleDay(Chart):
         plt.yticks(fontsize=25)
         if abs(max(single_day_data)) > 1.5e3:
             single_day_data = single_day_data * 1e-3
-            self.ylabel = f"k{self.ylabel}"
+            self.ylabel = f"[k{self.ylabel}]"
         plt.title(self.title, fontsize=40)
         plt.plot(
             single_day_data.index,

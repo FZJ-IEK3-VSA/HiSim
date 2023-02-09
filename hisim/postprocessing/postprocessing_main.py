@@ -322,7 +322,7 @@ class PostProcessor:
     ) -> None:
         """Writes a single line to the report."""
         report.open()
-        report.write(text)
+        report.write_with_normal_alignment(text)
         report.close()
 
     def compute_kpis(
@@ -337,7 +337,7 @@ class PostProcessor:
         lines = kpi_compute_return
         report.open()
         report.write_heading(["### KPIs"])
-        report.write(lines)
+        report.write_with_normal_alignment(lines)
         report.close()
 
     def write_components_to_report(
@@ -376,28 +376,49 @@ class PostProcessor:
                         output_descriptions.append(
                             report_image_entry.output_description
                         )
-
+        sorted_entries = sorted(report_image_entries, key=lambda x:x.output_type)
+        output_explanations = []
+        page_breaks = []
+        figure_counter = 1
         for component_name in component_names:
-            # write component information
-            report.write_heading([component_name])
-            for wrapped_component in ppdt.wrapped_components:
-                if wrapped_component.my_component.component_name == component_name:
-                    component_content = wrapped_component.my_component.write_to_report()
-                    report.write(component_content)
 
-            for index, component_output_folder_path in enumerate(
-                component_output_folder_paths
-            ):
-                folder_path = os.path.normpath(component_output_folder_path)
-                component_name1 = folder_path.split(os.sep)[-2]
-                output_type1 = folder_path.split(os.sep)[-1]
-                if component_name == component_name1:
-                    report.write_all_figures_of_one_output_type_to_report(
-                        component_name=component_name,
-                        output_type=output_type1,
-                        component_output_folder_path=component_output_folder_path,
-                        output_description=output_descriptions[index],
-                    )
+            report.write_heading([component_name])
+            if PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT in ppdt.post_processing_options:
+                for wrapped_component in ppdt.wrapped_components:
+                    if wrapped_component.my_component.component_name == component_name:
+                        report.write_with_normal_alignment(["The following information was used to configurate the component."])
+                        component_content = wrapped_component.my_component.write_to_report()
+                        report.write_with_normal_alignment(component_content)
+
+            if PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT in ppdt.post_processing_options:
+                for entry in sorted_entries:
+                    if entry.component_name != component_name:
+                        continue
+                    # write output description only once for each output type
+                    if entry.output_type not in output_explanations:
+                        output_explanations.append(entry.output_type)
+                        report.write_heading([entry.component_name + " Output: " + entry.output_type])
+                        report.write_with_normal_alignment([entry.output_description])
+                    report.write_figures_to_report(entry.file_path)
+                    report.write_with_center_alignment(["Fig." + str(figure_counter) + ": " + entry.component_name + " " + entry.output_type])
+                    report.add_spacer()
+                    figure_counter = figure_counter + 1
+            report.page_break()
+
+
+            # for index, component_output_folder_path in enumerate(
+            #     component_output_folder_paths
+            # ):
+            #     folder_path = os.path.normpath(component_output_folder_path)
+            #     component_name1 = folder_path.split(os.sep)[-2]
+            #     output_type1 = folder_path.split(os.sep)[-1]
+            #     if component_name == component_name1:
+            #         report.write_all_figures_of_one_output_type_to_report(
+            #             component_name=component_name,
+            #             output_type=output_type1,
+            #             component_output_folder_path=component_output_folder_path,
+            #             output_description=output_descriptions[index],
+            #         )
         #     # write respective component output figures
         #     for output_type in output_types:
         #         for report_image_entry in report_image_entries:
@@ -439,7 +460,7 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         report.write_heading(["### All Outputs"])
-        report.write(all_output_names)
+        report.write_with_normal_alignment(all_output_names)
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:

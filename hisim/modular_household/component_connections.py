@@ -886,6 +886,14 @@ def configure_heating_with_buffer_electric(
     my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
     my_sim.add_component(my_heatpump)
 
+    my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(
+    my_simulation_parameters=my_simulation_parameters,
+    config=building_heating_controller_config,
+)
+    my_buffer_controller.connect_only_predefined_connections(my_building)
+    my_buffer_controller.connect_only_predefined_connections(my_buffer)
+    my_sim.add_component(my_buffer_controller)
+
     if controlable:
         my_heatpump_controller_l1.connect_only_predefined_connections(
             my_electricity_controller
@@ -895,6 +903,12 @@ def configure_heating_with_buffer_electric(
             my_electricity_controller.component_name,
             my_electricity_controller.StorageTemperatureModifier,
         )
+        my_buffer_controller.connect_input(
+            my_buffer_controller.BuildingTemperatureModifier,
+            my_electricity_controller.component_name,
+            my_electricity_controller.BuildingTemperatureModifier
+        )
+
         my_heatpump.connect_only_predefined_connections(my_electricity_controller)
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,
@@ -929,13 +943,7 @@ def configure_heating_with_buffer_electric(
             source_weight=999,
         )
 
-    my_buffer_controller = controller_l1_building_heating.L1BuildingHeatController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=building_heating_controller_config,
-    )
-    my_buffer_controller.connect_only_predefined_connections(my_building)
     my_buffer_controller.connect_only_predefined_connections(my_electricity_controller)
-    my_sim.add_component(my_buffer_controller)
     my_buffer.connect_input(
         my_buffer.L1DeviceSignal,
         my_buffer_controller.component_name,

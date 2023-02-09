@@ -231,14 +231,14 @@ class Component:
         self.connect_input(input_fieldname=input_fieldname, src_object_name=src_object_name, src_field_name=src_field_name)
 
     # added variable input length and loop to be able to set default connections in one line in examples
-    @graph_call_path_factory(method_pattern, include_class_name=True)
+    # @graph_call_path_factory(method_pattern, include_class_name=True)
     def connect_only_predefined_connections(self, *source_components):
         """ Wrapper for default connections and connect with connections list. """
         for source_component in source_components:
             connections = self.get_default_connections(source_component)
             self.connect_with_connections_list(connections)
 
-    @graph_call_path_factory(method_pattern, include_class_name=True)
+    # @graph_call_path_factory(method_pattern, include_class_name=True)
     def connect_with_connections_list(self, connections: List[ComponentConnection]) -> None:
         """ Connect all inputs based on a connections list. """
         for connection in connections:

@@ -10,8 +10,8 @@ class PyCallGraph_Obj:
         method_pattern.make_graphviz_chart(with_labels=True, time_resolution=10, filename='HISIM_Method_Pattern.png')
 
     def execute(self):
-        path = "examples/basic_household_only_heating.py"
-        func = "basic_household_only_heating"
+        path = "examples/basic_household.py"
+        func = "basic_household_explicit"
         mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
         hisim_main.main(path, func,mysimpar)
         log.information(os.getcwd())

@@ -15,7 +15,7 @@ from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-
+from wrappedcallgraph.callgraphwrap import method_pattern
 
 class PostProcessor:
 
@@ -117,10 +117,18 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function")
 
+        if PostProcessingOptions.MAKE_CALLGRAPH_CHART in ppdt.post_processing_options:
+            log.information("Making Callgraph Chart.")
+            self.make_callgraph_chart()
+
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Generates the network charts that show the connection of the elements. """
         systemchart = SystemChart(ppdt)
         systemchart.make_chart()
+
+    def make_callgraph_chart(self):
+        """Make Pycallgraph chart."""
+        method_pattern.make_graphviz_chart(with_labels=True, time_resolution=10, filename='HISIM_Method_Pattern.png')
 
     def make_special_one_day_debugging_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """ Makes special plots for debugging if only a single day was calculated."""

@@ -5,15 +5,16 @@ import os
 import pydot
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-
-
+from hisim import log
+from wrappedcallgraph.callgraphwrap import MethodChart
 class SystemChart:
 
     """ Class for generating charts that show all the components. """
 
-    def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
+    def __init__(self, ppdt: PostProcessingDataTransfer) -> None: # , wrapped_method_nodes: MethodChart
         """ Initizalizes the class. """
         self.ppdt: PostProcessingDataTransfer = ppdt
+        # self.wrapped_method_nodes: MethodChart = wrapped_method_nodes
 
     def make_chart(self) -> None:
         """ Makes different charts. Entry point for the class. """
@@ -33,6 +34,7 @@ class SystemChart:
             my_node = pydot.Node(node_name)
             node_dict[component.my_component.component_name] = my_node
             graph.add_node(my_node)
+            log.information("graph system chart " + str(graph.to_string()))
         edge_labels = {}
         for component in self.ppdt.wrapped_components:
             for component_input in component.component_inputs:

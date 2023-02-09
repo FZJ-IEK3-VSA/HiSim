@@ -21,7 +21,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-@graph_call_path_factory(method_pattern, include_class_name=True)
+@graph_call_path_factory(method_pattern)
 def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """ Basic household example.
 
@@ -83,7 +83,7 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year,
+        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(year=year,
                                                                               seconds_per_timestep=seconds_per_timestep)
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
@@ -92,6 +92,7 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     my_sim.add_component(my_occupancy)
 
     # Build Weather
+
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.Aachen)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)

@@ -16,7 +16,7 @@ from hisim import utils
 
 from hisim.component import Component, SingleTimeStepValues, ComponentOutput, ConfigBase
 from hisim.simulationparameters import SimulationParameters
-
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -119,6 +119,7 @@ class Weather(Component):
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
+    @graph_call_path_factory(method_pattern)
     def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig):
         """ Initializes the entire class. """
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)

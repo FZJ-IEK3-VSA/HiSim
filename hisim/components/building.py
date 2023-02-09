@@ -89,7 +89,7 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -307,6 +307,7 @@ class Building(dynamic_component.DynamicComponent):
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
 
     @utils.measure_execution_time
+    @graph_call_path_factory(method_pattern)
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,

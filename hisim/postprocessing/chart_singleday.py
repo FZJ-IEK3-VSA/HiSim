@@ -141,7 +141,7 @@ class ChartSingleDay(Chart):
         if abs(max(single_day_data)) > 1.5e3:
             single_day_data = single_day_data * 1e-3
             self.ylabel = f"k{self.ylabel}"
-        plt.title(self.title, fontsize=20)
+        plt.title(self.title, fontsize=18)
         plt.plot(
             single_day_data.index,
             single_day_data,

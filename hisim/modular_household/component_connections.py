@@ -869,9 +869,8 @@ def configure_heating_with_buffer_electric(
     count += 1
 
     buffer_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer()
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(power=float(my_building.max_thermal_building_demand_in_watt))
     )
-    buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
     buffer_config.compute_default_volume(
         time_in_seconds=heatpump_l1_config.min_idle_time_in_seconds,
         temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius,
@@ -1027,9 +1026,8 @@ def configure_heating_with_buffer(
     count += 1
 
     buffer_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer()
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(power=float(my_building.max_thermal_building_demand_in_watt))
     )
-    buffer_config.power = float(my_building.max_thermal_building_demand_in_watt)
     buffer_config.compute_default_volume(
         time_in_seconds=heater_l1_config.min_idle_time_in_seconds,
         temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius,

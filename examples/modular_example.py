@@ -3,25 +3,25 @@
 # clean
 
 import json
-from os import path
 import os
 import shutil
+from os import path
 from typing import Any, List, Optional, Union
+
 import pandas as pd
+from utspclient.helpers.lpgdata import (TransportationDeviceSets,
+                                        TravelRouteSets)
 
 import hisim.loadtypes as lt
 import hisim.log
 import hisim.utils
-from hisim.components import (
-    building,
-    controller_l2_energy_management_system,
-    generic_price_signal,
-    loadprofilegenerator_connector,
-    loadprofilegenerator_utsp_connector,
-    weather,
-)
+from hisim.components import (building, controller_l2_energy_management_system,
+                              generic_price_signal,
+                              loadprofilegenerator_connector,
+                              loadprofilegenerator_utsp_connector, weather)
 from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.modular_household_config import read_in_configs
+from hisim.modular_household.interface_configs.modular_household_config import \
+    read_in_configs
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
@@ -161,14 +161,25 @@ def modular_household_explicit(
 
     """BASICS"""
     if utsp_connected:
+        if mobility_set is None:
+            this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
+            hisim.log.information("Default is used for mobility set, because None was defined.")
+        else:
+            this_mobility_set = mobility_set
+        if mobility_distance is None:
+            this_mobility_distance = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+            hisim.log.information("Default is used for mobility distance, because None was defined.")
+        else:
+            this_mobility_distance=mobility_distance
+
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 url=system_config_.url,
                 api_key=system_config_.api_key,
                 household=occupancy_profile,
                 result_path=hisim.utils.HISIMPATH["results"],
-                travel_route_set=mobility_distance,
-                transportation_device_set=mobility_set,
+                travel_route_set=this_mobility_distance,
+                transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
             )
         )
@@ -263,13 +274,14 @@ def modular_household_explicit(
         # pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
 
     # """CARS"""
-    my_cars, count = component_connections.configure_cars(
-        my_sim=my_sim,
-        my_simulation_parameters=my_simulation_parameters,
-        count=count,
-        ev_included=ev_included,
-        occupancy_config=my_occupancy_config,
-    )
+    if mobility_set is not None:
+        my_cars, count = component_connections.configure_cars(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            count=count,
+            ev_included=ev_included,
+            occupancy_config=my_occupancy_config,
+        )
     if clever is False:
         for car in my_cars:
             consumption.append(car)

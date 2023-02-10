@@ -108,3 +108,10 @@ class Chart:  # noqa: too-few-public-methods
             )
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
+
+        self.figsize=(6,4)
+        self.dpi = 600
+        self.fontsize_title = 18
+        self.fontsize_label = 15
+        self.fontsize_legend = 15
+        self.fontsize_ticks = 10

@@ -430,7 +430,6 @@ class PostProcessor:
                         report.write_with_normal_alignment([entry.output_description])
                         output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)
-                    # report.add_spacer()
                     report.write_with_center_alignment(
                         [
                             "Fig."

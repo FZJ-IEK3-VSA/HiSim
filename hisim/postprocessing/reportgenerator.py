@@ -7,7 +7,7 @@ from typing import Any, Optional
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
-from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
+from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate, canvas
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm
@@ -24,7 +24,12 @@ class MyDocTemplate(BaseDocTemplate):
             "normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")]
         )
         self.addPageTemplates(template)
-        # self.handle_pageEnd()
+        self._startBuild(filename=filename, canvasmaker=canvas.Canvas)
+        self.handle_documentBegin()
+        self.handle_documentBegin()
+        self.handle_pageBegin()
+        self._setPageTemplate()
+        self.handle_pageEnd()
 
     # Entries to the table of contents can be done either manually by
     # calling the addEntry method on the TableOfContents object or automatically

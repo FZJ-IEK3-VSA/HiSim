@@ -120,10 +120,10 @@ class ChartSingleDay(Chart):
 
     def close(self):
         """Closes a chart and saves."""
-        plt.xticks(fontsize=10)
-        plt.yticks(fontsize=10)
+        plt.xticks(fontsize=self.fontsize_ticks)
+        plt.yticks(fontsize=self.fontsize_ticks)
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        self.axis.set_ylabel(f"[{self.ylabel}]", fontsize=15)
+        self.axis.set_ylabel(f"[{self.ylabel}]", fontsize=self.fontsize_label)
         if hasattr(self, "line2"):
             self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         # plt.savefig(self.filepath)
@@ -135,13 +135,13 @@ class ChartSingleDay(Chart):
         single_day_data = self.get_day_data()
         plt.rcParams["font.size"] = "30"
         plt.rcParams["agg.path.chunksize"] = 10000
-        _fig, self.axis = plt.subplots(figsize=(7, 4), dpi=600)
-        plt.xticks(fontsize=10)
-        plt.yticks(fontsize=10)
+        _fig, self.axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
+        plt.xticks(fontsize=self.fontsize_ticks)
+        plt.yticks(fontsize=self.fontsize_ticks)
         if abs(max(single_day_data)) > 1.5e3:
             single_day_data = single_day_data * 1e-3
             self.ylabel = f"k{self.ylabel}"
-        plt.title(self.title, fontsize=18)
+        plt.title(self.title, fontsize=self.fontsize_title)
         plt.plot(
             single_day_data.index,
             single_day_data,
@@ -151,8 +151,8 @@ class ChartSingleDay(Chart):
         )
         plt.grid(True)
         self.axis.set_ylabel(self.ylabel)
-        plt.xlabel("Time [hours]", fontsize=15)
-        plt.ylabel(self.ylabel, fontsize=15)
+        plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
+        plt.ylabel(self.ylabel, fontsize=self.fontsize_label)
         plt.tight_layout()
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         if close:

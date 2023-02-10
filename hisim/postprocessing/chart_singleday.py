@@ -114,16 +114,16 @@ class ChartSingleDay(Chart):
         my_double.line2 = my_double.ax2.plot(
             self.data.index, other.data, label=other.property, linewidth=5
         )
-        my_double.ax2.set_ylabel(f"{other.ylabel}", fontsize=18)
+        my_double.ax2.set_ylabel(f"{other.ylabel}")
         my_double.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         return my_double
 
     def close(self):
         """Closes a chart and saves."""
-        plt.xticks(fontsize=25)
-        plt.yticks(fontsize=25)
+        plt.xticks(fontsize=10)
+        plt.yticks(fontsize=10)
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        self.axis.set_ylabel(f"[{self.ylabel}]", fontsize=30)
+        self.axis.set_ylabel(f"[{self.ylabel}]", fontsize=15)
         if hasattr(self, "line2"):
             self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         # plt.savefig(self.filepath)
@@ -135,13 +135,13 @@ class ChartSingleDay(Chart):
         single_day_data = self.get_day_data()
         plt.rcParams["font.size"] = "30"
         plt.rcParams["agg.path.chunksize"] = 10000
-        _fig, self.axis = plt.subplots(figsize=(13, 9))
-        plt.xticks(fontsize=25)
-        plt.yticks(fontsize=25)
+        _fig, self.axis = plt.subplots(figsize=(7, 4), dpi=600)
+        plt.xticks(fontsize=10)
+        plt.yticks(fontsize=10)
         if abs(max(single_day_data)) > 1.5e3:
             single_day_data = single_day_data * 1e-3
-            self.ylabel = f"[k{self.ylabel}]"
-        plt.title(self.title, fontsize=40)
+            self.ylabel = f"k{self.ylabel}"
+        plt.title(self.title, fontsize=20)
         plt.plot(
             single_day_data.index,
             single_day_data,
@@ -151,8 +151,9 @@ class ChartSingleDay(Chart):
         )
         plt.grid(True)
         self.axis.set_ylabel(self.ylabel)
-        plt.xlabel("Time [hours]", fontsize=30)
-        plt.ylabel(self.ylabel, fontsize=30)
+        plt.xlabel("Time [hours]", fontsize=15)
+        plt.ylabel(self.ylabel, fontsize=15)
+        plt.tight_layout()
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         if close:
             self.close()

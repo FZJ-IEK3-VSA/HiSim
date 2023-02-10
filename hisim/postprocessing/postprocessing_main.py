@@ -30,6 +30,7 @@ class PostProcessor:
         """Initializes the post processing."""
         self.dirname: str
         self.report_image_entries = []
+        self.chapter_counter: int
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -336,7 +337,9 @@ class PostProcessor:
         )
         lines = kpi_compute_return
         report.open()
-        report.write_heading_with_style_heading_one(["KPIs"])
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + ". KPIs"]
+        )
         report.write_with_normal_alignment(lines)
         report.close()
 
@@ -379,12 +382,13 @@ class PostProcessor:
         sorted_entries = sorted(report_image_entries, key=lambda x: x.output_type)
         output_explanations = []
         figure_counter = 1
-        component_counter = 1
+        self.chapter_counter = 1
 
         for component_name in component_names:
             output_type_counter = 1
+            report.add_spacer()
             report.write_heading_with_style_heading_one(
-                [str(component_counter) + ". " + component_name]
+                [str(self.chapter_counter) + ". " + component_name]
             )
             if (
                 PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
@@ -394,7 +398,7 @@ class PostProcessor:
                     if wrapped_component.my_component.component_name == component_name:
                         report.write_with_normal_alignment(
                             [
-                                "The following information was used to configurate the component."
+                                "The following information was used to configure the component."
                             ]
                         )
                         component_content = (
@@ -414,7 +418,7 @@ class PostProcessor:
                         output_explanations.append(entry.output_type)
                         report.write_heading_with_style_heading_two(
                             [
-                                str(component_counter)
+                                str(self.chapter_counter)
                                 + "."
                                 + str(output_type_counter)
                                 + " "
@@ -426,6 +430,7 @@ class PostProcessor:
                         report.write_with_normal_alignment([entry.output_description])
                         output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)
+                    # report.add_spacer()
                     report.write_with_center_alignment(
                         [
                             "Fig."
@@ -439,62 +444,16 @@ class PostProcessor:
                     report.add_spacer()
                     figure_counter = figure_counter + 1
             report.page_break()
-            component_counter = component_counter + 1
-
-            # for index, component_output_folder_path in enumerate(
-            #     component_output_folder_paths
-            # ):
-            #     folder_path = os.path.normpath(component_output_folder_path)
-            #     component_name1 = folder_path.split(os.sep)[-2]
-            #     output_type1 = folder_path.split(os.sep)[-1]
-            #     if component_name == component_name1:
-            #         report.write_all_figures_of_one_output_type_to_report(
-            #             component_name=component_name,
-            #             output_type=output_type1,
-            #             component_output_folder_path=component_output_folder_path,
-            #             output_description=output_descriptions[index],
-            #         )
-        #     # write respective component output figures
-        #     for output_type in output_types:
-        #         for report_image_entry in report_image_entries:
-        #             if (
-        #                 report_image_entry.component_name == component_name
-        #                 and report_image_entry.output_type == output_type
-        #             ):
-        #                 # report.write_heading([f"{component_name} Outputs"])
-        #                 # report.write([output_type])
-        #                 report.write_figures_to_report(
-        #                     file_path=report_image_entry.file_path,
-        #                 )
-        #     report.page_break()
-
-        # for component_output_folder_path in component_output_folder_paths:
-        #     folder_path = os.path.normpath(component_output_folder_path)
-        #     component_name = folder_path.split(os.sep)[-2]
-        #     output_type = folder_path.split(os.sep)[-1]
-        #     report.write_all_figures_of_one_output_type_to_report(
-        #         component_name=component_name,
-        #         output_type=output_type,
-        #         component_output_folder_path=component_output_folder_path,
-        #     )
-
-        # for wrapped_component in ppdt.wrapped_components:
-        #     if hasattr(wrapped_component.my_component, "write_to_report"):
-        #         component_content = wrapped_component.my_component.write_to_report()
-        #     else:
-        #         raise ValueError("Component is missing write_to_report_function: " + wrapped_component.my_component.component_name)
-        #     if isinstance(component_content, list) is False:
-        #         component_content = [component_content]
-        #     if isinstance(component_content, str) is True:
-        #         component_content = [component_content]
-        #     report.write(component_content)
-        #     report.write_figures_to_report(component_name=x.component_name, path=x.path)
+            self.chapter_counter = self.chapter_counter + 1
 
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
-        report.write_heading_with_style_heading_one(["All Outputs"])
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + ". All Outputs"]
+        )
+        self.chapter_counter = self.chapter_counter + 1
         report.write_with_normal_alignment(all_output_names)
         report.close()
 

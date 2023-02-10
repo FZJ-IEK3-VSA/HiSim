@@ -13,8 +13,6 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm
 from reportlab.platypus import Table
 from reportlab.platypus.tableofcontents import TableOfContents
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import mm
 from hisim import utils
 
 
@@ -59,25 +57,6 @@ class ReportGenerator:
             raise ValueError("Result path for the report was none.")
         self.story: Any
         self.toc = TableOfContents()
-        self.toc.levelStyles = [
-            ParagraphStyle(
-                fontName="Times-Bold",
-                fontSize=20,
-                name="TOCHeading1",
-                leftIndent=20,
-                firstLineIndent=-20,
-                spaceBefore=10,
-                leading=16,
-            ),
-            ParagraphStyle(
-                fontSize=18,
-                name="TOCHeading2",
-                leftIndent=40,
-                firstLineIndent=-20,
-                spaceBefore=5,
-                leading=12,
-            ),
-        ]
         self.filepath = os.path.join(dirpath, "report.pdf")
         self.open()
         self.write_preamble()
@@ -119,10 +98,10 @@ class ReportGenerator:
                 spaceAfter=40,
             )
         )
-        self.h1 = ParagraphStyle(
+        self.style_h1 = ParagraphStyle(
             name="Heading1", fontSize=16, leading=16, spaceBefore=20
         )
-        self.h2 = ParagraphStyle(
+        self.style_h2 = ParagraphStyle(
             name="Heading2", fontSize=14, leading=14, spaceBefore=10
         )
 
@@ -133,26 +112,13 @@ class ReportGenerator:
         # and add the object to the story
 
         toc = TableOfContents()
-        # toc.levelStyles = [
-        #     ParagraphStyle(fontSize=20, name="TOCHeading1", leftIndent=20, firstLineIndent=-20, spaceBefore=10, leading=16),
-        #     ParagraphStyle(fontSize=18, name="TOCHeading2", leftIndent=40, firstLineIndent=-20, spaceBefore=5, leading=12),
-        # ]
-        toc.levelStyles = [self.h1, self.h2]
+
+        toc.levelStyles = [self.style_h1, self.style_h2]
 
         self.story.append(
             Paragraph("<b>Table of contents</b>", self.styles["toc_centered"])
         )
         self.story.append(toc)
-        # self.story.append(PageBreak())
-        # self.story.append(Paragraph('First heading', h1))
-        # self.story.append(Paragraph('Text in first heading', ParagraphStyle('body')))
-        # self.story.append(Paragraph('First sub heading', h2))
-        # self.story.append(Paragraph('Text in first sub heading', ParagraphStyle('body')))
-        # self.story.append(PageBreak())
-        # self.story.append(Paragraph('Second sub heading', h2))
-        # self.story.append(Paragraph('Text in second sub heading', ParagraphStyle('body')))
-        # self.story.append(PageBreak())
-        # self.story.append(Paragraph('Last heading', h1))
 
     def write_preamble(self):
         """Write the preamble."""
@@ -224,64 +190,54 @@ class ReportGenerator:
         self.story = story
         self.story.append(PageBreak())
 
-    def write_with_normal_alignment(self, text):
+    def get_story(self):
+        """Get the story."""
+        self.story = copy.deepcopy(self.story)
+
+    def write_with_normal_alignment(self, text: str):
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
-                ptext = f'<font size="12">{part}</font>'
+                ptext = f'<font size="12">{part.strip()}</font>'
                 self.story.append(Paragraph(ptext, self.styles["Normal"]))
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 20))
 
-    def write_with_center_alignment(self, text):
+    def write_with_center_alignment(self, text: str):
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
-                ptext = f'<font size="12">{part}</font>'
+                ptext = f'<font size="12">{part.strip()}</font>'
                 paragraph = Paragraph(ptext, self.styles["Normal_CENTER"])
                 self.story.append(paragraph)
             self.story.append(Spacer(1, 10))
-
-    def get_story(self):
-        """Get the story."""
-        self.story = copy.deepcopy(self.story)
 
     def write_figures_to_report(self, file_path: str) -> None:
         """Add figure to the report."""
 
         if os.path.isfile(file_path):
-            image = Image(file_path, 5 * inch, 3 * inch)
+            image = Image(file_path, useDPI=True)
             image.hAlign = "CENTER"
             self.story.append(image)
-            self.story.append(Spacer(1, 10))
         else:
             raise ValueError("no files found")
 
-    def write_heading_with_style_heading_one(self, text):
+    def write_heading_with_style_heading_one(self, text: str):
         """Write text as heading."""
         if len(text) != 0:
-            # bar_string = (
-            #     "=============================================================="
-            # )
-            # self.story.append(Paragraph(bar_string, self.styles["Normal"]))
             for part in text:
-                ptext = f"<b>{part}</b>"
-                self.story.append(Paragraph(ptext, self.h1))
+                ptext = f"<b>{part.strip()}</b>"
+                self.story.append(Paragraph(ptext, self.style_h1))
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 30))
 
-    def write_heading_with_style_heading_two(self, text):
+    def write_heading_with_style_heading_two(self, text: str):
         """Write text as heading."""
         if len(text) != 0:
-            # bar_string = (
-            #     "=============================================================="
-            # )
-            # self.story.append(Paragraph(bar_string, self.styles["Normal"]))
             for part in text:
-                ptext = f"<b>{part}</b>"
-                self.story.append(Paragraph(ptext, self.h2))
+                ptext = f"<b>{part.strip()}</b>"
+                self.story.append(Paragraph(ptext, self.style_h2))
             self.story.append(Spacer(1, 10))
-        self.story.append(Spacer(1, 30))
 
     def page_break(self):
         """Make a page break."""

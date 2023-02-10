@@ -88,7 +88,6 @@ class Chart:  # noqa: too-few-public-methods
 
         self.title = self.title.replace("#", "")
         self.title.strip()
-        # log.information(str(self.title))
 
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]

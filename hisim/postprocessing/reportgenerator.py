@@ -7,13 +7,46 @@ from typing import Any, Optional
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
+from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
+from reportlab.lib.units import inch, cm
 from reportlab.platypus import Table
 from reportlab.platypus.tableofcontents import TableOfContents
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 from hisim import utils
+
+
+class MyDocTemplate(BaseDocTemplate):
+    def __init__(self, filename, **kw):
+        self.allowSplitting = 0
+        super().__init__(filename, **kw)
+        template = PageTemplate(
+            "normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")]
+        )
+        self.addPageTemplates(template)
+        # self.handle_pageEnd()
+
+    # Entries to the table of contents can be done either manually by
+    # calling the addEntry method on the TableOfContents object or automatically
+    # by sending a 'TOCEntry' notification in the afterFlowable method of
+    # the DocTemplate you are using. The data to be passed to notify is a list
+    # of three or four items countaining a level number, the entry text, the page
+    # number and an optional destination key which the entry should point to.
+    # This list will usually be created in a document template's method like
+    # afterFlowable(), making notification calls using the notify() method
+    # with appropriate data.
+
+    def afterFlowable(self, flowable):
+        "Registers TOC entries."
+        if flowable.__class__.__name__ == "Paragraph":
+            text = flowable.getPlainText()
+            style = flowable.style.name
+            if style == "Heading1":
+                self.notify("TOCEntry", (0, text, self.page))
+            if style == "Heading2":
+                self.notify("TOCEntry", (1, text, self.page))
 
 
 class ReportGenerator:
@@ -27,8 +60,23 @@ class ReportGenerator:
         self.story: Any
         self.toc = TableOfContents()
         self.toc.levelStyles = [
-        ParagraphStyle(fontName='Times-Bold', fontSize=20, name='TOCHeading1', leftIndent=20, firstLineIndent=-20, spaceBefore=10, leading=16),
-        ParagraphStyle(fontSize=18, name='TOCHeading2', leftIndent=40, firstLineIndent=-20, spaceBefore=5, leading=12),
+            ParagraphStyle(
+                fontName="Times-Bold",
+                fontSize=20,
+                name="TOCHeading1",
+                leftIndent=20,
+                firstLineIndent=-20,
+                spaceBefore=10,
+                leading=16,
+            ),
+            ParagraphStyle(
+                fontSize=18,
+                name="TOCHeading2",
+                leftIndent=40,
+                firstLineIndent=-20,
+                spaceBefore=5,
+                leading=12,
+            ),
         ]
         self.filepath = os.path.join(dirpath, "report.pdf")
         self.open()
@@ -36,19 +84,17 @@ class ReportGenerator:
         self.write_table_of_content()
         self.close()
 
-
-    def addPageNumber(canvas: canvas, doc):
-        """
-        Add the page number
-        """
-        page_num = canvas.getPageNumber()
-        text = "Page #%s" % page_num
-        canvas.drawRightString(200*mm, 20*mm, text)
-        return page_num
-
     def open(self):
         """Open a file."""
-        self.doc = SimpleDocTemplate(
+        # self.doc = SimpleDocTemplate(
+        #     self.filepath,
+        #     pagesize=letter,
+        #     rightMargin=72,
+        #     leftMargin=72,
+        #     topMargin=72,
+        #     bottomMargin=18,
+        # )
+        self.doc = MyDocTemplate(
             self.filepath,
             pagesize=letter,
             rightMargin=72,
@@ -58,21 +104,55 @@ class ReportGenerator:
         )
         self.styles = getSampleStyleSheet()
         self.styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY))
-        self.styles.add(ParagraphStyle(name="Normal_CENTER", parent=self.styles["Normal"], alignment=TA_CENTER))
-
-    def afterFlowable(self, flowable):
-         "Registers TOC entries."
-         if flowable.__class__.__name__ == 'Paragraph':
-             text = flowable.getPlainText()
-             style = flowable.style.name
-             if style == 'Heading1':
-                 self.notify('TOCEntry', (0, text, self.page))
-             if style == 'Heading2':
-                 self.notify('TOCEntry', (1, text, self.page))
+        self.styles.add(
+            ParagraphStyle(
+                name="Normal_CENTER", parent=self.styles["Normal"], alignment=TA_CENTER
+            )
+        )
+        self.styles.add(
+            ParagraphStyle(
+                name="toc_centered",
+                parent=self.styles["Normal"],
+                fontSize=20,
+                leading=16,
+                alignment=TA_CENTER,
+                spaceAfter=40,
+            )
+        )
+        self.h1 = ParagraphStyle(
+            name="Heading1", fontSize=16, leading=16, spaceBefore=20
+        )
+        self.h2 = ParagraphStyle(
+            name="Heading2", fontSize=14, leading=14, spaceBefore=10
+        )
 
     def write_table_of_content(self):
         """Write Table of Content."""
-        self.story.append(self.toc)
+
+        # Create an instance of TableOfContents. Override the level styles (optional)
+        # and add the object to the story
+
+        toc = TableOfContents()
+        # toc.levelStyles = [
+        #     ParagraphStyle(fontSize=20, name="TOCHeading1", leftIndent=20, firstLineIndent=-20, spaceBefore=10, leading=16),
+        #     ParagraphStyle(fontSize=18, name="TOCHeading2", leftIndent=40, firstLineIndent=-20, spaceBefore=5, leading=12),
+        # ]
+        toc.levelStyles = [self.h1, self.h2]
+
+        self.story.append(
+            Paragraph("<b>Table of contents</b>", self.styles["toc_centered"])
+        )
+        self.story.append(toc)
+        # self.story.append(PageBreak())
+        # self.story.append(Paragraph('First heading', h1))
+        # self.story.append(Paragraph('Text in first heading', ParagraphStyle('body')))
+        # self.story.append(Paragraph('First sub heading', h2))
+        # self.story.append(Paragraph('Text in first sub heading', ParagraphStyle('body')))
+        # self.story.append(PageBreak())
+        # self.story.append(Paragraph('Second sub heading', h2))
+        # self.story.append(Paragraph('Text in second sub heading', ParagraphStyle('body')))
+        # self.story.append(PageBreak())
+        # self.story.append(Paragraph('Last heading', h1))
 
     def write_preamble(self):
         """Write the preamble."""
@@ -93,20 +173,27 @@ class ReportGenerator:
         data = [[im1, im2]]
         report_table = Table(data)
         story.append(report_table)
-        story.append(Spacer(1, 24))
+        story.append(Spacer(1, 50))
 
         # Insert Title
         titel = "HiSim Simulation Report"
-        ptext = f'<font size="18">{titel}</font>'
+        ptext = f'<font size="30">{titel}</font>'
         story.append(Paragraph(ptext, self.styles["Title"]))
-        story.append(Spacer(1, 200))
+        story.append(Spacer(1, 150))
 
         # Inserts authors
-        authors = ["Developers: Dr. Noah Pflugradt", "Vitor Hugo Bellotto Zago"]
+        authors = [
+            "Developers:",
+            "\n",
+            "Dr. Noah Pflugradt",
+            "Vitor Hugo Bellotto Zago",
+            "Katharina Rieck",
+        ]
         for part in authors:
-            ptext = f'<font size="12">{part.strip()}</font>'
+            ptext = f'<font size="16">{part.strip()}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))
-        story.append(Spacer(1, 12))
+            story.append(Spacer(1, 10))
+        story.append(Spacer(1, 30))
 
         # Inserts address
         address_parts = [
@@ -118,21 +205,22 @@ class ReportGenerator:
             "Germany",
         ]
         for part in address_parts:
-            ptext = f'<font size="12">{part.strip()}</font>'
+            ptext = f'<font size="16">{part.strip()}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))
-        story.append(Spacer(1, 12))
+            story.append(Spacer(1, 10))
+        story.append(Spacer(1, 30))
 
         # Inserts time
         formatted_time = time.ctime()
-        ptext = f'<font size="12">{formatted_time}</font>'
+        ptext = f'<font size="16">{formatted_time}</font>'
         story.append(Paragraph(ptext, self.styles["Normal"]))
-        story.append(Spacer(1, 12))
+        story.append(Spacer(1, 30))
 
         if hasattr(self, "executation_time"):
             # formatted_time
-            ptext = f'<font size="12">{formatted_time}</font>'
+            ptext = f'<font size="16">{formatted_time}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))
-            story.append(Spacer(1, 12))
+            story.append(Spacer(1, 30))
         self.story = story
         self.story.append(PageBreak())
 
@@ -142,7 +230,8 @@ class ReportGenerator:
             for part in text:
                 ptext = f'<font size="12">{part}</font>'
                 self.story.append(Paragraph(ptext, self.styles["Normal"]))
-            self.story.append(Spacer(1, 12))
+            self.story.append(Spacer(1, 10))
+        self.story.append(Spacer(1, 20))
 
     def write_with_center_alignment(self, text):
         """Write a paragraph."""
@@ -151,12 +240,11 @@ class ReportGenerator:
                 ptext = f'<font size="12">{part}</font>'
                 paragraph = Paragraph(ptext, self.styles["Normal_CENTER"])
                 self.story.append(paragraph)
-            self.story.append(Spacer(1, 12))
+            self.story.append(Spacer(1, 10))
 
     def get_story(self):
         """Get the story."""
         self.story = copy.deepcopy(self.story)
-
 
     def write_figures_to_report(self, file_path: str) -> None:
         """Add figure to the report."""
@@ -165,55 +253,35 @@ class ReportGenerator:
             image = Image(file_path, 5 * inch, 3 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
-            self.story.append(Spacer(1, 24))
+            self.story.append(Spacer(1, 10))
         else:
             raise ValueError("no files found")
-        self.afterFlowable(Image)
 
-    def write_all_figures_of_one_output_type_to_report(
-        self,
-        component_output_folder_path: str,
-        component_name: str,
-        output_type: str,
-        output_description: Optional[str],
-    ) -> None:
-        """Add all figures of one component and one output type to the report."""
-
-        bar_string = "=============================================================="
-        self.story.append(Paragraph(bar_string, self.styles["Normal"]))
-
-        text = f'<font size="12">{component_name}</font>'
-        self.story.append(Paragraph(text, self.styles["Heading1"]))
-        text1 = f'<font size="12">{output_type}</font>'
-        self.story.append(Paragraph(text1, self.styles["Normal"]))
-        text2 = f'<font size="12">{output_description}</font>'
-        self.story.append(Paragraph(text2, self.styles["Normal"]))
-        self.story.append(Spacer(1, 12))
-
-        for file in os.listdir(component_output_folder_path):
-            file_path = os.path.join(component_output_folder_path, file)
-            if os.path.isfile(file_path):
-                image = Image(file_path, 5 * inch, 3 * inch)
-                image.hAlign = "CENTER"
-                self.story.append(image)
-                self.story.append(Spacer(1, 24))
-            else:
-                raise ValueError("no files found")
-
-        self.story.append(PageBreak())
-
-    def write_heading(self, text):
+    def write_heading_with_style_heading_one(self, text):
         """Write text as heading."""
         if len(text) != 0:
-            bar_string = (
-                "=============================================================="
-            )
-            self.story.append(Paragraph(bar_string, self.styles["Normal"]))
+            # bar_string = (
+            #     "=============================================================="
+            # )
+            # self.story.append(Paragraph(bar_string, self.styles["Normal"]))
             for part in text:
-                ptext = f'<font size="12">{part}</font>'
-                self.story.append(Paragraph(ptext, self.styles["Heading1"]))
-            self.story.append(Spacer(1, 12))
-            self.toc.addEntry(text=ptext, level=1, pageNum=self.addPageNumber(canvas, self.doc))
+                ptext = f"<b>{part}</b>"
+                self.story.append(Paragraph(ptext, self.h1))
+            self.story.append(Spacer(1, 10))
+        self.story.append(Spacer(1, 30))
+
+    def write_heading_with_style_heading_two(self, text):
+        """Write text as heading."""
+        if len(text) != 0:
+            # bar_string = (
+            #     "=============================================================="
+            # )
+            # self.story.append(Paragraph(bar_string, self.styles["Normal"]))
+            for part in text:
+                ptext = f"<b>{part}</b>"
+                self.story.append(Paragraph(ptext, self.h2))
+            self.story.append(Spacer(1, 10))
+        self.story.append(Spacer(1, 30))
 
     def page_break(self):
         """Make a page break."""
@@ -221,7 +289,7 @@ class ReportGenerator:
 
     def add_spacer(self):
         """Add spacer."""
-        self.story.append(Spacer(1,24))
+        self.story.append(Spacer(1, 30))
 
     def close(self):
         """Close the report."""

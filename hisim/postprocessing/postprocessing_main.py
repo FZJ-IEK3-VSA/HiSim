@@ -336,7 +336,7 @@ class PostProcessor:
         )
         lines = kpi_compute_return
         report.open()
-        report.write_heading(["### KPIs"])
+        report.write_heading_with_style_heading_one(["KPIs"])
         report.write_with_normal_alignment(lines)
         report.close()
 
@@ -376,35 +376,70 @@ class PostProcessor:
                         output_descriptions.append(
                             report_image_entry.output_description
                         )
-        sorted_entries = sorted(report_image_entries, key=lambda x:x.output_type)
+        sorted_entries = sorted(report_image_entries, key=lambda x: x.output_type)
         output_explanations = []
-        page_breaks = []
         figure_counter = 1
-        for component_name in component_names:
+        component_counter = 1
 
-            report.write_heading([component_name])
-            if PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT in ppdt.post_processing_options:
+        for component_name in component_names:
+            output_type_counter = 1
+            report.write_heading_with_style_heading_one(
+                [str(component_counter) + ". " + component_name]
+            )
+            if (
+                PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
+                in ppdt.post_processing_options
+            ):
                 for wrapped_component in ppdt.wrapped_components:
                     if wrapped_component.my_component.component_name == component_name:
-                        report.write_with_normal_alignment(["The following information was used to configurate the component."])
-                        component_content = wrapped_component.my_component.write_to_report()
+                        report.write_with_normal_alignment(
+                            [
+                                "The following information was used to configurate the component."
+                            ]
+                        )
+                        component_content = (
+                            wrapped_component.my_component.write_to_report()
+                        )
                         report.write_with_normal_alignment(component_content)
 
-            if PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT in ppdt.post_processing_options:
+            if (
+                PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT
+                in ppdt.post_processing_options
+            ):
                 for entry in sorted_entries:
                     if entry.component_name != component_name:
                         continue
                     # write output description only once for each output type
                     if entry.output_type not in output_explanations:
                         output_explanations.append(entry.output_type)
-                        report.write_heading([entry.component_name + " Output: " + entry.output_type])
+                        report.write_heading_with_style_heading_two(
+                            [
+                                str(component_counter)
+                                + "."
+                                + str(output_type_counter)
+                                + " "
+                                + entry.component_name
+                                + " Output: "
+                                + entry.output_type
+                            ]
+                        )
                         report.write_with_normal_alignment([entry.output_description])
+                        output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)
-                    report.write_with_center_alignment(["Fig." + str(figure_counter) + ": " + entry.component_name + " " + entry.output_type])
+                    report.write_with_center_alignment(
+                        [
+                            "Fig."
+                            + str(figure_counter)
+                            + ": "
+                            + entry.component_name
+                            + " "
+                            + entry.output_type
+                        ]
+                    )
                     report.add_spacer()
                     figure_counter = figure_counter + 1
             report.page_break()
-
+            component_counter = component_counter + 1
 
             # for index, component_output_folder_path in enumerate(
             #     component_output_folder_paths
@@ -459,7 +494,7 @@ class PostProcessor:
         output: ComponentOutput
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
-        report.write_heading(["### All Outputs"])
+        report.write_heading_with_style_heading_one(["All Outputs"])
         report.write_with_normal_alignment(all_output_names)
         report.close()
 

@@ -4,6 +4,7 @@ import os
 import re
 from hisim import log
 
+
 class Chart:  # noqa: too-few-public-methods
 
     """Parent class for plots to be exported."""

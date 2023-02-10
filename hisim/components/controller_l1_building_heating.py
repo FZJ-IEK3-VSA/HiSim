@@ -39,12 +39,14 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     t_min_heating_in_celsius: float
     t_max_heating_in_celsius: float
     t_buffer_activation_threshold_in_celsius: float
+    day_of_heating_season_begin: int
+    day_of_heating_season_end: int
 
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
         config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
-        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=45.0)
+        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=45.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
 
@@ -118,6 +120,8 @@ class L1BuildingHeatController(cp.Component):
 
         """ Initializes the class. """
         self.source_weight: int = config.source_weight
+        self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
         self.previous_state: L1BuildingHeatControllerState = (
             L1BuildingHeatControllerState()
@@ -210,8 +214,12 @@ class L1BuildingHeatController(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float, t_buffer_activation: float, t_buffer: float) -> None:
+    def control_heating(self, timestep: int, t_control: float, t_min_heating: float, t_max_heating: float, t_buffer_activation: float, t_buffer: float) -> None:
         """ Controlls the building heating. """
+        # prevent heating in summer
+        if self.heating_season_begin > timestep > self.heating_season_end:
+            self.previous_state.state = 0
+            return
         if t_control > t_max_heating:
             self.previous_state.state = 0
             return
@@ -253,7 +261,7 @@ class L1BuildingHeatController(cp.Component):
         t_max_target = self.config.t_max_heating_in_celsius + temperature_modifier
         t_buffer_activation = self.config.t_buffer_activation_threshold_in_celsius
         self.control_heating(
-            t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target, t_buffer_activation=t_buffer_activation, t_buffer=t_buffer
+            timestep=timestep, t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target, t_buffer_activation=t_buffer_activation, t_buffer=t_buffer
         )
         stsv.set_output_value(self.l2_device_signal_channel, self.state.state)
 

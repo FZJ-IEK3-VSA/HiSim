@@ -5,7 +5,7 @@
 The functions are all called in modular_household.
 """
 
-from typing import List, Optional, Tuple, Any
+from typing import List, Optional, Tuple, Any, Union
 from os import listdir, path
 import json
 
@@ -625,6 +625,7 @@ def configure_heating(
     my_simulation_parameters: SimulationParameters,
     my_building: building.Building,
     heating_system_installed: lt.HeatingSystems,
+    heating_parameters: List[Union[float, int]],
     count: int,
 ) -> Tuple[Component, int]:
     """Sets Heater, L1 Controller and L2 Controller for Heating System.
@@ -639,6 +640,8 @@ def configure_heating(
         The initialized building component.
     heating_system_installed: str
         Type of installed HeatingSystem
+    heating_parameters: List[Union[float, str]]
+        Contains heating reference temperature as well as first and last day of heating season.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -653,10 +656,14 @@ def configure_heating(
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(
         heating_system_installed.value
     )
+
+    # set power of heating system according to maximal power demand
+    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
+    heater_l1_config.day_of_heating_season_end = heating_parameters[1]
+    heater_l1_config.day_of_heating_season_begin = heating_parameters[2]
+
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
-
-    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
 
     my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters, config=heater_l1_config
@@ -688,6 +695,7 @@ def configure_heating_electric(
     heating_system_installed: lt.HeatingSystems,
     heatpump_power: float,
     controlable: bool,
+    heating_parameters: List[Union[float, int]],
     count: int,
 ) -> Tuple[Component, int]:
     """Sets Heater, L1 Controller and L2 Controller for Heating System.
@@ -710,6 +718,8 @@ def configure_heating_electric(
         Power of heat pump in multiples of default.
     controlable: bool
         True if control of heating device is smart, False if not.
+    heating_parameters: List[Union[float, str]]
+        Contains heating reference temperature as well as first and last day of heating season.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -730,6 +740,8 @@ def configure_heating_electric(
         )
 
     heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt * heatpump_power
+    heatpump_l1_config.day_of_heating_season_end = heating_parameters[1]
+    heatpump_l1_config.day_of_heating_season_begin = heating_parameters[2]
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
@@ -804,6 +816,7 @@ def configure_heating_with_buffer_electric(
     heatpump_power: float,
     buffer_volume: float,
     controlable: bool,
+    heating_parameters: List[Union[float, int]],
     count: int,
 ) -> Tuple:
     """Sets Heater, L1 Controller and L2 Controller for Heating System.
@@ -828,6 +841,8 @@ def configure_heating_with_buffer_electric(
         Volume of buffer storage in multiples of default.
     controlable: bool
         True if control of heating device is smart, False if not.
+    heating_parameters: List[Union[float, str]]
+        Contains heating reference temperature as well as first and last day of heating season.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -848,6 +863,8 @@ def configure_heating_with_buffer_electric(
         )
 
     heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt * heatpump_power
+    heatpump_l1_config.day_of_heating_season_end = heating_parameters[1] + 1
+    heatpump_l1_config.day_of_heating_season_begin = heating_parameters[2] - 1
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
@@ -864,6 +881,8 @@ def configure_heating_with_buffer_electric(
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating(
         "buffer"
     )
+    building_heating_controller_config.day_of_heating_season_end = heating_parameters[1]
+    building_heating_controller_config.day_of_heating_season_begin = heating_parameters[2]
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [
         count
     ] * 2
@@ -965,6 +984,7 @@ def configure_heating_with_buffer(
     my_building: building.Building,
     heating_system_installed: lt.HeatingSystems,
     buffer_volume: float,
+    heating_parameters: List[Union[float, int]],
     count: int,
 ) -> Tuple:
     """Sets Heater, L1 Controller and L2 Controller for Heating System.
@@ -983,6 +1003,8 @@ def configure_heating_with_buffer(
         Type of installed HeatingSystem.
     buffer_volume: float
         Volume of buffer storage in multiples of default. In case of None one is used.
+    heating_parameters: List[Union[float, str]]
+        Contains heating reference temperature as well as first and last day of heating season.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -999,6 +1021,8 @@ def configure_heating_with_buffer(
         "Buffer" + heating_system_installed.value + "Controller"
     )
 
+    heater_l1_config.day_of_heating_season_end = heating_parameters[1] + 1
+    heater_l1_config.day_of_heating_season_begin = heating_parameters[2] - 1
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
@@ -1015,6 +1039,8 @@ def configure_heating_with_buffer(
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating(
         "buffer"
     )
+    building_heating_controller_config.day_of_heating_season_end = heating_parameters[1]
+    building_heating_controller_config.day_of_heating_season_begin = heating_parameters[2] - 1
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [
         count
     ] * 2

@@ -52,17 +52,13 @@ class StorageConfig:
     drain_water_temperature: float
     efficiency: float
     power: Optional[float]
-    cooling_considered: bool
-    heating_season_begin: Optional[int]
-    heating_season_end: Optional[int]
 
     @staticmethod
     def get_default_config_boiler():
         """ Returns default configuration for boiler. """
         config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=500,
                                surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
-                               efficiency=1, power=None, cooling_considered=False, heating_season_begin=None,
-                               heating_season_end=None)
+                               efficiency=1, power=None)
         return config
 
     @staticmethod
@@ -74,12 +70,16 @@ class StorageConfig:
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
             name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=volume, surface=surface, u_value=0.36,
-            warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500, cooling_considered=True,
-            heating_season_begin=270, heating_season_end=150)
+            warm_water_temperature=50, drain_water_temperature=10, efficiency=1, power=1500)
         return config
 
     def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float, multiplier: float) -> None:
         """ Computes default volume and surface from power and min idle time of heating system. """
+        if self.use != lt.ComponentType.BUFFER:
+            raise Exception( "Default volume can only be computed for buffer storage not for boiler.")
+        elif self.power is None:
+            raise Exception( "Power needs to be set in config of hot water storage to calculate default volume.")
+
         energy_in_kilo_joule = self.power * time_in_seconds * 1e-3
         self.volume = energy_in_kilo_joule * multiplier / (temperature_difference_in_kelvin * 0.977 * 4.182)
          # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
@@ -135,15 +135,9 @@ class StorageState:
     def return_available_energy(self, heating: bool) -> float:
         """ Returns available energy in (J).
 
-        For heating up the building in winter and cooling the building in summer in case of buffer storages.
-        Here 30°C is set as the lower limit for the temperature in the buffer storage in winter and 20°C
-        is set as the upper limit for the temperature in buffer for cooling in summer.
+        For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
         """
-        if heating:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
-        else:
-            available_energy = (self.temperature_in_kelvin - 273.15 - 21) * self.volume_in_l * 0.977 * 4.182 * 1e3
-        return available_energy
+        return (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
 
 
 class HotWaterStorage(dycp.DynamicComponent):
@@ -310,14 +304,11 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.efficiency = config.efficiency
         self.drain_water_temperature = config.drain_water_temperature
         self.warm_water_temperature = config.warm_water_temperature
-        self.power = config.power
-        self.cooling_considered = config.cooling_considered
-        if self.cooling_considered:
-            if isinstance(config.heating_season_begin, int) and isinstance(config.heating_season_end, int):
-                self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-                self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            else:
-                raise Exception("Heating season needs to be defined in config if cooling is considered")
+        if self.use == lt.ComponentType.BUFFER and config.power is None:
+            raise Exception("Power needs to be set in config of hot water storage, if it is a buffer type.")
+        else:
+            self.power = config.power
+
 
     def write_to_report(self):
         """ Writes to report. """
@@ -371,22 +362,13 @@ class HotWaterStorage(dycp.DynamicComponent):
             # 4.182 specific heat of water in kJ K^(-1) kg^(-1)
             return stsv.get_input_value(self.water_consumption_c) \
                 * (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
-        if self.use == lt.ComponentType.BUFFER:
-            if not isinstance(self.power, float):
-                raise Exception("Power for heat transfer from buffer to building needs to be defined.")
+        elif self.use == lt.ComponentType.BUFFER:
             heatconsumption = stsv.get_input_value(self.l1_device_signal_c) \
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
-            if self.cooling_considered:
-                if self.heating_season_end < timestep < self.heating_season_begin:
-                    available_energy = self.state.return_available_energy(heating=False) \
-                        + thermal_energy_delivered
-                    heatconsumption = -heatconsumption
-                    if heatconsumption < available_energy:
-                        heatconsumption = min(available_energy, 0)
-                    return heatconsumption
-            else:
-                available_energy = self.state.return_available_energy(heating=True)\
-                    + thermal_energy_delivered
-                if heatconsumption > available_energy:
-                    heatconsumption = max(available_energy, 0)
-        return heatconsumption
+            available_energy = self.state.return_available_energy(heating=True)\
+                + thermal_energy_delivered
+            if heatconsumption > available_energy:
+                heatconsumption = max(available_energy, 0)
+            return heatconsumption
+        else:
+            raise Exception("Modular storage must be defined either as buffer or as boiler.")

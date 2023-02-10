@@ -124,25 +124,24 @@ def modular_household_explicit(
     if heatpump_included:
         heating_system_installed = lt.HeatingSystems.HEAT_PUMP
         water_heating_system_installed = lt.HeatingSystems.HEAT_PUMP
-        heatpump_power = system_config_.heatpump_power
-        if heatpump_power is None:
-            heatpump_power = 1
-            hisim.information("Default power is used for heat pump. ")
-        if heatpump_power < 1:
-            raise Exception('Heat pump power cannot be smaller than default: choose values greater than one')
+    heatpump_power = system_config_.heatpump_power
+    if heatpump_power is None:
+        heatpump_power = 1
+        hisim.log.information("Default power is used for heat pump. ")
+    if heatpump_power < 1:
+        raise Exception('Heat pump power cannot be smaller than default: choose values greater than one')
     clever = my_simulation_parameters.surplus_control
     pv_included = system_config_.pv_included  # True or False
     if pv_included:
         pv_peak_power = system_config_.pv_peak_power
     smart_devices_included = system_config_.smart_devices_included  # True or False
     buffer_included = system_config_.buffer_included
-    if buffer_included:
-        buffer_volume = system_config_.buffer_volume
-        if buffer_volume is None:
-            buffer_volume = 1
-            hisim.log.information("Default volume is used for buffer storage. ")
-        elif buffer_volume < 1:
-            raise Exception('Buffer volume cannot be smaller than default: choose values greater than one')
+    buffer_volume = system_config_.buffer_volume
+    if buffer_volume is None:
+        buffer_volume = 1
+        hisim.log.information("Default volume is used for buffer storage. ")
+    elif buffer_volume < 1:
+        raise Exception('Buffer volume cannot be smaller than default: choose values greater than one')
     battery_included = system_config_.battery_included
     if battery_included:
         battery_capacity = system_config_.battery_capacity

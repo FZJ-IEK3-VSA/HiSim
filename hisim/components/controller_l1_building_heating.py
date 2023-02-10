@@ -46,7 +46,7 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
         config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
-        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=45.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
+        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=55.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
 

@@ -264,6 +264,11 @@ class L1HeatPumpController(cp.Component):
             self.calc_percentage(t_storage, temperature_modifier)
             self.state.deactivate(timestep)
             return
+        if temperature_modifier > 0 and t_storage < self.config.t_max_heating_in_celsius:
+            self.state.activate(timestep)
+            self.calc_percentage(t_storage, temperature_modifier)
+            return
+
 
     def write_to_report(self) -> List[str]:
         """ Writes the information of the current component to the report. """

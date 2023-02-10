@@ -22,3 +22,4 @@ class PostProcessingOptions(IntEnum):
     INCLUDE_CONFIGS_IN_PDF_REPORT = 13
     INCLUDE_IMAGES_IN_PDF_REPORT = 14
 
+

@@ -140,6 +140,7 @@ results/Results
 hisim/results
 
 # simulation log
+tests/mypath/
 tests\hisim_simulation.log
 components_information.xlsx
 hisim/components_information.xlsx
@@ -151,6 +152,7 @@ tests/finished.flag
 examples/finished.flag
 examples/ac_results_5b
 examples/network_t1.png
+examples/*.png
 hisim/inputs/cfg.json
 cfg.json
 tests/cfg.json

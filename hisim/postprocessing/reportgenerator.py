@@ -116,6 +116,7 @@ class ReportGenerator:
             Paragraph("<b>Table of contents</b>", self.styles["toc_centered"])
         )
         self.story.append(self.toc)
+        self.story.append(PageBreak())
 
     def write_preamble(self):
         """Write the preamble."""

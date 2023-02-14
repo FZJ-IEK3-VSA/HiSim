@@ -19,7 +19,7 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry
-
+from hisim.simulationparameters import SimulationParameters
 
 class PostProcessor:
 
@@ -32,11 +32,13 @@ class PostProcessor:
         self.report_image_entries = []
         self.chapter_counter: int
 
+
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
         if dirname is None:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
+
 
     @utils.measure_execution_time
     def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -79,6 +81,7 @@ class PostProcessor:
                 time_correction_factor=ppdt.time_correction_factor,
             )
             my_sankey.plot_building(data=ppdt.all_outputs)
+
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
@@ -173,10 +176,12 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function")
 
+
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """Generates the network charts that show the connection of the elements."""
         systemchart = SystemChart(ppdt)
         systemchart.make_chart()
+
 
     def make_special_one_day_debugging_plots(
         self, ppdt: PostProcessingDataTransfer
@@ -211,15 +216,18 @@ class PostProcessor:
             my_entry = my_days.plot(close=True)
             self.report_image_entries.append(my_entry)
 
+
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports all data to CSV."""
         log.information("exporting to csv")
         self.export_results_to_csv(ppdt)
 
+
     def make_sankey_plots(self) -> None:
         """Makes Sankey plots. Needs work."""
         log.information("plotting sankeys")
         # TODO:   self.plot_sankeys()
+
 
     def make_bar_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """Make bar charts."""
@@ -236,6 +244,7 @@ class PostProcessor:
             )
             my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
             self.report_image_entries.append(my_entry)
+
 
     def make_single_day_plots(
         self, days: Any, ppdt: PostProcessingDataTransfer
@@ -255,6 +264,7 @@ class PostProcessor:
             )
             my_entry = my_days.plot(close=True)
             self.report_image_entries.append(my_entry)
+
 
     def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """Make carpet plots."""
@@ -280,6 +290,7 @@ class PostProcessor:
             )
             self.report_image_entries.append(my_entry)
 
+
     @utils.measure_memory_leak
     def make_line_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """Makes the line plots."""
@@ -295,6 +306,7 @@ class PostProcessor:
             my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
             self.report_image_entries.append(my_entry)
             del my_line
+
 
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -320,6 +332,7 @@ class PostProcessor:
                 csvfilename, sep=",", decimal=".", header=header
             )
 
+
     def write_to_report(
         self, text: Any, report: reportgenerator.ReportGenerator
     ) -> None:
@@ -328,21 +341,18 @@ class PostProcessor:
         report.write_with_normal_alignment(text)
         report.close()
 
-    def write_kpis_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
-    ) -> None:
-        """Computes KPI's and writes them to report and csv."""
-        kpi_compute_return = compute_kpis(
-            results=ppdt.results,
-            all_outputs=ppdt.all_outputs,
-            simulation_parameters=ppdt.simulation_parameters,
-        )
-        lines = kpi_compute_return
+    def write_simulation_parameters_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
+        """Write simulation parameters to report."""
         report.open()
+        simu_parameter: SimulationParameters
+        self.chapter_counter = 1
         report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". KPIs"]
+            [str(self.chapter_counter) + ". Simulation Parameters"]
         )
-        report.write_with_normal_alignment(lines)
+        for simu_parameter in ppdt.simulation_parameters:
+            report.write_with_normal_alignment([str(simu_parameter)])
+        self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
         report.close()
 
     def write_components_to_report(
@@ -384,7 +394,6 @@ class PostProcessor:
         sorted_entries = sorted(report_image_entries, key=lambda x: x.output_type)
         output_explanations = []
         figure_counter = 1
-        self.chapter_counter = 1
 
         for component_name in component_names:
             output_type_counter = 1
@@ -448,17 +457,7 @@ class PostProcessor:
             self.chapter_counter = self.chapter_counter + 1
 
         report.close()
-        # all_output_names: List[Optional[str]]
-        # all_output_names = []
-        # output: ComponentOutput
-        # for output in ppdt.all_outputs:
-        #     all_output_names.append(output.full_name + " [" + output.unit + "]")
-        # report.write_heading_with_style_heading_one(
-        #     [str(self.chapter_counter) + ". All Outputs"]
-        # )
-        # self.chapter_counter = self.chapter_counter + 1
-        # report.write_with_normal_alignment(all_output_names)
-        # report.close()
+
 
     def write_all_outputs_to_report(self, ppdt:PostProcessingDataTransfer, report: reportgenerator.ReportGenerator)-> None:
         """Write all outputs to report."""
@@ -476,6 +475,25 @@ class PostProcessor:
         report.page_break()
         report.close()
 
+
+    def write_kpis_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes KPI's and writes them to report and csv."""
+        kpi_compute_return = compute_kpis(
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        lines = kpi_compute_return
+        report.open()
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + ". KPIs"]
+        )
+        report.write_with_normal_alignment(lines)
+        report.close()
+
+
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
         """Opens files in given path.
 
@@ -488,6 +506,7 @@ class PostProcessor:
             )  # noqa: B606
         else:
             log.information("Not on Windows. Can't open explorer.")
+
 
     def export_sankeys(self):
         """Exports Sankeys plots.

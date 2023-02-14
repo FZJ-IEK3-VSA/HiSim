@@ -68,7 +68,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)
 
         y_ticks = np.arange(0, 25 * y_steps_per_hour, 6 * y_steps_per_hour).tolist()
-        axis.set_yticks(y_ticks, fontsize=self.fontsize_ticks)
+        axis.set_yticks(y_ticks) #, fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
         y_ticks_labels = np.flip(list(range(0, 25, 6)), axis=0)
         axis.set_yticklabels([str(i) for i in y_ticks_labels])

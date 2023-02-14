@@ -5,7 +5,7 @@ from enum import IntEnum
 
 class PostProcessingOptions(IntEnum):
 
-    """ Enum class for enabling / disabling parts of the post processing. """
+    """Enum class for enabling / disabling parts of the post processing."""
 
     PLOT_LINE = 1
     PLOT_CARPET = 2
@@ -22,5 +22,3 @@ class PostProcessingOptions(IntEnum):
     GENERATE_CSV_FOR_HOUSING_DATA_BASE = 13
     INCLUDE_CONFIGS_IN_PDF_REPORT = 14
     INCLUDE_IMAGES_IN_PDF_REPORT = 15
-
-

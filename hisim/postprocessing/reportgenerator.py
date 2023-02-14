@@ -201,8 +201,9 @@ class ReportGenerator:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
-                ptext = f'<font size="12">{part.strip()}</font>'
-                self.story.append(Paragraph(ptext, self.styles["Normal"]))
+                if part != None:
+                    ptext = f'<font size="12">{part.strip()}</font>'
+                    self.story.append(Paragraph(ptext, self.styles["Normal"]))
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 20))
 

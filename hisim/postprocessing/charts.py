@@ -448,7 +448,9 @@ class SankeyHISIM(Chart):
             pathlengths=pathlengths,
         )
         sankey.finish()
-        plt.title("Residence Annual Thermal Equilibrium [kWh]", fontsize=self.fontsize_title)
+        plt.title(
+            "Residence Annual Thermal Equilibrium [kWh]", fontsize=self.fontsize_title
+        )
         plt.axis("off")
         # plt.savefig(self.filepath)
         plt.savefig(self.filepath2)

@@ -3,7 +3,7 @@
 import copy
 import time
 import os
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Union
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import Paragraph, Spacer, Image, PageBreak
@@ -192,7 +192,7 @@ class ReportGenerator:
         """Get the story."""
         self.story = copy.deepcopy(self.story)
 
-    def write_with_normal_alignment(self, text: List[Optional[str]]) -> None:
+    def write_with_normal_alignment(self, text: Union[List[str],List[Optional[str]]]) -> None:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:

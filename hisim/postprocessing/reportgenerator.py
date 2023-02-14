@@ -6,7 +6,7 @@ import os
 from typing import Any, Optional, List, Union
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import Paragraph, Spacer, Image, PageBreak, KeepTogether
+from reportlab.platypus import Paragraph, Spacer, Image, PageBreak
 from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle

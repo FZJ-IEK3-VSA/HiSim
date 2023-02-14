@@ -487,7 +487,10 @@ class PostProcessor:
     ) -> None:
         """Write network charts to report."""
         report.open()
-        report.write_figures_to_report_with_certain_size(
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + ". System Network Charts"]
+        )
+        report.write_figures_to_report_with_size_six_seven(
             os.path.join(
                 ppdt.simulation_parameters.result_directory, "System_no_Edge_labels.png"
             )
@@ -500,7 +503,7 @@ class PostProcessor:
                 + "System Chart of all components."
             ]
         )
-        report.write_figures_to_report_with_certain_size(
+        report.write_figures_to_report_with_size_seven_six(
             os.path.join(
                 ppdt.simulation_parameters.result_directory,
                 "System_with_Edge_labels.png",
@@ -512,10 +515,11 @@ class PostProcessor:
                 "Fig."
                 + str(self.figure_counter)
                 + ": "
-                + "System Chart of all components including all outputs."
+                + "System Chart of all components and all outputs."
             ]
         )
         self.figure_counter = self.figure_counter + 1
+        self.chapter_counter = self.chapter_counter + 1
         report.page_break()
         report.close()
 
@@ -534,6 +538,7 @@ class PostProcessor:
             [str(self.chapter_counter) + ". KPIs"]
         )
         report.write_with_normal_alignment(lines)
+        self.chapter_counter = self.chapter_counter + 1
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:

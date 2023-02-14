@@ -88,7 +88,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         plt.tight_layout()
         log.trace("finished carpet plot: " + self.filepath)
         # plt.savefig(self.filepath, bbox_inches='tight')
-        plt.savefig(self.filepath2, bbox_inches="tight")
+        plt.savefig(self.filepath2)
         plt.close()
         return ReportImageEntry(
             category=None,
@@ -231,7 +231,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
         plt.legend(loc="best", fontsize=self.fontsize_legend)
         # plt.savefig(self.filepath, bbox_inches='tight')
-        plt.savefig(self.filepath2, bbox_inches="tight")
+        plt.savefig(self.filepath2)
         plt.close()
         return ReportImageEntry(
             category=None,

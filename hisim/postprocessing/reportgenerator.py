@@ -6,7 +6,7 @@ import os
 from typing import Any, Optional, List, Union
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import Paragraph, Spacer, Image, PageBreak, KeepTogether
 from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -192,7 +192,9 @@ class ReportGenerator:
         """Get the story."""
         self.story = copy.deepcopy(self.story)
 
-    def write_with_normal_alignment(self, text: Union[List[str],List[Optional[str]]]) -> None:
+    def write_with_normal_alignment(
+        self, text: Union[List[str], List[Optional[str]]]
+    ) -> None:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
@@ -223,11 +225,23 @@ class ReportGenerator:
         else:
             raise ValueError("no files found")
 
-    def write_figures_to_report_with_certain_size(self, file_path: str) -> None:
+    def write_figures_to_report_with_size_six_seven(self, file_path: str) -> None:
         """Add figure to the report with certain size."""
 
         if os.path.isfile(file_path):
-            image = Image(file_path, width=6 * inch, height=4 * inch, useDPI=True)
+            # image = Image(file_path)
+            image = Image(file_path, width=6 * inch, height=7 * inch)
+            image.hAlign = "CENTER"
+            self.story.append(image)
+        else:
+            raise ValueError("no files found")
+
+    def write_figures_to_report_with_size_seven_six(self, file_path: str) -> None:
+        """Add figure to the report with certain size."""
+
+        if os.path.isfile(file_path):
+            # image = Image(file_path)
+            image = Image(file_path, width=7 * inch, height=6 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:

@@ -49,6 +49,7 @@ class SimulationParameters(JSONWizard):
         self.predictive_control = predictive_control
         self.prediction_horizon = prediction_horizon
 
+
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """ Generates a parameter set for a full year without any post processing, primarily for unit testing. """
@@ -97,3 +98,14 @@ class SimulationParameters(JSONWizard):
         """ Gets a unique key from a simulation parameter class. """
         return str(self.start_date) + "###" + str(self.end_date) + "###" + str(self.seconds_per_timestep) + "###" + str(
             self.year) + "###" + str(self.timesteps)
+    
+    def get_unique_key_as_list(self) -> List(str):
+        """Get s unique key from a simulation parameter class as list."""
+        lines = []
+        lines.append(f"Start date: {self.start_date}")
+        lines.append(f"End date: {self.end_date}")
+        lines.append(f"Simualtion year: {self.year}")
+        lines.append(f"Seconds per timestep: {self.seconds_per_timestep}")
+        lines.append(f"Total number of timesteps: {self.timesteps}")
+        return lines
+

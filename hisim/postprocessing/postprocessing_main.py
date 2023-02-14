@@ -19,7 +19,7 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry
-from hisim.simulationparameters import SimulationParameters
+
 
 class PostProcessor:
 
@@ -30,15 +30,14 @@ class PostProcessor:
         """Initializes the post processing."""
         self.dirname: str
         self.report_image_entries = []
-        self.chapter_counter: int
-
+        self.chapter_counter: int = 1
+        self.figure_counter = 1
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
         if dirname is None:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
-
 
     @utils.measure_execution_time
     def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -82,7 +81,6 @@ class PostProcessor:
             )
             my_sankey.plot_building(data=ppdt.all_outputs)
 
-
     @utils.measure_execution_time
     @utils.measure_memory_leak
     def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
@@ -96,7 +94,7 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
-                PostProcessingOptions.WRITE_KPI_TO_REPORT,
+                PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(
@@ -134,14 +132,32 @@ class PostProcessor:
             log.information("Making CSV exports.")
             self.make_csv_export(ppdt)
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
-            log.information("Making PDF report.")
+            log.information(
+                "Making PDF report and writing simulation parameters to report."
+            )
+            self.write_simulation_parameters_to_report(ppdt, report)
+        if (
+            PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
+            log.information("Writing components to report.")
             self.write_components_to_report(ppdt, report, self.report_image_entries)
-        if PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT in ppdt.post_processing_options:
-            log.information("Write all outputs to report.")
+
+        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
+            log.information("Computing Network Charts")
+            self.make_network_charts(ppdt)
+        if (
+            PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
+            log.information("Writing all outputs to report.")
             self.write_all_outputs_to_report(ppdt, report)
-        if PostProcessingOptions.WRITE_KPI_TO_REPORT in ppdt.post_processing_options:
-            log.information("Writing KPIs to report.")
-            self.write_kpis_to_report(ppdt, report)
+        if PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT in ppdt.post_processing_options:
+            log.information("Writing network charts to report.")
+            self.write_network_charts_to_report(ppdt, report)
+        if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT in ppdt.post_processing_options:
+            log.information("Computing and writing KPIs to report.")
+            self.compute_and_write_kpis_to_report(ppdt, report)
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
@@ -152,10 +168,6 @@ class PostProcessor:
                 results=ppdt.results,
                 simulation_parameters=ppdt.simulation_parameters,
             )
-        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
-            log.information("Computing Network Charts")
-            self.make_network_charts(ppdt)
-
         # only a single day has been calculated. This gets special charts for debugging.
         if (
             PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY
@@ -176,12 +188,10 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function")
 
-
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """Generates the network charts that show the connection of the elements."""
         systemchart = SystemChart(ppdt)
         systemchart.make_chart()
-
 
     def make_special_one_day_debugging_plots(
         self, ppdt: PostProcessingDataTransfer
@@ -216,18 +226,15 @@ class PostProcessor:
             my_entry = my_days.plot(close=True)
             self.report_image_entries.append(my_entry)
 
-
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports all data to CSV."""
         log.information("exporting to csv")
         self.export_results_to_csv(ppdt)
 
-
     def make_sankey_plots(self) -> None:
         """Makes Sankey plots. Needs work."""
         log.information("plotting sankeys")
         # TODO:   self.plot_sankeys()
-
 
     def make_bar_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """Make bar charts."""
@@ -244,7 +251,6 @@ class PostProcessor:
             )
             my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
             self.report_image_entries.append(my_entry)
-
 
     def make_single_day_plots(
         self, days: Any, ppdt: PostProcessingDataTransfer
@@ -264,7 +270,6 @@ class PostProcessor:
             )
             my_entry = my_days.plot(close=True)
             self.report_image_entries.append(my_entry)
-
 
     def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """Make carpet plots."""
@@ -290,7 +295,6 @@ class PostProcessor:
             )
             self.report_image_entries.append(my_entry)
 
-
     @utils.measure_memory_leak
     def make_line_plots(self, ppdt: PostProcessingDataTransfer) -> None:
         """Makes the line plots."""
@@ -306,7 +310,6 @@ class PostProcessor:
             my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
             self.report_image_entries.append(my_entry)
             del my_line
-
 
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -332,7 +335,6 @@ class PostProcessor:
                 csvfilename, sep=",", decimal=".", header=header
             )
 
-
     def write_to_report(
         self, text: Any, report: reportgenerator.ReportGenerator
     ) -> None:
@@ -341,16 +343,22 @@ class PostProcessor:
         report.write_with_normal_alignment(text)
         report.close()
 
-    def write_simulation_parameters_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator) -> None:
+    def write_simulation_parameters_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
         """Write simulation parameters to report."""
         report.open()
-        simu_parameter: SimulationParameters
-        self.chapter_counter = 1
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + ". Simulation Parameters"]
         )
-        for simu_parameter in ppdt.simulation_parameters:
-            report.write_with_normal_alignment([str(simu_parameter)])
+        report.write_with_normal_alignment(
+            [
+                "The following information was used to configure the HiSim Building Simulation."
+            ]
+        )
+        report.write_with_normal_alignment(
+            ppdt.simulation_parameters.get_unique_key_as_list()
+        )
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
         report.close()
@@ -393,7 +401,6 @@ class PostProcessor:
                         )
         sorted_entries = sorted(report_image_entries, key=lambda x: x.output_type)
         output_explanations = []
-        figure_counter = 1
 
         for component_name in component_names:
             output_type_counter = 1
@@ -444,7 +451,7 @@ class PostProcessor:
                     report.write_with_center_alignment(
                         [
                             "Fig."
-                            + str(figure_counter)
+                            + str(self.figure_counter)
                             + ": "
                             + entry.component_name
                             + " "
@@ -452,14 +459,16 @@ class PostProcessor:
                         ]
                     )
                     report.add_spacer()
-                    figure_counter = figure_counter + 1
+                    self.figure_counter = self.figure_counter + 1
             report.page_break()
             self.chapter_counter = self.chapter_counter + 1
 
         report.close()
 
 
-    def write_all_outputs_to_report(self, ppdt:PostProcessingDataTransfer, report: reportgenerator.ReportGenerator)-> None:
+    def write_all_outputs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
         """Write all outputs to report."""
         report.open()
         all_output_names: List[Optional[str]]
@@ -475,8 +484,33 @@ class PostProcessor:
         report.page_break()
         report.close()
 
+    def write_network_charts_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator):
+        """Write network charts to report."""
+        report.open()
+        report.write_figures_to_report_with_certain_size(os.path.join(ppdt.simulation_parameters.result_directory, "System_no_Edge_labels.png"))
+        report.write_with_center_alignment(
+                        [
+                            "Fig."
+                            + str(self.figure_counter)
+                            + ": "
+                            + "System Chart of all components."
+                        ]
+                    )
+        report.write_figures_to_report_with_certain_size(os.path.join(ppdt.simulation_parameters.result_directory, "System_with_Edge_labels.png"))
+        self.figure_counter = self.figure_counter + 1
+        report.write_with_center_alignment(
+                        [
+                            "Fig."
+                            + str(self.figure_counter)
+                            + ": "
+                            + "System Chart of all components including all outputs."
+                        ]
+                    )
+        self.figure_counter = self.figure_counter + 1
+        report.page_break()
+        report.close()
 
-    def write_kpis_to_report(
+    def compute_and_write_kpis_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Computes KPI's and writes them to report and csv."""
@@ -493,7 +527,6 @@ class PostProcessor:
         report.write_with_normal_alignment(lines)
         report.close()
 
-
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
         """Opens files in given path.
 
@@ -506,7 +539,6 @@ class PostProcessor:
             )  # noqa: B606
         else:
             log.information("Not on Windows. Can't open explorer.")
-
 
     def export_sankeys(self):
         """Exports Sankeys plots.

@@ -201,9 +201,11 @@ class ReportGenerator:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
-                if part != None:
+                if part is not None:
                     ptext = f'<font size="12">{part.strip()}</font>'
                     self.story.append(Paragraph(ptext, self.styles["Normal"]))
+                else:
+                    raise ValueError("text contains Nones")
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 20))
 

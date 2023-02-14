@@ -445,6 +445,7 @@ class PostProcessor:
             report.page_break()
             self.chapter_counter = self.chapter_counter + 1
 
+        all_output_names: List[Optional[str]]
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:

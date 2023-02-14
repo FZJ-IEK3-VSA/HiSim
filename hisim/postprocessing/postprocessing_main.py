@@ -490,7 +490,7 @@ class PostProcessor:
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + ". System Network Charts"]
         )
-        report.write_figures_to_report_with_size_six_seven(
+        report.write_figures_to_report_with_size_five_six(
             os.path.join(
                 ppdt.simulation_parameters.result_directory, "System_no_Edge_labels.png"
             )
@@ -503,7 +503,7 @@ class PostProcessor:
                 + "System Chart of all components."
             ]
         )
-        report.write_figures_to_report_with_size_seven_six(
+        report.write_figures_to_report_with_size_eight_six(
             os.path.join(
                 ppdt.simulation_parameters.result_directory,
                 "System_with_Edge_labels.png",

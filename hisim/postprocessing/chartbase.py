@@ -2,7 +2,6 @@
 # clean
 import os
 import re
-from hisim import log
 
 
 class Chart:  # noqa: too-few-public-methods

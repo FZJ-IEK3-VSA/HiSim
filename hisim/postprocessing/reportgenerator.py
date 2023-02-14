@@ -3,18 +3,17 @@
 import copy
 import time
 import os
-from typing import Any, Optional, List, Union
+from typing import Any, Optional, List
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, PageBreak
-from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate, canvas
+from reportlab.platypus import Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm, mm
 from reportlab.platypus import Table
 from reportlab.platypus.tableofcontents import TableOfContents
 from hisim import utils
-from hisim import log
 
 
 class MyDocTemplate(BaseDocTemplate):
@@ -45,7 +44,6 @@ class MyDocTemplate(BaseDocTemplate):
                 self.notify("TOCEntry", (0, text, self.page))
             if style == "Heading2":
                 self.notify("TOCEntry", (1, text, self.page))
-            return self.page
 
 
 class ReportGenerator:
@@ -67,14 +65,6 @@ class ReportGenerator:
 
     def open(self):
         """Open a file."""
-        # self.doc = SimpleDocTemplate(
-        #     self.filepath,
-        #     pagesize=letter,
-        #     rightMargin=72,
-        #     leftMargin=72,
-        #     topMargin=72,
-        #     bottomMargin=18,
-        # )
         self.doc = MyDocTemplate(
             self.filepath,
             pagesize=letter,
@@ -259,7 +249,7 @@ class ReportGenerator:
         canvas.setFont(
             self.styles["Heading2"].fontName, self.styles["Heading2"].fontSize
         )
-        page_number_text = "%d" % (doc.page)
+        page_number_text = f"{doc.page}"
         canvas.drawRightString(200 * mm, 20 * mm, page_number_text)
         canvas.restoreState()
 

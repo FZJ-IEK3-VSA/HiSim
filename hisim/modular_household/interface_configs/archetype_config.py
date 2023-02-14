@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
+from typing import Optional
 from dataclasses_json import dataclass_json
 
 from utspclient.helpers.lpgdata import (
@@ -25,12 +26,14 @@ class ArcheTypeConfig:
     absolute_conditioned_floor_area: float = 121.2
     water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
-    mobility_set: JsonReference = field(
-        default_factory=lambda: TransportationDeviceSets.Bus_and_one_30_km_h_Car  # type: ignore
-    )
-    mobility_distance: JsonReference = field(
-        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance  # type: ignore
-    )
+    mobility_set: Optional[JsonReference] = None
+    # field(
+    #     default_factory=lambda: TransportationDeviceSets.Bus_and_one_30_km_h_Car  # type: ignore
+    # )
+    mobility_distance: Optional[JsonReference] = None
+    # field(
+    #     default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance  # type: ignore
+    # )
 
 
 # def create_archetype_config_file() -> None:

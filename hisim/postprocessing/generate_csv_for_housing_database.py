@@ -68,7 +68,7 @@ def generate_csv_for_database(all_outputs: List, results: pd.DataFrame, simulati
                     compute_energy_from_power(power_timeseries=results.iloc[:, index],
                     seconds_per_timestep=simulation_parameters.seconds_per_timestep)
             elif InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag:
-                if ComponentType.SMART_DEVICE in output.postprocessing_results:
+                if ComponentType.SMART_DEVICE in output.postprocessing_flag:
                     csv_frame[('RemainingLoad', 'Electricity [kWh]')] = csv_frame[('RemainingLoad', 'Electricity [kWh]')] + \
                     compute_energy_from_power(power_timeseries=results.iloc[:, index],
                     seconds_per_timestep=simulation_parameters.seconds_per_timestep)

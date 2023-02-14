@@ -15,20 +15,21 @@ class SystemConfig:
     """Defines the system config for the modular household."""
 
     pv_included: bool = True
-    pv_peak_power: Optional[float] = 5e3
+    pv_peak_power: Optional[float] = 1e4
     smart_devices_included: bool = False
-    buffer_included: bool = False
-    buffer_volume: Optional[float] = 150  # in liter
+    buffer_included: bool = True
+    buffer_volume: Optional[float] = 2.6  # in multiples of default
     battery_included: bool = False
     battery_capacity: Optional[float] = 20.0  # in kWh
     heatpump_included: bool = True
+    heatpump_power: Optional[float] = 1.0 # in multiples of default
     chp_included: bool = False
     chp_power: Optional[float] = 12
     h2_storage_included: bool = True
     h2_storage_size: Optional[float] = 100
     electrolyzer_included: bool = True
     electrolyzer_power: Optional[float] = 5e3
-    ev_included: bool = True
+    ev_included: bool = False
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )

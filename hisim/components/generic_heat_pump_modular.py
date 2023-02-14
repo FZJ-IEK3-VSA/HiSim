@@ -37,68 +37,29 @@ class HeatPumpConfig:
     device_name: str
     power_th: float
     water_vs_heating: lt.InandOutputType
-    cooling_considered: bool
-    heating_season_begin: Optional[int]
-    heating_season_end: Optional[int]
 
     @staticmethod
     def get_default_config_heating() -> Any:
-        config = HeatPumpConfig(
-            name="HeatingHeatPump",
-            source_weight=1,
-            manufacturer="Viessmann Werke GmbH & Co KG",
-            device_name="Vitocal 300-A AWO-AC 301.B07",
-            power_th=6200,
-            water_vs_heating=lt.InandOutputType.HEATING,
-            cooling_considered=True,
-            heating_season_begin=270,
-            heating_season_end=150,
-        )
+        config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> Any:
-        config = HeatPumpConfig(
-            name="DHWHeatPump",
-            source_weight=1,
-            manufacturer="Viessmann Werke GmbH & Co KG",
-            device_name="Vitocal 300-A AWO-AC 301.B07",
-            power_th=3000,
-            water_vs_heating=lt.InandOutputType.WATER_HEATING,
-            cooling_considered=False,
-            heating_season_begin=None,
-            heating_season_end=None,
-        )
+        config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
 
     @staticmethod
     def get_default_config_heating_electric() -> Any:
-        config = HeatPumpConfig(
-            name="HeatingHeatingRod",
-            source_weight=1,
-            manufacturer="dummy",
-            device_name="HeatingRod",
-            power_th=6200,
-            water_vs_heating=lt.InandOutputType.HEATING,
-            cooling_considered=True,
-            heating_season_begin=None,
-            heating_season_end=None,
-        )
+        config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
+                                water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
     def get_default_config_waterheating_electric() -> Any:
-        config = HeatPumpConfig(
-            name="DHWHeatingRod",
-            source_weight=1,
-            manufacturer="dummy",
-            device_name="HeatingRod",
-            power_th=3000,
-            water_vs_heating=lt.InandOutputType.WATER_HEATING,
-            cooling_considered=False,
-            heating_season_begin=None,
-            heating_season_end=None,
-        )
+        config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
+                                water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
 
 
@@ -117,12 +78,10 @@ class ModularHeatPumpState:
 
 class ModularHeatPump(cp.Component):
     """
-    Heat pump implementation. It does support a refrigeration cycle. The heatpump_modular differs to heatpump in (a) minumum run- and
+    Heat pump implementation. The heatpump_modular differs to heatpump in (a) minumum run- and
     idle time are given in seconds (not in time steps), (b) the season for heating and cooling is explicitly separated by days of the year.
     This is mostly done to avoid heating and cooling at the same day in spring and autum with PV surplus available. (c) heat pump modular needs
-    a generic_controller_l1_runtime signal. The run time is not controlled in the component itself but in the controller.
-
-    STILL TO BE DONE: implement COP for cooling period. At the moment it cools with heating efficiencies.
+    a generic_controller_l1_runtime signal. The run time is not controlled in the component itself but in the controller. Heat pump power can be modified by its config.
 
     Parameters
     ----------
@@ -130,10 +89,6 @@ class ModularHeatPump(cp.Component):
         Heat pump manufacturer
     device_name : str
         Heat pump model
-    heating_season_begin : int, optional
-        Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
-    heating_season_end : int, optional
-        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
     name : str, optional
         Name of heatpump within simulation. The default is 'HeatPump'
     source_weight : int, optional
@@ -312,20 +267,6 @@ class ModularHeatPump(cp.Component):
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
         self.cop_coef = np.polyfit(self.t_out_ref, self.cop_ref, 1)
         self.power_th = config.power_th
-        self.cooling_considered = config.cooling_considered
-        if self.cooling_considered:
-            self.heating_season_begin = (
-                config.heating_season_begin
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-            self.heating_season_end = (
-                config.heating_season_end
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
 
         self.state = ModularHeatPumpState()
         self.previous_state = ModularHeatPumpState()

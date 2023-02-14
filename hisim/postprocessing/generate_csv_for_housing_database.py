@@ -104,33 +104,17 @@ def generate_csv_for_database(
                 if LoadTypes.DIESEL in output.postprocessing_flag:
                     csv_frame[("Transport", "Diesel [l]")] = sum(results.iloc[:, index])
                 else:
-                    csv_frame[
-                        ("Transport", "Electricity [kWh]")
-                    ] = compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
-            elif (
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-                in output.postprocessing_flag
-            ):
-                csv_frame[("RemainingLoad", "Electricity [kWh]")] = csv_frame[
-                    ("RemainingLoad", "Electricity [kWh]")
-                ] + compute_energy_from_power(
-                    power_timeseries=results.iloc[:, index],
-                    seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                )
-            elif (
-                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
-                in output.postprocessing_flag
-            ):
-                if ComponentType.SMART_DEVICE in output.postprocessing_results:
-                    csv_frame[("RemainingLoad", "Electricity [kWh]")] = csv_frame[
-                        ("RemainingLoad", "Electricity [kWh]")
-                    ] + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
+                    csv_frame[('Transport', 'Electricity [kWh]')] = compute_energy_from_power(power_timeseries=results.iloc[:, index],
+                    seconds_per_timestep=simulation_parameters.seconds_per_timestep)
+            elif InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag:
+                csv_frame[('RemainingLoad', 'Electricity [kWh]')] = csv_frame[('RemainingLoad', 'Electricity [kWh]')] + \
+                    compute_energy_from_power(power_timeseries=results.iloc[:, index],
+                    seconds_per_timestep=simulation_parameters.seconds_per_timestep)
+            elif InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag:
+                if ComponentType.SMART_DEVICE in output.postprocessing_flag:
+                    csv_frame[('RemainingLoad', 'Electricity [kWh]')] = csv_frame[('RemainingLoad', 'Electricity [kWh]')] + \
+                    compute_energy_from_power(power_timeseries=results.iloc[:, index],
+                    seconds_per_timestep=simulation_parameters.seconds_per_timestep)
         else:
             continue
 

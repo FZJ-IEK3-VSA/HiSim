@@ -42,92 +42,34 @@ class L1HeatPumpConfig(ConfigBase):
     t_min_heating_in_celsius: float
     t_max_heating_in_celsius: float
     cooling_considered: bool
-    t_min_cooling_in_celsius: Optional[float]
-    t_max_cooling_in_celsius: Optional[float]
     day_of_heating_season_begin: Optional[int]
     day_of_heating_season_end: Optional[int]
-
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        t_min_heating_in_celsius: float,
-        t_max_heating_in_celsius: float,
-        cooling_considered: bool,
-        t_min_cooling_in_celsius: Optional[float],
-        t_max_cooling_in_celsius: Optional[float],
-        day_of_heating_season_begin: Optional[int],
-        day_of_heating_season_end: Optional[int],
-        min_operation_time_in_seconds: int,
-        min_idle_time_in_seconds: int,
-    ):
-        """Initializes config."""
-        super().__init__(name=name)
-        self.name = name
-        self.source_weight = source_weight
-        self.t_min_heating_in_celsius = t_min_heating_in_celsius
-        self.t_max_heating_in_celsius = t_max_heating_in_celsius
-        self.cooling_considered = cooling_considered
-        self.t_min_cooling_in_celsius = t_min_cooling_in_celsius
-        self.t_max_cooling_in_celsius = t_max_cooling_in_celsius
-        self.day_of_heating_season_begin = day_of_heating_season_begin
-        self.day_of_heating_season_end = day_of_heating_season_end
-        self.min_operation_time_in_seconds = min_operation_time_in_seconds
-        self.min_idle_time_in_seconds = min_idle_time_in_seconds
+    min_operation_time_in_seconds: int
+    min_idle_time_in_seconds: int
 
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> Any:
-        """Default Config for the buffer temperature."""
-        config = L1HeatPumpConfig(
-            name=name,
-            source_weight=1,
-            t_min_heating_in_celsius=20.0,
-            t_max_heating_in_celsius=22.0,
-            cooling_considered=True,
-            t_min_cooling_in_celsius=23,
-            t_max_cooling_in_celsius=25,
-            day_of_heating_season_begin=270,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=1800,
-            min_idle_time_in_seconds=1800,
-        )
+        """ Default Config for the buffer temperature. """
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
+                                  cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
+                                  min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
     @staticmethod
     def get_default_config_heat_source_controller_buffer(name: str) -> Any:
         """Default Config for the buffer temperature."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        config = L1HeatPumpConfig(
-            name=name,
-            source_weight=1,
-            t_min_heating_in_celsius=30.0,
-            t_max_heating_in_celsius=50.0,
-            cooling_considered=True,
-            t_min_cooling_in_celsius=23,
-            t_max_cooling_in_celsius=25,
-            day_of_heating_season_begin=270 - 1,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=1800,
-            min_idle_time_in_seconds=1800,
-        )
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
+                                  cooling_considered=True, day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150,
+                                  min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
     @staticmethod
     def get_default_config_heat_source_controller_dhw(name: str) -> Any:
-        """Default Config for the buffer temperature."""
-        config = L1HeatPumpConfig(
-            name=name,
-            source_weight=1,
-            t_min_heating_in_celsius=40.0,
-            t_max_heating_in_celsius=60.0,
-            cooling_considered=False,
-            t_min_cooling_in_celsius=23,
-            t_max_cooling_in_celsius=25,
-            day_of_heating_season_begin=270,
-            day_of_heating_season_end=150,
-            min_operation_time_in_seconds=1800,
-            min_idle_time_in_seconds=1800,
-        )
+        """ Default Config for the buffer temperature. """
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
+                                  cooling_considered=False, day_of_heating_season_begin=270, day_of_heating_season_end=150,
+                                  min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
 
 
@@ -423,6 +365,11 @@ class L1HeatPumpController(cp.Component):
             self.calc_percentage(t_storage, temperature_modifier)
             self.state.deactivate(timestep)
             return
+        if temperature_modifier > 0 and t_storage < self.config.t_max_heating_in_celsius:
+            self.state.activate(timestep)
+            self.calc_percentage(t_storage, temperature_modifier)
+            return
+
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

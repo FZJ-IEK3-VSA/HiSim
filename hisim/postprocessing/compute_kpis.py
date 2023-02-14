@@ -101,7 +101,8 @@ def compute_self_consumption_and_injection(
     injection = production_with_battery - consumption_with_battery
 
     # evaluate self consumption and immidiately sum over time
-    # battery is charged (counting to consumption) and discharged (counting to production) -> only one direction can be counted, otherwise the self-consumption can be greater than 100.
+    # battery is charged (counting to consumption) and discharged (counting to production)
+    # -> only one direction can be counted, otherwise the self-consumption can be greater than 100.
     # Here the production side is counted (battery_discharge).
     self_consumption = (
         pd.concat(
@@ -238,7 +239,7 @@ def compute_kpis(
         autarky_rate = 100 * (self_consumption_sum / consumption_sum)
 
         if not results["storage"].empty:
-            battery_soc = float(results["storage"][-1]) * 100
+            # battery_soc = float(results["storage"][-1]) * 100
             battery_losses = compute_energy_from_power(
                 power_timeseries=results["battery_charge"],
                 timeresolution=simulation_parameters.seconds_per_timestep,
@@ -253,7 +254,7 @@ def compute_kpis(
         self_consumption_rate = 0
         autarky_rate = 0
         battery_losses = 0
-        battery_soc = 0
+        # battery_soc = 0
     h2_system_losses = 0  # explicitly compute that
 
     # Electricity Price

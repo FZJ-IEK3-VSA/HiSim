@@ -83,7 +83,7 @@ def modular_household_explicit(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_KPI
+            PostProcessingOptions.WRITE_KPI_TO_REPORT
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.MAKE_NETWORK_CHARTS

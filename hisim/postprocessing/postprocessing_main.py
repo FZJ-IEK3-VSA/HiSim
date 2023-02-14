@@ -93,7 +93,7 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
-                PostProcessingOptions.COMPUTE_KPI,
+                PostProcessingOptions.WRITE_KPI_TO_REPORT,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(
@@ -133,10 +133,12 @@ class PostProcessor:
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information("Making PDF report.")
             self.write_components_to_report(ppdt, report, self.report_image_entries)
-        # Export all results to
-        if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
-            log.information("Computing KPIs")
-            self.compute_kpis(ppdt, report)
+        if PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT in ppdt.post_processing_options:
+            log.information("Write all outputs to report.")
+            self.write_all_outputs_to_report(ppdt, report)
+        if PostProcessingOptions.WRITE_KPI_TO_REPORT in ppdt.post_processing_options:
+            log.information("Writing KPIs to report.")
+            self.write_kpis_to_report(ppdt, report)
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
@@ -326,7 +328,7 @@ class PostProcessor:
         report.write_with_normal_alignment(text)
         report.close()
 
-    def compute_kpis(
+    def write_kpis_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Computes KPI's and writes them to report and csv."""
@@ -445,6 +447,22 @@ class PostProcessor:
             report.page_break()
             self.chapter_counter = self.chapter_counter + 1
 
+        report.close()
+        # all_output_names: List[Optional[str]]
+        # all_output_names = []
+        # output: ComponentOutput
+        # for output in ppdt.all_outputs:
+        #     all_output_names.append(output.full_name + " [" + output.unit + "]")
+        # report.write_heading_with_style_heading_one(
+        #     [str(self.chapter_counter) + ". All Outputs"]
+        # )
+        # self.chapter_counter = self.chapter_counter + 1
+        # report.write_with_normal_alignment(all_output_names)
+        # report.close()
+
+    def write_all_outputs_to_report(self, ppdt:PostProcessingDataTransfer, report: reportgenerator.ReportGenerator)-> None:
+        """Write all outputs to report."""
+        report.open()
         all_output_names: List[Optional[str]]
         all_output_names = []
         output: ComponentOutput
@@ -455,6 +473,7 @@ class PostProcessor:
         )
         self.chapter_counter = self.chapter_counter + 1
         report.write_with_normal_alignment(all_output_names)
+        report.page_break()
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:

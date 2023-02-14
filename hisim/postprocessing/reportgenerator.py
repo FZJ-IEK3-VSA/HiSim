@@ -17,8 +17,12 @@ from hisim import utils
 
 
 class MyDocTemplate(BaseDocTemplate):
+
+    """MyDocTemplate class."""
+
     def __init__(self, filename, **kw):
-        self.allowSplitting = 0
+        """Initialize the doc template."""
+        self.allow_splitting = 0
         super().__init__(filename, **kw)
         self.template = PageTemplate(
             "normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")]
@@ -36,7 +40,7 @@ class MyDocTemplate(BaseDocTemplate):
     # with appropriate data.
 
     def afterFlowable(self, flowable):
-        "Registers TOC entries."
+        """Registers TOC entries."""
         if flowable.__class__.__name__ == "Paragraph":
             text = flowable.getPlainText()
             style = flowable.style.name
@@ -255,7 +259,6 @@ class ReportGenerator:
 
     def close(self):
         """Close the report."""
-        self.story.append(PageBreak())
         story = copy.deepcopy(self.story)
         self.doc.template.onPage = self.add_page_number
         self.doc.template.onPageEnd = self.add_page_number

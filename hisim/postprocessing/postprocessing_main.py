@@ -131,6 +131,10 @@ class PostProcessor:
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
             log.information("Making CSV exports.")
             self.make_csv_export(ppdt)
+        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
+            log.information("Computing Network Charts")
+            self.make_network_charts(ppdt)
+        # Generate Pdf report
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information(
                 "Making PDF report and writing simulation parameters to report."
@@ -143,19 +147,22 @@ class PostProcessor:
             log.information("Writing components to report.")
             self.write_components_to_report(ppdt, report, self.report_image_entries)
 
-        if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
-            log.information("Computing Network Charts")
-            self.make_network_charts(ppdt)
         if (
             PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT
             in ppdt.post_processing_options
         ):
             log.information("Writing all outputs to report.")
             self.write_all_outputs_to_report(ppdt, report)
-        if PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT in ppdt.post_processing_options:
+        if (
+            PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
             log.information("Writing network charts to report.")
             self.write_network_charts_to_report(ppdt, report)
-        if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT in ppdt.post_processing_options:
+        if (
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
             log.information("Computing and writing KPIs to report.")
             self.compute_and_write_kpis_to_report(ppdt, report)
         if (
@@ -335,14 +342,6 @@ class PostProcessor:
                 csvfilename, sep=",", decimal=".", header=header
             )
 
-    def write_to_report(
-        self, text: Any, report: reportgenerator.ReportGenerator
-    ) -> None:
-        """Writes a single line to the report."""
-        report.open()
-        report.write_with_normal_alignment(text)
-        report.close()
-
     def write_simulation_parameters_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
@@ -465,7 +464,6 @@ class PostProcessor:
 
         report.close()
 
-
     def write_all_outputs_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
@@ -484,28 +482,39 @@ class PostProcessor:
         report.page_break()
         report.close()
 
-    def write_network_charts_to_report(self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator):
+    def write_network_charts_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
         """Write network charts to report."""
         report.open()
-        report.write_figures_to_report_with_certain_size(os.path.join(ppdt.simulation_parameters.result_directory, "System_no_Edge_labels.png"))
+        report.write_figures_to_report_with_certain_size(
+            os.path.join(
+                ppdt.simulation_parameters.result_directory, "System_no_Edge_labels.png"
+            )
+        )
         report.write_with_center_alignment(
-                        [
-                            "Fig."
-                            + str(self.figure_counter)
-                            + ": "
-                            + "System Chart of all components."
-                        ]
-                    )
-        report.write_figures_to_report_with_certain_size(os.path.join(ppdt.simulation_parameters.result_directory, "System_with_Edge_labels.png"))
+            [
+                "Fig."
+                + str(self.figure_counter)
+                + ": "
+                + "System Chart of all components."
+            ]
+        )
+        report.write_figures_to_report_with_certain_size(
+            os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                "System_with_Edge_labels.png",
+            )
+        )
         self.figure_counter = self.figure_counter + 1
         report.write_with_center_alignment(
-                        [
-                            "Fig."
-                            + str(self.figure_counter)
-                            + ": "
-                            + "System Chart of all components including all outputs."
-                        ]
-                    )
+            [
+                "Fig."
+                + str(self.figure_counter)
+                + ": "
+                + "System Chart of all components including all outputs."
+            ]
+        )
         self.figure_counter = self.figure_counter + 1
         report.page_break()
         report.close()

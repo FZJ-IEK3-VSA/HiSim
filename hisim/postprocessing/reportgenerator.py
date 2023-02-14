@@ -222,12 +222,12 @@ class ReportGenerator:
             self.story.append(image)
         else:
             raise ValueError("no files found")
-        
+
     def write_figures_to_report_with_certain_size(self, file_path: str) -> None:
         """Add figure to the report with certain size."""
 
         if os.path.isfile(file_path):
-            image = Image(file_path, width= 6* inch, height= 4* inch)
+            image = Image(file_path, width=6 * inch, height=4 * inch, useDPI=True)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:

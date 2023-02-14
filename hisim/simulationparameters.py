@@ -99,8 +99,8 @@ class SimulationParameters(JSONWizard):
         return str(self.start_date) + "###" + str(self.end_date) + "###" + str(self.seconds_per_timestep) + "###" + str(
             self.year) + "###" + str(self.timesteps)
     
-    def get_unique_key_as_list(self) -> List(str):
-        """Get s unique key from a simulation parameter class as list."""
+    def get_unique_key_as_list(self) -> List[str]:
+        """ Gets unique key from a simulation parameter class as list. """
         lines = []
         lines.append(f"Start date: {self.start_date}")
         lines.append(f"End date: {self.end_date}")

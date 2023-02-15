@@ -357,6 +357,8 @@ class OverviewGenerator:
                 pypath = os.path.join(dirpath, filename)
                 if ".eggs" in pypath:
                     continue
+                if ".venv" in pypath:
+                    continue
                 files.append(pypath)
         return files
 

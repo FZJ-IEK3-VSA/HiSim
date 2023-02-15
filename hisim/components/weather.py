@@ -109,7 +109,6 @@ class Weather(Component):
     WindSpeed = "WindSpeed"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
-    DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
     Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
     Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
@@ -157,9 +156,6 @@ class Weather(Component):
 
 
 
-        self.daily_average_outside_temperature_output : ComponentOutput = self.add_output(self.component_name, self.DailyAverageOutsideTemperatures, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS)
-
-
         self.temperature_list: List[float]
         self.DNI_list: List[float]
         self.DNIextra_list: List[float]
@@ -170,7 +166,6 @@ class Weather(Component):
         self.apparent_zenith_list: List[float]
         self.DHI_list: List[float]
         self.dry_bulb_list: List[float]
-        self.daily_average_outside_temperature_list_in_celsius: List[float]
         self.daily_average_outside_temperature_list_in_celsius: List[float]
 
     def write_to_report(self):
@@ -208,7 +203,6 @@ class Weather(Component):
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
         stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
-        stsv.set_output_value(self.daily_average_outside_temperature_output, self.daily_average_outside_temperature_list_in_celsius[timestep])
         stsv.set_output_value(self.daily_average_outside_temperature_output, self.daily_average_outside_temperature_list_in_celsius[timestep])
 
         # set the temperature forecast
@@ -288,8 +282,6 @@ class Weather(Component):
             database = pd.DataFrame(np.transpose(solardata),
                                     columns=['DNI', 'DHI', 'GHI', 't_out', 'altitude', 'azimuth', 'apparent_zenith', 'DryBulb', 'Wspd', 'DNIextra'])
             database.to_csv(cache_filepath)
-
-        self.calculate_daily_average_outside_temperature(temperaturelist=self.temperature_list, seconds_per_timestep=seconds_per_timestep)
 
         self.calculate_daily_average_outside_temperature(temperaturelist=self.temperature_list, seconds_per_timestep=seconds_per_timestep)
 

@@ -239,7 +239,7 @@ class Simulator:
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
-        log.information(f"Simulation took {execution_time:4.0f}s")
+        log.information(f"Simulation took {execution_time:1.2f}s.")
         results_merged = self.get_std_results(self.results_data_frame)
         ppdt = PostProcessingDataTransfer(
             results=self.results_data_frame,

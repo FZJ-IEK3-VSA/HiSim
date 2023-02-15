@@ -165,7 +165,7 @@ class SimulationParameters(JSONWizard):
         lines = []
         lines.append(f"Start date: {self.start_date}")
         lines.append(f"End date: {self.end_date}")
-        lines.append(f"Simualtion year: {self.year}")
+        lines.append(f"Simulation year: {self.year}")
         lines.append(f"Seconds per timestep: {self.seconds_per_timestep}")
         lines.append(f"Total number of timesteps: {self.timesteps}")
         return lines

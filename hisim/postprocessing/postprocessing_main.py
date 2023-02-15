@@ -3,6 +3,7 @@
 import os
 import sys
 from typing import Any, Optional, List
+from timeit import default_timer as timer
 
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
@@ -111,69 +112,133 @@ class PostProcessor:
             dirpath=ppdt.simulation_parameters.result_directory
         )
         days = {"month": 0, "day": 0}
+        # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
+            start = timer()
             self.make_line_plots(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making line plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_CARPET in ppdt.post_processing_options:
             log.information("Making carpet plots.")
+            start = timer()
             self.make_carpet_plots(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making carpet plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
+            start = timer()
             self.make_single_day_plots(days, ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making single day plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
             log.information("Making bar charts.")
+            start = timer()
             self.make_bar_charts(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making bar plots took " + f"{duration:1.2f}s.")
         # Plot sankey
         if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
             log.information("Making sankey plots.")
+            start = timer()
             self.make_sankey_plots()
+            end = timer()
+            duration = end - start
+            log.information("Making sankey plots took " + f"{duration:1.2f}s.")
         # Export all results to CSV
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
             log.information("Making CSV exports.")
+            start = timer()
             self.make_csv_export(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making CSV export took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
-            log.information("Computing Network Charts")
+            log.information("Computing network charts.")
+            start = timer()
             self.make_network_charts(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Computing network charts took " + f"{duration:1.2f}s.")
         # Generate Pdf report
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information(
                 "Making PDF report and writing simulation parameters to report."
             )
+            start = timer()
             self.write_simulation_parameters_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Making PDF report and writing simulation parameters to report took "
+                + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
             in ppdt.post_processing_options
         ):
             log.information("Writing components to report.")
+            start = timer()
             self.write_components_to_report(ppdt, report, self.report_image_entries)
+            end = timer()
+            duration = end - start
+            log.information("Writing components to report took " + f"{duration:1.2f}s.")
 
         if (
             PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT
             in ppdt.post_processing_options
         ):
             log.information("Writing all outputs to report.")
+            start = timer()
             self.write_all_outputs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Writing all outputs to report took " + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT
             in ppdt.post_processing_options
         ):
             log.information("Writing network charts to report.")
+            start = timer()
             self.write_network_charts_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Writing network charts toreport took " + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
             in ppdt.post_processing_options
         ):
             log.information("Computing and writing KPIs to report.")
+            start = timer()
             self.compute_and_write_kpis_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing KPIs to report took " + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
         ):
             log.information("Generating csv for housing data base. ")
+            start = timer()
             generate_csv_for_database(
                 all_outputs=ppdt.all_outputs,
                 results=ppdt.results,
                 simulation_parameters=ppdt.simulation_parameters,
+            )
+            end = timer()
+            duration = end - start
+            log.information(
+                "Generating csv for housing data base took " + f"{duration:1.2f}s."
             )
         # only a single day has been calculated. This gets special charts for debugging.
         if (
@@ -184,16 +249,23 @@ class PostProcessor:
             log.information(
                 "Making special single day plots for a single day calculation for testing."
             )
+            start = timer()
             self.make_special_one_day_debugging_plots(ppdt)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Making special single day plots for a single day calculation for testing took "
+                + f"{duration:1.2f}s."
+            )
 
         # Open file explorer
         if (
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
             in ppdt.post_processing_options
         ):
-            log.information("opening the explorer.")
+            log.information("Opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
-        log.information("Finished main post processing function")
+        log.information("Finished main post processing function.")
 
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """Generates the network charts that show the connection of the elements."""
@@ -235,12 +307,12 @@ class PostProcessor:
 
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports all data to CSV."""
-        log.information("exporting to csv")
+        log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
 
     def make_sankey_plots(self) -> None:
         """Makes Sankey plots. Needs work."""
-        log.information("plotting sankeys")
+        log.information("Plotting sankeys.")
         # TODO:   self.plot_sankeys()
 
     def make_bar_charts(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -369,50 +441,28 @@ class PostProcessor:
         report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Writes information about the components used in the simulation to the simulation report."""
-        report.open()
-        # sort report image entries
-        component_names = []
-        for report_image_entry in report_image_entries:
-            if report_image_entry.component_name not in component_names:
-                component_names.append(report_image_entry.component_name)
 
-        output_types = []
-        file_paths = []
-        component_output_folder_paths = []
-        output_descriptions = []
-        for component in component_names:
-            for report_image_entry in report_image_entries:
-                if report_image_entry.component_name == component:
-                    if report_image_entry.output_type not in output_types:
-                        output_types.append(report_image_entry.output_type)
-                    if report_image_entry.file_path not in file_paths:
-                        file_paths.append(report_image_entry.file_path)
-                    if (
-                        report_image_entry.component_output_folder_path
-                        not in component_output_folder_paths
-                    ):
-                        component_output_folder_paths.append(
-                            report_image_entry.component_output_folder_path
-                        )
-                    if report_image_entry.output_description not in output_descriptions:
-                        output_descriptions.append(
-                            report_image_entry.output_description
-                        )
-        sorted_entries = sorted(report_image_entries, key=lambda x: x.output_type)
-        output_explanations = []
+        def write_image_entry_to_report_for_one_component(
+            component: Any, report_image_entries_for_component: List[ReportImageEntry]
+        ) -> None:
+            """Write image entry to report for one component."""
 
-        for component_name in component_names:
+            sorted_entries = sorted(
+                report_image_entries_for_component, key=lambda x: x.output_type
+            )
+            output_explanations = []
+
             output_type_counter = 1
             report.add_spacer()
             report.write_heading_with_style_heading_one(
-                [str(self.chapter_counter) + ". " + component_name]
+                [str(self.chapter_counter) + ". " + component]
             )
             if (
                 PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
                 in ppdt.post_processing_options
             ):
                 for wrapped_component in ppdt.wrapped_components:
-                    if wrapped_component.my_component.component_name == component_name:
+                    if wrapped_component.my_component.component_name == component:
                         report.write_with_normal_alignment(
                             [
                                 "The following information was used to configure the component."
@@ -428,8 +478,6 @@ class PostProcessor:
                 in ppdt.post_processing_options
             ):
                 for entry in sorted_entries:
-                    if entry.component_name != component_name:
-                        continue
                     # write output description only once for each output type
                     if entry.output_type not in output_explanations:
                         output_explanations.append(entry.output_type)
@@ -461,6 +509,26 @@ class PostProcessor:
                     self.figure_counter = self.figure_counter + 1
             report.page_break()
             self.chapter_counter = self.chapter_counter + 1
+
+        report.open()
+        # sort report image entries
+        component_names = []
+        for report_image_entry in report_image_entries:
+            if report_image_entry.component_name not in component_names:
+                component_names.append(report_image_entry.component_name)
+
+        for component in component_names:
+            output_types = []
+            report_image_entries_for_component = []
+            for report_image_entry in report_image_entries:
+                if report_image_entry.component_name == component:
+                    report_image_entries_for_component.append(report_image_entry)
+                    if report_image_entry.output_type not in output_types:
+                        output_types.append(report_image_entry.output_type)
+
+            write_image_entry_to_report_for_one_component(
+                component, report_image_entries_for_component
+            )
 
         report.close()
 

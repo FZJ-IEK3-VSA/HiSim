@@ -1,9 +1,6 @@
 postprocessing package
 ======================
 
-Submodules
-----------
-
 postprocessing.chart\_singleday module
 --------------------------------------
 
@@ -72,14 +69,6 @@ postprocessing.system\_chart module
 -----------------------------------
 
 .. automodule:: postprocessing.system_chart
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: postprocessing
    :members:
    :undoc-members:
    :show-inheritance:

@@ -24,4 +24,4 @@ formats:
 python:
    install:
    - requirements: requirements.txt
-   - path: hisim
+   - path: .

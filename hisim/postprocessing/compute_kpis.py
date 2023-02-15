@@ -208,7 +208,6 @@ def compute_kpis(
             timeresolution=simulation_parameters.seconds_per_timestep) - \
             compute_energy_from_power(power_timeseries=results['battery_discharge'],
             timeresolution=simulation_parameters.seconds_per_timestep)
-            print(battery_soc, battery_losses)
 
     else:
         self_consumption_sum = 0

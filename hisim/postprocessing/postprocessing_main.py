@@ -12,6 +12,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import compute_kpis
+from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -65,7 +66,7 @@ class PostProcessor:
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
         if docker_flag.lower() in ("true", "yes", "y", "1"):
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
-            allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI}
+            allowed_options_for_docker = {PostProcessingOptions.EXPORT_TO_CSV, PostProcessingOptions.COMPUTE_KPI, PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE}
             # Of all specified options, select those that are allowed
             valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
             if len(valid_options) < len(ppdt.post_processing_options):
@@ -102,6 +103,9 @@ class PostProcessor:
         if PostProcessingOptions.COMPUTE_KPI in ppdt.post_processing_options:
             log.information("Computing KPIs")
             self.compute_kpis(ppdt, report)
+        if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
+            log.information("Generating csv for housing data base. ")
+            generate_csv_for_database(all_outputs=ppdt.all_outputs, results=ppdt.results, simulation_parameters=ppdt.simulation_parameters)
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
             log.information("Computing Network Charts")
             self.make_network_charts(ppdt)

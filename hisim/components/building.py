@@ -194,6 +194,7 @@ class Building(dynamic_component.DynamicComponent):
 
     # Inputs -> heating device
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    ThermalPowerCHP = "ThermalPowerCHP"
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
@@ -351,6 +352,13 @@ class Building(dynamic_component.DynamicComponent):
         self.thermal_power_delivered_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ThermalPowerDelivered,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            False,
+        )
+        self.thermal_power_chp_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ThermalPowerCHP,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             False,
@@ -604,10 +612,13 @@ class Building(dynamic_component.DynamicComponent):
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
         )
-
-        thermal_power_delivered_in_watt = stsv.get_input_value(
-            self.thermal_power_delivered_channel
-        )
+        thermal_power_delivered_in_watt = 0.0
+        if self.thermal_power_delivered_channel.source_output is not None:
+            thermal_power_delivered_in_watt = thermal_power_delivered_in_watt \
+                + stsv.get_input_value(self.thermal_power_delivered_channel)
+        if self.thermal_power_chp_channel.source_output is not None:
+             thermal_power_delivered_in_watt = thermal_power_delivered_in_watt \
+                + stsv.get_input_value(self.thermal_power_chp_channel)
 
         previous_thermal_mass_temperature_in_celsius = (
             self.state.thermal_mass_temperature_in_celsius

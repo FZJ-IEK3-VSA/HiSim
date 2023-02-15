@@ -92,7 +92,7 @@ class SmartDevice( cp.Component ):
         self.previous_state: SmartDeviceState
         self.state: SmartDeviceState
         if my_simulation_parameters.surplus_control and smart_devices_included:
-            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED, lt.ComponentType.SMART_DEVICE]
         else:
             postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
 

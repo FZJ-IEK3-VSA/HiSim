@@ -170,6 +170,7 @@ class ComponentType(str, enum.Enum):
     GAS_HEATER = "GasHeater"
     BATTERY = "Battery"
     CAR_BATTERY = "CarBattery"
+    CAR = "Car"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
     CHP = "CHP"
@@ -223,3 +224,6 @@ class InandOutputType(str, enum.Enum):
     HEAT_TO_BUFFER = "HeatToBuffer"
     THERMAL_PRODUCTION = "ThermalProduction"
     FUEL_CONSUMPTION = "FuelConsumption"
+
+    WATER_HEATING = "WaterHeating"
+    HEATING = "Heating"

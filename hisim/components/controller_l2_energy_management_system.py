@@ -1,7 +1,10 @@
 """ Iterative Energy Surplus Controller. """
 # clean
+from dataclasses import dataclass
 
 from typing import Any, List
+
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import dynamic_component
@@ -18,6 +21,27 @@ __version__ = "0.1"
 __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = "development"
+
+@dataclass_json
+@dataclass
+class EMSConfig(cp.ConfigBase):
+
+    """ L1 Controller Config. """
+
+    name: str
+    strategy: str
+    limit_to_shave: float
+    building_temperature_offset_value: float
+    storage_temperature_offset_value: float
+
+    @staticmethod
+    def get_default_config_EMS() -> "EMSConfig":
+        """ Default Config for Energy Management System. """
+        config = EMSConfig(
+            name="EMS", strategy="optimize_own_consumption", limit_to_shave=0,
+            building_temperature_offset_value=1, storage_temperature_offset_value=10
+            )
+        return config
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
@@ -43,9 +67,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     CheckPeakShaving = "CheckPeakShaving"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, strategy: str = "optimize_own_consumption",
-                 # strategy=["optimize_own_consumption","peak_shaving_from_grid", "peak_shaving_into_grid","seasonal_storage"]
-                 limit_to_shave: float = 0):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: EMSConfig):
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(my_component_inputs=self.my_component_inputs, my_component_outputs=self.my_component_outputs,
@@ -59,8 +81,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
 
         self.mode: Any
-        self.strategy = strategy
-        self.limit_to_shave = limit_to_shave
+        self.strategy = config.strategy
+        self.limit_to_shave = config.limit_to_shave
+        self.building_temperature_offset_value = config.building_temperature_offset_value
+        self.storage_temperature_offset_value = config.storage_temperature_offset_value
 
         # Inputs
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(object_name=self.component_name,
@@ -217,8 +241,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             stsv.set_output_value(self.flexible_electricity, flexible_electricity)
         stsv.set_output_value(self.total_electricity_consumption_channel, consumption_uncontrolled + consumption_ems_controlled)
         if flexible_electricity > 0:
-            stsv.set_output_value(self.building_temperature_modifier, 1)
-            stsv.set_output_value(self.storage_temperature_modifier, 10)
+            stsv.set_output_value(self.building_temperature_modifier, self.building_temperature_offset_value)
+            stsv.set_output_value(self.storage_temperature_modifier, self.storage_temperature_offset_value)
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)

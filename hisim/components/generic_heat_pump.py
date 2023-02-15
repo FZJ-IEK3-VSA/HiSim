@@ -904,14 +904,14 @@ class HeatPumpController(cp.Component):
             ):
                 self.controller_heatpumpmode = "off"
                 return
-        if self.controller_heatpumpmode == "cooling":
+        elif self.controller_heatpumpmode == "cooling":
             if (
                 water_temperature_input_in_celsius
                 < minimum_cooling_set_temperature
             ):
                 self.controller_heatpumpmode = "off"
                 return
-        if self.controller_heatpumpmode == "off":
+        elif self.controller_heatpumpmode == "off":
             # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
             if (
                 water_temperature_input_in_celsius
@@ -925,6 +925,8 @@ class HeatPumpController(cp.Component):
             ):
                 self.controller_heatpumpmode = "cooling"
                 return
+        else:
+            raise ValueError("unknown mode")
 
     def smart_conditions(
         self, set_temperature: float, electricity_input: float

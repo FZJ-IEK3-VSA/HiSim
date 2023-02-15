@@ -229,7 +229,6 @@ class ReportGenerator:
         """Add figure to the report with certain size."""
 
         if os.path.isfile(file_path):
-            # image = Image(file_path)
             image = Image(file_path, width=5 * inch, height=7 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
@@ -240,8 +239,7 @@ class ReportGenerator:
         """Add figure to the report with certain size."""
 
         if os.path.isfile(file_path):
-            # image = Image(file_path)
-            image = Image(file_path, width=7 * inch)
+            image = Image(file_path, width=8 * inch, height= 5 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:

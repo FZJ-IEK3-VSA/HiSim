@@ -22,8 +22,8 @@ class ChartSingleDay(Chart):
         time_correction_factor: float,
         output_description: str,
         data: Any,
-        day: int = 0,
-        month: int = 0,
+        day: Any = 0,
+        month: Any = 0,
         output2: Any = None,
     ):
         """Initializes the class."""

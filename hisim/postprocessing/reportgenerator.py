@@ -96,10 +96,10 @@ class ReportGenerator:
             )
         )
         self.style_h1 = ParagraphStyle(
-            name="Heading1", fontSize=16, leading=16, spaceBefore=20
+            name="Heading1", fontSize=12, leading=16, spaceBefore=20
         )
         self.style_h2 = ParagraphStyle(
-            name="Heading2", fontSize=14, leading=14, spaceBefore=10
+            name="Heading2", fontSize=12, leading=14, spaceBefore=10
         )
 
     def write_table_of_content(self):
@@ -241,7 +241,7 @@ class ReportGenerator:
 
         if os.path.isfile(file_path):
             # image = Image(file_path)
-            image = Image(file_path, width=7 * inch, height=4 * inch)
+            image = Image(file_path, width=7 * inch)
             image.hAlign = "CENTER"
             self.story.append(image)
         else:

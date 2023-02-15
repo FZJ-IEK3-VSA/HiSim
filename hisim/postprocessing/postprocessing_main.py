@@ -30,9 +30,9 @@ class PostProcessor:
     def __init__(self):
         """Initializes the post processing."""
         self.dirname: str
-        self.report_image_entries = []
+        self.report_image_entries: List[ReportImageEntry] = []
         self.chapter_counter: int = 1
-        self.figure_counter = 1
+        self.figure_counter: int = 1
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -332,7 +332,7 @@ class PostProcessor:
             self.report_image_entries.append(my_entry)
 
     def make_single_day_plots(
-        self, days: Any, ppdt: PostProcessingDataTransfer
+        self, days: dict[str, int], ppdt: PostProcessingDataTransfer
     ) -> None:
         """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):

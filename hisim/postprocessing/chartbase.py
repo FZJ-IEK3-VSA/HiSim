@@ -110,7 +110,7 @@ class Chart:  # noqa: too-few-public-methods
 
         self.figsize = (6, 4)
         self.dpi = 600
-        self.fontsize_title = 18
-        self.fontsize_label = 15
-        self.fontsize_legend = 15
+        self.fontsize_title = 14
+        self.fontsize_label = 12
+        self.fontsize_legend = 12
         self.fontsize_ticks = 10

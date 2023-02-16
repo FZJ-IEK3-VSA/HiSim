@@ -302,10 +302,10 @@ class GenericHeatPumpNew(cp.Component):
         """Get heat pump controller default connections."""
         log.information("setting controller default connections in HeatPump")
         connections = []
-        controller_classname = HeatPumpController.get_classname()
+        controller_classname = HeatPumpControllerNew.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHeatPumpNew.State, controller_classname, HeatPumpController.State
+                GenericHeatPumpNew.State, controller_classname, HeatPumpControllerNew.State
             )
         )
         return connections

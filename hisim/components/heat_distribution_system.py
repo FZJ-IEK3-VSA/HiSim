@@ -35,6 +35,7 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     name: str
     water_temperature_in_distribution_system_in_celsius: float
+    heating_system: str
 
     @classmethod
     def get_default_heatdistributionsystem_config(
@@ -44,6 +45,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
             water_temperature_in_distribution_system_in_celsius=60,
+            heating_system="FloorHeating",
         )
         return config
 
@@ -101,19 +103,21 @@ class HeatDistribution(cp.Component):
             name=config.name, my_simulation_parameters=my_simulation_parameters
         )
         self.heat_distribution_system_config = config
+        self.heating_system = self.heat_distribution_system_config.heating_system
         self.state = HeatDistributionState(
             self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius
         )
         self.state_controller: float = 0.0
-        # self.residence_temperature_in_celsius: float = 0.0
         self.water_temperature_input_in_celsius: float = 0.0
-        self.floor_heating_water_mass_flow_rate_in_kg_per_second: float = 0
-        # self.max_water_mass_flow_rate_in_kg_per_second: float = 0.0
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second: float = (
+            0.0
+        )
         self.heat_gain_for_building_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 0.0
         self.max_thermal_building_demand_in_watt: float = 0.0
         self.real_heat_building_demand_in_watt: float = 0.0
-        self.build()
+        self.delta_temperature_in_celsius: float = 1.0
+        self.build(heating_system=self.heating_system)
 
         # Inputs
 
@@ -180,6 +184,7 @@ class HeatDistribution(cp.Component):
 
     def build(
         self,
+        heating_system: str,
     ) -> None:
         """Build function.
 
@@ -188,6 +193,13 @@ class HeatDistribution(cp.Component):
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
+        # choose delta T depending on the chosen heating system
+        if heating_system == "FloorHeating":
+            self.delta_temperature_in_celsius = 3
+        elif heating_system == "Radiator":
+            self.delta_temperature_in_celsius = 20
+        else:
+            raise ValueError("unknown heating system.")
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -234,8 +246,8 @@ class HeatDistribution(cp.Component):
             self.max_thermal_building_demand_channel
         )
         # Calculations ----------------------------------------------------------------------------------------------------------
-        self.floor_heating_water_mass_flow_rate_in_kg_per_second = (
-            self.calc_floor_heating_system_water_mass_flow_rate(
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
+            self.calc_heating_distribution_system_water_mass_flow_rate(
                 self.max_thermal_building_demand_in_watt
             )
         )
@@ -244,21 +256,12 @@ class HeatDistribution(cp.Component):
         )
         if self.state_controller == 1:
 
-            # self.calculate_heat_gain_for_building(
-            #     self.floor_heating_water_mass_flow_rate_in_kg_per_second,
-            #     self.water_temperature_input_in_celsius,
-            #     self.residence_temperature_in_celsius,
-            # )
-
             # building gets the heat that it needs
             self.heat_gain_for_building_in_watt = self.real_heat_building_demand_in_watt
 
-            # self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
-            #     self.residence_temperature_in_celsius,
-            # )
             self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
                 water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
-                water_mass_flow_in_kg_per_second=self.floor_heating_water_mass_flow_rate_in_kg_per_second,
+                water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
                 real_heat_buiding_demand_in_watt=self.real_heat_building_demand_in_watt,
             )
 
@@ -292,47 +295,26 @@ class HeatDistribution(cp.Component):
         )
         stsv.set_output_value(
             self.floor_heating_water_mass_flow_rate_channel,
-            self.floor_heating_water_mass_flow_rate_in_kg_per_second,
+            self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
         )
 
-    def calc_floor_heating_system_water_mass_flow_rate(
+    def calc_heating_distribution_system_water_mass_flow_rate(
         self,
         max_thermal_building_demand_in_watt: float,
     ) -> Any:
-        """Calculate water mass flow between floor heating system and hot water storage."""
+        """Calculate water mass flow between heating distribution system and hot water storage."""
         specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
-        # information from Noah: deltaT for floor heating = 3 K or °C
-        delta_temperature_for_floor_heating_in_celsius = 3
-        floor_heating_water_mass_flow_in_kg_per_second = (
+
+        heating_distribution_system_water_mass_flow_in_kg_per_second = (
             max_thermal_building_demand_in_watt
             / (
                 specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-                * delta_temperature_for_floor_heating_in_celsius
+                * self.delta_temperature_in_celsius
             )
         )
-        return floor_heating_water_mass_flow_in_kg_per_second
-
-    # def calculate_heat_gain_for_building(
-    #     self,
-    #     water_mass_flow_in_kg_per_second,
-    #     heated_water_temperature_in_celsius,
-    #     residence_temperature_in_celsius,
-    # ):
-    #     """Calculate heat gain for the building from heat distribution system."""
-    #     self.heat_gain_for_building_in_watt = (
-    #         water_mass_flow_in_kg_per_second
-    #         * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-    #         * (heated_water_temperature_in_celsius - residence_temperature_in_celsius)
-    #     )
-
-    # def determine_water_temperature_output_after_heat_exchange_with_building(
-    #     self, residence_temperature_in_celsius
-    # ):
-    #     """Calculate cooled water temperature after heat exchange between heat distribution system and building."""
-    #     cooled_water_temperature_output_in_celsius = residence_temperature_in_celsius
-    #     return cooled_water_temperature_output_in_celsius
+        return heating_distribution_system_water_mass_flow_in_kg_per_second
 
     def determine_water_temperature_output_after_heat_exchange_with_building(
         self,
@@ -432,11 +414,15 @@ class HeatDistributionController(cp.Component):
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
         )
 
-        self.add_default_connections(self.get_default_connections_from_building_controller())
+        self.add_default_connections(
+            self.get_default_connections_from_building_controller()
+        )
         self.controller_heat_distribution_mode: str = "off"
         self.previous_controller_heat_distribution_mode: str = "off"
 
-    def get_default_connections_from_building_controller(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_building_controller(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Get building controller default connections."""
         log.information(
             "setting building controller default connections in HeatDistributionController"
@@ -464,7 +450,9 @@ class HeatDistributionController(cp.Component):
         """
         # Sth
         self.controller_heat_distribution_mode = "off"
-        self.previous_controller_heat_distribution_mode = self.controller_heat_distribution_mode
+        self.previous_controller_heat_distribution_mode = (
+            self.controller_heat_distribution_mode
+        )
 
         # Configuration
         # self.set_residence_temperature_in_celsius = (
@@ -480,7 +468,9 @@ class HeatDistributionController(cp.Component):
 
     def i_save_state(self) -> None:
         """Save the current state."""
-        self.previous_controller_heat_distribution_mode = self.controller_heat_distribution_mode
+        self.previous_controller_heat_distribution_mode = (
+            self.controller_heat_distribution_mode
+        )
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""

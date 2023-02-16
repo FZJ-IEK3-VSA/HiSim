@@ -78,8 +78,6 @@ def basic_household_new(
     total_base_area_in_m2 = None
 
     # Set Heat Pump Controller
-    # set_residence_temperature_heating_in_celsius = 19.0
-    # set_residence_temperature_cooling_in_celsius = 24.0
     set_water_storage_temperature_for_heating_in_celsius = 50
     set_water_storage_temperature_for_cooling_in_celsius = 70
     offset = 0.5
@@ -102,6 +100,7 @@ def basic_household_new(
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
     water_temperature_in_distribution_system_in_celsius = 60
+    heating_system = "FloorHeating"
 
     # Set Heat Distribution Controller
     # min_heating_temperature_building_in_celsius = 20
@@ -216,10 +215,10 @@ def basic_household_new(
     )
 
     # Build Heat Distribution System
-
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
         name=hds_name,
-        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius
+        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
+        heating_system=heating_system
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,

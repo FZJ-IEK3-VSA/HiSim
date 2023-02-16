@@ -148,13 +148,13 @@ class GenericHeatPump(cp.Component):
         my_simulation_parameters: SimulationParameters,
         manufacturer: str = "Viessmann Werke GmbH & Co KG",
         name: str = "Vitocal 300-A AWO-AC 301.B07",
-        min_operation_time: int = 60 * 60,
-        min_idle_time: int = 15 * 60,
+        min_operation_time_in_seconds: int = 60 * 60,
+        min_idle_time_in_seconds: int = 15 * 60,
     ) -> None:
         """Construct all the necessary attributes."""
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
 
-        self.build(manufacturer, name, min_operation_time, min_idle_time)
+        self.build(manufacturer, name, min_operation_time_in_seconds, min_idle_time_in_seconds)
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
@@ -318,8 +318,8 @@ class GenericHeatPump(cp.Component):
         self,
         manufacturer: str,
         name: str,
-        min_operation_time: float,
-        min_idle_time: float,
+        min_operation_time_in_seconds: float,
+        min_idle_time_in_seconds: float,
     ) -> None:
         """Build function.
 
@@ -371,10 +371,10 @@ class GenericHeatPump(cp.Component):
 
         # Sets the time operation restricitions
         self.min_operation_time = (
-            min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+            min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
         self.min_idle_time = (
-            min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+            min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
 
         # Writes info to report

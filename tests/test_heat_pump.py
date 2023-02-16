@@ -29,8 +29,8 @@ def test_heat_pump():
     # Set Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(manufacturer=manufacturer,
                                                      name=name,
-                                                     min_operation_time=minimum_idle_time,
-                                                     min_idle_time=minimum_operation_time, my_simulation_parameters=my_simulation_parameters)
+                                                     min_operation_time_in_seconds=minimum_idle_time,
+                                                     min_idle_time_in_seconds=minimum_operation_time, my_simulation_parameters=my_simulation_parameters)
 
     # Set Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(set_residence_temperature_heating_in_celsius=temperature_air_heating_in_celsius,

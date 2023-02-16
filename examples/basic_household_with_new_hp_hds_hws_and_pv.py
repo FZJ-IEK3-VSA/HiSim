@@ -86,8 +86,8 @@ def basic_household_new(
     # Set Heat Pump
     hp_manufacturer = "Viessmann Werke GmbH & Co KG"
     hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 60 * 60
-    hp_min_idle_time = 15 * 60
+    hp_min_operation_time_in_seconds = 60 * 60
+    hp_min_idle_time_in_seconds = 15 * 60
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
@@ -166,6 +166,7 @@ def basic_household_new(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+
     # Build Building Controller
     my_building_controller_config = building.BuildingControllerConfig(
         minimal_building_temperature_in_celsius=20.0,
@@ -195,8 +196,8 @@ def basic_household_new(
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         manufacturer=hp_manufacturer,
         name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time,
+        min_operation_time_in_seconds=hp_min_operation_time_in_seconds,
+        min_idle_time_in_seconds=hp_min_idle_time_in_seconds,
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -324,7 +325,6 @@ def basic_household_new(
         my_building.component_name,
         my_building.TemperatureIndoorAir,
     )
-
     my_building_controller.connect_input(
         my_building_controller.ReferenceMaxHeatBuildingDemand,
         my_building.component_name,
@@ -352,13 +352,11 @@ def basic_household_new(
         my_weather.component_name,
         my_weather.TemperatureOutside,
     )
-
     my_heat_pump.connect_input(
         my_heat_pump.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
         my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
     )
-
     my_heat_pump.connect_input(
         my_heat_pump.MaxThermalBuildingDemand,
         my_building.component_name,
@@ -370,13 +368,11 @@ def basic_household_new(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )
-
     my_simple_heat_water_storage.connect_input(
         my_simple_heat_water_storage.WaterTemperatureFromHeatGenerator,
         my_heat_pump.component_name,
         my_heat_pump.WaterTemperatureOutput,
     )
-
     my_simple_heat_water_storage.connect_input(
         my_simple_heat_water_storage.WaterMassFlowRateFromHeatGenerator,
         my_heat_pump.component_name,
@@ -388,11 +384,6 @@ def basic_household_new(
         my_heat_distribution_system.FloorHeatingWaterMassFlowRate,
     )
     # -----------------------------------------------------------------------------------------------------------------
-    # my_heat_distribution_controller.connect_input(
-    #     my_heat_distribution_controller.ResidenceTemperature,
-    #     my_building.component_name,
-    #     my_building.TemperatureIndoorAir,
-    # )
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.RealHeatBuildingDemand,
         my_building_controller.component_name,
@@ -409,11 +400,6 @@ def basic_household_new(
         my_heat_distribution_controller.component_name,
         my_heat_distribution_controller.State,
     )
-    # my_heat_distribution_system.connect_input(
-    #     my_heat_distribution_system.ResidenceTemperature,
-    #     my_building.component_name,
-    #     my_building.TemperatureIndoorAir,
-    # )
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.RealThermalBuildingDemand,
         my_heat_distribution_controller.component_name,
@@ -424,7 +410,6 @@ def basic_household_new(
         my_building.component_name,
         my_building.ReferenceMaxHeatBuildingDemand,
     )
-
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.WaterTemperatureInput,
         my_simple_heat_water_storage.component_name,

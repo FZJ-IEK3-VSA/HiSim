@@ -148,8 +148,8 @@ def test_house_with_pv_and_hp_for_heating_test(
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         manufacturer=hp_manufacturer,
         name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time,
+        min_operation_time_in_seconds=hp_min_operation_time,
+        min_idle_time_in_seconds=hp_min_idle_time,
         my_simulation_parameters=my_simulation_parameters,
     )
 

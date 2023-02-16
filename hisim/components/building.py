@@ -164,7 +164,7 @@ class BuildingState:
             self.thermal_mass_temperature_in_celsius,
             self.thermal_capacitance_in_joule_per_kelvin,
         )
-    
+
 
 class BuildingControllerState:
 
@@ -647,11 +647,15 @@ class Building(dynamic_component.DynamicComponent):
         )
         thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
-            thermal_power_delivered_in_watt = thermal_power_delivered_in_watt \
+            thermal_power_delivered_in_watt = (
+                thermal_power_delivered_in_watt
                 + stsv.get_input_value(self.thermal_power_delivered_channel)
+            )
         if self.thermal_power_chp_channel.source_output is not None:
-             thermal_power_delivered_in_watt = thermal_power_delivered_in_watt \
+            thermal_power_delivered_in_watt = (
+                thermal_power_delivered_in_watt
                 + stsv.get_input_value(self.thermal_power_chp_channel)
+            )
 
         previous_thermal_mass_temperature_in_celsius = (
             self.state.thermal_mass_temperature_in_celsius
@@ -1910,7 +1914,8 @@ class BuildingController(cp.Component):
             level_of_utilization=0,
         )
         self.previous_state = self.state.clone()
-
+        self.real_heat_building_demand_in_watt: float = 0.0
+        self.building_temperature_in_celsius: float = 0.0
         # =================================================================================================================================
         # Inputs and Output channels
 
@@ -1994,7 +1999,7 @@ class BuildingController(cp.Component):
         force_convergence: bool,
     ) -> None:
         """Simulates the building controller."""
-        building_temperature_in_celsius = stsv.get_input_value(
+        self.building_temperature_in_celsius = stsv.get_input_value(
             self.residence_temperature_channel
         )
         minimal_building_temperature_in_celsius = (
@@ -2003,11 +2008,11 @@ class BuildingController(cp.Component):
         delta_temp_for_level_of_utilization = 0.4
 
         # Building is warm enough
-        if building_temperature_in_celsius > minimal_building_temperature_in_celsius:
+        if self.building_temperature_in_celsius > minimal_building_temperature_in_celsius:
             level_of_utilization: float = 0
         # Building get heated up, when temperature is underneath target temperature
         elif (
-            building_temperature_in_celsius
+            self.building_temperature_in_celsius
             < minimal_building_temperature_in_celsius
             - delta_temp_for_level_of_utilization
         ):
@@ -2015,10 +2020,10 @@ class BuildingController(cp.Component):
         else:
             level_of_utilization = (
                 minimal_building_temperature_in_celsius
-                - building_temperature_in_celsius
+                - self.building_temperature_in_celsius
             )
 
-        real_heat_building_demand_in_watt = (
+        self.real_heat_building_demand_in_watt = (
             self.state.level_of_utilization
             * stsv.get_input_value(self.ref_max_thermal_build_demand_channel)
         )
@@ -2027,5 +2032,5 @@ class BuildingController(cp.Component):
             self.level_of_utilization_channel, self.state.level_of_utilization
         )
         stsv.set_output_value(
-            self.real_heat_building_demand_channel, real_heat_building_demand_in_watt
+            self.real_heat_building_demand_channel, self.real_heat_building_demand_in_watt
         )

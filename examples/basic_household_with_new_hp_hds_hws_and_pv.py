@@ -36,6 +36,7 @@ def basic_household_new(
         - Weather
         - Photovoltaic System
         - Building
+        - Building Controller
         - Heat Pump
         - Heat Pump Controller
         - Heat Distribution System
@@ -102,7 +103,7 @@ def basic_household_new(
     water_temperature_in_distribution_system_in_celsius = 60
 
     # Set Heat Distribution Controller
-    min_heating_temperature_building_in_celsius = 20
+    # min_heating_temperature_building_in_celsius = 20
     set_heating_threshold_temperature = 16.0
     mode = 1
 
@@ -167,8 +168,8 @@ def basic_household_new(
     )
     # Build Building Controller
     my_building_controller_config = building.BuildingControllerConfig(
-        minimal_building_temperature_in_celsius=20,
-        stop_heating_building_temperature_in_celsius=26
+        minimal_building_temperature_in_celsius=20.0,
+        stop_heating_building_temperature_in_celsius=26.0,
     )
 
     my_building_controller = building.BuildingController(
@@ -226,7 +227,7 @@ def basic_household_new(
     # Build Heat Distribution Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
-        min_heating_temperature_building_in_celsius=min_heating_temperature_building_in_celsius,
+        # min_heating_temperature_building_in_celsius=min_heating_temperature_building_in_celsius,
         set_heating_threshold_temperature_in_celsius=set_heating_threshold_temperature,
         mode=mode,
     )
@@ -271,7 +272,7 @@ def basic_household_new(
         my_weather.component_name,
         my_weather.WindSpeed,
     )
-
+    # -----------------------------------------------------------------------------------------------------------------
     my_building.connect_input(
         my_building.Altitude, my_weather.component_name, my_weather.Altitude
     )
@@ -316,18 +317,19 @@ def basic_household_new(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
+    # -----------------------------------------------------------------------------------------------------------------
     my_building_controller.connect_input(
         my_building_controller.ResidenceTemperature,
-        my_building_controller.component_name,
-        my_building.TemperatureIndoorAir
+        my_building.component_name,
+        my_building.TemperatureIndoorAir,
     )
 
     my_building_controller.connect_input(
         my_building_controller.ReferenceMaxHeatBuildingDemand,
-        my_building_controller.component_name,
-        my_building.ReferenceMaxHeatBuildingDemand
+        my_building.component_name,
+        my_building.ReferenceMaxHeatBuildingDemand,
     )
-
+    # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
@@ -338,7 +340,7 @@ def basic_household_new(
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-
+    # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump.connect_input(
         my_heat_pump.State,
         my_heat_pump_controller.component_name,
@@ -361,7 +363,7 @@ def basic_household_new(
         my_building.component_name,
         my_building.ReferenceMaxHeatBuildingDemand,
     )
-
+    # -----------------------------------------------------------------------------------------------------------------
     my_simple_heat_water_storage.connect_input(
         my_simple_heat_water_storage.WaterTemperatureFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
@@ -384,6 +386,7 @@ def basic_household_new(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.FloorHeatingWaterMassFlowRate,
     )
+    # -----------------------------------------------------------------------------------------------------------------
     # my_heat_distribution_controller.connect_input(
     #     my_heat_distribution_controller.ResidenceTemperature,
     #     my_building.component_name,
@@ -391,14 +394,15 @@ def basic_household_new(
     # )
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.RealHeatBuildingDemand,
-        my_heat_distribution_controller.component_name,
-        my_building_controller.RealHeatBuildingDemand
+        my_building_controller.component_name,
+        my_building_controller.RealHeatBuildingDemand,
     )
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.DailyAverageOutsideTemperature,
         my_weather.component_name,
         my_weather.DailyAverageOutsideTemperatures,
     )
+    # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.State,
         my_heat_distribution_controller.component_name,
@@ -410,9 +414,9 @@ def basic_household_new(
     #     my_building.TemperatureIndoorAir,
     # )
     my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.RealHeatBuildingDemand,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_controller.RealHeatBuildingDemandPassedToHeatDistributionSystem
+        my_heat_distribution_system.RealThermalBuildingDemand,
+        my_heat_distribution_controller.component_name,
+        my_heat_distribution_controller.RealHeatBuildingDemandPassedToHeatDistributionSystem,
     )
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.MaxThermalBuildingDemand,
@@ -434,6 +438,7 @@ def basic_household_new(
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_base_electricity_load_profile)
     my_sim.add_component(my_building)
+    my_sim.add_component(my_building_controller)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
     my_sim.add_component(my_simple_heat_water_storage)

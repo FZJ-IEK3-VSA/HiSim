@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.building import Building
+from hisim.components.building import BuildingController
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
@@ -81,7 +81,7 @@ class HeatDistribution(cp.Component):
     WaterTemperatureInput = "WaterTemperatureInput"
     MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
     # MaxWaterMassFlowRate = "MaxWaterMassFlowRate"
-    RealHeatBuildingDemand = "RealHeatBuildingDemand"
+    RealThermalBuildingDemand = "RealThermalBuildingDemand"
 
     # Outputs
     WaterTemperatureOutput = "WaterTemperatureOutput"
@@ -130,7 +130,7 @@ class HeatDistribution(cp.Component):
         # )
         self.real_heat_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.RealHeatBuildingDemand,
+            self.RealThermalBuildingDemand,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             True,
@@ -424,30 +424,30 @@ class HeatDistributionController(cp.Component):
             self.add_output(
                 self.component_name,
                 self.RealHeatBuildingDemandPassedToHeatDistributionSystem,
-                lt.LoadTypes.TEMPERATURE,
-                lt.Units.CELSIUS,
+                lt.LoadTypes.HEATING,
+                lt.Units.WATT,
             )
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
         )
 
-        self.add_default_connections(self.get_default_connections_from_building())
+        self.add_default_connections(self.get_default_connections_from_building_controller())
         self.controller_heat_distribution_mode: str = "off"
         self.previous_controller_heat_distribution_mode: str = "off"
 
-    def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
-        """Get building default connections."""
+    def get_default_connections_from_building_controller(self) -> List[cp.ComponentConnection]:
+        """Get building controller default connections."""
         log.information(
-            "setting building default connections in HeatDistributionController"
+            "setting building controller default connections in HeatDistributionController"
         )
         connections = []
-        building_classname = Building.get_classname()
+        building_controller_classname = BuildingController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HeatDistributionController.ResidenceTemperature,
-                building_classname,
-                Building.TemperatureMeanThermalMass,
+                HeatDistributionController.RealHeatBuildingDemand,
+                building_controller_classname,
+                BuildingController.RealHeatBuildingDemand,
             )
         )
         return connections

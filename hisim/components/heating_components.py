@@ -54,7 +54,7 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-class BuildingControllerState:
+class Test_BuildingControllerState:
 
     """BuildingControllerState class."""
 
@@ -71,7 +71,7 @@ class BuildingControllerState:
 
     def clone(self):
         """Copies the BuildingControllerState."""
-        return BuildingControllerState(
+        return Test_BuildingControllerState(
             temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
             level_of_utilization=self.level_of_utilization,
         )
@@ -79,7 +79,7 @@ class BuildingControllerState:
 
 @dataclass_json
 @dataclass
-class BuildingControllerConfig:
+class Test_BuildingControllerConfig:
 
     """Configuration of the Building Controller class."""
 
@@ -149,7 +149,7 @@ class HeatingComponent(dynamic_component.DynamicComponent):
         self.test_new_temperature_in_celsius: float
         self.build()
 
-        self.state: BuildingControllerState = BuildingControllerState(temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
+        self.state: Test_BuildingControllerState = Test_BuildingControllerState(temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
         level_of_utilization=self.level_of_utilization)
         self.previous_state = self.state.clone()
 
@@ -254,12 +254,10 @@ class HeatingComponent(dynamic_component.DynamicComponent):
         # Only with HeatPump
         elif self.thermal_power_delivered_channel.source_output is not None:
             thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
-        else:
-            thermal_power_delivered_in_watt = sum(
-                self.get_dynamic_inputs(
-                    stsv=stsv, tags=[lt.InandOutputType.HEAT_TO_BUILDING]
-                )
-            )
+        # else:
+        #     thermal_power_delivered_in_watt = sum(
+        #         self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_TO_BUILDING])
+        #     )
 
     # =================================================================================================================================
 
@@ -301,7 +299,7 @@ class HeatingComponent(dynamic_component.DynamicComponent):
         self.timesteps = self.my_simulation_parameters.timesteps
 
 
-class BuildingController(cp.Component):
+class Test_BuildingController(cp.Component):
 
     """BuildingController class.
 
@@ -327,7 +325,7 @@ class BuildingController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: BuildingControllerConfig,
+        config: Test_BuildingControllerConfig,
     ):
         """Constructs all the neccessary attributes of the Building Controller object."""
         super().__init__(
@@ -340,7 +338,7 @@ class BuildingController(cp.Component):
         self.stop_heating_building_temperature_in_celsius = (
             config.stop_heating_building_temperature_in_celsius
         )
-        self.state = BuildingControllerState(
+        self.state = Test_BuildingControllerState(
             temperature_building_target_in_celsius=config.minimal_building_temperature_in_celsius,
             level_of_utilization=0,
         )
@@ -380,7 +378,7 @@ class BuildingController(cp.Component):
     @staticmethod
     def get_default_config():
         """Gets a default configuration of the building controller."""
-        config = BuildingControllerConfig(
+        config = Test_BuildingControllerConfig(
             minimal_building_temperature_in_celsius=20,
             stop_heating_building_temperature_in_celsius=21,
         )

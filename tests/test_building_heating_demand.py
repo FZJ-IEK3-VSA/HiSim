@@ -148,15 +148,15 @@ def test_house_with_pv_and_hp_for_heating_test(
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         manufacturer=hp_manufacturer,
         name=hp_name,
-        min_operation_time_in_seconds=hp_min_operation_time,
-        min_idle_time_in_seconds=hp_min_idle_time,
+        min_operation_time=hp_min_operation_time,
+        min_idle_time=hp_min_idle_time,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(
-        set_residence_temperature_heating_in_celsius=temperature_air_heating_in_celsius,
-        set_residence_temperature_cooling_in_celsius=temperature_air_cooling_in_celsius,
+        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
         mode=hp_mode,
         my_simulation_parameters=my_simulation_parameters,
@@ -226,7 +226,7 @@ def test_house_with_pv_and_hp_for_heating_test(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.TemperatureMean,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureIndoorAir,
     )
 
     # =========================================================================================================================================================

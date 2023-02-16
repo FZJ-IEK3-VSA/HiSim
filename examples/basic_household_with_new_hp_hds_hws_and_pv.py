@@ -8,7 +8,7 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import generic_heat_pump
+from hisim.components import generic_heat_pump_for_house_with_hds
 from hisim.components import sumbuilder
 from hisim.components import simple_heat_water_storage
 from hisim.components import heat_distribution_system
@@ -103,7 +103,6 @@ def basic_household_new(
     heating_system = "FloorHeating"
 
     # Set Heat Distribution Controller
-    # min_heating_temperature_building_in_celsius = 20
     set_heating_threshold_temperature = 16.0
     mode = 1
 
@@ -184,7 +183,7 @@ def basic_household_new(
     )
 
     # Build Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
+    my_heat_pump_controller = generic_heat_pump_for_house_with_hds.HeatPumpControllerNew(
         set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
         offset=offset,
@@ -193,7 +192,7 @@ def basic_household_new(
     )
 
     # Build Heat Pump
-    my_heat_pump = generic_heat_pump.GenericHeatPump(
+    my_heat_pump = generic_heat_pump_for_house_with_hds.GenericHeatPumpNew(
         manufacturer=hp_manufacturer,
         name=hp_name,
         min_operation_time_in_seconds=hp_min_operation_time_in_seconds,

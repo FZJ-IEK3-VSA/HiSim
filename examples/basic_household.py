@@ -71,8 +71,8 @@ def basic_household_explicit(
     total_base_area_in_m2 = None
 
     # Set Heat Pump Controller
-    set_residence_temperature_heating_in_celsius = 19.0
-    set_residence_temperature_cooling_in_celsius = 24.0
+    temperature_air_heating_in_celsius = 19.0
+    temperature_air_cooling_in_celsius = 24.0
     set_heating_threshold_temperature = 16.0
     offset = 0.5
     hp_mode = 2
@@ -152,9 +152,8 @@ def basic_household_explicit(
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(
-        set_residence_temperature_heating_in_celsius=set_residence_temperature_heating_in_celsius,
-        set_residence_temperature_cooling_in_celsius=set_residence_temperature_cooling_in_celsius,
-        set_heating_threshold_temperature_in_celsius=set_heating_threshold_temperature,
+        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
         mode=hp_mode,
         my_simulation_parameters=my_simulation_parameters,
@@ -164,8 +163,8 @@ def basic_household_explicit(
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         manufacturer=hp_manufacturer,
         name=hp_name,
-        min_operation_time_in_seconds=hp_min_operation_time,
-        min_idle_time_in_seconds=hp_min_idle_time,
+        min_operation_time=hp_min_operation_time,
+        min_idle_time=hp_min_idle_time,
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -266,11 +265,7 @@ def basic_household_explicit(
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.DailyAverageOutsideTemperature,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
-    )
+
 
     my_heat_pump.connect_input(
         my_heat_pump.State,

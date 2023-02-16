@@ -22,8 +22,7 @@ from hisim import utils
 
 # from hisim.components.extended_storage import WaterSlice
 # from hisim.components.configuration import WarmWaterStorageConfig
-# from hisim.components.configuration import PhysicsConfig
-from hisim.components.building import Building
+from hisim.components.configuration import PhysicsConfig
 from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -38,7 +37,7 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-class GenericHeatPumpState:
+class GenericHeatPumpStateNew:
 
     """Heat Pump State class.
 
@@ -62,25 +61,31 @@ class GenericHeatPumpState:
             self.heating_power_in_watt = 0.0
             self.cooling_power_in_watt = 0.0
             self.cop = 1.0
-            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
+            self.electricity_input_in_watt = abs(
+                self.thermal_power_delivered_in_watt / self.cop
+            )
         elif self.thermal_power_delivered_in_watt > 0.0:
             self.activation = -1
             self.heating_power_in_watt = self.thermal_power_delivered_in_watt
             self.cooling_power_in_watt = 0.0
             self.cop = cop
-            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
+            self.electricity_input_in_watt = abs(
+                self.thermal_power_delivered_in_watt / self.cop
+            )
         elif self.thermal_power_delivered_in_watt < 0.0:
             self.activation = 1
             self.heating_power_in_watt = 0
             self.cooling_power_in_watt = self.thermal_power_delivered_in_watt
             self.cop = cop
-            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
+            self.electricity_input_in_watt = abs(
+                self.thermal_power_delivered_in_watt / self.cop
+            )
         else:
             raise Exception("Impossible Heat Pump State.")
 
     def clone(self) -> Any:
         """Clone heat pump state."""
-        return GenericHeatPumpState(
+        return GenericHeatPumpStateNew(
             self.start_timestep,
             self.thermal_power_delivered_in_watt,
             self.cop,
@@ -88,7 +93,7 @@ class GenericHeatPumpState:
         )
 
 
-class GenericHeatPump(cp.Component):
+class GenericHeatPumpNew(cp.Component):
 
     """Heat pump class.
 
@@ -112,9 +117,14 @@ class GenericHeatPump(cp.Component):
     # Inputs
     State = "State"
     TemperatureOutside = "TemperatureOutside"
-    WaterConsumption = "WaterConsumption"
-    WaterInput_mass = "WaterInput_mass"  # kg/s
-    WaterInput_temperature = "WaterInput_temperature"  # °C
+    # WaterConsumption = "WaterConsumption"
+    # WaterInput_mass = "WaterInput_mass"  # kg/s
+    # WaterInput_temperature = "WaterInput_temperature"  # °C
+    WaterTemperatureInputFromHeatWaterStorage = (
+        "WaterTemperatureInputFromHeatWaterStorage"
+    )
+    # MaxWaterMassFlowRate = "MaxWaterMassFlowRate"
+    MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
 
     # Outputs
     # WaterOutput_mass = "WaterOutput_mass"                           # kg/s
@@ -126,6 +136,8 @@ class GenericHeatPump(cp.Component):
     Cooling = "Cooling"
     ElectricityOutput = "ElectricityOutput"
     NumberOfCycles = "NumberOfCycles"
+    WaterTemperatureOutput = "WaterTemperatureOutput"
+    HeatPumpWaterMassFlowRate = "HeatPumpWaterMassFlowRate"
 
     # Similar components to connect to:
     # 1. Weather
@@ -136,19 +148,24 @@ class GenericHeatPump(cp.Component):
         my_simulation_parameters: SimulationParameters,
         manufacturer: str = "Viessmann Werke GmbH & Co KG",
         name: str = "Vitocal 300-A AWO-AC 301.B07",
-        min_operation_time: int = 60 * 60,
-        min_idle_time: int = 15 * 60,
+        min_operation_time_in_seconds: int = 60 * 60,
+        min_idle_time_in_seconds: int = 15 * 60,
     ) -> None:
         """Construct all the necessary attributes."""
         super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
 
-        self.build(manufacturer, name, min_operation_time, min_idle_time)
+        self.build(manufacturer, name, min_operation_time_in_seconds, min_idle_time_in_seconds)
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
-        self.state = GenericHeatPumpState(start_timestep=int(0), cycle_number=0)
+        self.state = GenericHeatPumpStateNew(start_timestep=int(0), cycle_number=0)
         self.previous_state = self.state.clone()
         self.has_been_converted: Any
+        self.water_temperature_input_in_celsius: float = 0
+        self.heatpump_water_mass_flow_rate_in_kg_per_second: float = 0
+        self.water_temperature_output_in_celsius: float = 0
+        self.max_thermal_building_demand_in_watt: float = 0
+
         # Inputs - Mandatories
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, LoadTypes.ANY, Units.ANY, True
@@ -160,29 +177,51 @@ class GenericHeatPump(cp.Component):
             Units.CELSIUS,
             True,
         )
-        # Inputs - Not Mandatories
-        self.water_load_channel: cp.ComponentInput = self.add_input(
+        # # Inputs - Not Mandatories
+        # self.water_load_channel: cp.ComponentInput = self.add_input(
+        #     self.component_name,
+        #     self.WaterConsumption,
+        #     LoadTypes.VOLUME,
+        #     Units.LITER,
+        #     False,
+        # )
+        # self.water_input_mass_channel: cp.ComponentInput = self.add_input(
+        #     self.component_name,
+        #     self.WaterInput_mass,
+        #     LoadTypes.WARM_WATER,
+        #     Units.KG_PER_SEC,
+        #     False,
+        # )
+        # self.water_input_temperature_channel: cp.ComponentInput = self.add_input(
+        #     self.component_name,
+        #     self.WaterInput_temperature,
+        #     LoadTypes.WARM_WATER,
+        #     Units.CELSIUS,
+        #     False,
+        # )
+        self.water_temperature_input_from_heat_water_storage_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.WaterConsumption,
-            LoadTypes.VOLUME,
-            Units.LITER,
-            False,
-        )
-        self.water_input_mass_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterInput_mass,
-            LoadTypes.WARM_WATER,
-            Units.KG_PER_SEC,
-            False,
-        )
-        self.water_input_temperature_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterInput_temperature,
-            LoadTypes.WARM_WATER,
+            self.WaterTemperatureInputFromHeatWaterStorage,
+            LoadTypes.TEMPERATURE,
             Units.CELSIUS,
-            False,
+            True,
         )
 
+        # self.max_water_mass_flow_rate_input_channel: cp.ComponentInput = self.add_input(
+        #     self.component_name,
+        #     self.MaxWaterMassFlowRate,
+        #     LoadTypes.WARM_WATER,
+        #     Units.KG_PER_SEC,
+        #     True,
+        # )
+
+        self.max_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.MaxThermalBuildingDemand,
+            LoadTypes.HEATING,
+            Units.WATT,
+            True,
+        )
         # Outputs
         # self.water_output_mass: cp.ComponentOutput = self.add_output(self.ComponentName,
         #                                                          self.WaterOutput_mass,
@@ -218,6 +257,23 @@ class GenericHeatPump(cp.Component):
             LoadTypes.ELECTRICITY,
             Units.WATT,
         )
+        self.water_temperature_output_channel: cp.ComponentOutput = (
+            self.add_output(
+                self.component_name,
+                self.WaterTemperatureOutput,
+                LoadTypes.WARM_WATER,
+                Units.CELSIUS,
+            )
+        )
+
+        self.heatpump_water_mass_flow_rate_input_channel: cp.ComponentOutput = (
+            self.add_output(
+                self.component_name,
+                self.HeatPumpWaterMassFlowRate,
+                LoadTypes.WARM_WATER,
+                Units.KG_PER_SEC,
+            )
+        )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY
@@ -233,7 +289,7 @@ class GenericHeatPump(cp.Component):
         weather_classname = Weather.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHeatPump.TemperatureOutside,
+                GenericHeatPumpNew.TemperatureOutside,
                 weather_classname,
                 Weather.TemperatureOutside,
             )
@@ -249,7 +305,7 @@ class GenericHeatPump(cp.Component):
         controller_classname = HeatPumpController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHeatPump.State, controller_classname, HeatPumpController.State
+                GenericHeatPumpNew.State, controller_classname, HeatPumpController.State
             )
         )
         return connections
@@ -262,8 +318,8 @@ class GenericHeatPump(cp.Component):
         self,
         manufacturer: str,
         name: str,
-        min_operation_time: float,
-        min_idle_time: float,
+        min_operation_time_in_seconds: float,
+        min_idle_time_in_seconds: float,
     ) -> None:
         """Build function.
 
@@ -288,7 +344,9 @@ class GenericHeatPump(cp.Component):
         self.cop_ref = []
         self.temperature_outside_ref = []
         for heat_pump_cops in heat_pump["COP"]:
-            self.temperature_outside_ref.append(float([*heat_pump_cops][0][1:].split("/")[0]))
+            self.temperature_outside_ref.append(
+                float([*heat_pump_cops][0][1:].split("/")[0])
+            )
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
         self.cop_coef = np.polyfit(self.temperature_outside_ref, self.cop_ref, 1)
 
@@ -313,10 +371,10 @@ class GenericHeatPump(cp.Component):
 
         # Sets the time operation restricitions
         self.min_operation_time = (
-            min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+            min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
         self.min_idle_time = (
-            min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+            min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
 
         # Writes info to report
@@ -338,9 +396,9 @@ class GenericHeatPump(cp.Component):
         if factor != 1:
             self.has_been_converted = True
 
-    def calc_cop(self, t_out: float) -> float:
+    def calc_cop(self, temperature_outside: float) -> float:
         """Calculate cop."""
-        val: float = self.cop_coef[0] * t_out + self.cop_coef[1]
+        val: float = self.cop_coef[0] * temperature_outside + self.cop_coef[1]
         return val
 
     def i_save_state(self) -> None:
@@ -361,8 +419,12 @@ class GenericHeatPump(cp.Component):
         """Write important variables to report."""
         lines: List[str] = []
         lines.append("Name: Heat Pump")
-        lines.append(f"Max heating power: {(self.max_heating_power_in_watt) * 1e-3:4.3f} kW")
-        lines.append(f"Max heating power variation restriction: {self.max_heating_power_variation_restriction_in_watt:4.3f} W")
+        lines.append(
+            f"Max heating power: {(self.max_heating_power_in_watt) * 1e-3:4.3f} kW"
+        )
+        lines.append(
+            f"Max heating power variation restriction: {self.max_heating_power_variation_restriction_in_watt:4.3f} W"
+        )
         # lines = []
         # lines.append([self.ComponentName,""])
         # lines.append(["Max power:","{:4.2f}".format(self.max_heating_power)])
@@ -374,8 +436,14 @@ class GenericHeatPump(cp.Component):
     ) -> None:
         """Simulate heat pump."""
         # Inputs
-        state_c = stsv.get_input_value(self.state_channel)
+        state_from_heat_pump_controller = stsv.get_input_value(self.state_channel)
         temperature_outside = stsv.get_input_value(self.temperature_outside_channel)
+        self.water_temperature_input_in_celsius = stsv.get_input_value(
+            self.water_temperature_input_from_heat_water_storage_channel
+        )
+        self.max_thermal_building_demand_in_watt = stsv.get_input_value(
+            self.max_thermal_building_demand_channel
+        )
         # log.information("State: {}, Temperature: {}".format(stateC, t_out))
         # log.information("State of Activation: {}".format(self.state.activation))
         # log.information("Timestep special: {}".format(self.state.start_timestep + self.min_idle_time))
@@ -423,6 +491,13 @@ class GenericHeatPump(cp.Component):
         #    stsv.set_output_value(self.wasted_energy_max_temperature, wasted_energy_max_temperature)
         # ToDo: Implementation with Thermal Energy Storage - END
 
+        # Calculation of water mass flow rate of heat pump
+        self.heatpump_water_mass_flow_rate_in_kg_per_second = (
+            self.calc_heat_pump_water_mass_flow_rate(
+                self.max_thermal_building_demand_in_watt
+            )
+        )
+
         # Calculation.ThermalEnergyDelivery
         # Heat Pump is on
         if self.state.activation != 0:
@@ -430,32 +505,56 @@ class GenericHeatPump(cp.Component):
             # Checks if the minimum running time has been reached
             if (
                 timestep >= self.state.start_timestep + self.min_operation_time
-                and state_c == 0
+                and state_from_heat_pump_controller == 0
             ):
-                self.state = GenericHeatPumpState(
+                self.state = GenericHeatPumpStateNew(
                     start_timestep=timestep, cycle_number=number_of_cycles
                 )
+
+            self.water_temperature_output_in_celsius = self.calculate_water_temperature_after_heat_transfer(
+                input_power_in_watt=self.state.heating_power_in_watt,
+                water_mass_flow_rate_in_kg_per_second=self.heatpump_water_mass_flow_rate_in_kg_per_second,
+                water_input_temperature_in_celsius=self.water_temperature_input_in_celsius,
+            )
             stsv.set_output_value(
                 self.thermal_power_delivered_channel,
                 self.state.thermal_power_delivered_in_watt,
             )
-            stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
-            stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
+            stsv.set_output_value(
+                self.heating_channel, self.state.heating_power_in_watt
+            )
+            stsv.set_output_value(
+                self.cooling_channel, self.state.cooling_power_in_watt
+            )
             stsv.set_output_value(
                 self.electricity_output_channel, self.state.electricity_input_in_watt
             )
             stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
+            stsv.set_output_value(
+                self.water_temperature_output_channel,
+                self.water_temperature_output_in_celsius,
+            )
+            stsv.set_output_value(
+                self.heatpump_water_mass_flow_rate_input_channel,
+                self.heatpump_water_mass_flow_rate_in_kg_per_second,
+            )
+            # log.information("hp timestep " + str(timestep))
+            # log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
+            # log.information("hp heating power " + str(self.state.heating_power_in_watt))
+            # log.information("hp cooling power " + str(self.state.cooling_power_in_watt))
+            # log.information("hp waster mass flow rate " + str(self.heatpump_water_mass_flow_rate_in_kg_per_second))
+            # log.information("hp water temperature output " + str(self.water_temperature_output_in_celsius))
             return
 
         # Heat Pump is Off
-        if state_c != 0 and (
+        if state_from_heat_pump_controller != 0 and (
             timestep >= self.state.start_timestep + self.min_idle_time
         ):
             self.number_of_cycles = self.number_of_cycles + 1
             number_of_cycles = self.number_of_cycles
-            if state_c == 1:
+            if state_from_heat_pump_controller == 1:
                 # if stsv.get_input_value(self.stateC) > 0:
-                self.state = GenericHeatPumpState(
+                self.state = GenericHeatPumpStateNew(
                     start_timestep=timestep,
                     thermal_power_delivered_in_watt=self.max_heating_power_in_watt,
                     cop=self.calc_cop(temperature_outside),
@@ -463,16 +562,22 @@ class GenericHeatPump(cp.Component):
                 )
 
             else:
-                self.state = GenericHeatPumpState(
+                self.state = GenericHeatPumpStateNew(
                     start_timestep=timestep,
                     thermal_power_delivered_in_watt=self.max_cooling_power_in_watt,
                     cop=self.calc_cop(temperature_outside),
                     cycle_number=number_of_cycles,
                 )
 
+        self.water_temperature_output_in_celsius = self.calculate_water_temperature_after_heat_transfer(
+            input_power_in_watt=self.state.heating_power_in_watt,
+            water_mass_flow_rate_in_kg_per_second=self.heatpump_water_mass_flow_rate_in_kg_per_second,
+            water_input_temperature_in_celsius=self.water_temperature_input_in_celsius,
+        )
         # Outputs
         stsv.set_output_value(
-            self.thermal_power_delivered_channel, self.state.thermal_power_delivered_in_watt
+            self.thermal_power_delivered_channel,
+            self.state.thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
         stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
@@ -480,6 +585,21 @@ class GenericHeatPump(cp.Component):
             self.electricity_output_channel, self.state.electricity_input_in_watt
         )
         stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
+
+        stsv.set_output_value(
+            self.water_temperature_output_channel,
+            self.water_temperature_output_in_celsius,
+        )
+        stsv.set_output_value(
+            self.heatpump_water_mass_flow_rate_input_channel,
+            self.heatpump_water_mass_flow_rate_in_kg_per_second,
+        )
+        # log.information("hp timestep " + str(timestep))
+        # log.information("hp thermal power delivered " + str(self.state.thermal_power_delivered_in_watt))
+        # log.information("hp heating power " + str(self.state.heating_power_in_watt))
+        # log.information("hp cooling power " + str(self.state.cooling_power_in_watt))
+        # log.information("hp waster mass flow rate " + str(self.heatpump_water_mass_flow_rate_in_kg_per_second))
+        # log.information("hp water temperature output " + str(self.water_temperature_output_in_celsius))
 
     def process_thermal(self, ws_in: float) -> None:
         """Process thermal."""
@@ -504,8 +624,44 @@ class GenericHeatPump(cp.Component):
         # ws_in.change_slice_parameters(new_temperature=ws_out_temperature, new_enthalpy=ws_out_enthalpy, new_mass=ws_out_mass)
         # return ws_in, wasted_energy, thermal_energy_to_add
 
+    def calculate_water_temperature_after_heat_transfer(
+        self,
+        input_power_in_watt: float,
+        water_input_temperature_in_celsius: float,
+        water_mass_flow_rate_in_kg_per_second: float,
+    ) -> float:
+        """Calculate the heated water temperture after the heat transfer from heat pump heating power to water."""
+        heated_water_temperature_in_celsius = (
+            input_power_in_watt
+            / (
+                water_mass_flow_rate_in_kg_per_second
+                * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            )
+            + water_input_temperature_in_celsius
+        )
+        return heated_water_temperature_in_celsius
 
-class HeatPumpController(cp.Component):
+    def calc_heat_pump_water_mass_flow_rate(
+        self,
+        max_thermal_building_demand_in_watt: float,
+    ) -> Any:
+        """Calculate water mass flow between heat pump and hot water storage."""
+        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
+            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        )
+        # information from Noah: deltaT = 3-5 K or °C
+        delta_temperature_for_heat_pumps_in_celsius = 4
+        heat_pump_water_mass_flow_in_kg_per_second = (
+            max_thermal_building_demand_in_watt
+            / (
+                specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
+                * delta_temperature_for_heat_pumps_in_celsius
+            )
+        )
+        return heat_pump_water_mass_flow_in_kg_per_second
+
+
+class HeatPumpControllerNew(cp.Component):
 
     """Heat Pump Controller.
 
@@ -528,7 +684,10 @@ class HeatPumpController(cp.Component):
     """
 
     # Inputs
-    TemperatureMean = "Residence Temperature"
+    # TemperatureMean = "Residence Temperature"
+    WaterTemperatureInputFromHeatWaterStorage = (
+        "WaterTemperatureInputFromHeatWaterStorage"
+    )
     ElectricityInput = "ElectricityInput"
 
     # Outputs
@@ -540,8 +699,8 @@ class HeatPumpController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        temperature_air_heating_in_celsius: float = 18.0,
-        temperature_air_cooling_in_celsius: float = 26.0,
+        set_water_storage_temperature_for_heating_in_celsius: float = 50,
+        set_water_storage_temperature_for_cooling_in_celsius: float = 55,
         offset: float = 0.0,
         mode: int = 1,
     ) -> None:
@@ -550,15 +709,15 @@ class HeatPumpController(cp.Component):
             "HeatPumpController", my_simulation_parameters=my_simulation_parameters
         )
         self.build(
-            temperature_air_cooling=temperature_air_cooling_in_celsius,
-            temperature_air_heating=temperature_air_heating_in_celsius,
+            set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
+            set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
             offset=offset,
             mode=mode,
         )
 
-        self.temperature_mean_channel: cp.ComponentInput = self.add_input(
+        self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.TemperatureMean,
+            self.WaterTemperatureInputFromHeatWaterStorage,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
@@ -570,30 +729,21 @@ class HeatPumpController(cp.Component):
             Units.WATT,
             False,
         )
+
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, LoadTypes.ANY, Units.ANY
         )
 
-        self.add_default_connections(self.get_default_connections_from_building())
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-    def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
-        """Get building default connections."""
-        log.information("setting building default connections in Heatpumpcontroller")
-        connections = []
-        building_classname = Building.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatPumpController.TemperatureMean,
-                building_classname,
-                Building.TemperatureIndoorAir,
-            )
-        )
-        return connections
 
     def build(
-        self, temperature_air_heating: float, temperature_air_cooling: float, offset: float, mode: float
+        self,
+        set_water_storage_temperature_for_heating_in_celsius: float,
+        set_water_storage_temperature_for_cooling_in_celsius: float,
+        offset: float,
+        mode: float,
     ) -> None:
         """Build function.
 
@@ -604,8 +754,12 @@ class HeatPumpController(cp.Component):
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
         # Configuration
-        self.temperature_set_heating = temperature_air_heating
-        self.temperature_set_cooling = temperature_air_cooling
+        self.set_water_storage_temperature_for_heating_in_celsius = (
+            set_water_storage_temperature_for_heating_in_celsius
+        )
+        self.set_water_storage_temperature_for_cooling_in_celsius = (
+            set_water_storage_temperature_for_cooling_in_celsius
+        )
         self.offset = offset
 
         self.mode = mode
@@ -643,60 +797,120 @@ class HeatPumpController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            temperature_mean_old = stsv.get_input_value(self.temperature_mean_channel)
+
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
             electricity_input = stsv.get_input_value(self.electricity_input_channel)
 
             if self.mode == 1:
-                self.conditions(temperature_mean_old)
+                self.conditions(
+                    water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
+                )
             elif self.mode == 2:
-                self.smart_conditions(temperature_mean_old, electricity_input)
+                self.smart_conditions(
+                    set_temperature=water_temperature_input_from_heat_water_storage_in_celsius,
+                    electricity_input=electricity_input,
+                )
+
+            if self.controller_heatpumpmode == "heating":
+                state = 1
+            if self.controller_heatpumpmode == "cooling":
+                state = -1
+            if self.controller_heatpumpmode == "off":
+                state = 0
+
+            # log.information("hp controller timestep " + str(timestep))
+            # log.information("hp controller input water temp from hws " + str(water_temperature_input_from_heat_water_storage_in_celsius))
+            # log.information("hp controller state " + str(state))
+
+            stsv.set_output_value(self.state_channel, state)
+
+    def conditions(
+        self,
+        water_temperature_input_in_celsius: float,
+    ) -> None:
+        """Set conditions for the heat pump controller mode."""
+
+        maximum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius + self.offset
+        )
+        minimum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius
+        )
+        minimum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
+        )
+        maximum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius
+        )
 
         if self.controller_heatpumpmode == "heating":
-            state = 1
-        if self.controller_heatpumpmode == "cooling":
-            state = -1
-        if self.controller_heatpumpmode == "off":
-            state = 0
-        stsv.set_output_value(self.state_channel, state)
-
-    def conditions(self, set_temperature: float) -> None:
-        """Set conditions for the heat pump controller mode."""
-        maximum_heating_set_temperature = self.temperature_set_heating + self.offset
-        minimum_heating_set_temperature = self.temperature_set_heating
-        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset
-        maximum_cooling_set_temperature = self.temperature_set_cooling
-
-        if self.controller_heatpumpmode == "heating":  # and daily_avg_temp < 15:
-            if set_temperature > maximum_heating_set_temperature:  # 23
+            if (
+                water_temperature_input_in_celsius
+                > maximum_heating_set_temperature
+            ):
                 self.controller_heatpumpmode = "off"
                 return
-        if self.controller_heatpumpmode == "cooling":
-            if set_temperature < minimum_cooling_set_temperature:  # 24
+        elif self.controller_heatpumpmode == "cooling":
+            if (
+                water_temperature_input_in_celsius
+                < minimum_cooling_set_temperature
+            ):
                 self.controller_heatpumpmode = "off"
                 return
-        if self.controller_heatpumpmode == "off":
+        elif self.controller_heatpumpmode == "off":
             # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
-            if set_temperature < minimum_heating_set_temperature:  # 21
+            if (
+                water_temperature_input_in_celsius
+                < minimum_heating_set_temperature
+            ):
                 self.controller_heatpumpmode = "heating"
                 return
-            if set_temperature > maximum_cooling_set_temperature:  # 26
+            if (
+                water_temperature_input_in_celsius
+                > maximum_cooling_set_temperature
+            ):
                 self.controller_heatpumpmode = "cooling"
                 return
+        else:
+            raise ValueError("unknown mode")
 
-    def smart_conditions(self, set_temperature: float, electricity_input: float) -> None:
+    def smart_conditions(
+        self, set_temperature: float, electricity_input: float
+    ) -> None:
         """Set smart conditions for the heat pump controller mode."""
         smart_offset_upper = 3
         smart_offset_lower = 0.5
-        maximum_heating_set_temperature = self.temperature_set_heating + self.offset
+        # maximum_heating_set_temperature = self.set_residence_temperature_heating + self.offset
+        # if electricity_input < 0:
+        #     maximum_heating_set_temperature += smart_offset_upper
+        # # maximum_heating_set_temp = self.t_set_heating
+        # minimum_heating_set_temperature = self.set_residence_temperature_heating
+        # if electricity_input < 0:
+        #     minimum_heating_set_temperature += smart_offset_lower
+        # minimum_cooling_set_temperature = self.set_residence_temperature_cooling - self.offset
+        # # minimum_cooling_set_temp = self.t_set_cooling
+        # maximum_cooling_set_temperature = self.set_residence_temperature_cooling
+
+        maximum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius + self.offset
+        )
         if electricity_input < 0:
             maximum_heating_set_temperature += smart_offset_upper
         # maximum_heating_set_temp = self.t_set_heating
-        minimum_heating_set_temperature = self.temperature_set_heating
+        minimum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius
+        )
         if electricity_input < 0:
             minimum_heating_set_temperature += smart_offset_lower
-        minimum_cooling_set_temperature = self.temperature_set_cooling - self.offset
+        minimum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
+        )
         # minimum_cooling_set_temp = self.t_set_cooling
-        maximum_cooling_set_temperature = self.temperature_set_cooling
+        maximum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius
+        )
 
         if self.controller_heatpumpmode == "heating":  # and daily_avg_temp < 15:
             if set_temperature > maximum_heating_set_temperature:  # 23

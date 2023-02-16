@@ -171,7 +171,7 @@ class L1BuildingHeatController(cp.Component):
             cp.ComponentConnection(
                 L1BuildingHeatController.BuildingTemperature,
                 building_classname,
-                Building.TemperatureMean,
+                Building.TemperatureIndoorAir,
             )
         )
         return connections

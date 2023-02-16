@@ -135,9 +135,7 @@ class HeatingWaterStorage(cp.Component):
         self.water_temperature_from_heat_generator_in_celsius: float = (
             self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius
         )
-        # self._water_mass_flow_rate_in_kg_per_second: float = 0
         self.mean_water_temperature_in_water_storage_in_celsius: float = 0.0
-        # self.mix_water_temperature_from_input_flows_in_celsius: float = 0
         self.water_mass_flow_rate_from_heat_generator_in_kg_per_second: float = 0.0
         self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float = 0.0
 
@@ -240,10 +238,6 @@ class HeatingWaterStorage(cp.Component):
 
         # Calculations ------------------------------------------------------------------------------------------------------
 
-        # self.calculate_mix_water_temperature_from_input_flows(
-        #     cooled_water_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
-        #     heated_water_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
-        # )
         if timestep >= self.state.start_timestep + self.min_water_mixing_time_in_timesteps:
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
                 water_temperature_from_heat_distribution_system_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
@@ -283,17 +277,6 @@ class HeatingWaterStorage(cp.Component):
             self.density_water_at_60_degree_celsius_in_kg_per_liter
             * self.waterstorageconfig.volume_heating_water_storage_in_liter
         )
-
-    # def calculate_mix_water_temperature_from_input_flows(
-    #     self,
-    #     cooled_water_temperature_in_celsius,
-    #     heated_water_temperature_in_celsius,
-    # ):
-    #     """Calculate the mean temperature of the water in the water boiler."""
-    #     # the water mass flow rate is equal and constant
-    #     self.mix_water_temperature_from_input_flows_in_celsius = (
-    #         cooled_water_temperature_in_celsius + heated_water_temperature_in_celsius
-    #     ) / 2
 
     def calculate_mean_water_temperature_in_water_storage(
         self,

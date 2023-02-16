@@ -79,10 +79,8 @@ class HeatDistribution(cp.Component):
 
     # Inputs
     State = "State"
-    # ResidenceTemperature = "ResidenceTemperature"
     WaterTemperatureInput = "WaterTemperatureInput"
     MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
-    # MaxWaterMassFlowRate = "MaxWaterMassFlowRate"
     RealThermalBuildingDemand = "RealThermalBuildingDemand"
 
     # Outputs
@@ -124,14 +122,6 @@ class HeatDistribution(cp.Component):
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
-        # self.max_water_mass_flow_rate_channel: cp.ComponentInput = self.add_input(
-
-        #     self.component_name,
-        #     self.MaxWaterMassFlowRate,
-        #     lt.LoadTypes.WARM_WATER,
-        #     lt.Units.KG_PER_SEC,
-        #     True,
-        # )
         self.real_heat_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.RealThermalBuildingDemand,
@@ -146,13 +136,6 @@ class HeatDistribution(cp.Component):
             lt.Units.WATT,
             True,
         )
-        # self.residence_temperature_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.ResidenceTemperature,
-        #     lt.LoadTypes.TEMPERATURE,
-        #     lt.Units.CELSIUS,
-        #     True,
-        # )
         self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterTemperatureInput,
@@ -233,15 +216,11 @@ class HeatDistribution(cp.Component):
         self.real_heat_building_demand_in_watt = stsv.get_input_value(
             self.real_heat_building_demand_channel
         )
-        # self.residence_temperature_in_celsius = stsv.get_input_value(
-        #     self.residence_temperature_channel
-        # )
+
         self.water_temperature_input_in_celsius = stsv.get_input_value(
             self.water_temperature_input_channel
         )
-        # self.max_water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
-        #     self.max_water_mass_flow_rate_channel
-        # )
+
         self.max_thermal_building_demand_in_watt = stsv.get_input_value(
             self.max_thermal_building_demand_channel
         )
@@ -346,7 +325,7 @@ class HeatDistributionController(cp.Component):
     """
 
     # Inputs
-    # ResidenceTemperature = "ResidenceTemperature"
+
     RealHeatBuildingDemand = "RealHeatBuildingDemand"
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
     # Outputs
@@ -361,7 +340,6 @@ class HeatDistributionController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        # min_heating_temperature_building_in_celsius: float = 20.0,
         set_heating_threshold_temperature_in_celsius: float = 16.0,
         mode: int = 1,
     ) -> None:
@@ -374,18 +352,9 @@ class HeatDistributionController(cp.Component):
         self.start_timestep: int = 0
         self.real_heat_building_demand_in_watt: float = 0.0
         self.build(
-            # set_min_heating_temperature_residence_in_celsius=min_heating_temperature_building_in_celsius,
             set_heating_threshold_temperature=set_heating_threshold_temperature_in_celsius,
             mode=mode,
         )
-
-        # self.residence_temperature_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.ResidenceTemperature,
-        #     lt.LoadTypes.TEMPERATURE,
-        #     lt.Units.CELSIUS,
-        #     False,
-        # )
         self.real_heat_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.RealHeatBuildingDemand,
@@ -440,7 +409,6 @@ class HeatDistributionController(cp.Component):
 
     def build(
         self,
-        # set_min_heating_temperature_residence_in_celsius: float,
         set_heating_threshold_temperature: float,
         mode: int,
     ) -> None:
@@ -455,10 +423,6 @@ class HeatDistributionController(cp.Component):
         )
 
         # Configuration
-        # self.set_residence_temperature_in_celsius = (
-        #     set_min_heating_temperature_residence_in_celsius
-        # )
-
         self.set_heating_threshold_temperature = set_heating_threshold_temperature
         self.mode = mode
 
@@ -485,10 +449,6 @@ class HeatDistributionController(cp.Component):
         lines = []
         lines.append("Heat Distribution Controller")
         # todo: add more useful stuff here
-        # lines.append(
-        #     "Set Temperature of Residence [°C]: "
-        #     + str(self.set_residence_temperature_in_celsius)
-        # )
         return lines
 
     def i_simulate(
@@ -499,9 +459,6 @@ class HeatDistributionController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            # residence_temperature_in_celsius = stsv.get_input_value(
-            #     self.residence_temperature_channel
-            # )
             self.real_heat_building_demand_in_watt = stsv.get_input_value(
                 self.real_heat_building_demand_channel
             )
@@ -510,10 +467,6 @@ class HeatDistributionController(cp.Component):
             )
 
             if self.mode == 1:
-                # self.conditions_for_opening_or_shutting_heat_distribution(
-                #     residence_temperature_in_celsius=residence_temperature_in_celsius,
-                #     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                # )
                 self.conditions_for_opening_or_shutting_heat_distribution(
                     real_heat_building_demand_in_watt=self.real_heat_building_demand_in_watt,
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
@@ -526,39 +479,11 @@ class HeatDistributionController(cp.Component):
             else:
                 raise ValueError("unknown mode")
 
-            # log.information("hds controller " + str(self.state_controller) + "\n")
             stsv.set_output_value(self.state_channel, self.state_controller)
             stsv.set_output_value(
                 self.real_heat_building_demand_passed_to_hds_channel,
                 self.real_heat_building_demand_in_watt,
             )
-
-    # def conditions_for_opening_or_shutting_heat_distribution(
-    #     self,
-    #     residence_temperature_in_celsius: float,
-    #     daily_average_outside_temperature_in_celsius: float,
-    # ) -> None:
-    #     """Set conditions for the valve in heat distribution."""
-    #     set_residence_temperature_in_celsius = self.set_residence_temperature_in_celsius
-
-    #     if self.controller_heat_distribution_mode == "open":
-    #         if (
-    #             residence_temperature_in_celsius >= set_residence_temperature_in_celsius
-    #             or daily_average_outside_temperature_in_celsius
-    #             > self.set_heating_threshold_temperature
-    #         ):
-    #             self.controller_heat_distribution_mode = "close"
-    #             return
-    #     elif self.controller_heat_distribution_mode == "close":
-    #         if (
-    #             residence_temperature_in_celsius < set_residence_temperature_in_celsius
-    #             and daily_average_outside_temperature_in_celsius
-    #             < self.set_heating_threshold_temperature
-    #         ):
-    #             self.controller_heat_distribution_mode = "open"
-    #             return
-    #     else:
-    #         raise ValueError("unknown mode")
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,

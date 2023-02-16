@@ -699,8 +699,6 @@ class HeatPumpController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        # set_residence_temperature_heating_in_celsius: float = 18.0,
-        # set_residence_temperature_cooling_in_celsius: float = 26.0,
         set_water_storage_temperature_for_heating_in_celsius: float = 50,
         set_water_storage_temperature_for_cooling_in_celsius: float = 55,
         offset: float = 0.0,
@@ -711,21 +709,11 @@ class HeatPumpController(cp.Component):
             "HeatPumpController", my_simulation_parameters=my_simulation_parameters
         )
         self.build(
-            # set_residence_temperature_cooling=set_residence_temperature_cooling_in_celsius,
-            # set_residence_temperature_heating=set_residence_temperature_heating_in_celsius,
             set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
             set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
             offset=offset,
             mode=mode,
         )
-
-        # self.temperature_mean_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.TemperatureMeanThermalMass,
-        #     LoadTypes.TEMPERATURE,
-        #     Units.CELSIUS,
-        #     True,
-        # )
 
         self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -746,26 +734,12 @@ class HeatPumpController(cp.Component):
             self.component_name, self.State, LoadTypes.ANY, Units.ANY
         )
 
-        # self.add_default_connections(self.get_default_connections_from_building())
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-    # def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
-    #     """Get building default connections."""
-    #     log.information("setting building default connections in Heatpumpcontroller")
-    #     connections = []
-    #     building_classname = Building.get_classname()
-    #     connections.append(
-    #         cp.ComponentConnection(
-    #             HeatPumpController.TemperatureMean,
-    #             building_classname,
-    #             Building.TemperatureMeanThermalMass,
-    #         )
-    #     )
-    #     return connections
 
     def build(
-        self,  # set_residence_temperature_heating: float, set_residence_temperature_cooling: float,
+        self,
         set_water_storage_temperature_for_heating_in_celsius: float,
         set_water_storage_temperature_for_cooling_in_celsius: float,
         offset: float,
@@ -780,8 +754,6 @@ class HeatPumpController(cp.Component):
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
         # Configuration
-        # self.set_residence_temperature_heating = set_residence_temperature_heating
-        # self.set_residence_temperature_cooling = set_residence_temperature_cooling
         self.set_water_storage_temperature_for_heating_in_celsius = (
             set_water_storage_temperature_for_heating_in_celsius
         )
@@ -825,7 +797,7 @@ class HeatPumpController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            # residence_temperature_in_celsius = stsv.get_input_value(self.temperature_mean_channel)
+
             water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel
             )
@@ -834,12 +806,10 @@ class HeatPumpController(cp.Component):
             if self.mode == 1:
                 self.conditions(
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
-                    # residence_temperature_in_celsius=residence_temperature_in_celsius,
                 )
             elif self.mode == 2:
                 self.smart_conditions(
                     set_temperature=water_temperature_input_from_heat_water_storage_in_celsius,
-                    # residence_temperature_in_celsius,
                     electricity_input=electricity_input,
                 )
 
@@ -859,30 +829,8 @@ class HeatPumpController(cp.Component):
     def conditions(
         self,
         water_temperature_input_in_celsius: float,
-    ) -> None:  # residence_temperature_in_celsius: float ) -> None:
+    ) -> None:
         """Set conditions for the heat pump controller mode."""
-        # maximum_heating_set_temperature = self.set_residence_temperature_heating + self.offset
-        # minimum_heating_set_temperature = self.set_residence_temperature_heating
-        # minimum_cooling_set_temperature = self.set_residence_temperature_cooling - self.offset
-        # maximum_cooling_set_temperature = self.set_residence_temperature_cooling
-
-        # if self.controller_heatpumpmode == "heating":
-        #     if residence_temperature_in_celsius > maximum_heating_set_temperature
-        #        and daily_average_outside_temperature_in_celsius > self.set_heating_threshold_temperature:
-        #         self.controller_heatpumpmode = "off"
-        #         return
-        # if self.controller_heatpumpmode == "cooling":
-        #     if residence_temperature_in_celsius < minimum_cooling_set_temperature:
-        #         self.controller_heatpumpmode = "off"
-        #         return
-        # if self.controller_heatpumpmode == "off":
-        #     # if pvs_surplus > ? and air_temp < minimum_heating_air + 2:
-        #     if residence_temperature_in_celsius < minimum_heating_set_temperature
-        #       and daily_average_outside_temperature_in_celsius < self.set_heating_threshold_temperature:
-        #         self.controller_heatpumpmode = "heating"
-        #         return
-        #     if residence_temperature_in_celsius > maximum_cooling_set_temperature:
-        #         return
 
         maximum_heating_set_temperature = (
             self.set_water_storage_temperature_for_heating_in_celsius + self.offset

@@ -164,6 +164,39 @@ class BuildingState:
             self.thermal_mass_temperature_in_celsius,
             self.thermal_capacitance_in_joule_per_kelvin,
         )
+    
+
+class BuildingControllerState:
+
+    """BuildingControllerState class."""
+
+    def __init__(
+        self,
+        temperature_building_target_in_celsius: float,
+        level_of_utilization: float,
+    ):
+        """Constructs all the neccessary attributes for the BuildingControllerState object."""
+        self.temperature_building_target_in_celsius: float = (
+            temperature_building_target_in_celsius
+        )
+        self.level_of_utilization: float = level_of_utilization
+
+    def clone(self):
+        """Copies the BuildingControllerState."""
+        return BuildingControllerState(
+            temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
+            level_of_utilization=self.level_of_utilization,
+        )
+
+
+@dataclass_json
+@dataclass
+class BuildingControllerConfig:
+
+    """Configuration of the Building Controller class."""
+
+    minimal_building_temperature_in_celsius: float
+    stop_heating_building_temperature_in_celsius: float
 
 
 class Building(dynamic_component.DynamicComponent):
@@ -1831,3 +1864,168 @@ class Window:
             return 0
 
         return poa_irrad["poa_direct"] * reduction_factor_with_area
+
+
+class BuildingController(cp.Component):
+
+    """BuildingController class.
+
+    It calculates on base of the maximal Building
+    Thermal Demand and the difference of the actual Building Tempreature
+    to the Target/Minimal Building Tempreature how much the building is suppose
+    to be heated up. This Output is called "RealBuildingHeatDemand".
+
+    Parameters
+    ----------
+    sim_params : Simulator
+        Simulator object used to carry the simulation using this class
+
+    """
+
+    # Inputs
+    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+    ResidenceTemperature = "ResidenceTemperature"
+    # Outputs
+    RealHeatBuildingDemand = "RealHeatBuildingDemand"
+    LevelOfUtilization = "LevelOfUtilization"
+
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: BuildingControllerConfig,
+    ):
+        """Constructs all the neccessary attributes of the Building Controller object."""
+        super().__init__(
+            name="BuildingController",
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        self.minimal_building_temperature_in_celsius = (
+            config.minimal_building_temperature_in_celsius
+        )
+        self.stop_heating_building_temperature_in_celsius = (
+            config.stop_heating_building_temperature_in_celsius
+        )
+        self.state = BuildingControllerState(
+            temperature_building_target_in_celsius=config.minimal_building_temperature_in_celsius,
+            level_of_utilization=0,
+        )
+        self.previous_state = self.state.clone()
+
+        # =================================================================================================================================
+        # Inputs and Output channels
+
+        self.ref_max_thermal_build_demand_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ReferenceMaxHeatBuildingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            True,
+        )
+        self.residence_temperature_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ResidenceTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+        self.real_heat_building_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.RealHeatBuildingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+        )
+        self.level_of_utilization_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.LevelOfUtilization,
+            lt.LoadTypes.ANY,
+            lt.Units.PERCENT,
+        )
+        # =================================================================================================================================
+
+    @staticmethod
+    def get_default_config():
+        """Gets a default configuration of the building controller."""
+        config = BuildingControllerConfig(
+            minimal_building_temperature_in_celsius=20,
+            stop_heating_building_temperature_in_celsius=21,
+        )
+        return config
+
+    def build(self):
+        """Build load profile for entire simulation duration."""
+        pass
+
+    def write_to_report(
+        self,
+    ):
+        """Writes a report."""
+        pass
+
+    def i_save_state(
+        self,
+    ):
+        """Saves the current state."""
+        self.previous_state = self.state.clone()
+
+    def i_restore_state(
+        self,
+    ):
+        """Restores previous state."""
+        self.state = self.previous_state.clone()
+
+    def i_doublecheck(
+        self,
+        timestep: int,
+        stsv: cp.SingleTimeStepValues,
+    ) -> None:
+        """Doublechecks."""
+        pass
+
+    def i_prepare_simulation(
+        self,
+    ) -> None:
+        """Prepares the simulation."""
+        pass
+
+    def i_simulate(
+        self,
+        timestep: int,
+        stsv: cp.SingleTimeStepValues,
+        force_convergence: bool,
+    ) -> None:
+        """Simulates the building controller."""
+        building_temperature_in_celsius = stsv.get_input_value(
+            self.residence_temperature_channel
+        )
+        minimal_building_temperature_in_celsius = (
+            self.minimal_building_temperature_in_celsius
+        )
+        delta_temp_for_level_of_utilization = 0.4
+
+        # Building is warm enough
+        if building_temperature_in_celsius > minimal_building_temperature_in_celsius:
+            level_of_utilization: float = 0
+        # Building get heated up, when temperature is underneath target temperature
+        elif (
+            building_temperature_in_celsius
+            < minimal_building_temperature_in_celsius
+            - delta_temp_for_level_of_utilization
+        ):
+            level_of_utilization = 1
+        else:
+            level_of_utilization = (
+                minimal_building_temperature_in_celsius
+                - building_temperature_in_celsius
+            )
+
+        real_heat_building_demand_in_watt = (
+            self.state.level_of_utilization
+            * stsv.get_input_value(self.ref_max_thermal_build_demand_channel)
+        )
+        self.state.level_of_utilization = level_of_utilization
+        stsv.set_output_value(
+            self.level_of_utilization_channel, self.state.level_of_utilization
+        )
+        stsv.set_output_value(
+            self.real_heat_building_demand_channel, real_heat_building_demand_in_watt
+        )

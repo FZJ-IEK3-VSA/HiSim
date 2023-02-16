@@ -165,7 +165,15 @@ def basic_household_new(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    # Build Building Controller
+    my_building_controller_config = building.BuildingControllerConfig(
+        minimal_building_temperature_in_celsius=20,
+        stop_heating_building_temperature_in_celsius=26
+    )
 
+    my_building_controller = building.BuildingController(
+        config=my_building_controller_config, my_simulation_parameters=my_simulation_parameters
+    )
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         name="BaseLoad",
@@ -308,6 +316,17 @@ def basic_household_new(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
+    my_building_controller.connect_input(
+        my_building_controller.ResidenceTemperature,
+        my_building_controller.component_name,
+        my_building.TemperatureIndoorAir
+    )
+
+    my_building_controller.connect_input(
+        my_building_controller.ReferenceMaxHeatBuildingDemand,
+        my_building_controller.component_name,
+        my_building.ReferenceMaxHeatBuildingDemand
+    )
 
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
@@ -365,12 +384,16 @@ def basic_household_new(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.FloorHeatingWaterMassFlowRate,
     )
+    # my_heat_distribution_controller.connect_input(
+    #     my_heat_distribution_controller.ResidenceTemperature,
+    #     my_building.component_name,
+    #     my_building.TemperatureIndoorAir,
+    # )
     my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.ResidenceTemperature,
-        my_building.component_name,
-        my_building.TemperatureIndoorAir,
+        my_heat_distribution_controller.RealHeatBuildingDemand,
+        my_heat_distribution_controller.component_name,
+        my_building_controller.RealHeatBuildingDemand
     )
-
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.DailyAverageOutsideTemperature,
         my_weather.component_name,
@@ -381,10 +404,15 @@ def basic_household_new(
         my_heat_distribution_controller.component_name,
         my_heat_distribution_controller.State,
     )
+    # my_heat_distribution_system.connect_input(
+    #     my_heat_distribution_system.ResidenceTemperature,
+    #     my_building.component_name,
+    #     my_building.TemperatureIndoorAir,
+    # )
     my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.ResidenceTemperature,
-        my_building.component_name,
-        my_building.TemperatureIndoorAir,
+        my_heat_distribution_system.RealHeatBuildingDemand,
+        my_heat_distribution_system.component_name,
+        my_heat_distribution_controller.RealHeatBuildingDemandPassedToHeatDistributionSystem
     )
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.MaxThermalBuildingDemand,

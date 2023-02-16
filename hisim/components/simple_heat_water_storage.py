@@ -56,7 +56,7 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
             cool_water_temperature_in_storage_in_celsius=40,
             hot_water_temperature_in_storage_in_celsius=60,
             volume_heating_water_storage_in_liter=500,
-            min_water_mixing_time_in_seconds=60*60
+            min_water_mixing_time_in_seconds=60 * 60
         )
         return config
 
@@ -126,9 +126,9 @@ class HeatingWaterStorage(cp.Component):
             cool_water_temperature_in_celsius=self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius,
             hot_water_temperature_in_celsius=self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius,
         )
-        self.min_water_mixing_time_in_seconds = self.waterstorageconfig.min_water_mixing_time_in_seconds
-        self.previous_state: self.state.clone()
+        self.previous_state = self.state.clone()
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
+        self.min_water_mixing_time_in_timesteps = self.waterstorageconfig.min_water_mixing_time_in_seconds / self.seconds_per_timestep
         self.water_temperature_from_heat_distribution_system_in_celsius: float = (
             self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius
         )
@@ -136,7 +136,7 @@ class HeatingWaterStorage(cp.Component):
             self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius
         )
         # self._water_mass_flow_rate_in_kg_per_second: float = 0
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 0
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 0.0
         # self.mix_water_temperature_from_input_flows_in_celsius: float = 0
         self.water_mass_flow_rate_from_heat_generator_in_kg_per_second: float = 0.0
         self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float = 0.0
@@ -237,13 +237,14 @@ class HeatingWaterStorage(cp.Component):
         self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = stsv.get_input_value(
             self.water_mass_flow_rate_heat_distrution_system_input_channel
         )
+
         # Calculations ------------------------------------------------------------------------------------------------------
 
         # self.calculate_mix_water_temperature_from_input_flows(
         #     cooled_water_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
         #     heated_water_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
         # )
-        if timestep >= self.state.start_timestep + self.min_water_mixing_time_in_seconds:
+        if timestep >= self.state.start_timestep + self.min_water_mixing_time_in_timesteps:
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
                 water_temperature_from_heat_distribution_system_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
                 water_temperature_from_heat_generator_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
@@ -260,11 +261,9 @@ class HeatingWaterStorage(cp.Component):
 
         # Set outputs -------------------------------------------------------------------------------------------------------
         # log.information("hws timestep " + str(timestep))
-        # log.information("hws water temp from hds " + str(self.water_temperature_from_heat_distribution_system_in_celsius))
-        # log.information("hws flow rate from hds " + str(self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second))
-        # log.information("hws water temp from hp " + str(self.water_temperature_from_heat_generator_in_celsius))
-        # log.information("hws flow rate from hp " + str(self.water_mass_flow_rate_from_heat_generator_in_kg_per_second))
-        # log.information("hws mean water temp " + str(self.state.mean_water_temperature_in_storage_in_celsius))
+        # log.information("hws cool water temp " + str(self.state.cool_water_temperature_in_celsius))
+        # log.information("hws hot water temp " + str(self.state.hot_water_temperature_in_celsius))
+        # log.information("hws mean water temp " + str(self.state.mean_water_temperature_in_storage_in_celsius)  + "\n")
 
         stsv.set_output_value(
             self.mean_water_temperature_water_storage_output_channel,

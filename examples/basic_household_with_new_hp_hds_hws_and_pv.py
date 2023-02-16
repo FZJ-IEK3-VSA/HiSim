@@ -88,11 +88,12 @@ def basic_household_new(
     # Set Heat Pump
     hp_manufacturer = "Viessmann Werke GmbH & Co KG"
     hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 60
-    hp_min_idle_time = 15
+    hp_min_operation_time = 60 * 60
+    hp_min_idle_time = 15 * 60
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
+    min_water_mixing_time_in_seconds = 60 * 60
     volume_heating_water_storage_in_liter = 100
     mean_water_temperature_in_storage_in_celsius = 50
     cool_water_temperature_in_storage_in_celsius = 40
@@ -112,7 +113,7 @@ def basic_household_new(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -203,6 +204,7 @@ def basic_household_new(
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_heat_water_storage.HeatingWaterStorageConfig(
         name=hws_name,
+        min_water_mixing_time_in_seconds=min_water_mixing_time_in_seconds,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
         cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,

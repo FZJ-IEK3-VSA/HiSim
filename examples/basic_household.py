@@ -73,7 +73,6 @@ def basic_household_explicit(
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
-    set_heating_threshold_temperature = 16.0
     offset = 0.5
     hp_mode = 2
 
@@ -265,7 +264,6 @@ def basic_household_explicit(
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-
 
     my_heat_pump.connect_input(
         my_heat_pump.State,

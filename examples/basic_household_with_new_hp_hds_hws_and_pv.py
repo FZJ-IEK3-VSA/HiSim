@@ -173,7 +173,8 @@ def basic_household_new(
     )
 
     my_building_controller = building.BuildingController(
-        config=my_building_controller_config, my_simulation_parameters=my_simulation_parameters
+        config=my_building_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
@@ -207,7 +208,7 @@ def basic_household_new(
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
         cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
-        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius
+        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius,
     )
     my_simple_heat_water_storage = simple_heat_water_storage.HeatingWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -218,7 +219,7 @@ def basic_household_new(
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
         name=hds_name,
         water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
-        heating_system=heating_system
+        heating_system=heating_system,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,

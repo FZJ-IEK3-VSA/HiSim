@@ -122,10 +122,12 @@ def household_gas_heater(
     )
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        min_heating_temperature_building_in_celsius=20.0,
-        mode=1,
-        my_simulation_parameters=my_simulation_parameters,
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            min_heating_temperature_building_in_celsius=20.0,
+            mode=1,
+            my_simulation_parameters=my_simulation_parameters,
+        )
     )
 
     # =================================================================================================================================
@@ -192,7 +194,7 @@ def household_gas_heater(
     my_heat_distribution.connect_input(
         my_heat_distribution.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMeanThermalMass
+        my_building.TemperatureMeanThermalMass,
     )
 
     my_heat_distribution_controller.connect_input(

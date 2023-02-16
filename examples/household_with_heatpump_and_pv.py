@@ -158,11 +158,15 @@ def household_pv_hp(
     )
 
     # Build Weather
-    my_weather = weather.Weather(config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
-                                 my_simulation_parameters=my_simulation_parameters)
+    my_weather = weather.Weather(
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_PV_system()
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_PV_system()
+    )
     my_photovoltaic_system_config.power = power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
@@ -179,8 +183,10 @@ def household_pv_hp(
     )
 
     # Build Building
-    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(),
-                                    my_simulation_parameters=my_simulation_parameters)
+    my_building = building.Building(
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.HeatPumpController(

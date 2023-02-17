@@ -280,8 +280,8 @@ class HeatDistribution(cp.Component):
             self.water_temperature_output_in_celsius
         )
         # log.information("hsd timestep " + str(timestep))
-        # log.information("hsd water temperature output " + str(self.state.water_temperature_in_distribution_system_in_celsius))
-        # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
+        # log.information("hsd water temperature output " + str(self.water_temperature_output_in_celsius))
+        # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt) + "\n")
 
         # stsv.set_output_value(
         #     self.water_temperature_output_channel,
@@ -527,8 +527,8 @@ class HeatDistributionController(cp.Component):
             # if heating or cooling is needed for building
             if (
                 real_heat_building_demand_in_watt != 0
-                #or daily_average_outside_temperature_in_celsius
-                #< self.set_heating_threshold_temperature
+                or daily_average_outside_temperature_in_celsius
+                < self.set_heating_threshold_temperature
             ):
                 self.controller_heat_distribution_mode = "on"
                 return

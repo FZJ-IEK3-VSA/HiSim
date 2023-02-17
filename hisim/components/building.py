@@ -80,7 +80,7 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-from hisim.components.configuration import PhysicsConfig
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -195,17 +195,20 @@ class BuildingControllerConfig(cp.ConfigBase):
 
     """Configuration of the Building Controller class."""
 
+    name: str
     minimal_building_temperature_in_celsius: float
     maximal_building_temperature_in_celsius: float
 
     @classmethod
-    def get_default_config(cls)-> Any:
+    def get_default_config(cls) -> Any:
         """Gets a default configuration of the building controller."""
         config = BuildingControllerConfig(
+            name="BuildingController",
             minimal_building_temperature_in_celsius=20,
             maximal_building_temperature_in_celsius=24,
         )
         return config
+
 
 class Building(dynamic_component.DynamicComponent):
 
@@ -1920,6 +1923,7 @@ class BuildingController(cp.Component):
         self.previous_state = self.state.clone()
         self.real_heat_building_demand_in_watt: float = 0.0
         self.building_temperature_in_celsius: float = 0.0
+        self.level_of_utilization: float = 0.0
         # =================================================================================================================================
         # Inputs and Output channels
 
@@ -1953,8 +1957,6 @@ class BuildingController(cp.Component):
         )
         # =================================================================================================================================
 
-
-
     def build(self):
         """Build load profile for entire simulation duration."""
         pass
@@ -1967,7 +1969,6 @@ class BuildingController(cp.Component):
         for config_string in self.building_controller_config.get_string_dict():
             lines.append(config_string)
         return lines
-
 
     def i_save_state(
         self,
@@ -2002,76 +2003,81 @@ class BuildingController(cp.Component):
         force_convergence: bool,
     ) -> None:
         """Simulates the building controller."""
-        self.building_temperature_in_celsius = stsv.get_input_value(
-            self.residence_temperature_channel
-        )
-        minimal_building_temperature_in_celsius = (
-            self.minimal_building_temperature_in_celsius
-        )
-        maximal_building_temperature_in_celsius = (
-            self.maximal_building_temperature_in_celsius
-        )
-        delta_temp_for_level_of_utilization = 0.4
-        level_of_utilization: float = 0
-        # Building is too hot and needs cooling
-        if (
-            self.building_temperature_in_celsius
-            >= maximal_building_temperature_in_celsius
-            + delta_temp_for_level_of_utilization
-        ):
-            level_of_utilization = -1
-        elif (
-            maximal_building_temperature_in_celsius
-            <= self.building_temperature_in_celsius
-            < maximal_building_temperature_in_celsius
-            + delta_temp_for_level_of_utilization
-        ):
-            level_of_utilization = -(
-                self.building_temperature_in_celsius
-                - maximal_building_temperature_in_celsius
-            )
-
-        # Building is warm enough
-        elif (
-            minimal_building_temperature_in_celsius
-            <= self.building_temperature_in_celsius
-            < maximal_building_temperature_in_celsius
-        ):
-            level_of_utilization = 0
-
-        # Building is too cold and needs heating. It gets heated up, when temperature is underneath target temperature
-        elif (
-            minimal_building_temperature_in_celsius
-            - delta_temp_for_level_of_utilization
-            <= self.building_temperature_in_celsius
-            < minimal_building_temperature_in_celsius
-        ):
-            level_of_utilization = (
-                minimal_building_temperature_in_celsius
-                - self.building_temperature_in_celsius
-            )
-        elif (
-            self.building_temperature_in_celsius
-            < minimal_building_temperature_in_celsius
-            - delta_temp_for_level_of_utilization
-        ):
-            level_of_utilization = 1
-
+        if force_convergence:
+            pass
         else:
-            raise ValueError("the right case could not be identified")
+            self.building_temperature_in_celsius = stsv.get_input_value(
+                self.residence_temperature_channel
+            )
+            minimal_building_temperature_in_celsius = (
+                self.minimal_building_temperature_in_celsius
+            )
+            maximal_building_temperature_in_celsius = (
+                self.maximal_building_temperature_in_celsius
+            )
+            delta_temp_for_level_of_utilization = 0.4
 
-        self.real_heat_building_demand_in_watt = (
-            self.state.level_of_utilization
-            * stsv.get_input_value(self.ref_max_thermal_build_demand_channel)
-        )
-        self.state.level_of_utilization = level_of_utilization
-        stsv.set_output_value(
-            self.level_of_utilization_channel, self.state.level_of_utilization
-        )
-        stsv.set_output_value(
-            self.real_heat_building_demand_channel,
-            self.real_heat_building_demand_in_watt,
-        )
-        # log.information("bcontroller timestep " + str(timestep))
-        # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
-        # log.information("bcontroller real buiding heat deamnd " + str(self.real_heat_building_demand_in_watt) +"\n")
+            # Building is too hot and needs cooling
+            if (
+                self.building_temperature_in_celsius
+                >= maximal_building_temperature_in_celsius
+                + delta_temp_for_level_of_utilization
+            ):
+                self.level_of_utilization = -0.5
+            elif (
+                maximal_building_temperature_in_celsius
+                <= self.building_temperature_in_celsius
+                < maximal_building_temperature_in_celsius
+                + delta_temp_for_level_of_utilization
+            ):
+                self.level_of_utilization = -(
+                    self.building_temperature_in_celsius
+                    - maximal_building_temperature_in_celsius
+                )
+
+            # Building is warm enough
+            elif (
+                minimal_building_temperature_in_celsius
+                <= self.building_temperature_in_celsius
+                < maximal_building_temperature_in_celsius
+            ):
+                self.level_of_utilization = 0
+
+            # Building is too cold and needs heating. It gets heated up, when temperature is underneath target temperature
+            elif (
+                minimal_building_temperature_in_celsius
+                - delta_temp_for_level_of_utilization
+                <= self.building_temperature_in_celsius
+                < minimal_building_temperature_in_celsius
+            ):
+                self.level_of_utilization = (
+                    minimal_building_temperature_in_celsius
+                    - self.building_temperature_in_celsius
+                )
+            elif (
+                self.building_temperature_in_celsius
+                < minimal_building_temperature_in_celsius
+                - delta_temp_for_level_of_utilization
+            ):
+                self.level_of_utilization = 0.7
+
+            else:
+                raise ValueError("the right case could not be identified")
+
+            self.real_heat_building_demand_in_watt = (
+                self.state.level_of_utilization
+                * stsv.get_input_value(self.ref_max_thermal_build_demand_channel)
+            )
+            self.state.level_of_utilization = self.level_of_utilization
+
+            stsv.set_output_value(
+                self.level_of_utilization_channel, self.state.level_of_utilization
+            )
+            stsv.set_output_value(
+                self.real_heat_building_demand_channel,
+                self.real_heat_building_demand_in_watt,
+            )
+            # log.information("bcontroller timestep " + str(timestep))
+            # log.information("bcontroller building temp " + str(self.building_temperature_in_celsius))
+            # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
+            # log.information("bcontroller real buiding heat deamnd " + str(self.real_heat_building_demand_in_watt))

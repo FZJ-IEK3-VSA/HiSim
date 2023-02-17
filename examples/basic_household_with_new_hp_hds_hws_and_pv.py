@@ -79,7 +79,7 @@ def basic_household_new(
 
     # Set Heat Pump Controller
     set_water_storage_temperature_for_heating_in_celsius = 50
-    set_water_storage_temperature_for_cooling_in_celsius = 70
+    set_water_storage_temperature_for_cooling_in_celsius = 55
     offset = 0.5
     hp_mode = 1
 

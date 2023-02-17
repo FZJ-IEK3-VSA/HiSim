@@ -14,7 +14,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-# from hisim import log
 
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -237,6 +236,10 @@ class HeatingWaterStorage(cp.Component):
         self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = stsv.get_input_value(
             self.water_mass_flow_rate_heat_distrution_system_input_channel
         )
+        if self.water_temperature_from_heat_distribution_system_in_celsius == 0 and self.water_temperature_from_heat_generator_in_celsius == 0:
+            """first iteration --> random numbers"""
+            self.water_temperature_from_heat_distribution_system_in_celsius = 50
+            self.water_temperature_from_heat_generator_in_celsius = 50
 
         # Calculations ------------------------------------------------------------------------------------------------------
 
@@ -252,14 +255,14 @@ class HeatingWaterStorage(cp.Component):
             )
             self.state = HeatingWaterStorageState(start_timestep=timestep,
                                           mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-                                          cool_water_temperature_in_celsius=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
+                                          cool_water_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
                                           hot_water_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius)
 
         # Set outputs -------------------------------------------------------------------------------------------------------
         # log.information("hws timestep " + str(timestep))
-        # log.information("hws cool water temp " + str(self.state.cool_water_temperature_in_celsius))
-        # log.information("hws hot water temp " + str(self.state.hot_water_temperature_in_celsius))
-        # log.information("hws mean water temp " + str(self.state.mean_water_temperature_in_storage_in_celsius)  + "\n")
+        # log.information("hws cool water temp from hds " + str(self.state.cool_water_temperature_in_celsius))
+        # log.information("hws hot water temp from hp " + str(self.state.hot_water_temperature_in_celsius))
+        # log.information("hws mean water temp in hws " + str(self.state.mean_water_temperature_in_storage_in_celsius))
 
         stsv.set_output_value(
             self.mean_water_temperature_water_storage_output_channel,

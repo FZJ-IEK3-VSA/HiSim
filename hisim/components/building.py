@@ -196,7 +196,7 @@ class BuildingControllerConfig:
     """Configuration of the Building Controller class."""
 
     minimal_building_temperature_in_celsius: float
-    stop_heating_building_temperature_in_celsius: float
+    maximal_building_temperature_in_celsius: float
 
 
 class Building(dynamic_component.DynamicComponent):
@@ -1906,8 +1906,8 @@ class BuildingController(cp.Component):
         self.minimal_building_temperature_in_celsius = (
             config.minimal_building_temperature_in_celsius
         )
-        self.stop_heating_building_temperature_in_celsius = (
-            config.stop_heating_building_temperature_in_celsius
+        self.maximal_building_temperature_in_celsius = (
+            config.maximal_building_temperature_in_celsius
         )
         self.state = BuildingControllerState(
             temperature_building_target_in_celsius=config.minimal_building_temperature_in_celsius,
@@ -1952,7 +1952,7 @@ class BuildingController(cp.Component):
         """Gets a default configuration of the building controller."""
         config = BuildingControllerConfig(
             minimal_building_temperature_in_celsius=20,
-            stop_heating_building_temperature_in_celsius=21,
+            maximal_building_temperature_in_celsius=24,
         )
         return config
 
@@ -2005,23 +2005,57 @@ class BuildingController(cp.Component):
         minimal_building_temperature_in_celsius = (
             self.minimal_building_temperature_in_celsius
         )
+        maximal_building_temperature_in_celsius = (
+            self.maximal_building_temperature_in_celsius
+        )
         delta_temp_for_level_of_utilization = 0.4
+        level_of_utilization: float = 0
+        # Building is too hot and needs cooling
+        if (
+            self.building_temperature_in_celsius
+            >= maximal_building_temperature_in_celsius
+            + delta_temp_for_level_of_utilization
+        ):
+            level_of_utilization = -1
+        elif (
+            maximal_building_temperature_in_celsius
+            <= self.building_temperature_in_celsius
+            < maximal_building_temperature_in_celsius
+            + delta_temp_for_level_of_utilization
+        ):
+            level_of_utilization = -(
+                self.building_temperature_in_celsius
+                - maximal_building_temperature_in_celsius
+            )
 
         # Building is warm enough
-        if self.building_temperature_in_celsius > minimal_building_temperature_in_celsius:
-            level_of_utilization: float = 0
-        # Building get heated up, when temperature is underneath target temperature
+        elif (
+            minimal_building_temperature_in_celsius
+            <= self.building_temperature_in_celsius
+            < maximal_building_temperature_in_celsius
+        ):
+            level_of_utilization = 0
+
+        # Building is too cold and needs heating. It gets heated up, when temperature is underneath target temperature
+        elif (
+            minimal_building_temperature_in_celsius
+            - delta_temp_for_level_of_utilization
+            <= self.building_temperature_in_celsius
+            < minimal_building_temperature_in_celsius
+        ):
+            level_of_utilization = (
+                minimal_building_temperature_in_celsius
+                - self.building_temperature_in_celsius
+            )
         elif (
             self.building_temperature_in_celsius
             < minimal_building_temperature_in_celsius
             - delta_temp_for_level_of_utilization
         ):
             level_of_utilization = 1
+
         else:
-            level_of_utilization = (
-                minimal_building_temperature_in_celsius
-                - self.building_temperature_in_celsius
-            )
+            raise ValueError("the right case could not be identified")
 
         self.real_heat_building_demand_in_watt = (
             self.state.level_of_utilization
@@ -2032,5 +2066,9 @@ class BuildingController(cp.Component):
             self.level_of_utilization_channel, self.state.level_of_utilization
         )
         stsv.set_output_value(
-            self.real_heat_building_demand_channel, self.real_heat_building_demand_in_watt
+            self.real_heat_building_demand_channel,
+            self.real_heat_building_demand_in_watt,
         )
+        # log.information("bcontroller timestep " + str(timestep))
+        # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
+        # log.information("bcontroller real buiding heat deamnd " + str(self.real_heat_building_demand_in_watt) +"\n")

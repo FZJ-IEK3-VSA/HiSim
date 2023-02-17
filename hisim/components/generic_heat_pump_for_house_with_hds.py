@@ -700,7 +700,7 @@ class HeatPumpControllerNew(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         set_water_storage_temperature_for_heating_in_celsius: float = 50,
-        set_water_storage_temperature_for_cooling_in_celsius: float = 55,
+        set_water_storage_temperature_for_cooling_in_celsius: float = 60,
         offset: float = 0.0,
         mode: int = 1,
     ) -> None:

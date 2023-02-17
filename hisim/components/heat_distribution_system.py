@@ -243,6 +243,14 @@ class HeatDistribution(cp.Component):
                 water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
                 real_heat_buiding_demand_in_watt=self.real_heat_building_demand_in_watt,
             )
+            stsv.set_output_value(
+            self.water_temperature_output_channel,
+            self.water_temperature_output_in_celsius,
+            )
+            stsv.set_output_value(
+            self.thermal_power_delivered_channel,
+            self.heat_gain_for_building_in_watt,
+            )
 
         elif self.state_controller == 0:
 
@@ -250,6 +258,14 @@ class HeatDistribution(cp.Component):
 
             self.water_temperature_output_in_celsius = (
                 self.water_temperature_input_in_celsius
+            )
+            stsv.set_output_value(
+            self.water_temperature_output_channel,
+            self.water_temperature_output_in_celsius,
+            )
+            stsv.set_output_value(
+            self.thermal_power_delivered_channel,
+            self.heat_gain_for_building_in_watt,
             )
 
         else:
@@ -261,17 +277,16 @@ class HeatDistribution(cp.Component):
         )
         # log.information("hsd timestep " + str(timestep))
         # log.information("hsd water temperature output " + str(self.state.water_temperature_in_distribution_system_in_celsius))
-        # log.information("hsd water mass flow rate "  + str(self.floor_heating_water_mass_flow_rate_in_kg_per_second))
         # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
 
-        stsv.set_output_value(
-            self.water_temperature_output_channel,
-            self.water_temperature_output_in_celsius,
-        )
-        stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.heat_gain_for_building_in_watt,
-        )
+        # stsv.set_output_value(
+        #     self.water_temperature_output_channel,
+        #     self.water_temperature_output_in_celsius,
+        # )
+        # stsv.set_output_value(
+        #     self.thermal_power_delivered_channel,
+        #     self.heat_gain_for_building_in_watt,
+        # )
         stsv.set_output_value(
             self.floor_heating_water_mass_flow_rate_channel,
             self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
@@ -494,20 +509,38 @@ class HeatDistributionController(cp.Component):
         # set_residence_temperature_in_celsius = self.set_residence_temperature_in_celsius
 
         if self.controller_heat_distribution_mode == "on":
+            # no heat exchange with building if theres no demand and if avg temp outside too high
             if (
-                real_heat_building_demand_in_watt == 0
-                or daily_average_outside_temperature_in_celsius
-                > self.set_heating_threshold_temperature
+            real_heat_building_demand_in_watt == 0
+            and daily_average_outside_temperature_in_celsius
+            > self.set_heating_threshold_temperature
             ):
                 self.controller_heat_distribution_mode = "off"
                 return
         elif self.controller_heat_distribution_mode == "off":
+            # if heating or cooling is needed for building
             if (
                 real_heat_building_demand_in_watt != 0
-                and daily_average_outside_temperature_in_celsius
-                < self.set_heating_threshold_temperature
+                #or daily_average_outside_temperature_in_celsius
+                #< self.set_heating_threshold_temperature
             ):
                 self.controller_heat_distribution_mode = "on"
                 return
+
+        #     if (
+        #         real_heat_building_demand_in_watt == 0
+        #         or daily_average_outside_temperature_in_celsius
+        #         > self.set_heating_threshold_temperature
+        #     ):
+        #         self.controller_heat_distribution_mode = "off"
+        #         return
+        # elif self.controller_heat_distribution_mode == "off":
+        #     if (
+        #         real_heat_building_demand_in_watt != 0
+        #         and daily_average_outside_temperature_in_celsius
+        #         < self.set_heating_threshold_temperature
+        #     ):
+        #         self.controller_heat_distribution_mode = "on"
+        #         return
         else:
             raise ValueError("unknown mode")

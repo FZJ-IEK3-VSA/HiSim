@@ -15,6 +15,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim')))
 sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim', 'components')))
+sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim', 'postprocessing')))
 
 
 # -- Project information -----------------------------------------------------

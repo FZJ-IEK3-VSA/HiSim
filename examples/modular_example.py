@@ -114,7 +114,7 @@ def modular_household_explicit(
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
         )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_KPI
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
         # my_simulation_parameters.post_processing_options.append(
         #     PostProcessingOptions.MAKE_NETWORK_CHARTS
@@ -198,6 +198,7 @@ def modular_household_explicit(
 
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                name="UTSPConnector",
                 url=system_config_.url,
                 api_key=system_config_.api_key,
                 household=occupancy_profile,
@@ -276,6 +277,7 @@ def modular_household_explicit(
 
     # add price signal
     my_price_signal = generic_price_signal.PriceSignal(
+        config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
         my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_price_signal)

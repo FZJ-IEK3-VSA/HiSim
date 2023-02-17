@@ -6,7 +6,13 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim import log
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, ComponentConnection
+from hisim.component import (
+    Component,
+    ComponentInput,
+    ComponentOutput,
+    SingleTimeStepValues,
+    ComponentConnection,
+)
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
@@ -21,6 +27,7 @@ __maintainer__ = "Tjarko Tjaden"
 __email__ = "tjarko.tjaden@hs-emden-leer.de"
 __status__ = "development"
 
+
 @dataclass_json
 @dataclass
 class CarBatteryConfig:
@@ -29,16 +36,23 @@ class CarBatteryConfig:
     e_bat_custom: float  # capacity in Kilowatt
     name: str
     source_weight: int
-    
+
     @staticmethod
-    def get_default_config(name: str = 'CarBattery', p_inv_custom: float = 5, e_bat_custom: float = 10, source_weight: int = 1) -> Any:
-        config=CarBatteryConfig(
-            system_id='SG1',
+    def get_default_config(
+        name: str = "CarBattery",
+        p_inv_custom: float = 5,
+        e_bat_custom: float = 10,
+        source_weight: int = 1,
+    ) -> Any:
+        config = CarBatteryConfig(
+            system_id="SG1",
             p_inv_custom=p_inv_custom,
             e_bat_custom=e_bat_custom,
             name=name,
-            source_weight=source_weight)
+            source_weight=source_weight,
+        )
         return config
+
 
 class CarBattery(Component):
     """
@@ -48,15 +62,16 @@ class CarBattery(Component):
     """
 
     # Inputs
-    LoadingPowerInput = "LoadingPowerInput"     # W
+    LoadingPowerInput = "LoadingPowerInput"  # W
 
     # Outputs
-    AcBatteryPower = "AcBatteryPower"           # W
-    DcBatteryPower = "DcBatteryPower"           # W
-    StateOfCharge = "StateOfCharge"             # [0..1]
+    AcBatteryPower = "AcBatteryPower"  # W
+    DcBatteryPower = "DcBatteryPower"  # W
+    StateOfCharge = "StateOfCharge"  # [0..1]
 
-    def __init__(self, my_simulation_parameters: SimulationParameters,
-                 config:CarBatteryConfig):
+    def __init__(
+        self, my_simulation_parameters: SimulationParameters, config: CarBatteryConfig
+    ):
         """
         Loads the parameters of the specified battery storage.
 
@@ -70,8 +85,11 @@ class CarBattery(Component):
             Useable battery capacity. Only for system_ids of type "Generic". [Wh]
         """
         self.battery_config = config
-        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
-        
+        super().__init__(
+            name=config.name + "_w" + str(config.source_weight),
+            my_simulation_parameters=my_simulation_parameters,
+        )
+
         self.source_weight = self.battery_config.source_weight
 
         self.system_id = self.battery_config.system_id
@@ -85,65 +103,95 @@ class CarBattery(Component):
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
-        self.BAT = bsl.ACBatMod(system_id=self.system_id,
-                                p_inv_custom=self.p_inv_custom,
-                                e_bat_custom=self.e_bat_custom)
+        self.BAT = bsl.ACBatMod(
+            system_id=self.system_id,
+            p_inv_custom=self.p_inv_custom,
+            e_bat_custom=self.e_bat_custom,
+        )
 
         # Define component inputs
-        self.p_set: ComponentInput = self.add_input(object_name=self.component_name,
-                                                    field_name=self.LoadingPowerInput,
-                                                    load_type=LoadTypes.ELECTRICITY,
-                                                    unit=Units.WATT,
-                                                    mandatory=True)
+        self.p_set: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.LoadingPowerInput,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            mandatory=True,
+        )
 
         # Define component outputs
-        self.p_bs: ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.AcBatteryPower, load_type=LoadTypes.ELECTRICITY,
-                                                     unit=Units.WATT, postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.CAR_BATTERY])
-        
-        self.p_bat: ComponentOutput = self.add_output(object_name=self.component_name,
-                                                      field_name=self.DcBatteryPower,
-                                                      load_type=LoadTypes.ELECTRICITY,
-                                                      unit=Units.WATT)
+        self.p_bs: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.AcBatteryPower,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[
+                InandOutputType.CHARGE_DISCHARGE,
+                ComponentType.CAR_BATTERY,
+            ],
+        )
 
-        self.soc: ComponentOutput = self.add_output(object_name=self.component_name,
-                                                    field_name=self.StateOfCharge,
-                                                    load_type=LoadTypes.ANY,
-                                                    unit=Units.ANY,
-                                                    postprocessing_flag=[InandOutputType.STORAGE_CONTENT])
-        
-        self.add_default_connections(self.get_default_connections_from_charge_controller())
+        self.p_bat: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.DcBatteryPower,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+        )
+
+        self.soc: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.StateOfCharge,
+            load_type=LoadTypes.ANY,
+            unit=Units.ANY,
+            postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
+        )
+
+        self.add_default_connections(
+            self.get_default_connections_from_charge_controller()
+        )
 
     def get_default_connections_from_charge_controller(self) -> Any:
-        log.information("setting ev charge controller default connections in car battery")
+        log.information(
+            "setting ev charge controller default connections in car battery"
+        )
         connections: List[ComponentConnection] = []
-        ev_charge_controller_classname = controller_l1_generic_ev_charge.L1Controller.get_classname()
-        connections.append(ComponentConnection(CarBattery.LoadingPowerInput, ev_charge_controller_classname, controller_l1_generic_ev_charge.L1Controller.ToOrFromBattery))
+        ev_charge_controller_classname = (
+            controller_l1_generic_ev_charge.L1Controller.get_classname()
+        )
+        connections.append(
+            ComponentConnection(
+                CarBattery.LoadingPowerInput,
+                ev_charge_controller_classname,
+                controller_l1_generic_ev_charge.L1Controller.ToOrFromBattery,
+            )
+        )
         return connections
 
-    def i_save_state(self)  -> None:
+    def i_save_state(self) -> None:
         self.previous_state = self.state.clone()
 
-    def i_restore_state(self)  -> None:
+    def i_restore_state(self) -> None:
         self.state = self.previous_state.clone()
 
-    def i_doublecheck(self, timestep: int,  stsv: SingleTimeStepValues) -> None:
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
+
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation. """
+        """Prepares the simulation."""
         pass
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues,  force_convergence: bool)  -> None:
-        
+
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
+
         # Parameters
         dt = self.my_simulation_parameters.seconds_per_timestep
-        
+
         # Load input values
         p_set = stsv.get_input_value(self.p_set)
         soc = self.state.soc
 
         # Simulate on timestep
-        results = self.BAT.simulate(p_load=p_set,
-                                    soc=soc,
-                                    dt=dt)
+        results = self.BAT.simulate(p_load=p_set, soc=soc, dt=dt)
         p_bs = results[0]
         p_bat = results[1]
         soc = results[2]

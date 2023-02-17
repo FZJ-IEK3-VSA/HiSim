@@ -68,6 +68,7 @@ def household_gas_heater(
     seconds_per_timestep = 60 * 15
 
     # Set Occupancy
+    name = "UTSPConnector"
     url = my_config.lpg_url
     api_key = my_config.api_key
     household = my_config.household_type
@@ -88,6 +89,7 @@ def household_gas_heater(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+        name=name,
         url=url,
         api_key=api_key,
         household=household,
@@ -114,23 +116,23 @@ def household_gas_heater(
 
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(
-        config=generic_gas_heater.GasHeater.get_default_config(),
+        config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage und Heat Water Storage Controller
     my_heat_water_storage = generic_heat_water_storage.HeatStorage(
-        config=generic_heat_water_storage.HeatStorage.get_default_config(),
+        config=generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_water_storage_controller = generic_heat_water_storage.HeatStorageController(
-        config=generic_heat_water_storage.HeatStorageController.get_default_config(),
+        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Controller
     my_controller_heat = controller_l1_heat_old.ControllerHeat(
-        config=controller_l1_heat_old.ControllerHeat.get_default_config(),
+        config=controller_l1_heat_old.ControllerHeatConfig.get_default_controller_heat_l1(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

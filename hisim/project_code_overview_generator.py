@@ -278,7 +278,7 @@ class OverviewGenerator:
                 class_info = ClassInformation()
                 class_info.class_name = strname
                 if strname in self.existing_classes:
-                    raise Exception("The class " + strname + " exists multiple times.")
+                    raise ValueError("The class " + strname + " exists multiple times.")
                 self.existing_classes.append(strname)
                 class_info.lines_of_code = len(inspect.getsourcelines(module_member[1]))
                 myfi.classes.append(class_info)

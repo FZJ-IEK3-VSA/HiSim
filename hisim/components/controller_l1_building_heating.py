@@ -157,7 +157,9 @@ class L1BuildingHeatController(cp.Component):
         )
 
         self.add_default_connections(self.get_building_default_connections())
-        self.add_default_connections(self.get_default_connections_from_hot_water_storage())
+        self.add_default_connections(
+            self.get_default_connections_from_hot_water_storage()
+        )
         self.add_default_connections(self.get_default_connections_from_ems())
 
     def get_building_default_connections(self):

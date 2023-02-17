@@ -14,7 +14,7 @@ def test_basic_household():
     """ Single day. """
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
-    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    mysimpar = SimulationParameters.one_day_only_with_all_options(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 

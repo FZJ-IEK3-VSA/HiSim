@@ -27,6 +27,7 @@ class HeatSourceConfig:
     """
     HeatSource Config
     """
+
     name: str
     source_weight: int
     fuel: lt.LoadTypes
@@ -36,14 +37,26 @@ class HeatSourceConfig:
 
     @staticmethod
     def get_default_config_heating() -> Any:
-        config = HeatSourceConfig(name='HeatingHeatSource', source_weight=1, fuel=lt.LoadTypes.DISTRICTHEATING, power_th=6200, 
-        water_vs_heating=lt.InandOutputType.HEATING, efficiency=1.0)
+        config = HeatSourceConfig(
+            name="HeatingHeatSource",
+            source_weight=1,
+            fuel=lt.LoadTypes.DISTRICTHEATING,
+            power_th=6200,
+            water_vs_heating=lt.InandOutputType.HEATING,
+            efficiency=1.0,
+        )
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> Any:
-        config = HeatSourceConfig(name='DHWHeatSource', source_weight=1, fuel=lt.LoadTypes.DISTRICTHEATING, power_th=3000,
-        water_vs_heating=lt.InandOutputType.WATER_HEATING, efficiency=1.0)
+        config = HeatSourceConfig(
+            name="DHWHeatSource",
+            source_weight=1,
+            fuel=lt.LoadTypes.DISTRICTHEATING,
+            power_th=3000,
+            water_vs_heating=lt.InandOutputType.WATER_HEATING,
+            efficiency=1.0,
+        )
         return config
 
 
@@ -72,7 +85,9 @@ class HeatSource(cp.Component):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     FuelDelivered = "FuelDelivered"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: HeatSourceConfig) -> None:
+    def __init__(
+        self, my_simulation_parameters: SimulationParameters, config: HeatSourceConfig
+    ) -> None:
         """
         Parameters
         ----------
@@ -82,7 +97,10 @@ class HeatSource(cp.Component):
             Efficiency of heat transfer
         """
 
-        super().__init__(config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+        super().__init__(
+            config.name + "_w" + str(config.source_weight),
+            my_simulation_parameters=my_simulation_parameters,
+        )
 
         # introduce parameters of district heating
         self.name = config.name
@@ -94,29 +112,58 @@ class HeatSource(cp.Component):
         self.previous_state = HeatSourceState()
 
         # Inputs - Mandatories
-        self.l1_heatsource_taget_percentage: cp.ComponentInput = self.add_input(self.component_name, self.L1HeatSourceTargetPercentage,
-            lt.LoadTypes.ANY, lt.Units.PERCENT, mandatory=True)
+        self.l1_heatsource_taget_percentage: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.L1HeatSourceTargetPercentage,
+            lt.LoadTypes.ANY,
+            lt.Units.PERCENT,
+            mandatory=True,
+        )
 
-        # Outputs 
-        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ThermalPowerDelivered,
-            load_type=lt.LoadTypes.HEATING, unit=lt.Units.WATT, postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION])
-        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.FuelDelivered, load_type=self.fuel,
-                unit=lt.Units.ANY, postprocessing_flag=[lt.InandOutputType.FUEL_CONSUMPTION, config.fuel, config.water_vs_heating])
-
+        # Outputs
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerDelivered,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
+        )
+        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.FuelDelivered,
+            load_type=self.fuel,
+            unit=lt.Units.ANY,
+            postprocessing_flag=[
+                lt.InandOutputType.FUEL_CONSUMPTION,
+                config.fuel,
+                config.water_vs_heating,
+            ],
+        )
 
         if config.fuel == lt.LoadTypes.OIL:
             self.FuelDeliveredC.unit = lt.Units.LITER
         else:
             self.FuelDeliveredC.unit = lt.Units.WATT_HOUR
 
-        self.add_default_connections(self.get_default_connections_controller_l1_heatpump())
+        self.add_default_connections(
+            self.get_default_connections_controller_l1_heatpump()
+        )
 
-    def get_default_connections_controller_l1_heatpump(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_controller_l1_heatpump(
+        self,
+    ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in Generic Heat Source")
         connections = []
-        controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()
-        connections.append(cp.ComponentConnection(HeatSource.L1HeatSourceTargetPercentage, controller_classname,
-                                                  controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage))
+        controller_classname = (
+            controller_l1_heatpump.L1HeatPumpController.get_classname()
+        )
+        connections.append(
+            cp.ComponentConnection(
+                HeatSource.L1HeatSourceTargetPercentage,
+                controller_classname,
+                controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage,
+            )
+        )
         return connections
 
     def write_to_report(self) -> List[str]:
@@ -130,12 +177,12 @@ class HeatSource(cp.Component):
         lines = []
         lines.append("Name: {}".format(self.name + str(self.source_weight)))
         lines.append("Fuel: {}".format(self.fuel))
-        lines.append("Power: {:4.0f} kW".format((self.power_th) * 1E-3))
-        lines.append('Efficiency : {:4.0f} %'.format((self.efficiency) * 100))
+        lines.append("Power: {:4.0f} kW".format((self.power_th) * 1e-3))
+        lines.append("Efficiency : {:4.0f} %".format((self.efficiency) * 100))
         return lines
 
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation. """
+        """Prepares the simulation."""
         pass
 
     def i_save_state(self) -> None:
@@ -147,7 +194,9 @@ class HeatSource(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """
         Performs the simulation of the district heating model.
         """
@@ -165,11 +214,26 @@ class HeatSource(cp.Component):
         if power_modifier > 1:
             power_modifier = 1
 
-        stsv.set_output_value(self.ThermalPowerDeliveredC, self.power_th * power_modifier * self.efficiency)
+        stsv.set_output_value(
+            self.ThermalPowerDeliveredC,
+            self.power_th * power_modifier * self.efficiency,
+        )
 
         if self.fuel == lt.LoadTypes.OIL:
             # conversion from Wh oil to liter oil
-            stsv.set_output_value(self.FuelDeliveredC,
-                                  power_modifier * self.power_th * 1.0526315789474e-4 * self.my_simulation_parameters.seconds_per_timestep / 3.6e3)
+            stsv.set_output_value(
+                self.FuelDeliveredC,
+                power_modifier
+                * self.power_th
+                * 1.0526315789474e-4
+                * self.my_simulation_parameters.seconds_per_timestep
+                / 3.6e3,
+            )
         else:
-            stsv.set_output_value(self.FuelDeliveredC, power_modifier * self.power_th * self.my_simulation_parameters.seconds_per_timestep / 3.6e3)
+            stsv.set_output_value(
+                self.FuelDeliveredC,
+                power_modifier
+                * self.power_th
+                * self.my_simulation_parameters.seconds_per_timestep
+                / 3.6e3,
+            )

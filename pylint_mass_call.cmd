@@ -8,8 +8,6 @@ pylint C:\Users\k.rieck\HiSim\examples\default_connections.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\dynamic_components.py
 if %errorlevel% neq 0 exit /b
-pylint C:\Users\k.rieck\HiSim\examples\household_with_fake_heater.py
-if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\household_with_gas_heater.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\household_with_gas_heater_with_controller.py
@@ -93,6 +91,8 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\chart_singleday.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\compute_kpis.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\generate_csv_for_housing_database.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\postprocessing_datatransfer.py
 if %errorlevel% neq 0 exit /b

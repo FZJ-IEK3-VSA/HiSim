@@ -468,38 +468,42 @@ class Building(dynamic_component.DynamicComponent):
             self.TemperatureMeanThermalMass,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.TemperatureMeanThermalMass} will follow.",
         )
         self.internal_surface_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TemperatureInternalSurface,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.TemperatureInternalSurface} will follow.",
         )
         self.indoor_air_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TemperatureIndoorAir,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.TemperatureIndoorAir} will follow.",
         )
         self.total_power_to_residence_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TotalEnergyToResidence,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.TotalEnergyToResidence} will follow.",
         )
         self.solar_gain_through_windows_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.SolarGainThroughWindows,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.SolarGainThroughWindows} will follow.",
         )
-        self.var_max_thermal_building_demand_channel: cp.ComponentOutput = (
-            self.add_output(
-                self.component_name,
-                self.ReferenceMaxHeatBuildingDemand,
-                lt.LoadTypes.HEATING,
-                lt.Units.WATT,
-            )
+        self.var_max_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.ReferenceMaxHeatBuildingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ReferenceMaxHeatBuildingDemand} will follow.",
         )
 
         # self.max_water_mass_flow_rate_channel: cp.ComponentOutput = self.add_output(
@@ -1117,21 +1121,12 @@ class Building(dynamic_component.DynamicComponent):
     ):
         """Write important variables to report."""
         lines = []
-        lines.append(f"Building Name: {self.component_name}")
-        lines.append(f"Building Code: {self.buildingconfig.building_code}")
-        lines.append(
-            f"Building Heat Capacity Class: {self.buildingconfig.building_heat_capacity_class}"
-        )
-        lines.append(
-            f"Building Absolute Conditioned Floor Area [m2]: {self.buildingconfig.absolute_conditioned_floor_area_in_m2}"
-        )
-        lines.append(
-            f"Building Initial Internal Temperature [°C]: {self.buildingconfig.initial_internal_temperature_in_celsius}"
-        )
-        lines.append(
-            f"Building Heating Reference Temperature [°C]: {self.buildingconfig.heating_reference_temperature_in_celsius}"
-        )
+        for config_string in self.buildingconfig.get_string_dict():
+            lines.append(config_string)
 
+        lines.append(
+            f"Max Thermal Demand [W]: {self.max_thermal_building_demand_in_watt}"
+        )
         lines.append(
             "-------------------------------------------------------------------------------------------"
         )

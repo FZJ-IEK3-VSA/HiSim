@@ -6,7 +6,7 @@ import itertools
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
 import pandas as pd
@@ -34,10 +34,11 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class UtspLpgConnectorConfig:
+class UtspLpgConnectorConfig(cp.ConfigBase):
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
+    name: str
     url: str
     api_key: str
     household: JsonReference
@@ -46,17 +47,17 @@ class UtspLpgConnectorConfig:
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
 
-    @staticmethod
-    def get_default_config(
-        url: str = "http://localhost:443/api/v1/profilerequest", api_key: str = ""
-    ) -> "UtspLpgConnectorConfig":
+    @classmethod
+    def get_default_UTSP_connector_config(cls) -> Any:
+
         """Creates a default configuration. Chooses default values for the LPG parameters."""
-        result_path = os.path.join(utils.get_input_directory(), "lpg_profiles")
+
         config = UtspLpgConnectorConfig(
-            url,
-            api_key,
-            Households.CHR01_Couple_both_at_Work,
-            result_path,
+            name="UTSPConnector",
+            url="http://localhost:443/api/v1/profilerequest",
+            api_key="",
+            household=Households.CHR01_Couple_both_at_Work,
+            result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
@@ -102,11 +103,11 @@ class UtspLpgConnector(cp.Component):
         config: UtspLpgConnectorConfig,
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
+        self.utsp_config = config
         super().__init__(
-            name=UtspLpgConnector.__name__,
+            name=self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        self.utsp_config = config
         self.build()
 
         # Inputs - Not Mandatory
@@ -126,13 +127,18 @@ class UtspLpgConnector(cp.Component):
         )
 
         self.number_of_residents_c: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY
+            self.component_name,
+            self.NumberByResidents,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description=f"here a description for LPG UTSP {self.NumberByResidents} will follow.",
         )
         self.heating_by_residents_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
         )
         self.electricity_output_c: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -142,6 +148,7 @@ class UtspLpgConnector(cp.Component):
             postprocessing_flag=[
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
             ],
+            output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow.",
         )
 
         self.water_consumption_c: cp.ComponentOutput = self.add_output(
@@ -149,6 +156,7 @@ class UtspLpgConnector(cp.Component):
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
+            output_description=f"here a description for LPG UTSP {self.WaterConsumption} will follow.",
         )
 
     def i_save_state(self) -> None:
@@ -572,5 +580,6 @@ class UtspLpgConnector(cp.Component):
     def write_to_report(self):
         """Adds a report entry for this component."""
         lines = []
-        lines.append(f"Name: {self.component_name}")
+        for config_string in self.utsp_config.get_string_dict():
+            lines.append(config_string)
         return lines

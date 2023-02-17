@@ -177,14 +177,18 @@ class ComponentName(Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Simulates the component."""
         # define local variables
         input_1 = stsv.get_input_value(self.input_from_other_component)
         input_2 = self.state.output_with_state
 
         # do your calculations
-        output_1 = input_2 + input_1 * self.my_simulation_parameters.seconds_per_timestep
+        output_1 = (
+            input_2 + input_1 * self.my_simulation_parameters.seconds_per_timestep
+        )
         output_2 = input_1 + self.factor
 
         # write values for output time series

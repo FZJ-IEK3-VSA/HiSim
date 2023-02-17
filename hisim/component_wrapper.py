@@ -37,7 +37,7 @@ class ComponentWrapper:
             col.global_index = len(all_outputs)  # noqa
             for output in all_outputs:
                 if output.full_name == col.full_name:
-                    raise Exception("trying to register the same key twice: " + col.full_name)
+                    raise ValueError("trying to register the same key twice: " + col.full_name)
             all_outputs.append(col)
             log.debug("Registered output " + col.full_name)
             self.component_outputs.append(col)

@@ -214,7 +214,9 @@ class GasHeaterWithController(cp.Component):
         """Write a report."""
         lines: List = []
         lines.append("Gas Heater")
-        lines.append("Max Thermal Power [W]: " + str(self.maximal_thermal_power_in_watt))
+        lines.append(
+            "Max Thermal Power [W]: " + str(self.maximal_thermal_power_in_watt)
+        )
         lines.append("Operation Time [min]: " + str(self.min_operation_time))
         lines.append("Idle Time [min]: " + str(self.min_idle_time))
         return lines
@@ -435,7 +437,10 @@ class GasHeaterController(cp.Component):
         """Write important variables to report."""
         lines = []
         lines.append("Gas Heater Controller")
-        lines.append("Set Temperature of Water [°C]: " + str(self.set_temperature_water_boiler_in_celsius))
+        lines.append(
+            "Set Temperature of Water [°C]: "
+            + str(self.set_temperature_water_boiler_in_celsius)
+        )
         # todo: add more useful stuff here
         return lines
 
@@ -469,7 +474,10 @@ class GasHeaterController(cp.Component):
             self.set_temperature_water_boiler_in_celsius
         )
         # gas is turned off a little before maximum water temp is reached
-        if water_boiler_temperature >= maxium_water_boiler_set_temperature - self.offset:
+        if (
+            water_boiler_temperature
+            >= maxium_water_boiler_set_temperature - self.offset
+        ):
             self.controller_gas_valve_mode = "close"
             return
 

@@ -367,16 +367,19 @@ def configure_battery(
     """
     if battery_capacity is not None:
         my_advanced_battery_config = (
-            advanced_battery_bslib.BatteryConfig.get_default_config(
+            advanced_battery_bslib.BatteryConfig(
                 e_bat_custom=battery_capacity,
                 p_inv_custom=battery_capacity * 0.5 * 1e3,
                 source_weight=count,
+                system_id='SG1',
+                name='Battery',
             )
         )
     else:
         my_advanced_battery_config = (
-            advanced_battery_bslib.BatteryConfig.get_default_config(source_weight=count)
+            advanced_battery_bslib.BatteryConfig.get_default_config()
         )
+        my_advanced_battery_config.source_weight=count
     count += 1
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,

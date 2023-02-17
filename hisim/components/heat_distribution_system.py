@@ -86,7 +86,7 @@ class HeatDistribution(cp.Component):
     # Outputs
     WaterTemperatureOutput = "WaterTemperatureOutput"
     ThermalPowerDelivered = "ThermalPowerDelivered"
-    FloorHeatingWaterMassFlowRate = "FloorHeatingWaterMassFlowRate"
+    HeatingDistributionSystemWaterMassFlowRate = "FloorHeatingWaterMassFlowRate"
 
     # Similar components to connect to:
     # 1. Building
@@ -149,19 +149,22 @@ class HeatDistribution(cp.Component):
             self.WaterTemperatureOutput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
+            output_description=f"here a description for {self.WaterTemperatureOutput} will follow.",
         )
         self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalPowerDelivered,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
         )
-        self.floor_heating_water_mass_flow_rate_channel: cp.ComponentOutput = (
+        self.heating_distribution_system_water_mass_flow_rate_channel: cp.ComponentOutput = (
             self.add_output(
                 self.component_name,
-                self.FloorHeatingWaterMassFlowRate,
+                self.HeatingDistributionSystemWaterMassFlowRate,
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.KG_PER_SEC,
+                output_description=f"here a description for {self.HeatingDistributionSystemWaterMassFlowRate} will follow.",
             )
         )
 
@@ -203,7 +206,8 @@ class HeatDistribution(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        lines.append("Heat Distribution System")
+        for config_string in self.heat_distribution_system_config.get_string_dict():
+            lines.append(config_string)
         return lines
 
     def i_simulate(
@@ -288,7 +292,7 @@ class HeatDistribution(cp.Component):
         #     self.heat_gain_for_building_in_watt,
         # )
         stsv.set_output_value(
-            self.floor_heating_water_mass_flow_rate_channel,
+            self.heating_distribution_system_water_mass_flow_rate_channel,
             self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
         )
 
@@ -392,10 +396,12 @@ class HeatDistributionController(cp.Component):
                 self.RealHeatBuildingDemandPassedToHeatDistributionSystem,
                 lt.LoadTypes.HEATING,
                 lt.Units.WATT,
+                output_description=f"here a description for {self.RealHeatBuildingDemandPassedToHeatDistributionSystem} will follow.",
             )
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
+            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY,
+            output_description=f"here a description for {self.State} will follow.",
         )
 
         self.add_default_connections(

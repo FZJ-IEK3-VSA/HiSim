@@ -191,13 +191,21 @@ class BuildingControllerState:
 
 @dataclass_json
 @dataclass
-class BuildingControllerConfig:
+class BuildingControllerConfig(cp.ConfigBase):
 
     """Configuration of the Building Controller class."""
 
     minimal_building_temperature_in_celsius: float
     maximal_building_temperature_in_celsius: float
 
+    @classmethod
+    def get_default_config(cls)-> Any:
+        """Gets a default configuration of the building controller."""
+        config = BuildingControllerConfig(
+            minimal_building_temperature_in_celsius=20,
+            maximal_building_temperature_in_celsius=24,
+        )
+        return config
 
 class Building(dynamic_component.DynamicComponent):
 
@@ -1894,18 +1902,19 @@ class BuildingController(cp.Component):
         config: BuildingControllerConfig,
     ):
         """Constructs all the neccessary attributes of the Building Controller object."""
+        self.building_controller_config = config
         super().__init__(
             name="BuildingController",
             my_simulation_parameters=my_simulation_parameters,
         )
         self.minimal_building_temperature_in_celsius = (
-            config.minimal_building_temperature_in_celsius
+            self.building_controller_config.minimal_building_temperature_in_celsius
         )
         self.maximal_building_temperature_in_celsius = (
-            config.maximal_building_temperature_in_celsius
+            self.building_controller_config.maximal_building_temperature_in_celsius
         )
         self.state = BuildingControllerState(
-            temperature_building_target_in_celsius=config.minimal_building_temperature_in_celsius,
+            temperature_building_target_in_celsius=self.minimal_building_temperature_in_celsius,
             level_of_utilization=0,
         )
         self.previous_state = self.state.clone()
@@ -1933,23 +1942,18 @@ class BuildingController(cp.Component):
             self.RealHeatBuildingDemand,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.RealHeatBuildingDemand} will follow.",
         )
         self.level_of_utilization_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.LevelOfUtilization,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
+            output_description=f"here a description for {self.LevelOfUtilization} will follow.",
         )
         # =================================================================================================================================
 
-    @staticmethod
-    def get_default_config():
-        """Gets a default configuration of the building controller."""
-        config = BuildingControllerConfig(
-            minimal_building_temperature_in_celsius=20,
-            maximal_building_temperature_in_celsius=24,
-        )
-        return config
+
 
     def build(self):
         """Build load profile for entire simulation duration."""
@@ -1959,7 +1963,11 @@ class BuildingController(cp.Component):
         self,
     ):
         """Writes a report."""
-        pass
+        lines = []
+        for config_string in self.building_controller_config.get_string_dict():
+            lines.append(config_string)
+        return lines
+
 
     def i_save_state(
         self,

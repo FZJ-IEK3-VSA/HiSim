@@ -168,6 +168,7 @@ def basic_household_new(
 
     # Build Building Controller
     my_building_controller_config = building.BuildingControllerConfig(
+        name="BuildingController",
         minimal_building_temperature_in_celsius=20.0,
         maximal_building_temperature_in_celsius=26.0,
     )
@@ -177,26 +178,29 @@ def basic_household_new(
     )
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        name="BaseLoad",
-        grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+        config=sumbuilder.ElectricityGridConfig(name="ElectrcityGrid_BaseLoad", grid=[my_occupancy, "Subtract", my_photovoltaic_system], signal=None),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump_for_house_with_hds.HeatPumpControllerNew(
+        config=generic_heat_pump_for_house_with_hds.HeatPumpControllerConfigNew(
+        name="HeatPumpController",
         set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
         offset=offset,
-        mode=hp_mode,
+        mode=hp_mode),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump_for_house_with_hds.GenericHeatPumpNew(
+        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew(
+        name="HeatPump",
         manufacturer=hp_manufacturer,
-        name=hp_name,
+        heat_pump_name=hp_name,
         min_operation_time_in_seconds=hp_min_operation_time_in_seconds,
-        min_idle_time_in_seconds=hp_min_idle_time_in_seconds,
+        min_idle_time_in_seconds=hp_min_idle_time_in_seconds),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -380,7 +384,7 @@ def basic_household_new(
     my_simple_heat_water_storage.connect_input(
         my_simple_heat_water_storage.WaterMassFlowRateFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
-        my_heat_distribution_system.FloorHeatingWaterMassFlowRate,
+        my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_controller.connect_input(

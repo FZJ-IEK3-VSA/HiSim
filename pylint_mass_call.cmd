@@ -4,6 +4,8 @@ pylint C:\Users\k.rieck\HiSim\examples\basic_household.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\basic_household_only_heating.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\basic_household_with_new_hp_hds_hws_and_pv.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\default_connections.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\dynamic_components.py
@@ -76,9 +78,15 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater_with_controlle
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_heat_pump.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\generic_heat_pump_for_house_with_hds.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_hot_water_storage_modular.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\heating_components.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\heat_distribution_system.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\simple_heat_water_storage.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\modular_household\component_connections.py
 if %errorlevel% neq 0 exit /b

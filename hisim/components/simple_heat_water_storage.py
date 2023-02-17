@@ -188,6 +188,7 @@ class HeatingWaterStorage(cp.Component):
                 self.MeanWaterTemperatureInWaterStorage,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
+                output_description=f"here a description for {self.MeanWaterTemperatureInWaterStorage} will follow.",
             )
         )
 
@@ -197,8 +198,9 @@ class HeatingWaterStorage(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write a report."""
-        lines: List = []
-        lines.append("Heating Water Storage")
+        lines = []
+        for config_string in self.waterstorageconfig.get_string_dict():
+            lines.append(config_string)
         return lines
 
     def i_save_state(self) -> None:

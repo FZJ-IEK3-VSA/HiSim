@@ -11,7 +11,8 @@ This module contains the following classes:
 # Generic/Built-in
 import copy
 from typing import List, Any, Optional
-
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
 import numpy as np
 
 from hisim import component as cp
@@ -35,6 +36,57 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
+
+
+@dataclass_json
+@dataclass
+class GenericHeatPumpConfigNew(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return GenericHeatPumpNew.get_full_classname()
+
+    name: str
+    manufacturer: str
+    heat_pump_name: str
+    min_operation_time_in_seconds: float
+    min_idle_time_in_seconds: float
+
+    @classmethod
+    def get_default_generic_heat_pump_config(cls):
+        """Gets a default Generic Heat Pump."""
+        return GenericHeatPumpConfigNew(
+            name="HeatPump",
+            heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
+            manufacturer="Viessmann Werke GmbH & Co KG",
+            min_operation_time_in_seconds=60 * 60,
+            min_idle_time_in_seconds=15 * 60,
+        )
+
+
+@dataclass_json
+@dataclass
+class HeatPumpControllerConfigNew(cp.ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatPumpControllerNew.get_full_classname()
+
+    name: str
+    set_water_storage_temperature_for_heating_in_celsius: float
+    set_water_storage_temperature_for_cooling_in_celsius: float
+    offset: float
+    mode: int
+    @classmethod
+    def get_default_generic_heat_pump_controller_config(cls):
+        """Gets a default Generic Heat Pump Controller."""
+        return HeatPumpControllerConfigNew(
+            name="HeatPumpController",
+            set_water_storage_temperature_for_heating_in_celsius=50,
+            set_water_storage_temperature_for_cooling_in_celsius=60,
+            offset=0.0,
+            mode=1,
+        )
 
 
 class GenericHeatPumpStateNew:
@@ -146,15 +198,18 @@ class GenericHeatPumpNew(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        manufacturer: str = "Viessmann Werke GmbH & Co KG",
-        name: str = "Vitocal 300-A AWO-AC 301.B07",
-        min_operation_time_in_seconds: int = 60 * 60,
-        min_idle_time_in_seconds: int = 15 * 60,
+        config: GenericHeatPumpConfigNew,
     ) -> None:
         """Construct all the necessary attributes."""
-        super().__init__("HeatPump", my_simulation_parameters=my_simulation_parameters)
-
-        self.build(manufacturer, name, min_operation_time_in_seconds, min_idle_time_in_seconds)
+        self.heatpump_config = config
+        super().__init__(
+            self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters
+        )
+        self.manufacturer = self.heatpump_config.manufacturer
+        self.heatpump_name = self.heatpump_config.heat_pump_name
+        self.min_operation_time_in_seconds = self.heatpump_config.min_operation_time_in_seconds
+        self.min_idle_time_in_seconds = self.heatpump_config.min_idle_time_in_seconds
+        self.build(self.manufacturer, self.heatpump_name, self.min_operation_time_in_seconds, self.min_idle_time_in_seconds)
 
         self.number_of_cycles = 0
         self.number_of_cycles_previous = copy.deepcopy(self.number_of_cycles)
@@ -241,14 +296,17 @@ class GenericHeatPumpNew(cp.Component):
             self.ThermalPowerDelivered,
             LoadTypes.HEATING,
             Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Heating, LoadTypes.HEATING, Units.WATT
+            self.component_name, self.Heating, LoadTypes.HEATING, Units.WATT,
+            output_description=f"here a description for {self.Heating} will follow.",
         )
 
         self.cooling_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT
+            self.component_name, self.Cooling, LoadTypes.COOLING, Units.WATT,
+            output_description=f"here a description for {self.Cooling} will follow.",
         )
 
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
@@ -256,6 +314,7 @@ class GenericHeatPumpNew(cp.Component):
             self.ElectricityOutput,
             LoadTypes.ELECTRICITY,
             Units.WATT,
+            output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow.",
         )
         self.water_temperature_output_channel: cp.ComponentOutput = (
             self.add_output(
@@ -263,6 +322,7 @@ class GenericHeatPumpNew(cp.Component):
                 self.WaterTemperatureOutput,
                 LoadTypes.WARM_WATER,
                 Units.CELSIUS,
+                output_description=f"here a description for {self.WaterTemperatureOutput} will follow.",
             )
         )
 
@@ -272,11 +332,13 @@ class GenericHeatPumpNew(cp.Component):
                 self.HeatPumpWaterMassFlowRate,
                 LoadTypes.WARM_WATER,
                 Units.KG_PER_SEC,
+                output_description=f"here a description for {self.HeatPumpWaterMassFlowRate} will follow.",
             )
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY
+            self.component_name, self.NumberOfCycles, LoadTypes.ANY, Units.ANY,
+            output_description=f"here a description for {self.NumberOfCycles} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -417,18 +479,15 @@ class GenericHeatPumpNew(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
-        lines: List[str] = []
-        lines.append("Name: Heat Pump")
+        lines = []
+        for config_string in self.heatpump_config.get_string_dict():
+            lines.append(config_string)
         lines.append(
             f"Max heating power: {(self.max_heating_power_in_watt) * 1e-3:4.3f} kW"
         )
         lines.append(
             f"Max heating power variation restriction: {self.max_heating_power_variation_restriction_in_watt:4.3f} W"
         )
-        # lines = []
-        # lines.append([self.ComponentName,""])
-        # lines.append(["Max power:","{:4.2f}".format(self.max_heating_power)])
-        # lines.append(["Max power var:","{:4.2f}".format(self.max_heating_power_var)])
         return lines
 
     def i_simulate(
@@ -699,20 +758,19 @@ class HeatPumpControllerNew(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_water_storage_temperature_for_heating_in_celsius: float = 50,
-        set_water_storage_temperature_for_cooling_in_celsius: float = 60,
-        offset: float = 0.0,
-        mode: int = 1,
+        config: HeatPumpControllerConfigNew,
     ) -> None:
         """Construct all the neccessary attributes."""
+        self.heatpump_controller_config = config
         super().__init__(
-            "HeatPumpController", my_simulation_parameters=my_simulation_parameters
+            self.heatpump_controller_config.name,
+            my_simulation_parameters=my_simulation_parameters,
         )
         self.build(
-            set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
-            set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
-            offset=offset,
-            mode=mode,
+            set_water_storage_temperature_for_heating_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_heating_in_celsius,
+            set_water_storage_temperature_for_cooling_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
+            offset=self.heatpump_controller_config.offset,
+            mode=self.heatpump_controller_config.mode,
         )
 
         self.water_temperature_input_channel: cp.ComponentInput = self.add_input(
@@ -731,7 +789,8 @@ class HeatPumpControllerNew(cp.Component):
         )
 
         self.state_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.State, LoadTypes.ANY, Units.ANY
+            self.component_name, self.State, LoadTypes.ANY, Units.ANY,
+            output_description=f"here a description for {self.State} will follow.",
         )
 
         self.controller_heatpumpmode: Any
@@ -783,9 +842,8 @@ class HeatPumpControllerNew(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        lines.append("Heat Pump Controller")
-        # todo: add more useful stuff here
-        lines.append("tbd")
+        for config_string in self.heatpump_controller_config.get_string_dict():
+            lines.append(config_string)
         return lines
 
     def i_simulate(

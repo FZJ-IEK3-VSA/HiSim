@@ -14,7 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim import log
+# from hisim import log
 
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -61,9 +61,9 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
         return config
 
 
-class HeatStorageState:
+class HeatingWaterStorageState:
 
-    """HeatStorageState."""
+    """HeatingWaterStorageState."""
 
     def __init__(
         self,
@@ -82,7 +82,7 @@ class HeatStorageState:
 
     def clone(self) -> Any:
         """Save previous state."""
-        return HeatStorageState(
+        return HeatingWaterStorageState(
             self.start_timestep,
             mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_storage_in_celsius,
             cool_water_temperature_in_celsius=self.cool_water_temperature_in_celsius,
@@ -120,7 +120,7 @@ class HeatingWaterStorage(cp.Component):
         # =================================================================================================================================
         # Initialization of variables
         self.waterstorageconfig = config
-        self.state = HeatStorageState(
+        self.state = HeatingWaterStorageState(
             start_timestep=int(0),
             mean_water_temperature_in_storage_in_celsius=self.waterstorageconfig.mean_water_temperature_in_storage_in_celsius,
             cool_water_temperature_in_celsius=self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius,
@@ -248,7 +248,7 @@ class HeatingWaterStorage(cp.Component):
                 previous_mean_water_temperature_in_water_storage_in_celsius=start_water_temperature_in_storage_in_celsius,
                 seconds_per_timestep=self.seconds_per_timestep,
             )
-            self.state = HeatStorageState(start_timestep=timestep,
+            self.state = HeatingWaterStorageState(start_timestep=timestep,
                                           mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
                                           cool_water_temperature_in_celsius=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
                                           hot_water_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius)

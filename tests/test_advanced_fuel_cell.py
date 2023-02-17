@@ -21,7 +21,7 @@ def test_chp_system():
 
     #===================================================================================================================
     # Set Gas Heater
-    my_chp_system_config= advanced_fuel_cell.CHP.get_default_config()
+    my_chp_system_config= advanced_fuel_cell.CHPConfig.get_default_config()
     my_chp_system_config.min_operation_time=60
     my_chp_system_config.min_idle_time = 15
     my_chp_system_config.gas_type = "Methan"

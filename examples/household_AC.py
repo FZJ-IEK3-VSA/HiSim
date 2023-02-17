@@ -203,7 +203,7 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_sim.add_component(my_building)
     if control=="PID":
     
-        pid_controller=PIDcontroller.PIDController(my_simulation_parameters=my_simulation_parameters,ki=ki, kp=kp, kd=kd)
+        pid_controller=PIDcontroller.PIDController(my_simulation_parameters=my_simulation_parameters,config=PIDcontroller.PIDControllerConfig(ki=ki, kp=kp, kd=kd))
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                               my_building.component_name,
                                               my_building.TemperatureMean)
@@ -223,19 +223,19 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         #                                       my_building.component_name,
         #                                       my_building.TemperatureAir)
     if control=="on_off":
-        my_air_conditioner_controller=air_conditioner.AirConditionercontroller(t_air_heating=t_air_heating,
+        my_air_conditioner_controller=air_conditioner.AirConditionercontroller(config=air_conditioner.AirConditionerControllerConfig(t_air_heating=t_air_heating,
                                                                 t_air_cooling=t_air_cooling,
-                                                                offset=offset,
+                                                                offset=offset),
                                                                 my_simulation_parameters=my_simulation_parameters)
         my_air_conditioner_controller.connect_input(my_air_conditioner_controller.TemperatureMean,
                                               my_building.component_name,
                                               my_building.TemperatureMean)
 
-    my_air_conditioner = air_conditioner.AirConditioner(manufacturer=ac_manufacturer,
+    my_air_conditioner = air_conditioner.AirConditioner(config=air_conditioner.AirConditionerConfig(manufacturer=ac_manufacturer,
                                           name=Model,
                                           min_operation_time=hp_min_operation_time,
                                           min_idle_time=hp_min_idle_time,
-                                          control=control,
+                                          control=control),
                                           my_simulation_parameters=my_simulation_parameters)
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureOutside,
                                 my_weather.component_name,
@@ -260,9 +260,6 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                               my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
     
-
-
-
 
 if __name__ == "__main__":
     y = np.logspace(1, 3, num=7)

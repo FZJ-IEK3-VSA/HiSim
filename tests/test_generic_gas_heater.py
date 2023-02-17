@@ -22,7 +22,7 @@ def test_gas_heater():
     maximal_power_in_watt = 12_000
     # ===================================================================================================================
     # Set Gas Heater
-    my_gas_heater_config = generic_gas_heater.GasHeater.get_default_config()
+    my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config()
     my_gas_heater_config.temperature_delta_in_celsius = temperature_delta_in_celsius
     my_gas_heater_config.maximal_power_in_watt = maximal_power_in_watt
 

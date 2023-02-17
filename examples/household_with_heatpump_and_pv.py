@@ -126,12 +126,6 @@ def household_pv_hp(
     offset = 0.5
     hp_mode = 2
 
-    # Set Heat Pump
-    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-    hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 60
-    hp_min_idle_time = 15
-
     # =================================================================================================================================
     # Build Components
 
@@ -144,6 +138,7 @@ def household_pv_hp(
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+        name="UTSPConnector",
         url=url,
         api_key=api_key,
         household=household,
@@ -173,8 +168,9 @@ def household_pv_hp(
 
     # Build Electricity Grid
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        name="BaseLoad",
+        config=sumbuilder.ElectricityGridConfig(name="BaseLoad",
         grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+        signal=None),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -183,20 +179,19 @@ def household_pv_hp(
                                     my_simulation_parameters=my_simulation_parameters)
 
     # Build Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(
+        name="GenericHeatPumpController",
         temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
         temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
-        mode=hp_mode,
+        mode=hp_mode),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        manufacturer=hp_manufacturer,
-        name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time,
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

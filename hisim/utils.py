@@ -148,7 +148,7 @@ def get_cache_file(component_key: str, parameter_class: Any, my_simulation_param
     simulation_parameter_str = my_simulation_parameters.get_unique_key()
     json_str = json_str + simulation_parameter_str
     if len(json_str) < 5:
-        raise Exception("Empty json detected for caching. This is a bug.")
+        raise ValueError("Empty json detected for caching. This is a bug.")
     json_str_encoded = json_str.encode('utf-8')
     # Johanna Ganglbauer: python told me "TypeError: openssl_sha256() takes at most 1 argument (2 given)",
     # I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package?

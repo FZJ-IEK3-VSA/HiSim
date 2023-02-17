@@ -72,6 +72,20 @@ class SimulationParameters(JSONWizard):
         for option in PostProcessingOptions:
             self.post_processing_options.append(option)
 
+    def enable_all_options_except_report(self) -> None:
+        """Enables all the post processing options except the report generation."""
+        self.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
+        self.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        self.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        self.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY)
+        self.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
+
+
     @classmethod
     def full_year_all_options(
         cls, year: int, seconds_per_timestep: int
@@ -86,6 +100,19 @@ class SimulationParameters(JSONWizard):
         pars.enable_all_options()
         return pars
 
+    @classmethod
+    def full_year_all_options_except_report(
+        cls, year: int, seconds_per_timestep: int
+    ) -> SimulationParameters:
+        """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
+        pars = cls(
+            datetime.datetime(year, 1, 1),
+            datetime.datetime(year + 1, 1, 1),
+            seconds_per_timestep,
+            "",
+        )
+        pars.enable_all_options_except_report()
+        return pars
     @classmethod
     def january_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""

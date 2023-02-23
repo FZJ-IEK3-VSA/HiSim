@@ -44,6 +44,8 @@ class L1HeatPumpConfig(ConfigBase):
     t_min_heating_in_celsius: float
     #: upper set temperature of building, given in °C
     t_max_heating_in_celsius: float
+    # True if control is only considered in the heating period, False if control is needed during the entire year
+    cooling_considered: bool
     # julian day of simulation year, where heating season begins
     day_of_heating_season_begin: int
     # julian day of simulation year, where heating season ends

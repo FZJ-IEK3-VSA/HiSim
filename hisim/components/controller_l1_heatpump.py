@@ -56,7 +56,7 @@ class L1HeatPumpConfig(ConfigBase):
     min_idle_time_in_seconds: int
 
     @staticmethod
-    def get_default_config_heat_source_controller(name: str) -> Any:
+    def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
         """ Returns default configuration for the controller of building heating. """
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
                                   cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
@@ -64,7 +64,7 @@ class L1HeatPumpConfig(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heat_source_controller_buffer(name: str) -> Any:
+    def get_default_config_heat_source_controller_buffer(name: str) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
@@ -73,7 +73,7 @@ class L1HeatPumpConfig(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heat_source_controller_dhw(name: str) -> Any:
+    def get_default_config_heat_source_controller_dhw(name: str) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of a drain hot water storage. """
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
                                   cooling_considered=False, day_of_heating_season_begin=270, day_of_heating_season_end=150,
@@ -182,8 +182,8 @@ class L1HeatPumpController(cp.Component):
                 / self.my_simulation_parameters.seconds_per_timestep
             )
         self.state: L1HeatPumpControllerState = L1HeatPumpControllerState(0, 0, 0, 0)
-        self.previous_state: L1HeatPumpConfig = self.state.clone()
-        self.processed_state: L1HeatPumpConfig = self.state.clone()
+        self.previous_state: L1HeatPumpControllerState = self.state.clone()
+        self.processed_state: L1HeatPumpControllerState = self.state.clone()
 
         # Component Outputs
         self.heat_pump_target_percentage_channel: cp.ComponentOutput = self.add_output(

@@ -1,10 +1,11 @@
+""" Generic Heat Source (Oil, Gas or DistrictHeating) together with Configuration and State. """
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
 from typing import List, Any
 
 from dataclasses_json import dataclass_json
 
-""" Generic Heat Source (Oil, Gas or DistrictHeating) together with Configuration and State. """
 # Import modules from HiSim
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -87,8 +88,8 @@ class HeatSource(cp.Component):
     Heat Source implementation - District Heating, Oil Heating or Gas Heating. Heat is converted with given efficiency.
 
     Components to connect to:
-    *Heat Pump Controller (controller_l1_heatpump)
-    *Energy Management System (controller_l2_energy_management_system) - optional
+    (1) Heat Pump Controller (controller_l1_heatpump)
+    (2) Energy Management System (controller_l2_energy_management_system) - optional
     """
 
     # Inputs

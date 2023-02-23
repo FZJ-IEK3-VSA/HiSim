@@ -94,9 +94,9 @@ class ModularHeatPump(cp.Component):
     This implementation does not consider cooling of buildings.
 
     Components to connect to:
-    *Weather
-    *Heat Pump Controller (controller_l1_heatpump)
-    *Energy Management System (controller_l2_energy_management_system) - optional
+    (1) Weather
+    (2) Heat Pump Controller (controller_l1_heatpump)
+    (3) Energy Management System (controller_l2_energy_management_system) - optional
     """
 
     # Inputs

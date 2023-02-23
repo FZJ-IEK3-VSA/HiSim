@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # clean
-""" Generic heating controller. """
+""" Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered."""
 
 from dataclasses import dataclass
 
@@ -36,20 +36,26 @@ __status__ = "development"
 class L1HeatPumpConfig(ConfigBase):
 
     """L1 Controller Config."""
-
+    #: name of the device
     name: str
+    #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
+    #: lower set temperature of building, given in °C
     t_min_heating_in_celsius: float
+    #: upper set temperature of building, given in °C
     t_max_heating_in_celsius: float
-    cooling_considered: bool
-    day_of_heating_season_begin: Optional[int]
-    day_of_heating_season_end: Optional[int]
+    # julian day of simulation year, where heating season begins
+    day_of_heating_season_begin: int
+    # julian day of simulation year, where heating season ends
+    day_of_heating_season_end: int
+    # minimal operation time of heat source
     min_operation_time_in_seconds: int
+    # minimal resting time of heat source
     min_idle_time_in_seconds: int
 
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> Any:
-        """ Default Config for the buffer temperature. """
+        """ Returns default configuration for the controller of building heating. """
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
                                   cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
                                   min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
@@ -57,7 +63,7 @@ class L1HeatPumpConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_heat_source_controller_buffer(name: str) -> Any:
-        """Default Config for the buffer temperature."""
+        """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
                                   cooling_considered=True, day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150,
@@ -66,7 +72,7 @@ class L1HeatPumpConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_heat_source_controller_dhw(name: str) -> Any:
-        """ Default Config for the buffer temperature. """
+        """Returns default configuration for the controller of a drain hot water storage. """
         config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
                                   cooling_considered=False, day_of_heating_season_begin=270, day_of_heating_season_end=150,
                                   min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
@@ -90,7 +96,7 @@ class L1HeatPumpControllerState:
         self.deactivation_time_step: int = deactivation_time_step
         self.percentage: float = percentage
 
-    def clone(self) -> Any:
+    def clone(self) -> "L1HeatPumpControllerState":
         """Copies the current instance."""
         return L1HeatPumpControllerState(
             on_off=self.on_off,
@@ -116,11 +122,12 @@ class L1HeatPumpControllerState:
 
 class L1HeatPumpController(cp.Component):
 
-    """L1 building controller. Processes signals ensuring comfort temperature of building.
+    """L1 building controller. Processes signals ensuring comfort temperature of building/buffer or boiler.
 
     Gets available surplus electricity and the temperature of the storage or building to control as input,
     and outputs control signal 0/1 for turn off/switch on based on comfort temperature limits and available electricity.
-    It optionally has different modes for cooling and heating selected by the time of the year.
+    In addition, run time control is considered, so that e. g. heat pumps do not continuosly turn on and off.
+    It is optionally only activated during the heating season.
 
     """
 

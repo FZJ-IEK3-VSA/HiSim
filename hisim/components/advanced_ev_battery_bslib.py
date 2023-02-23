@@ -33,6 +33,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig:
+    """Configuration of a Car Battery. """
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority

@@ -31,6 +31,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
+    """Battery Configuration. """
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""

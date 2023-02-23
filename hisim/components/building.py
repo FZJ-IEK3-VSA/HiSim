@@ -67,7 +67,7 @@ from hisim import (
 from hisim import (
     log,
 )
-
+from hisim.components.configuration import PhysicsConfig
 from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnector,
 )
@@ -174,18 +174,21 @@ class BuildingControllerState:
         self,
         temperature_building_target_in_celsius: float,
         level_of_utilization: float,
+        real_heat_building_deman_in_watt: float,
     ):
         """Constructs all the neccessary attributes for the BuildingControllerState object."""
         self.temperature_building_target_in_celsius: float = (
             temperature_building_target_in_celsius
         )
         self.level_of_utilization: float = level_of_utilization
+        self.real_heat_building_demand_in_watt: float = real_heat_building_deman_in_watt
 
     def clone(self):
         """Copies the BuildingControllerState."""
         return BuildingControllerState(
             temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
             level_of_utilization=self.level_of_utilization,
+            real_heat_building_deman_in_watt=self.real_heat_building_demand_in_watt,
         )
 
 
@@ -260,7 +263,7 @@ class Building(dynamic_component.DynamicComponent):
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
-    # MaxWaterMassFlowRate = "MaxWaterMassFlow"
+    HeatLoss = "HeatLoss"
 
     @utils.measure_execution_time
     def __init__(
@@ -516,13 +519,13 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.ReferenceMaxHeatBuildingDemand} will follow.",
         )
-
-        # self.max_water_mass_flow_rate_channel: cp.ComponentOutput = self.add_output(
-        #     self.component_name,
-        #     self.MaxWaterMassFlowRate,
-        #     lt.LoadTypes.WARM_WATER,
-        #     lt.Units.KG_PER_SEC,
-        # )
+        self.heat_loss_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatLoss,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.HeatLoss} will follow.",
+        )
 
         # =================================================================================================================================
         # Add and get default connections
@@ -731,10 +734,10 @@ class Building(dynamic_component.DynamicComponent):
             self.max_thermal_building_demand_in_watt,
         )
 
-        # stsv.set_output_value(
-        #     self.max_water_mass_flow_rate_channel,
-        #     self.max_water_mass_flow_rate_in_kg_per_second,
-        # )
+        stsv.set_output_value(
+            self.heat_loss_channel,
+            self.heat_loss_in_watt,
+        )
 
         # Saves solar gains cache
         if not self.is_in_cache:
@@ -1697,19 +1700,22 @@ class Building(dynamic_component.DynamicComponent):
     ) -> Any:
         """Calculate maximal thermal building demand using TABULA data."""
 
-        vals1_in_watt_per_m2_per_kelvin = float(
+        self.vals1_in_watt_per_m2_per_kelvin = float(
             self.buildingdata["h_Transmission"].values[0]
         ) * (1 / self.scaling_factor)
 
-        if vals1_in_watt_per_m2_per_kelvin is None:
+        if self.vals1_in_watt_per_m2_per_kelvin is None:
             raise ValueError("h_Transmission was none.")
-        vals2_in_watt_per_m2_per_kelvin = float(
+        self.vals2_in_watt_per_m2_per_kelvin = float(
             self.buildingdata["h_Ventilation"].values[0]
         ) * (1 / self.scaling_factor)
 
         # with with dQ/dt = h * (T2-T1) * A -> [W]
         max_thermal_building_demand_in_watt = (
-            (vals1_in_watt_per_m2_per_kelvin + vals2_in_watt_per_m2_per_kelvin)
+            (
+                self.vals1_in_watt_per_m2_per_kelvin
+                + self.vals2_in_watt_per_m2_per_kelvin
+            )
             * (
                 initial_temperature_in_celsius
                 - heating_reference_temperature_in_celsius
@@ -1717,27 +1723,6 @@ class Building(dynamic_component.DynamicComponent):
             * self.scaled_conditioned_floor_area_in_m2
         )
         return max_thermal_building_demand_in_watt
-
-    # # =====================================================================================================================================
-    # # Calculation of maximal water mass flow for water circulation through heating distribution system and heating water storage
-    # def calc_max_water_mass_flow_rate(
-    #     self,
-    #     initial_temperature_in_celsius: float,
-    #     heating_reference_temperature_in_celsius: float,
-    #     max_thermal_building_demand_in_watt: float,
-    # ) -> Any:
-    #     """Calculate maximal water mass flow."""
-    #     specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
-    #         PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-    #     )
-    #     max_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (
-    #         specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-    #         * (
-    #             initial_temperature_in_celsius
-    #             - heating_reference_temperature_in_celsius
-    #         )
-    #     )
-    #     return max_water_mass_flow_in_kg_per_second
 
 
 # =====================================================================================================================================
@@ -1895,6 +1880,9 @@ class BuildingController(cp.Component):
     # Inputs
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     ResidenceTemperature = "ResidenceTemperature"
+    HeatingDistributionSystemWaterMassFlowRate = (
+        "HeatingDistributionSystemWaterMassFlowRate"
+    )
     # Outputs
     RealHeatBuildingDemand = "RealHeatBuildingDemand"
     LevelOfUtilization = "LevelOfUtilization"
@@ -1919,11 +1907,27 @@ class BuildingController(cp.Component):
         self.state = BuildingControllerState(
             temperature_building_target_in_celsius=self.minimal_building_temperature_in_celsius,
             level_of_utilization=0,
+            real_heat_building_deman_in_watt=0,
         )
+        self.building = Building(
+            config=BuildingConfig.get_default_german_single_family_home(),
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        self.h_transmission = self.building.vals1_in_watt_per_m2_per_kelvin
+        self.h_ventilation = self.building.vals2_in_watt_per_m2_per_kelvin
+
+        self.building_area_in_m2 = self.building.scaled_conditioned_floor_area_in_m2
+
+        self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second: float = 0.0
+        self.heating_demand_one_in_watt: float = 0.0
+        self.heating_demand_two_in_watt: float = 0.0
+        self.cooling_demand_one_in_watt: float = 0.0
+        self.cooling_demand_two_in_watt: float = 0.0
         self.previous_state = self.state.clone()
         self.real_heat_building_demand_in_watt: float = 0.0
         self.building_temperature_in_celsius: float = 0.0
         self.level_of_utilization: float = 0.0
+
         # =================================================================================================================================
         # Inputs and Output channels
 
@@ -1939,6 +1943,13 @@ class BuildingController(cp.Component):
             self.ResidenceTemperature,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            True,
+        )
+        self.heat_distribution_system_water_mass_flow_rate_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingDistributionSystemWaterMassFlowRate,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
             True,
         )
         self.real_heat_building_demand_channel: cp.ComponentOutput = self.add_output(
@@ -2009,13 +2020,18 @@ class BuildingController(cp.Component):
             self.building_temperature_in_celsius = stsv.get_input_value(
                 self.residence_temperature_channel
             )
+            self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second = (
+                stsv.get_input_value(
+                    self.heat_distribution_system_water_mass_flow_rate_channel
+                )
+            )
             minimal_building_temperature_in_celsius = (
                 self.minimal_building_temperature_in_celsius
             )
             maximal_building_temperature_in_celsius = (
                 self.maximal_building_temperature_in_celsius
             )
-            delta_temp_for_level_of_utilization = 0.4
+            delta_temp_for_level_of_utilization = 0.2
 
             # Building is too hot and needs cooling
             if (
@@ -2023,7 +2039,7 @@ class BuildingController(cp.Component):
                 >= maximal_building_temperature_in_celsius
                 + delta_temp_for_level_of_utilization
             ):
-                self.level_of_utilization = -0.5
+                self.level_of_utilization = -0.4
             elif (
                 maximal_building_temperature_in_celsius
                 <= self.building_temperature_in_celsius
@@ -2047,7 +2063,7 @@ class BuildingController(cp.Component):
             elif (
                 minimal_building_temperature_in_celsius
                 - delta_temp_for_level_of_utilization
-                <= self.building_temperature_in_celsius
+                < self.building_temperature_in_celsius
                 < minimal_building_temperature_in_celsius
             ):
                 self.level_of_utilization = (
@@ -2056,10 +2072,10 @@ class BuildingController(cp.Component):
                 )
             elif (
                 self.building_temperature_in_celsius
-                < minimal_building_temperature_in_celsius
+                <= minimal_building_temperature_in_celsius
                 - delta_temp_for_level_of_utilization
             ):
-                self.level_of_utilization = 0.7
+                self.level_of_utilization = 0.4
 
             else:
                 raise ValueError("the right case could not be identified")
@@ -2073,11 +2089,67 @@ class BuildingController(cp.Component):
             stsv.set_output_value(
                 self.level_of_utilization_channel, self.state.level_of_utilization
             )
+
+            # self.real_heat_building_demand_in_watt = self.state.real_heat_building_demand_in_watt
+
+            # if self.building_temperature_in_celsius < self.minimal_building_temperature_in_celsius:
+            #     self.calc_real_building_heat_demand()
+            #     self.real_heat_demand = self.heating_demand_one_in_watt
+            # elif self.building_temperature_in_celsius > self.maximal_building_temperature_in_celsius:
+            #     self.calc_cooling_demand()
+            #     self.real_heat_demand = self.cooling_demand_one_in_watt
+            # elif self.minimal_building_temperature_in_celsius <= self.building_temperature_in_celsius <= self.maximal_building_temperature_in_celsius:
+            #     self.real_heat_demand = 0
+            # else:
+            #     raise ValueError("unknown case")
+
+            # self.state.real_heat_building_demand_in_watt = self.real_heat_demand
+
             stsv.set_output_value(
                 self.real_heat_building_demand_channel,
                 self.real_heat_building_demand_in_watt,
             )
             # log.information("bcontroller timestep " + str(timestep))
             # log.information("bcontroller building temp " + str(self.building_temperature_in_celsius))
-            # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
+            # # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
             # log.information("bcontroller real buiding heat deamnd " + str(self.real_heat_building_demand_in_watt))
+
+    def calc_real_building_heat_demand(self):
+        """Calc real heat demand for keeping house to minimum temp."""
+        self.heating_demand_one_in_watt = (
+            4
+            * (self.h_transmission + self.h_ventilation)
+            * (
+                self.minimal_building_temperature_in_celsius
+                - self.building_temperature_in_celsius
+            )
+            * self.building_area_in_m2
+        )
+        self.heating_demand_two_in_watt = (
+            self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second
+            * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            * (
+                self.minimal_building_temperature_in_celsius
+                - self.building_temperature_in_celsius
+            )
+        )
+
+    def calc_cooling_demand(self):
+        """Calc Cooling demand."""
+        self.cooling_demand_one_in_watt = (
+            4
+            * (self.h_transmission + self.h_ventilation)
+            * (
+                self.maximal_building_temperature_in_celsius
+                - self.building_temperature_in_celsius
+            )
+            * self.building_area_in_m2
+        )
+        self.cooling_demand_two_in_watt = (
+            self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second
+            * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            * (
+                self.maximal_building_temperature_in_celsius
+                - self.building_temperature_in_celsius
+            )
+        )

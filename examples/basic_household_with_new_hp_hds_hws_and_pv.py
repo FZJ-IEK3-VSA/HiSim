@@ -77,6 +77,11 @@ def basic_household_new(
     absolute_conditioned_floor_area_in_m2 = 121.2
     total_base_area_in_m2 = None
 
+    # Set Building Controller
+    name_building_controller = "BuildingController"
+    minimal_building_temperature_in_celsius = 20.0
+    maximal_building_temperature_in_celsius = 22.0
+
     # Set Heat Pump Controller
     set_water_storage_temperature_for_heating_in_celsius = 50
     set_water_storage_temperature_for_cooling_in_celsius = 55
@@ -88,18 +93,17 @@ def basic_household_new(
     hp_name = "Vitocal 300-A AWO-AC 301.B07"
     hp_min_operation_time_in_seconds = 60 * 60
     hp_min_idle_time_in_seconds = 15 * 60
-
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     min_water_mixing_time_in_seconds = 60 * 60
     volume_heating_water_storage_in_liter = 100
     mean_water_temperature_in_storage_in_celsius = 50
-    cool_water_temperature_in_storage_in_celsius = 40
-    hot_water_temperature_in_storage_in_celsius = 60
+    cool_water_temperature_in_storage_in_celsius = 50
+    hot_water_temperature_in_storage_in_celsius = 50
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 60
+    water_temperature_in_distribution_system_in_celsius = 50
     heating_system = "FloorHeating"
 
     # Set Heat Distribution Controller
@@ -168,9 +172,9 @@ def basic_household_new(
 
     # Build Building Controller
     my_building_controller_config = building.BuildingControllerConfig(
-        name="BuildingController",
-        minimal_building_temperature_in_celsius=20.0,
-        maximal_building_temperature_in_celsius=26.0,
+        name=name_building_controller,
+        minimal_building_temperature_in_celsius=minimal_building_temperature_in_celsius,
+        maximal_building_temperature_in_celsius=maximal_building_temperature_in_celsius,
     )
 
     my_building_controller = building.BuildingController(
@@ -332,6 +336,11 @@ def basic_household_new(
         my_building_controller.ReferenceMaxHeatBuildingDemand,
         my_building.component_name,
         my_building.ReferenceMaxHeatBuildingDemand,
+    )
+    my_building_controller.connect_input(
+        my_building_controller.HeatingDistributionSystemWaterMassFlowRate,
+        my_heat_distribution_system.component_name,
+        my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(

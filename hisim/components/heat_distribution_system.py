@@ -86,7 +86,7 @@ class HeatDistribution(cp.Component):
     # Outputs
     WaterTemperatureOutput = "WaterTemperatureOutput"
     ThermalPowerDelivered = "ThermalPowerDelivered"
-    HeatingDistributionSystemWaterMassFlowRate = "FloorHeatingWaterMassFlowRate"
+    HeatingDistributionSystemWaterMassFlowRate = "HeatingDistributionSystemWaterMassFlowRate"
 
     # Similar components to connect to:
     # 1. Building
@@ -235,7 +235,7 @@ class HeatDistribution(cp.Component):
             )
         )
         self.state.water_temperature_in_distribution_system_in_celsius = (
-            self.water_temperature_input_in_celsius
+            self.water_temperature_output_in_celsius
         )
         if self.state_controller == 1:
 
@@ -247,14 +247,14 @@ class HeatDistribution(cp.Component):
                 water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
                 real_heat_buiding_demand_in_watt=self.real_heat_building_demand_in_watt,
             )
-            stsv.set_output_value(
-            self.water_temperature_output_channel,
-            self.water_temperature_output_in_celsius,
-            )
-            stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.heat_gain_for_building_in_watt,
-            )
+            # stsv.set_output_value(
+            # self.water_temperature_output_channel,
+            # self.water_temperature_output_in_celsius,
+            # )
+            # stsv.set_output_value(
+            # self.thermal_power_delivered_channel,
+            # self.heat_gain_for_building_in_watt,
+            # )
 
         elif self.state_controller == 0:
 
@@ -263,34 +263,34 @@ class HeatDistribution(cp.Component):
             self.water_temperature_output_in_celsius = (
                 self.water_temperature_input_in_celsius
             )
-            stsv.set_output_value(
-            self.water_temperature_output_channel,
-            self.water_temperature_output_in_celsius,
-            )
-            stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.heat_gain_for_building_in_watt,
-            )
+            # stsv.set_output_value(
+            # self.water_temperature_output_channel,
+            # self.water_temperature_output_in_celsius,
+            # )
+            # stsv.set_output_value(
+            # self.thermal_power_delivered_channel,
+            # self.heat_gain_for_building_in_watt,
+            # )
 
         else:
             raise ValueError("unknown mode")
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
-        self.state.water_temperature_in_distribution_system_in_celsius = (
-            self.water_temperature_output_in_celsius
-        )
+        # self.state.water_temperature_in_distribution_system_in_celsius = (
+        #     self.water_temperature_output_in_celsius
+        # )
         # log.information("hsd timestep " + str(timestep))
-        # log.information("hsd water temperature output " + str(self.water_temperature_output_in_celsius))
+        # log.information("hsd water temperature output " + str(self.state.water_temperature_in_distribution_system_in_celsius))
         # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt) + "\n")
 
-        # stsv.set_output_value(
-        #     self.water_temperature_output_channel,
-        #     self.water_temperature_output_in_celsius,
-        # )
-        # stsv.set_output_value(
-        #     self.thermal_power_delivered_channel,
-        #     self.heat_gain_for_building_in_watt,
-        # )
+        stsv.set_output_value(
+            self.water_temperature_output_channel,
+            self.state.water_temperature_in_distribution_system_in_celsius,
+        )
+        stsv.set_output_value(
+            self.thermal_power_delivered_channel,
+            self.heat_gain_for_building_in_watt,
+        )
         stsv.set_output_value(
             self.heating_distribution_system_water_mass_flow_rate_channel,
             self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,

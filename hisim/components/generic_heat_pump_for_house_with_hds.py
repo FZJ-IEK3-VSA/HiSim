@@ -110,11 +110,13 @@ class GenericHeatPumpStateNew:
         thermal_power_delivered_in_watt: float = 0.0,
         cop: float = 1.0,
         cycle_number: Optional[int] = None,
+        water_output_temperature_in_celsius: float = 0.0,
     ) -> None:
         """Contruct all the necessary attributes."""
         self.start_timestep = start_timestep
         self.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
         self.cycle_number = cycle_number
+        self.water_output_temperature_in_celsius = water_output_temperature_in_celsius
         if thermal_power_delivered_in_watt == 0.0:
             self.activation = 0
             self.heating_power_in_watt = 0.0
@@ -149,6 +151,7 @@ class GenericHeatPumpStateNew:
             self.thermal_power_delivered_in_watt,
             self.cop,
             self.cycle_number,
+            self.water_output_temperature_in_celsius,
         )
 
 
@@ -622,6 +625,7 @@ class GenericHeatPumpNew(cp.Component):
                 self.water_temperature_output_channel,
                 self.water_temperature_output_in_celsius,
             )
+
             stsv.set_output_value(
                 self.heatpump_water_mass_flow_rate_input_channel,
                 self.heatpump_water_mass_flow_rate_in_kg_per_second,
@@ -646,20 +650,23 @@ class GenericHeatPumpNew(cp.Component):
             self.number_of_cycles = self.number_of_cycles + 1
             number_of_cycles = self.number_of_cycles
             if state_from_heat_pump_controller == 1:
-                # if stsv.get_input_value(self.stateC) > 0:
+
                 self.state = GenericHeatPumpStateNew(
                     start_timestep=timestep,
                     thermal_power_delivered_in_watt=self.max_heating_power_in_watt,
                     cop=self.calc_cop(temperature_outside),
                     cycle_number=number_of_cycles,
+                    water_output_temperature_in_celsius=self.water_temperature_output_in_celsius,
                 )
 
             else:
+
                 self.state = GenericHeatPumpStateNew(
                     start_timestep=timestep,
                     thermal_power_delivered_in_watt=self.max_cooling_power_in_watt,
                     cop=self.calc_cop(temperature_outside),
                     cycle_number=number_of_cycles,
+                    water_output_temperature_in_celsius=self.water_temperature_output_in_celsius,
                 )
 
         # self.water_temperature_output_in_celsius = self.calculate_water_temperature_after_heat_transfer(
@@ -689,6 +696,7 @@ class GenericHeatPumpNew(cp.Component):
             self.water_temperature_output_channel,
             self.water_temperature_output_in_celsius,
         )
+
         stsv.set_output_value(
             self.heatpump_water_mass_flow_rate_input_channel,
             self.heatpump_water_mass_flow_rate_in_kg_per_second,

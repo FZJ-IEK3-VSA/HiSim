@@ -1,3 +1,4 @@
+""" Modular Heat Pump Class together with Configuration and State. """
 # Generic/Built-in
 from dataclasses import dataclass
 from typing import Optional, List, Any
@@ -31,33 +32,43 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig:
+    #: name of the device
     name: str
+    #: priority of the device in energy management system: the higher the number the lower the priority
     source_weight: int
+    #: manufacturer to search heat pump in data base
     manufacturer: str
+    #: device name to search heat pump in data base
     device_name: str
+    #: maximal thermal power of heat pump in kW
     power_th: float
+    #: usage of the heatpump: either for heating or for water heating
     water_vs_heating: lt.InandOutputType
 
     @staticmethod
     def get_default_config_heating() -> Any:
+        """ Returns default configuration of a heat pump used for heating. """
         config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
                                 device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> Any:
+        """ Returns default configuration of a heat pump used for water heating."""
         config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
                                 device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
 
     @staticmethod
     def get_default_config_heating_electric() -> Any:
+        """ Returns default configuartion of simple electrical heating system with a COP of one. """
         config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
                                 water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
     def get_default_config_waterheating_electric() -> Any:
+        """ Returns default configuration of electrical heating rod for boiler. """
         config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
                                 water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
@@ -67,33 +78,24 @@ class ModularHeatPumpState:
     """
     This data class saves the state of the heat pump.
     """
-
-    def __init__(self, state: float = 0, timestep: int = -1):
-        self.state: float = state
-        self.timestep = timestep
+    
+    #: state of the heat pump: 1 means it is turned on - 0 means it is off
+    state: float = 0
 
     def clone(self):
-        return ModularHeatPumpState(state=self.state, timestep=self.timestep)
+        """Creates copy of state. """
+        return ModularHeatPumpState(state=self.state)
 
 
 class ModularHeatPump(cp.Component):
     """
-    Heat pump implementation. The heatpump_modular differs to heatpump in (a) minumum run- and
-    idle time are given in seconds (not in time steps), (b) the season for heating and cooling is explicitly separated by days of the year.
-    This is mostly done to avoid heating and cooling at the same day in spring and autum with PV surplus available. (c) heat pump modular needs
-    a generic_controller_l1_runtime signal. The run time is not controlled in the component itself but in the controller. Heat pump power can be modified by its config.
+    Heat pump implementation. The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component but in the related controller.
+    This implementation does not consider cooling of buildings.
 
-    Parameters
-    ----------
-    manufacturer : str
-        Heat pump manufacturer
-    device_name : str
-        Heat pump model
-    name : str, optional
-        Name of heatpump within simulation. The default is 'HeatPump'
-    source_weight : int, optional
-        Weight of component, relevant if there is more than one heat pump, defines hierachy in control. The default is 1.
-
+    Components to connect to:
+    *Weather
+    *Heat Pump Controller (controller_l1_heatpump)
+    *Energy Management System (controller_l2_energy_management_system) - optional
     """
 
     # Inputs
@@ -106,11 +108,6 @@ class ModularHeatPump(cp.Component):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     ElectricityOutput = "ElectricityOutput"
     PowerModifier = "PowerModifier"
-
-    # Similar components to connect to:
-    # 1. HeatPump l1 controller
-    # 2. HeatPump l2 controller
-    # 3. HeatPump l3 controller ( optional )
 
     @utils.measure_execution_time
     def __init__(
@@ -193,6 +190,7 @@ class ModularHeatPump(cp.Component):
         )
 
     def get_default_connections_from_weather(self):
+        """ Sets default connections of Weather. """
         log.information("setting weather default connections in HeatPump")
         connections = []
         weather_classname = Weather.get_classname()
@@ -206,6 +204,7 @@ class ModularHeatPump(cp.Component):
         return connections
 
     def get_default_connections_from_L2GenericEnergyManagementSystem(self):
+        """ Sets default connections of Energy Management System. """
         log.information("setting weather default connections in HeatPump")
         connections = []
         ems_classname = L2GenericEnergyManagementSystem.get_classname()
@@ -219,6 +218,7 @@ class ModularHeatPump(cp.Component):
         return connections
 
     def get_default_connections_from_controller_l1_heatpump(self):
+        """ Sets default connections of heat pump controller. """
         log.information("setting l1 default connections in HeatPump")
         connections = []
         controller_classname = (
@@ -238,6 +238,7 @@ class ModularHeatPump(cp.Component):
         pass
 
     def build(self, config):
+        """ Initialization function of Modular Heat Pump."""
         self.name = config.name
         self.source_weight = config.source_weight
         self.manufacturer = config.manufacturer
@@ -275,6 +276,7 @@ class ModularHeatPump(cp.Component):
         self.write_to_report()
 
     def cal_cop(self, t_out: float) -> float:
+        """ Returns coefficient of performance of selected heat pump. """
         val: float = self.cop_coef[0] * t_out + self.cop_coef[1]
         return val
 
@@ -288,6 +290,7 @@ class ModularHeatPump(cp.Component):
         pass
 
     def write_to_report(self) -> List[str]:
+        """ Writes relevant data to report. """
         lines: List[str] = []
         lines.append("Name: {}".format(self.name + str(self.source_weight)))
         lines.append("Manufacturer: {}".format(self.name))
@@ -297,6 +300,7 @@ class ModularHeatPump(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """ Iteration of heat pump simulation. """
 
         # Inputs
         target_percentage = stsv.get_input_value(self.L1HeatControllerTargetPercentage)
@@ -322,7 +326,3 @@ class ModularHeatPump(cp.Component):
         stsv.set_output_value(self.PowerModifierChannel, power_modifier)
 
         stsv.set_output_value(self.ElectricityOutputC, electric_power * power_modifier)
-
-        # #put forecast into dictionary  # if self.my_simulation_parameters.predictive_control:  #     #only in first timestep  #     if self.state.timestep + 1 == timestep:  #         self.state.timestep += 1  #         self.previous_state.timestep += 1  #         runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-
-        #         self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.HEAT_PUMP, source_weight = self.source_weight, entry =[self.power_th / cop] * runtime)

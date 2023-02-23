@@ -120,6 +120,7 @@ class SingleTimeStepValues:
         newstsv.values = self.values[:]
         return newstsv
 
+    @graph_call_path_factory(method_pattern)
     def get_input_value(self, component_input: ComponentInput) -> float:
         """ Gets a value for an input from the single time step values. """
         if component_input.source_output is None:

@@ -6,31 +6,24 @@ import time
 from collections import defaultdict
 import inspect
 import seaborn as sns
-from hisim import log
 
 def graph_call_path_factory(node_container):
     def register_method(func):
         @wraps(func)
         def function_wrapper_for_node_storage(*args, **kwargs):
-            curr_frame = inspect.currentframe()
-            node_name = curr_frame.f_locals['func'].__qualname__
+            curr_frame = inspect.stack(0)
+            node_name = curr_frame[0][0].f_locals['func'].__qualname__
+            src_function = curr_frame[1][3]
+            try:
+                src_class = type(curr_frame[1][0].f_locals['self']).__qualname__
+                src_node = src_class + '.' + src_function
+            except KeyError:
+                src_node = src_function
             if node_name not in node_container.wrapped_method_nodes:
-                node_class = curr_frame.f_locals['func'].__qualname__.replace('.' + node_name,'')
                 node_container.wrapped_method_nodes[node_name] = node_name
-                node_container.node_class_map[node_name] = node_class
                 node_container.wrapped_method_counter[node_name] = 0
                 node_container.wrapped_method_timer[node_name] = 0
-                src_function = inspect.stack()[1][3]
-                frame = inspect.stack()[1][0].f_locals         
-                try:
-                    try:
-                        src_class = type(frame['self']).__qualname__
-                    except KeyError:
-                        src_class = None
-                finally:
-                    del frame
-                node_container.wrapped_method_src[node_name] = src_function
-                node_container.src_class_map[node_name] = src_class
+            node_container.wrapped_method_src[node_name].add(src_node)
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
             end_time = time.perf_counter()
@@ -50,9 +43,7 @@ class MethodChart:
         self.wrapped_method_nodes = defaultdict(list)
         self.wrapped_method_counter = defaultdict(int)
         self.wrapped_method_timer = defaultdict(float)
-        self.wrapped_method_src = defaultdict(list)
-        self.node_class_map = defaultdict(list)
-        self.src_class_map = defaultdict(list)
+        self.wrapped_method_src = defaultdict(set)
 
     def set_color_scheme(self):
         max_value = max(self.wrapped_method_counter.values())
@@ -72,20 +63,14 @@ class MethodChart:
             my_node = pydot.Node(node, label=node+"\\n"+count_label+"\\n"+time_label, color=self.color_palette[method])
             node_dict[method] = my_node
             graph.add_node(my_node)
-            log.information("callgraph " + str(graph.to_string()))
         edge_labels = {}
-        for node_method in self.wrapped_method_nodes:
-            base_node_src_node = self.wrapped_method_src[node_method]
-            base_node_src_class = self.src_class_map[node_method]
-            if base_node_src_class:
-                base_node_src_name = base_node_src_class + '.' + base_node_src_node
-            else:
-                base_node_src_name = base_node_src_node
-            if base_node_src_name in self.wrapped_method_nodes:
-                node_a = node_dict[base_node_src_name]
-                node_b = node_dict[node_method]
+        for base_node in self.wrapped_method_nodes:
+            src_nodes = [node for node in self.wrapped_method_src[base_node] if node in self.wrapped_method_nodes]
+            for src_node in src_nodes:
+                node_a = node_dict[src_node]
+                node_b = node_dict[base_node]
                 key = (node_a, node_b)
-                this_edge_label = str(base_node_src_name) + " -> " + node_method
+                this_edge_label = str(src_node) + " -> " + base_node
                 this_edge_label = this_edge_label.replace("°C", "&#8451;")
                 if key not in edge_labels:
                     edge_labels[key] = this_edge_label
@@ -100,3 +85,4 @@ class MethodChart:
 
 global method_pattern
 method_pattern = MethodChart()
+

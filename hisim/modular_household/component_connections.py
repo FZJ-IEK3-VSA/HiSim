@@ -597,7 +597,7 @@ def configure_water_heating_electric(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=my_heatpump.source_weight,
+            source_weight=my_heatpump.config.source_weight,
         )
 
         my_electricity_controller.add_component_output(
@@ -606,7 +606,7 @@ def configure_water_heating_electric(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=my_heatpump.source_weight,
+            source_weight=my_heatpump.config.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
         )
@@ -777,7 +777,7 @@ def configure_heating_electric(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=my_heatpump.source_weight,
+            source_weight=my_heatpump.config.source_weight,
         )
 
         my_electricity_controller.add_component_output(
@@ -786,7 +786,7 @@ def configure_heating_electric(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=my_heatpump.source_weight,
+            source_weight=my_heatpump.config.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
         )
@@ -940,7 +940,7 @@ def configure_heating_with_buffer_electric(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=my_heatpump.source_weight,
+            source_weight=my_heatpump.config.source_weight,
         )
 
         my_electricity_controller.add_component_output(
@@ -949,7 +949,7 @@ def configure_heating_with_buffer_electric(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=my_heatpump.source_weight,
+            source_weight=my_heatpump.config.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
         )

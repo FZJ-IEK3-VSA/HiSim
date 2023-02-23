@@ -32,6 +32,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig:
+    """ Configuration of a HeatPump. """
     #: name of the device
     name: str
     #: priority of the device in energy management system: the higher the number the lower the priority
@@ -46,28 +47,28 @@ class HeatPumpConfig:
     water_vs_heating: lt.InandOutputType
 
     @staticmethod
-    def get_default_config_heating() -> Any:
+    def get_default_config_heating() -> "HeatPumpConfig":
         """ Returns default configuration of a heat pump used for heating. """
         config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
                                 device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
-    def get_default_config_waterheating() -> Any:
+    def get_default_config_waterheating() -> "HeatPumpConfig":
         """ Returns default configuration of a heat pump used for water heating."""
         config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
                                 device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
 
     @staticmethod
-    def get_default_config_heating_electric() -> Any:
+    def get_default_config_heating_electric() -> "HeatPumpConfig":
         """ Returns default configuartion of simple electrical heating system with a COP of one. """
         config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
                                 water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
-    def get_default_config_waterheating_electric() -> Any:
+    def get_default_config_waterheating_electric() -> "HeatPumpConfig":
         """ Returns default configuration of electrical heating rod for boiler. """
         config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
                                 water_vs_heating=lt.InandOutputType.WATER_HEATING)
@@ -78,11 +79,11 @@ class ModularHeatPumpState:
     """
     This data class saves the state of the heat pump.
     """
-    
-    #: state of the heat pump: 1 means it is turned on - 0 means it is off
-    state: float = 0
+    def __init__(self, state: int = 0):
+        """Initializes state. """
+        self.state = state
 
-    def clone(self):
+    def clone(self) -> "ModularHeatPumpState":
         """Creates copy of state. """
         return ModularHeatPumpState(state=self.state)
 
@@ -119,7 +120,9 @@ class ModularHeatPump(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.config = config
-        self.build(config)
+        self.build()
+        self.state = ModularHeatPumpState()
+        self.previous_state = ModularHeatPumpState()
 
         if my_simulation_parameters.surplus_control:
             postprocessing_flag = [
@@ -237,13 +240,8 @@ class ModularHeatPump(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def build(self, config):
+    def build(self):
         """ Initialization function of Modular Heat Pump."""
-        self.name = config.name
-        self.source_weight = config.source_weight
-        self.manufacturer = config.manufacturer
-        self.devicename = config.device_name
-
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
@@ -251,8 +249,8 @@ class ModularHeatPump(cp.Component):
         heat_pump = None
         for heat_pump in heat_pumps_database:
             if (
-                heat_pump["Manufacturer"] == config.manufacturer
-                and heat_pump["Name"] == config.device_name
+                heat_pump["Manufacturer"] == self.config.manufacturer
+                and heat_pump["Name"] == self.config.device_name
             ):
                 heat_pump_found = True
                 break
@@ -267,10 +265,6 @@ class ModularHeatPump(cp.Component):
             self.t_out_ref.append(float([*heat_pump_cops][0][1:].split("/")[0]))
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
         self.cop_coef = np.polyfit(self.t_out_ref, self.cop_ref, 1)
-        self.power_th = config.power_th
-
-        self.state = ModularHeatPumpState()
-        self.previous_state = ModularHeatPumpState()
 
         # Writes info to report
         self.write_to_report()
@@ -292,9 +286,9 @@ class ModularHeatPump(cp.Component):
     def write_to_report(self) -> List[str]:
         """ Writes relevant data to report. """
         lines: List[str] = []
-        lines.append("Name: {}".format(self.name + str(self.source_weight)))
-        lines.append("Manufacturer: {}".format(self.name))
-        lines.append("Max power: {:4.0f} kW".format((self.power_th) * 1e-3))
+        lines.append("Name: {}".format(self.config.name + str(self.config.source_weight)))
+        lines.append("Manufacturer: {}".format(self.config.name))
+        lines.append("Max power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
         return lines
 
     def i_simulate(
@@ -307,7 +301,7 @@ class ModularHeatPump(cp.Component):
 
         T_outside: float = stsv.get_input_value(self.TemperatureOutsideC)
         cop = self.cal_cop(T_outside)
-        electric_power = self.power_th / cop
+        electric_power = self.config.power_th / cop
 
         # calculate modulation
         if target_percentage > 0:
@@ -321,7 +315,7 @@ class ModularHeatPump(cp.Component):
         power_modifier = min(1, power_modifier)
 
         stsv.set_output_value(
-            self.ThermalPowerDeliveredC, self.power_th * power_modifier
+            self.ThermalPowerDeliveredC, self.config.power_th * power_modifier
         )
         stsv.set_output_value(self.PowerModifierChannel, power_modifier)
 

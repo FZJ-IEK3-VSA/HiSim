@@ -2,7 +2,7 @@
 # clean
 import os
 import sys
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 
 from hisim.postprocessing import reportgenerator
@@ -332,7 +332,7 @@ class PostProcessor:
             self.report_image_entries.append(my_entry)
 
     def make_single_day_plots(
-        self, days: dict[str, int], ppdt: PostProcessingDataTransfer
+        self, days: Dict[str, int], ppdt: PostProcessingDataTransfer
     ) -> None:
         """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):

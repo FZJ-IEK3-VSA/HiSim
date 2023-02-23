@@ -1,4 +1,4 @@
-""" Contains all the main simulator components. """
+""" The Simulator class forms the framework for all HiSim simulations. It iterates over all components in each timestep until convergence and loops over all time steps. """
 # clean
 import os
 import datetime

@@ -17,7 +17,7 @@ from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.components.configuration import PhysicsConfig
-
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -162,6 +162,7 @@ class Occupancy(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
+    @graph_call_path_factory(method_pattern)
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_conversion: bool
     ) -> None:

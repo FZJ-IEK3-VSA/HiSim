@@ -36,7 +36,6 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
         - Building
         - Heat Pump
     """
-
     # System Parameters #
 
     # Set simulation parameters
@@ -153,3 +152,4 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     my_sim.add_component(my_heat_pump)
 
     my_building.connect_input(my_building.ThermalEnergyDelivered, my_heat_pump.component_name, my_heat_pump.ThermalEnergyDelivered)
+

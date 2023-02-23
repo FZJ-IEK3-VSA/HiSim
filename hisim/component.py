@@ -127,6 +127,7 @@ class SingleTimeStepValues:
             return 0
         return self.values[component_input.source_output.global_index]
 
+    @graph_call_path_factory(method_pattern)
     def set_output_value(self, output: ComponentOutput, value: float) -> None:
         """ Sets a single output value in the single time step values array. """
         self.values[output.global_index] = value

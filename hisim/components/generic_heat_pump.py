@@ -17,7 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim import log
-
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -290,6 +290,7 @@ class GenericHeatPump(cp.Component):
         #lines.append(["Max power var:","{:4.2f}".format(self.max_heating_power_var)])
         return lines
 
+    @graph_call_path_factory(method_pattern)
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # Inputs
         stateC = stsv.get_input_value(self.stateC)
@@ -494,6 +495,8 @@ class HeatPumpController(cp.Component):
         # todo: add more useful stuff here
         lines.append("tbd")
         return lines
+
+    
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:

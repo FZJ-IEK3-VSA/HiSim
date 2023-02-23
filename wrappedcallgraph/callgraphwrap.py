@@ -7,10 +7,14 @@ from collections import defaultdict
 import inspect
 import seaborn as sns
 
+
 def graph_call_path_factory(node_container):
+    
     def register_method(func):
+        
         @wraps(func)
         def function_wrapper_for_node_storage(*args, **kwargs):
+
             curr_frame = inspect.stack(0)
             node_name = curr_frame[0][0].f_locals['func'].__qualname__
             src_function = curr_frame[1][3]
@@ -23,6 +27,7 @@ def graph_call_path_factory(node_container):
                 node_container.wrapped_method_nodes[node_name] = node_name
                 node_container.wrapped_method_counter[node_name] = 0
                 node_container.wrapped_method_timer[node_name] = 0
+
             node_container.wrapped_method_src[node_name].add(src_node)
             start_time = time.perf_counter()
             result = func(*args, **kwargs)
@@ -32,8 +37,13 @@ def graph_call_path_factory(node_container):
             node_container.wrapped_method_timer[node_name] += total_time
             del curr_frame
             return result
+        
         return function_wrapper_for_node_storage
     return register_method
+
+
+
+
 
 class MethodChart:
     """ Class for generating charts that show the components. """

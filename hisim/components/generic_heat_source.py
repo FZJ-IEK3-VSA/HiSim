@@ -89,7 +89,6 @@ class HeatSource(cp.Component):
 
     Components to connect to:
     (1) Heat Pump Controller (controller_l1_heatpump)
-    (2) Energy Management System (controller_l2_energy_management_system) - optional
     """
 
     # Inputs

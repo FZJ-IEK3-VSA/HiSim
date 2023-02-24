@@ -96,7 +96,6 @@ class ModularHeatPump(cp.Component):
     Components to connect to:
     (1) Weather
     (2) Heat Pump Controller (controller_l1_heatpump)
-    (3) Energy Management System (controller_l2_energy_management_system) - optional
     """
 
     # Inputs
@@ -133,8 +132,7 @@ class ModularHeatPump(cp.Component):
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
             ]
-        self.state: ModularHeatPumpState
-        self.previous_state: ModularHeatPumpState
+
         # Inputs - Mandatories
         self.TemperatureOutsideC: cp.ComponentInput = self.add_input(
             self.component_name,

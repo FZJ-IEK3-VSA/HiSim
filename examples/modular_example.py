@@ -41,7 +41,7 @@ def cleanup_old_result_folders():
             shutil.rmtree(full_path)
 
 
-def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[int, List[float]]:
+def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[int, List[int]]:
     """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system. Both relies on the location.
     :param location: location of the building, reference temperature and heating season depend on the climate (at the location)
     :type location: str

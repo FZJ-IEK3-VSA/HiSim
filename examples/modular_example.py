@@ -41,14 +41,14 @@ def cleanup_old_result_folders():
             shutil.rmtree(full_path)
 
 
-def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[int, List[int]]:
+def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[float, List[int]]:
     """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system. Both relies on the location.
     :param location: location of the building, reference temperature and heating season depend on the climate (at the location)
     :type location: str
 
     :return: heating reference temperature and heating season of the location,
     heating season is given by julian day of the year when heating period starts (third entry) and ends (first entry).
-    :rtype: Tuple[int, List[float]]
+    :rtype: Tuple[float, List[int]]
     """    
 
     converting_data = pd.read_csv(
@@ -346,6 +346,8 @@ def modular_household_explicit(
 
     # """ EV BATTERY """
     if ev_included:
+        if mobility_set is None:
+            raise Exception("If EV should be simulated mobility set needs to be defined." )
         _ = component_connections.configure_ev_batteries(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,  # noqa

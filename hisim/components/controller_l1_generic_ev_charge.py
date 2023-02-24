@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-""" Controller of EV battery. """
+""" Controller of EV battery with configuration and state. """
 
 from typing import List, Any
 from dataclasses import dataclass
@@ -29,31 +29,21 @@ __status__ = "development"
 @dataclass
 class ChargingStationConfig:
 
-    """Definition of the configuration of Charging Station."""
+    """Definition of the configuration of Charging Station and the set point for the control."""
 
+    #: name of the device
     name: str
+    #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
+    #: definition of the charging station, in line with definitions from LoadProfileGenerator
     charging_station_set: JsonReference
+    #: set point for state of charge of battery
     battery_set: float
-
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        charging_station_set: JsonReference,
-        battery_set: float,
-    ) -> None:
-        """Initialization of the configuration of Charging Station."""
-
-        self.name = name
-        self.source_weight = source_weight
-        self.charging_station_set = charging_station_set
-        self.battery_set = battery_set
 
     @staticmethod
     def get_default_config(
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-    ) -> Any:
+    ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
         config = ChargingStationConfig(
             name="L1EVChargeControl",
@@ -72,14 +62,20 @@ class L1ControllerState:
         """Initializes power for battery charge/discharge in state."""
         self.power = power
 
-    def clone(self) -> Any:
+    def clone(self) -> "L1ControllerState":
         """Copy state efficiently."""
         return L1ControllerState(power=self.power)
 
 
 class L1Controller(cp.Component):
 
-    """Simulates EV charging with constant SOC threshold and optional surplus control."""
+    """Simulates EV charging and battery losses due to driving. Control according to constant SOC threshold and optional surplus control.
+
+    Components to connect to:
+    (1) Car (generic_car)
+    (2) Car Battery (advanced_ev_battery_bslib)
+    (3) EMS (controller_l2_energy_management_system) - optional
+    """
 
     # Inputs
     ElectricityOutput = "ElectricityOutput"
@@ -167,7 +163,7 @@ class L1Controller(cp.Component):
         return connections
 
     def get_default_connections_advanced_battery(self) -> List[cp.ComponentConnection]:
-        """Default connections of battery in ev charge controller."""
+        """Default connections of car battery in ev charge controller."""
         log.information("setting battery default connections in ev charge controler")
         connections: List[cp.ComponentConnection] = []
         battery_classname = advanced_ev_battery_bslib.CarBattery.get_classname()

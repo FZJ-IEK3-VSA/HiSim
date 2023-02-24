@@ -1,3 +1,5 @@
+""" Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List, Any
 from dataclasses import dataclass
@@ -15,7 +17,6 @@ from hisim.component import (
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from typing import Optional
-from hisim.components import controller_l1_generic_ev_charge
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -30,19 +31,26 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
+    """Battery Configuration. """
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return Battery.get_full_classname()
 
+    #: name of the device
     name: str
-    system_id: str
-    p_inv_custom: float  # power in Watt
-    e_bat_custom: float  # capacity in Kilowatt
+    #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
+    #: name of battery to search in database (bslib)
+    system_id: str
+    #: charging and discharging power in Watt
+    p_inv_custom: float
+    #: battery capacity in in kWh
+    e_bat_custom: float
 
     @classmethod
-    def get_default_config(cls) -> Any:
+    def get_default_config(cls) -> "BatteryConfig":
+        """ Returns default configuration of battery. """
         config = BatteryConfig(
             name="Battery",
             p_inv_custom=5,
@@ -58,6 +66,9 @@ class Battery(Component):
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
     are loaded within the init for a specific or generic battery type.
+
+    Components to connect to:
+    (1) Energy Management System
     """
 
     # Inputs
@@ -73,15 +84,6 @@ class Battery(Component):
     ):
         """
         Loads the parameters of the specified battery storage.
-
-        Parameters
-        ----------
-        system_id : str
-            Name (system_id) of the battery storage from bslib database.
-        p_inv_custom : numeric, default 0
-            AC power of battery inverter. Only for system_ids of type "Generic". [W]
-        e_bat_custom : numeric, default 0
-            Useable battery capacity. Only for system_ids of type "Generic". [Wh]
         """
         self.battery_config = config
         super().__init__(
@@ -196,7 +198,9 @@ class Battery(Component):
 
 @dataclass
 class BatteryState:
+    #: state of charge of the battery
     soc: float = 0
 
     def clone(self):
+        "Creates a copy of the Battery State. "
         return BatteryState(soc=self.soc)

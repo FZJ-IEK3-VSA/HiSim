@@ -8,11 +8,13 @@ from hisim import log
 @dataclass_json
 @dataclass
 class ModularHouseholdConfig:
+    #: configuration of the technological equipment of the household
     system_config_: Optional[system_config.SystemConfig] = None
+    #: configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
 def read_in_configs(pathname: str) -> ModularHouseholdConfig:
-    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
+    """Reads in ModularHouseholdConfig file and loads default if file cannot be found. """
     try:
         with open(pathname, encoding="utf8") as config_file:
             household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore

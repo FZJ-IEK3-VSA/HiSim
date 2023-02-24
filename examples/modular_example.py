@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 from os import path
-from typing import Any, List, Optional, Union
+from typing import Any, List, Optional, Union, Tuple
 
 import pandas as pd
 from utspclient.helpers.lpgdata import (TransportationDeviceSets,
@@ -41,28 +41,21 @@ def cleanup_old_result_folders():
             shutil.rmtree(full_path)
 
 
-def get_heating_reference_temperature_and_season_from_location(location: str) -> List[Union[float, int]]:
+def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[float, List[int]]:
     """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system. Both relies on the location.
-    Parameters
-    ----------
-    location : str
-        Location of the building. Reference temperature and heating season depend on the climate (at the location).
+    :param location: location of the building, reference temperature and heating season depend on the climate (at the location)
+    :type location: str
 
-    Returns
-    --------
-    List[Unioj[float, int]]
-        First entry is heating reference temperature.
-        Second entry is end of heating season as julian day given as integer number, where 01.01 corresponds to 1.
-        Third entry is start of heating season again given as julian day.
-
-    """
-
+    :return: heating reference temperature and heating season of the location,
+    heating season is given by julian day of the year when heating period starts (third entry) and ends (first entry).
+    :rtype: Tuple[float, List[int]]
+    """    
 
     converting_data = pd.read_csv(
         hisim.utils.HISIMPATH["housing_reference_temperatures"]
     )
     converting_data.index = converting_data["Location"]
-    return [float(converting_data.loc[location]["HeatingReferenceTemperature"]), int(converting_data.loc[location]['HeatingSeasonEnd']), int(converting_data.loc[location]['HeatingSeasonBegin'])]
+    return ( float(converting_data.loc[location]["HeatingReferenceTemperature"]), [int(converting_data.loc[location]['HeatingSeasonEnd']), int(converting_data.loc[location]['HeatingSeasonBegin'])])
 
 
 def modular_household_explicit(
@@ -212,13 +205,13 @@ def modular_household_explicit(
     my_sim.add_component(my_weather)
 
     # Build building
-    heating_parameters = get_heating_reference_temperature_and_season_from_location(
+    reference_temperature, heating_season = get_heating_reference_temperature_and_season_from_location(
         location=location
     )
     
     my_building_config = building.BuildingConfig(
         name="Building_1",
-        heating_reference_temperature_in_celsius=heating_parameters[0],
+        heating_reference_temperature_in_celsius=reference_temperature,
         building_code=building_code,
         building_heat_capacity_class="medium",
         initial_internal_temperature_in_celsius=23,
@@ -353,6 +346,8 @@ def modular_household_explicit(
 
     # """ EV BATTERY """
     if ev_included:
+        if mobility_set is None:
+            raise Exception("If EV should be simulated mobility set needs to be defined." )
         _ = component_connections.configure_ev_batteries(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,  # noqa
@@ -422,7 +417,7 @@ def modular_household_explicit(
                 heatpump_power=heatpump_power,
                 buffer_volume=buffer_volume,
                 controlable=clever,
-                heating_parameters=heating_parameters,
+                heating_season=heating_season,
                 count=count,
             )
 
@@ -439,7 +434,7 @@ def modular_household_explicit(
                 my_building=my_building,
                 heating_system_installed=heating_system_installed,
                 buffer_volume=buffer_volume,
-                heating_parameters=heating_parameters,
+                heating_season=heating_season,
                 count=count,
             )
 
@@ -461,7 +456,7 @@ def modular_household_explicit(
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
                 controlable=clever,
-                heating_parameters=heating_parameters,
+                heating_season=heating_season,
                 count=count,
             )
         else:
@@ -470,7 +465,7 @@ def modular_household_explicit(
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,
                 heating_system_installed=heating_system_installed,
-                heating_parameters=heating_parameters,
+                heating_season=heating_season,
                 count=count,
             )
 

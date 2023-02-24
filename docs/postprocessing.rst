@@ -1,4 +1,4 @@
-postprocessing package
+Postprocessing Package
 ======================
 
 postprocessing.chart\_singleday module

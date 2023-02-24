@@ -1,4 +1,5 @@
-""" Iterative Energy Surplus Controller. """
+""" Iterative Energy Surplus Controller. It received the electricity consumption of all components and the PV production. According to the balance it sends activation/deactivation siganls to components.
+The component with the lowest source weight is activated first. """
 # clean
 from dataclasses import dataclass
 
@@ -33,15 +34,19 @@ class EMSConfig(cp.ConfigBase):
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return L2GenericEnergyManagementSystem.get_full_classname()
-
+    #: name of the device
     name: str
+    # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     strategy: str
+    # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float
+    # increase in buiding set temperatures when PV surplus is available for heating
     building_temperature_offset_value: float
+    # increase in buffer set temperatures when PV surplus is available for heating
     storage_temperature_offset_value: float
 
     @classmethod
-    def get_default_config_EMS(cls) -> Any:
+    def get_default_config_EMS(cls) -> "EMSConfig":
         """Default Config for Energy Management System."""
         config = EMSConfig(
             name="EMS L2EMSElectricityController",
@@ -209,6 +214,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
     def write_to_report(self):
+        """Writes relevant information to report. """
         lines = []
         for config_string in self.ems_config.get_string_dict():
             lines.append(config_string)
@@ -236,6 +242,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         input: cp.ComponentInput,
         output: cp.ComponentOutput,
     ) -> Any:
+        """Calculates available surplus electricity, substracts the electricity consumption signal of the component from the previous iteration,
+        and sends updated signal back.
+        """
         is_battery = None
         # get previous signal and substract from total balance
         previous_signal = stsv.get_input_value(component_input=input)
@@ -272,6 +281,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def postprocess_battery(
         self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int
     ) -> Any:
+        """ Updates battery signal and total demand, if behaviour of battery changed in given iteration. """
         previous_signal = stsv.get_input_value(component_input=self.inputs_sorted[ind])
         stsv.set_output_value(
             output=self.outputs_sorted[ind], value=deltademand + previous_signal
@@ -281,6 +291,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def optimize_own_consumption_iterative(
         self, delta_demand: float, stsv: cp.SingleTimeStepValues
     ) -> None:
+        """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
         skip_CHP = False
         for ind in range(len(self.inputs_sorted)):
             component_type = self.components_sorted[ind]
@@ -322,6 +333,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """ Simulates iteration of surplus controller. """
         if force_convergence:
             return
 

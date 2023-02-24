@@ -83,7 +83,7 @@ def test_simple_bucket_boiler_state():
     my_boiler.i_simulate(j, stsv, False)
 
     #check if heat loss in boiler corresponds to heatloss originated from 1 l hot water use and u-value heat loss
-    assert stsv.values[2] == my_heater.power_th * my_heater.efficiency
+    assert stsv.values[2] == my_heater.config.power_th * my_heater.config.efficiency
 
     #check if heater stops heating when temperature of boiler is too high
     stsv.values[0] = 0

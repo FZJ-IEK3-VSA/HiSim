@@ -965,11 +965,7 @@ def configure_heating_with_buffer_electric(
         )
 
     my_buffer_controller.connect_only_predefined_connections(my_electricity_controller)
-    my_buffer.connect_input(
-        my_buffer.L1DeviceSignal,
-        my_buffer_controller.component_name,
-        my_buffer_controller.boiler_signal,
-    )
+    my_buffer.connect_only_predefined_connections(my_buffer_controller)
     my_buffer.connect_only_predefined_connections(my_heatpump)
     my_building.connect_input(
         input_fieldname=my_building.ThermalPowerDelivered,
@@ -1069,11 +1065,7 @@ def configure_heating_with_buffer(
     )
     my_buffer_controller.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_buffer_controller)
-    my_buffer.connect_input(
-        my_buffer.L1DeviceSignal,
-        my_buffer_controller.component_name,
-        my_buffer_controller.boiler_signal,
-    )
+    my_buffer.connect_only_predefined_connections(my_buffer_controller)
     my_buffer.connect_only_predefined_connections(my_heater)
     my_building.connect_input(
         input_fieldname=my_building.ThermalPowerDelivered,

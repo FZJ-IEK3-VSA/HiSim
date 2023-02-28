@@ -49,6 +49,32 @@ class HeatDistributionConfig(cp.ConfigBase):
         )
         return config
 
+@dataclass_json
+@dataclass
+class HeatDistributionControllerConfig(cp.ConfigBase):
+
+    """HeatDistribution Controller Config Class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatDistributionController.get_full_classname()
+
+    name: str
+    set_water_storage_temperature_for_heating_in_celsius: float
+    set_water_storage_temperature_for_cooling_in_celsius: float
+    set_heating_threshold_outside_temperature_in_celsius: float
+
+
+    @classmethod
+    def get_default_heat_distribution_controller_config(cls):
+        """Gets a default HeatDistribution Controller."""
+        return HeatDistributionControllerConfig(
+            name="HeatDistributionController",
+            set_water_storage_temperature_for_heating_in_celsius=50,
+            set_water_storage_temperature_for_cooling_in_celsius=55,
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
+        )
 
 class HeatDistributionState:
 
@@ -276,12 +302,10 @@ class HeatDistribution(cp.Component):
             raise ValueError("unknown mode")
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
-        # self.state.water_temperature_in_distribution_system_in_celsius = (
-        #     self.water_temperature_output_in_celsius
-        # )
+
         # log.information("hsd timestep " + str(timestep))
         # log.information("hsd water temperature output " + str(self.state.water_temperature_in_distribution_system_in_celsius))
-        # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt) + "\n")
+        # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
 
         stsv.set_output_value(
             self.water_temperature_output_channel,
@@ -344,9 +368,12 @@ class HeatDistributionController(cp.Component):
     """
 
     # Inputs
-
     RealHeatBuildingDemand = "RealHeatBuildingDemand"
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    WaterTemperatureInputFromHeatWaterStorage = (
+        "WaterTemperatureInputFromHeatWaterStorage"
+    )
+
     # Outputs
     State = "State"
     RealHeatBuildingDemandPassedToHeatDistributionSystem = (
@@ -359,21 +386,24 @@ class HeatDistributionController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_heating_threshold_temperature_in_celsius: float = 16.0,
-        mode: int = 1,
+        config: HeatDistributionControllerConfig
     ) -> None:
         """Construct all the neccessary attributes."""
+        self.heat_distribution_controller_config = config
         super().__init__(
-            "HeatDistributionController",
+            self.heat_distribution_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state_controller: int = 0
         self.start_timestep: int = 0
         self.real_heat_building_demand_in_watt: float = 0.0
+        self.water_temperature_input_in_celsius: float = 50
         self.build(
-            set_heating_threshold_temperature=set_heating_threshold_temperature_in_celsius,
-            mode=mode,
-        )
+            set_heating_threshold_temperature=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            set_water_storage_temperature_for_heating_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_heating_in_celsius,
+            set_water_storage_temperature_for_cooling_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
+            )
+
         self.real_heat_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.RealHeatBuildingDemand,
@@ -390,6 +420,14 @@ class HeatDistributionController(cp.Component):
                 True,
             )
         )
+        self.water_temperature_input_from_heat_water_storage_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterTemperatureInputFromHeatWaterStorage,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+
         self.real_heat_building_demand_passed_to_hds_channel: cp.ComponentOutput = (
             self.add_output(
                 self.component_name,
@@ -431,7 +469,8 @@ class HeatDistributionController(cp.Component):
     def build(
         self,
         set_heating_threshold_temperature: float,
-        mode: int,
+        set_water_storage_temperature_for_heating_in_celsius: float,
+        set_water_storage_temperature_for_cooling_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -445,7 +484,8 @@ class HeatDistributionController(cp.Component):
 
         # Configuration
         self.set_heating_threshold_temperature = set_heating_threshold_temperature
-        self.mode = mode
+        self.set_water_storage_temperature_for_heating_in_celsius = set_water_storage_temperature_for_heating_in_celsius
+        self.set_water_storage_temperature_for_cooling_in_celsius = set_water_storage_temperature_for_cooling_in_celsius
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -486,11 +526,13 @@ class HeatDistributionController(cp.Component):
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
-
-            if self.mode == 1:
-                self.conditions_for_opening_or_shutting_heat_distribution(
+            self.water_temperature_input_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_from_heat_water_storage_channel
+            )
+            self.conditions_for_opening_or_shutting_heat_distribution(
                     real_heat_building_demand_in_watt=self.real_heat_building_demand_in_watt,
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                    water_temperature_input_in_celsius=self.water_temperature_input_in_celsius
                 )
 
             if self.controller_heat_distribution_mode == "on":
@@ -498,6 +540,7 @@ class HeatDistributionController(cp.Component):
             elif self.controller_heat_distribution_mode == "off":
                 self.state_controller = 0
             else:
+
                 raise ValueError("unknown mode")
 
             stsv.set_output_value(self.state_channel, self.state_controller)
@@ -506,10 +549,15 @@ class HeatDistributionController(cp.Component):
                 self.real_heat_building_demand_in_watt,
             )
 
+        # log.information("hsdc timestep " + str(timestep))
+        # log.information("hsdc state " + str(self.state_controller))
+        # log.information("hsdc real heat demand " + str(self.real_heat_building_demand_in_watt) + "\n")
+
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
         real_heat_building_demand_in_watt: float,
         daily_average_outside_temperature_in_celsius: float,
+        water_temperature_input_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
         # set_residence_temperature_in_celsius = self.set_residence_temperature_in_celsius
@@ -517,18 +565,21 @@ class HeatDistributionController(cp.Component):
         if self.controller_heat_distribution_mode == "on":
             # no heat exchange with building if theres no demand and if avg temp outside too high
             if (
-            real_heat_building_demand_in_watt == 0
+            (real_heat_building_demand_in_watt == 0
             and daily_average_outside_temperature_in_celsius
-            > self.set_heating_threshold_temperature
+            > self.set_heating_threshold_temperature)
+            # or water_temperature_input_in_celsius < self.set_water_storage_temperature_for_heating_in_celsius
+            # or water_temperature_input_in_celsius >= self.set_water_storage_temperature_for_cooling_in_celsius
             ):
                 self.controller_heat_distribution_mode = "off"
                 return
         elif self.controller_heat_distribution_mode == "off":
             # if heating or cooling is needed for building
             if (
-                real_heat_building_demand_in_watt != 0
+                (real_heat_building_demand_in_watt != 0
                 or daily_average_outside_temperature_in_celsius
-                < self.set_heating_threshold_temperature
+                < self.set_heating_threshold_temperature)
+                # and self.set_water_storage_temperature_for_heating_in_celsius <= water_temperature_input_in_celsius < self.set_water_storage_temperature_for_cooling_in_celsius
             ):
                 self.controller_heat_distribution_mode = "on"
                 return

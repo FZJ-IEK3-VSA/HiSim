@@ -80,11 +80,11 @@ def basic_household_new(
     # Set Building Controller
     name_building_controller = "BuildingController"
     minimal_building_temperature_in_celsius = 20.0
-    maximal_building_temperature_in_celsius = 22.0
+    maximal_building_temperature_in_celsius = 23.0
 
     # Set Heat Pump Controller
-    set_water_storage_temperature_for_heating_in_celsius = 50
-    set_water_storage_temperature_for_cooling_in_celsius = 55
+    set_water_storage_temperature_for_heating_in_celsius = 49
+    set_water_storage_temperature_for_cooling_in_celsius = 52
     offset = 0.5
     hp_mode = 1
 
@@ -107,15 +107,15 @@ def basic_household_new(
     heating_system = "FloorHeating"
 
     # Set Heat Distribution Controller
+    hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
-    mode = 1
 
     # =================================================================================================================================
     # Build Components
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options_except_report(
+        my_simulation_parameters = SimulationParameters.full_year_line_and_carpet_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -236,9 +236,10 @@ def basic_household_new(
     # Build Heat Distribution Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
-        # min_heating_temperature_building_in_celsius=min_heating_temperature_building_in_celsius,
-        set_heating_threshold_temperature_in_celsius=set_heating_threshold_temperature,
-        mode=mode,
+        config=heat_distribution_system.HeatDistributionControllerConfig(name=hds_controller_name,
+                                                                         set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
+                                                                         set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
+                                                                         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius)
     )
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
@@ -405,6 +406,11 @@ def basic_household_new(
         my_heat_distribution_controller.DailyAverageOutsideTemperature,
         my_weather.component_name,
         my_weather.DailyAverageOutsideTemperatures,
+    )
+    my_heat_distribution_controller.connect_input(
+        my_heat_distribution_controller.WaterTemperatureInputFromHeatWaterStorage,
+        my_simple_heat_water_storage.component_name,
+        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_system.connect_input(

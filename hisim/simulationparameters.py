@@ -72,18 +72,25 @@ class SimulationParameters(JSONWizard):
         for option in PostProcessingOptions:
             self.post_processing_options.append(option)
 
-    def enable_all_options_except_report(self) -> None:
-        """Enables all the post processing options except the report generation."""
+    def enable_line_and_carpet_plots(self) -> None:
+        """Enables line and carpet plots."""
         self.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
+        # self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
+        # self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
+        # self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
         self.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-        self.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        self.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY)
-        self.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
+        # self.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        # self.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # self.post_processing_options.append(PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY)
+        # self.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
+        # self.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        # self.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
+        # self.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
+        # self.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
+        # self.post_processing_options.append(PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT)
+        # self.post_processing_options.append(PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT)
+        # self.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
 
 
     @classmethod
@@ -101,7 +108,7 @@ class SimulationParameters(JSONWizard):
         return pars
 
     @classmethod
-    def full_year_all_options_except_report(
+    def full_year_line_and_carpet_plots(
         cls, year: int, seconds_per_timestep: int
     ) -> SimulationParameters:
         """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
@@ -111,17 +118,20 @@ class SimulationParameters(JSONWizard):
             seconds_per_timestep,
             "",
         )
-        pars.enable_all_options_except_report()
+        pars.enable_line_and_carpet_plots()
         return pars
+
     @classmethod
     def january_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""
-        return cls(
+        pars =  cls(
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 31),
             seconds_per_timestep,
             "",
         )
+        pars.enable_line_and_carpet_plots()
+        return pars
 
     @classmethod
     def three_months_only(

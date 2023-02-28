@@ -697,8 +697,8 @@ class Building(dynamic_component.DynamicComponent):
         (
             thermal_mass_average_bulk_temperature_in_celsius,
             heat_loss_in_watt,
-            internal_surface_temp,
-            indoor_air_temp,
+            internal_surface_temperature_in_celsius,
+            indoor_air_temperature_in_celsius,
         ) = self.calc_crank_nicolson(
             thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
             internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt,
@@ -717,11 +717,11 @@ class Building(dynamic_component.DynamicComponent):
         )
         stsv.set_output_value(
             self.internal_surface_temperature_channel,
-            internal_surface_temp,
+            internal_surface_temperature_in_celsius,
         )
         stsv.set_output_value(
             self.indoor_air_temperature_channel,
-            indoor_air_temp,
+            indoor_air_temperature_in_celsius,
         )
 
         # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
@@ -754,10 +754,9 @@ class Building(dynamic_component.DynamicComponent):
                     index=False,
                 )
         # log.information("building timestep " + str(timestep))
-        # log.information("building temperature outside " + str(temperature_outside_in_celsius))
-        # log.information("building heat loss " + str(heat_loss_in_watt))
-        # log.information("building max demand " + str(self.max_thermal_building_demand_in_watt))
-        # log.information("building indoor air temperature " + str(indoor_air_temp))
+        # log.information("building thermal power input " + str(thermal_power_delivered_in_watt))
+        # log.information("building thermal mass temp " + str(thermal_mass_average_bulk_temperature_in_celsius))
+        # log.information("building indoor air temperature " + str(indoor_air_temperature_in_celsius))
 
     # =================================================================================================================================
 
@@ -2031,7 +2030,7 @@ class BuildingController(cp.Component):
             maximal_building_temperature_in_celsius = (
                 self.maximal_building_temperature_in_celsius
             )
-            delta_temp_for_level_of_utilization = 0.2
+            delta_temp_for_level_of_utilization = 0
 
             # Building is too hot and needs cooling
             if (
@@ -2039,47 +2038,49 @@ class BuildingController(cp.Component):
                 >= maximal_building_temperature_in_celsius
                 + delta_temp_for_level_of_utilization
             ):
-                self.level_of_utilization = -0.4
-            elif (
-                maximal_building_temperature_in_celsius
-                <= self.building_temperature_in_celsius
-                < maximal_building_temperature_in_celsius
-                + delta_temp_for_level_of_utilization
-            ):
-                self.level_of_utilization = -(
-                    self.building_temperature_in_celsius
-                    - maximal_building_temperature_in_celsius
-                )
+                self.level_of_utilization = -0.5
+
+            # elif (
+            #     maximal_building_temperature_in_celsius
+            #     <= self.building_temperature_in_celsius
+            #     < maximal_building_temperature_in_celsius
+            #     + delta_temp_for_level_of_utilization
+            # ):
+            #     self.level_of_utilization = -(
+            #         self.building_temperature_in_celsius
+            #         - maximal_building_temperature_in_celsius
+            #     )
 
             # Building is warm enough
             elif (
                 minimal_building_temperature_in_celsius
                 <= self.building_temperature_in_celsius
-                < maximal_building_temperature_in_celsius
+                < maximal_building_temperature_in_celsius + delta_temp_for_level_of_utilization
             ):
                 self.level_of_utilization = 0
 
             # Building is too cold and needs heating. It gets heated up, when temperature is underneath target temperature
-            elif (
-                minimal_building_temperature_in_celsius
-                - delta_temp_for_level_of_utilization
-                < self.building_temperature_in_celsius
-                < minimal_building_temperature_in_celsius
-            ):
-                self.level_of_utilization = (
-                    minimal_building_temperature_in_celsius
-                    - self.building_temperature_in_celsius
-                )
+            # elif (
+            #     minimal_building_temperature_in_celsius
+            #     - delta_temp_for_level_of_utilization
+            #     < self.building_temperature_in_celsius
+            #     < minimal_building_temperature_in_celsius
+            # ):
+            #     self.level_of_utilization = (
+            #         minimal_building_temperature_in_celsius
+            #         - self.building_temperature_in_celsius
+            #     )
             elif (
                 self.building_temperature_in_celsius
                 <= minimal_building_temperature_in_celsius
                 - delta_temp_for_level_of_utilization
             ):
-                self.level_of_utilization = 0.4
+                self.level_of_utilization = 0.5
 
             else:
                 raise ValueError("the right case could not be identified")
 
+            # before self.state.level..
             self.real_heat_building_demand_in_watt = (
                 self.state.level_of_utilization
                 * stsv.get_input_value(self.ref_max_thermal_build_demand_channel)
@@ -2111,20 +2112,24 @@ class BuildingController(cp.Component):
             )
             # log.information("bcontroller timestep " + str(timestep))
             # log.information("bcontroller building temp " + str(self.building_temperature_in_celsius))
-            # # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
+            # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
             # log.information("bcontroller real buiding heat deamnd " + str(self.real_heat_building_demand_in_watt))
 
     def calc_real_building_heat_demand(self):
         """Calc real heat demand for keeping house to minimum temp."""
+
         self.heating_demand_one_in_watt = (
-            4
-            * (self.h_transmission + self.h_ventilation)
+            (self.h_transmission + self.h_ventilation)
             * (
                 self.minimal_building_temperature_in_celsius
                 - self.building_temperature_in_celsius
             )
             * self.building_area_in_m2
         )
+        # abs loss = H_tr + H_v 
+        # heat demand = abs loss + needed energy
+        # needed energy = c_gebäude * m_gebäude * delta T
+
         self.heating_demand_two_in_watt = (
             self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second
             * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin

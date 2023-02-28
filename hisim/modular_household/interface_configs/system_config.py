@@ -49,8 +49,6 @@ class SystemConfig:
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     )
-    #: True if connection to the UTSP is desired for a connection to the LoadProfileGenerator; False if default consumption profiles should be considered
-    utsp_connect: bool = True
     #: url of the UTSP
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     #: passwort to connect to the UTSP

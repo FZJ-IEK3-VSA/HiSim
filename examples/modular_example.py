@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 from os import path
-from typing import Any, List, Optional, Union, Tuple
+from typing import Any, List, Optional, Tuple
 
 import pandas as pd
 from utspclient.helpers.lpgdata import (TransportationDeviceSets,
@@ -102,6 +102,7 @@ def modular_household_explicit(
 
     # get archetype configuration
     location = arche_type_config_.location.value
+    occupancy_profile_utsp = arche_type_config_.occupancy_profile_utsp
     occupancy_profile = arche_type_config_.occupancy_profile
     building_code = arche_type_config_.building_code
     floor_area = arche_type_config_.absolute_conditioned_floor_area
@@ -111,6 +112,19 @@ def modular_household_explicit(
     heating_system_installed = arche_type_config_.heating_system_installed
     mobility_set = arche_type_config_.mobility_set
     mobility_distance = arche_type_config_.mobility_distance
+
+    # select if utsp is needed based on defined occupancy_profile:
+    if occupancy_profile_utsp is None and occupancy_profile is None:
+        raise Exception('Either occupancy_profile_utsp or occupancy_profile need to be defined in archetype_config file.')
+    elif occupancy_profile_utsp is not None and occupancy_profile is not None:
+        hisim.log.warning("Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. " )
+    if occupancy_profile_utsp is not None:
+        occupancy_profile = occupancy_profile.utsp
+        utsp_connected = True
+    else:
+        utsp_connected = False
+    del occupancy_profile_utsp
+    
 
     # get system configuration: technical equipment
     heatpump_included = system_config_.heatpump_included
@@ -149,7 +163,6 @@ def modular_household_explicit(
         electrolyzer_power = system_config_.electrolyzer_power
     ev_included = system_config_.ev_included
     charging_station = system_config_.charging_station
-    utsp_connected = system_config_.utsp_connect
 
     """BASICS"""
     if utsp_connected:
@@ -176,6 +189,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
             )
         )
+            
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
@@ -183,7 +197,7 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile.Name or ""
+            "Occupancy", occupancy_profile or ""
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,

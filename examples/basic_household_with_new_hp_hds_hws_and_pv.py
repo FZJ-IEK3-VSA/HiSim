@@ -180,7 +180,6 @@ def basic_household_new(
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_heat_water_storage.HeatingWaterStorageConfig(
         name=hws_name,
-        min_water_mixing_time_in_seconds=min_water_mixing_time_in_seconds,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
         cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,

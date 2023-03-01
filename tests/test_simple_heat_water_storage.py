@@ -1,88 +1,95 @@
 from hisim import component as cp
-#import components as cps
-#import components
-from hisim.components import generic_heat_water_storage
+from hisim.components import simple_heat_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
+from hisim import log
 
-def test_storage():
+def test_simple_storage():
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
-    # Storage
-    V_SP_heating_water = 1000
-    V_SP_warm_water = 200
-    temperature_of_warm_water_extratcion = 32
-    ambient_temperature = 15
+
+    # Set Simple Heat Water Storage
+    hws_name = "SimpleHeatWaterStorage"
+    volume_heating_water_storage_in_liter = 100
+    mean_water_temperature_in_storage_in_celsius = 50
+    cool_water_temperature_in_storage_in_celsius = 50
+    hot_water_temperature_in_storage_in_celsius = 50
 
     #===================================================================================================================
-    # Set Storage
-    my_storage_config= generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config()
-    my_storage_config.V_SP_heating_water =V_SP_heating_water
-    my_storage_config.V_SP_warm_water = V_SP_warm_water
-    my_storage_config.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
-    my_storage_config.ambient_temperature = ambient_temperature
+    # Build Heat Water Storage
+    my_simple_heat_water_storage_config = simple_heat_water_storage.HeatingWaterStorageConfig(
+        name=hws_name,
+        volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+        mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
+        cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
+        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius
+    )
+    my_simple_heat_water_storage = simple_heat_water_storage.HeatingWaterStorage(
+        config=my_simple_heat_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
-    my_storage = generic_heat_water_storage.HeatStorage(config=my_storage_config,
-                                     my_simulation_parameters=my_simulation_parameters)
-
-    thermal_demand_heating_water = cp.ComponentOutput("FakeThermalDemandHeatingWater",
-                             "ThermalDemandHeatingWater",
-                                                      lt.LoadTypes.ANY,
-                                                      lt.Units.PERCENT)
-
-    thermal_demand_warm_water = cp.ComponentOutput("FakeThermalDemandWarmWater",
-                              "ThermalDemandWarmWater",
-                                                   lt.LoadTypes.WATER,
+    water_temperature_input_from_heat_distribution_system = cp.ComponentOutput("FakeWaterInputTemperatureFromHds",
+                             "WaterTemperatureInputFromHeatDistributionSystem",
+                                                      lt.LoadTypes.TEMPERATURE,
                                                    lt.Units.CELSIUS)
 
-    control_signal_choose_storage = cp.ComponentOutput("FakeControlSignalChooseStorage",
-                              "ControlSignalChooseStorage",
-                                                       lt.LoadTypes.WATER,
-                                                       lt.Units.CELSIUS)
+    water_temperature_input_from_heat_generator = cp.ComponentOutput("FakeWaterInputTemperatureFromHeatGenerator",
+                              "WaterTemperatureInputFromHeatGenerator",
+                                                   lt.LoadTypes.TEMPERATURE,
+                                                   lt.Units.CELSIUS)
 
-    thermal_input_power1 = cp.ComponentOutput("FakeThermalInputPower1",
-                              "ThermalInputPower1",
-                                              lt.LoadTypes.WATER,
-                                              lt.Units.CELSIUS)
+    water_mass_flow_rate_from_heat_distribution_system = cp.ComponentOutput("FakeWaterMassFlowRateFromHds",
+                              "WaterMassFlowRateFromHeatDistributionSystem",
+                                                       lt.LoadTypes.WARM_WATER,
+                                                       lt.Units.KG_PER_SEC)
+    
+    water_mass_flow_rate_from_heat_generator = cp.ComponentOutput("FakeWaterMassFlowRateFromHeatGenerator",
+                              "WaterMassFlowRateFromHeatGenerator",
+                                                       lt.LoadTypes.WARM_WATER,
+                                                       lt.Units.KG_PER_SEC)
 
-    my_storage.thermal_demand_heating_water.source_output = thermal_demand_heating_water
-    my_storage.thermal_demand_warm_water.source_output = thermal_demand_warm_water
-    my_storage.control_signal_choose_storage.source_output = control_signal_choose_storage
-    my_storage.thermal_input_power1.source_output = thermal_input_power1
+    
+    my_simple_heat_water_storage.water_temperature_heat_distribution_system_input_channel.source_output = water_temperature_input_from_heat_distribution_system
+    my_simple_heat_water_storage.water_temperature_heat_generator_input_channel.source_output = water_temperature_input_from_heat_generator
+    my_simple_heat_water_storage.water_mass_flow_rate_heat_distrution_system_input_channel.source_output = water_mass_flow_rate_from_heat_distribution_system
+    my_simple_heat_water_storage.water_mass_flow_rate_heat_generator_input_channel.source_output = water_mass_flow_rate_from_heat_generator
+    
+    
 
-    number_of_outputs = fft.get_number_of_outputs([thermal_demand_heating_water,
-                                        thermal_demand_warm_water,
-                                        control_signal_choose_storage,
-                                        thermal_input_power1,
-                                        my_storage])
+    number_of_outputs = fft.get_number_of_outputs([water_temperature_input_from_heat_distribution_system,
+                                        water_temperature_input_from_heat_generator,
+                                        water_mass_flow_rate_from_heat_distribution_system,
+                                        water_mass_flow_rate_from_heat_generator,
+                                        my_simple_heat_water_storage])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components([thermal_demand_heating_water,
-                                        thermal_demand_warm_water,
-                                        control_signal_choose_storage,
-                                        thermal_input_power1,
-                                        my_storage])
+    fft.add_global_index_of_components([water_temperature_input_from_heat_distribution_system,
+                                        water_temperature_input_from_heat_generator,
+                                        water_mass_flow_rate_from_heat_distribution_system,
+                                        water_mass_flow_rate_from_heat_generator,
+                                        my_simple_heat_water_storage])
 
-    stsv.values[thermal_demand_heating_water.global_index] = 2000
-    stsv.values[thermal_demand_warm_water.global_index] = 400
-    stsv.values[control_signal_choose_storage.global_index] = 1
-    stsv.values[thermal_input_power1.global_index] = 800
+
+    stsv.values[water_temperature_input_from_heat_distribution_system.global_index] = 48
+    stsv.values[water_temperature_input_from_heat_generator.global_index] = 52
+    stsv.values[water_mass_flow_rate_from_heat_distribution_system.global_index] = 0.787
+    stsv.values[water_mass_flow_rate_from_heat_generator.global_index] = 0.59
 
     timestep = 300
     # Simulate
 
-    my_storage.i_restore_state()
-    my_storage.i_simulate(timestep, stsv, False)
-    # WW-Storage is choosed to be heated up
-    assert 1 == stsv.values[control_signal_choose_storage.global_index]
-    # Temperature of Heating-Water Storage sinks
-    assert 39.97334630595229== stsv.values[my_storage.T_sp_C_hw.global_index]
-    # Temperature of Heating-Water Storage raise
-    assert 40.02265485276707 == stsv.values[my_storage.T_sp_C_ww.global_index]
-    # Energy Loss of Storage
-    assert 6.26 == stsv.values[my_storage.UA_SP_C.global_index]
-    # Temperature of choosed storage (warm-Water) to be heated up
-    assert stsv.values[my_storage.T_sp_C_ww.global_index] == stsv.values[my_storage.T_sp_C.global_index]
+    my_simple_heat_water_storage.i_restore_state()
+
+    for seconds_per_timestep in [60, 60* 15, 60 * 30, 60* 60, 60* 120]:
+        log.information("sec per timestep " + str(seconds_per_timestep))
+        my_simple_heat_water_storage.seconds_per_timestep = seconds_per_timestep
+
+        my_simple_heat_water_storage.i_simulate(timestep, stsv, False)
+
+        log.information("storage mean temp " + str(my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius))
+        log.information("Stsv outputs " + str(stsv.values))
+

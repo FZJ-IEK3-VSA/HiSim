@@ -119,15 +119,7 @@ def basic_household_with_default_connections(
     my_sim.add_component(my_photovoltaic_system)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_heat_capacity_class,
-        initial_internal_temperature_in_celsius=initial_internal_temperature_in_celsius,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-        total_base_area_in_m2=total_base_area_in_m2,
-        name="Building",
-    )
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),

@@ -155,15 +155,15 @@ def household_gas_heater(
         my_building.ReferenceMaxHeatBuildingDemand,
     )
 
-    my_gasheater.connect_input(
-        my_gasheater.InitialResidenceTemperature,
-        my_building.component_name,
-        my_building.InitialInternalTemperature,
-    )
+    # my_gasheater.connect_input(
+    #     my_gasheater.InitialResidenceTemperature,
+    #     my_building.component_name,
+    #     my_building.InitialInternalTemperature,
+    # )
     my_gasheater.connect_input(
         my_gasheater.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureMeanThermalMass,
     )
 
     my_gasheater_controller.connect_input(
@@ -209,7 +209,7 @@ def household_gas_heater(
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureMeanThermalMass,
     )
 
     my_heat_distribution_controller.connect_input(

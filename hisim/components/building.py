@@ -126,7 +126,7 @@ class BuildingConfig(cp.ConfigBase):
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
             set_heating_temperature_in_celsius=20,
-            set_cooling_temperature_in_celsius=24,
+            set_cooling_temperature_in_celsius=23,
         )
         return config
 

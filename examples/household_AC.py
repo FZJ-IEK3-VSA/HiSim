@@ -71,13 +71,6 @@ def household_AC_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     # Set occupancy
     occupancy_profile = "CH01"
 
-    # Set building
-    building_code = "ES.ME.SFH.05.Gen.ReEx.001.003"
-    building_heat_capacity_class = "medium"
-    initial_internal_temperature_in_celsius = 19
-    heating_reference_temperature_in_celsius = -14
-
-
     # Set air conditioner controller
     t_air_heating = 16.0
     t_air_cooling = 24.0

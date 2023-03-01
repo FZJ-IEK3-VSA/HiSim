@@ -58,14 +58,6 @@ def basic_household_with_default_connections(
     # Set occupancy
     # occupancy_profile = "CH01"
 
-    # Set building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_heat_capacity_class = "medium"
-    initial_internal_temperature_in_celsius = 23
-    heating_reference_temperature_in_celsius = -14
-    absolute_conditioned_floor_area_in_m2 = 121.2
-    total_base_area_in_m2 = None
-
     # Set heat pump controller
     temperature_air_heating_in_celsius = 16.0
     temperature_air_cooling_in_celsius = 24.0

@@ -57,13 +57,6 @@ def test_house_with_pv_and_hp_for_heating_test(
     # Set Occupancy
     occupancy_profile = "CH01"
 
-    # Set Building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_heat_capacity_class = "medium"
-    initial_temperature_in_celsius = 23
-    heating_reference_temperature_in_celsius = -14
-    absolute_conditioned_floor_area_in_m2 = 218.9
-    total_base_area_in_m2 = None
 
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.5
@@ -248,7 +241,7 @@ def test_house_with_pv_and_hp_for_heating_test(
     )
 
     energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2 = (
-        sum_heating_in_kilowatt_hour / absolute_conditioned_floor_area_in_m2
+        sum_heating_in_kilowatt_hour / my_building_config.absolute_conditioned_floor_area_in_m2
     )
     log.information(
         "energy need for heating from tabula [kWh/(a*m2)] "

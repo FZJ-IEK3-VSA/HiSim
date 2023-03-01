@@ -216,6 +216,7 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     HeatLoss = "HeatLoss"
+    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
 
     @utils.measure_execution_time
     def __init__(
@@ -326,7 +327,6 @@ class Building(dynamic_component.DynamicComponent):
         self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year: float = (
             0
         )
-        self.theoretical_thermal_building_demand_in_watt: float = 0
 
         self.get_building()
         self.build()
@@ -335,11 +335,7 @@ class Building(dynamic_component.DynamicComponent):
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
         )
-        # self.max_water_mass_flow_rate_in_kg_per_second = self.calc_max_water_mass_flow_rate(
-        #     heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
-        #     initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
-        #     max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt,
-        # )
+
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
@@ -479,7 +475,13 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatLoss} will follow.",
         )
-
+        self.theoretical_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalThermalBuildingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
+        )
         # =================================================================================================================================
         # Add and get default connections
 
@@ -616,6 +618,10 @@ class Building(dynamic_component.DynamicComponent):
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
         )
+
+        set_heating_temperature_in_celsius = 20
+        set_cooling_temperature_in_celsius = 24
+
         thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
             thermal_power_delivered_in_watt = (
@@ -663,6 +669,12 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius
         )
 
+        theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
+            set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
+            set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
+            previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
+            outside_temperature_in_celsius=temperature_outside_in_celsius,
+        )
         # Returns outputs
         stsv.set_output_value(
             self.thermal_mass_temperature_channel,
@@ -690,6 +702,11 @@ class Building(dynamic_component.DynamicComponent):
         stsv.set_output_value(
             self.heat_loss_channel,
             self.heat_loss_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.theoretical_thermal_building_demand_channel,
+            theoretical_thermal_building_demand_in_watt,
         )
 
         # Saves solar gains cache
@@ -1701,7 +1718,7 @@ class Building(dynamic_component.DynamicComponent):
             <= set_cooling_temperature_in_celsius
         ):
             # step1 finsihed, no heating or cooling needed
-            self.theoretical_thermal_building_demand_in_watt = 0
+            theoretical_thermal_building_demand_in_watt = 0
 
         elif (
             indoor_air_temperature_zero_in_celsius > set_cooling_temperature_in_celsius
@@ -1732,7 +1749,7 @@ class Building(dynamic_component.DynamicComponent):
                     set_heating_temperature_in_celsius
                 )
 
-            self.theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_when_heating_or_cooling_needed_step_two(
+            theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_when_heating_or_cooling_needed_step_two(
                 ten_thermal_power_delivered_in_watt=ten_thermal_power_delivered_in_watt,
                 indoor_air_temperature_zero_in_celsius=indoor_air_temperature_zero_in_celsius,
                 indoor_air_temperature_ten_in_celsius=indoor_air_temperature_ten_in_celsius,
@@ -1740,6 +1757,8 @@ class Building(dynamic_component.DynamicComponent):
             )
         else:
             raise ValueError("value error for theoretical building demand")
+
+        return theoretical_thermal_building_demand_in_watt
 
     def calc_indoor_air_temperature_zero_step_one(
         self,

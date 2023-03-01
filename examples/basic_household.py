@@ -69,6 +69,8 @@ def basic_household_explicit(
     heating_reference_temperature = -14
     absolute_conditioned_floor_area_in_m2 = 121.2
     total_base_area_in_m2 = None
+    set_heating_temperature_in_celsius = 20.0
+    set_cooling_temperature_in_celsius = 24.0
 
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 16.0
@@ -130,6 +132,8 @@ def basic_household_explicit(
         absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
         total_base_area_in_m2=total_base_area_in_m2,
         name="Building1",
+        set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
     )
 
     my_building = building.Building(
@@ -249,7 +253,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.TemperatureMean,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureMeanThermalMass,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,

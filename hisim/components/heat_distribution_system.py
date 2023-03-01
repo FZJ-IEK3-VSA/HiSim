@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.building import BuildingController
+from hisim.components.building import Building
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
@@ -107,7 +107,7 @@ class HeatDistribution(cp.Component):
     State = "State"
     WaterTemperatureInput = "WaterTemperatureInput"
     MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
-    RealThermalBuildingDemand = "RealThermalBuildingDemand"
+    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
 
     # Outputs
     WaterTemperatureOutput = "WaterTemperatureOutput"
@@ -139,7 +139,7 @@ class HeatDistribution(cp.Component):
         self.heat_gain_for_building_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 0.0
         self.max_thermal_building_demand_in_watt: float = 0.0
-        self.real_heat_building_demand_in_watt: float = 0.0
+        self.theoretical_thermal_building_demand_in_watt: float = 0.0
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
 
@@ -148,9 +148,9 @@ class HeatDistribution(cp.Component):
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
-        self.real_heat_building_demand_channel: cp.ComponentInput = self.add_input(
+        self.theoretical_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.RealThermalBuildingDemand,
+            self.TheoreticalThermalBuildingDemand,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             True,
@@ -243,8 +243,8 @@ class HeatDistribution(cp.Component):
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
         self.state_controller = stsv.get_input_value(self.state_channel)
-        self.real_heat_building_demand_in_watt = stsv.get_input_value(
-            self.real_heat_building_demand_channel
+        self.theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+            self.theoretical_thermal_building_demand_channel
         )
 
         self.water_temperature_input_in_celsius = stsv.get_input_value(
@@ -266,21 +266,14 @@ class HeatDistribution(cp.Component):
         if self.state_controller == 1:
 
             # building gets the heat that it needs
-            self.heat_gain_for_building_in_watt = self.real_heat_building_demand_in_watt
+            self.heat_gain_for_building_in_watt = self.theoretical_thermal_building_demand_in_watt
 
             self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
                 water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
                 water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-                real_heat_buiding_demand_in_watt=self.real_heat_building_demand_in_watt,
+                real_heat_buiding_demand_in_watt=self.theoretical_thermal_building_demand_in_watt,
             )
-            # stsv.set_output_value(
-            # self.water_temperature_output_channel,
-            # self.water_temperature_output_in_celsius,
-            # )
-            # stsv.set_output_value(
-            # self.thermal_power_delivered_channel,
-            # self.heat_gain_for_building_in_watt,
-            # )
+
 
         elif self.state_controller == 0:
 
@@ -289,14 +282,7 @@ class HeatDistribution(cp.Component):
             self.water_temperature_output_in_celsius = (
                 self.water_temperature_input_in_celsius
             )
-            # stsv.set_output_value(
-            # self.water_temperature_output_channel,
-            # self.water_temperature_output_in_celsius,
-            # )
-            # stsv.set_output_value(
-            # self.thermal_power_delivered_channel,
-            # self.heat_gain_for_building_in_watt,
-            # )
+
 
         else:
             raise ValueError("unknown mode")
@@ -368,7 +354,7 @@ class HeatDistributionController(cp.Component):
     """
 
     # Inputs
-    RealHeatBuildingDemand = "RealHeatBuildingDemand"
+    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
@@ -396,7 +382,7 @@ class HeatDistributionController(cp.Component):
         )
         self.state_controller: int = 0
         self.start_timestep: int = 0
-        self.real_heat_building_demand_in_watt: float = 0.0
+        self.theoretical_thermal_building_demand_in_watt: float = 0.0
         self.water_temperature_input_in_celsius: float = 50
         self.build(
             set_heating_threshold_temperature=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
@@ -404,9 +390,9 @@ class HeatDistributionController(cp.Component):
             set_water_storage_temperature_for_cooling_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
             )
 
-        self.real_heat_building_demand_channel: cp.ComponentInput = self.add_input(
+        self.theoretical_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.RealHeatBuildingDemand,
+            self.TheoreticalThermalBuildingDemand,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             True,
@@ -428,15 +414,7 @@ class HeatDistributionController(cp.Component):
             True,
         )
 
-        self.real_heat_building_demand_passed_to_hds_channel: cp.ComponentOutput = (
-            self.add_output(
-                self.component_name,
-                self.RealHeatBuildingDemandPassedToHeatDistributionSystem,
-                lt.LoadTypes.HEATING,
-                lt.Units.WATT,
-                output_description=f"here a description for {self.RealHeatBuildingDemandPassedToHeatDistributionSystem} will follow.",
-            )
-        )
+
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY,
             output_description=f"here a description for {self.State} will follow.",
@@ -456,12 +434,12 @@ class HeatDistributionController(cp.Component):
             "setting building controller default connections in HeatDistributionController"
         )
         connections = []
-        building_controller_classname = BuildingController.get_classname()
+        building_classname = Building.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HeatDistributionController.RealHeatBuildingDemand,
-                building_controller_classname,
-                BuildingController.RealHeatBuildingDemand,
+                HeatDistributionController.TheoreticalThermalBuildingDemand,
+                building_classname,
+                Building.TheoreticalThermalBuildingDemand,
             )
         )
         return connections
@@ -520,8 +498,8 @@ class HeatDistributionController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            self.real_heat_building_demand_in_watt = stsv.get_input_value(
-                self.real_heat_building_demand_channel
+            self.theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+                self.theoretical_thermal_building_demand_channel
             )
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
@@ -530,7 +508,7 @@ class HeatDistributionController(cp.Component):
                 self.water_temperature_input_from_heat_water_storage_channel
             )
             self.conditions_for_opening_or_shutting_heat_distribution(
-                    real_heat_building_demand_in_watt=self.real_heat_building_demand_in_watt,
+                    real_heat_building_demand_in_watt=self.theoretical_thermal_building_demand_in_watt,
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
                     water_temperature_input_in_celsius=self.water_temperature_input_in_celsius
                 )
@@ -544,10 +522,7 @@ class HeatDistributionController(cp.Component):
                 raise ValueError("unknown mode")
 
             stsv.set_output_value(self.state_channel, self.state_controller)
-            stsv.set_output_value(
-                self.real_heat_building_demand_passed_to_hds_channel,
-                self.real_heat_building_demand_in_watt,
-            )
+
 
         # log.information("hsdc timestep " + str(timestep))
         # log.information("hsdc state " + str(self.state_controller))
@@ -584,20 +559,6 @@ class HeatDistributionController(cp.Component):
                 self.controller_heat_distribution_mode = "on"
                 return
 
-        #     if (
-        #         real_heat_building_demand_in_watt == 0
-        #         or daily_average_outside_temperature_in_celsius
-        #         > self.set_heating_threshold_temperature
-        #     ):
-        #         self.controller_heat_distribution_mode = "off"
-        #         return
-        # elif self.controller_heat_distribution_mode == "off":
-        #     if (
-        #         real_heat_building_demand_in_watt != 0
-        #         and daily_average_outside_temperature_in_celsius
-        #         < self.set_heating_threshold_temperature
-        #     ):
-        #         self.controller_heat_distribution_mode = "on"
-        #         return
+
         else:
             raise ValueError("unknown mode")

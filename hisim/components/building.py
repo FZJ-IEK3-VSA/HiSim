@@ -67,7 +67,6 @@ from hisim import (
 from hisim import (
     log,
 )
-from hisim.components.configuration import PhysicsConfig
 from hisim.components.loadprofilegenerator_utsp_connector import (
     UtspLpgConnector,
 )
@@ -110,6 +109,8 @@ class BuildingConfig(cp.ConfigBase):
     initial_internal_temperature_in_celsius: float
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
+    set_heating_temperature_in_celsius: float
+    set_cooling_temperature_in_celsius: float
 
     @classmethod
     def get_default_german_single_family_home(
@@ -124,6 +125,8 @@ class BuildingConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=-14,
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
+            set_heating_temperature_in_celsius=20,
+            set_cooling_temperature_in_celsius=23,
         )
         return config
 
@@ -164,53 +167,6 @@ class BuildingState:
             self.thermal_mass_temperature_in_celsius,
             self.thermal_capacitance_in_joule_per_kelvin,
         )
-
-
-class BuildingControllerState:
-
-    """BuildingControllerState class."""
-
-    def __init__(
-        self,
-        temperature_building_target_in_celsius: float,
-        level_of_utilization: float,
-        real_heat_building_deman_in_watt: float,
-    ):
-        """Constructs all the neccessary attributes for the BuildingControllerState object."""
-        self.temperature_building_target_in_celsius: float = (
-            temperature_building_target_in_celsius
-        )
-        self.level_of_utilization: float = level_of_utilization
-        self.real_heat_building_demand_in_watt: float = real_heat_building_deman_in_watt
-
-    def clone(self):
-        """Copies the BuildingControllerState."""
-        return BuildingControllerState(
-            temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
-            level_of_utilization=self.level_of_utilization,
-            real_heat_building_deman_in_watt=self.real_heat_building_demand_in_watt,
-        )
-
-
-@dataclass_json
-@dataclass
-class BuildingControllerConfig(cp.ConfigBase):
-
-    """Configuration of the Building Controller class."""
-
-    name: str
-    minimal_building_temperature_in_celsius: float
-    maximal_building_temperature_in_celsius: float
-
-    @classmethod
-    def get_default_config(cls) -> Any:
-        """Gets a default configuration of the building controller."""
-        config = BuildingControllerConfig(
-            name="BuildingController",
-            minimal_building_temperature_in_celsius=20,
-            maximal_building_temperature_in_celsius=24,
-        )
-        return config
 
 
 class Building(dynamic_component.DynamicComponent):
@@ -264,6 +220,7 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     HeatLoss = "HeatLoss"
+    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
 
     @utils.measure_execution_time
     def __init__(
@@ -285,6 +242,12 @@ class Building(dynamic_component.DynamicComponent):
 
         # =================================================================================================================================
         # Initialization of variables
+        self.set_heating_temperature_in_celsius = (
+            self.buildingconfig.set_heating_temperature_in_celsius
+        )
+        self.set_cooling_temperature_in_celsius = (
+            self.buildingconfig.set_cooling_temperature_in_celsius
+        )
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -382,11 +345,7 @@ class Building(dynamic_component.DynamicComponent):
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
         )
-        # self.max_water_mass_flow_rate_in_kg_per_second = self.calc_max_water_mass_flow_rate(
-        #     heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
-        #     initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
-        #     max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt,
-        # )
+
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
@@ -526,7 +485,13 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatLoss} will follow.",
         )
-
+        self.theoretical_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalThermalBuildingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
+        )
         # =================================================================================================================================
         # Add and get default connections
 
@@ -663,6 +628,7 @@ class Building(dynamic_component.DynamicComponent):
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
         )
+
         thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
             thermal_power_delivered_in_watt = (
@@ -710,6 +676,12 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius
         )
 
+        theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
+            set_heating_temperature_in_celsius=self.set_heating_temperature_in_celsius,
+            set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
+            previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
+            outside_temperature_in_celsius=temperature_outside_in_celsius,
+        )
         # Returns outputs
         stsv.set_output_value(
             self.thermal_mass_temperature_channel,
@@ -739,6 +711,11 @@ class Building(dynamic_component.DynamicComponent):
             self.heat_loss_in_watt,
         )
 
+        stsv.set_output_value(
+            self.theoretical_thermal_building_demand_channel,
+            theoretical_thermal_building_demand_in_watt,
+        )
+
         # Saves solar gains cache
         if not self.is_in_cache:
             self.cache[timestep] = solar_heat_gain_through_windows
@@ -755,8 +732,8 @@ class Building(dynamic_component.DynamicComponent):
                 )
         # log.information("building timestep " + str(timestep))
         # log.information("building thermal power input " + str(thermal_power_delivered_in_watt))
-        # log.information("building thermal mass temp " + str(thermal_mass_average_bulk_temperature_in_celsius))
-        # log.information("building indoor air temperature " + str(indoor_air_temperature_in_celsius))
+        # log.information("building real indoor air temperature " + str(indoor_air_temperature_in_celsius))
+        # log.information("buiding theoretical demand " + str(theoretical_thermal_building_demand_in_watt))
 
     # =================================================================================================================================
 
@@ -1723,6 +1700,171 @@ class Building(dynamic_component.DynamicComponent):
         )
         return max_thermal_building_demand_in_watt
 
+    # =====================================================================================================================================
+    # Calculate theroretical thermal building demand according to ISO 13790 C.4
+
+    def calc_theoretical_thermal_building_demand_for_building(
+        self,
+        set_heating_temperature_in_celsius: float,
+        set_cooling_temperature_in_celsius: float,
+        previous_thermal_mass_temperature_in_celsius: float,
+        outside_temperature_in_celsius: float,
+    ) -> Any:
+        """Calculate theoretical thermal building demand to attain a certain set temperature according to ISO 13790 (C.4)."""
+
+        # step1, calculate air temperature when thermal power delivered is zero
+        indoor_air_temperature_zero_in_celsius = self.calc_indoor_air_temperature_zero_step_one(
+            previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
+            outside_temperature_in_celsius=outside_temperature_in_celsius,
+        )
+
+        # conditions for air_temperature_zero
+        if (
+            set_heating_temperature_in_celsius
+            <= indoor_air_temperature_zero_in_celsius
+            <= set_cooling_temperature_in_celsius
+        ):
+            # step1 finsihed, no heating or cooling needed
+            theoretical_thermal_building_demand_in_watt = 0
+
+        elif (
+            indoor_air_temperature_zero_in_celsius > set_cooling_temperature_in_celsius
+            or indoor_air_temperature_zero_in_celsius
+            < set_heating_temperature_in_celsius
+        ):
+            # step2, heating or cooling is needed, calculate air temperature when therma power delivered is 10 W/m2
+            (
+                indoor_air_temperature_ten_in_celsius,
+                ten_thermal_power_delivered_in_watt,
+            ) = self.calc_indoor_air_temperature_ten_step_two(
+                previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
+                outside_temperature_in_celsius=outside_temperature_in_celsius,
+            )
+            # set air temperature
+            if (
+                indoor_air_temperature_zero_in_celsius
+                > set_cooling_temperature_in_celsius
+            ):
+                indoor_air_temperature_set_in_celsius = (
+                    set_cooling_temperature_in_celsius
+                )
+            elif (
+                indoor_air_temperature_zero_in_celsius
+                < set_heating_temperature_in_celsius
+            ):
+                indoor_air_temperature_set_in_celsius = (
+                    set_heating_temperature_in_celsius
+                )
+
+            theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_when_heating_or_cooling_needed_step_two(
+                ten_thermal_power_delivered_in_watt=ten_thermal_power_delivered_in_watt,
+                indoor_air_temperature_zero_in_celsius=indoor_air_temperature_zero_in_celsius,
+                indoor_air_temperature_ten_in_celsius=indoor_air_temperature_ten_in_celsius,
+                indoor_air_temperature_set_in_celsius=indoor_air_temperature_set_in_celsius,
+            )
+        else:
+            raise ValueError("value error for theoretical building demand")
+
+        return theoretical_thermal_building_demand_in_watt
+
+    def calc_indoor_air_temperature_zero_step_one(
+        self,
+        previous_thermal_mass_temperature_in_celsius: float,
+        outside_temperature_in_celsius: float,
+    ) -> Any:
+        """Calculate indoor air temperature for zero thermal power delivered (Phi_HC_nd) according to ISO 13790 (C.4.2)."""
+
+        # step1: check if heating or cooling is needed
+        zero_thermal_power_delivered_in_watt = 0
+
+        # get conductances and transmissions (C.6-C.8)
+        self.get_conductances()
+        # self.transmission_heat_transfer_coefficient_1_in_watt_per_kelvin
+        # self.transmission_heat_transfer_coefficient_2_in_watt_per_kelvin
+        # self.transmission_heat_transfer_coefficient_3_in_watt_per_kelvin
+
+        # calculate temperatures (C.9 - C.11)
+        thermal_mass_average_bulk_temperature_in_celsius = self.calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
+            previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius
+        )
+
+        internal_room_surface_temperature_in_celsius = self.calc_temperature_of_internal_room_surfaces_in_celsius(
+            temperature_outside_in_celsius=outside_temperature_in_celsius,
+            thermal_mass_temperature_in_celsius=thermal_mass_average_bulk_temperature_in_celsius,
+            thermal_power_delivered_in_watt=zero_thermal_power_delivered_in_watt,
+        )
+
+        # indoor air temperature named zero
+        indoor_air_temperature_zero_in_celsius = self.calc_temperature_of_the_inside_air_in_celsius(
+            temperature_outside_in_celsius=outside_temperature_in_celsius,
+            temperature_internal_room_surfaces_in_celsius=internal_room_surface_temperature_in_celsius,
+            thermal_power_delivered_in_watt=zero_thermal_power_delivered_in_watt,
+        )
+        return indoor_air_temperature_zero_in_celsius
+
+    def calc_indoor_air_temperature_ten_step_two(
+        self,
+        previous_thermal_mass_temperature_in_celsius: float,
+        outside_temperature_in_celsius: float,
+    ) -> Any:
+        """Calculate indoor air temperature for thermal power delivered (Phi_HC_nd) of 10 W/m2 according to ISO 13790 (C.4.2)."""
+        heating_power_in_watt_per_m2 = 10
+        ten_thermal_power_delivered_in_watt = (
+            heating_power_in_watt_per_m2 * self.scaled_conditioned_floor_area_in_m2
+        )
+
+        # get conductances and transmissions (C.6-C.8)
+        self.get_conductances()
+        # self.transmission_heat_transfer_coefficient_1_in_watt_per_kelvin
+        # self.transmission_heat_transfer_coefficient_2_in_watt_per_kelvin
+        # self.transmission_heat_transfer_coefficient_3_in_watt_per_kelvin
+
+        # calculate temperatures (C.9 - C.11)
+        thermal_mass_average_bulk_temperature_in_celsius = self.calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
+            previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius
+        )
+
+        internal_room_surface_temperature_in_celsius = self.calc_temperature_of_internal_room_surfaces_in_celsius(
+            temperature_outside_in_celsius=outside_temperature_in_celsius,
+            thermal_mass_temperature_in_celsius=thermal_mass_average_bulk_temperature_in_celsius,
+            thermal_power_delivered_in_watt=ten_thermal_power_delivered_in_watt,
+        )
+
+        # indoor air temperature named zero
+        indoor_air_temperature_ten_in_celsius = self.calc_temperature_of_the_inside_air_in_celsius(
+            temperature_outside_in_celsius=outside_temperature_in_celsius,
+            temperature_internal_room_surfaces_in_celsius=internal_room_surface_temperature_in_celsius,
+            thermal_power_delivered_in_watt=ten_thermal_power_delivered_in_watt,
+        )
+
+        return (
+            indoor_air_temperature_ten_in_celsius,
+            ten_thermal_power_delivered_in_watt,
+        )
+
+    def calc_theoretical_thermal_building_demand_when_heating_or_cooling_needed_step_two(
+        self,
+        ten_thermal_power_delivered_in_watt: float,
+        indoor_air_temperature_set_in_celsius: float,
+        indoor_air_temperature_zero_in_celsius: float,
+        indoor_air_temperature_ten_in_celsius: float,
+    ) -> Any:
+        """Calculate theoretical thermal building demand to attain a certain set temperature according to ISO 13790 (C.4.2, Eq. C.13)."""
+
+        theoretical_thermal_building_demand_in_watt = (
+            ten_thermal_power_delivered_in_watt
+            * (
+                indoor_air_temperature_set_in_celsius
+                - indoor_air_temperature_zero_in_celsius
+            )
+            / (
+                indoor_air_temperature_ten_in_celsius
+                - indoor_air_temperature_zero_in_celsius
+            )
+        )
+
+        return theoretical_thermal_building_demand_in_watt
+
 
 # =====================================================================================================================================
 class Window:
@@ -1858,303 +2000,3 @@ class Window:
             return 0
 
         return poa_irrad["poa_direct"] * reduction_factor_with_area
-
-
-class BuildingController(cp.Component):
-
-    """BuildingController class.
-
-    It calculates on base of the maximal Building
-    Thermal Demand and the difference of the actual Building Tempreature
-    to the Target/Minimal Building Tempreature how much the building is suppose
-    to be heated up. This Output is called "RealBuildingHeatDemand".
-
-    Parameters
-    ----------
-    sim_params : Simulator
-        Simulator object used to carry the simulation using this class
-
-    """
-
-    # Inputs
-    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
-    ResidenceTemperature = "ResidenceTemperature"
-    HeatingDistributionSystemWaterMassFlowRate = (
-        "HeatingDistributionSystemWaterMassFlowRate"
-    )
-    # Outputs
-    RealHeatBuildingDemand = "RealHeatBuildingDemand"
-    LevelOfUtilization = "LevelOfUtilization"
-
-    def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: BuildingControllerConfig,
-    ):
-        """Constructs all the neccessary attributes of the Building Controller object."""
-        self.building_controller_config = config
-        super().__init__(
-            name="BuildingController",
-            my_simulation_parameters=my_simulation_parameters,
-        )
-        self.minimal_building_temperature_in_celsius = (
-            self.building_controller_config.minimal_building_temperature_in_celsius
-        )
-        self.maximal_building_temperature_in_celsius = (
-            self.building_controller_config.maximal_building_temperature_in_celsius
-        )
-        self.state = BuildingControllerState(
-            temperature_building_target_in_celsius=self.minimal_building_temperature_in_celsius,
-            level_of_utilization=0,
-            real_heat_building_deman_in_watt=0,
-        )
-        self.building = Building(
-            config=BuildingConfig.get_default_german_single_family_home(),
-            my_simulation_parameters=my_simulation_parameters,
-        )
-        self.h_transmission = self.building.vals1_in_watt_per_m2_per_kelvin
-        self.h_ventilation = self.building.vals2_in_watt_per_m2_per_kelvin
-
-        self.building_area_in_m2 = self.building.scaled_conditioned_floor_area_in_m2
-
-        self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second: float = 0.0
-        self.heating_demand_one_in_watt: float = 0.0
-        self.heating_demand_two_in_watt: float = 0.0
-        self.cooling_demand_one_in_watt: float = 0.0
-        self.cooling_demand_two_in_watt: float = 0.0
-        self.previous_state = self.state.clone()
-        self.real_heat_building_demand_in_watt: float = 0.0
-        self.building_temperature_in_celsius: float = 0.0
-        self.level_of_utilization: float = 0.0
-
-        # =================================================================================================================================
-        # Inputs and Output channels
-
-        self.ref_max_thermal_build_demand_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.ReferenceMaxHeatBuildingDemand,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            True,
-        )
-        self.residence_temperature_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.ResidenceTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            True,
-        )
-        self.heat_distribution_system_water_mass_flow_rate_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.HeatingDistributionSystemWaterMassFlowRate,
-            lt.LoadTypes.WARM_WATER,
-            lt.Units.KG_PER_SEC,
-            True,
-        )
-        self.real_heat_building_demand_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.RealHeatBuildingDemand,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            output_description=f"here a description for {self.RealHeatBuildingDemand} will follow.",
-        )
-        self.level_of_utilization_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.LevelOfUtilization,
-            lt.LoadTypes.ANY,
-            lt.Units.PERCENT,
-            output_description=f"here a description for {self.LevelOfUtilization} will follow.",
-        )
-        # =================================================================================================================================
-
-    def build(self):
-        """Build load profile for entire simulation duration."""
-        pass
-
-    def write_to_report(
-        self,
-    ):
-        """Writes a report."""
-        lines = []
-        for config_string in self.building_controller_config.get_string_dict():
-            lines.append(config_string)
-        return lines
-
-    def i_save_state(
-        self,
-    ):
-        """Saves the current state."""
-        self.previous_state = self.state.clone()
-
-    def i_restore_state(
-        self,
-    ):
-        """Restores previous state."""
-        self.state = self.previous_state.clone()
-
-    def i_doublecheck(
-        self,
-        timestep: int,
-        stsv: cp.SingleTimeStepValues,
-    ) -> None:
-        """Doublechecks."""
-        pass
-
-    def i_prepare_simulation(
-        self,
-    ) -> None:
-        """Prepares the simulation."""
-        pass
-
-    def i_simulate(
-        self,
-        timestep: int,
-        stsv: cp.SingleTimeStepValues,
-        force_convergence: bool,
-    ) -> None:
-        """Simulates the building controller."""
-        if force_convergence:
-            pass
-        else:
-            self.building_temperature_in_celsius = stsv.get_input_value(
-                self.residence_temperature_channel
-            )
-            self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second = (
-                stsv.get_input_value(
-                    self.heat_distribution_system_water_mass_flow_rate_channel
-                )
-            )
-            minimal_building_temperature_in_celsius = (
-                self.minimal_building_temperature_in_celsius
-            )
-            maximal_building_temperature_in_celsius = (
-                self.maximal_building_temperature_in_celsius
-            )
-            delta_temp_for_level_of_utilization = 0
-
-            # Building is too hot and needs cooling
-            if (
-                self.building_temperature_in_celsius
-                >= maximal_building_temperature_in_celsius
-                + delta_temp_for_level_of_utilization
-            ):
-                self.level_of_utilization = -0.5
-
-            # elif (
-            #     maximal_building_temperature_in_celsius
-            #     <= self.building_temperature_in_celsius
-            #     < maximal_building_temperature_in_celsius
-            #     + delta_temp_for_level_of_utilization
-            # ):
-            #     self.level_of_utilization = -(
-            #         self.building_temperature_in_celsius
-            #         - maximal_building_temperature_in_celsius
-            #     )
-
-            # Building is warm enough
-            elif (
-                minimal_building_temperature_in_celsius
-                <= self.building_temperature_in_celsius
-                < maximal_building_temperature_in_celsius + delta_temp_for_level_of_utilization
-            ):
-                self.level_of_utilization = 0
-
-            # Building is too cold and needs heating. It gets heated up, when temperature is underneath target temperature
-            # elif (
-            #     minimal_building_temperature_in_celsius
-            #     - delta_temp_for_level_of_utilization
-            #     < self.building_temperature_in_celsius
-            #     < minimal_building_temperature_in_celsius
-            # ):
-            #     self.level_of_utilization = (
-            #         minimal_building_temperature_in_celsius
-            #         - self.building_temperature_in_celsius
-            #     )
-            elif (
-                self.building_temperature_in_celsius
-                <= minimal_building_temperature_in_celsius
-                - delta_temp_for_level_of_utilization
-            ):
-                self.level_of_utilization = 0.5
-
-            else:
-                raise ValueError("the right case could not be identified")
-
-            # before self.state.level..
-            self.real_heat_building_demand_in_watt = (
-                self.state.level_of_utilization
-                * stsv.get_input_value(self.ref_max_thermal_build_demand_channel)
-            )
-            self.state.level_of_utilization = self.level_of_utilization
-
-            stsv.set_output_value(
-                self.level_of_utilization_channel, self.state.level_of_utilization
-            )
-
-            # self.real_heat_building_demand_in_watt = self.state.real_heat_building_demand_in_watt
-
-            # if self.building_temperature_in_celsius < self.minimal_building_temperature_in_celsius:
-            #     self.calc_real_building_heat_demand()
-            #     self.real_heat_demand = self.heating_demand_one_in_watt
-            # elif self.building_temperature_in_celsius > self.maximal_building_temperature_in_celsius:
-            #     self.calc_cooling_demand()
-            #     self.real_heat_demand = self.cooling_demand_one_in_watt
-            # elif self.minimal_building_temperature_in_celsius <= self.building_temperature_in_celsius <= self.maximal_building_temperature_in_celsius:
-            #     self.real_heat_demand = 0
-            # else:
-            #     raise ValueError("unknown case")
-
-            # self.state.real_heat_building_demand_in_watt = self.real_heat_demand
-
-            stsv.set_output_value(
-                self.real_heat_building_demand_channel,
-                self.real_heat_building_demand_in_watt,
-            )
-            # log.information("bcontroller timestep " + str(timestep))
-            # log.information("bcontroller building temp " + str(self.building_temperature_in_celsius))
-            # log.information("bcontroller state level o utilization " + str(self.state.level_of_utilization))
-            # log.information("bcontroller real buiding heat deamnd " + str(self.real_heat_building_demand_in_watt))
-
-    def calc_real_building_heat_demand(self):
-        """Calc real heat demand for keeping house to minimum temp."""
-
-        self.heating_demand_one_in_watt = (
-            (self.h_transmission + self.h_ventilation)
-            * (
-                self.minimal_building_temperature_in_celsius
-                - self.building_temperature_in_celsius
-            )
-            * self.building_area_in_m2
-        )
-        # abs loss = H_tr + H_v 
-        # heat demand = abs loss + needed energy
-        # needed energy = c_gebäude * m_gebäude * delta T
-
-        self.heating_demand_two_in_watt = (
-            self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second
-            * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-            * (
-                self.minimal_building_temperature_in_celsius
-                - self.building_temperature_in_celsius
-            )
-        )
-
-    def calc_cooling_demand(self):
-        """Calc Cooling demand."""
-        self.cooling_demand_one_in_watt = (
-            4
-            * (self.h_transmission + self.h_ventilation)
-            * (
-                self.maximal_building_temperature_in_celsius
-                - self.building_temperature_in_celsius
-            )
-            * self.building_area_in_m2
-        )
-        self.cooling_demand_two_in_watt = (
-            self.water_mass_flow_rate_heat_distribution_system_in_kg_per_second
-            * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-            * (
-                self.maximal_building_temperature_in_celsius
-                - self.building_temperature_in_celsius
-            )
-        )

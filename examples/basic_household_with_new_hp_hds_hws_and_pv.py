@@ -69,18 +69,6 @@ def basic_household_new(
     # Set Occupancy
     occupancy_profile = "CH01"
 
-    # Set Building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_heat_capacity_class = "medium"
-    initial_temperature_in_celsius = 23
-    heating_reference_temperature = -14
-    absolute_conditioned_floor_area_in_m2 = 121.2
-    total_base_area_in_m2 = None
-
-    # Set Building Controller
-    name_building_controller = "BuildingController"
-    minimal_building_temperature_in_celsius = 20.0
-    maximal_building_temperature_in_celsius = 23.0
 
     # Set Heat Pump Controller
     set_water_storage_temperature_for_heating_in_celsius = 49
@@ -95,7 +83,6 @@ def basic_household_new(
     hp_min_idle_time_in_seconds = 15 * 60
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
-    min_water_mixing_time_in_seconds = 60 * 60
     volume_heating_water_storage_in_liter = 100
     mean_water_temperature_in_storage_in_celsius = 50
     cool_water_temperature_in_storage_in_celsius = 50
@@ -155,31 +142,13 @@ def basic_household_new(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_heat_capacity_class,
-        initial_internal_temperature_in_celsius=initial_temperature_in_celsius,
-        heating_reference_temperature_in_celsius=heating_reference_temperature,
-        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-        total_base_area_in_m2=total_base_area_in_m2,
-        name="Building1",
-    )
+    # Build Building    
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Building Controller
-    my_building_controller_config = building.BuildingControllerConfig(
-        name=name_building_controller,
-        minimal_building_temperature_in_celsius=minimal_building_temperature_in_celsius,
-        maximal_building_temperature_in_celsius=maximal_building_temperature_in_celsius,
-    )
-
-    my_building_controller = building.BuildingController(
-        config=my_building_controller_config, my_simulation_parameters=my_simulation_parameters
-    )
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         config=sumbuilder.ElectricityGridConfig(name="ElectrcityGrid_BaseLoad", grid=[my_occupancy, "Subtract", my_photovoltaic_system], signal=None),
@@ -328,22 +297,6 @@ def basic_household_new(
         my_heat_distribution_system.ThermalPowerDelivered,
     )
     # -----------------------------------------------------------------------------------------------------------------
-    my_building_controller.connect_input(
-        my_building_controller.ResidenceTemperature,
-        my_building.component_name,
-        my_building.TemperatureIndoorAir,
-    )
-    my_building_controller.connect_input(
-        my_building_controller.ReferenceMaxHeatBuildingDemand,
-        my_building.component_name,
-        my_building.ReferenceMaxHeatBuildingDemand,
-    )
-    my_building_controller.connect_input(
-        my_building_controller.HeatingDistributionSystemWaterMassFlowRate,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
-    )
-    # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
@@ -398,9 +351,9 @@ def basic_household_new(
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.RealHeatBuildingDemand,
-        my_building_controller.component_name,
-        my_building_controller.RealHeatBuildingDemand,
+        my_heat_distribution_controller.TheoreticalThermalBuildingDemand,
+        my_building.component_name,
+        my_building.TheoreticalThermalBuildingDemand,
     )
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.DailyAverageOutsideTemperature,
@@ -419,9 +372,9 @@ def basic_household_new(
         my_heat_distribution_controller.State,
     )
     my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.RealThermalBuildingDemand,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.RealHeatBuildingDemandPassedToHeatDistributionSystem,
+        my_heat_distribution_system.TheoreticalThermalBuildingDemand,
+        my_building.component_name,
+        my_building.TheoreticalThermalBuildingDemand,
     )
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.MaxThermalBuildingDemand,
@@ -442,9 +395,9 @@ def basic_household_new(
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_base_electricity_load_profile)
     my_sim.add_component(my_building)
-    my_sim.add_component(my_building_controller)
-    my_sim.add_component(my_heat_pump_controller)
-    my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_simple_heat_water_storage)
     my_sim.add_component(my_heat_distribution_system)
     my_sim.add_component(my_heat_distribution_controller)
+    my_sim.add_component(my_simple_heat_water_storage)
+    my_sim.add_component(my_heat_pump_controller)
+    my_sim.add_component(my_heat_pump)
+    

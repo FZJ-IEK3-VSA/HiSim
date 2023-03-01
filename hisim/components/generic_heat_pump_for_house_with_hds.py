@@ -600,7 +600,7 @@ class GenericHeatPumpNew(cp.Component):
         # Calculation.ThermalEnergyDelivery
         # Heat Pump is on
         if self.state.activation != 0:
-            log.information("hp timestep (first case, hp on)" + str(timestep))
+            # log.information("hp timestep (first case, hp on)" + str(timestep))
             self.number_of_cycles = self.state.cycle_number
             # Checks if the minimum running time has been reached
             if (
@@ -621,7 +621,7 @@ class GenericHeatPumpNew(cp.Component):
                 self.electricity_input_in_watt = abs(
                     self.state.thermal_power_delivered_in_watt / self.state.cop)
 
-                log.information("hp timestep (op time over, hp gets turned off)")
+                # log.information("hp timestep (op time over, hp gets turned off)")
                 # log.information("hp number of cycles "+ str(number_of_cycles))
                 # log.information("hp state thermal power " + str(self.state.thermal_power_delivered_in_watt))
 
@@ -671,14 +671,14 @@ class GenericHeatPumpNew(cp.Component):
 
         # Heat Pump is Off
         elif self.state.activation == 0:
-            log.information("hp timestep (second case, hp off)" + str(timestep))
+            # log.information("hp timestep (second case, hp off)" + str(timestep))
 
             if self.state_from_heat_pump_controller != 0 and (
                 timestep >= self.state.start_timestep + self.min_idle_time
             ):
                 self.number_of_cycles = self.number_of_cycles + 1
                 # number_of_cycles = self.number_of_cycles
-                log.information("hp timestep (idle time over, hp gets turned on)")
+                # log.information("hp timestep (idle time over, hp gets turned on)")
                 # log.information("hp number of cycles "+ str(number_of_cycles))
 
                 if self.state_from_heat_pump_controller == 1:
@@ -756,16 +756,16 @@ class GenericHeatPumpNew(cp.Component):
             self.heatpump_water_mass_flow_rate_input_channel,
             self.heatpump_water_mass_flow_rate_in_kg_per_second,
         )
-        log.information("hp timestep " + str(timestep))
-        # log.information("hp hpc state " + str(self.state_from_heat_pump_controller))
-        log.information(
-            "hp thermal power delivered "
-            + str(self.state.thermal_power_delivered_in_watt)
-        )
-        log.information("hp water temperature input " + str(self.water_temperature_input_in_celsius))
-        log.information(
-            "hp water temperature output "
-            + str(self.water_temperature_output_in_celsius))
+        # log.information("hp timestep " + str(timestep))
+        # # log.information("hp hpc state " + str(self.state_from_heat_pump_controller))
+        # log.information(
+        #     "hp thermal power delivered "
+        #     + str(self.state.thermal_power_delivered_in_watt)
+        # )
+        # log.information("hp water temperature input " + str(self.water_temperature_input_in_celsius))
+        # log.information(
+        #     "hp water temperature output "
+        #     + str(self.water_temperature_output_in_celsius))
     
     def process_thermal(self, ws_in: float) -> None:
         """Process thermal."""
@@ -992,12 +992,12 @@ class HeatPumpControllerNew(cp.Component):
             if self.controller_heatpumpmode == "off":
                 state = 0
 
-            log.information("hp controller timestep " + str(timestep))
-            log.information(
-                "hp controller input water temp from hws "
-                + str(self.water_temperature_input_from_heat_water_storage_in_celsius)
-            )
-            log.information("hp controller state " + str(state))
+            # log.information("hp controller timestep " + str(timestep))
+            # log.information(
+            #     "hp controller input water temp from hws "
+            #     + str(self.water_temperature_input_from_heat_water_storage_in_celsius)
+            # )
+            # log.information("hp controller state " + str(state))
 
             stsv.set_output_value(self.state_channel, state)
 

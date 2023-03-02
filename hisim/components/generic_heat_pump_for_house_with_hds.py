@@ -89,7 +89,7 @@ class HeatPumpControllerConfigNew(cp.ConfigBase):
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpControllerConfigNew(
             name="HeatPumpController",
-            set_water_storage_temperature_for_heating_in_celsius=50,
+            set_water_storage_temperature_for_heating_in_celsius=49,
             set_water_storage_temperature_for_cooling_in_celsius=55,
             offset=0.0,
             mode=1,

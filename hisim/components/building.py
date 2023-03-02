@@ -434,14 +434,14 @@ class Building(dynamic_component.DynamicComponent):
             self.SetHeatingTemperature,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
-            True,
+            False,
         )
         self.set_cooling_temperature_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.SetCoolingTemperature,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
-            True,
+            False,
         )
 
         # Output channels

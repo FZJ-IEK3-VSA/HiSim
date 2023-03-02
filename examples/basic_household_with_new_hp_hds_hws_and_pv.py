@@ -98,7 +98,7 @@ def basic_household_new(
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
     set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 23
+    set_cooling_temperature_for_building_in_celsius = 22
 
     # =================================================================================================================================
     # Build Components

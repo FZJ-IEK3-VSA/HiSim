@@ -1794,12 +1794,6 @@ class Building(dynamic_component.DynamicComponent):
         # step1: check if heating or cooling is needed
         zero_thermal_power_delivered_in_watt = 0
 
-        # get conductances and transmissions (C.6-C.8)
-        self.get_conductances()
-        # self.transmission_heat_transfer_coefficient_1_in_watt_per_kelvin
-        # self.transmission_heat_transfer_coefficient_2_in_watt_per_kelvin
-        # self.transmission_heat_transfer_coefficient_3_in_watt_per_kelvin
-
         # calculate temperatures (C.9 - C.11)
         thermal_mass_average_bulk_temperature_in_celsius = self.calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
             previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius
@@ -1829,13 +1823,7 @@ class Building(dynamic_component.DynamicComponent):
         ten_thermal_power_delivered_in_watt = (
             heating_power_in_watt_per_m2 * self.scaled_conditioned_floor_area_in_m2
         )
-
-        # get conductances and transmissions (C.6-C.8)
-        self.get_conductances()
-        # self.transmission_heat_transfer_coefficient_1_in_watt_per_kelvin
-        # self.transmission_heat_transfer_coefficient_2_in_watt_per_kelvin
-        # self.transmission_heat_transfer_coefficient_3_in_watt_per_kelvin
-
+    
         # calculate temperatures (C.9 - C.11)
         thermal_mass_average_bulk_temperature_in_celsius = self.calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
             previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius

@@ -1,6 +1,7 @@
 """Heat Distribution Module."""
 # clean
-# Owned
+
+from enum import IntEnum
 from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -21,6 +22,13 @@ __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
 
 
+class HeatingSystemType(IntEnum):
+
+    """Enum"""
+
+    RADIATOR = 1
+    FLOORHEATING = 2
+
 @dataclass_json
 @dataclass
 class HeatDistributionConfig(cp.ConfigBase):
@@ -34,7 +42,7 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     name: str
     water_temperature_in_distribution_system_in_celsius: float
-    heating_system: str
+    heating_system: HeatingSystemType
 
     @classmethod
     def get_default_heatdistributionsystem_config(
@@ -44,7 +52,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
             water_temperature_in_distribution_system_in_celsius=50,
-            heating_system="FloorHeating",
+            heating_system=HeatingSystemType.FLOORHEATING,
         )
         return config
 
@@ -212,9 +220,9 @@ class HeatDistribution(cp.Component):
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
         # choose delta T depending on the chosen heating system
-        if heating_system == "FloorHeating":
+        if heating_system == HeatingSystemType.FLOORHEATING:
             self.delta_temperature_in_celsius = 3
-        elif heating_system == "Radiator":
+        elif heating_system == HeatingSystemType.RADIATOR:
             self.delta_temperature_in_celsius = 20
         else:
             raise ValueError("unknown heating system.")
@@ -349,7 +357,11 @@ class HeatDistribution(cp.Component):
                 * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
             )
         )
-        return water_temperature_output_in_celsius
+        # if water_temperature_output_in_celsius < build_temp:
+        #     water_temperature_output_in_celsius = build_temp
+        # calc thermal power delivered effective
+        # p = c * m * deltaT 
+        return water_temperature_output_in_celsius # p
 
 
 class HeatDistributionController(cp.Component):

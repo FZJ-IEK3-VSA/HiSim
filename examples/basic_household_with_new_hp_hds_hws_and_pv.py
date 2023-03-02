@@ -91,7 +91,7 @@ def basic_household_new(
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
     water_temperature_in_distribution_system_in_celsius = 50
-    heating_system = "FloorHeating"
+    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
@@ -104,7 +104,7 @@ def basic_household_new(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_line_and_carpet_plots(
+        my_simulation_parameters = SimulationParameters.one_week_only( # SimulationParameters.full_year_line_and_carpet_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)

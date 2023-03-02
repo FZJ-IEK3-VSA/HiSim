@@ -14,7 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim import log
+# from hisim import log
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -138,6 +138,7 @@ class HeatingWaterStorage(cp.Component):
         self.water_temperature_from_heat_generator_in_celsius: float = (
             self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius
         )
+        self.start_water_temperature_in_storage_in_celsius = 50.0
         self.mean_water_temperature_in_water_storage_in_celsius: float = 0.0
         self.water_mass_flow_rate_from_heat_generator_in_kg_per_second: float = 0.0
         self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float = (
@@ -230,8 +231,8 @@ class HeatingWaterStorage(cp.Component):
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the heating water storage."""
-        start_water_temperature_in_storage_in_celsius = (
-            self.state.mean_water_temperature_in_storage_in_celsius
+        self.start_water_temperature_in_storage_in_celsius = (
+            self.mean_water_temperature_in_water_storage_in_celsius
         )
         # Get inputs --------------------------------------------------------------------------------------------------------
         self.water_temperature_from_heat_distribution_system_in_celsius = (
@@ -257,7 +258,7 @@ class HeatingWaterStorage(cp.Component):
             water_mass_flow_rate_from_heat_generator_in_kg_per_second=self.water_mass_flow_rate_from_heat_generator_in_kg_per_second,
             water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
             water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
-            previous_mean_water_temperature_in_water_storage_in_celsius=start_water_temperature_in_storage_in_celsius,
+            previous_mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
             seconds_per_timestep=self.seconds_per_timestep,
         )
 
@@ -268,17 +269,19 @@ class HeatingWaterStorage(cp.Component):
             factor_for_water_input_portion,
         ) = self.calculate_mixing_factor_for_water_temperature_outputs()
 
+        # hds gets water from hp
         self.water_temperature_to_heat_distribution_system_in_celsius = self.calculate_water_output_temperature(
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             mixing_factor_water_input_portion=factor_for_water_input_portion,
             mixing_factor_water_storage_portion=factor_for_water_storage_portion,
-            water_input_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
+            water_input_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
         )
+        # hp gets water from hds
         self.water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             mixing_factor_water_input_portion=factor_for_water_input_portion,
             mixing_factor_water_storage_portion=factor_for_water_storage_portion,
-            water_input_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
+            water_input_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
         )
 
         # if timestep >= self.state.start_timestep + self.min_water_mixing_time_in_timesteps:
@@ -312,9 +315,10 @@ class HeatingWaterStorage(cp.Component):
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
-        self.density_water_at_60_degree_celsius_in_kg_per_liter = 0.98
+        # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
+        self.density_water_at_50_degree_celsius_in_kg_per_liter = 0.988
         self.water_mass_in_storage_in_kg = (
-            self.density_water_at_60_degree_celsius_in_kg_per_liter
+            self.density_water_at_50_degree_celsius_in_kg_per_liter
             * self.waterstorageconfig.volume_heating_water_storage_in_liter
         )
 

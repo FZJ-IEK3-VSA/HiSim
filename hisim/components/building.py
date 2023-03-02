@@ -109,8 +109,6 @@ class BuildingConfig(cp.ConfigBase):
     initial_internal_temperature_in_celsius: float
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
-    set_heating_temperature_in_celsius: float
-    set_cooling_temperature_in_celsius: float
 
     @classmethod
     def get_default_german_single_family_home(
@@ -125,8 +123,6 @@ class BuildingConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=-14,
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
-            set_heating_temperature_in_celsius=20,
-            set_cooling_temperature_in_celsius=23,
         )
         return config
 
@@ -198,6 +194,8 @@ class Building(dynamic_component.DynamicComponent):
     # Inputs -> heating device
     ThermalPowerDelivered = "ThermalPowerDelivered"
     ThermalPowerCHP = "ThermalPowerCHP"
+    SetHeatingTemperature = "SetHeatingTemperature"
+    SetCoolingTemperature = "SetCoolingTemperature"
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
@@ -242,12 +240,8 @@ class Building(dynamic_component.DynamicComponent):
 
         # =================================================================================================================================
         # Initialization of variables
-        self.set_heating_temperature_in_celsius = (
-            self.buildingconfig.set_heating_temperature_in_celsius
-        )
-        self.set_cooling_temperature_in_celsius = (
-            self.buildingconfig.set_cooling_temperature_in_celsius
-        )
+        self.set_heating_temperature_in_celsius: float = 20
+        self.set_cooling_temperature_in_celsius: float = 23
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -432,6 +426,21 @@ class Building(dynamic_component.DynamicComponent):
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            True,
+        )
+
+        self.set_heating_temperature_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.SetHeatingTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+        self.set_cooling_temperature_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.SetCoolingTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
             True,
         )
 
@@ -627,6 +636,13 @@ class Building(dynamic_component.DynamicComponent):
 
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
+        )
+
+        self.set_heating_temperature_in_celsius = stsv.get_input_value(
+            self.set_heating_temperature_channel
+        )
+        self.set_cooling_temperature_in_celsius = stsv.get_input_value(
+            self.set_cooling_temperature_channel
         )
 
         thermal_power_delivered_in_watt = 0.0

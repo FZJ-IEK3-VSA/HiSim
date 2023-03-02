@@ -80,6 +80,8 @@ class HeatingWaterStorage(cp.Component):
     )
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
 
+    WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
+
     @utils.measure_execution_time
     def __init__(
         self,
@@ -109,8 +111,8 @@ class HeatingWaterStorage(cp.Component):
         self.start_water_temperature_in_storage_in_celsius = 50.0
         self.mean_water_temperature_in_water_storage_in_celsius: float = 50.0
 
-        self.water_temperature_to_heat_distribution_system_in_celsius: float = 0.0
-        self.water_temperature_to_heat_generator_in_celsius: float = 0.0
+        self.water_temperature_to_heat_distribution_system_in_celsius: float = 50.0
+        self.water_temperature_to_heat_generator_in_celsius: float = 50.0
         self.build()
 
         # =================================================================================================================================
@@ -168,6 +170,14 @@ class HeatingWaterStorage(cp.Component):
             output_description=f"here a description for {self.WaterTemperatureToHeatGenerator} will follow.",
         )
 
+        self.water_temperature_mean_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMeanTemperatureInStorage,
+            lt.LoadTypes.WATER,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.WaterMeanTemperatureInStorage} will follow.",
+        )
+
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
         pass
@@ -219,6 +229,13 @@ class HeatingWaterStorage(cp.Component):
                 )
             )
 
+            if self.water_temperature_from_heat_distribution_system_in_celsius == 0:
+                """first iteration --> random numbers"""
+                self.water_temperature_from_heat_distribution_system_in_celsius = 50
+            if self.water_temperature_from_heat_generator_in_celsius == 0:
+                """first iteration --> random numbers"""
+                self.water_temperature_from_heat_generator_in_celsius = 50
+
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
                 water_temperature_from_heat_distribution_system_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
                 water_temperature_from_heat_generator_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
@@ -262,6 +279,13 @@ class HeatingWaterStorage(cp.Component):
                 self.water_temperature_heat_generator_output_channel,
                 self.water_temperature_to_heat_generator_in_celsius,
             )
+
+            stsv.set_output_value(self.water_temperature_mean_channel, self.mean_water_temperature_in_water_storage_in_celsius)
+
+            # log.information("hws timestep" + str(timestep))
+            # log.information("hws mean temp " + str(self.mean_water_temperature_in_water_storage_in_celsius))
+            # log.information("hws temp for hds " + str(self.water_temperature_to_heat_distribution_system_in_celsius))
+            # log.information("hws temp for hp " + str(self.water_temperature_to_heat_generator_in_celsius))
 
     def build(self):
         """Build function.

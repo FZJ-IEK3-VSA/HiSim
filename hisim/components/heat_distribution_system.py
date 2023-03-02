@@ -9,7 +9,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-# from hisim import log
+from hisim import log
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -138,12 +138,12 @@ class HeatDistribution(cp.Component):
             self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius
         )
         self.state_controller: float = 0.0
-        self.water_temperature_input_in_celsius: float = 0.0
+        self.water_temperature_input_in_celsius: float = 50.0
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second: float = (
             0.0
         )
         self.thermal_power_delivered_in_watt: float = 0.0
-        self.water_temperature_output_in_celsius: float = 0.0
+        self.water_temperature_output_in_celsius: float = 50.0
         self.max_thermal_building_demand_in_watt: float = 0.0
         self.theoretical_thermal_building_demand_in_watt: float = 0.0
         self.delta_temperature_in_celsius: float = 1.0
@@ -298,8 +298,9 @@ class HeatDistribution(cp.Component):
             # Set outputs -----------------------------------------------------------------------------------------------------------
 
             # log.information("hsd timestep " + str(timestep))
+            # log.information("hsd water temperature input " + str(self.water_temperature_input_in_celsius))
             # log.information("hsd water temperature output " + str(self.water_temperature_output_in_celsius))
-            # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
+
 
             stsv.set_output_value(
                 self.water_temperature_output_channel,

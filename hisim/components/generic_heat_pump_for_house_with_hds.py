@@ -233,9 +233,9 @@ class GenericHeatPumpNew(cp.Component):
         self.state = GenericHeatPumpStateNew(start_timestep=int(0), cycle_number=0)
         self.previous_state = self.state.clone()
         self.has_been_converted: Any
-        self.water_temperature_input_in_celsius: float = 50
+        self.water_temperature_input_in_celsius: float = 50.0
         self.heatpump_water_mass_flow_rate_in_kg_per_second: float = 0
-        self.water_temperature_output_in_celsius: float = 0
+        self.water_temperature_output_in_celsius: float = 50.0
         self.max_thermal_building_demand_in_watt: float = 0
         self.temperature_outside: float = 0
         self.start_timestep: int = 0
@@ -535,13 +535,13 @@ class GenericHeatPumpNew(cp.Component):
         self.max_thermal_building_demand_in_watt = stsv.get_input_value(
             self.max_thermal_building_demand_channel
         )
-        if self.water_temperature_input_in_celsius == 0:
-            """first iteration --> random numbers"""
-            self.water_temperature_input_in_celsius = 50
+        # if self.water_temperature_input_in_celsius == 0:
+        #     """first iteration --> random numbers"""
+        #     self.water_temperature_input_in_celsius = 50
   
-        if self.water_temperature_output_in_celsius == 0:
-            """first iteration --> random numbers"""
-            self.water_temperature_output_in_celsius = 50
+        # if self.water_temperature_output_in_celsius == 0:
+        #     """first iteration --> random numbers"""
+        #     self.water_temperature_output_in_celsius = 50
 
         # log.information("State: {}, Temperature: {}".format(stateC, t_out))
         # log.information("State of Activation: {}".format(self.state.activation))

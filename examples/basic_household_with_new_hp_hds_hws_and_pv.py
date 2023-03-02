@@ -105,7 +105,7 @@ def basic_household_new(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
+        my_simulation_parameters = SimulationParameters.january_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -409,10 +409,10 @@ def basic_household_new(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_base_electricity_load_profile)
+    my_sim.add_component(my_simple_heat_water_storage)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_distribution_system)
-    my_sim.add_component(my_simple_heat_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
     

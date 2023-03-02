@@ -300,6 +300,17 @@ def basic_household_new(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
+
+    my_building.connect_input(
+        my_building.SetHeatingTemperature,
+        my_heat_distribution_controller.component_name,
+        my_heat_distribution_controller.SetHeatingTemperatureForBuilding,
+    )
+    my_building.connect_input(
+        my_building.SetCoolingTemperature,
+        my_heat_distribution_controller.component_name,
+        my_heat_distribution_controller.SetCoolingTemperatureForBuilding,
+    )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
@@ -398,9 +409,9 @@ def basic_household_new(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_base_electricity_load_profile)
+    my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_distribution_system)
-    my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_simple_heat_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)

@@ -1823,7 +1823,7 @@ class Building(dynamic_component.DynamicComponent):
         ten_thermal_power_delivered_in_watt = (
             heating_power_in_watt_per_m2 * self.scaled_conditioned_floor_area_in_m2
         )
-    
+
         # calculate temperatures (C.9 - C.11)
         thermal_mass_average_bulk_temperature_in_celsius = self.calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
             previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius

@@ -107,7 +107,7 @@ class HeatingWaterStorage(cp.Component):
         )
 
         self.start_water_temperature_in_storage_in_celsius = 50.0
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 0.0
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 50.0
 
         self.water_temperature_to_heat_distribution_system_in_celsius: float = 0.0
         self.water_temperature_to_heat_generator_in_celsius: float = 0.0

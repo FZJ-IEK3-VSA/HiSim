@@ -179,20 +179,12 @@ class GenericHeatPumpNew(cp.Component):
     # Inputs
     State = "State"
     TemperatureOutside = "TemperatureOutside"
-    # WaterConsumption = "WaterConsumption"
-    # WaterInput_mass = "WaterInput_mass"  # kg/s
-    # WaterInput_temperature = "WaterInput_temperature"  # °C
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
-    # MaxWaterMassFlowRate = "MaxWaterMassFlowRate"
     MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
 
     # Outputs
-    # WaterOutput_mass = "WaterOutput_mass"                           # kg/s
-    # WaterOutput_temperature = "WaterOutput_temperature"             # °C
-    # WastedEnergyMaxTemperature = "Wasted Energy Max Temperature"    # W
-
     ThermalPowerDelivered = "ThermalPowerDelivered"
     Heating = "Heating"
     Cooling = "Cooling"
@@ -255,28 +247,9 @@ class GenericHeatPumpNew(cp.Component):
             Units.CELSIUS,
             True,
         )
-        # # Inputs - Not Mandatories
-        # self.water_load_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.WaterConsumption,
-        #     LoadTypes.VOLUME,
-        #     Units.LITER,
-        #     False,
-        # )
-        # self.water_input_mass_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.WaterInput_mass,
-        #     LoadTypes.WARM_WATER,
-        #     Units.KG_PER_SEC,
-        #     False,
-        # )
-        # self.water_input_temperature_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.WaterInput_temperature,
-        #     LoadTypes.WARM_WATER,
-        #     Units.CELSIUS,
-        #     False,
-        # )
+
+        # Inputs - Not Mandatories
+  
         self.water_temperature_input_from_heat_water_storage_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterTemperatureInputFromHeatWaterStorage,
@@ -285,13 +258,6 @@ class GenericHeatPumpNew(cp.Component):
             True,
         )
 
-        # self.max_water_mass_flow_rate_input_channel: cp.ComponentInput = self.add_input(
-        #     self.component_name,
-        #     self.MaxWaterMassFlowRate,
-        #     LoadTypes.WARM_WATER,
-        #     Units.KG_PER_SEC,
-        #     True,
-        # )
 
         self.max_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -301,18 +267,6 @@ class GenericHeatPumpNew(cp.Component):
             True,
         )
         # Outputs
-        # self.water_output_mass: cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                          self.WaterOutput_mass,
-        #                                                          LoadTypes.WarmWater,
-        #                                                          Units.kg_per_sec)
-        # self.water_output_temperature: cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                                 self.WaterOutput_temperature,
-        # ä                                                                      LoadTypes.WarmWater,
-        #                                                                 Units.Celsius)
-        # self.wasted_energy_max_temperature: cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                                      self.WastedEnergyMaxTemperature,
-        #                                                                      LoadTypes.WarmWater,
-        #                                                                      Units.Watt)
 
         self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -502,7 +456,7 @@ class GenericHeatPumpNew(cp.Component):
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
-        self.state = self.previous_state.clone()  # copy.deepcopy(self.previous_state)
+        self.state = self.previous_state.clone()
         self.number_of_cycles = self.number_of_cycles_previous
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
@@ -535,60 +489,6 @@ class GenericHeatPumpNew(cp.Component):
         self.max_thermal_building_demand_in_watt = stsv.get_input_value(
             self.max_thermal_building_demand_channel
         )
-        # if self.water_temperature_input_in_celsius == 0:
-        #     """first iteration --> random numbers"""
-        #     self.water_temperature_input_in_celsius = 50
-  
-        # if self.water_temperature_output_in_celsius == 0:
-        #     """first iteration --> random numbers"""
-        #     self.water_temperature_output_in_celsius = 50
-
-        # log.information("State: {}, Temperature: {}".format(stateC, t_out))
-        # log.information("State of Activation: {}".format(self.state.activation))
-        # log.information("Timestep special: {}".format(self.state.start_timestep + self.min_idle_time))
-        # Calculation
-
-        # Calculation.ThermalEnergyStorage
-        # ToDo: Implementation with Thermal Energy Storage - BEGIN
-        # if self.water_loadC.SourceOutput is not None:
-        #    if stsv.get_input_value(self.water_loadC) != 0:
-        #        control_signal = 1
-        #    else:
-        #        control_signal = 0
-        #    # Inputs
-        #    water_input_mass_sec = stsv.get_input_value(self.water_input_mass)
-        #    water_input_mass = water_input_mass_sec
-        #    water_input_temperature = stsv.get_input_value(self.water_input_temperature)
-
-        #    mass_flow_max = self.max_heating_power / (4180 * 25)  # kg/s ## -> ~0.07
-
-        #    if control_signal == 1 and (water_input_mass == 0 and water_input_temperature == 0):
-        #        """first iteration"""
-        #        water_input_temperature = 40
-        #        water_input_mass = mass_flow_max
-
-        #    if control_signal == 1:
-        #        volume_flow_gasheater = water_input_mass / PhysicsConfig.water_density
-        #        ws = WaterSlice(WarmWaterStorageConfig.tank_diameter,
-        #                       (4 * volume_flow_gasheater) / (pi * WarmWaterStorageConfig.tank_diameter ** 2),
-        #                        water_input_temperature
-        #                       )
-        #        ws_output, wasted_energy_max_temperature, thermal_output = self.process_thermal(ws)
-        #    else:
-        #        height_flow_gasheater = 0
-        #        water_input_temperature = 0
-        #        ws = WaterSlice(WarmWaterStorageConfig.tank_diameter, height_flow_gasheater, water_input_temperature)
-        #        ws_output = ws
-        #        wasted_energy_max_temperature = 0
-
-        #    ws_output_mass = ws_output.mass
-        #    ws_output_temperature = ws_output.temperature
-
-        #    # Mass is consistent
-        #    stsv.set_output_value(self.water_output_mass, ws_output_mass)
-        #    stsv.set_output_value(self.water_output_temperature, ws_output_temperature)
-        #    stsv.set_output_value(self.wasted_energy_max_temperature, wasted_energy_max_temperature)
-        # ToDo: Implementation with Thermal Energy Storage - END
 
         # Calculation of water mass flow rate of heat pump
         self.heatpump_water_mass_flow_rate_in_kg_per_second = (
@@ -625,11 +525,6 @@ class GenericHeatPumpNew(cp.Component):
                 # log.information("hp number of cycles "+ str(number_of_cycles))
                 # log.information("hp state thermal power " + str(self.state.thermal_power_delivered_in_watt))
 
-            # self.water_temperature_output_in_celsius = self.calculate_water_temperature_after_heat_transfer(
-            #     input_power_in_watt=self.state.thermal_power_delivered_in_watt,
-            #     water_mass_flow_rate_in_kg_per_second=self.heatpump_water_mass_flow_rate_in_kg_per_second,
-            #     water_input_temperature_in_celsius=self.water_temperature_input_in_celsius,
-            #     )
 
             # stsv.set_output_value(
             #     self.thermal_power_delivered_channel,
@@ -767,28 +662,6 @@ class GenericHeatPumpNew(cp.Component):
         #     "hp water temperature output "
         #     + str(self.water_temperature_output_in_celsius))
     
-    def process_thermal(self, ws_in: float) -> None:
-        """Process thermal."""
-        pass
-        # temperature_max = 55
-        # heat_capacity = PhysicsConfig.water_specific_heat_capacity
-        # thermal_energy_to_add = self.max_heating_power
-        # ws_out_mass = ws_in.mass
-        # try:
-        # ws_out_temperature = ws_in.temperature + thermal_energy_to_add / (heat_capacity * ws_out_mass)
-        # except ZeroDivisionError:
-        # log.information(heat_capacity)
-        # log.information(ws_out_mass)
-        # log.information(ws_in.mass)
-        # raise ValueError
-        # wasted_energy = 0
-        # if ws_out_temperature > temperature_max:
-        # delta_T = ws_out_temperature - temperature_max
-        # wasted_energy = (delta_T * ws_out_mass * PhysicsConfig.water_specific_heat_capacity)
-        #  ws_out_temperature = temperature_max
-        # ws_out_enthalpy = ws_in.enthalpy + thermal_energy_to_add
-        # ws_in.change_slice_parameters(new_temperature=ws_out_temperature, new_enthalpy=ws_out_enthalpy, new_mass=ws_out_mass)
-        # return ws_in, wasted_energy, thermal_energy_to_add
 
     def calculate_water_temperature_after_heat_transfer(
         self,
@@ -970,10 +843,6 @@ class HeatPumpControllerNew(cp.Component):
             )
 
             electricity_input = stsv.get_input_value(self.electricity_input_channel)
-
-            # if self.water_temperature_input_from_heat_water_storage_in_celsius == 0:
-            #     """first iteration --> random numbers"""
-            #     self.water_temperature_input_from_heat_water_storage_in_celsius = 50
 
             if self.mode == 1:
                 self.conditions(

@@ -36,7 +36,6 @@ def basic_household_new(
         - Weather
         - Photovoltaic System
         - Building
-        - Building Controller
         - Heat Pump
         - Heat Pump Controller
         - Heat Distribution System
@@ -105,7 +104,7 @@ def basic_household_new(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.january_only(
+        my_simulation_parameters = SimulationParameters.full_year_line_and_carpet_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)

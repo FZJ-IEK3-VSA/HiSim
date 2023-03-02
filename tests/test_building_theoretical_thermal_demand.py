@@ -1,7 +1,5 @@
-"""Test for heat demand calculation in the building module.
+"""Test for heat demand calculation in the building module."""
 
-The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
-"""
 # clean
 import os
 from typing import Optional

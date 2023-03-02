@@ -452,7 +452,7 @@ class Weather(Component):
             self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
             self.wind_speed_list = my_weather["Wspd"].tolist()
         else:
-            tmy_data, _ = read_test_reference_year_data(
+            tmy_data = read_test_reference_year_data(
                 weatherconfig=self.weather_config,
                 year=self.my_simulation_parameters.year,
             )
@@ -752,13 +752,13 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
-        data, location_dict = read_nsrdb_data(filepath, year)
+        data = read_nsrdb_data(filepath, year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD:
-        data, location_dict = read_dwd_data(filepath, year)
+        data = read_dwd_data(filepath, year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15min:
-        data, location_dict = read_nsrdb_15min_data(filepath, year)
+        data = read_nsrdb_15min_data(filepath, year)
 
-    return data, location_dict
+    return data
 
 
 def read_dwd_data(filepath: str, year: int) -> Any:
@@ -766,10 +766,8 @@ def read_dwd_data(filepath: str, year: int) -> Any:
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
         lines = file_stream.readlines()
-        location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
         lat = float(lines[1][20:37])
         lon = float(lines[2][15:30])
-    location_dict = {"name": location_name, "latitude": lat, "longitude": lon}
     # check if time series data already exists as .csv with DNI
     if os.path.isfile(filepath + ".csv"):
         data = pd.read_csv(
@@ -800,20 +798,12 @@ def read_dwd_data(filepath: str, year: int) -> Any:
         # calculate direct normal
         data["DNI"] = calculate_direct_normal_radiation(
             data["B"], lon, lat
-        )  # data["DNI"] = data["B"]
-
-        # save as .csv  # data.to_csv(filepath + ".csv",sep=";",decimal=",")
-    return data, location_dict
+        )
+    return data
 
 
 def read_nsrdb_data(filepath, year):
     """Reads a set of NSRDB data."""
-    with open(filepath + ".dat", encoding="utf-8") as file_stream:
-        lines = file_stream.readlines()
-        location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
-        lat = float(lines[1][20:25])
-        lon = float(lines[2][15:20])
-    location_dict = {"name": location_name, "latitude": lat, "longitude": lon}
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
     data = data.drop(data.index[8761:8772])
@@ -834,12 +824,11 @@ def read_nsrdb_data(filepath, year):
             "DNI": "DNI",
         }
     )
-    return data, location_dict
+    return data
 
 def read_nsrdb_15min_data(filepath, year):
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows = [0, 1])
-    location=get_coordinates(filepath=filepath, source_enum=WeatherDataSourceEnum.NSRDB_15min)
     # get data
     data.index = pd.date_range(
         f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/Berlin"
@@ -850,7 +839,7 @@ def read_nsrdb_15min_data(filepath, year):
             "Wind Speed": "Wspd",
         }
     )
-    return data, location
+    return data
 
 
 def calculate_direct_normal_radiation(

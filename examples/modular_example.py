@@ -101,7 +101,7 @@ def modular_household_explicit(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get archetype configuration
-    location = arche_type_config_.location.value
+    location = arche_type_config_.building_code.split(".")[0]
     occupancy_profile_utsp = arche_type_config_.occupancy_profile_utsp
     occupancy_profile = arche_type_config_.occupancy_profile
     building_code = arche_type_config_.building_code

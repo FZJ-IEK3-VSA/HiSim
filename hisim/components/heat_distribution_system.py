@@ -246,71 +246,73 @@ class HeatDistribution(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the heat distribution system."""
-
-        # Get inputs ------------------------------------------------------------------------------------------------------------
-        self.state_controller = stsv.get_input_value(self.state_channel)
-        self.theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
-            self.theoretical_thermal_building_demand_channel
-        )
-
-        self.water_temperature_input_in_celsius = stsv.get_input_value(
-            self.water_temperature_input_channel
-        )
-
-        self.max_thermal_building_demand_in_watt = stsv.get_input_value(
-            self.max_thermal_building_demand_channel
-        )
-        # Calculations ----------------------------------------------------------------------------------------------------------
-        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
-            self.calc_heating_distribution_system_water_mass_flow_rate(
-                self.max_thermal_building_demand_in_watt
-            )
-        )
-        self.state.water_temperature_in_distribution_system_in_celsius = (
-            self.water_temperature_output_in_celsius
-        )
-        if self.state_controller == 1:
-
-            # building gets the heat that it needs
-            self.thermal_power_delivered_in_watt = (
-                self.theoretical_thermal_building_demand_in_watt
-            )
-
-            self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
-                water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
-                water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-                real_heat_buiding_demand_in_watt=self.theoretical_thermal_building_demand_in_watt,
-            )
-
-        elif self.state_controller == 0:
-
-            self.thermal_power_delivered_in_watt = 0.0
-
-            self.water_temperature_output_in_celsius = (
-                self.water_temperature_input_in_celsius
-            )
-
+        if force_convergence:
+            pass
         else:
-            raise ValueError("unknown mode")
+            # Get inputs ------------------------------------------------------------------------------------------------------------
+            self.state_controller = stsv.get_input_value(self.state_channel)
+            self.theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+                self.theoretical_thermal_building_demand_channel
+            )
 
-        # Set outputs -----------------------------------------------------------------------------------------------------------
+            self.water_temperature_input_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
 
-        # log.information("hsd timestep " + str(timestep))
-        # log.information("hsd water temperature output " + str(self.water_temperature_output_in_celsius))
-        # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
+            self.max_thermal_building_demand_in_watt = stsv.get_input_value(
+                self.max_thermal_building_demand_channel
+            )
+            # Calculations ----------------------------------------------------------------------------------------------------------
+            self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
+                self.calc_heating_distribution_system_water_mass_flow_rate(
+                    self.max_thermal_building_demand_in_watt
+                )
+            )
+            self.state.water_temperature_in_distribution_system_in_celsius = (
+                self.water_temperature_output_in_celsius
+            )
+            if self.state_controller == 1:
 
-        stsv.set_output_value(
-            self.water_temperature_output_channel,
-            self.water_temperature_output_in_celsius,
-        )
-        stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            self.thermal_power_delivered_in_watt,
-        )
-        stsv.set_output_value(
-            self.heating_distribution_system_water_mass_flow_rate_channel,
-            self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-        )
+                # building gets the heat that it needs
+                self.thermal_power_delivered_in_watt = (
+                    self.theoretical_thermal_building_demand_in_watt
+                )
+
+                self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
+                    water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
+                    water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
+                    real_heat_buiding_demand_in_watt=self.theoretical_thermal_building_demand_in_watt,
+                )
+
+            elif self.state_controller == 0:
+
+                self.thermal_power_delivered_in_watt = 0.0
+
+                self.water_temperature_output_in_celsius = (
+                    self.water_temperature_input_in_celsius
+                )
+
+            else:
+                raise ValueError("unknown mode")
+
+            # Set outputs -----------------------------------------------------------------------------------------------------------
+
+            # log.information("hsd timestep " + str(timestep))
+            # log.information("hsd water temperature output " + str(self.water_temperature_output_in_celsius))
+            # log.information("hsd heat gain " + str(self.heat_gain_for_building_in_watt))
+
+            stsv.set_output_value(
+                self.water_temperature_output_channel,
+                self.water_temperature_output_in_celsius,
+            )
+            stsv.set_output_value(
+                self.thermal_power_delivered_channel,
+                self.thermal_power_delivered_in_watt,
+            )
+            stsv.set_output_value(
+                self.heating_distribution_system_water_mass_flow_rate_channel,
+                self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
+            )
 
     def calc_heating_distribution_system_water_mass_flow_rate(
         self,

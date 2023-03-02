@@ -299,7 +299,7 @@ def basic_household_new(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
+        my_simple_heat_water_storage.WaterTemperatureToHeatGenerator,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
@@ -320,7 +320,7 @@ def basic_household_new(
     my_heat_pump.connect_input(
         my_heat_pump.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
+        my_simple_heat_water_storage.WaterTemperatureToHeatGenerator,
     )
     my_heat_pump.connect_input(
         my_heat_pump.MaxThermalBuildingDemand,
@@ -362,7 +362,7 @@ def basic_household_new(
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
+        my_simple_heat_water_storage.WaterTemperatureToHeatDistributionSystem,
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_system.connect_input(
@@ -383,7 +383,7 @@ def basic_household_new(
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.WaterTemperatureInput,
         my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.MeanWaterTemperatureInWaterStorage,
+        my_simple_heat_water_storage.WaterTemperatureToHeatDistributionSystem,
     )
 
     # =================================================================================================================================

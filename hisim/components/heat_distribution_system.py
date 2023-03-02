@@ -44,7 +44,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            water_temperature_in_distribution_system_in_celsius=60,
+            water_temperature_in_distribution_system_in_celsius=50,
             heating_system="FloorHeating",
         )
         return config
@@ -71,7 +71,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Gets a default HeatDistribution Controller."""
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
-            set_water_storage_temperature_for_heating_in_celsius=50,
+            set_water_storage_temperature_for_heating_in_celsius=49,
             set_water_storage_temperature_for_cooling_in_celsius=55,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
         )
@@ -136,7 +136,7 @@ class HeatDistribution(cp.Component):
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second: float = (
             0.0
         )
-        self.heat_gain_for_building_in_watt: float = 0.0
+        self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 0.0
         self.max_thermal_building_demand_in_watt: float = 0.0
         self.theoretical_thermal_building_demand_in_watt: float = 0.0
@@ -266,7 +266,7 @@ class HeatDistribution(cp.Component):
         if self.state_controller == 1:
 
             # building gets the heat that it needs
-            self.heat_gain_for_building_in_watt = self.theoretical_thermal_building_demand_in_watt
+            self.thermal_power_delivered_in_watt = self.theoretical_thermal_building_demand_in_watt
 
             self.water_temperature_output_in_celsius = self.determine_water_temperature_output_after_heat_exchange_with_building(
                 water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
@@ -277,7 +277,7 @@ class HeatDistribution(cp.Component):
 
         elif self.state_controller == 0:
 
-            self.heat_gain_for_building_in_watt = 0.0
+            self.thermal_power_delivered_in_watt = 0.0
 
             self.water_temperature_output_in_celsius = (
                 self.water_temperature_input_in_celsius
@@ -299,7 +299,7 @@ class HeatDistribution(cp.Component):
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            self.heat_gain_for_building_in_watt,
+            self.thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(
             self.heating_distribution_system_water_mass_flow_rate_channel,
@@ -362,9 +362,6 @@ class HeatDistributionController(cp.Component):
 
     # Outputs
     State = "State"
-    RealHeatBuildingDemandPassedToHeatDistributionSystem = (
-        "RealHeatBuildingDemandPassedToHeatDistributionSystem"
-    )
 
     # Similar components to connect to:
     # 1. Building
@@ -414,35 +411,14 @@ class HeatDistributionController(cp.Component):
             True,
         )
 
-
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY,
             output_description=f"here a description for {self.State} will follow.",
         )
 
-        self.add_default_connections(
-            self.get_default_connections_from_building_controller()
-        )
         self.controller_heat_distribution_mode: str = "off"
         self.previous_controller_heat_distribution_mode: str = "off"
 
-    def get_default_connections_from_building_controller(
-        self,
-    ) -> List[cp.ComponentConnection]:
-        """Get building controller default connections."""
-        log.information(
-            "setting building controller default connections in HeatDistributionController"
-        )
-        connections = []
-        building_classname = Building.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistributionController.TheoreticalThermalBuildingDemand,
-                building_classname,
-                Building.TheoreticalThermalBuildingDemand,
-            )
-        )
-        return connections
 
     def build(
         self,
@@ -526,7 +502,6 @@ class HeatDistributionController(cp.Component):
 
         # log.information("hsdc timestep " + str(timestep))
         # log.information("hsdc state " + str(self.state_controller))
-        # log.information("hsdc real heat demand " + str(self.real_heat_building_demand_in_watt) + "\n")
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
@@ -535,7 +510,6 @@ class HeatDistributionController(cp.Component):
         water_temperature_input_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
-        # set_residence_temperature_in_celsius = self.set_residence_temperature_in_celsius
 
         if self.controller_heat_distribution_mode == "on":
             # no heat exchange with building if theres no demand and if avg temp outside too high
@@ -549,7 +523,7 @@ class HeatDistributionController(cp.Component):
                 self.controller_heat_distribution_mode = "off"
                 return
         elif self.controller_heat_distribution_mode == "off":
-            # if heating or cooling is needed for building
+            # if heating or cooling is needed for building or if avg temp outside too low
             if (
                 (real_heat_building_demand_in_watt != 0
                 or daily_average_outside_temperature_in_celsius

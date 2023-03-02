@@ -54,6 +54,10 @@ def test_house_with_fake_heater_for_heating_test(
     # Set Occupancy
     occupancy_profile = "CH01"
 
+    # Set Fake Heater
+    set_heating_temperature_for_building_in_celsius = 20
+    set_cooling_temperature_for_building_in_celsius = 23
+
     # =========================================================================================================================================================
     # Build Components
 
@@ -114,7 +118,9 @@ def test_house_with_fake_heater_for_heating_test(
 
     # Build Fake Heater
     my_fake_heater = fake_heater.FakeHeater(
-        my_simulation_parameters=my_simulation_parameters
+        my_simulation_parameters=my_simulation_parameters,
+        set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius
     )
 
     # =========================================================================================================================================================
@@ -164,6 +170,16 @@ def test_house_with_fake_heater_for_heating_test(
         my_building.ThermalPowerDelivered,
         my_fake_heater.component_name,
         my_fake_heater.ThermalPowerDelivered,
+    )
+    my_building.connect_input(
+        my_building.SetHeatingTemperature,
+        my_fake_heater.component_name,
+        my_fake_heater.SetHeatingTemperatureForBuilding,
+    )
+    my_building.connect_input(
+        my_building.SetCoolingTemperature,
+        my_fake_heater.component_name,
+        my_fake_heater.SetCoolingTemperatureForBuilding,
     )
 
     # Fake Heater

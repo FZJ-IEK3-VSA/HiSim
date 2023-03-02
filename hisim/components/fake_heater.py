@@ -27,6 +27,8 @@ class FakeHeater(cp.Component):
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    SetHeatingTemperatureForBuilding = "SetHeatingTemperatureForBuilding"
+    SetCoolingTemperatureForBuilding = "SetCoolingTemperatureForBuilding"
 
     # Similar components to connect to:
     # 1. Building
@@ -34,6 +36,8 @@ class FakeHeater(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
+        set_heating_temperature_for_building_in_celsius: float,
+        set_cooling_temperature_for_building_in_celsius: float,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
@@ -42,6 +46,8 @@ class FakeHeater(cp.Component):
 
         self.thermal_power_delivered_in_watt: float = 0
         self.theoretical_thermal_building_in_watt: float = 0
+        self.set_heating_temperature_for_building_in_celsius = set_heating_temperature_for_building_in_celsius
+        self.set_cooling_temperature_for_building_in_celsius = set_cooling_temperature_for_building_in_celsius
 
         # Inputs
 
@@ -60,6 +66,21 @@ class FakeHeater(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
+        )
+
+        self.set_heating_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.SetHeatingTemperatureForBuilding,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.SetHeatingTemperatureForBuilding} will follow.",
+        )
+        self.set_cooling_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.SetCoolingTemperatureForBuilding,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.SetCoolingTemperatureForBuilding} will follow.",
         )
 
     def build(
@@ -112,4 +133,14 @@ class FakeHeater(cp.Component):
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
             self.thermal_power_delivered_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.set_heating_temperature_for_building_channel,
+            self.set_heating_temperature_for_building_in_celsius
+        )
+
+        stsv.set_output_value(
+            self.set_cooling_temperature_for_building_channel,
+            self.set_cooling_temperature_for_building_in_celsius
         )

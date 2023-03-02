@@ -16,14 +16,14 @@ from hisim import loadtypes as lt
 from hisim import utils
 # from hisim import log
 
-__authors__ = "Frank Burkrad, Maximilian Hillen"
+__authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""
 __version__ = ""
-__maintainer__ = "Maximilian Hillen"
-__email__ = "maximilian.hillen@rwth-aachen.de"
-__status__ = ""
+__maintainer__ = "Katharina Rieck"
+__email__ = "k.rieck@fz-juelich.de"
+__status__ = "dev"
 
 
 @dataclass_json
@@ -53,38 +53,9 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
             mean_water_temperature_in_storage_in_celsius=50,
             cool_water_temperature_in_storage_in_celsius=50,
             hot_water_temperature_in_storage_in_celsius=50,
-            volume_heating_water_storage_in_liter=500,
+            volume_heating_water_storage_in_liter=100,
         )
         return config
-
-
-class HeatingWaterStorageState:
-
-    """HeatingWaterStorageState."""
-
-    def __init__(
-        self,
-        start_timestep: int,
-        mean_water_temperature_in_storage_in_celsius: float = 50,
-        cool_water_temperature_in_celsius: float = 50,
-        hot_water_temperature_in_celsius: float = 50,
-    ) -> None:
-        """Construct all the necessary attributes."""
-        self.start_timestep = start_timestep
-        self.mean_water_temperature_in_storage_in_celsius = (
-            mean_water_temperature_in_storage_in_celsius
-        )
-        self.cool_water_temperature_in_celsius = cool_water_temperature_in_celsius
-        self.hot_water_temperature_in_celsius = hot_water_temperature_in_celsius
-
-    def clone(self) -> Any:
-        """Save previous state."""
-        return HeatingWaterStorageState(
-            self.start_timestep,
-            mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_storage_in_celsius,
-            cool_water_temperature_in_celsius=self.cool_water_temperature_in_celsius,
-            hot_water_temperature_in_celsius=self.hot_water_temperature_in_celsius,
-        )
 
 
 class HeatingWaterStorage(cp.Component):
@@ -123,14 +94,6 @@ class HeatingWaterStorage(cp.Component):
         # Initialization of variables
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
-        self.state = HeatingWaterStorageState(
-            start_timestep=int(0),
-            mean_water_temperature_in_storage_in_celsius=self.waterstorageconfig.mean_water_temperature_in_storage_in_celsius,
-            cool_water_temperature_in_celsius=self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius,
-            hot_water_temperature_in_celsius=self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius,
-        )
-        self.previous_state = self.state.clone()
-        self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
 
         self.water_temperature_from_heat_distribution_system_in_celsius: float = (
             self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius
@@ -138,12 +101,13 @@ class HeatingWaterStorage(cp.Component):
         self.water_temperature_from_heat_generator_in_celsius: float = (
             self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius
         )
-        self.start_water_temperature_in_storage_in_celsius = 50.0
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 0.0
         self.water_mass_flow_rate_from_heat_generator_in_kg_per_second: float = 0.0
         self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float = (
             0.0
         )
+
+        self.start_water_temperature_in_storage_in_celsius = 50.0
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 0.0
 
         self.water_temperature_to_heat_distribution_system_in_celsius: float = 0.0
         self.water_temperature_to_heat_generator_in_celsius: float = 0.0
@@ -217,11 +181,11 @@ class HeatingWaterStorage(cp.Component):
 
     def i_save_state(self) -> None:
         """Save the current state."""
-        self.previous_state = self.state.clone()
+        pass
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
-        self.state = self.previous_state.clone()
+        pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -284,18 +248,7 @@ class HeatingWaterStorage(cp.Component):
             water_input_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
         )
 
-        # if timestep >= self.state.start_timestep + self.min_water_mixing_time_in_timesteps:
-
-        #     self.state = HeatingWaterStorageState(start_timestep=timestep,
-        #                                   mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-        #                                   cool_water_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
-        #                                   hot_water_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius)
-
         # Set outputs -------------------------------------------------------------------------------------------------------
-        # log.information("hws timestep " + str(timestep))
-        # log.information("hws cool water temp from hds " + str(self.state.cool_water_temperature_in_celsius))
-        # log.information("hws hot water temp from hp " + str(self.state.hot_water_temperature_in_celsius))
-        # log.information("hws mean water temp in hws " + str(self.state.mean_water_temperature_in_storage_in_celsius) + "\n")
 
         stsv.set_output_value(
             self.water_temperature_heat_distribution_system_output_channel,

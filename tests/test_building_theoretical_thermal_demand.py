@@ -54,7 +54,7 @@ def test_house_with_fake_heater_for_heating_test(
 
     # Set Fake Heater
     set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 23
+    set_cooling_temperature_for_building_in_celsius = 22
 
     # =========================================================================================================================================================
     # Build Components

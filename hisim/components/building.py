@@ -240,6 +240,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # =================================================================================================================================
         # Initialization of variables
+
         self.set_heating_temperature_in_celsius: float = 20
         self.set_cooling_temperature_in_celsius: float = 23
 

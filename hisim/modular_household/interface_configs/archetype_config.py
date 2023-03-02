@@ -19,7 +19,7 @@ class ArcheTypeConfig:
     """Defines the system config for the modular household."""
 
     #: location of the building, used mainly to get the best suited weather data
-    location: Locations = Locations.AACHEN
+    location: Locations = Locations.MADRID
     #: modular household template of the LoadProfileGenerator, used to get the electrical- and hot water consumption profile (https://www.loadprofilegenerator.de/); for an interface to the LoadProfileGenerator the UTSP is needed
     occupancy_profile_utsp: Optional[JsonReference] = None # field(
     #     default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore

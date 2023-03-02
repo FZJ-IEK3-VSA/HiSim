@@ -119,7 +119,7 @@ def modular_household_explicit(
     elif occupancy_profile_utsp is not None and occupancy_profile is not None:
         hisim.log.warning("Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. " )
     if occupancy_profile_utsp is not None:
-        occupancy_profile = occupancy_profile.utsp
+        occupancy_profile = occupancy_profile_utsp
         utsp_connected = True
     else:
         utsp_connected = False

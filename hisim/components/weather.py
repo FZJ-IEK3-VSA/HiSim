@@ -1,20 +1,21 @@
 """ Handles all the weather data processing. """
 
+import csv
 import datetime
 import math
 import os
 from dataclasses import dataclass
-from typing import List, Any
 from enum import Enum
+from typing import Any, List
+
 import numpy as np
 import pandas as pd
 import pvlib
 
 from hisim import loadtypes as lt
-from hisim import log
-from hisim import utils
-
-from hisim.component import Component, SingleTimeStepValues, ComponentOutput, ConfigBase
+from hisim import log, utils
+from hisim.component import (Component, ComponentOutput, ConfigBase,
+                             SingleTimeStepValues)
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -42,6 +43,7 @@ class WeatherDataSourceEnum(Enum):
 
     DWD = 1
     NSRDB = 2
+    NSRDB_15min = 3
 
 
 class LocationEnum(Enum):
@@ -162,18 +164,25 @@ class LocationEnum(Enum):
     )  # noqa: invalid-name
     Madrid = (
         "Madrid",
-        "test-reference-years_2015-2045_15-locations",
+        "NSRDB",
         "NSRDB",
         "Madrid",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Seville = (
         "Seville",
-        "test-reference-years_2015-2045_15-locations",
+        "NSRDB",
         "NSRDB",
         "Seville",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
+    )  # noqa: invalid-name,
+    FR = (
+        "Paris",
+        "NSRDB_15min",
+        "Paris",
+        "403286_48.85_2.34_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )   # noqa: invalid-name
 
 
 @dataclass
@@ -420,7 +429,7 @@ class Weather(Component):
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         log.information(self.weather_config.location)
         log.information(self.weather_config.to_json())  # type: ignore
-        location_dict = get_coordinates(self.weather_config.source_path)
+        location_dict = get_coordinates(filepath=self.weather_config.source_path, source_enum=self.weather_config.data_source)
         self.simulation_repository.set_entry("weather_location", location_dict)
         cachefound, cache_filepath = utils.get_cache_file(
             "Weather", self.weather_config, self.my_simulation_parameters
@@ -443,26 +452,29 @@ class Weather(Component):
             self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
             self.wind_speed_list = my_weather["Wspd"].tolist()
         else:
-            tmy_data, location = read_test_reference_year_data(
+            tmy_data, _ = read_test_reference_year_data(
                 weatherconfig=self.weather_config,
                 year=self.my_simulation_parameters.year,
             )
-            DNI = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
+            if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15min:
+                DNI = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
+                DHI = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
+                GHI = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
+            else:
+                DNI = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
+                temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
+                DHI = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
+                GHI = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
+                wind_speed = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index)  # type: ignore
-            # DNI_data = self.interpolate(tmy_data['DNI'], 2015)
-            temperature = self.interpolate(
-                tmy_data["T"], self.my_simulation_parameters.year
-            )
-            DHI = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
-            GHI = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
-            solpos = pvlib.solarposition.get_solarposition(DNI.index, location["latitude"], location["longitude"])  # type: ignore
+            
+            solpos = pvlib.solarposition.get_solarposition(DNI.index, location_dict["latitude"], location_dict["longitude"])  # type: ignore
             altitude = solpos["elevation"]
             azimuth = solpos["azimuth"]
             apparent_zenith = solpos["apparent_zenith"]
-            wind_speed = self.interpolate(
-                tmy_data["Wspd"], self.my_simulation_parameters.year
-            )
 
             if seconds_per_timestep != 60:
                 self.temperature_list = (
@@ -703,7 +715,7 @@ class Weather(Component):
         return self.daily_average_outside_temperature_list_in_celsius
 
 
-def get_coordinates(filepath: str) -> Any:
+def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
@@ -711,12 +723,23 @@ def get_coordinates(filepath: str) -> Any:
     # get the correct file path
     # filepath = os.path.join(utils.HISIMPATH["weather"][location])
 
-    # get the geoposition
-    with open(filepath + ".dat", encoding="utf-8") as file_stream:
-        lines = file_stream.readlines()
-        location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
-        lat = float(lines[1][20:37])
-        lon = float(lines[2][15:30])
+    if source_enum == WeatherDataSourceEnum.NSRDB_15min:
+        with open(filepath, encoding="utf-8") as csvfile:
+            spamreader = csv.reader(csvfile)
+            for (i, row) in enumerate(spamreader):
+                if i==1:
+                    location_name=row[1]
+                    lat=float(row[5])
+                    lon=float(row[6])
+                elif i > 1:
+                    break
+    else:
+        # get the geoposition
+        with open(filepath + ".dat", encoding="utf-8") as file_stream:
+            lines = file_stream.readlines()
+            location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
+            lat = float(lines[1][20:37])
+            lon = float(lines[2][15:30])
     return {"name": location_name, "latitude": lat, "longitude": lon}
     # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
 
@@ -732,6 +755,8 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
         data, location_dict = read_nsrdb_data(filepath, year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD:
         data, location_dict = read_dwd_data(filepath, year)
+    elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15min:
+        data, location_dict = read_nsrdb_15min_data(filepath, year)
 
     return data, location_dict
 
@@ -810,6 +835,22 @@ def read_nsrdb_data(filepath, year):
         }
     )
     return data, location_dict
+
+def read_nsrdb_15min_data(filepath, year):
+    """Reads a set of NSRDB data in 15 min resolution."""
+    data = pd.read_csv(filepath, encoding="utf-8", skiprows = [0, 1])
+    location=get_coordinates(filepath=filepath, source_enum=WeatherDataSourceEnum.NSRDB_15min)
+    # get data
+    data.index = pd.date_range(
+        f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/Berlin"
+    )
+    data = data.rename(
+        columns={
+            "Temperature": "T",
+            "Wind Speed": "Wspd",
+        }
+    )
+    return data, location
 
 
 def calculate_direct_normal_radiation(

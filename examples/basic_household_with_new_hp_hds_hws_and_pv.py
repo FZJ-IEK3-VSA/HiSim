@@ -81,6 +81,7 @@ def basic_household_new(
     hp_name = "Vitocal 300-A AWO-AC 301.B07"
     hp_min_operation_time_in_seconds = 60 * 60
     hp_min_idle_time_in_seconds = 15 * 60
+
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
@@ -96,6 +97,8 @@ def basic_household_new(
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
+    set_heating_temperature_for_building_in_celsius = 20
+    set_cooling_temperature_for_building_in_celsius = 23
 
     # =================================================================================================================================
     # Build Components
@@ -207,7 +210,9 @@ def basic_household_new(
         config=heat_distribution_system.HeatDistributionControllerConfig(name=hds_controller_name,
                                                                          set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
                                                                          set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
-                                                                         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius)
+                                                                         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
+                                                                         set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+                                                                         set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius)
     )
     # =================================================================================================================================
     # Connect Component Inputs with Outputs

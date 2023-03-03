@@ -19,7 +19,7 @@ def test_hds():
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
     water_temperature_in_distribution_system_in_celsius = 50
-    heating_system = "FloorHeating"
+    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # ===================================================================================================================
     # Build Heat Distribution System
@@ -40,7 +40,12 @@ def test_hds():
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
     )
-
+    residence_temperature_indoor_air = cp.ComponentOutput(
+        "FakeResidenceTemperatureInput",
+        "ResidenceTemperatureInput",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.CELSIUS,
+    )
     theoretical_thermal_building_demand = cp.ComponentOutput(
         "FakeTheoreticalThermalDemand",
         "TheoreticalThermalDemand",
@@ -59,8 +64,12 @@ def test_hds():
         "FakeStateController", "StateController", lt.LoadTypes.ANY, lt.Units.ANY
     )
 
+    # connect hds inputs to fake outputs
     my_heat_distribution_system.water_temperature_input_channel.source_output = (
         water_temperature_input_from_water_storage
+    )
+    my_heat_distribution_system.residence_temperature_input_channel.source_output = (
+        residence_temperature_indoor_air
     )
     my_heat_distribution_system.theoretical_thermal_building_demand_channel.source_output = (
         theoretical_thermal_building_demand
@@ -73,6 +82,7 @@ def test_hds():
     number_of_outputs = fft.get_number_of_outputs(
         [
             water_temperature_input_from_water_storage,
+            residence_temperature_indoor_air,
             theoretical_thermal_building_demand,
             maximal_thermal_building_demand,
             state_from_hds_controller,
@@ -86,6 +96,7 @@ def test_hds():
     fft.add_global_index_of_components(
         [
             water_temperature_input_from_water_storage,
+            residence_temperature_indoor_air,
             theoretical_thermal_building_demand,
             maximal_thermal_building_demand,
             state_from_hds_controller,
@@ -96,11 +107,11 @@ def test_hds():
     stsv.values[water_temperature_input_from_water_storage.global_index] = 50
     stsv.values[maximal_thermal_building_demand.global_index] = 9000
     stsv.values[state_from_hds_controller.global_index] = 1
-
+    stsv.values[residence_temperature_indoor_air.global_index] = 19
     timestep = 300
 
     # Simulate
-    theoretical_thermal_building_demands_in_watt = [0, -10, +10, -8000, +3000]
+    theoretical_thermal_building_demands_in_watt = [0, -10, +10, -8000, +3000, +1000000]
 
     for demand in theoretical_thermal_building_demands_in_watt:
 
@@ -109,8 +120,8 @@ def test_hds():
         my_heat_distribution_system.i_restore_state()
         my_heat_distribution_system.i_simulate(timestep, stsv, False)
 
-        water_mass_flow_of_hds_in_kg_per_second = stsv.values[6]
-        water_output_temperature_in_celsius_from_simulation = stsv.values[4]
+        water_mass_flow_of_hds_in_kg_per_second = stsv.values[7]
+        water_output_temperature_in_celsius_from_simulation = stsv.values[5]
 
         # Test if water output of hds is correct for different theoretical thermal demands from building
         calculated_water_output_temperature_in_celsius = stsv.values[
@@ -124,7 +135,25 @@ def test_hds():
             "water output temperature after heat exchange with building "
             + str(water_output_temperature_in_celsius_from_simulation)
         )
-        assert (
-            calculated_water_output_temperature_in_celsius
-            == water_output_temperature_in_celsius_from_simulation
+        log.information(
+            "thermal output delivered from hds " + str(stsv.values[6]) + "\n"
         )
+
+        if (
+            calculated_water_output_temperature_in_celsius
+            >= stsv.values[residence_temperature_indoor_air.global_index]
+        ):
+            assert (
+                water_output_temperature_in_celsius_from_simulation
+                == calculated_water_output_temperature_in_celsius
+            )
+
+        # test if water out temperature is limited to residence temperature in case the thermal demand from building is too high
+        elif (
+            calculated_water_output_temperature_in_celsius
+            < stsv.values[residence_temperature_indoor_air.global_index]
+        ):
+            assert (
+                water_output_temperature_in_celsius_from_simulation
+                == stsv.values[residence_temperature_indoor_air.global_index]
+            )

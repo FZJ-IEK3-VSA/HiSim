@@ -88,7 +88,7 @@ class Simulator:
 
     def process_one_timestep(
         self, timestep: int, previous_stsv: cp.SingleTimeStepValues
-    ) -> Tuple[cp.SingleTimeStepValues, int]:
+    ) -> Tuple[cp.SingleTimeStepValues, int, bool]:
         """Executes one simulation timestep.
 
         Some components can be connected in a circle.

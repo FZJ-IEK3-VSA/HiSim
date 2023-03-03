@@ -1,3 +1,5 @@
+"""Dummy class and configuration returning electricity prices (from grid) and returns (injection) in each time step. """
+
 # Owned
 from typing import List, Any
 from dataclasses import dataclass
@@ -25,10 +27,12 @@ class PriceSignalConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return PriceSignal.get_full_classname()
 
+    #: name of the price signal
     name: str
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
+        """Default configuration for price signal. """
         config = PriceSignalConfig(
             name="PriceSignal",
         )
@@ -38,20 +42,7 @@ class PriceSignalConfig(cp.ConfigBase):
 class PriceSignal(cp.Component):
     """
     Class component that provides price for electricity.
-
-    Parameters
-    -----------------------------------------------
-    profile: string
-        profile code corresponded to the family or residents configuration
-
-    ComponentInputs:
-    -----------------------------------------------
-       None
-
-    ComponentOutputs:
-    -----------------------------------------------
-       Price for injection: cents/kWh
-       Price for purchase: cents/kWh
+    Outputs: Price for injection: cents/kWh, Price for purchase: cents/kWh
     """
 
     # Forecasts
@@ -65,6 +56,13 @@ class PriceSignal(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig
     ) -> None:
+        """Initialization of Price Signal class
+
+        :param my_simulation_parameters: _description_
+        :type my_simulation_parameters: SimulationParameters
+        :param config: _description_
+        :type config: PriceSignalConfig
+        """
         self.price_signal_config = config
         super().__init__(
             name=self.price_signal_config.name,
@@ -112,6 +110,7 @@ class PriceSignal(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Outputs price signal of time step. """
         if (
             self.my_simulation_parameters.predictive_control
             and self.my_simulation_parameters.prediction_horizon
@@ -138,6 +137,7 @@ class PriceSignal(cp.Component):
         stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])
 
     def build_dummy(self, start: int, end: int) -> None:
+        """Initialization of information if step function is used for prices. """
         self.start = start
         self.end = end
 
@@ -146,6 +146,7 @@ class PriceSignal(cp.Component):
         pass
 
     def write_to_report(self) -> List[str]:
+        """Writes relevant information to report. """
         lines = []
         for config_string in self.price_signal_config.get_string_dict():
             lines.append(config_string)

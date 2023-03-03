@@ -62,14 +62,6 @@ def basic_household_explicit(
     # Set Occupancy
     occupancy_profile = "CH01"
 
-    # Set Building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_heat_capacity_class = "medium"
-    initial_temperature_in_celsius = 23
-    heating_reference_temperature = -14
-    absolute_conditioned_floor_area_in_m2 = 121.2
-    total_base_area_in_m2 = None
-
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
@@ -122,15 +114,7 @@ def basic_household_explicit(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_heat_capacity_class,
-        initial_internal_temperature_in_celsius=initial_temperature_in_celsius,
-        heating_reference_temperature_in_celsius=heating_reference_temperature,
-        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-        total_base_area_in_m2=total_base_area_in_m2,
-        name="Building1",
-    )
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -249,7 +233,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.TemperatureMean,
         my_building.component_name,
-        my_building.TemperatureIndoorAir,
+        my_building.TemperatureMeanThermalMass,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,

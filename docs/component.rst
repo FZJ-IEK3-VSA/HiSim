@@ -1,4 +1,4 @@
-component module
+Component Module
 ================
 
 .. automodule:: component

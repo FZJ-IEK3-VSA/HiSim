@@ -79,12 +79,6 @@ def household_AC_explicit(
     # Set occupancy
     occupancy_profile = "CH01"
 
-    # Set building
-    building_code = "ES.ME.SFH.05.Gen.ReEx.001.003"
-    building_heat_capacity_class = "medium"
-    initial_internal_temperature_in_celsius = 19
-    heating_reference_temperature_in_celsius = -14
-
     # Set air conditioner controller
     t_air_heating = 16.0
     t_air_cooling = 24.0
@@ -158,13 +152,7 @@ def household_AC_explicit(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_heat_capacity_class,
-        initial_internal_temperature_in_celsius=initial_internal_temperature_in_celsius,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        name="Building1",
-    )
+    my_building_config=building.BuildingConfig.get_default_german_single_family_home()
 
     my_photovoltaic_system.connect_input(
         my_photovoltaic_system.TemperatureOutside,
@@ -261,7 +249,7 @@ def household_AC_explicit(
         pid_controller=PIDcontroller.PIDController(my_simulation_parameters=my_simulation_parameters,config=PIDcontroller.PIDControllerConfig(ki=ki, kp=kp, kd=kd))
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                               my_building.component_name,
-                                              my_building.TemperatureMean)
+                                              my_building.TemperatureMeanThermalMass)
         # pid_controller.connect_input(pid_controller.TemperatureMeanPrev,
         #                                       my_building.component_name,
         #                                       my_building.TemperatureMeanPrev)
@@ -284,7 +272,7 @@ def household_AC_explicit(
                                                                 my_simulation_parameters=my_simulation_parameters)
         my_air_conditioner_controller.connect_input(my_air_conditioner_controller.TemperatureMean,
                                               my_building.component_name,
-                                              my_building.TemperatureMean)
+                                              my_building.TemperatureMeanThermalMass)
 
     my_air_conditioner = air_conditioner.AirConditioner(config=air_conditioner.AirConditionerConfig(manufacturer=ac_manufacturer,
                                           name=Model,

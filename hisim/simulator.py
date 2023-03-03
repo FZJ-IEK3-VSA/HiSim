@@ -1,4 +1,7 @@
-""" Contains all the main simulator components. """
+"""The Simulator class forms the framework for all HiSim simulations.
+
+It iterates over all components in each timestep until convergence and loops over all time steps.
+"""
 # clean
 import os
 import datetime
@@ -28,11 +31,16 @@ __status__ = "production"
 
 class Simulator:
 
-    """ Core class of HiSim: Runs the main loop. """
+    """Core class of HiSim: Runs the main loop."""
 
     @utils.measure_execution_time
-    def __init__(self, module_directory: str, setup_function: str, my_simulation_parameters: Optional[SimulationParameters]) -> None:
-        """ Initializes the simulator class and creates the result directory. """
+    def __init__(
+        self,
+        module_directory: str,
+        setup_function: str,
+        my_simulation_parameters: Optional[SimulationParameters],
+    ) -> None:
+        """Initializes the simulator class and creates the result directory."""
         if setup_function is None:
             raise ValueError("No setup function was set")
         self.setup_function = setup_function
@@ -46,14 +54,16 @@ class Simulator:
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
 
-    def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
-        """ Sets the simulation parameters and the logging level at the same time. """
+    def set_simulation_parameters(
+        self, my_simulation_parameters: SimulationParameters
+    ) -> None:
+        """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
     def add_component(self, component: cp.Component, is_cachable: bool = False) -> None:
-        """ Adds component to simulator and wraps it up the output in the register. """
+        """Adds component to simulator and wraps it up the output in the register."""
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
         # set the repository
@@ -66,18 +76,20 @@ class Simulator:
 
     @utils.measure_execution_time
     def connect_all_components(self) -> None:
-        """ Connects the inputs from every component to the corresponding outputs. """
+        """Connects the inputs from every component to the corresponding outputs."""
         for wrapped_component in self.wrapped_components:
             wrapped_component.connect_inputs(self.all_outputs)
 
     @utils.measure_execution_time
     def prepare_calculation(self) -> None:
-        """ Connects the inputs from every component to the corresponding outputs. """
+        """Connects the inputs from every component to the corresponding outputs."""
         for wrapped_component in self.wrapped_components:
             wrapped_component.prepare_calculation()
 
-    def process_one_timestep(self, timestep: int, previous_stsv: cp.SingleTimeStepValues) -> Tuple[cp.SingleTimeStepValues, int]:
-        """ Executes one simulation timestep.
+    def process_one_timestep(
+        self, timestep: int, previous_stsv: cp.SingleTimeStepValues
+    ) -> Tuple[cp.SingleTimeStepValues, int]:
+        """Executes one simulation timestep.
 
         Some components can be connected in a circle.
         To solve the circular dependency, all components have their states restored
@@ -124,8 +136,15 @@ class Simulator:
             if iterative_tries > 10:
                 force_convergence = True
             if iterative_tries > 100:
-                list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
-                raise ValueError("More than 100 tries in time step " + str(timestep) + "\n" + list_of_changed_values)
+                list_of_changed_values = stsv.get_differences_for_error_msg(
+                    previous_values, self.all_outputs
+                )
+                raise ValueError(
+                    "More than 100 tries in time step "
+                    + str(timestep)
+                    + "\n"
+                    + list_of_changed_values
+                )
             # Copies actual values to previous variable
             previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
@@ -135,20 +154,27 @@ class Simulator:
         return (stsv, iterative_tries, force_convergence)
 
     def prepare_simulation_directory(self):
-        """ Prepares the simulation directory. Determines the filename if nothing is set. """
-        if self._simulation_parameters.result_directory is None or len(self._simulation_parameters.result_directory) == 0:
+        """Prepares the simulation directory. Determines the filename if nothing is set."""
+        if (
+            self._simulation_parameters.result_directory is None
+            or len(self._simulation_parameters.result_directory) == 0
+        ):
             result_dirname = f"{self.setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            self._simulation_parameters.result_directory = os.path.join(self.module_directory, "results", result_dirname)
+            self._simulation_parameters.result_directory = os.path.join(
+                self.module_directory, "results", result_dirname
+            )
 
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
-        log.information("Using result directory: " + self._simulation_parameters.result_directory)
+        log.information(
+            "Using result directory: " + self._simulation_parameters.result_directory
+        )
         log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
     # @profile
     # @utils.measure_execution_time
     def run_all_timesteps(self) -> None:
-        """ Performs all the timesteps of the simulation and saves the results in the attribute results. """
+        """Performs all the timesteps of the simulation and saves the results in the attribute results."""
         # Error Tests
         # Test if all parameters were initialized
         if self._simulation_parameters is None:
@@ -159,19 +185,34 @@ class Simulator:
             raise ValueError("Not a single component was defined. Quitting.")
         # call again because it might not have gotten executed depending on how it's called.
         self.prepare_simulation_directory()
-        flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
-        if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
-            log.warning("Found " + flagfile + ". This calculation seems finished. Quitting.")
+        flagfile = os.path.join(
+            self._simulation_parameters.result_directory, "finished.flag"
+        )
+        if self._simulation_parameters.skip_finished_results and os.path.exists(
+            flagfile
+        ):
+            log.warning(
+                "Found " + flagfile + ". This calculation seems finished. Quitting."
+            )
             return
         # Starts time counter
         start_counter = time.perf_counter()
         self.prepare_calculation()
         # Connects all components
         self.connect_all_components()
-        log.information("finished connecting all components. A total of " + str(
-            len(self.wrapped_components)) + " components were defined. They have a total of " + str(len(self.all_outputs)) + " outputs.")
+        log.information(
+            "finished connecting all components. A total of "
+            + str(len(self.wrapped_components))
+            + " components were defined. They have a total of "
+            + str(len(self.all_outputs))
+            + " outputs."
+        )
         all_result_lines = []
-        log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
+        log.information(
+            "Starting simulation for "
+            + str(self._simulation_parameters.timesteps)
+            + " timesteps"
+        )
         lastmessage = datetime.datetime.now()
         last_step: int = 0
         starttime = datetime.datetime.now()
@@ -201,7 +242,9 @@ class Simulator:
                 lastmessage = self.show_progress(starttime, step, total_iteration_tries_since_last_msg, last_step, force_convergence)
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
-        postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
+        postprocessing_datatransfer = self.prepare_post_processing(
+            all_result_lines, start_counter
+        )
         log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
             raise ValueError("postprocessing_datatransfer was none")
@@ -215,12 +258,12 @@ class Simulator:
         del my_post_processor
         self.simulation_repository.clear()
         log.information("Finished postprocessing")
-        with open(flagfile, 'a', encoding="utf-8") as filestream:
+        with open(flagfile, "a", encoding="utf-8") as filestream:
             filestream.write("finished")
 
     @utils.measure_execution_time
     def prepare_post_processing(self, all_result_lines, start_counter):
-        """ Prepares the post processing. """
+        """Prepares the post processing."""
         log.information("Preparing post processing")
         # Prepares the results from the simulation for the post processing.
         if len(all_result_lines) != self._simulation_parameters.timesteps:
@@ -233,9 +276,13 @@ class Simulator:
             column_name = entry.get_pretty_name()
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
-        self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
+        self.results_data_frame = pd.DataFrame(
+            data=all_result_lines, columns=colum_names
+        )
         # todo: fix this constant
-        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T")
+        df_index = pd.date_range(
+            "2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T"
+        )
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
@@ -267,11 +314,15 @@ class Simulator:
             average_iteration_tries: float = 1
         else:
             average_iteration_tries = total_iteration_tries / elapsed_steps
-        time_elapsed = datetime.timedelta(seconds=(self._simulation_parameters.timesteps - step) / steps_per_second)
+        time_elapsed = datetime.timedelta(
+            seconds=(self._simulation_parameters.timesteps - step) / steps_per_second
+        )
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore
         simulation_status = f"Simulating... {(step / self._simulation_parameters.timesteps) * 100:.1f}% "
-        simulation_status += f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds_str} min "
+        simulation_status += (
+            f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds_str} min "
+        )
         simulation_status += f"| Speed: {steps_per_second:.0f} step/s "
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
         simulation_status += f"| Avg. iterations {average_iteration_tries:.1f}"
@@ -281,22 +332,27 @@ class Simulator:
         return datetime.datetime.now()
 
     def get_std_results(self, results_data_frame: pd.DataFrame) -> pd.DataFrame:
-        """ Converts results into a pretty dataframe for post processing. """
-        pd_timeline = pd.date_range(start=self._simulation_parameters.start_date,
-                                    end=self._simulation_parameters.end_date,
-                                    freq=f'{self._simulation_parameters.seconds_per_timestep}S')[:-1]
+        """Converts results into a pretty dataframe for post processing."""
+        pd_timeline = pd.date_range(
+            start=self._simulation_parameters.start_date,
+            end=self._simulation_parameters.end_date,
+            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
+        )[:-1]
         n_columns = results_data_frame.shape[1]
         results_data_frame.index = pd_timeline
         results_merged = pd.DataFrame()
         for i_column in range(n_columns):
-            temp_df = pd.DataFrame(results_data_frame.values[:, i_column], index=pd_timeline,
-                                   columns=[results_data_frame.columns[i_column]])
+            temp_df = pd.DataFrame(
+                results_data_frame.values[:, i_column],
+                index=pd_timeline,
+                columns=[results_data_frame.columns[i_column]],
+            )
             column_name1 = results_data_frame.columns[i_column]  # noqa
             column_name: str = cast(str, column_name1)
-            if 'Temperature' in column_name or 'Percent' in column_name:
-                temp_df = temp_df.resample('M').interpolate(method='linear')
+            if "Temperature" in column_name or "Percent" in column_name:
+                temp_df = temp_df.resample("M").interpolate(method="linear")
             else:
-                temp_df = temp_df.resample('M').sum()
+                temp_df = temp_df.resample("M").sum()
             results_merged[temp_df.columns[0]] = temp_df.values[:, 0]
             results_merged.index = temp_df.index
         return results_merged

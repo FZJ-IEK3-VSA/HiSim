@@ -1,3 +1,5 @@
+""" Car Battery implementation built upon the bslib library. It contains a CarBattery Class together with its Configuration and State. """
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List, Any
 from dataclasses import dataclass
@@ -31,11 +33,17 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig:
-    system_id: str
-    p_inv_custom: float  # power in Watt
-    e_bat_custom: float  # capacity in Kilowatt
+    """Configuration of a Car Battery. """
+    #: name of the device
     name: str
+    #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
+    #: name of battery to search in database (bslib)
+    system_id: str
+    #: charging and discharging power in Watt
+    p_inv_custom: float
+    #: battery capacity in in kWh
+    e_bat_custom: float
 
     @staticmethod
     def get_default_config(
@@ -44,6 +52,7 @@ class CarBatteryConfig:
         e_bat_custom: float = 10,
         source_weight: int = 1,
     ) -> Any:
+        """Returns default configuration of a Car Battery. """
         config = CarBatteryConfig(
             system_id="SG1",
             p_inv_custom=p_inv_custom,
@@ -59,6 +68,9 @@ class CarBattery(Component):
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
     are loaded within the init for a specific or generic battery type.
+
+    Components to connect to:
+    (1) CarBattery controller (controller_l1_generic_ev_charge)
     """
 
     # Inputs
@@ -74,15 +86,6 @@ class CarBattery(Component):
     ):
         """
         Loads the parameters of the specified battery storage.
-
-        Parameters
-        ----------
-        system_id : str
-            Name (system_id) of the battery storage from bslib database.
-        p_inv_custom : numeric, default 0
-            AC power of battery inverter. Only for system_ids of type "Generic". [W]
-        e_bat_custom : numeric, default 0
-            Useable battery capacity. Only for system_ids of type "Generic". [Wh]
         """
         self.battery_config = config
         super().__init__(
@@ -212,7 +215,9 @@ class CarBattery(Component):
 
 @dataclass
 class EVBatteryState:
+    # state of charge of the battery
     soc: float = 0
 
     def clone(self):
+        "Creates a copy of the Car Battery State. "
         return EVBatteryState(soc=self.soc)

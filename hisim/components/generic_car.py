@@ -1,4 +1,4 @@
-"""Simple Car (LPG connected) and charging station (if it is electric)."""
+"""Simple Car (LPG connected) and configuration. Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations. """
 
 # -*- coding: utf-8 -*-
 from typing import List, Any
@@ -32,24 +32,14 @@ class CarConfig:
 
     """Definition of configuration of Car."""
 
+    #: name of the car
     name: str
+    #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
+    #: type of fuel, either Electricity or Diesel 
     fuel: lt.LoadTypes
+    #: consumption per kilometer driven, either in kWh/km or l/km
     consumption_per_km: float
-
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        fuel: lt.LoadTypes,
-        consumption_per_km: float,
-    ):
-        """Initialization of car configuration."""
-
-        self.name = name
-        self.source_weight = source_weight
-        self.fuel = fuel
-        self.consumption_per_km = consumption_per_km  # consumption in kWh/km or l/km
 
     @staticmethod
     def get_default_diesel_config() -> Any:
@@ -75,6 +65,7 @@ class CarConfig:
 
 
 def most_frequent(input_list: List) -> Any:
+    """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower. """
     counter = 0
     num = input_list[0]
 

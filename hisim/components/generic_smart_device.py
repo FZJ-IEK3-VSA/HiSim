@@ -1,3 +1,7 @@
+"""Implementation of shiftable household devices like washing machines, dish washers or dryers. Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and
+activates the device when surplus from PV is available. The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
+the configuration is automatically adopted from the information provided by the LPG. """
+
 # Generic/Built-in
 import json
 import math as ma
@@ -21,19 +25,7 @@ __status__ = "development"
 
 
 class SmartDeviceState:
-    """Component representing smart appliance
-
-    Parameters:
-    -----------
-    actual power : float, optional
-        Power of smart appliance at given timestep
-    timestep_of_activation : int, optional
-        Timestep, where the device was activated. The default is -999.
-    time_to_go : integer, optional
-        Duration of the power profile, which follows for the nex time steps. The default is 0.
-    position : integer, optional
-        Index of demand profile relevent for the given timestep. The default is 0.
-    """
+    """State representing smart appliance."""
 
     def __init__(
         self,
@@ -42,12 +34,24 @@ class SmartDeviceState:
         time_to_go: int = 0,
         position: int = 0,
     ):
+        """Initilization of state.
+
+        :param actual_power: power of smart appliance at given timestep, defaults to 0
+        :type actual_power: float, optional
+        :param timestep_of_activation: timestep, where the device was activated, defaults to -999
+        :type timestep_of_activation: int, optional
+        :param time_to_go: duration of the power profile, which follows for the nex time steps, defaults to 0
+        :type time_to_go: int, optional
+        :param position: index of demand profile relevent for the given timestep, defaults to 0
+        :type position: int, optional
+        """
         self.actual_power = actual_power
         self.timestep_of_activation = timestep_of_activation
         self.time_to_go = time_to_go
         self.position = position
 
-    def clone(self):
+    def clone(self) -> "SmartDeviceState":
+        """Copy state efficiently."""
         return SmartDeviceState(
             self.actual_power,
             self.timestep_of_activation,
@@ -56,7 +60,13 @@ class SmartDeviceState:
         )
 
     def run(self, timestep: int, electricity_profile: List[float]) -> None:
+        """Check device state based on previous time step.
 
+        :param timestep: timestep of simulation
+        :type timestep: int
+        :param electricity_profile: load profile of device for actual or next activation
+        :type electricity_profile: List[float]
+        """
         # device activation
         if timestep > self.timestep_of_activation + self.time_to_go:
             self.timestep_of_activation = timestep
@@ -80,11 +90,6 @@ class SmartDevice(cp.Component):
     """
     Class component that provides availablity and profiles of flexible smart devices like shiftable (in time) washing machines and dishwashers.
     Data provided or based on LPG exports.
-
-    Parameters
-    -----------------------------------------------
-    profile: string
-        profile code corresponded to the family or residents configuration
     """
 
     # mandatory Inputs
@@ -158,6 +163,15 @@ class SmartDevice(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Iteration in smart appliance like washing mashine, dish washer or dryer.
+
+        :param timestep: timestep of simulation
+        :type timestep: int
+        :param stsv: _description_
+        :type stsv: cp.SingleTimeStepValues
+        :param force_convergence: _description_
+        :type force_convergence: bool
+        """
 
         # initialize power
         self.state.actual_power = 0
@@ -195,6 +209,17 @@ class SmartDevice(cp.Component):
     def build(
         self, identifier: str, source_weight: int, seconds_per_timestep: int = 60
     ) -> None:
+        """Initialization of Smart Device information
+
+        :param identifier: name of smart device in LPG
+        :type identifier: str
+        :param source_weight: priority of smart device in Energy Management System
+        :type source_weight: int
+        :param seconds_per_timestep: time step size, defaults to 60
+        :type seconds_per_timestep: int, optional
+        :raises NameError: _description_
+        :raises TypeError: _description_
+        """
 
         # load smart device profile
         smart_device_profile = []
@@ -283,6 +308,7 @@ class SmartDevice(cp.Component):
         self.previous_state = SmartDeviceState()
 
     def write_to_report(self) -> List[str]:
+        """Writes relevant information to report. """
         lines: List[str] = []
         lines.append("DeviceName: {}".format(self.component_name))
         return lines

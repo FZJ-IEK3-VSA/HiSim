@@ -287,15 +287,16 @@ def modular_household_explicit(
             consumption.append(car)
 
     # """SMART DEVICES"""
-    my_smart_devices, count = component_connections.configure_smart_devices(
-        my_sim=my_sim,
-        my_simulation_parameters=my_simulation_parameters,
-        count=count,
-        smart_devices_included=smart_devices_included,
-    )
-    if not smart_devices_included or clever is False:
-        for device in my_smart_devices:
-            consumption.append(device)
+    if utsp_connected:
+        my_smart_devices, count = component_connections.configure_smart_devices(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            count=count,
+            smart_devices_included=smart_devices_included,
+        )
+        if not smart_devices_included or clever is False:
+            for device in my_smart_devices:
+                consumption.append(device)
 
     # """SURPLUS CONTROLLER"""
     if needs_ems(
@@ -369,7 +370,7 @@ def modular_household_explicit(
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
-    if smart_devices_included and clever:
+    if smart_devices_included and clever and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
             my_smart_devices=my_smart_devices,

@@ -176,13 +176,14 @@ class LocationEnum(Enum):
         "Seville",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name,
-    FR = (
-        "Paris",
-        "NSRDB_15min",
-        "Paris",
-        "403286_48.85_2.34_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )   # noqa: invalid-name
+    DE = (
+        "Aachen",
+        "test-reference-years_1995-2012_1-location",
+        "data_processed",
+        "aachen_center",
+        WeatherDataSourceEnum.DWD,
+    )  # noqa: invalid-name
+
 
 
 @dataclass

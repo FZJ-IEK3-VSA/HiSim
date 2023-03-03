@@ -209,15 +209,7 @@ def modular_household_explicit(
         location=location
     )
     
-    my_building_config = building.BuildingConfig(
-        name="Building_1",
-        heating_reference_temperature_in_celsius=reference_temperature,
-        building_code=building_code,
-        building_heat_capacity_class="medium",
-        initial_internal_temperature_in_celsius=23,
-        absolute_conditioned_floor_area_in_m2=floor_area,
-        total_base_area_in_m2=None,
-    )
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

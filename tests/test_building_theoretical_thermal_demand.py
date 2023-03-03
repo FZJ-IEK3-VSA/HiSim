@@ -1,23 +1,19 @@
-"""Test for heat demand calculation in the building module.
+"""Test for heat demand calculation in the building module."""
 
-The aim is to compare the calculated heat demand in the building module with the heat demand given by TABULA.
-"""
 # clean
 import os
 from typing import Optional
 import numpy as np
-# import pandas as pd
 
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.components import generic_heat_pump
-from hisim import log
-# from hisim import utils
+from hisim.components import fake_heater
 
-__authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
+
+__authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
@@ -26,25 +22,24 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_test_building_heat_demand.py"
-FUNC = "house_with_pv_and_hp_for_heating_test"
+PATH = "../examples/household_for_test_building_theoretical_heat_demand.py"
+FUNC = "house_with_fake_heater_for_heating_test"
 
 
-def test_house_with_pv_and_hp_for_heating_test(
+def test_house_with_fake_heater_for_heating_test(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """Test for heating energy demand.
 
     This setup function emulates an household including the basic components. Here the residents have their
-    heating needs covered by the heat pump.
+    heating needs covered by a fake heater that returns exactly the heat that the building needs.
 
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)
         - Weather
         - Building
-        - Heat Pump
-        - Heat Pump Controller
+        - Fake Heater
     """
 
     # =========================================================================================================================================================
@@ -57,26 +52,18 @@ def test_house_with_pv_and_hp_for_heating_test(
     # Set Occupancy
     occupancy_profile = "CH01"
 
-
-    # Set Heat Pump Controller
-    temperature_air_heating_in_celsius = 19.5
-    temperature_air_cooling_in_celsius = 20.5
-    offset = 0.5
-    hp_mode = 2
-
-    # Set Heat Pump
-    # hp_min_operation_time = 1
-    # hp_min_idle_time = 1
+    # Set Fake Heater
+    set_heating_temperature_for_building_in_celsius = 20
+    set_cooling_temperature_for_building_in_celsius = 22
 
     # =========================================================================================================================================================
     # Build Components
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -127,22 +114,13 @@ def test_house_with_pv_and_hp_for_heating_test(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Heat Pump
-    my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+    # Build Fake Heater
+    my_fake_heater = fake_heater.FakeHeater(
         my_simulation_parameters=my_simulation_parameters,
+        set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius
     )
 
-    # Build Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-        name="GenericHeatpumpController",
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
-        my_simulation_parameters=my_simulation_parameters,
-    )
     # =========================================================================================================================================================
     # Connect Components
 
@@ -188,27 +166,25 @@ def test_house_with_pv_and_hp_for_heating_test(
     )
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
-        my_heat_pump.component_name,
-        my_heat_pump.ThermalPowerDelivered,
+        my_fake_heater.component_name,
+        my_fake_heater.ThermalPowerDelivered,
+    )
+    my_building.connect_input(
+        my_building.SetHeatingTemperature,
+        my_fake_heater.component_name,
+        my_fake_heater.SetHeatingTemperatureForBuilding,
+    )
+    my_building.connect_input(
+        my_building.SetCoolingTemperature,
+        my_fake_heater.component_name,
+        my_fake_heater.SetCoolingTemperatureForBuilding,
     )
 
-    # Heat Pump
-    my_heat_pump.connect_input(
-        my_heat_pump.State,
-        my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-
-    # Heat Pump Controller
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.TemperatureMean,
+    # Fake Heater
+    my_fake_heater.connect_input(
+        my_fake_heater.TheoreticalThermalBuildingDemand,
         my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
+        my_building.TheoreticalThermalBuildingDemand,
     )
 
     # =========================================================================================================================================================
@@ -217,43 +193,21 @@ def test_house_with_pv_and_hp_for_heating_test(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_heat_pump_controller)
+    my_sim.add_component(my_fake_heater)
 
     my_sim.run_all_timesteps()
 
     # =========================================================================================================================================================
-    # Calculate annual heat pump heating energy
+    # Test Air Temperature of Building
 
-    results_heatpump_heating = my_sim.results_data_frame[
-        "HeatPump - Heating [Heating - W]"
+    building_indoor_air_temperatures = my_sim.results_data_frame[
+        "Building_1 - TemperatureIndoorAir [Temperature - °C]"
     ]
-    sum_heating_in_watt_timestep = sum(results_heatpump_heating)
-    log.information("sum hp heating [W*timestep] " + str(sum_heating_in_watt_timestep))
-    timestep_factor = seconds_per_timestep / 3600
-    sum_heating_in_watt_hour = sum_heating_in_watt_timestep * timestep_factor
-    sum_heating_in_kilowatt_hour = sum_heating_in_watt_hour / 1000
-    # =========================================================================================================================================================
-    # Test annual floor related heating demand
 
-    energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 = (
-        my_building.buildingdata["q_h_nd"].values[0]
-    )
-
-    energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2 = (
-        sum_heating_in_kilowatt_hour / my_building_config.absolute_conditioned_floor_area_in_m2
-    )
-    log.information(
-        "energy need for heating from tabula [kWh/(a*m2)] "
-        + str(energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2)
-    )
-    log.information(
-        "energy need for heating from heat pump [kWh/(a*m2)] "
-        + str(energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2)
-    )
-    # test whether tabula energy demand for heating is equal to energy demand for heating generated from heat pump with a tolerance of 30%
-    np.testing.assert_allclose(
-        energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
-        energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2,
-        rtol=0.3,
-    )
+    for air_temperature in building_indoor_air_temperatures.values:
+        # check if air temperature in building is held between set temperatures
+        assert (
+            my_building.set_heating_temperature_in_celsius
+            <= np.round(air_temperature)
+            <= my_building.set_cooling_temperature_in_celsius
+        )

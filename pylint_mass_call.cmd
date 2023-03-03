@@ -72,6 +72,8 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\example_template.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\example_transformer.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\fake_heater.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater_with_controller.py
@@ -124,6 +126,8 @@ pylint C:\Users\k.rieck\HiSim\tests\test_building_manual_calculation_thermal_con
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_building_scalability_with_factor.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_building_theoretical_thermal_demand.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_examples.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_example_component.py
@@ -135,4 +139,6 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_example_transformer.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_generic_gas_heater.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_simple_heat_water_storage.py
 if %errorlevel% neq 0 exit /b

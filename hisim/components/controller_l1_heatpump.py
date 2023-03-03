@@ -271,7 +271,7 @@ class L1HeatPumpController(cp.Component):
             cp.ComponentConnection(
                 L1HeatPumpController.StorageTemperature,
                 building_classname,
-                building.Building.TemperatureMean,
+                building.Building.TemperatureMeanThermalMass,
             )
         )
         return connections

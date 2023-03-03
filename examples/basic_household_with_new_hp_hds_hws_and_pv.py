@@ -396,6 +396,11 @@ def basic_household_new(
         my_building.ReferenceMaxHeatBuildingDemand,
     )
     my_heat_distribution_system.connect_input(
+        my_heat_distribution_system.ResidenceTemperatureIndoorAir,
+        my_building.component_name,
+        my_building.TemperatureIndoorAir,
+    )
+    my_heat_distribution_system.connect_input(
         my_heat_distribution_system.WaterTemperatureInput,
         my_simple_heat_water_storage.component_name,
         my_simple_heat_water_storage.WaterTemperatureToHeatDistributionSystem,

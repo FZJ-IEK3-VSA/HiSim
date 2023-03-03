@@ -130,7 +130,7 @@ class SimulationParameters(JSONWizard):
             seconds_per_timestep,
             "",
         )
-        pars.enable_line_and_carpet_plots()
+        pars.enable_all_options()
         return pars
 
     @classmethod

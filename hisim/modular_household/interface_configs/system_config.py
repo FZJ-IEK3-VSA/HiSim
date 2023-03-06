@@ -20,7 +20,7 @@ class SystemConfig:
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
     smart_devices_included: bool = False
     #: decision on the consideration of a buffer storage for heating
-    buffer_included: bool = True
+    buffer_included: bool = False
     #: volume of the considered buffer storage in multiples of the default size
     buffer_volume: Optional[float] = 1  # in multiples of default
     #: decision on the consideration of battery
@@ -28,7 +28,7 @@ class SystemConfig:
     #: capacity of the considered battery in kWh
     battery_capacity: Optional[float] = 20.0  # in kWh
     #: decision on the consideration of heat pump
-    heatpump_included: bool = True
+    heatpump_included: bool = False
     #: maximal power of the considered heat pump in multiples of the default
     heatpump_power: Optional[float] = 1.0 # in multiples of default
     #: decision on the consideration of combined heat and power - in this case a fuel cell

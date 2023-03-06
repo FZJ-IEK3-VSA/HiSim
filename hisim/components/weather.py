@@ -177,12 +177,139 @@ class LocationEnum(Enum):
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name,
     DE = (
-        "Aachen",
-        "test-reference-years_1995-2012_1-location",
-        "data_processed",
-        "aachen_center",
-        WeatherDataSourceEnum.DWD,
+        "Potsdam",
+        "NSRDB_15min",
+        "Potsdam",
+        "742114_52.41_13.06_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
     )  # noqa: invalid-name
+    PL = (
+        "Warsaw",
+        "NSRDB_15min",
+        "Warsaw",
+        "1138443_52.25_21.02_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    SE = (
+        "Stockholm",
+        "NSRDB_15min",
+        "Stockholm",
+        "984998_59.33_18.06_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    NO = (
+        "Oslo",
+        "NSRDB_15min",
+        "Oslo",
+        "653025_59.93_10.74_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    RS = (
+        "Belgrad",
+        "NSRDB_15min",
+        "Belgrad",
+        "1108363_44.77_20.46_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    IT = (
+        "Rome",
+        "NSRDB_15min",
+        "Rome",
+        "718838_41.89_12.50_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    GB = (
+        "London",
+        "NSRDB_15min",
+        "London",
+        "337089_51.49_-0.10_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    CY = (
+        "Nicosia",
+        "NSRDB_15min",
+        "Nicosia",
+        "1809004_35.17_33.38_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    GR = (
+        "Athens",
+        "NSRDB_15min",
+        "Athens",
+        "1291832_37.97_23.74_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    IE = (
+        "Dublin",
+        "NSRDB_15min",
+        "Dublin",
+        "165308_53.37_-6.26_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    SI = (
+        "Ljubljana",
+        "NSRDB_15min",
+        "Ljubljana",
+        "808557_46.05_14.50_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    CZ = (
+        "Prague",
+        "NSRDB_15min",
+        "Prague",
+        "804583_50.09_14.42_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    AT = (
+        "Viena",
+        "NSRDB_15min",
+        "Viena",
+        "902141_48.21_16.38_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    HU = (
+        "Budapest",
+        "NSRDB_15min",
+        "Budapest",
+        "1035927_47.49_19.06_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    BE = (
+        "Uccle",
+        "NSRDB_15min",
+        "Uccle",
+        "454992_50.81_4.34_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    ES = (
+        "Barcelona",
+        "NSRDB_15min",
+        "Barcelona",
+        "398308_41.41_2.14_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    DK = (
+        "Copenhagen",
+        "NSRDB_15min",
+        "Copenhagen",
+        "721796_55.69_12.58_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    NL = (
+        "Amsterdam",
+        "NSRDB_15min",
+        "Amsterdam",
+        "469536_52.37_4.90_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+    BG = (
+        "Sofia",
+        "NSRDB_15min",
+        "Sofia",
+        "1267064_42.69_23.30_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
+
 
 
 

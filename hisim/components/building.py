@@ -1017,6 +1017,7 @@ class Building(dynamic_component.DynamicComponent):
                     self.buildingconfig.absolute_conditioned_floor_area_in_m2
                 )
                 factor_of_absolute_floor_area_to_tabula_floor_area = 1.0
+                self.buildingdata["A_C_Ref"] = self.scaled_conditioned_floor_area_in_m2
             # scaling conditioned floor area
             else:
                 factor_of_absolute_floor_area_to_tabula_floor_area = (
@@ -1036,6 +1037,7 @@ class Building(dynamic_component.DynamicComponent):
                     self.buildingconfig.total_base_area_in_m2
                 )
                 factor_of_total_base_area_to_tabula_floor_area = 1.0
+                self.buildingdata["A_C_Ref"] = self.scaled_conditioned_floor_area_in_m2
             # scaling conditioned floor area
             else:
                 factor_of_total_base_area_to_tabula_floor_area = (
@@ -1052,6 +1054,7 @@ class Building(dynamic_component.DynamicComponent):
         else:
             if self.conditioned_floor_area_in_m2 == 0:
                 self.scaled_conditioned_floor_area_in_m2 = 500
+                self.buildingdata["A_C_Ref"] = self.scaled_conditioned_floor_area_in_m2
                 log.warning("There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used.")
             else:
                 self.scaled_conditioned_floor_area_in_m2 = self.conditioned_floor_area_in_m2

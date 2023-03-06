@@ -14,7 +14,7 @@ class SystemConfig:
 
     """Defines the configuration and sizing of all components considered in a modular household."""
     #: decision on the consideration of Photovoltaic Panel
-    pv_included: bool = True
+    pv_included: bool = False
     #: peak power of the considered Photovoltaic Panel in Wp
     pv_peak_power: Optional[float] = 1e4
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers

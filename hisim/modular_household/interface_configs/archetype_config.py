@@ -27,7 +27,7 @@ class ArcheTypeConfig:
     #: building code of considered type of building originated from the Tabula data base (https://episcope.eu/building-typology/webtool/)
     building_code: str = "ES.ME.AB.01.Gen.ReEx.001.001"
     #: absolute area considered for heating and cooling
-    absolute_conditioned_floor_area: float = None
+    absolute_conditioned_floor_area: Optional[float] = None
     #: type of water heating system
     water_heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     #: type of heating system

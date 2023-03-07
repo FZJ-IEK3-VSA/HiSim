@@ -5,6 +5,7 @@ import sys
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 
+from hisim.components import building
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
 from hisim import log
@@ -227,19 +228,28 @@ class PostProcessor:
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
-        ):
-            log.information("Generating csv for housing data base. ")
-            start = timer()
-            generate_csv_for_database(
-                all_outputs=ppdt.all_outputs,
-                results=ppdt.results,
-                simulation_parameters=ppdt.simulation_parameters,
-            )
-            end = timer()
-            duration = end - start
-            log.information(
-                "Generating csv for housing data base took " + f"{duration:1.2f}s."
-            )
+        ):  
+            building_data = []
+            for elem in ppdt.wrapped_components:
+                if isinstance(elem.my_component, building.Building):
+                    building_data = elem.my_component.buildingdata
+            if len(building_data) == 0:
+                log.warning("Building needs to be defined to generate csv for housing data base.")
+            else:
+                log.information("Generating csv for housing data base. ")
+                start = timer()
+                generate_csv_for_database(
+                    all_outputs=ppdt.all_outputs,
+                    results=ppdt.results,
+                    simulation_parameters=ppdt.simulation_parameters,
+                    building_data=building_data
+                )
+                end = timer()
+                duration = end - start
+                log.information(
+                    "Generating csv for housing data base took " + f"{duration:1.2f}s."
+                )
+                
         # only a single day has been calculated. This gets special charts for debugging.
         if (
             PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY

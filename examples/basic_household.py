@@ -122,18 +122,23 @@ def basic_household_explicit(
 
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig(name="ElectrcityGrid_BaseLoad", grid=[my_occupancy, "Subtract", my_photovoltaic_system], signal=None),
+        config=sumbuilder.ElectricityGridConfig(
+            name="ElectrcityGrid_BaseLoad",
+            grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+            signal=None,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
-        name="GenericHeatPumpController",
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
+            name="GenericHeatPumpController",
+            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+            offset=offset,
+            mode=hp_mode,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -147,9 +152,8 @@ def basic_household_explicit(
     # Connect Component Inputs with Outputs
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-   
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
@@ -164,7 +168,9 @@ def basic_household_explicit(
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-    my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
+    my_heat_pump.connect_only_predefined_connections(
+        my_weather, my_heat_pump_controller
+    )
     my_heat_pump.get_default_connections_heatpump_controller()
     # =================================================================================================================================
     # Add Components to Simulation Parameters

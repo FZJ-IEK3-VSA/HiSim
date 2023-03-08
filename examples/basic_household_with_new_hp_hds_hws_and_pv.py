@@ -214,17 +214,14 @@ def basic_household_new(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_photovoltaic_system.get_default_connections_from_weather()
+    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     # -----------------------------------------------------------------------------------------------------------------
-    my_building.get_default_connections_from_weather()
-    my_building.get_default_connections_from_occupancy()
-
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
-
     my_building.connect_input(
         my_building.SetHeatingTemperature,
         my_heat_distribution_controller.component_name,
@@ -247,16 +244,8 @@ def basic_household_new(
         my_base_electricity_load_profile.ElectricityOutput,
     )
     # -----------------------------------------------------------------------------------------------------------------
-    my_heat_pump.connect_input(
-        my_heat_pump.State,
-        my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
+    my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
+
     my_heat_pump.connect_input(
         my_heat_pump.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
@@ -289,47 +278,9 @@ def basic_household_new(
         my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
     )
     # -----------------------------------------------------------------------------------------------------------------
-    my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.TheoreticalThermalBuildingDemand,
-        my_building.component_name,
-        my_building.TheoreticalThermalBuildingDemand,
-    )
-    my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.DailyAverageOutsideTemperature,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
-    )
-    my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.WaterTemperatureInputFromHeatWaterStorage,
-        my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
-    )
+    my_heat_distribution_controller.connect_only_predefined_connections(my_weather, my_building, my_simple_hot_water_storage)
     # -----------------------------------------------------------------------------------------------------------------
-    my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.State,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.State,
-    )
-    my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.TheoreticalThermalBuildingDemand,
-        my_building.component_name,
-        my_building.TheoreticalThermalBuildingDemand,
-    )
-    my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.MaxThermalBuildingDemand,
-        my_building.component_name,
-        my_building.ReferenceMaxHeatBuildingDemand,
-    )
-    my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.ResidenceTemperatureIndoorAir,
-        my_building.component_name,
-        my_building.TemperatureIndoorAir,
-    )
-    my_heat_distribution_system.connect_input(
-        my_heat_distribution_system.WaterTemperatureInput,
-        my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
-    )
+    my_heat_distribution_system.connect_only_predefined_connections(my_building, my_heat_distribution_controller, my_simple_hot_water_storage)
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

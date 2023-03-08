@@ -164,7 +164,6 @@ def basic_household_explicit(
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
     # =================================================================================================================================

@@ -216,13 +216,22 @@ def basic_household_new(
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     # -----------------------------------------------------------------------------------------------------------------
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy, my_heat_distribution_controller)
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
-
+    my_building.connect_input(
+        my_building.SetHeatingTemperature,
+        my_heat_distribution_controller.component_name,
+        my_heat_distribution_controller.SetHeatingTemperatureForBuilding
+    )
+    my_building.connect_input(
+        my_building.SetCoolingTemperature,
+        my_heat_distribution_controller.component_name,
+        my_heat_distribution_controller.SetCoolingTemperatureForBuilding
+    )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,

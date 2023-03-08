@@ -6,7 +6,9 @@ from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
-from hisim. components import building, simple_hot_water_storage, weather
+from hisim. components.building import Building
+from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
@@ -239,26 +241,26 @@ class HeatDistribution(cp.Component):
             """Get building default connections."""
             log.information("setting building default connections")
             connections = []
-            building_classname = building.Building.get_classname()
+            building_classname = Building.get_classname()
             connections.append(
                 cp.ComponentConnection(
                     HeatDistribution.TheoreticalThermalBuildingDemand,
                     building_classname,
-                    building.Building.TheoreticalThermalBuildingDemand,
+                    Building.TheoreticalThermalBuildingDemand,
                 )
             )
             connections.append(
                 cp.ComponentConnection(
                     HeatDistribution.MaxThermalBuildingDemand,
                     building_classname,
-                    building.Building.ReferenceMaxHeatBuildingDemand,
+                    Building.ReferenceMaxHeatBuildingDemand,
                 )
             )
             connections.append(
                 cp.ComponentConnection(
                     HeatDistribution.ResidenceTemperatureIndoorAir,
                     building_classname,
-                    building.Building.TemperatureIndoorAir,
+                    Building.TemperatureIndoorAir,
                 )
             )
             return connections
@@ -269,12 +271,12 @@ class HeatDistribution(cp.Component):
             """Get simple hot water storage default connections."""
             log.information("setting simple hot water storage default connections")
             connections = []
-            hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+            hws_classname = SimpleHotWaterStorage.get_classname()
             connections.append(
                 cp.ComponentConnection(
                     HeatDistribution.WaterTemperatureInput,
                     hws_classname,
-                    simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                    SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
                 )
             )
             return connections
@@ -553,12 +555,12 @@ class HeatDistributionController(cp.Component):
                 """Get weather default connections."""
                 log.information("setting weather default connections")
                 connections = []
-                weather_classname = weather.Weather.get_classname()
+                weather_classname = Weather.get_classname()
                 connections.append(
                     cp.ComponentConnection(
                         HeatDistributionController.DailyAverageOutsideTemperature,
                         weather_classname,
-                        weather.Weather.DailyAverageOutsideTemperatures,
+                        Weather.DailyAverageOutsideTemperatures,
                     )
                 )
                 return connections
@@ -569,12 +571,12 @@ class HeatDistributionController(cp.Component):
                 """Get building default connections."""
                 log.information("setting building default connections")
                 connections = []
-                building_classname = building.Building.get_classname()
+                building_classname = Building.get_classname()
                 connections.append(
                     cp.ComponentConnection(
                         HeatDistributionController.TheoreticalThermalBuildingDemand,
                         building_classname,
-                        building.Building.TheoreticalThermalBuildingDemand,
+                        Building.TheoreticalThermalBuildingDemand,
                     )
                 )
                 return connections
@@ -585,12 +587,12 @@ class HeatDistributionController(cp.Component):
                 """Get simple_hot_water_storage default connections."""
                 log.information("setting simple_hot_water_storage default connections")
                 connections = []
-                hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+                hws_classname = SimpleHotWaterStorage.get_classname()
                 connections.append(
                     cp.ComponentConnection(
                         HeatDistributionController.WaterTemperatureInputFromHeatWaterStorage,
                         hws_classname,
-                        simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                        SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
                     )
                 )
                 return connections

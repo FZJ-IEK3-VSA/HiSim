@@ -79,7 +79,6 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-from hisim.components.heat_distribution_system import HeatDistributionController
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -606,29 +605,6 @@ class Building(dynamic_component.DynamicComponent):
         )
         return connections
     
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
-        """Get heat_distribution_controllerdefault connections."""
-        log.information("setting heat_distribution_controller default connections")
-        connections = []
-        hdsc_classname = HeatDistributionController.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                Building.SetHeatingTemperature,
-                hdsc_classname,
-                HeatDistributionController.SetHeatingTemperatureForBuilding,
-            )
-        )
-        connections.append(
-            cp.ComponentConnection(
-                Building.SetCoolingTemperature,
-                hdsc_classname,
-                HeatDistributionController.SetCoolingTemperatureForBuilding,
-            )
-        )
-        return connections
-
     # =================================================================================================================================
     # Simulation of the building class
 

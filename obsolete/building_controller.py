@@ -1,4 +1,4 @@
-"""Heating components module.
+"""Building Controller module.
 
 This module simulates heating components for the building.
 
@@ -89,14 +89,14 @@ class Test_BuildingControllerConfig:
 
 @dataclass_json
 @dataclass
-class HeatingComponentConfig(cp.ConfigBase):
+class HeatingComponentInBuildingConfig(cp.ConfigBase):
 
     """Configuration of the heating component class."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return HeatingComponent.get_full_classname()
+        return HeatingComponentInBuilding.get_full_classname()
 
     name: str
 
@@ -105,13 +105,13 @@ class HeatingComponentConfig(cp.ConfigBase):
         cls,
     ) -> Any:
         """Gets a default Building."""
-        config = HeatingComponentConfig(
+        config = HeatingComponentInBuildingConfig(
             name="Heating Device Config Name",
         )
         return config
 
 
-class HeatingComponent(dynamic_component.DynamicComponent):
+class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
 
     """Heating component class."""
 
@@ -128,7 +128,7 @@ class HeatingComponent(dynamic_component.DynamicComponent):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: HeatingComponentConfig,
+        config: HeatingComponentInBuildingConfig,
     ):
         """Constructs all the neccessary attributes."""
         self.heatingcomponentconfig = config

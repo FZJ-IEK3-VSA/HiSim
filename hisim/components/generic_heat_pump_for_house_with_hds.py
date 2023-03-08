@@ -458,14 +458,13 @@ class GenericHeatPumpNew(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        lines.append(self.heatpump_config.get_string_dict())
         lines.append(
             f"Max heating power: {(self.max_heating_power_in_watt) * 1e-3:4.3f} kW"
         )
         lines.append(
             f"Max heating power variation restriction: {self.max_heating_power_variation_restriction_in_watt:4.3f} W"
         )
-        return lines
+        return self.heatpump_config.get_string_dict() + lines
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

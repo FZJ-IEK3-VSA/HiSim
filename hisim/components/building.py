@@ -1145,7 +1145,6 @@ class Building(dynamic_component.DynamicComponent):
     ):
         """Write important variables to report."""
         lines = []
-        lines.append(self.buildingconfig.get_string_dict())
 
         lines.append(
             f"Max Thermal Demand [W]: {self.max_thermal_building_demand_in_watt}"
@@ -1226,7 +1225,7 @@ class Building(dynamic_component.DynamicComponent):
             f"Annual Floor Related Heating Demand, based on TABULA (Q_h_nd) [kWh/m2.a]: "
             f"{self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
-        return lines
+        return self.buildingconfig.get_string_dict() + lines
 
     # =====================================================================================================================================
     # Calculation of the heat transfer coefficients or thermal conductances.

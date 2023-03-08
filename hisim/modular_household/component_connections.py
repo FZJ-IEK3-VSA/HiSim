@@ -922,7 +922,6 @@ def configure_heating_with_buffer_electric(
             my_electricity_controller.BuildingTemperatureModifier
         )
 
-        my_heatpump.connect_only_predefined_connections(my_electricity_controller)
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,
             source_component_output=my_heatpump.ElectricityOutput,

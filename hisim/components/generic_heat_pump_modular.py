@@ -101,8 +101,6 @@ class ModularHeatPump(cp.Component):
     # Inputs
     TemperatureOutside = "TemperatureOutside"
     L1DeviceSignal = "L1DeviceSignal"
-    l1_RunTimeSignal = "l1_RunTimeSignal"
-    ems_flexible_electricity = "EMS Modulating Signal"
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
@@ -142,14 +140,6 @@ class ModularHeatPump(cp.Component):
             mandatory=True,
         )
 
-        self.EMS_Flexible_ElectricityC: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.ems_flexible_electricity,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
-            mandatory=False,
-        )
-
         self.L1HeatControllerTargetPercentage: cp.ComponentInput = self.add_input(
             self.component_name,
             self.L1DeviceSignal,
@@ -186,9 +176,6 @@ class ModularHeatPump(cp.Component):
         self.add_default_connections(
             self.get_default_connections_from_controller_l1_heatpump()
         )
-        self.add_default_connections(
-            self.get_default_connections_from_L2GenericEnergyManagementSystem()
-        )
 
     def get_default_connections_from_weather(self):
         """ Sets default connections of Weather. """
@@ -200,20 +187,6 @@ class ModularHeatPump(cp.Component):
                 ModularHeatPump.TemperatureOutside,
                 weather_classname,
                 Weather.TemperatureOutside,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_L2GenericEnergyManagementSystem(self):
-        """ Sets default connections of Energy Management System. """
-        log.information("setting weather default connections in HeatPump")
-        connections = []
-        ems_classname = L2GenericEnergyManagementSystem.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                ModularHeatPump.ems_flexible_electricity,
-                ems_classname,
-                L2GenericEnergyManagementSystem.FlexibleElectricity,
             )
         )
         return connections

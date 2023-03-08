@@ -1,6 +1,13 @@
 # -*- coding: utf-8 -*-
 # clean
-""" Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered."""
+""" 
+    Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered.
+    The heat source operates in four modes:
+        (a) 0.5 * power when temperature is already above target and only runs due to minimal operation time, or temperature is between upper target and increased upper target from ESM
+        (b) 0.75 * power when temperature is within tolerance range,
+        (c) full power when temperature is below lower target,
+        (d) off when temperature is already below target and only runs due to minimal idle time, or temperature is above upper target.
+"""
 
 from dataclasses import dataclass
 
@@ -136,7 +143,6 @@ class L1HeatPumpController(cp.Component):
     # Inputs
     StorageTemperature = "StorageTemperature"
     StorageTemperatureModifier = "StorageTemperatureModifier"
-    FlexibileElectricity = "FlexibleElectricity"
     # Outputs
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
     OnOffState = "OnOffState"
@@ -212,39 +218,10 @@ class L1HeatPumpController(cp.Component):
             mandatory=False,
         )
 
-        self.flexible_electricity_input: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.FlexibileElectricity,
-            LoadTypes.ELECTRICITY,
-            Units.WATT,
-            mandatory=False,
-        )
-
         self.add_default_connections(
             self.get_default_connections_generic_hot_water_storage_modular()
         )
         self.add_default_connections(self.get_default_connections_from_building())
-        self.add_default_connections(
-            self.get_default_connections_from_controller_l2_energy_management_system()
-        )
-
-    def get_default_connections_from_controller_l2_energy_management_system(self):
-        """Sets the default connections for the building."""
-        log.information(
-            "setting building default connections in L1 building Controller"
-        )
-        connections = []
-        ems_classname = (
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
-        )
-        connections.append(
-            cp.ComponentConnection(
-                L1HeatPumpController.FlexibileElectricity,
-                ems_classname,
-                controller_l2_energy_management_system.L2GenericEnergyManagementSystem.FlexibleElectricity,
-            )
-        )
-        return connections
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""

@@ -6,7 +6,7 @@ import json
 import os
 import shutil
 from os import path
-from typing import Any, List, Optional, Union, Tuple
+from typing import Any, List, Optional, Tuple
 
 import pandas as pd
 from utspclient.helpers.lpgdata import (TransportationDeviceSets,
@@ -88,12 +88,12 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        # )
         # my_simulation_parameters.post_processing_options.append(
         #     PostProcessingOptions.MAKE_NETWORK_CHARTS
         # )
@@ -101,7 +101,8 @@ def modular_household_explicit(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # get archetype configuration
-    location = arche_type_config_.location.value
+    location = arche_type_config_.building_code.split(".")[0]
+    occupancy_profile_utsp = arche_type_config_.occupancy_profile_utsp
     occupancy_profile = arche_type_config_.occupancy_profile
     building_code = arche_type_config_.building_code
     floor_area = arche_type_config_.absolute_conditioned_floor_area
@@ -111,6 +112,19 @@ def modular_household_explicit(
     heating_system_installed = arche_type_config_.heating_system_installed
     mobility_set = arche_type_config_.mobility_set
     mobility_distance = arche_type_config_.mobility_distance
+
+    # select if utsp is needed based on defined occupancy_profile:
+    if occupancy_profile_utsp is None and occupancy_profile is None:
+        raise Exception('Either occupancy_profile_utsp or occupancy_profile need to be defined in archetype_config file.')
+    elif occupancy_profile_utsp is not None and occupancy_profile is not None:
+        hisim.log.warning("Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. " )
+    if occupancy_profile_utsp is not None:
+        occupancy_profile = occupancy_profile_utsp
+        utsp_connected = True
+    else:
+        utsp_connected = False
+    del occupancy_profile_utsp
+    
 
     # get system configuration: technical equipment
     heatpump_included = system_config_.heatpump_included
@@ -149,7 +163,6 @@ def modular_household_explicit(
         electrolyzer_power = system_config_.electrolyzer_power
     ev_included = system_config_.ev_included
     charging_station = system_config_.charging_station
-    utsp_connected = system_config_.utsp_connect
 
     """BASICS"""
     if utsp_connected:
@@ -176,6 +189,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
             )
         )
+            
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
@@ -183,7 +197,7 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile.Name or ""
+            "Occupancy", occupancy_profile or ""
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -209,7 +223,15 @@ def modular_household_explicit(
         location=location
     )
     
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig(
+        name="Building_1",
+        building_code=building_code,
+        building_heat_capacity_class="medium",
+        initial_internal_temperature_in_celsius=23,
+        heating_reference_temperature_in_celsius=reference_temperature,
+        absolute_conditioned_floor_area_in_m2=floor_area,
+        total_base_area_in_m2=None,
+    )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -273,15 +295,16 @@ def modular_household_explicit(
             consumption.append(car)
 
     # """SMART DEVICES"""
-    my_smart_devices, count = component_connections.configure_smart_devices(
-        my_sim=my_sim,
-        my_simulation_parameters=my_simulation_parameters,
-        count=count,
-        smart_devices_included=smart_devices_included,
-    )
-    if not smart_devices_included or clever is False:
-        for device in my_smart_devices:
-            consumption.append(device)
+    if utsp_connected:
+        my_smart_devices, count = component_connections.configure_smart_devices(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            count=count,
+            smart_devices_included=smart_devices_included,
+        )
+        if not smart_devices_included or clever is False:
+            for device in my_smart_devices:
+                consumption.append(device)
 
     # """SURPLUS CONTROLLER"""
     if needs_ems(
@@ -355,7 +378,7 @@ def modular_household_explicit(
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
-    if smart_devices_included and clever:
+    if smart_devices_included and clever and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
             my_smart_devices=my_smart_devices,

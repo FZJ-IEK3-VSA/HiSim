@@ -333,7 +333,7 @@ class Occupancy(cp.Component):
             # convert electricity consumption and water consumption to desired format and unit
             self.electricity_consumption = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60W / min
+            ).tolist()  # 1 kWh/min == 60 000 W / min
             self.water_consumption = pd.to_numeric(
                 pre_water_consumption["Sum [L]"]
             ).tolist()

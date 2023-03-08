@@ -228,8 +228,8 @@ class PostProcessor:
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
-        ):  
-            building_data = []
+        ):
+
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata

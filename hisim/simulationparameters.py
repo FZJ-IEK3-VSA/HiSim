@@ -72,17 +72,17 @@ class SimulationParameters(JSONWizard):
         for option in PostProcessingOptions:
             self.post_processing_options.append(option)
 
-    def enable_line_and_carpet_plots(self) -> None:
+    def enable_plots_only(self) -> None:
         """Enables line and carpet plots."""
         self.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
-        # self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        # self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
         self.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         # self.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        # self.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # self.post_processing_options.append(PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY)
+        self.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY)
         # self.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
         # self.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         # self.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
@@ -108,7 +108,7 @@ class SimulationParameters(JSONWizard):
         return pars
 
     @classmethod
-    def full_year_line_and_carpet_plots(
+    def full_year_only_plots(
         cls, year: int, seconds_per_timestep: int
     ) -> SimulationParameters:
         """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
@@ -118,7 +118,7 @@ class SimulationParameters(JSONWizard):
             seconds_per_timestep,
             "",
         )
-        pars.enable_line_and_carpet_plots()
+        pars.enable_plots_only()
         return pars
 
     @classmethod

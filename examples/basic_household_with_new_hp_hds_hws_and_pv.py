@@ -208,8 +208,6 @@ def basic_household_new(
         my_simulation_parameters=my_simulation_parameters,
         config=heat_distribution_system.HeatDistributionControllerConfig(name=hds_controller_name,
                                                                          set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
-                                                                         set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
-                                                                         set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
                                                                          set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
                                                                          set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius)
     )

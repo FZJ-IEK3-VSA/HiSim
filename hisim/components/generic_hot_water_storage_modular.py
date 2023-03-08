@@ -167,7 +167,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     one output: the hot water storage temperature.
 
     Components to connect to:
-    (1a) Building Controller(controller_l1_generic_runtime) - if buffer
+    (1a) Building Controller(controller_l1_building_heating) - if buffer
     (1b) Occupancy Profile (either loadprofilegenerator_connector or loadprofilegenerator_utsp_connector) - if boiler
     (2a) Heat Source (generic_heat_source)
     (2b) Heat Pump (generic_heat_pump_modular)
@@ -178,7 +178,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     ThermalPowerDelivered = "ThermalPowerDelivered"  # either thermal energy delivered
     ThermalPowerCHP = "ThermalPowerCHP"
     WaterConsumption = "WaterConsumption"
-    L1DeviceSignal = "L1DeviceSignal"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
     my_component_inputs: List[dycp.DynamicConnectionInput] = []
     my_component_outputs: List[dycp.DynamicConnectionOutput] = []
 
@@ -214,7 +214,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
         # inputs
         if self.use == lt.ComponentType.BOILER:
-            self.water_consumption_c: cp.ComponentInput = self.add_input(
+            self.water_consumption_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterConsumption,
                 lt.LoadTypes.WARM_WATER,
@@ -224,9 +224,9 @@ class HotWaterStorage(dycp.DynamicComponent):
             self.add_default_connections(self.get_occupancy_default_connections())
             self.add_default_connections(self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
-            self.l1_device_signal_c: cp.ComponentInput = self.add_input(
+            self.heat_controller_target_percentage_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
-                self.L1DeviceSignal,
+                self.HeatControllerTargetPercentage,
                 lt.LoadTypes.ON_OFF,
                 lt.Units.BINARY,
                 mandatory=True,
@@ -251,7 +251,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         )
 
         # Outputs
-        self.temperature_mean_c: cp.ComponentOutput = self.add_output(
+        self.temperature_mean_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureMean,
             load_type=lt.LoadTypes.TEMPERATURE,
@@ -355,9 +355,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         heating_controller_classname = controller_l1_building_heating.L1BuildingHeatController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HotWaterStorage.L1DeviceSignal,
+                HotWaterStorage.HeatControllerTargetPercentage,
                 heating_controller_classname,
-                controller_l1_building_heating.L1BuildingHeatController.boiler_signal,
+                controller_l1_building_heating.L1BuildingHeatController.HeatControllerTargetPercentage,
             )
         )
         return connections
@@ -440,7 +440,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
         # save outputs
         stsv.set_output_value(
-            self.temperature_mean_c, self.state.temperature_in_kelvin - 273.15
+            self.temperature_mean_channel, self.state.temperature_in_kelvin - 273.15
         )
 
     def calculate_heat_consumption(
@@ -454,10 +454,10 @@ class HotWaterStorage(dycp.DynamicComponent):
             # heat loss due to hot water consumption -> base on energy balance in kJ
             # 0.977 density of water in kg/l
             # 4.182 specific heat of water in kJ K^(-1) kg^(-1)
-            return stsv.get_input_value(self.water_consumption_c) \
+            return stsv.get_input_value(self.water_consumption_channel) \
                 * (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
         elif self.use == lt.ComponentType.BUFFER:
-            heatconsumption = stsv.get_input_value(self.l1_device_signal_c) \
+            heatconsumption = stsv.get_input_value(self.heat_controller_target_percentage_channel) \
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
             available_energy = self.state.return_available_energy(heating=True)\
                 + thermal_energy_delivered

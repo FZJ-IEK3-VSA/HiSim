@@ -52,7 +52,7 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
+        config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
         t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=55.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
@@ -93,7 +93,7 @@ class L1BuildingHeatController(cp.Component):
     BuildingTemperatureModifier = "BuildingTemperatureModifier"
     BufferTemperature = "BufferTemperature"
     # Outputs
-    boiler_signal = "l2_DeviceSignal"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
 
     # #Forecasts
     # HeatPumpLoadForecast = "HeatPumpLoadForecast"
@@ -127,8 +127,8 @@ class L1BuildingHeatController(cp.Component):
         )
 
         # Component Outputs
-        self.l2_device_signal_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.boiler_signal, LoadTypes.ON_OFF, Units.BINARY
+        self.heat_controller_target_percentage_channel: cp.ComponentOutput = self.add_output(
+            self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ON_OFF, Units.BINARY
         )
 
         # Component Inputs
@@ -219,17 +219,17 @@ class L1BuildingHeatController(cp.Component):
         """ Controls the heating from buffer to building. """
         # prevent heating in summer
         if self.heating_season_begin > timestep > self.heating_season_end:
-            self.previous_state.state = 0
+            self.state.state = 0
             return
         if t_control > t_max_heating:
-            self.previous_state.state = 0
+            self.state.state = 0
             return
         if t_control < t_min_heating:
             # start heating if temperature goes below lower limit
-            self.previous_state.state = 1
+            self.state.state = 1
             return
         if t_buffer > t_buffer_activation:
-            self.previous_state.state = 1
+            self.state.state = 1
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -264,7 +264,7 @@ class L1BuildingHeatController(cp.Component):
         self.control_heating(
             timestep=timestep, t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target, t_buffer_activation=t_buffer_activation, t_buffer=t_buffer
         )
-        stsv.set_output_value(self.l2_device_signal_channel, self.state.state)
+        stsv.set_output_value(self.heat_controller_target_percentage_channel, self.state.state)
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

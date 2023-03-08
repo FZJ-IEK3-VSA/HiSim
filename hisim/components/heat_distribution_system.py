@@ -70,8 +70,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         return HeatDistributionController.get_full_classname()
 
     name: str
-    set_water_storage_temperature_for_heating_in_celsius: float
-    set_water_storage_temperature_for_cooling_in_celsius: float
+    # set_water_storage_temperature_for_heating_in_celsius: float
+    # set_water_storage_temperature_for_cooling_in_celsius: float
     set_heating_threshold_outside_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
@@ -81,8 +81,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Gets a default HeatDistribution Controller."""
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
-            set_water_storage_temperature_for_heating_in_celsius=49,
-            set_water_storage_temperature_for_cooling_in_celsius=55,
+            # set_water_storage_temperature_for_heating_in_celsius=49,
+            # set_water_storage_temperature_for_cooling_in_celsius=55,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_heating_temperature_for_building_in_celsius=20,
             set_cooling_temperature_for_building_in_celsius=23,
@@ -147,16 +147,9 @@ class HeatDistribution(cp.Component):
         self.state = HeatDistributionState(
             self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius
         )
-        self.state_controller: float = 0.0
-        self.water_temperature_input_in_celsius: float = 50.0
-        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second: float = (
-            0.0
-        )
-        self.residence_temperature_input_in_celsius: float = 0.0
+
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 50.0
-        self.max_thermal_building_demand_in_watt: float = 0.0
-        self.theoretical_thermal_building_demand_in_watt: float = 0.0
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
 
@@ -270,59 +263,55 @@ class HeatDistribution(cp.Component):
             pass
         else:
             # Get inputs ------------------------------------------------------------------------------------------------------------
-            self.state_controller = stsv.get_input_value(self.state_channel)
-            self.theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+            state_controller = stsv.get_input_value(self.state_channel)
+            theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
                 self.theoretical_thermal_building_demand_channel
             )
 
-            self.water_temperature_input_in_celsius = stsv.get_input_value(
+            water_temperature_input_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel
             )
 
-            self.max_thermal_building_demand_in_watt = stsv.get_input_value(
+            max_thermal_building_demand_in_watt = stsv.get_input_value(
                 self.max_thermal_building_demand_channel
             )
-            self.residence_temperature_input_in_celsius = stsv.get_input_value(
+            residence_temperature_input_in_celsius = stsv.get_input_value(
                 self.residence_temperature_input_channel
             )
             # Calculations ----------------------------------------------------------------------------------------------------------
-            self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
+            heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
                 self.calc_heating_distribution_system_water_mass_flow_rate(
-                    self.max_thermal_building_demand_in_watt
+                    max_thermal_building_demand_in_watt
                 )
             )
             self.state.water_temperature_in_distribution_system_in_celsius = (
                 self.water_temperature_output_in_celsius
             )
-            if self.state_controller == 1:
+            if state_controller == 1:
 
                 # building gets the heat that it needs
                 (
                     self.water_temperature_output_in_celsius,
                     self.thermal_power_delivered_in_watt,
                 ) = self.determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
-                    water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
-                    water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-                    theoretical_thermal_buiding_demand_in_watt=self.theoretical_thermal_building_demand_in_watt,
-                    residence_temperature_in_celsius=self.residence_temperature_input_in_celsius,
+                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+                    water_mass_flow_in_kg_per_second=heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
+                    theoretical_thermal_buiding_demand_in_watt=theoretical_thermal_building_demand_in_watt,
+                    residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-            elif self.state_controller == 0:
+            elif state_controller == 0:
 
                 self.thermal_power_delivered_in_watt = 0.0
 
                 self.water_temperature_output_in_celsius = (
-                    self.water_temperature_input_in_celsius
+                    water_temperature_input_in_celsius
                 )
 
             else:
                 raise ValueError("unknown mode")
 
             # Set outputs -----------------------------------------------------------------------------------------------------------
-
-            # log.information("hsd timestep " + str(timestep))
-            # log.information("hsd water temperature input " + str(self.water_temperature_input_in_celsius))
-            # log.information("hsd water temperature output " + str(self.water_temperature_output_in_celsius))
 
             stsv.set_output_value(
                 self.water_temperature_output_channel,
@@ -334,7 +323,7 @@ class HeatDistribution(cp.Component):
             )
             stsv.set_output_value(
                 self.heating_distribution_system_water_mass_flow_rate_channel,
-                self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
+                heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
             )
 
     def calc_heating_distribution_system_water_mass_flow_rate(
@@ -424,13 +413,11 @@ class HeatDistributionController(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state_controller: int = 0
-        self.theoretical_thermal_building_demand_in_watt: float = 0.0
-        self.water_temperature_input_in_celsius: float = 50
 
         self.build(
             set_heating_threshold_temperature=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-            set_water_storage_temperature_for_heating_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_heating_in_celsius,
-            set_water_storage_temperature_for_cooling_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
+            # set_water_storage_temperature_for_heating_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_heating_in_celsius,
+            # set_water_storage_temperature_for_cooling_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
             set_heating_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
         )
@@ -492,8 +479,8 @@ class HeatDistributionController(cp.Component):
     def build(
         self,
         set_heating_threshold_temperature: float,
-        set_water_storage_temperature_for_heating_in_celsius: float,
-        set_water_storage_temperature_for_cooling_in_celsius: float,
+        # set_water_storage_temperature_for_heating_in_celsius: float,
+        # set_water_storage_temperature_for_cooling_in_celsius: float,
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
     ) -> None:
@@ -509,12 +496,12 @@ class HeatDistributionController(cp.Component):
 
         # Configuration
         self.set_heating_threshold_temperature = set_heating_threshold_temperature
-        self.set_water_storage_temperature_for_heating_in_celsius = (
-            set_water_storage_temperature_for_heating_in_celsius
-        )
-        self.set_water_storage_temperature_for_cooling_in_celsius = (
-            set_water_storage_temperature_for_cooling_in_celsius
-        )
+        # self.set_water_storage_temperature_for_heating_in_celsius = (
+        #     set_water_storage_temperature_for_heating_in_celsius
+        # )
+        # self.set_water_storage_temperature_for_cooling_in_celsius = (
+        #     set_water_storage_temperature_for_cooling_in_celsius
+        # )
         self.set_heating_temperature_for_building_in_celsius = (
             set_heating_temperature_for_building_in_celsius
         )
@@ -555,17 +542,17 @@ class HeatDistributionController(cp.Component):
             pass
         else:
             # Retrieves inputs
-            self.theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+            theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
                 self.theoretical_thermal_building_demand_channel
             )
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
-            self.water_temperature_input_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_from_heat_water_storage_channel
-            )
+            # water_temperature_input_in_celsius = stsv.get_input_value(
+            #     self.water_temperature_input_from_heat_water_storage_channel
+            # )
             self.conditions_for_opening_or_shutting_heat_distribution(
-                theoretical_thermal_building_demand_in_watt=self.theoretical_thermal_building_demand_in_watt,
+                theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
                 daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
                 # water_temperature_input_in_celsius=self.water_temperature_input_in_celsius,
             )
@@ -588,8 +575,6 @@ class HeatDistributionController(cp.Component):
                 self.set_cooling_temperature_for_building_in_celsius,
             )
 
-        # log.information("hsdc timestep " + str(timestep))
-        # log.information("hsdc state " + str(self.state_controller))
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,

@@ -1145,8 +1145,7 @@ class Building(dynamic_component.DynamicComponent):
     ):
         """Write important variables to report."""
         lines = []
-        for config_string in self.buildingconfig.get_string_dict():
-            lines.append(config_string)
+        lines.append(self.buildingconfig.get_string_dict())
 
         lines.append(
             f"Max Thermal Demand [W]: {self.max_thermal_building_demand_in_watt}"

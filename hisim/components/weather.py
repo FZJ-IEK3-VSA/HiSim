@@ -493,10 +493,7 @@ class Weather(Component):
 
     def write_to_report(self):
         """Write configuration to the report."""
-        lines = []
-        for config_string in self.weather_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.weather_config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Saves the current state."""

@@ -177,12 +177,7 @@ class ElectricityGrid(Component):
         )
 
     def write_to_report(self) -> List[str]:
-        lines = []
-        for config_string in self.electricity_grid_config.get_string_dict():
-            lines.append(config_string)
-        # todo: add more useful stuff here
-        lines.append("tbd")
-        return lines
+        return self.electricity_grid_config.get_string_dict()
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""

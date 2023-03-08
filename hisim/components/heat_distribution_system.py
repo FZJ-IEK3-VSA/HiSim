@@ -322,10 +322,7 @@ class HeatDistribution(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
-        lines = []
-        for config_string in self.heat_distribution_system_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.heat_distribution_system_config.get_string_dict()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

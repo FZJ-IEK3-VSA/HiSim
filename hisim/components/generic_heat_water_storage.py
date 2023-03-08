@@ -239,8 +239,7 @@ class HeatStorage(Component):
 
     def write_to_report(self) -> None:
         lines = []
-        for config_string in self.heat_storage_config.get_string_dict():
-            lines.append(config_string)
+        lines.append(self.heat_storage_config.get_string_dict())
         lines.append("Name: HeatWaterStorage")
         lines.append(f"Volume Warm Water Storage [L]: {self.V_SP_warm_water}")
         lines.append(f"Volume Heat Water Storage [L]: {self.V_SP_heating_water}")
@@ -478,8 +477,7 @@ class HeatStorageController(cp.Component):
 
     def write_to_report(self) -> None:
         lines = []
-        for config_string in self.heatstoragecontroller_config.get_string_dict():
-            lines.append(config_string)
+        lines.append(self.heatstoragecontroller_config.get_string_dict())
         lines.append("Name: HeatWaterStorage Controller")
         lines.append(
             f"Initial Temperature Building [°C]: {self.initial_temperature_building}"

@@ -184,10 +184,7 @@ class PIDController(cp.Component):
 
     def write_to_report(self):
         """Logs the most important config stuff to the report."""
-        lines = []
-        for config_string in self.pid_controller_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.pid_controller_config.get_string_dict()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

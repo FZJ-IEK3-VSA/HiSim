@@ -445,8 +445,7 @@ class GenericHeatPump(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        for config_string in self.heatpump_config.get_string_dict():
-            lines.append(config_string)
+        lines.append(self.heatpump_config.get_string_dict())
         lines.append(
             f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}"
         )
@@ -726,10 +725,7 @@ class GenericHeatPumpController(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
-        lines = []
-        for config_string in self.heatpump_controller_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.heatpump_controller_config.get_string_dict()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

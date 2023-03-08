@@ -445,10 +445,7 @@ class PVSystem(cp.Component):
         pass
 
     def write_to_report(self):
-        lines = []
-        for config_string in self.pvconfig.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.pvconfig.get_string_dict()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

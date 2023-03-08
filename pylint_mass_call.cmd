@@ -72,8 +72,6 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\example_template.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\example_transformer.py
 if %errorlevel% neq 0 exit /b
-pylint C:\Users\k.rieck\HiSim\hisim\components\fake_heater.py
-if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater_with_controller.py
@@ -84,11 +82,11 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\generic_heat_pump_for_house_with_
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_hot_water_storage_modular.py
 if %errorlevel% neq 0 exit /b
-pylint C:\Users\k.rieck\HiSim\hisim\components\heating_components.py
-if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\heat_distribution_system.py
 if %errorlevel% neq 0 exit /b
-pylint C:\Users\k.rieck\HiSim\hisim\components\simple_heat_water_storage.py
+pylint C:\Users\k.rieck\HiSim\hisim\components\idealized_electric_heater.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\simple_hot_water_storage.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\modular_household\component_connections.py
 if %errorlevel% neq 0 exit /b
@@ -111,6 +109,8 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\reportgenerator.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\system_chart.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\obsolete\building_controller.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\functions_for_testing.py
 if %errorlevel% neq 0 exit /b
@@ -140,5 +140,5 @@ pylint C:\Users\k.rieck\HiSim\tests\test_example_transformer.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_generic_gas_heater.py
 if %errorlevel% neq 0 exit /b
-pylint C:\Users\k.rieck\HiSim\tests\test_simple_heat_water_storage.py
+pylint C:\Users\k.rieck\HiSim\tests\test_simple_hot_water_storage.py
 if %errorlevel% neq 0 exit /b

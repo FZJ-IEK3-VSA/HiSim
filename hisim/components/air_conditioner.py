@@ -305,8 +305,7 @@ class AirConditioner(cp.Component):
 
     def write_to_report(self):
         lines = []
-        for config_string in self.air_conditioner_config.get_string_dict():
-            lines.append(config_string)
+        lines.append(self.air_conditioner_config.get_string_dict())
         lines.append("Name: Air Conditioner")
         lines.append(f"Manufacturer: {self.manufacturer}")
         lines.append(f"Model {self.model}")
@@ -501,8 +500,7 @@ class AirConditionercontroller(cp.Component):
 
     def write_to_report(self):
         lines = []
-        for config_string in self.air_conditioner_controller_config.get_string_dict():
-            lines.append(config_string)
+        lines.append(self.air_conditioner_controller_config.get_string_dict())
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
         lines.append(

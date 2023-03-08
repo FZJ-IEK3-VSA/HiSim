@@ -190,10 +190,7 @@ class Battery(Component):
         self.state.soc = soc
 
     def write_to_report(self) -> List[str]:
-        lines = []
-        for config_string in self.battery_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.battery_config.get_string_dict()
 
 
 @dataclass

@@ -10,7 +10,7 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump_for_house_with_hds
 from hisim.components import sumbuilder
-from hisim.components import simple_heat_water_storage
+from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
@@ -180,14 +180,14 @@ def basic_household_new(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_heat_water_storage.HeatingWaterStorageConfig(
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
         cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
         hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius
     )
-    my_simple_heat_water_storage = simple_heat_water_storage.HeatingWaterStorage(
+    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -313,8 +313,8 @@ def basic_household_new(
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
-        my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.WaterTemperatureToHeatGenerator,
+        my_simple_hot_water_storage.component_name,
+        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
@@ -334,8 +334,8 @@ def basic_household_new(
     )
     my_heat_pump.connect_input(
         my_heat_pump.WaterTemperatureInputFromHeatWaterStorage,
-        my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.WaterTemperatureToHeatGenerator,
+        my_simple_hot_water_storage.component_name,
+        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
     )
     my_heat_pump.connect_input(
         my_heat_pump.MaxThermalBuildingDemand,
@@ -343,23 +343,23 @@ def basic_household_new(
         my_building.ReferenceMaxHeatBuildingDemand,
     )
     # -----------------------------------------------------------------------------------------------------------------
-    my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.WaterTemperatureFromHeatDistributionSystem,
+    my_simple_hot_water_storage.connect_input(
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )
-    my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.WaterTemperatureFromHeatGenerator,
+    my_simple_hot_water_storage.connect_input(
+        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
         my_heat_pump.component_name,
         my_heat_pump.WaterTemperatureOutput,
     )
-    my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.WaterMassFlowRateFromHeatGenerator,
+    my_simple_hot_water_storage.connect_input(
+        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
         my_heat_pump.component_name,
         my_heat_pump.HeatPumpWaterMassFlowRate,
     )
-    my_simple_heat_water_storage.connect_input(
-        my_simple_heat_water_storage.WaterMassFlowRateFromHeatDistributionSystem,
+    my_simple_hot_water_storage.connect_input(
+        my_simple_hot_water_storage.WaterMassFlowRateFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
     )
@@ -376,8 +376,8 @@ def basic_household_new(
     )
     my_heat_distribution_controller.connect_input(
         my_heat_distribution_controller.WaterTemperatureInputFromHeatWaterStorage,
-        my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.WaterTemperatureToHeatDistributionSystem,
+        my_simple_hot_water_storage.component_name,
+        my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_system.connect_input(
@@ -402,8 +402,8 @@ def basic_household_new(
     )
     my_heat_distribution_system.connect_input(
         my_heat_distribution_system.WaterTemperatureInput,
-        my_simple_heat_water_storage.component_name,
-        my_simple_heat_water_storage.WaterTemperatureToHeatDistributionSystem,
+        my_simple_hot_water_storage.component_name,
+        my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
     )
 
     # =================================================================================================================================
@@ -413,7 +413,7 @@ def basic_household_new(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_base_electricity_load_profile)
-    my_sim.add_component(my_simple_heat_water_storage)
+    my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_distribution_system)

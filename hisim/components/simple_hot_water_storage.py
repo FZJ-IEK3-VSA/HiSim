@@ -15,7 +15,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim import log
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -211,7 +210,9 @@ class SimpleHotWaterStorage(cp.Component):
                 self.water_temperature_heat_generator_input_channel
             )
             water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel)
+                stsv.get_input_value(
+                    self.water_mass_flow_rate_heat_generator_input_channel
+                )
             )
             water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = (
                 stsv.get_input_value(
@@ -270,8 +271,10 @@ class SimpleHotWaterStorage(cp.Component):
                 self.water_temperature_to_heat_generator_in_celsius,
             )
 
-            stsv.set_output_value(self.water_temperature_mean_channel, self.mean_water_temperature_in_water_storage_in_celsius)
-
+            stsv.set_output_value(
+                self.water_temperature_mean_channel,
+                self.mean_water_temperature_in_water_storage_in_celsius,
+            )
 
     def build(self):
         """Build function.

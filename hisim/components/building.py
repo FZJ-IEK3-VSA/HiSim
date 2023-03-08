@@ -604,7 +604,7 @@ class Building(dynamic_component.DynamicComponent):
             )
         )
         return connections
-    
+
     # =================================================================================================================================
     # Simulation of the building class
 
@@ -1008,7 +1008,8 @@ class Building(dynamic_component.DynamicComponent):
             raise ValueError(
                 "Only one variable can be used, the other one must be None."
             )
-        elif self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
+
+        if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
 
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
             if self.conditioned_floor_area_in_m2 == 0:
@@ -1054,13 +1055,15 @@ class Building(dynamic_component.DynamicComponent):
             if self.conditioned_floor_area_in_m2 == 0:
                 self.scaled_conditioned_floor_area_in_m2 = 500
                 self.buildingdata["A_C_Ref"] = self.scaled_conditioned_floor_area_in_m2
-                log.warning("There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used.")
+                log.warning(
+                    "There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used."
+                )
             else:
-                self.scaled_conditioned_floor_area_in_m2 = self.conditioned_floor_area_in_m2
+                self.scaled_conditioned_floor_area_in_m2 = (
+                    self.conditioned_floor_area_in_m2
+                )
 
             self.scaling_factor = 1
-
-
 
         for w_i in self.windows_and_door:
             self.scaled_windows_and_door_envelope_areas_in_m2.append(

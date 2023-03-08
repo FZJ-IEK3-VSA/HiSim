@@ -3,7 +3,6 @@
 import os
 import re
 
-
 class Chart:  # noqa: too-few-public-methods
 
     """Parent class for plots to be exported."""
@@ -85,9 +84,9 @@ class Chart:  # noqa: too-few-public-methods
             else:
                 self.title = f"{self.title}{single_match}"
 
-        self.title = self.title.replace("#", "")
+        self.title = self.title.replace("# ", "\n")
         self.title.strip()
-
+        # log.information("title " + str(self.title))
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = os.path.join(

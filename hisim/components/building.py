@@ -1157,7 +1157,8 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         lines.append(
-            f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: {self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
+            f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: "
+            f"{self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
         )
 
         lines.append(
@@ -1194,7 +1195,8 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Heat Transfers:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Annual Floor Related Total Heat Loss, based on TABULA (Q_ht) [kWh/m2.a]: {self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year:.2f}"
+            f"Annual Floor Related Total Heat Loss, based on TABULA (Q_ht) [kWh/m2.a]: "
+            f"{self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
         lines.append(
             f"Annual Floor Related Internal Heat Gain, based on TABULA (Q_int) [kWh/m2.a]: "

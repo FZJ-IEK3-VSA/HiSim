@@ -327,7 +327,7 @@ class Simulator:
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
         simulation_status += f"| Avg. iterations {average_iteration_tries:.1f}"
         if force_covergence:
-            simulation_status += f" (forced)"
+            simulation_status += " (forced)"
         log.information(simulation_status)
         return datetime.datetime.now()
 

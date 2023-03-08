@@ -58,7 +58,7 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
         """ Returns default configuration for the controller of building heating. """
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=19.0, t_max_heating_in_celsius=21.0,
                                   cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
                                   min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
@@ -267,8 +267,13 @@ class L1HeatPumpController(cp.Component):
         log.information("setting buffer default connections in L1 building Controller")
         connections = []
         building_classname = building.Building.get_classname()
-        connections.append(cp.ComponentConnection(L1HeatPumpController.StorageTemperature, building_classname,
-                                                  building.Building.TemperatureIndoorAir))
+        connections.append(
+            cp.ComponentConnection(
+                L1HeatPumpController.StorageTemperature,
+                building_classname,
+                building.Building.TemperatureMeanThermalMass,
+            )
+        )
         return connections
 
     def i_prepare_simulation(self) -> None:

@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 # clean
 """ 
-    Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered.
-    The heat source operates in four modes:
+    Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered. This file contains Controller together with Configuration and State.
+    The heat source is controlled accoring to four modes:
         (a) 0.5 * power when temperature is already above target and only runs due to minimal operation time, or temperature is between upper target and increased upper target from ESM
         (b) 0.75 * power when temperature is within tolerance range,
         (c) full power when temperature is below lower target,
@@ -134,10 +134,13 @@ class L1HeatPumpController(cp.Component):
     """L1 building controller. Processes signals ensuring comfort temperature of building/buffer or boiler.
 
     Gets available surplus electricity and the temperature of the storage or building to control as input,
-    and outputs control signal 0/1 for turn off/switch on based on comfort temperature limits and available electricity.
+    and outputs power signal for heat source based on comfort temperature limits and available electricity.
     In addition, run time control is considered, so that e. g. heat pumps do not continuosly turn on and off.
     It is optionally only activated during the heating season.
 
+    Components to connect to:
+    (1) Building or Buffer Storage (generic_hot_water_storage_modular)
+    (2) Energy Management System (controller_l2_energy_management_system) -> optional if set temperatures are increased when surplus is available.
     """
 
     # Inputs
@@ -145,7 +148,6 @@ class L1HeatPumpController(cp.Component):
     StorageTemperatureModifier = "StorageTemperatureModifier"
     # Outputs
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
-    OnOffState = "OnOffState"
 
     @utils.measure_execution_time
     def __init__(
@@ -197,9 +199,6 @@ class L1HeatPumpController(cp.Component):
             self.HeatControllerTargetPercentage,
             LoadTypes.ANY,
             Units.PERCENT,
-        )
-        self.on_off_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.OnOffState, LoadTypes.ANY, Units.ANY
         )
 
         # Component Inputs
@@ -284,7 +283,6 @@ class L1HeatPumpController(cp.Component):
         stsv.set_output_value(
             self.heat_pump_target_percentage_channel, modulating_signal
         )
-        stsv.set_output_value(self.on_off_channel, self.state.on_off)
 
     def calc_percentage(self, t_storage: float, temperature_modifier: float) -> None:
         """Calculate the heat pump target percentage."""

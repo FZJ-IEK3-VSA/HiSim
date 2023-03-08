@@ -40,15 +40,15 @@ def test_simple_bucket_boiler_state():
 
     my_boiler_controller_l1.storage_temperature_channel.source_output = my_boiler.temperature_mean_c
     my_boiler.water_consumption_c.source_output = WW_use
-    my_boiler.thermal_power_delivered_channel.source_output = my_heater.ThermalPowerDeliveredC
+    my_boiler.thermal_power_delivered_channel.source_output = my_heater.thermal_power_delivered_channel
     my_heater.l1_heatsource_taget_percentage.source_output = my_boiler_controller_l1.heat_pump_target_percentage_channel
 
     # indexing of in- and outputs
     WW_use.global_index = 0
     my_boiler.temperature_mean_c.global_index = 1
-    my_heater.ThermalPowerDeliveredC.global_index = 2
+    my_heater.thermal_power_delivered_channel.global_index = 2
     my_boiler_controller_l1.heat_pump_target_percentage_channel.global_index = 3
-    my_heater.FuelDeliveredC.global_index = 4
+    my_heater.fuel_delivered_channel.global_index = 4
 
 
     j = 60

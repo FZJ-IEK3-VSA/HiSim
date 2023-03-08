@@ -23,13 +23,13 @@ from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
-__authors__ = "Vitor Hugo Bellotto Zago"
+__authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
+__maintainer__ = "Katharina Rieck"
+__email__ = "k.rieck@fz-juelich.de"
 __status__ = "development"
 
 

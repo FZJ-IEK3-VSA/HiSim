@@ -214,84 +214,11 @@ def basic_household_new(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.DirectNormalIrradiance,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradiance,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.DirectNormalIrradianceExtra,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradianceExtra,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.DiffuseHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.DiffuseHorizontalIrradiance,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.GlobalHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.GlobalHorizontalIrradiance,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.ApparentZenith,
-        my_weather.component_name,
-        my_weather.ApparentZenith,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.WindSpeed,
-        my_weather.component_name,
-        my_weather.WindSpeed,
-    )
+    my_photovoltaic_system.get_default_connections_from_weather()
     # -----------------------------------------------------------------------------------------------------------------
-    my_building.connect_input(
-        my_building.Altitude, my_weather.component_name, my_weather.Altitude
-    )
-    my_building.connect_input(
-        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
-    my_building.connect_input(
-        my_building.DirectNormalIrradiance,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradiance,
-    )
-    my_building.connect_input(
-        my_building.DiffuseHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.DiffuseHorizontalIrradiance,
-    )
-    my_building.connect_input(
-        my_building.GlobalHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.GlobalHorizontalIrradiance,
-    )
-    my_building.connect_input(
-        my_building.DirectNormalIrradianceExtra,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradianceExtra,
-    )
-    my_building.connect_input(
-        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
-    )
-    my_building.connect_input(
-        my_building.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-    my_building.connect_input(
-        my_building.HeatingByResidents,
-        my_occupancy.component_name,
-        my_occupancy.HeatingByResidents,
-    )
+    my_building.get_default_connections_from_weather()
+    my_building.get_default_connections_from_occupancy()
+
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_heat_distribution_system.component_name,

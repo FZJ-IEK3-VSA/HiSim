@@ -154,7 +154,6 @@ class HeatDistribution(cp.Component):
         self.build(heating_system=self.heating_system)
 
         # Inputs
-
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )

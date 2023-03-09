@@ -103,8 +103,7 @@ def dynamic_components_demonstration(
     )
     my_cl2_config = cl2.EMSConfig.get_default_config_EMS()
     my_cl2 = cl2.L2GenericEnergyManagementSystem(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_cl2_config
+        my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )
 
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
@@ -136,7 +135,7 @@ def dynamic_components_demonstration(
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_photovoltaic_system_config
+        config=my_photovoltaic_system_config,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 

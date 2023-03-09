@@ -147,7 +147,4 @@ class PriceSignal(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Writes relevant information to report. """
-        lines = []
-        for config_string in self.price_signal_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.price_signal_config.get_string_dict()

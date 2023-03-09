@@ -305,15 +305,13 @@ class AirConditioner(cp.Component):
 
     def write_to_report(self):
         lines = []
-        for config_string in self.air_conditioner_config.get_string_dict():
-            lines.append(config_string)
         lines.append("Name: Air Conditioner")
         lines.append(f"Manufacturer: {self.manufacturer}")
         lines.append(f"Model {self.model}")
         lines.append(f"Min Operation Time [Sec]: {self.min_operation_time}")
         lines.append(f"Min Idle Time [Sec]: {self.min_idle_time}")
         lines.append(f"Control: {self.control}")
-        return lines
+        return self.air_conditioner_config.get_string_dict() + lines
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
@@ -501,8 +499,6 @@ class AirConditionercontroller(cp.Component):
 
     def write_to_report(self):
         lines = []
-        for config_string in self.air_conditioner_controller_config.get_string_dict():
-            lines.append(config_string)
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
         lines.append(
@@ -515,7 +511,7 @@ class AirConditionercontroller(cp.Component):
                 self.t_set_cooling
             )
         )
-        return lines
+        return self.air_conditioner_controller_config.get_string_dict() + lines
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

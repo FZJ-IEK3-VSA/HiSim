@@ -80,7 +80,6 @@ from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
 
-
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]
@@ -1009,7 +1008,8 @@ class Building(dynamic_component.DynamicComponent):
             raise ValueError(
                 "Only one variable can be used, the other one must be None."
             )
-        elif self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
+
+        if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
 
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
             if self.conditioned_floor_area_in_m2 == 0:
@@ -1055,13 +1055,15 @@ class Building(dynamic_component.DynamicComponent):
             if self.conditioned_floor_area_in_m2 == 0:
                 self.scaled_conditioned_floor_area_in_m2 = 500
                 self.buildingdata["A_C_Ref"] = self.scaled_conditioned_floor_area_in_m2
-                log.warning("There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used.")
+                log.warning(
+                    "There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used."
+                )
             else:
-                self.scaled_conditioned_floor_area_in_m2 = self.conditioned_floor_area_in_m2
+                self.scaled_conditioned_floor_area_in_m2 = (
+                    self.conditioned_floor_area_in_m2
+                )
 
             self.scaling_factor = 1
-
-
 
         for w_i in self.windows_and_door:
             self.scaled_windows_and_door_envelope_areas_in_m2.append(
@@ -1143,8 +1145,6 @@ class Building(dynamic_component.DynamicComponent):
     ):
         """Write important variables to report."""
         lines = []
-        for config_string in self.buildingconfig.get_string_dict():
-            lines.append(config_string)
 
         lines.append(
             f"Max Thermal Demand [W]: {self.max_thermal_building_demand_in_watt}"
@@ -1172,7 +1172,8 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         lines.append(
-            f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: {self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
+            f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: "
+            f"{self.heat_transfer_coefficient_by_ventilation_reference_in_watt_per_kelvin:.2f}"
         )
 
         lines.append(
@@ -1209,7 +1210,8 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Heat Transfers:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Annual Floor Related Total Heat Loss, based on TABULA (Q_ht) [kWh/m2.a]: {self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year:.2f}"
+            f"Annual Floor Related Total Heat Loss, based on TABULA (Q_ht) [kWh/m2.a]: "
+            f"{self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
         lines.append(
             f"Annual Floor Related Internal Heat Gain, based on TABULA (Q_int) [kWh/m2.a]: "
@@ -1223,7 +1225,7 @@ class Building(dynamic_component.DynamicComponent):
             f"Annual Floor Related Heating Demand, based on TABULA (Q_h_nd) [kWh/m2.a]: "
             f"{self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
-        return lines
+        return self.buildingconfig.get_string_dict() + lines
 
     # =====================================================================================================================================
     # Calculation of the heat transfer coefficients or thermal conductances.

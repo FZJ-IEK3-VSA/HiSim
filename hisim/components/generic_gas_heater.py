@@ -164,10 +164,7 @@ class GasHeater(Component):
 
     def write_to_report(self) -> List[str]:
         """Write a report."""
-        lines = []
-        for config_string in self.gasheater_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.gasheater_config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Save the current state."""

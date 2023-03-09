@@ -1,4 +1,4 @@
-"""Fake Heater Module."""
+"""Idealized Electric Heater Module."""
 # clean
 # Owned
 from typing import List
@@ -18,9 +18,9 @@ __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
 
 
-class FakeHeater(cp.Component):
+class IdealizedElectricHeater(cp.Component):
 
-    """Fake Heater System."""
+    """Idealized Electric Heater System."""
 
     # Inputs
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
@@ -41,7 +41,7 @@ class FakeHeater(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "FakeHeaterSystem", my_simulation_parameters=my_simulation_parameters
+            "IdealizedElectricHeater", my_simulation_parameters=my_simulation_parameters
         )
 
         self.thermal_power_delivered_in_watt: float = 0
@@ -111,13 +111,13 @@ class FakeHeater(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        lines.append("Fake Heater System")
+        lines.append("Idealized Electric Heater")
         return lines
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """Simulate the fake heater."""
+        """Simulate the Idealized Electric Heater."""
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
         self.theoretical_thermal_building_in_watt = stsv.get_input_value(

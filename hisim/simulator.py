@@ -88,7 +88,7 @@ class Simulator:
 
     def process_one_timestep(
         self, timestep: int, previous_stsv: cp.SingleTimeStepValues
-    ) -> Tuple[cp.SingleTimeStepValues, int]:
+    ) -> Tuple[cp.SingleTimeStepValues, int, bool]:
         """Executes one simulation timestep.
 
         Some components can be connected in a circle.
@@ -151,7 +151,7 @@ class Simulator:
 
         for wrapped_component in self.wrapped_components:
             wrapped_component.doublecheck(timestep, stsv)
-        return (stsv, iterative_tries)
+        return (stsv, iterative_tries, force_convergence)
 
     def prepare_simulation_directory(self):
         """Prepares the simulation directory. Determines the filename if nothing is set."""
@@ -226,7 +226,7 @@ class Simulator:
             if self._simulation_parameters.timesteps % 500 == 0:
                 log.information("Starting step " + str(step))
 
-            (resulting_stsv, iteration_tries) = self.process_one_timestep(step, stsv)
+            (resulting_stsv, iteration_tries, force_convergence) = self.process_one_timestep(step, stsv)
             stsv = cp.SingleTimeStepValues(number_of_outputs)
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
@@ -239,9 +239,7 @@ class Simulator:
 
             # For simulation longer than 5 seconds
             if elapsed.total_seconds() > 5:
-                lastmessage = self.show_progress(
-                    starttime, step, total_iteration_tries_since_last_msg, last_step
-                )
+                lastmessage = self.show_progress(starttime, step, total_iteration_tries_since_last_msg, last_step, force_convergence)
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
         postprocessing_datatransfer = self.prepare_post_processing(
@@ -303,14 +301,8 @@ class Simulator:
         log.information("Finished preparing post processing")
         return ppdt
 
-    def show_progress(
-        self,
-        starttime: datetime.datetime,
-        step: int,
-        total_iteration_tries: int,
-        last_step: int,
-    ) -> datetime.datetime:
-        """Makes the pretty progress messages with time estimate."""
+    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int, last_step: int, force_covergence: bool) -> datetime.datetime:
+        """ Makes the pretty progress messages with time estimate. """
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
         elapsed_minutes, elapsed_seconds = divmod(elapsed.seconds, 60)
@@ -334,6 +326,8 @@ class Simulator:
         simulation_status += f"| Speed: {steps_per_second:.0f} step/s "
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
         simulation_status += f"| Avg. iterations {average_iteration_tries:.1f}"
+        if force_covergence:
+            simulation_status += " (forced)"
         log.information(simulation_status)
         return datetime.datetime.now()
 

@@ -205,10 +205,7 @@ class ControllerHeat(cp.Component):
         self.mode = mode
 
     def write_to_report(self):
-        lines = []
-        for config_string in self.controller_heat_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.controller_heat_config.get_string_dict()
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""

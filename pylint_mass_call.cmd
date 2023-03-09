@@ -4,6 +4,8 @@ pylint C:\Users\k.rieck\HiSim\examples\basic_household.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\basic_household_only_heating.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\examples\basic_household_with_new_hp_hds_hws_and_pv.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\default_connections.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\examples\dynamic_components.py
@@ -76,9 +78,15 @@ pylint C:\Users\k.rieck\HiSim\hisim\components\generic_gas_heater_with_controlle
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_heat_pump.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\generic_heat_pump_for_house_with_hds.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\generic_hot_water_storage_modular.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\heat_distribution_system.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\idealized_electric_heater.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\components\simple_hot_water_storage.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\modular_household\component_connections.py
 if %errorlevel% neq 0 exit /b
@@ -102,6 +110,8 @@ pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\reportgenerator.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\postprocessing\system_chart.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\obsolete\building_controller.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\functions_for_testing.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_advanced_battery_bslib.py
@@ -116,6 +126,8 @@ pylint C:\Users\k.rieck\HiSim\tests\test_building_manual_calculation_thermal_con
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_building_scalability_with_factor.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_building_theoretical_thermal_demand.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_examples.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_example_component.py
@@ -127,4 +139,6 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_example_transformer.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_generic_gas_heater.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_simple_hot_water_storage.py
 if %errorlevel% neq 0 exit /b

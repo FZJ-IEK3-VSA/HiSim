@@ -181,7 +181,7 @@ class Weather(Component):
         """ Double chekc. """
         pass
 
-    # @graph_call_path_factory(method_pattern)
+    @graph_call_path_factory(method_pattern)
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """ Performs the simulation. """
         if self.last_timestep_with_update == timestep:

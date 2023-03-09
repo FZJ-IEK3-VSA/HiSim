@@ -16,7 +16,7 @@ import hisim.component as cp
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
-
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
 __copyright__ = "Copyright 2020-2022, FZJ-IEK-3"
@@ -147,6 +147,7 @@ class Simulator:
 
     # @profile
     # @utils.measure_execution_time
+    @graph_call_path_factory(method_pattern)
     def run_all_timesteps(self) -> None:
         """ Performs all the timesteps of the simulation and saves the results in the attribute results. """
         # Error Tests

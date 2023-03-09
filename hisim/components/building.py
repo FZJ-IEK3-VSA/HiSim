@@ -636,7 +636,6 @@ class Building(dynamic_component.DynamicComponent):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulates the thermal behaviour of the building."""
-
         # Gets inputs
         if hasattr(self, "solar_gain_through_windows") is False:
             # altitude = stsv.get_input_value(self.altitude_channel)

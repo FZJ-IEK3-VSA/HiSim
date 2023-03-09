@@ -6,12 +6,14 @@ import time
 from collections import defaultdict
 import inspect
 import seaborn as sns
+import cProfile
+from hisim import log
 
-
+# pr = cProfile.Profile()
+# pr.enable()
 def graph_call_path_factory(node_container):
     
     def register_method(func):
-        
         @wraps(func)
         def function_wrapper_for_node_storage(*args, **kwargs):
 
@@ -30,7 +32,12 @@ def graph_call_path_factory(node_container):
 
             node_container.wrapped_method_src[node_name].add(src_node)
             start_time = time.perf_counter()
+            node_container.pr.enable()
+            # log.information("profiling enabled")
             result = func(*args, **kwargs)
+            node_container.pr.disable()
+            # log.information("profiling disabled")
+            node_container.pr.dump_stats("wrappedcallgraph/callgraphwrap.prof")
             end_time = time.perf_counter()
             total_time = end_time - start_time
             node_container.wrapped_method_counter[node_name] += 1
@@ -39,11 +46,10 @@ def graph_call_path_factory(node_container):
             return result
         
         return function_wrapper_for_node_storage
+
     return register_method
 
-
-
-
+# pr.disable()
 
 class MethodChart:
     """ Class for generating charts that show the components. """
@@ -54,6 +60,7 @@ class MethodChart:
         self.wrapped_method_counter = defaultdict(int)
         self.wrapped_method_timer = defaultdict(float)
         self.wrapped_method_src = defaultdict(set)
+        self.pr = cProfile.Profile()
 
     def set_color_scheme(self):
         max_value = max(self.wrapped_method_counter.values())
@@ -96,3 +103,5 @@ class MethodChart:
 global method_pattern
 method_pattern = MethodChart()
 
+# # this profile can be visualized by typing the command "snakeviz wrappedcallgraph/pycallgraph_tester.prof" in the terminal
+# pr.dump_stats("wrappedcallgraph/callgraphwrap.prof")

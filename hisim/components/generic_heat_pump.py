@@ -290,7 +290,7 @@ class GenericHeatPump(cp.Component):
         #lines.append(["Max power var:","{:4.2f}".format(self.max_heating_power_var)])
         return lines
 
-    @graph_call_path_factory(method_pattern)
+    # @graph_call_path_factory(method_pattern)
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # Inputs
         stateC = stsv.get_input_value(self.stateC)

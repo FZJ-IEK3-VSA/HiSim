@@ -21,7 +21,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-@graph_call_path_factory(method_pattern)
+# @graph_call_path_factory(method_pattern)
 def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """ Basic household example.
 

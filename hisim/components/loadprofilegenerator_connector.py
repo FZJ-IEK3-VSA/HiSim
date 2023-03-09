@@ -162,7 +162,7 @@ class Occupancy(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    @graph_call_path_factory(method_pattern)
+    # @graph_call_path_factory(method_pattern)
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_conversion: bool
     ) -> None:

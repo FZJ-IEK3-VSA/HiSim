@@ -8,6 +8,9 @@ import inspect
 import seaborn as sns
 import cProfile
 from hisim import log
+import gprof2dot
+import pstats
+import os
 
 # pr = cProfile.Profile()
 # pr.enable()
@@ -32,12 +35,17 @@ def graph_call_path_factory(node_container):
 
             node_container.wrapped_method_src[node_name].add(src_node)
             start_time = time.perf_counter()
-            node_container.pr.enable()
-            # log.information("profiling enabled")
-            result = func(*args, **kwargs)
-            node_container.pr.disable()
-            # log.information("profiling disabled")
-            node_container.pr.dump_stats("wrappedcallgraph/callgraphwrap.prof")
+            if node_container.profiler:
+                node_container.pr.enable()
+                # log.information("profiling enabled")
+                result = func(*args, **kwargs)
+                node_container.pr.disable()
+                stats = pstats.Stats(node_container.pr, stream=None).sort_stats('cumulative')
+                # log.information("profiling disabled")
+                stats.dump_stats("wrappedcallgraph/callgraphwrap.pstats") #node_container.pr
+
+            else:
+                result = func(*args, **kwargs)
             end_time = time.perf_counter()
             total_time = end_time - start_time
             node_container.wrapped_method_counter[node_name] += 1
@@ -46,21 +54,21 @@ def graph_call_path_factory(node_container):
             return result
         
         return function_wrapper_for_node_storage
-
+    
     return register_method
-
-# pr.disable()
-
+            
 class MethodChart:
     """ Class for generating charts that show the components. """
 
-    def __init__(self):
+    def __init__(self, profiler: bool = False):
         """ Initizalizes the class. """
         self.wrapped_method_nodes = defaultdict(list)
         self.wrapped_method_counter = defaultdict(int)
         self.wrapped_method_timer = defaultdict(float)
         self.wrapped_method_src = defaultdict(set)
-        self.pr = cProfile.Profile()
+        self.profiler = profiler
+        if self.profiler:
+            self.pr = cProfile.Profile()
 
     def set_color_scheme(self):
         max_value = max(self.wrapped_method_counter.values())
@@ -101,7 +109,7 @@ class MethodChart:
         graph.write_png(filename)
 
 global method_pattern
-method_pattern = MethodChart()
+method_pattern = MethodChart(profiler=True)
 
 # # this profile can be visualized by typing the command "snakeviz wrappedcallgraph/pycallgraph_tester.prof" in the terminal
 # pr.dump_stats("wrappedcallgraph/callgraphwrap.prof")

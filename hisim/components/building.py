@@ -631,7 +631,7 @@ class Building(dynamic_component.DynamicComponent):
 
     # =================================================================================================================================
     # Simulation of the building class
-    @graph_call_path_factory(method_pattern)
+    # @graph_call_path_factory(method_pattern)
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
@@ -810,7 +810,7 @@ class Building(dynamic_component.DynamicComponent):
         """Doublechecks."""
         pass
 
-    @graph_call_path_factory(method_pattern)
+    # @graph_call_path_factory(method_pattern)
     def build(
         self,
     ):

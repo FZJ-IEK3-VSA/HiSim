@@ -12,6 +12,7 @@ class PyCallGraph_Obj:
     
     def __init__(self) -> None:
         #pr.enable()
+        
         self.execute()
         #pr.disable()
         method_pattern.make_graphviz_chart(with_labels=True, time_resolution=10, filename='wrappedcallgraph/HISIM_Method_Pattern.png')
@@ -24,8 +25,8 @@ class PyCallGraph_Obj:
         log.information(os.getcwd())
 
 run=PyCallGraph_Obj()
-
-
+log.information("executing pycallgraph tester example")
+os.system("gprof2dot -f pstats wrappedcallgraph/callgraphwrap.pstats | dot -Tpng -o wrappedcallgraph/callgraphwrap_output.png")
 
 # # this profile can be visualized by typing the command "snakeviz wrappedcallgraph/pycallgraph_tester.prof" in the terminal
 # pr.dump_stats("wrappedcallgraph/pycallgraph_tester.prof")

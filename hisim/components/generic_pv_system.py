@@ -273,7 +273,7 @@ class PVSystem(cp.Component):
         lines.append("Inverter: {}".format(self.pvconfig.inverter_name))
         return lines
 
-    @graph_call_path_factory(method_pattern)
+    # @graph_call_path_factory(method_pattern)
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
 
         if hasattr(self, "output"):

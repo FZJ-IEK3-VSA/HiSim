@@ -3,17 +3,14 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from wrappedcallgraph.callgraphwrap import method_pattern
-import cProfile
 
-#pr = cProfile.Profile()
-#pr.enable()
 
 class PyCallGraph_Obj:
     
     def __init__(self) -> None:
         
         self.execute()
-        method_pattern.make_graphviz_chart(with_labels=True, time_resolution=10, filename='wrappedcallgraph/HISIM_Method_Pattern_old.png')
+        method_pattern.make_graphviz_chart(time_resolution=10, filename='wrappedcallgraph/HISIM_Method_Pattern.png')
         
     def execute(self):
         path = "examples/basic_household.py"
@@ -23,10 +20,4 @@ class PyCallGraph_Obj:
         log.information(os.getcwd())
 
 run=PyCallGraph_Obj()
-# os.system("gprof2dot -f pstats wrappedcallgraph/profile.pstats | dot -Tpng -o wrappedcallgraph/callgraphwrap_changes_output.png")
-
-#pr.disable()
-# # this profile can be visualized by typing the command "snakeviz wrappedcallgraph/pycallgraph_tester.prof" in the terminal
-# pr.dump_stats("wrappedcallgraph/pycallgraph_tester.prof")
-
 

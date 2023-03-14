@@ -146,6 +146,7 @@ class HeatPumpHplib(Component):
             field_name=self.ThermalOutputPower,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
+            output_description=("Thermal output power in Watt")
         )
 
         self.p_el: ComponentOutput = self.add_output(
@@ -153,6 +154,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
+            output_description="Electricity input power in Watt"
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -160,6 +162,7 @@ class HeatPumpHplib(Component):
             field_name=self.COP,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
+            output_description="COP"
         )
 
         self.t_out: ComponentOutput = self.add_output(
@@ -167,6 +170,7 @@ class HeatPumpHplib(Component):
             field_name=self.TemperatureOutput,
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
+            output_description="Temperature Output in °C"
         )
 
         self.m_dot: ComponentOutput = self.add_output(
@@ -174,6 +178,7 @@ class HeatPumpHplib(Component):
             field_name=self.MassFlowOutput,
             load_type=LoadTypes.VOLUME,
             unit=Units.KG_PER_SEC,
+            output_description="Mass flow output"
         )
 
         self.time_on: ComponentOutput = self.add_output(
@@ -181,6 +186,7 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOn,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
+            output_description="Time turned on"
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -188,6 +194,7 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOff,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
+            output_description="Time turned off"
         )
 
     @staticmethod

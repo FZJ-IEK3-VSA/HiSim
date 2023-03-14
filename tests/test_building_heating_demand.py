@@ -73,7 +73,7 @@ def test_house_with_pv_and_hp_for_heating_test(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 

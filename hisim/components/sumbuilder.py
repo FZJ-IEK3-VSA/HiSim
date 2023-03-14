@@ -274,7 +274,8 @@ class SumBuilderForTwoInputs(Component):
             self.component_name, SumBuilderForTwoInputs.SumInput2, loadtype, unit, False
         )
         self.output1: cp.ComponentOutput = self.add_output(
-            self.component_name, SumBuilderForTwoInputs.SumOutput, loadtype, unit
+            self.component_name, SumBuilderForTwoInputs.SumOutput, loadtype, unit, 
+            output_description="Sum of values"
         )
 
     def i_save_state(self) -> None:

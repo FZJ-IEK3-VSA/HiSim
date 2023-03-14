@@ -31,7 +31,7 @@ class PostProcessor:
     def __init__(self):
         """Initializes the post processing."""
         self.dirname: str
-        self.report_image_entries: List[ReportImageEntry] = []
+        # self.report_image_entries: List[ReportImageEntry] = []
         self.chapter_counter: int = 1
         self.figure_counter: int = 1
 
@@ -89,7 +89,7 @@ class PostProcessor:
         """Runs the main post processing."""
         # Define the directory name
         log.information("Main post processing function")
-
+        report_image_entries: List[ReportImageEntry] = []
         # Check whether HiSim is running in a docker container
         docker_flag = os.getenv("HISIM_IN_DOCKER_CONTAINER", "false")
         if docker_flag.lower() in ("true", "yes", "y", "1"):
@@ -117,28 +117,28 @@ class PostProcessor:
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
             start = timer()
-            self.make_line_plots(ppdt)
+            self.make_line_plots(ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making line plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_CARPET in ppdt.post_processing_options:
             log.information("Making carpet plots.")
             start = timer()
-            self.make_carpet_plots(ppdt)
+            self.make_carpet_plots(ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making carpet plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
             start = timer()
-            self.make_single_day_plots(days, ppdt)
+            self.make_single_day_plots(days, ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
             log.information("Making bar charts.")
             start = timer()
-            self.make_bar_charts(ppdt)
+            self.make_bar_charts(ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information("Making bar plots took " + f"{duration:1.2f}s.")
@@ -184,7 +184,7 @@ class PostProcessor:
         ):
             log.information("Writing components to report.")
             start = timer()
-            self.write_components_to_report(ppdt, report, self.report_image_entries)
+            self.write_components_to_report(ppdt, report, report_image_entries)
             end = timer()
             duration = end - start
             log.information("Writing components to report took " + f"{duration:1.2f}s.")
@@ -229,7 +229,7 @@ class PostProcessor:
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
         ):
-
+            building_data = []
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata
@@ -260,7 +260,7 @@ class PostProcessor:
                 "Making special single day plots for a single day calculation for testing."
             )
             start = timer()
-            self.make_special_one_day_debugging_plots(ppdt)
+            self.make_special_one_day_debugging_plots(ppdt, report_image_entries=report_image_entries)
             end = timer()
             duration = end - start
             log.information(
@@ -283,7 +283,8 @@ class PostProcessor:
         systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(
-        self, ppdt: PostProcessingDataTransfer
+        self, ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry]
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -313,7 +314,7 @@ class PostProcessor:
                     output_description=output.output_description,
                 )
             my_entry = my_days.plot(close=True)
-            self.report_image_entries.append(my_entry)
+            report_image_entries.append(my_entry)
 
     def make_csv_export(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports all data to CSV."""
@@ -325,7 +326,7 @@ class PostProcessor:
         log.information("Plotting sankeys.")
         # TODO:   self.plot_sankeys()
 
-    def make_bar_charts(self, ppdt: PostProcessingDataTransfer) -> None:
+    def make_bar_charts(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry]) -> None:
         """Make bar charts."""
         for index, output in enumerate(ppdt.all_outputs):
             my_bar = charts.BarChart(
@@ -339,10 +340,11 @@ class PostProcessor:
                 output_description=output.output_description,
             )
             my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
-            self.report_image_entries.append(my_entry)
+            report_image_entries.append(my_entry)
 
     def make_single_day_plots(
-        self, days: Dict[str, int], ppdt: PostProcessingDataTransfer
+        self, days: Dict[str, int], ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry]
     ) -> None:
         """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -358,9 +360,9 @@ class PostProcessor:
                 output_description=output.output_description,
             )
             my_entry = my_days.plot(close=True)
-            self.report_image_entries.append(my_entry)
+            report_image_entries.append(my_entry)
 
-    def make_carpet_plots(self, ppdt: PostProcessingDataTransfer) -> None:
+    def make_carpet_plots(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry]) -> None:
         """Make carpet plots."""
         for index, output in enumerate(ppdt.all_outputs):
             log.trace("Making carpet plots")
@@ -382,12 +384,14 @@ class PostProcessor:
                 ),
                 data=ppdt.results.iloc[:, index],
             )
-            self.report_image_entries.append(my_entry)
+            report_image_entries.append(my_entry)
 
     @utils.measure_memory_leak
-    def make_line_plots(self, ppdt: PostProcessingDataTransfer) -> None:
+    def make_line_plots(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry]) -> None:
         """Makes the line plots."""
         for index, output in enumerate(ppdt.all_outputs):
+            if output.output_description is None:
+                raise ValueError("Output description was missing for " + output.full_name)
             my_line = charts.Line(
                 output=output.full_name,
                 component_name=output.component_name,
@@ -397,7 +401,7 @@ class PostProcessor:
                 output_description=output.output_description,
             )
             my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
-            self.report_image_entries.append(my_entry)
+            report_image_entries.append(my_entry)
             del my_line
 
     @utils.measure_execution_time
@@ -457,7 +461,7 @@ class PostProcessor:
         ) -> None:
             """Write image entry to report for one component."""
 
-            sorted_entries = sorted(
+            sorted_entries: List[ReportImageEntry] = sorted(
                 report_image_entries_for_component, key=lambda x: x.output_type
             )
             output_explanations = []
@@ -487,6 +491,7 @@ class PostProcessor:
                 PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT
                 in ppdt.post_processing_options
             ):
+                entry: ReportImageEntry
                 for entry in sorted_entries:
                     # write output description only once for each output type
                     if entry.output_type not in output_explanations:
@@ -502,6 +507,8 @@ class PostProcessor:
                                 + entry.output_type
                             ]
                         )
+                        if entry.output_description is None:
+                            raise ValueError("Component had no description: " + str(entry.component_name))
                         report.write_with_normal_alignment([entry.output_description])
                         output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)

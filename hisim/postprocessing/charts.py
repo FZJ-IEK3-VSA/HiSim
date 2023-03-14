@@ -115,6 +115,8 @@ class Line(Chart):  # noqa: too-few-public-methods
         time_correction_factor: float,
         output_description: str,
     ):
+        if output_description is None:
+            raise ValueError("Output description was None for component " + component_name)
         """Initializes a line chart."""
         super().__init__(
             output=output,

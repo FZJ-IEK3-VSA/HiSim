@@ -36,7 +36,7 @@ class RandomNumbers(Component):
             self.component_name,
             RandomNumbers.RandomOutput,
             lt.LoadTypes.ANY,
-            lt.Units.ANY,
+            lt.Units.ANY, output_description="Random Number Output"
         )
 
     def i_restore_state(self) -> None:

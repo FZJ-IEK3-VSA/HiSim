@@ -135,7 +135,7 @@ class L1BuildingHeatController(cp.Component):
     
         # Component Outputs
         self.heat_controller_target_percentage_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ON_OFF, Units.BINARY
+            self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ON_OFF, Units.BINARY, output_description="Heating controller of buffer storage."
         )
 
         # Component Inputs

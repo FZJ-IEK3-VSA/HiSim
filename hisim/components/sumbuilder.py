@@ -1,5 +1,5 @@
 """ Contains functions to sum up multiple inputs. """
-
+# clean
 from dataclasses import dataclass
 from typing import Any, List, Optional
 

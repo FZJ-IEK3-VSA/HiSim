@@ -32,6 +32,7 @@ jobs:
     - name: Lint with prospector
       working-directory: ./
       run: |
+                prospector setup.py
         prospector examples/basic_household.py
         prospector examples/basic_household_only_heating.py
         prospector examples/basic_household_with_new_hp_hds_hws_and_pv.py
@@ -87,12 +88,10 @@ jobs:
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/postprocessing/system_chart.py
-        prospector obsolete/building_controller.py
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
         prospector tests/test_building.py
         prospector tests/test_building_heating_demand.py
-        prospector tests/test_building_manual_calculation_thermal_conductances.py
         prospector tests/test_building_scalability_with_factor.py
         prospector tests/test_building_theoretical_thermal_demand.py
         prospector tests/test_examples_basic_household.py
@@ -106,6 +105,7 @@ jobs:
         prospector tests/test_gas_heater.py
         prospector tests/test_generic_gas_heater.py
         prospector tests/test_simple_hot_water_storage.py
+
 
 
 

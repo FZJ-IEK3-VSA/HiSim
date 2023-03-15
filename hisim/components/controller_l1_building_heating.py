@@ -2,10 +2,11 @@
 # clean
 """ Generic heating controller with configuration and state. It controls the heating system (heat transfer from buffer storage to building) only during the heating period.
 It is a ping pong control with an optional input from the Energy Management System, which enforces heating with electricity from PV. 
-The buffer is controlled accoring to three modes:
-    (a) 0.5 * power when buffer temperature is between upper target and increased upper target from ESM.
+The buffer is controlled accoring to four modes:
+    (a) 0.5 * power when buffer temperature is within the upper half between upper target and increased upper target from Energy Management System (only in surplus case),
+    (b) 0.75 * power when buffer temperature is within the lower half beweet upper target and increase upper target from Energy Management System (only in surplus case),
     (c) full power when building temperature is below lower target,
-    (d) off when temperature is already below target and only runs due to minimal idle time, or temperature is above upper target."""
+    (d) off when temperature is higher than upper target. """
 
 from dataclasses import dataclass
 
@@ -56,8 +57,8 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
-        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=55.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
+        config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=19.5,
+        t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
 
@@ -83,7 +84,7 @@ class L1BuildingHeatController(cp.Component):
     """L1 building controller. Processes signals ensuring comfort temperature of building.
 
     Gets temperature of building to control as input, as well as a signal from the energy management system to increase the set temperatur of the buffer storage.
-    It outputs a control signal with three modes (0, 0.5 and 1) for zero, half and full power accordingly.
+    It outputs a control signal with four modes (0, 0.5, 0.75 and 1) for zero, half, three quarter and full power accordingly.
     It is only activated during the heating season.
 
     Components to connect to:
@@ -225,17 +226,33 @@ class L1BuildingHeatController(cp.Component):
             # start heating if temperature goes below lower limit
             self.state.state = 1
             return
-        # deactivate heating when building temperature is above upper threshold
-        if t_control > self.config.t_max_heating_in_celsius + temperature_modifier:
-            self.state.state = 0
-            return
-        # deactivate half heating when temperature modifier is zero, because it is only wished in surplus case.
-        if self.state.state == 0.5 and temperature_modifier == 0:
-            self.state.state=0
-            return
-        # heat with medium power, when storage is getting hot and building can still be heated
-        if t_buffer > self.config.t_buffer_activation_threshold_in_celsius and temperature_modifier > 0:
-            self.state.state = 0.5
+        # "normal" heat control when no surplus electricity is available
+        if temperature_modifier == 0:
+            # deactivate heating when building temperature is above upper threshold
+            if t_control > self.config.t_max_heating_in_celsius:
+                self.state.state = 0
+                return
+            # deactivate heating when temperature modifier is zero and signal comes from surplus control.
+            # states 0.5 and 0.75 are only activated when temperature modifier is greater than zero, which is only the case in surplus control.
+            if self.state.state in [0.5, 0.75]:
+                self.state.state = 0
+                return
+        # "surplus heat control" when storage is getting hot
+        if temperature_modifier > 0 and t_buffer > self.config.t_buffer_activation_threshold_in_celsius:
+            # heat with 75 % power and building can still be heated
+            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier / 2:
+                self.state.state = 0.75
+                return
+            # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
+            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
+                self.state.state = 0.5
+                return
+            # deactivate heating when building temperature increases tolerance interval
+            if t_control >= self.config.t_max_heating_in_celsius + temperature_modifier:
+                self.state.state = 0
+                return
+
+            
             return
 
     def i_save_state(self) -> None:

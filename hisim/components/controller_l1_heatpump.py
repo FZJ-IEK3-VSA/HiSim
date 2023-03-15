@@ -65,7 +65,7 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
         """ Returns default configuration for the controller of building heating. """
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=19.0, t_max_heating_in_celsius=21.0,
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=19.5, t_max_heating_in_celsius=20.5,
                                   cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
                                   min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
@@ -284,25 +284,22 @@ class L1HeatPumpController(cp.Component):
             self.heat_pump_target_percentage_channel, modulating_signal
         )
 
-    def calc_percentage(self, t_storage: float, temperature_modifier: float) -> None:
+    def calc_percentage(self, t_storage: float) -> None:
         """Calculate the heat pump target percentage."""
         if t_storage < self.config.t_min_heating_in_celsius:
+            # full power when temperature is below lower threshold
             self.state.percentage = 1
             return
         if (
             t_storage < self.config.t_max_heating_in_celsius
-            and temperature_modifier == 0
         ):
+            # 75 % power when temperature is within threshold
             self.state.percentage = 0.75
             return
         if (
             t_storage >= self.config.t_max_heating_in_celsius
-            and temperature_modifier == 0
         ):
-            self.state.percentage = 0.5
-            return
-        t_max_target = self.config.t_min_heating_in_celsius + temperature_modifier
-        if t_storage < t_max_target:
+            # 50 % power when temperature is already in tolerance of surplus
             self.state.percentage = 0.5
             return
 
@@ -319,7 +316,7 @@ class L1HeatPumpController(cp.Component):
             >= timestep
         ):
             # mandatory on, minimum runtime not reached
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
         if (
             self.state.on_off == 0
@@ -328,30 +325,30 @@ class L1HeatPumpController(cp.Component):
             >= timestep
         ):
             # mandatory off, minimum resting time not reached
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
-        # check signals and turn on or off if it is necessary
-        t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
-        # prevent heating in summer
         if self.cooling_considered:
             if (
                 self.heating_season_begin > timestep > self.heating_season_end
-                and t_storage >= t_min_target - 40
+                and t_storage >= self.config.t_min_heating_in_celsius - 30
             ):
+                # prevent heating in summer
                 self.state.deactivate(timestep)
                 return
-        if t_storage < t_min_target:
+        if t_storage < self.config.t_min_heating_in_celsius:
+            # activate heating when storage temperature is too low
             self.state.activate(timestep)
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
-        t_max_target = self.config.t_max_heating_in_celsius + temperature_modifier
-        if t_storage > t_max_target:
-            self.calc_percentage(t_storage, temperature_modifier)
+        if t_storage > self.config.t_max_heating_in_celsius + temperature_modifier:
+            # deactivate heating when storage temperature is too high
             self.state.deactivate(timestep)
+            self.calc_percentage(t_storage)
             return
         if temperature_modifier > 0 and t_storage < self.config.t_max_heating_in_celsius:
+            # activate heating when surplus electricity is available
             self.state.activate(timestep)
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
 
 

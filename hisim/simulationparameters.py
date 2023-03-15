@@ -161,6 +161,7 @@ class SimulationParameters(JSONWizard):
         )
         pars.enable_plots_only()
         return pars
+
     @classmethod
     def three_months_only(
         cls, year: int, seconds_per_timestep: int

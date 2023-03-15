@@ -32,7 +32,7 @@ jobs:
     - name: Lint with prospector
       working-directory: ./
       run: |
-                prospector setup.py
+        prospector setup.py
         prospector examples/basic_household.py
         prospector examples/basic_household_only_heating.py
         prospector examples/basic_household_with_new_hp_hds_hws_and_pv.py

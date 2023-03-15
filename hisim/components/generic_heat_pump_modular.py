@@ -277,9 +277,6 @@ class ModularHeatPump(cp.Component):
             power_modifier = target_percentage
         if target_percentage == 0:
             power_modifier = 0
-        if target_percentage < 0:
-            flexible_electricity = stsv.get_input_value(self.EMS_Flexible_ElectricityC)
-            power_modifier = flexible_electricity / electric_power
 
         power_modifier = min(1, power_modifier)
 

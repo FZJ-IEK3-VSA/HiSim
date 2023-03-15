@@ -68,10 +68,10 @@ class L1BuildingHeatControllerState:
 
     def __init__(
         self,
-        state: int = 0
+        state: float = 0
     ):
         """Initializes the class."""
-        self.state: int = state
+        self.state: float = state
 
     def clone(self) -> "L1BuildingHeatControllerState":
         """Clones itself."""

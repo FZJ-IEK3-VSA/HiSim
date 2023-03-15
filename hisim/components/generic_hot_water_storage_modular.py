@@ -7,7 +7,7 @@ one output: the hot water storage temperature.
 """
 # clean
 # Generic/Built-in
-from typing import Optional, List, Any
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -41,6 +41,7 @@ __status__ = "development"
 class StorageConfig:
 
     """Used in the HotWaterStorageClass defining the basics."""
+
     #: name of the hot water storage
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -69,7 +70,7 @@ class StorageConfig:
         return config
 
     @staticmethod
-    def get_default_config_buffer(power: float = 2000, volume: float=500) -> Any:
+    def get_default_config_buffer(power: float = 2000, volume: float = 500) -> Any:
         """ Returns default configuration for buffer (radius:height = 1:4). """
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (volume * 1e-3 / (4 * np.pi)) ** (
@@ -85,11 +86,11 @@ class StorageConfig:
     def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float, multiplier: float) -> None:
         """ Computes default volume and surface from power and min idle time of heating system. """
         if self.use != lt.ComponentType.BUFFER:
-            raise Exception( "Default volume can only be computed for buffer storage not for boiler.")
+            raise Exception("Default volume can only be computed for buffer storage not for boiler.")
 
         energy_in_kilo_joule = self.power * time_in_seconds * 1e-3
         self.volume = energy_in_kilo_joule * multiplier / (temperature_difference_in_kelvin * 0.977 * 4.182)
-         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
+        # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (self.volume * 1e-3 / (4 * np.pi))**(1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
@@ -149,7 +150,7 @@ class StorageState:
                 "Water in your storage tank was freezing. This points towards a major problem in your model."
             )
 
-    def return_available_energy(self, heating: bool) -> float:
+    def return_available_energy(self) -> float:
         """Returns available energy in (J).
 
         For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
@@ -347,7 +348,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             )
         )
         return connections
-    
+
     def get_heating_controller_default_connections(self):
         """Sets heating controller default connections in hot water storage."""
         hisim.log.information("setting heating controller default connections in hot water storaage")
@@ -417,7 +418,6 @@ class HotWaterStorage(dycp.DynamicComponent):
         heatconsumption: float = self.calculate_heat_consumption(
             stsv=stsv,
             thermal_energy_delivered=thermal_energy_delivered,
-            timestep=timestep,
         )
         stsv.set_output_value(self.power_to_building_channel, heatconsumption)
 
@@ -447,7 +447,6 @@ class HotWaterStorage(dycp.DynamicComponent):
         self,
         stsv: cp.SingleTimeStepValues,
         thermal_energy_delivered: float,
-        timestep: int,
     ) -> float:
         """Calculates the heat consumption."""
         if self.use == lt.ComponentType.BOILER:
@@ -456,13 +455,12 @@ class HotWaterStorage(dycp.DynamicComponent):
             # 4.182 specific heat of water in kJ K^(-1) kg^(-1)
             return stsv.get_input_value(self.water_consumption_c) \
                 * (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
-        elif self.use == lt.ComponentType.BUFFER:
+        if self.use == lt.ComponentType.BUFFER:
             heatconsumption = stsv.get_input_value(self.l1_device_signal_c) \
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
-            available_energy = self.state.return_available_energy(heating=True)\
+            available_energy = self.state.return_available_energy()\
                 + thermal_energy_delivered
             if heatconsumption > available_energy:
                 heatconsumption = max(available_energy, 0)
             return heatconsumption
-        else:
-            raise Exception("Modular storage must be defined either as buffer or as boiler.")
+        raise Exception("Modular storage must be defined either as buffer or as boiler.")

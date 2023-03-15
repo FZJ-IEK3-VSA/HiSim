@@ -16,7 +16,7 @@ from hisim import hisim_main
 # import os
 import pytest
 
-@pytest.mark.example
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_modular_household_configurations():
     """ Tests the modular households. """

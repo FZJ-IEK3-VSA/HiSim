@@ -17,7 +17,7 @@ from hisim.utils import HISIMPATH
 def read_in_fuel_costs() -> pd.DataFrame:
     """Reads data for cost from csv."""
     price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 1, 2])
-    price_frame.index = price_frame["fuel type"]
+    price_frame.index = price_frame["fuel type"] # type: ignore
     price_frame.drop(columns=["fuel type"], inplace=True)
     return price_frame
 

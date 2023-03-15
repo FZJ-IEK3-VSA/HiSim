@@ -2,6 +2,7 @@
 # clean
 import os
 import sys
+import pandas as pd
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 
@@ -229,7 +230,7 @@ class PostProcessor:
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
             in ppdt.post_processing_options
         ):
-            building_data = []
+            building_data = pd.DataFrame()
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata

@@ -880,6 +880,7 @@ def configure_heating_with_buffer_electric(
     )
     building_heating_controller_config.day_of_heating_season_end = heating_season[0]
     building_heating_controller_config.day_of_heating_season_begin = heating_season[1]
+    building_heating_controller_config.t_buffer_activation_threshold_in_celsius = heatpump_l1_config.t_max_heating_in_celsius
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [
         count
     ] * 2
@@ -1029,6 +1030,7 @@ def configure_heating_with_buffer(
     )
     building_heating_controller_config.day_of_heating_season_end = heating_season[0]
     building_heating_controller_config.day_of_heating_season_begin = heating_season[1] - 1
+    building_heating_controller_config.t_buffer_activation_threshold_in_celsius = heater_l1_config.t_max_heating_in_celsius
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [
         count
     ] * 2

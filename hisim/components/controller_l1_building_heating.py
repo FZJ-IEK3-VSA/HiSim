@@ -235,7 +235,6 @@ class L1BuildingHeatController(cp.Component):
             return
         # heat with medium power, when storage is getting hot and building can still be heated
         if t_buffer > self.config.t_buffer_activation_threshold_in_celsius and temperature_modifier > 0:
-            print((timestep %96)*0.25 , t_buffer, self.config.t_buffer_activation_threshold_in_celsius, temperature_modifier)
             self.state.state = 0.5
             return
 

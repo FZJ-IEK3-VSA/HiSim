@@ -6,6 +6,7 @@ The window areas are scaled via the ratio of window area to wall area.
 """
 # clean
 import numpy as np
+import pytest
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -14,7 +15,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from tests import functions_for_testing as fft
-import pytest
+
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time

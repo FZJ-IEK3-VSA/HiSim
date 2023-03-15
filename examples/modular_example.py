@@ -1,7 +1,5 @@
 """Example sets up a modular household according to json input file."""
 
-# clean
-
 import json
 import os
 import shutil

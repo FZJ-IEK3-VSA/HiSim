@@ -5,7 +5,7 @@
 The functions are all called in modular_household.
 """
 
-from typing import List, Optional, Tuple, Any, Union
+from typing import List, Optional, Tuple, Any
 from os import listdir, path
 import json
 
@@ -337,7 +337,6 @@ def configure_smart_controller_for_smart_devices(
             output_description="Target electricity for Smart Device Controller. ",
         )
 
-        
         elem.connect_dynamic_input(
             input_fieldname=generic_smart_device.SmartDevice.ElectricityTarget,
             src_object=electricity_to_smart_device,
@@ -381,7 +380,7 @@ def configure_battery(
         my_advanced_battery_config = (
             advanced_battery_bslib.BatteryConfig.get_default_config()
         )
-        my_advanced_battery_config.source_weight=count
+        my_advanced_battery_config.source_weight = count
     count += 1
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,

@@ -3,8 +3,6 @@
 The aim is to implement scalability in the building module by scaling up the area of the building. 
 Therefore some functions must be adjusted which are tested here before."""
 
-# clean
-
 import numpy as np
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters

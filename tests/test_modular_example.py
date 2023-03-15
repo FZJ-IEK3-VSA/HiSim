@@ -16,11 +16,11 @@ from hisim import hisim_main
 # import os
 import pytest
 
-@pytest.mark.base
+@pytest.mark.example
 @utils.measure_execution_time
-def test_json_executor():
-    ex = ExampleConfig()
-    ex.make_example_config()
-
-    je = JsonExecutor("cfg.json")
-    je.execute_all()
+def test_modular_household_configurations():
+    """ Tests the modular households. """
+    path = "../examples/modular_example.py"
+    func = "modular_household_explicit"
+    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60 * 15)
+    hisim_main.main(path, func, mysimpar)

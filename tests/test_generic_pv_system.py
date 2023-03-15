@@ -4,7 +4,9 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim import simulator as sim
 from tests import functions_for_testing as fft
+import pytest
 
+@pytest.mark.base
 def test_photovoltaic():
     # Sets inputs
     # weather_location = "Aachen"

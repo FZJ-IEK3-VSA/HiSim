@@ -5,7 +5,9 @@ from hisim.components import generic_heat_source
 from hisim.components import controller_l1_heatpump
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+import pytest
 
+@pytest.mark.base
 def test_heat_source():
 
     #simulation parameters

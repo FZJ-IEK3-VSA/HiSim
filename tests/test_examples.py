@@ -7,8 +7,9 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import utils
+import pytest
 
-
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household():
     """ Single day. """
@@ -18,7 +19,7 @@ def test_basic_household():
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 
-
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household_network_chart():
     """ Makes only the network charts. """
@@ -29,7 +30,7 @@ def test_basic_household_network_chart():
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 
-
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_modular_household_configurations():
     """ Tests the modular example. """
@@ -38,7 +39,7 @@ def test_modular_household_configurations():
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60 * 15)
     hisim_main.main(path, func, mysimpar)
 
-
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_household_with_heatpump_and_pv():
     """ Single day. """
@@ -48,7 +49,7 @@ def test_household_with_heatpump_and_pv():
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())
 
-
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_household_with_gas_heater():
     """ Single day. """

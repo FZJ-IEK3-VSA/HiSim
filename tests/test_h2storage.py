@@ -11,7 +11,9 @@ from hisim import loadtypes as lt
 
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import generic_hydrogen_storage
+import pytest
 
+@pytest.mark.base
 def test_chp_system():
 
     seconds_per_timestep = 60

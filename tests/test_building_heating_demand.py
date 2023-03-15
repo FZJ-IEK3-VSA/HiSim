@@ -15,7 +15,8 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim import log
-# from hisim import utils
+from hisim import utils
+import pytest
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -29,7 +30,8 @@ __status__ = "development"
 PATH = "../examples/household_for_test_building_heat_demand.py"
 FUNC = "house_with_pv_and_hp_for_heating_test"
 
-
+@pytest.mark.buildingtest
+@utils.measure_execution_time
 def test_house_with_pv_and_hp_for_heating_test(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements

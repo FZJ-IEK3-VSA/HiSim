@@ -1,7 +1,7 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: pytest
+name: pytest base tests
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
     - name: Test with pytest
       working-directory: ./tests/
       run: |
-        pytest
+        pytest -m "base"
 
     #    # stop the build if there are Python syntax errors or undefined names
        

@@ -111,7 +111,7 @@ class SimulationParameters(JSONWizard):
         return pars
 
     @classmethod
-    def full_year_all_options(
+    def full_year_plots_only(
         cls, year: int, seconds_per_timestep: int
     ) -> SimulationParameters:
         """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""

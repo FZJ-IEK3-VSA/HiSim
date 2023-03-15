@@ -27,7 +27,7 @@ import pytest
 #         my_residence = building.Building(
 #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
 #         log.information(building_code)
-@pytest.mark.base
+@pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_building_thermal_conductance_calculation():
     """Test function for some functions of the building module."""

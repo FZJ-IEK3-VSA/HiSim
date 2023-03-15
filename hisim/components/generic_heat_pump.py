@@ -11,9 +11,10 @@ This module contains the following classes:
 # Generic/Built-in
 import copy
 from typing import List, Any, Optional
+from dataclasses import dataclass
 import numpy as np
 from dataclasses_json import dataclass_json
-from dataclasses import dataclass
+
 
 from hisim import component as cp
 from hisim import log
@@ -42,6 +43,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericHeatPumpConfig(cp.ConfigBase):
+
+    """ Config for the generic heat pump. """
+
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
@@ -68,6 +72,9 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class GenericHeatPumpControllerConfig(cp.ConfigBase):
+
+    """ Controller for the generic heat pump. """
+
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""

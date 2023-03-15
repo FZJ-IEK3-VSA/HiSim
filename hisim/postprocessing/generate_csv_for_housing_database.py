@@ -3,11 +3,11 @@
 """ Computes all relevant parameters for data base of Energy System Models, as well as parameters needed for validation of the building types."""
 
 import os
+from typing import List
 
 import pandas as pd
 
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
-from typing import List
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
@@ -15,6 +15,7 @@ from hisim import utils
 def compute_energy_from_power(
     power_timeseries: pd.Series, seconds_per_timestep: int
 ) -> float:
+    """ Computes energy from power value. """
     if power_timeseries.empty:
         return 0.0
     return float(power_timeseries.sum() * seconds_per_timestep / 3.6e6)
@@ -26,7 +27,7 @@ def generate_csv_for_database(
     simulation_parameters: SimulationParameters,
     building_data: pd.DataFrame,
 ) -> None:
-    """Extracts relevant data from the HiSIM simulation and puts it together in a .csv file
+    """Extracts relevant data from the HiSIM simulation and puts it together in a .csv file.
 
     :param all_outputs: List of all outputs
     :type all_outputs: List
@@ -171,7 +172,7 @@ def generate_csv_for_database(
     converting_data = pd.read_csv(
         utils.HISIMPATH["housing_reference_temperatures"]
     )
-    converting_data.index = converting_data["Location"] # type: ignore
+    converting_data.index = converting_data["Location"]  # type: ignore
 
     # write all necesary data for building validation to csv file
     csv_frame[("Annual Heating Demand Tabula", "[kWh/(m*m*a)]")] = building_data["q_ht"].to_list()[0]
@@ -184,8 +185,6 @@ def generate_csv_for_database(
     csv_frame[("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")] = building_data["q_ht"].to_list()[0] * \
         ((20 - csv_frame[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")]) * csv_frame[("HeatingDays HiSIM", "Number of Days")]) / \
         ((20 - csv_frame[("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")]) * csv_frame[("HeatingDays Tabula", "Number of Days")])
-    
-   
 
     pathname = os.path.join(
         simulation_parameters.result_directory, "csv_for_housing_data_base.csv"

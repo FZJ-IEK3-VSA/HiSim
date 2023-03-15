@@ -16,8 +16,6 @@ pylint examples\household_with_gas_heater_with_controller.py
 if %errorlevel% neq 0 exit /b
 pylint examples\household_with_heatpump_and_pv.py
 if %errorlevel% neq 0 exit /b
-pylint examples\modular_example.py
-if %errorlevel% neq 0 exit /b
 pylint examples\simple_examples.py
 if %errorlevel% neq 0 exit /b
 pylint hisim\component.py
@@ -112,8 +110,6 @@ pylint hisim\postprocessing\reportgenerator.py
 if %errorlevel% neq 0 exit /b
 pylint hisim\postprocessing\system_chart.py
 if %errorlevel% neq 0 exit /b
-pylint obsolete\building_controller.py
-if %errorlevel% neq 0 exit /b
 pylint tests\functions_for_testing.py
 if %errorlevel% neq 0 exit /b
 pylint tests\test_advanced_battery_bslib.py
@@ -121,8 +117,6 @@ if %errorlevel% neq 0 exit /b
 pylint tests\test_building.py
 if %errorlevel% neq 0 exit /b
 pylint tests\test_building_heating_demand.py
-if %errorlevel% neq 0 exit /b
-pylint tests\test_building_manual_calculation_thermal_conductances.py
 if %errorlevel% neq 0 exit /b
 pylint tests\test_building_scalability_with_factor.py
 if %errorlevel% neq 0 exit /b

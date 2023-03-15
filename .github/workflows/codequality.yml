@@ -34,8 +34,12 @@ jobs:
       run: |
         prospector examples/basic_household.py
         prospector examples/basic_household_only_heating.py
+        prospector examples/basic_household_with_new_hp_hds_hws_and_pv.py
         prospector examples/default_connections.py
         prospector examples/dynamic_components.py
+        prospector examples/household_with_gas_heater.py
+        prospector examples/household_with_gas_heater_with_controller.py
+        prospector examples/household_with_heatpump_and_pv.py
         prospector examples/simple_examples.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
@@ -56,28 +60,52 @@ jobs:
         prospector hisim/components/controller_l1_building_heating.py
         prospector hisim/components/controller_l1_generic_runtime.py
         prospector hisim/components/controller_l1_heatpump.py
+        prospector hisim/components/controller_l2_energy_management_system.py
         prospector hisim/components/controller_l2_generic_heat_simple.py
+        prospector hisim/components/controller_l2_smart_controller.py
         prospector hisim/components/example_component.py
         prospector hisim/components/example_storage.py
         prospector hisim/components/example_template.py
         prospector hisim/components/example_transformer.py
+        prospector hisim/components/generic_gas_heater.py
+        prospector hisim/components/generic_gas_heater_with_controller.py
+        prospector hisim/components/generic_heat_pump.py
+        prospector hisim/components/generic_heat_pump_for_house_with_hds.py
         prospector hisim/components/generic_hot_water_storage_modular.py
+        prospector hisim/components/heat_distribution_system.py
+        prospector hisim/components/idealized_electric_heater.py
+        prospector hisim/components/simple_hot_water_storage.py
+        prospector hisim/components/sumbuilder.py
+        prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
         prospector hisim/postprocessing/charts.py
         prospector hisim/postprocessing/chart_singleday.py
+        prospector hisim/postprocessing/compute_kpis.py
+        prospector hisim/postprocessing/generate_csv_for_housing_database.py
         prospector hisim/postprocessing/postprocessing_datatransfer.py
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/postprocessing/system_chart.py
+        prospector obsolete/building_controller.py
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
         prospector tests/test_building.py
-        prospector tests/test_examples.py
+        prospector tests/test_building_heating_demand.py
+        prospector tests/test_building_manual_calculation_thermal_conductances.py
+        prospector tests/test_building_scalability_with_factor.py
+        prospector tests/test_building_theoretical_thermal_demand.py
+        prospector tests/test_examples_basic_household.py
+        prospector tests/test_examples_basic_household_network_chart.py
+        prospector tests/test_examples_basic_household_with_all_resultfiles.py
+        prospector tests/test_examples_household_with_heatpump_and_pv.py
         prospector tests/test_example_component.py
         prospector tests/test_example_storage.py
         prospector tests/test_example_template.py
         prospector tests/test_example_transformer.py
+        prospector tests/test_gas_heater.py
+        prospector tests/test_generic_gas_heater.py
+        prospector tests/test_simple_hot_water_storage.py
 
 
 

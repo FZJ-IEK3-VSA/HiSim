@@ -27,12 +27,14 @@ def test_example_transformer():
         field_name="transformerinput1",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        output_description="Source 2"
     )
     transformerinput2_output = cp.ComponentOutput(
         object_name="source",
         field_name="transformerinput2",
         load_type=lt.LoadTypes.ANY,
         unit=lt.Units.ANY,
+        output_description="Source 2"
     )
     my_example_transformer.input1.source_output = transformerinput1_output
     my_example_transformer.input2.source_output = transformerinput2_output

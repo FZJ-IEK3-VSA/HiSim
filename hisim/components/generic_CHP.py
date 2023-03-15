@@ -101,6 +101,7 @@ class GCHP(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
+            output_description="Thermal Power Delivered"
         )
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -111,12 +112,14 @@ class GCHP(cp.Component):
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 lt.ComponentType.FUEL_CELL,
             ],
+            output_description="Electricity Output"
         )
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.FuelDelivered,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
+            output_description="Fuel Delivered"
         )
         self.add_default_connections(
             self.get_default_connections_from_l1_generic_chp_runtime_controller()
@@ -337,6 +340,7 @@ class L1GenericCHPRuntimeController(cp.Component):
             self.L1DeviceSignal,
             lt.LoadTypes.ON_OFF,
             lt.Units.BINARY,
+            output_description="L1 Device Signal C"
         )
         self.state0: L1GenericCHPControllerState
         self.state: L1GenericCHPControllerState

@@ -129,6 +129,7 @@ class GenericElectrolyzer(cp.Component):
             GenericElectrolyzer.HydrogenOutput,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
+            output_description="Hydrogen output"
         )
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -139,6 +140,7 @@ class GenericElectrolyzer(cp.Component):
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 lt.ComponentType.ELECTROLYZER,
             ],
+            output_description="Electricity Output"
         )
         self.add_default_connections(
             self.get_default_connections_from_L1GenericElectrolyzerController()
@@ -378,6 +380,7 @@ class L1GenericElectrolyzerController(cp.Component):
             self.ElectricityTarget,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Electricity Output"
         )
 
         self.add_default_connections(

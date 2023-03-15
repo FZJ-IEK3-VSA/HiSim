@@ -258,6 +258,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
+            output_description="Temperature Mean"
         )
         # Outputs
         self.power_to_building_channel: cp.ComponentOutput = self.add_output(
@@ -265,6 +266,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             self.PowerToBuilding,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description="Power to Building"
         )
 
         self.add_default_connections(

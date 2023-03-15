@@ -192,9 +192,11 @@ class L1HeatPumpController(cp.Component):
             self.HeatControllerTargetPercentage,
             LoadTypes.ANY,
             Units.PERCENT,
+            output_description="Heat Controller Target Percentage"
         )
         self.on_off_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.OnOffState, LoadTypes.ANY, Units.ANY
+            self.component_name, self.OnOffState, LoadTypes.ANY, Units.ANY,
+            output_description="On Off Channel"
         )
 
         # Component Inputs

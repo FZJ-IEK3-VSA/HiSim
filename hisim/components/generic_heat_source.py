@@ -128,6 +128,7 @@ class HeatSource(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
+            output_description="Thermal Power Delivered"
         )
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -139,6 +140,7 @@ class HeatSource(cp.Component):
                 config.fuel,
                 config.water_vs_heating,
             ],
+            output_description="Fuel Delivered"
         )
 
         if config.fuel == lt.LoadTypes.OIL:

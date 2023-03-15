@@ -243,36 +243,42 @@ class AdvancedElectrolyzer(Component):
             AdvancedElectrolyzer.WaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
+            output_description="Water Demand"
         )
         self.hydrogen_output: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.HydrogenOutput,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
+            output_description="Hydrogen Output"
         )
         self.oxygen_output: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.OxygenOutput,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
+            output_description="Oxygen Output"
         )
         self.energy_losses: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.EnergyLosses,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Energy Losses"
         )
         self.unused_power: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.UnusedPower,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Unused Power"
         )
         self.electricity_real_needed: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.ElectricityRealNeeded,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Electricity Real Needed"
         )
 
         self.electrolyzer_efficiency: ComponentOutput = self.add_output(
@@ -280,12 +286,14 @@ class AdvancedElectrolyzer(Component):
             AdvancedElectrolyzer.ElectrolyzerEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
+            output_description="Electrolyzer Efficiency"
         )
         self.power_level: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.PowerLevel,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
+            output_description="Power Level"
         )
 
         self.max_power: float = config.max_power
@@ -623,42 +631,49 @@ class HydrogenStorage(Component):
             HydrogenStorage.CurrentHydrogenFillLevel,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG,
+            output_description="Current Hydrogen Fill Level"
         )
         self.current_fill_percent: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.CurrentHydrogenFillLevelPercent,
             lt.LoadTypes.HYDROGEN,
             lt.Units.PERCENT,
+            output_description="Current Hydrogen Fill Level Percent"
         )
         self.storage_delta: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.StorageDelta,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
+            output_description="Storage Delta"
         )
         self.hydrogen_not_stored: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.HydrogenNotStored,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG,
+            output_description="Hydrogen not Stored"
         )
         self.hydrogen_not_released: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.HydrogenNotReleased,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG,
+            output_description="Hydrogen not Released"
         )
         self.hydrogen_storage_energy_demand: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.HydrogenStorageEnergyDemand,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Hydrogen Storage Energy Demand"
         )
         self.hydrogen_losses: ComponentOutput = self.add_output(
             self.component_name,
             HydrogenStorage.HydrogenLosses,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG,
+            output_description="Hydrogen Losses"
         )
         self.discharging_hydrogen_real: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -666,6 +681,7 @@ class HydrogenStorage(Component):
             load_type=lt.LoadTypes.HYDROGEN,
             unit=lt.Units.KG_PER_SEC,
             sankey_flow_direction=False,
+            output_description="Discharging Hydrogen Amount Real"
         )
 
         self.max_capacity = config.max_capacity

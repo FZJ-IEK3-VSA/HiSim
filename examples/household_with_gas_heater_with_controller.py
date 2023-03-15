@@ -85,6 +85,7 @@ def household_gas_heater(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
+        name="UTSP Connector"
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -113,20 +114,19 @@ def household_gas_heater(
         my_simulation_parameters=my_simulation_parameters,
         set_heating_temperature_water_boiler_in_celsius=60.0,
         offset=2.0,
-        mode=1,
+        mode=1
     )
+
+    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
 
     # Build Heat Distribution System
     my_heat_distribution = heat_distribution_system.HeatDistribution(
-        my_simulation_parameters=my_simulation_parameters,
+        my_simulation_parameters=my_simulation_parameters, config=hds_config
     )
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        min_heating_temperature_building_in_celsius=20.0,
-        mode=1,
-        my_simulation_parameters=my_simulation_parameters,
-    )
+    hdscontroller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters)
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
@@ -147,7 +147,7 @@ def household_gas_heater(
     my_gasheater.connect_input(
         my_gasheater.CooledWaterTemperatureBoilerInput,
         my_heat_distribution.component_name,
-        my_heat_distribution.CooledWaterTemperatureDistributionOutput,
+        my_heat_distribution.WaterTemperatureOutput,
     )
     my_gasheater.connect_input(
         my_gasheater.ReferenceMaxHeatBuildingDemand,
@@ -179,31 +179,20 @@ def household_gas_heater(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.MeanWaterTemperatureDistributionInput,
-        my_gasheater.component_name,
-        my_gasheater.MeanWaterTemperatureBoilerOutput,
-    )
-
-    my_heat_distribution.connect_input(
-        my_heat_distribution.HeatedWaterTemperatureDistributionInput,
+        my_heat_distribution.WaterTemperatureInput,
         my_gasheater.component_name,
         my_gasheater.HeatedWaterTemperatureBoilerOutput,
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.GasPower,
-        my_gasheater.component_name,
-        my_gasheater.GasPower,
-    )
-    my_heat_distribution.connect_input(
-        my_heat_distribution.MaxMassFlow,
+        my_heat_distribution.MaxWaterMassFlowRate,
         my_gasheater.component_name,
         my_gasheater.MaxMassFlow,
     )
     my_heat_distribution.connect_input(
         my_heat_distribution.ResidenceTemperature,
         my_building.component_name,
-        my_building.TemperatureMean,
+        my_building.TemperatureMeanThermalMass,
     )
 
     my_heat_distribution_controller.connect_input(

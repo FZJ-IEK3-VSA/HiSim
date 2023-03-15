@@ -10,6 +10,10 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
+import pytest
+
+
+@pytest.mark.base
 def test_execute_json_generator():
     ex = ExampleConfig()
     ex.make_example_config()

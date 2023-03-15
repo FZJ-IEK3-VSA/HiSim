@@ -7,7 +7,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from typing import Any
+from typing import Any, List
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -237,10 +237,8 @@ class HeatStorage(Component):
             output_description=f"here a description for {self.RealHeatForBuilding} will follow.",
         )
 
-    def write_to_report(self) -> None:
+    def write_to_report(self) -> List[str]:
         lines = []
-        for config_string in self.heat_storage_config.get_string_dict():
-            lines.append(config_string)
         lines.append("Name: HeatWaterStorage")
         lines.append(f"Volume Warm Water Storage [L]: {self.V_SP_warm_water}")
         lines.append(f"Volume Heat Water Storage [L]: {self.V_SP_heating_water}")
@@ -250,7 +248,8 @@ class HeatStorage(Component):
         lines.append(f"Ambient Temperature [°C]: {self.ambient_temperature}")
         lines.append(f"Temperature Warm Water Storage [°C]: {self.T_sp_ww}")
         lines.append(f"temperature Heat Water Storage [°C]: {self.T_sp_hw}")
-        return
+
+        return self.heat_storage_config.get_string_dict() + lines
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -476,10 +475,8 @@ class HeatStorageController(cp.Component):
     def build(self):
         pass
 
-    def write_to_report(self) -> None:
+    def write_to_report(self) -> List[str]:
         lines = []
-        for config_string in self.heatstoragecontroller_config.get_string_dict():
-            lines.append(config_string)
         lines.append("Name: HeatWaterStorage Controller")
         lines.append(
             f"Initial Temperature Building [°C]: {self.initial_temperature_building}"
@@ -487,6 +484,7 @@ class HeatStorageController(cp.Component):
         lines.append(
             f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}"
         )
+        return self.heatstoragecontroller_config.get_string_dict() + lines
 
     def i_save_state(self) -> None:
         pass

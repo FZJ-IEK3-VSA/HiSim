@@ -1,15 +1,16 @@
-"""Test for simple heat water storage."""
+"""Test for simple hot water storage."""
 # clean
 from hisim import component as cp
-from hisim.components import simple_heat_water_storage
+from hisim.components import simple_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
+import pytest
 
-
+@pytest.mark.base
 def test_simple_storage():
-    """Test for simple heat water storage."""
+    """Test for simple hot water storage."""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -25,14 +26,14 @@ def test_simple_storage():
 
     # ===================================================================================================================
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_heat_water_storage.HeatingWaterStorageConfig(
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
         cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
         hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius,
     )
-    my_simple_heat_water_storage = simple_heat_water_storage.HeatingWaterStorage(
+    my_simple_heat_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -65,6 +66,7 @@ def test_simple_storage():
         lt.Units.KG_PER_SEC,
     )
 
+    # connect fake inputs to simple hot water storage
     my_simple_heat_water_storage.water_temperature_heat_distribution_system_input_channel.source_output = (
         water_temperature_input_from_heat_distribution_system
     )
@@ -105,11 +107,12 @@ def test_simple_storage():
     stsv.values[water_mass_flow_rate_from_heat_distribution_system.global_index] = 0.787
     stsv.values[water_mass_flow_rate_from_heat_generator.global_index] = 0.59
 
+    # Simulate for timestep 300
     timestep = 300
 
-    # Simulate for timestep 300
-
     my_simple_heat_water_storage.i_restore_state()
+
+    # calculate mixing factors for different seconds per timestep
     factors_for_water_storage_portion = []
     seconds_per_timesteps_to_test = [60, 60 * 15, 60 * 30, 60 * 60, 60 * 120]
     for i in seconds_per_timesteps_to_test:
@@ -117,7 +120,8 @@ def test_simple_storage():
             factors_for_water_storage_portion.append(i / 3600)
         elif i > 3600:
             factors_for_water_storage_portion.append(1.0)
-
+    
+    # simulate simple hot water storage for different seconds per timestep
     for index, seconds_per_timestep in enumerate(seconds_per_timesteps_to_test):
         log.information("sec per timestep " + str(seconds_per_timestep))
         my_simple_heat_water_storage.seconds_per_timestep = seconds_per_timestep
@@ -151,7 +155,7 @@ def test_simple_storage():
             + mass_water_hg_in_kg
             + mass_water_hds_in_kg
         )
-
+        # test if calculated mean water temperature is equal to simulated water temperature
         assert (
             calculated_mean_water_temperature_in_celsius
             == my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius

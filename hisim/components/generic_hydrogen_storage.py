@@ -132,6 +132,7 @@ class GenericHydrogenStorage(cp.Component):
             load_type=lt.LoadTypes.HYDROGEN,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
+            output_description="Hydrogen SOC"
         )
 
         self.add_default_connections(

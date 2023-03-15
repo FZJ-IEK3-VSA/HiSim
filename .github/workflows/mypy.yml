@@ -17,7 +17,9 @@ jobs:
         python-version: "3.11"
     - name: Install Dependencies
       run: |
+        python -m pip install --upgrade pip
         pip install mypy
+        pip install pytest
     - name: mypy
       run: |
         mypy -p hisim --config-file mypy.ini

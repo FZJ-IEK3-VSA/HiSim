@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 # clean
-""" Generic heating controller with configuration and state. It controls the heating system (heat transfer from buffer storage to building) only during the heating period.
-It is a ping pong control with an optional input from the Energy Management System, which enforces heating with electricity from PV. 
+""" Generic heating controller with configuration and state.
+
+It controls the heating system (heat transfer from buffer storage to building)
+only during the heating period.
+It is a ping pong control with an optional input from the Energy Management System,
+which enforces heating with electricity from PV.
 The buffer is controlled accoring to four modes:
     (a) 0.5 * power when buffer temperature is within the upper half between upper target and increased upper target from Energy Management System (only in surplus case),
     (b) 0.75 * power when buffer temperature is within the lower half beweet upper target and increase upper target from Energy Management System (only in surplus case),
     (c) full power when building temperature is below lower target,
-    (d) off when temperature is higher than upper target. """
+    (d) off when temperature is higher than upper target.
 
 from dataclasses import dataclass
 
 # Owned
-from typing import List, Optional, Any
+from typing import List, Any
 
 from dataclasses_json import dataclass_json
 
@@ -39,6 +43,7 @@ __status__ = "development"
 class L1BuildingHeatingConfig(cp.ConfigBase):
 
     """Configuration of Building Controller. """
+
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -78,6 +83,7 @@ class L1BuildingHeatControllerState:
         return L1BuildingHeatControllerState(
             state=self.state
         )
+
 
 class L1BuildingHeatController(cp.Component):
 
@@ -139,13 +145,14 @@ class L1BuildingHeatController(cp.Component):
             Units.CELSIUS,
             mandatory=True,
         )
+
         self.buffer_temperature_channel: cp.ComponentInput = self.add_input(
-                    self.component_name,
-                    self.BufferTemperature,
-                    LoadTypes.TEMPERATURE,
-                    Units.CELSIUS,
-                    mandatory=False,
-                )
+            self.component_name,
+            self.BufferTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=False,
+        )
 
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
             self.component_name,

@@ -10,8 +10,8 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.components import fake_heater
-
+from hisim.components import idealized_electric_heater
+import pytest
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -23,23 +23,23 @@ __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../examples/household_for_test_building_theoretical_heat_demand.py"
-FUNC = "house_with_fake_heater_for_heating_test"
+FUNC = "house_with_idealized_electric_heater_for_heating_test"
 
-
-def test_house_with_fake_heater_for_heating_test(
+@pytest.mark.base
+def test_house_with_idealized_electric_heater_for_heating_test(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """Test for heating energy demand.
 
     This setup function emulates an household including the basic components. Here the residents have their
-    heating needs covered by a fake heater that returns exactly the heat that the building needs.
+    heating needs covered by a idealized electric heater that returns exactly the heat that the building needs.
 
     - Simulation Parameters
     - Components
         - Occupancy (Residents' Demands)
         - Weather
         - Building
-        - Fake Heater
+        - Idealized Electric Heater
     """
 
     # =========================================================================================================================================================
@@ -115,7 +115,7 @@ def test_house_with_fake_heater_for_heating_test(
     )
 
     # Build Fake Heater
-    my_fake_heater = fake_heater.FakeHeater(
+    my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
         set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius
@@ -166,23 +166,23 @@ def test_house_with_fake_heater_for_heating_test(
     )
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
-        my_fake_heater.component_name,
-        my_fake_heater.ThermalPowerDelivered,
+        my_idealized_electric_heater.component_name,
+        my_idealized_electric_heater.ThermalPowerDelivered,
     )
     my_building.connect_input(
         my_building.SetHeatingTemperature,
-        my_fake_heater.component_name,
-        my_fake_heater.SetHeatingTemperatureForBuilding,
+        my_idealized_electric_heater.component_name,
+        my_idealized_electric_heater.SetHeatingTemperatureForBuilding,
     )
     my_building.connect_input(
         my_building.SetCoolingTemperature,
-        my_fake_heater.component_name,
-        my_fake_heater.SetCoolingTemperatureForBuilding,
+        my_idealized_electric_heater.component_name,
+        my_idealized_electric_heater.SetCoolingTemperatureForBuilding,
     )
 
     # Fake Heater
-    my_fake_heater.connect_input(
-        my_fake_heater.TheoreticalThermalBuildingDemand,
+    my_idealized_electric_heater.connect_input(
+        my_idealized_electric_heater.TheoreticalThermalBuildingDemand,
         my_building.component_name,
         my_building.TheoreticalThermalBuildingDemand,
     )
@@ -193,7 +193,7 @@ def test_house_with_fake_heater_for_heating_test(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
-    my_sim.add_component(my_fake_heater)
+    my_sim.add_component(my_idealized_electric_heater)
 
     my_sim.run_all_timesteps()
 

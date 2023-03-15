@@ -1,4 +1,5 @@
-"""Heating Water Storage Module."""
+"""Simple Hot Water Storage Module."""
+
 # clean
 # Owned
 from typing import List, Any
@@ -14,7 +15,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-# from hisim import log
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -28,14 +28,14 @@ __status__ = "dev"
 
 @dataclass_json
 @dataclass
-class HeatingWaterStorageConfig(cp.ConfigBase):
+class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
-    """Configuration of the HeatingWaterStorage class."""
+    """Configuration of the SimpleHotWaterStorage class."""
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
-        return HeatingWaterStorage.get_full_classname()
+        return SimpleHotWaterStorage.get_full_classname()
 
     name: str
     volume_heating_water_storage_in_liter: float
@@ -44,12 +44,12 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
     hot_water_temperature_in_storage_in_celsius: float
 
     @classmethod
-    def get_default_heatingwaterstorage_config(
+    def get_default_simplehotwaterstorage_config(
         cls,
     ) -> Any:
-        """Get a default heatingwaterstorage config."""
-        config = HeatingWaterStorageConfig(
-            name="HeatingWaterStorage",
+        """Get a default simplehotwaterstorage config."""
+        config = SimpleHotWaterStorageConfig(
+            name="SimpleHotWaterStorage",
             mean_water_temperature_in_storage_in_celsius=50,
             cool_water_temperature_in_storage_in_celsius=50,
             hot_water_temperature_in_storage_in_celsius=50,
@@ -58,9 +58,9 @@ class HeatingWaterStorageConfig(cp.ConfigBase):
         return config
 
 
-class HeatingWaterStorage(cp.Component):
+class SimpleHotWaterStorage(cp.Component):
 
-    """HeatingWaterStorage class."""
+    """SimpleHotWaterStorage class."""
 
     # Input
 
@@ -86,7 +86,7 @@ class HeatingWaterStorage(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: HeatingWaterStorageConfig,
+        config: SimpleHotWaterStorageConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
@@ -96,17 +96,6 @@ class HeatingWaterStorage(cp.Component):
         # Initialization of variables
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
-
-        self.water_temperature_from_heat_distribution_system_in_celsius: float = (
-            self.waterstorageconfig.cool_water_temperature_in_storage_in_celsius
-        )
-        self.water_temperature_from_heat_generator_in_celsius: float = (
-            self.waterstorageconfig.hot_water_temperature_in_storage_in_celsius
-        )
-        self.water_mass_flow_rate_from_heat_generator_in_kg_per_second: float = 0.0
-        self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float = (
-            0.0
-        )
 
         self.start_water_temperature_in_storage_in_celsius = 50.0
         self.mean_water_temperature_in_water_storage_in_celsius: float = 50.0
@@ -184,10 +173,7 @@ class HeatingWaterStorage(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Write a report."""
-        lines = []
-        for config_string in self.waterstorageconfig.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.waterstorageconfig.get_string_dict()
 
     def i_save_state(self) -> None:
         """Save the current state."""
@@ -212,35 +198,37 @@ class HeatingWaterStorage(cp.Component):
                 self.mean_water_temperature_in_water_storage_in_celsius
             )
             # Get inputs --------------------------------------------------------------------------------------------------------
-            self.water_temperature_from_heat_distribution_system_in_celsius = (
+            water_temperature_from_heat_distribution_system_in_celsius = (
                 stsv.get_input_value(
                     self.water_temperature_heat_distribution_system_input_channel
                 )
             )
-            self.water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
+            water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
                 self.water_temperature_heat_generator_input_channel
             )
-            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel)
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
+                stsv.get_input_value(
+                    self.water_mass_flow_rate_heat_generator_input_channel
+                )
             )
-            self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = (
+            water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = (
                 stsv.get_input_value(
                     self.water_mass_flow_rate_heat_distrution_system_input_channel
                 )
             )
 
-            if self.water_temperature_from_heat_distribution_system_in_celsius == 0:
+            if water_temperature_from_heat_distribution_system_in_celsius == 0:
                 """first iteration --> random numbers"""
-                self.water_temperature_from_heat_distribution_system_in_celsius = 50
-            if self.water_temperature_from_heat_generator_in_celsius == 0:
+                water_temperature_from_heat_distribution_system_in_celsius = 50
+            if water_temperature_from_heat_generator_in_celsius == 0:
                 """first iteration --> random numbers"""
-                self.water_temperature_from_heat_generator_in_celsius = 50
+                water_temperature_from_heat_generator_in_celsius = 50
 
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
-                water_temperature_from_heat_distribution_system_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
-                water_temperature_from_heat_generator_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second=self.water_mass_flow_rate_from_heat_generator_in_kg_per_second,
-                water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
+                water_temperature_from_heat_distribution_system_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
+                water_temperature_from_heat_generator_in_celsius=water_temperature_from_heat_generator_in_celsius,
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+                water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
                 water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
                 previous_mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
                 seconds_per_timestep=self.seconds_per_timestep,
@@ -258,14 +246,14 @@ class HeatingWaterStorage(cp.Component):
                 mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
                 mixing_factor_water_input_portion=factor_for_water_input_portion,
                 mixing_factor_water_storage_portion=factor_for_water_storage_portion,
-                water_input_temperature_in_celsius=self.water_temperature_from_heat_generator_in_celsius,
+                water_input_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
             )
             # hp gets water from hds
             self.water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
                 mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
                 mixing_factor_water_input_portion=factor_for_water_input_portion,
                 mixing_factor_water_storage_portion=factor_for_water_storage_portion,
-                water_input_temperature_in_celsius=self.water_temperature_from_heat_distribution_system_in_celsius,
+                water_input_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
             )
 
             # Set outputs -------------------------------------------------------------------------------------------------------
@@ -280,12 +268,10 @@ class HeatingWaterStorage(cp.Component):
                 self.water_temperature_to_heat_generator_in_celsius,
             )
 
-            stsv.set_output_value(self.water_temperature_mean_channel, self.mean_water_temperature_in_water_storage_in_celsius)
-
-            # log.information("hws timestep" + str(timestep))
-            # log.information("hws mean temp " + str(self.mean_water_temperature_in_water_storage_in_celsius))
-            # log.information("hws temp for hds " + str(self.water_temperature_to_heat_distribution_system_in_celsius))
-            # log.information("hws temp for hp " + str(self.water_temperature_to_heat_generator_in_celsius))
+            stsv.set_output_value(
+                self.water_temperature_mean_channel,
+                self.mean_water_temperature_in_water_storage_in_celsius,
+            )
 
     def build(self):
         """Build function.

@@ -6,7 +6,7 @@
 # Owned
 from typing import List, Any, Dict, Optional
 from hisim.component import Component, SingleTimeStepValues
-from hisim.components.generic_heat_pump import GenericHeatPumpController
+from hisim.components.generic_heat_pump import GenericHeatPumpController, GenericHeatPumpControllerConfig
 from hisim.components.generic_ev_charger import EVChargerController
 from hisim.simulationparameters import SimulationParameters
 
@@ -33,9 +33,15 @@ class SmartController(Component):
         """Build wrapped controllers."""
         for controller_name in controllers:
             if "HeatPump" in controller_name:
+                ghpcc = GenericHeatPumpControllerConfig("generic heat pump controller",
+                                                        temperature_air_heating_in_celsius=15,
+                                                        temperature_air_cooling_in_celsius=25,
+                                                        offset=0,
+                                                        mode=1)
                 self.wrapped_controllers.append(
+
                     GenericHeatPumpController(
-                        my_simulation_parameters=self.my_simulation_parameters
+                        my_simulation_parameters=self.my_simulation_parameters, config=ghpcc
                     )
                 )
 

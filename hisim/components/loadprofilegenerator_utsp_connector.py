@@ -579,7 +579,4 @@ class UtspLpgConnector(cp.Component):
 
     def write_to_report(self):
         """Adds a report entry for this component."""
-        lines = []
-        for config_string in self.utsp_config.get_string_dict():
-            lines.append(config_string)
-        return lines
+        return self.utsp_config.get_string_dict()

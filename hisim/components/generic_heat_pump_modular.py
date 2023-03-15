@@ -153,6 +153,7 @@ class ModularHeatPump(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER],
+            output_description="Thermal Power Delivered"
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -160,6 +161,7 @@ class ModularHeatPump(cp.Component):
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=postprocessing_flag,
+            output_description="Electricity Output"
         )
 
         self.power_modifier_channel: cp.ComponentOutput = self.add_output(
@@ -168,6 +170,7 @@ class ModularHeatPump(cp.Component):
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
             postprocessing_flag=[],
+            output_description="Power Modifier"
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())

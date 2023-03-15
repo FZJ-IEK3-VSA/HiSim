@@ -63,7 +63,7 @@ def basic_household_explicit(
     occupancy_profile = "CH01"
 
     # Set Heat Pump Controller
-    temperature_air_heating_in_celsius = 16.0
+    temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
     offset = 0.5
     hp_mode = 2
@@ -122,18 +122,23 @@ def basic_household_explicit(
 
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig(name="ElectrcityGrid_BaseLoad", grid=[my_occupancy, "Subtract", my_photovoltaic_system], signal=None),
+        config=sumbuilder.ElectricityGridConfig(
+            name="ElectrcityGrid_BaseLoad",
+            grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+            signal=None,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
-        name="GenericHeatPumpController",
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
+            name="GenericHeatPumpController",
+            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+            offset=offset,
+            mode=hp_mode,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -146,112 +151,27 @@ def basic_household_explicit(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.DirectNormalIrradiance,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradiance,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.DirectNormalIrradianceExtra,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradianceExtra,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.DiffuseHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.DiffuseHorizontalIrradiance,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.GlobalHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.GlobalHorizontalIrradiance,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.ApparentZenith,
-        my_weather.component_name,
-        my_weather.ApparentZenith,
-    )
-    my_photovoltaic_system.connect_input(
-        my_photovoltaic_system.WindSpeed,
-        my_weather.component_name,
-        my_weather.WindSpeed,
-    )
+    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 
-    my_building.connect_input(
-        my_building.Altitude, my_weather.component_name, my_weather.Altitude
-    )
-    my_building.connect_input(
-        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
-    my_building.connect_input(
-        my_building.DirectNormalIrradiance,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradiance,
-    )
-    my_building.connect_input(
-        my_building.DiffuseHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.DiffuseHorizontalIrradiance,
-    )
-    my_building.connect_input(
-        my_building.GlobalHorizontalIrradiance,
-        my_weather.component_name,
-        my_weather.GlobalHorizontalIrradiance,
-    )
-    my_building.connect_input(
-        my_building.DirectNormalIrradianceExtra,
-        my_weather.component_name,
-        my_weather.DirectNormalIrradianceExtra,
-    )
-    my_building.connect_input(
-        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
-    )
-    my_building.connect_input(
-        my_building.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-    my_building.connect_input(
-        my_building.HeatingByResidents,
-        my_occupancy.component_name,
-        my_occupancy.HeatingByResidents,
-    )
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
         my_heat_pump.ThermalPowerDelivered,
     )
 
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.TemperatureMean,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
-    )
+    my_heat_pump_controller.connect_only_predefined_connections(my_building)
+
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_base_electricity_load_profile.component_name,
         my_base_electricity_load_profile.ElectricityOutput,
     )
-
-    my_heat_pump.connect_input(
-        my_heat_pump.State,
-        my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State,
+    my_heat_pump.connect_only_predefined_connections(
+        my_weather, my_heat_pump_controller
     )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-
+    my_heat_pump.get_default_connections_heatpump_controller()
     # =================================================================================================================================
     # Add Components to Simulation Parameters
 

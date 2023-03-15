@@ -9,19 +9,23 @@ from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
-from utspclient.helpers.lpgdata import (TransportationDeviceSets,
-                                        TravelRouteSets)
+from utspclient.helpers.lpgdata import TransportationDeviceSets, TravelRouteSets
 
 import hisim.loadtypes as lt
 import hisim.log
 import hisim.utils
-from hisim.components import (building, controller_l2_energy_management_system,
-                              generic_price_signal,
-                              loadprofilegenerator_connector,
-                              loadprofilegenerator_utsp_connector, weather)
+from hisim.components import (
+    building,
+    controller_l2_energy_management_system,
+    generic_price_signal,
+    loadprofilegenerator_connector,
+    loadprofilegenerator_utsp_connector,
+    weather,
+)
 from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.modular_household_config import \
-    read_in_configs
+from hisim.modular_household.interface_configs.modular_household_config import (
+    read_in_configs,
+)
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
@@ -136,7 +140,9 @@ def modular_household_explicit(
         heatpump_power = 1
         hisim.log.information("Default power is used for heat pump. ")
     if heatpump_power < 1:
-        raise Exception('Heat pump power cannot be smaller than default: choose values greater than one')
+        raise Exception(
+            "Heat pump power cannot be smaller than default: choose values greater than one"
+        )
     clever = my_simulation_parameters.surplus_control
     pv_included = system_config_.pv_included  # True or False
     if pv_included:
@@ -148,7 +154,9 @@ def modular_household_explicit(
         buffer_volume = 1
         hisim.log.information("Default volume is used for buffer storage. ")
     elif buffer_volume < 1:
-        raise Exception('Buffer volume cannot be smaller than default: choose values greater than one')
+        raise Exception(
+            "Buffer volume cannot be smaller than default: choose values greater than one"
+        )
     battery_included = system_config_.battery_included
     if battery_included:
         battery_capacity = system_config_.battery_capacity
@@ -168,14 +176,20 @@ def modular_household_explicit(
     if utsp_connected:
         if mobility_set is None:
             this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
-            hisim.log.information("Default is used for mobility set, because None was defined.")
+            hisim.log.information(
+                "Default is used for mobility set, because None was defined."
+            )
         else:
             this_mobility_set = mobility_set
         if mobility_distance is None:
-            this_mobility_distance = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
-            hisim.log.information("Default is used for mobility distance, because None was defined.")
+            this_mobility_distance = (
+                TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+            )
+            hisim.log.information(
+                "Default is used for mobility distance, because None was defined."
+            )
         else:
-            this_mobility_distance=mobility_distance
+            this_mobility_distance = mobility_distance
 
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -314,12 +328,14 @@ def modular_household_explicit(
         heating_system_installed,
         smart_devices_included,
         water_heating_system_installed,
-    ):  
-        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_EMS()
+    ):
+        my_electricity_controller_config = (
+            controller_l2_energy_management_system.EMSConfig.get_default_config_EMS()
+        )
         my_electricity_controller = (
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
                 my_simulation_parameters=my_simulation_parameters,
-                config=my_electricity_controller_config
+                config=my_electricity_controller_config,
             )
         )
 
@@ -517,7 +533,7 @@ def modular_household_explicit(
             my_building.connect_input(
                 input_fieldname=my_building.ThermalPowerDelivered,
                 src_object_name=my_chp.component_name,
-                src_field_name=my_chp.ThermalPowerDelivered
+                src_field_name=my_chp.ThermalPowerDelivered,
             )
 
         # chp_cost = preprocessing.calculate_chp_investment_cost(

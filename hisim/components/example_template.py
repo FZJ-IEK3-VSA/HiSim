@@ -156,6 +156,7 @@ class ComponentName(Component):
             field_name=self.OutputWithState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
+            output_description="Output with State"
         )
 
         self.output_without_state: ComponentOutput = self.add_output(
@@ -163,6 +164,7 @@ class ComponentName(Component):
             field_name=self.OutputWithoutState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
+            output_description="Output without State"
         )
 
     def i_save_state(self) -> None:

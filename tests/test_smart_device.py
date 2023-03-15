@@ -7,7 +7,9 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 
 import csv
+import pytest
 
+@pytest.mark.base
 def test_smart_device():
     """
     Test time shifting for smart devices

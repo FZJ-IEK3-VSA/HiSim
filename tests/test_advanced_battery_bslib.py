@@ -6,8 +6,9 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
+import pytest
 
-
+@pytest.mark.base
 def test_advanced_battery_bslib():
     """ Performs a basic test for a single calculation of the battery lib. """
     seconds_per_timestep = 60

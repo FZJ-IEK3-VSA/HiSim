@@ -101,7 +101,7 @@ def household_AC_explicit(
     # Build system parameters
     if my_simulation_parameters is None:
         # my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters = SimulationParameters.january_only(
+        my_simulation_parameters = SimulationParameters.january_only_with_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(

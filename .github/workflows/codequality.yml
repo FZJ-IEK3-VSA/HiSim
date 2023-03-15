@@ -72,7 +72,6 @@ jobs:
         prospector hisim/postprocessing/system_chart.py
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
-        prospector tests/test_basic_household_with_all_resultfiles.py
         prospector tests/test_building.py
         prospector tests/test_examples.py
         prospector tests/test_example_component.py

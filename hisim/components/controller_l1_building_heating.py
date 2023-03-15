@@ -11,6 +11,7 @@ The buffer is controlled accoring to four modes:
     (b) 0.75 * power when buffer temperature is within the lower half beweet upper target and increase upper target from Energy Management System (only in surplus case),
     (c) full power when building temperature is below lower target,
     (d) off when temperature is higher than upper target.
+"""
 
 from dataclasses import dataclass
 

@@ -4,6 +4,8 @@
 
 import datetime
 import time
+import pytest
+
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -13,7 +15,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from tests import functions_for_testing as fft
-import pytest
+
 
 @pytest.mark.base
 @utils.measure_execution_time

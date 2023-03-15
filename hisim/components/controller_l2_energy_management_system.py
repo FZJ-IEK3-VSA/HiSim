@@ -1,5 +1,11 @@
-""" Iterative Energy Surplus Controller. It received the electricity consumption of all components and the PV production. According to the balance it sends activation/deactivation siganls to components.
-The component with the lowest source weight is activated first. """
+""" Iterative Energy Surplus Controller.
+
+It received the electricity consumption
+of all components and the PV production. According to the balance it
+sends activation/deactivation siganls to components.
+The component with the lowest source weight is activated first.
+"""
+
 # clean
 from dataclasses import dataclass
 
@@ -46,7 +52,7 @@ class EMSConfig(cp.ConfigBase):
     storage_temperature_offset_value: float
 
     @classmethod
-    def get_default_config_EMS(cls) -> "EMSConfig":
+    def get_default_config_ems(cls) -> "EMSConfig":
         """Default Config for Energy Management System."""
         config = EMSConfig(
             name="EMS L2EMSElectricityController",
@@ -59,8 +65,9 @@ class EMSConfig(cp.ConfigBase):
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
-    """
-    Surplus electricity controller - time step based.
+
+    """ Surplus electricity controller - time step based.
+
     Iteratively goes through hierachy of devices given by
     source weights of components and passes available surplus
     electricity to each device. Needs to be configured with
@@ -85,6 +92,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: EMSConfig
     ):
+        """ Initializes. """
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         self.ems_config = config
@@ -178,25 +186,25 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     def sort_source_weights_and_components(self) -> None:
         """Sorts dynamic Inputs and Outputs according to source weights."""
-        Inputs = [
+        inputs = [
             elem for elem in self.my_component_inputs if elem.source_weight != 999
         ]
-        SourceTags = [elem.source_tags[0] for elem in Inputs]
-        SourceWeights = [elem.source_weight for elem in Inputs]
-        sortindex = sorted(range(len(SourceWeights)), key=lambda k: SourceWeights[k])
-        SourceWeights = [SourceWeights[i] for i in sortindex]
-        self.components_sorted = [SourceTags[i] for i in sortindex]
+        source_tags = [elem.source_tags[0] for elem in inputs]
+        source_weights = [elem.source_weight for elem in inputs]
+        sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
+        source_weights = [source_weights[i] for i in sortindex]
+        self.components_sorted = [source_tags[i] for i in sortindex]
         self.inputs_sorted = [
-            getattr(self, Inputs[i].source_component_class) for i in sortindex
+            getattr(self, inputs[i].source_component_class) for i in sortindex
         ]
         self.outputs_sorted = []
-        for ind in range(len(SourceWeights)):
+        for ind in range(len(source_weights)): # noqa
             output = self.get_dynamic_output(
                 tags=[
                     self.components_sorted[ind],
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
-                weight_counter=SourceWeights[ind],
+                weight_counter=source_weights[ind],
             )
             if output is not None:
                 self.outputs_sorted.append(output)
@@ -218,10 +226,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return self.ems_config.get_string_dict()
 
     def i_save_state(self) -> None:
+        """ Saves the state. """
         # abändern, siehe Storage
         pass  # self.previous_state = self.state
 
     def i_restore_state(self) -> None:
+        """ Restores the state. """
         pass  # self.state = self.previous_state
 
     def i_prepare_simulation(self) -> None:
@@ -229,6 +239,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """ Doublechecks values. """
         pass
 
     def control_electricity_component_iterative(
@@ -236,15 +247,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         deltademand: float,
         stsv: cp.SingleTimeStepValues,
         component_type: lt.ComponentType,
-        input: cp.ComponentInput,
+        input_channel: cp.ComponentInput,
         output: cp.ComponentOutput,
     ) -> Any:
-        """Calculates available surplus electricity, substracts the electricity consumption signal of the component from the previous iteration,
+        """ Calculates available surplus electricity.
+
+        Subtracts the electricity consumption signal of the component from the previous iteration,
         and sends updated signal back.
         """
         is_battery = None
         # get previous signal and substract from total balance
-        previous_signal = stsv.get_input_value(component_input=input)
+        previous_signal = stsv.get_input_value(component_input=input_channel)
 
         # control from substracted balance
         if component_type == lt.ComponentType.BATTERY:
@@ -289,10 +302,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self, delta_demand: float, stsv: cp.SingleTimeStepValues
     ) -> None:
         """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
-        skip_CHP = False
-        for ind in range(len(self.inputs_sorted)):
+        skip_chp = False
+        for ind in range(len(self.inputs_sorted)):  # noqa
             component_type = self.components_sorted[ind]
-            input = self.inputs_sorted[ind]
+            single_input = self.inputs_sorted[ind]
             output = self.outputs_sorted[ind]
             if component_type in [
                 lt.ComponentType.BATTERY,
@@ -302,7 +315,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.SMART_DEVICE,
                 lt.ComponentType.CAR_BATTERY,
             ]:
-                if not skip_CHP or component_type in [
+                if not skip_chp or component_type in [
                     lt.ComponentType.BATTERY,
                     lt.ComponentType.ELECTROLYZER,
                     lt.ComponentType.HEAT_PUMP,
@@ -316,7 +329,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         deltademand=delta_demand,
                         stsv=stsv,
                         component_type=component_type,
-                        input=input,
+                        input_channel=single_input,
                         output=output,
                     )
                 else:
@@ -325,7 +338,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     delta_demand = self.postprocess_battery(
                         deltademand=delta_demand, stsv=stsv, ind=is_battery
                     )
-                    skip_CHP = True
+                    skip_chp = True
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
@@ -337,7 +350,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         if timestep == 0:
             self.sort_source_weights_and_components()
 
-        ###ELECTRICITY#####
+        # ELECTRICITY #
 
         # get production
         production = sum(
@@ -395,7 +408,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.peak_shaving_from_grid(delta_demand=delta_demand, limit_to_shave=limit_to_shave,stsv=stsv)
         """
 
-        #######HEAT########
+        # HEAT #
         # If comftortable temperature of building is to low heat with WarmWaterStorage the building
         # Solution with Control Signal Residence
         # not perfect solution!

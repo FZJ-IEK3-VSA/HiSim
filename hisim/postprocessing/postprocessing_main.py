@@ -2,9 +2,9 @@
 # clean
 import os
 import sys
-import pandas as pd
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
+import pandas as pd
 
 from hisim.components import building
 from hisim.postprocessing import reportgenerator
@@ -247,10 +247,8 @@ class PostProcessor:
                 )
                 end = timer()
                 duration = end - start
-                log.information(
-                    "Generating csv for housing data base took " + f"{duration:1.2f}s."
-                )
-                
+                log.information("Generating csv for housing data base took " + f"{duration:1.2f}s.")
+
         # only a single day has been calculated. This gets special charts for debugging.
         if (
             PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY

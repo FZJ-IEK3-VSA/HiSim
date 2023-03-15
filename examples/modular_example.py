@@ -31,10 +31,7 @@ from hisim.simulator import SimulationParameters
 
 
 def cleanup_old_result_folders():
-    """
-    Removes old result folders of previous modular_household_explicit
-    simulations.
-    """
+    """ Removes old result folders of previous modular_household_explicit simulations. """
     base_path = os.path.join(
         hisim.utils.hisim_abs_path, os.path.pardir, "examples", "results"
     )
@@ -46,20 +43,22 @@ def cleanup_old_result_folders():
 
 
 def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[float, List[int]]:
-    """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system. Both relies on the location.
+    """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.
+
+    Both relies on the location.
     :param location: location of the building, reference temperature and heating season depend on the climate (at the location)
     :type location: str
 
     :return: heating reference temperature and heating season of the location,
     heating season is given by julian day of the year when heating period starts (third entry) and ends (first entry).
     :rtype: Tuple[float, List[int]]
-    """    
+    """
 
-    converting_data = pd.read_csv(
-        hisim.utils.HISIMPATH["housing_reference_temperatures"]
-    )
+    converting_data = pd.read_csv(hisim.utils.HISIMPATH["housing_reference_temperatures"])
     converting_data.index = converting_data["Location"]
-    return ( float(converting_data.loc[location]["HeatingReferenceTemperature"]), [int(converting_data.loc[location]['HeatingSeasonEnd']), int(converting_data.loc[location]['HeatingSeasonBegin'])])
+    return (float(converting_data.loc[location]["HeatingReferenceTemperature"]),
+            [int(converting_data.loc[location]['HeatingSeasonEnd']),
+             int(converting_data.loc[location]['HeatingSeasonBegin'])])
 
 
 def modular_household_explicit(
@@ -120,15 +119,14 @@ def modular_household_explicit(
     # select if utsp is needed based on defined occupancy_profile:
     if occupancy_profile_utsp is None and occupancy_profile is None:
         raise Exception('Either occupancy_profile_utsp or occupancy_profile need to be defined in archetype_config file.')
-    elif occupancy_profile_utsp is not None and occupancy_profile is not None:
-        hisim.log.warning("Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. " )
+    if occupancy_profile_utsp is not None and occupancy_profile is not None:
+        hisim.log.warning("Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. ")
     if occupancy_profile_utsp is not None:
         occupancy_profile = occupancy_profile_utsp
         utsp_connected = True
     else:
         utsp_connected = False
     del occupancy_profile_utsp
-    
 
     # get system configuration: technical equipment
     heatpump_included = system_config_.heatpump_included
@@ -203,7 +201,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
             )
         )
-            
+
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
@@ -236,7 +234,7 @@ def modular_household_explicit(
     reference_temperature, heating_season = get_heating_reference_temperature_and_season_from_location(
         location=location
     )
-    
+
     my_building_config = building.BuildingConfig(
         name="Building_1",
         building_code=building_code,
@@ -378,7 +376,7 @@ def modular_household_explicit(
     # """ EV BATTERY """
     if ev_included:
         if mobility_set is None:
-            raise Exception("If EV should be simulated mobility set needs to be defined." )
+            raise Exception("If EV should be simulated mobility set needs to be defined.")
         _ = component_connections.configure_ev_batteries(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,  # noqa

@@ -330,7 +330,7 @@ def modular_household_explicit(
         water_heating_system_installed,
     ):
         my_electricity_controller_config = (
-            controller_l2_energy_management_system.EMSConfig.get_default_config_EMS()
+            controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
         )
         my_electricity_controller = (
             controller_l2_energy_management_system.L2GenericEnergyManagementSystem(

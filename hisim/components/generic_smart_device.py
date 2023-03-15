@@ -137,6 +137,7 @@ class SmartDevice(cp.Component):
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=postprocessing_flag,
+            output_description="Electricity output"
         )
 
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(

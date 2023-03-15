@@ -214,6 +214,8 @@ class Component:
                    sankey_flow_direction: Optional[bool] = None,
                    output_description: Optional[str] = None) -> ComponentOutput:
         """ Adds an output definition. """
+        if output_description is None:
+            raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
         outp = ComponentOutput(object_name, field_name, load_type, unit, postprocessing_flag, sankey_flow_direction, output_description)
         self.outputs.append(outp)

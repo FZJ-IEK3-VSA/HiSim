@@ -25,7 +25,7 @@ class ArcheTypeConfig:
     #: reference to stored electricity consumption and hot water consumption data, no interface to LoadProfileGenerator needed, no obligatory UTSP connection - available options: "AVG" - average consumption profile over Europe and "CH01" - example output of the LPG
     occupancy_profile: Optional[str] = "AVG"
     #: building code of considered type of building originated from the Tabula data base (https://episcope.eu/building-typology/webtool/)
-    building_code: str = "AT.N.AB.01.Gen.ReEx.001.001"
+    building_code: str = "RS.N.AB.07.Gen.ReEx.001.002"
     #: absolute area considered for heating and cooling
     absolute_conditioned_floor_area: Optional[float] = None
     #: type of water heating system

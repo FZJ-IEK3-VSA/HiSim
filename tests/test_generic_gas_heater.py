@@ -8,8 +8,9 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
+import pytest
 
-
+@pytest.mark.base
 def test_gas_heater():
     """Test for the gas heater."""
 

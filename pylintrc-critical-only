@@ -185,7 +185,11 @@ disable=raw-checker-failed,
         too-many-return-statements,
         consider-using-enumerate,
         consider-using-min-builtin,
-        consider-using-max-builtin
+        consider-using-max-builtin,
+        broad-exception-raised,
+        cyclic-import,
+        consider-using-generator
+
 
 
       

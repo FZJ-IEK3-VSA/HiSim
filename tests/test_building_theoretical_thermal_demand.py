@@ -11,7 +11,7 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
-
+import pytest
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -25,7 +25,7 @@ __status__ = "development"
 PATH = "../examples/household_for_test_building_theoretical_heat_demand.py"
 FUNC = "house_with_idealized_electric_heater_for_heating_test"
 
-
+@pytest.mark.buildingtest
 def test_house_with_idealized_electric_heater_for_heating_test(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements

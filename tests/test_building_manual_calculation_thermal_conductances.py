@@ -9,22 +9,7 @@ import numpy as np
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
-
-building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
-building_heat_capacity_class = "medium"
-seconds_per_timestep = 60
-my_simulation_parameters = SimulationParameters.one_day_only(
-    year=2021, seconds_per_timestep=seconds_per_timestep
-)
-
-# Set Residence
-my_residence_config = (
-    building.BuildingConfig.get_default_german_single_family_home()
-)
-my_residence_config.building_code = building_code
-my_residence_config.building_heat_capacity_class = building_heat_capacity_class
-my_residence = building.Building(
-            config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
+import pytest
 
 # # in case you want to check on all TABULA buildings -> run test over all building_codes
 # d_f = pd.read_csv(
@@ -42,10 +27,27 @@ my_residence = building.Building(
 #         my_residence = building.Building(
 #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
 #         log.information(building_code)
-
+@pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_building_thermal_conductance_calculation():
     """Test function for some functions of the building module."""
+
+    building_code = "DE.N.SFH.05.Gen.ReEx.001.001"
+    building_heat_capacity_class = "medium"
+    seconds_per_timestep = 60
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        year=2021, seconds_per_timestep=seconds_per_timestep
+    )
+
+    # Set Residence
+    my_residence_config = (
+        building.BuildingConfig.get_default_german_single_family_home()
+    )
+    my_residence_config.building_code = building_code
+    my_residence_config.building_heat_capacity_class = building_heat_capacity_class
+    my_residence = building.Building(
+                config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
+
 
     # Test calculation of the thermal conductances H_Transmission (H_tr) given by TABULA
     # building function: get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin

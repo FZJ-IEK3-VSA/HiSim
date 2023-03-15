@@ -202,7 +202,7 @@ class ReportGenerator:
                     ptext = f'<font size="12">{part.strip()}</font>'
                     self.story.append(Paragraph(ptext, self.styles["Normal"]))
                 else:
-                    raise ValueError("text contains Nones")
+                    raise ValueError("text contains Nones. Text was: " + str(text))
             self.story.append(Spacer(1, 10))
         self.story.append(Spacer(1, 20))
 

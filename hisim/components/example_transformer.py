@@ -102,12 +102,14 @@ class ExampleTransformer(Component):
             ExampleTransformer.TransformerOutput,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
+            output_description="Output 1"
         )
         self.output2: ComponentOutput = self.add_output(
             self.transformerconfig.name,
             ExampleTransformer.TransformerOutput2,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
+            output_description="Output 2"
         )
 
     def i_save_state(self) -> None:

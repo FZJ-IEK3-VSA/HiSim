@@ -4,8 +4,9 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
+import pytest
 
-
+@pytest.mark.base
 def test_heat_pump_hplib():
 
     # Definitions for HeatPump init

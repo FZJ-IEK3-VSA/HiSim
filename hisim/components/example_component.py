@@ -129,6 +129,7 @@ class ExampleComponent(Component):
             self.TemperatureMean,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
+            output_description="Temperature mean"
         )
 
         self.electricity_output_c: ComponentOutput = self.add_output(
@@ -136,12 +137,14 @@ class ExampleComponent(Component):
             self.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description="Electricity output"
         )
         self.stored_energy_c: ComponentOutput = self.add_output(
             self.component_name,
             self.StoredEnergy,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description="Stored Energy"
         )
 
     def build(

@@ -5,7 +5,9 @@ from hisim.components import controller_l1_heatpump
 from hisim import loadtypes as lt
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
+import pytest
 
+@pytest.mark.base
 def test_simple_bucket_boiler_state():
 
     #simulation parameters

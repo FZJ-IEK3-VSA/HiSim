@@ -4,6 +4,7 @@ from hisim import loadtypes as lt
 from hisim.components import generic_CHP
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
+import pytest
 
 
 """
@@ -19,7 +20,7 @@ Created on Thu Jul 21 20:04:59 2022
 @author: Johanna
 """
 
-
+@pytest.mark.base
 def test_chp_system():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)

@@ -176,6 +176,13 @@ class LocationEnum(Enum):
         "Seville",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name,
+    FR = (
+        "Paris",
+        "NSRDB_15min",
+        "Paris",
+        "403286_48.85_2.34_2019.csv",
+        WeatherDataSourceEnum.NSRDB_15min,
+    )  # noqa: invalid-name
     DE = (
         "Potsdam",
         "NSRDB_15min",
@@ -565,6 +572,7 @@ class Weather(Component):
                 cache_filepath, sep=",", decimal=".", encoding="cp1252"
             )
             self.temperature_list = my_weather["t_out"].tolist()
+            self.daily_average_outside_temperature_list_in_celsius = my_weather["t_out_daily_average"].tolist()
             self.dry_bulb_list = self.temperature_list
             self.DHI_list = my_weather["DHI"].tolist()
             self.DNI_list = my_weather[
@@ -612,6 +620,10 @@ class Weather(Component):
                     .mean()
                     .to_list()
                 )
+                self.calculate_daily_average_outside_temperature(
+                    temperaturelist=self.temperature_list,
+                    seconds_per_timestep=seconds_per_timestep)
+
                 self.DHI_list = (
                     DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
@@ -642,6 +654,9 @@ class Weather(Component):
             else:
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
+                self.calculate_daily_average_outside_temperature(
+                    temperaturelist=self.temperature_list,
+                    seconds_per_timestep=seconds_per_timestep)
                 self.DHI_list = DHI.tolist()
                 self.DNI_list = DNI.tolist()
                 self.DNIextra_list = dni_extra.tolist()
@@ -664,6 +679,7 @@ class Weather(Component):
                 self.dry_bulb_list,
                 self.wind_speed_list,
                 self.DNIextra_list,
+                self.daily_average_outside_temperature_list_in_celsius
             ]
 
             database = pd.DataFrame(
@@ -679,14 +695,10 @@ class Weather(Component):
                     "DryBulb",
                     "Wspd",
                     "DNIextra",
+                    "t_out_daily_average"
                 ],
             )
             database.to_csv(cache_filepath)
-
-        self.calculate_daily_average_outside_temperature(
-            temperaturelist=self.temperature_list,
-            seconds_per_timestep=seconds_per_timestep,
-        )
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.my_simulation_parameters.predictive_control:

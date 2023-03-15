@@ -10,6 +10,10 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
+import pytest
+
+
+@pytest.mark.base
 def test_execute_json_generator():
     ex = ExampleConfig()
     ex.make_example_config()
@@ -19,7 +23,7 @@ class ExampleConfig:
         jcg: JsonConfigurationGenerator = JsonConfigurationGenerator("TestModel")
 
         # basic simulation parameters
-        my_simulation_parameters = SimulationParameters.january_only(year=2022, seconds_per_timestep=60)
+        my_simulation_parameters = SimulationParameters.january_only_with_only_charts(year=2022, seconds_per_timestep=60)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         jcg.set_simulation_parameters(my_simulation_parameters)
 

@@ -4,6 +4,8 @@
 
 import datetime
 import time
+import pytest
+
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -15,6 +17,7 @@ from hisim import utils
 from tests import functions_for_testing as fft
 
 
+@pytest.mark.base
 @utils.measure_execution_time
 def test_building():
     """Test function for the building module."""

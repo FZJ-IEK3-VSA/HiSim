@@ -110,8 +110,9 @@ class SimulationParameters(JSONWizard):
         pars.enable_all_options()
         return pars
 
+
     @classmethod
-    def full_year_only_plots(
+    def full_year_plots_only(
         cls, year: int, seconds_per_timestep: int
     ) -> SimulationParameters:
         """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
@@ -124,8 +125,9 @@ class SimulationParameters(JSONWizard):
         pars.enable_plots_only()
         return pars
 
+
     @classmethod
-    def january_only(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+    def january_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""
         pars = cls(
             datetime.datetime(year, 1, 1),
@@ -134,6 +136,18 @@ class SimulationParameters(JSONWizard):
             "",
         )
         pars.enable_all_options()
+        return pars
+
+    @classmethod
+    def january_only_with_only_charts(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Generates a parameter set for a single january, primarily for unit testing."""
+        pars = cls(
+            datetime.datetime(year, 1, 1),
+            datetime.datetime(year, 1, 31),
+            seconds_per_timestep,
+            "",
+        )
+        pars.enable_plots_only()
         return pars
 
     @classmethod
@@ -184,6 +198,20 @@ class SimulationParameters(JSONWizard):
             "",
         )
         pars.enable_all_options()
+        return pars
+
+    @classmethod
+    def one_day_only_with_only_plots(
+        cls, year: int, seconds_per_timestep: int
+    ) -> SimulationParameters:
+        """Generates a parameter set for a single day, primarily for unit testing."""
+        pars = cls(
+            datetime.datetime(year, 1, 1),
+            datetime.datetime(year, 1, 2),
+            seconds_per_timestep,
+            "",
+        )
+        pars.enable_plots_only()
         return pars
 
     def get_unique_key(self) -> str:

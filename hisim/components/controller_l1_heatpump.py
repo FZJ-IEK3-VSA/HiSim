@@ -5,7 +5,7 @@
 from dataclasses import dataclass
 
 # Owned
-from typing import List, Any, Optional
+from typing import List
 
 # Generic/Built-in
 
@@ -36,6 +36,7 @@ __status__ = "development"
 class L1HeatPumpConfig(ConfigBase):
 
     """L1 Controller Config."""
+
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -191,9 +192,11 @@ class L1HeatPumpController(cp.Component):
             self.HeatControllerTargetPercentage,
             LoadTypes.ANY,
             Units.PERCENT,
+            output_description="Heat Controller Target Percentage"
         )
         self.on_off_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.OnOffState, LoadTypes.ANY, Units.ANY
+            self.component_name, self.OnOffState, LoadTypes.ANY, Units.ANY,
+            output_description="On Off Channel"
         )
 
         # Component Inputs
@@ -378,7 +381,6 @@ class L1HeatPumpController(cp.Component):
             self.state.activate(timestep)
             self.calc_percentage(t_storage, temperature_modifier)
             return
-
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

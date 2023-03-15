@@ -171,7 +171,7 @@ def generate_csv_for_database(
     converting_data = pd.read_csv(
         utils.HISIMPATH["housing_reference_temperatures"]
     )
-    converting_data.index = converting_data["Location"]
+    converting_data.index = converting_data["Location"] # type: ignore
 
     # write all necesary data for building validation to csv file
     csv_frame[("Annual Heating Demand Tabula", "[kWh/(m*m*a)]")] = building_data["q_ht"].to_list()[0]

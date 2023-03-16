@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 # clean
-""" 
-    Generic heating controller with ping pong control and optional input for energy management system.
-    Runtime and idle time also considered. This file contains Controller together with Configuration and State.
-    The heat source is controlled accoring to four modes:
-        (a) 0.5 * power when temperature is already above target and only runs due to minimal operation time,
-            or temperature is between upper target and increased upper target from ESM
-        (b) 0.75 * power when temperature is within tolerance range,
-        (c) full power when temperature is below lower target,
-        (d) off when temperature is already below target and only runs due to minimal idle time, or temperature is above upper target.
+
+""" Generic heating controller with ping pong control and optional input for energy management system.
+
+Runtime and idle time also considered. This file contains Controller together with Configuration and State.
+The heat source is controlled accoring to four modes:
+(a) 0.5 * power when temperature is already above target and only runs due to minimal operation time,
+or temperature is between upper target and increased upper target from ESM
+(b) 0.75 * power when temperature is within tolerance range,
+(c) full power when temperature is below lower target,
+(d) off when temperature is already below target and only runs due to minimal idle time, or temperature is above upper target.
 """
 
 # Owned

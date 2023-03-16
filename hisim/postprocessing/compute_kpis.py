@@ -17,7 +17,7 @@ from hisim.utils import HISIMPATH
 def read_in_fuel_costs() -> pd.DataFrame:
     """Reads data for cost from csv."""
     price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 1, 2])
-    price_frame.index = price_frame["fuel type"] # type: ignore
+    price_frame.index = price_frame["fuel type"]  # type: ignore
     price_frame.drop(columns=["fuel type"], inplace=True)
     return price_frame
 
@@ -93,6 +93,7 @@ def compute_consumption_production(
 def compute_self_consumption_and_injection(
     results: pd.DataFrame,
 ) -> Tuple[pd.Series, pd.Series]:
+    """ Computes the self consumption and the grid injection. """
     # account for battery
     production_with_battery = results["production"] + results["battery_discharge"]
     consumption_with_battery = results["consumption"] + results["battery_charge"]
@@ -148,6 +149,7 @@ def search_electricity_prices_in_results(
 def compute_energy_from_power(
     power_timeseries: pd.Series, timeresolution: int
 ) -> float:
+    """ Computes the energy from a power value. """
     if power_timeseries.empty:
         return 0.0
     return float(power_timeseries.sum() * timeresolution / 3.6e6)
@@ -160,6 +162,7 @@ def compute_cost_of_fuel_type(
     price_frame: pd.DataFrame,
     fuel: LoadTypes,
 ) -> Tuple[float, float]:
+    """ Computes the cost of the fuel type. """
     fuel_consumption = pd.Series(dtype=pd.Float64Dtype)
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
@@ -172,16 +175,16 @@ def compute_cost_of_fuel_type(
     # convert liters to Wh
     if not fuel_consumption.empty:
         if fuel == LoadTypes.OIL:
-            liters_to_Wh = 1e4 / 1.0526315789474
+            liters_to_watt_hours = 1e4 / 1.0526315789474
         elif fuel == LoadTypes.DIESEL:
-            liters_to_Wh = 9.8e3
+            liters_to_watt_hours = 9.8e3
         else:
-            liters_to_Wh = 1
+            liters_to_watt_hours = 1
         consumption_sum = (
             compute_energy_from_power(
                 power_timeseries=fuel_consumption, timeresolution=timeresolution
             )
-            * liters_to_Wh
+            * liters_to_watt_hours
         )
     else:
         consumption_sum = 0

@@ -1,12 +1,13 @@
 """Test for simple hot water storage."""
 # clean
+import pytest
 from hisim import component as cp
 from hisim.components import simple_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
-import pytest
+
 
 @pytest.mark.base
 def test_simple_storage():
@@ -120,7 +121,7 @@ def test_simple_storage():
             factors_for_water_storage_portion.append(i / 3600)
         elif i > 3600:
             factors_for_water_storage_portion.append(1.0)
-    
+
     # simulate simple hot water storage for different seconds per timestep
     for index, seconds_per_timestep in enumerate(seconds_per_timesteps_to_test):
         log.information("sec per timestep " + str(seconds_per_timestep))

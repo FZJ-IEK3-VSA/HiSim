@@ -9,7 +9,6 @@ The module contains the following classes:
 """
 
 # this module is not finished yet!
-# clean
 
 # Generic/Built-in
 from typing import List, Any

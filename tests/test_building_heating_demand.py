@@ -5,8 +5,8 @@ The aim is to compare the calculated heat demand in the building module with the
 # clean
 import os
 from typing import Optional
+import pytest
 import numpy as np
-# import pandas as pd
 
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
@@ -16,7 +16,6 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim import log
 from hisim import utils
-import pytest
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -29,6 +28,7 @@ __status__ = "development"
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../examples/household_for_test_building_heat_demand.py"
 FUNC = "house_with_pv_and_hp_for_heating_test"
+
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
@@ -59,7 +59,6 @@ def test_house_with_pv_and_hp_for_heating_test(
     # Set Occupancy
     occupancy_profile = "CH01"
 
-
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.5
     temperature_air_cooling_in_celsius = 20.5
@@ -78,7 +77,6 @@ def test_house_with_pv_and_hp_for_heating_test(
         my_simulation_parameters = SimulationParameters.full_year_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(

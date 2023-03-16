@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
+import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import generic_CHP
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-import pytest
+
 
 
 """

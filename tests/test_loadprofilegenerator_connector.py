@@ -1,8 +1,9 @@
+import pytest
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-import pytest
+
 
 @pytest.mark.base
 def test_occupancy():

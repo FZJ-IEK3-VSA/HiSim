@@ -1,6 +1,7 @@
+import pytest
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
-import pytest
+
 
 @pytest.mark.examples
 def test_basic_household_with_default_connections():

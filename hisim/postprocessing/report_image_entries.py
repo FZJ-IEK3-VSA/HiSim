@@ -24,7 +24,9 @@ class ReportImageEntry:
         self.output_type = output_type
         self.category = category
         if output_description is None:
-            raise ValueError("Component description was none from component: " + component_name)
+            raise ValueError(
+                "Component description was none from component: " + component_name
+            )
         self.output_description = output_description
         self.unit = unit
         self.component_output_folder_path = component_output_folder_path

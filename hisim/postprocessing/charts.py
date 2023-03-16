@@ -117,7 +117,9 @@ class Line(Chart):  # noqa: too-few-public-methods
     ):
         """Initializes a line chart."""
         if output_description is None:
-            raise ValueError("Output description was None for component " + component_name)
+            raise ValueError(
+                "Output description was None for component " + component_name
+            )
 
         super().__init__(
             output=output,
@@ -208,7 +210,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
             time_correction_factor=time_correction_factor,
             output_description=output_description,
         )
-        self.filename = f"monthly_{self.output}.png"
+        self.filename = f"monthly_{self.output}{self.figure_format}"
 
     def plot(self, data: Any) -> ReportImageEntry:
         """Plots the bar chart."""
@@ -270,7 +272,7 @@ class SankeyHISIM(Chart):
             directory_path=directorypath,
             time_correction_factor=time_correction_factor,
         )
-        self.filename = f"{self.output}.png"
+        self.filename = f"{self.output}{self.figure_format}"
 
     def plot(self, data):
         """Executes the plot."""

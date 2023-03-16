@@ -15,7 +15,7 @@ from hisim import utils
 def compute_energy_from_power(
     power_timeseries: pd.Series, seconds_per_timestep: int
 ) -> float:
-    """ Computes energy from power value. """
+    """Computes energy from power value."""
     if power_timeseries.empty:
         return 0.0
     return float(power_timeseries.sum() * seconds_per_timestep / 3.6e6)
@@ -71,7 +71,6 @@ def generate_csv_for_database(
         + ["HeatingDays HiSIM"]
         + ["AverageTemperatureInHeatingSeason Tabula"]
         + ["AverageTemperatureInHeatingSeason HiSIM"]
-
     )
     units = (
         fuels_heating * 2
@@ -169,22 +168,51 @@ def generate_csv_for_database(
     # extract infos from used climate data to compare to climate information used for tabula evaluation
     building_code = building_data["Code_BuildingVariant"].to_list()[0]
     print(building_code)
-    converting_data = pd.read_csv(
-        utils.HISIMPATH["housing_reference_temperatures"]
-    )
+    converting_data = pd.read_csv(utils.HISIMPATH["housing_reference_temperatures"])
     converting_data.index = converting_data["Location"]  # type: ignore
 
     # write all necesary data for building validation to csv file
-    csv_frame[("Annual Heating Demand Tabula", "[kWh/(m*m*a)]")] = building_data["q_ht"].to_list()[0]
-    csv_frame[("HeatingDays Tabula", "Number of Days")] = building_data["HeatingDays"].to_list()[0]
-    csv_frame[("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")] = building_data["Theta_e"].to_list()[0]
-    csv_frame[("Annual Heating Demand HiSIM", "[kWh/(m*m*a)]")] = csv_frame[("SpaceHeating", "Distributed Stream [kWh]")] / building_data["A_C_Ref"]
-    csv_frame[("HeatingDays HiSIM", "Number of Days")] = int(converting_data.loc[building_code.split(".")[0]]["NumberOfHeatingDays"])
-    csv_frame[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")] = float(converting_data.loc[building_code.split(".")[0]]["Average"])
+    csv_frame[("Annual Heating Demand Tabula", "[kWh/(m*m*a)]")] = building_data[
+        "q_ht"
+    ].to_list()[0]
+    csv_frame[("HeatingDays Tabula", "Number of Days")] = building_data[
+        "HeatingDays"
+    ].to_list()[0]
+    csv_frame[
+        ("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")
+    ] = building_data["Theta_e"].to_list()[0]
+    csv_frame[("Annual Heating Demand HiSIM", "[kWh/(m*m*a)]")] = (
+        csv_frame[("SpaceHeating", "Distributed Stream [kWh]")]
+        / building_data["A_C_Ref"]
+    )
+    csv_frame[("HeatingDays HiSIM", "Number of Days")] = int(
+        converting_data.loc[building_code.split(".")[0]]["NumberOfHeatingDays"]
+    )
+    csv_frame[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")] = float(
+        converting_data.loc[building_code.split(".")[0]]["Average"]
+    )
     csv_frame[("Building Size", "Area [m*m]")] = building_data["A_C_Ref"]
-    csv_frame[("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")] = building_data["q_ht"].to_list()[0] * \
-        ((20 - csv_frame[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")]) * csv_frame[("HeatingDays HiSIM", "Number of Days")]) / \
-        ((20 - csv_frame[("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")]) * csv_frame[("HeatingDays Tabula", "Number of Days")])
+    csv_frame[("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")] = (
+        building_data["q_ht"].to_list()[0]
+        * (
+            (
+                20
+                - csv_frame[
+                    ("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")
+                ]
+            )
+            * csv_frame[("HeatingDays HiSIM", "Number of Days")]
+        )
+        / (
+            (
+                20
+                - csv_frame[
+                    ("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")
+                ]
+            )
+            * csv_frame[("HeatingDays Tabula", "Number of Days")]
+        )
+    )
 
     pathname = os.path.join(
         simulation_parameters.result_directory, "csv_for_housing_data_base.csv"

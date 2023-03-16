@@ -5,6 +5,7 @@ import os
 import pydot
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+from hisim.postprocessing.chartbase import FigureFormat
 
 
 class SystemChart:
@@ -14,23 +15,24 @@ class SystemChart:
     def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
         """Initizalizes the class."""
         self.ppdt: PostProcessingDataTransfer = ppdt
+        self.figure_format_system_chart = FigureFormat.JPG
 
     def make_chart(self) -> None:
         """Makes different charts. Entry point for the class."""
         self.make_graphviz_chart(
             with_labels=False,
             with_class_names=True,
-            filename="System_no_Edge_with_class_labels.png",
+            filename=f"System_no_Edge_with_class_labels{self.figure_format_system_chart}",
         )
         self.make_graphviz_chart(
             with_labels=False,
             with_class_names=False,
-            filename="System_no_Edge_labels.png",
+            filename=f"System_no_Edge_labels{self.figure_format_system_chart}",
         )
         self.make_graphviz_chart(
             with_labels=True,
             with_class_names=False,
-            filename="System_with_Edge_labels.png",
+            filename=f"System_with_Edge_labels{self.figure_format_system_chart}",
         )
 
     def make_graphviz_chart(

@@ -21,7 +21,9 @@ from hisim.postprocessing.generate_csv_for_housing_database import (
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+from hisim.postprocessing.report_image_entries import ReportImageEntry
 from wrappedcallgraph.callgraphwrap import method_pattern
+
 
 class PostProcessor:
 
@@ -275,13 +277,11 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function.")
 
+        # Make callgraph
         if PostProcessingOptions.MAKE_CALLGRAPH_CHART in ppdt.post_processing_options:
             log.information("Making Callgraph Chart.")
             self.make_callgraph_chart()
 
-        if PostProcessingOptions.MAKE_CALLGRAPH_CHART in ppdt.post_processing_options:
-            log.information("Making Callgraph Chart.")
-            self.make_callgraph_chart()
 
     def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
         """Generates the network charts that show the connection of the elements."""
@@ -292,8 +292,11 @@ class PostProcessor:
         """Make Pycallgraph chart."""
         method_pattern.make_graphviz_chart(with_labels=True, time_resolution=10, filename='HISIM_Method_Pattern.png')
 
-    def make_special_one_day_debugging_plots(self, ppdt: PostProcessingDataTransfer) -> None:
-        """ Makes special plots for debugging if only a single day was calculated."""
+    def make_special_one_day_debugging_plots(
+        self, ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry]
+    ) -> None:
+        """Makes special plots for debugging if only a single day was calculated."""
         for index, output in enumerate(ppdt.all_outputs):
             if output.full_name == "Dummy # Residence Temperature":
                 my_days = ChartSingleDay(
@@ -635,7 +638,6 @@ class PostProcessor:
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
         """Opens files in given path.
-
         The keyword darwin is used for supporting macOS,
         xdg-open will be available on any unix client running X.
         """
@@ -648,7 +650,7 @@ class PostProcessor:
 
     def export_sankeys(self):
         """Exports Sankeys plots.
-
         ToDo: implement
         """
         pass  # noqa: unnecessary-pass
+

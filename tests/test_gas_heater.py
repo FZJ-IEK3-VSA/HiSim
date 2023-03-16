@@ -5,7 +5,6 @@ import pytest
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import utils
 
 

@@ -1,12 +1,13 @@
 """Test for simple hot water storage."""
 # clean
+import pytest
 from hisim import component as cp
 from hisim.components import simple_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
-import pytest
+
 
 @pytest.mark.base
 def test_simple_storage():

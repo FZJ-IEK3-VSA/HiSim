@@ -1,14 +1,14 @@
 """Test for the Example Transformer."""
 
 # clean
-
+import pytest
 from hisim import component as cp
 from hisim.components import example_transformer
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
 from tests import functions_for_testing as fft
-import pytest
+
 
 @pytest.mark.base
 def test_example_transformer():

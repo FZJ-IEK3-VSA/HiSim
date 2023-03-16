@@ -121,7 +121,7 @@ def test_simple_storage():
             factors_for_water_storage_portion.append(i / 3600)
         elif i > 3600:
             factors_for_water_storage_portion.append(1.0)
-    
+
     # simulate simple hot water storage for different seconds per timestep
     for index, seconds_per_timestep in enumerate(seconds_per_timesteps_to_test):
         log.information("sec per timestep " + str(seconds_per_timestep))

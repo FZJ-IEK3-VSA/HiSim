@@ -45,18 +45,21 @@ def compute_consumption_production(
     # flags for Units: cp.ComponentOutput.unit
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
-    results["consumption"] = 0
-    results["production"] = 0
-    results["battery_charge"] = 0
-    results["battery_discharge"] = 0
-    results["storage"] = 0
+    consumption_ids = []
+    production_ids = []
+    battery_charge_discharge_ids = []
+    hot_water_charge_ids = []
+    hot_water_discharge_ids = []
+    heating_charge_ids = [] 
+    heating_discharge_ids = []
+
     index: int
     output: ComponentOutput
 
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
             if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
-                results["production"] = results["production"] + results.iloc[:, index]
+                production_ids.append(index)
 
             elif (
                 (
@@ -66,37 +69,34 @@ def compute_consumption_production(
                 or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 in output.postprocessing_flag
             ):
-                results["consumption"] = results["consumption"] + results.iloc[:, index]
-
-            elif InandOutputType.STORAGE_CONTENT in output.postprocessing_flag:
-                results["storage"] = results["storage"] + results.iloc[:, index]
-
+                consumption_ids.append(index)
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BATTERY in output.postprocessing_flag:
-                    results["battery_charge"] = results[
-                        "battery_charge"
-                    ] + results.iloc[:, index].clip(lower=0)
-                    results["battery_discharge"] = results[
-                        "battery_discharge"
-                    ] - results.iloc[:, index].clip(upper=0)
+                    battery_charge_discharge_ids.append(index)
                 elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
-                    results["consumption"] = results["consumption"] + results.iloc[
-                        :, index
-                    ].clip(lower=0)
-
+                    consumption_ids.append(index)
         else:
             continue
 
-    return results
+    pos = lambda col : col[col > 0]
+    neg = lambda col : col[col < 0]   
+
+    postprocessing_results = pd.DataFrame()
+    postprocessing_results[ "consumption" ] = results.iloc[:,consumption_ids].agg(pos).sum(axis=1)
+    postprocessing_results[ "production" ] = results.iloc[:,production_ids].agg(pos).sum(axis=1)
+    postprocessing_results["battery_charge"] = results.iloc[:,battery_charge_discharge_ids].agg(pos).sum(axis=1)
+    postprocessing_results["battery_discharge"] = results.iloc[:,battery_charge_discharge_ids].agg(neg).sum(axis=1) * (-1)
+
+    return postprocessing_results
 
 
 def compute_self_consumption_and_injection(
-    results: pd.DataFrame,
+    postprocessing_results: pd.DataFrame,
 ) -> Tuple[pd.Series, pd.Series]:
     """Computes the self consumption and the grid injection."""
     # account for battery
-    production_with_battery = results["production"] + results["battery_discharge"]
-    consumption_with_battery = results["consumption"] + results["battery_charge"]
+    production_with_battery = postprocessing_results["production"] + postprocessing_results["battery_discharge"]
+    consumption_with_battery = postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
 
     # evaluate injection and sum over time
     injection = production_with_battery - consumption_with_battery
@@ -109,10 +109,10 @@ def compute_self_consumption_and_injection(
         pd.concat(
             (
                 production_with_battery[
-                    production_with_battery <= results["consumption"]
+                    production_with_battery <= postprocessing_results["consumption"]
                 ],
-                results["consumption"][
-                    results["consumption"] < production_with_battery
+                postprocessing_results["consumption"][
+                    postprocessing_results["consumption"] < production_with_battery
                 ],
             )
         )
@@ -206,7 +206,7 @@ def compute_kpis(
     price_frame = read_in_fuel_costs()
 
     # compute consumption and production and extract price signals
-    results = compute_consumption_production(all_outputs=all_outputs, results=results)
+    postprocessing_results = compute_consumption_production(all_outputs=all_outputs, results=results)
     (
         electricity_price_consumption,
         electricity_price_injection,
@@ -214,19 +214,19 @@ def compute_kpis(
 
     # sum consumption and production over time make it more clear and better
     consumption_sum = compute_energy_from_power(
-        power_timeseries=results["consumption"],
+        power_timeseries=postprocessing_results["consumption"],
         timeresolution=simulation_parameters.seconds_per_timestep,
     )
 
     production_sum = compute_energy_from_power(
-        power_timeseries=results["production"],
+        power_timeseries=postprocessing_results["production"],
         timeresolution=simulation_parameters.seconds_per_timestep,
     )
 
     # computes injection and self consumption + autarky and self consumption rates
     if production_sum > 0:
         injection, self_consumption = compute_self_consumption_and_injection(
-            results=results
+            postprocessing_results=postprocessing_results
         )
         injection_sum = compute_energy_from_power(
             power_timeseries=injection[injection > 0],
@@ -241,13 +241,13 @@ def compute_kpis(
         self_consumption_rate = 100 * (self_consumption_sum / production_sum)
         autarky_rate = 100 * (self_consumption_sum / consumption_sum)
 
-        if not results["storage"].empty:
+        if not postprocessing_results["battery_charge"].empty:
             # battery_soc = float(results["storage"][-1]) * 100
             battery_losses = compute_energy_from_power(
-                power_timeseries=results["battery_charge"],
+                power_timeseries=postprocessing_results["battery_charge"],
                 timeresolution=simulation_parameters.seconds_per_timestep,
             ) - compute_energy_from_power(
-                power_timeseries=results["battery_discharge"],
+                power_timeseries=postprocessing_results["battery_discharge"],
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
 
@@ -277,7 +277,7 @@ def compute_kpis(
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
             price = price + compute_energy_from_power(
-                power_timeseries=results["consumption"] - self_consumption,
+                power_timeseries=postprocessing_results["consumption"] - self_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
         else:
@@ -291,7 +291,7 @@ def compute_kpis(
         if not electricity_price_consumption.empty:
             # substract self consumption from consumption for bill calculation
             price = price + compute_energy_from_power(
-                power_timeseries=results["consumption"] * electricity_price_consumption,
+                power_timeseries=postprocessing_results["consumption"] * electricity_price_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
         else:

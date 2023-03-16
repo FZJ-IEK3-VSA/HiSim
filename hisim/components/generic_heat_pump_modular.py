@@ -152,7 +152,7 @@ class ModularHeatPump(cp.Component):
             field_name=self.ThermalPowerDelivered,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER],
+            postprocessing_flag=[lt.InandOutputType.CHARGE, self.config.water_vs_heating],
             output_description="Thermal Power Delivered"
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(

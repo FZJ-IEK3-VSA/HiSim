@@ -406,8 +406,8 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a CSV file."""
-        log.information("ppdt.results " + str(ppdt.results))
-        ppdt.results.to_csv(os.path.join(ppdt.simulation_parameters.result_directory, "all_results.csv"), sep=",", decimal=".")
+        # log.information("ppdt.results " + str(ppdt.results))
+        # ppdt.results.to_excel(os.path.join(ppdt.simulation_parameters.result_directory, "all_results.xlsx"))
         for column in ppdt.results:
             ppdt.results[column].to_csv(
                 os.path.join(

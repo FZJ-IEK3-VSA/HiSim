@@ -132,7 +132,7 @@ class L1BuildingHeatController(cp.Component):
         self.state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
         self.previous_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
         self.processed_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
-    
+
         # Component Outputs
         self.heat_controller_target_percentage_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ON_OFF, Units.BINARY, output_description="Heating controller of buffer storage."
@@ -250,17 +250,12 @@ class L1BuildingHeatController(cp.Component):
             # heat with 75 % power and building can still be heated
             if t_control < self.config.t_max_heating_in_celsius + temperature_modifier / 2:
                 self.state.state = 0.75
-                return
             # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
-            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
+            elif t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
                 self.state.state = 0.5
-                return
             # deactivate heating when building temperature increases tolerance interval
-            if t_control >= self.config.t_max_heating_in_celsius + temperature_modifier:
+            else:  # if t_control >= self.config.t_max_heating_in_celsius + temperature_modifier:
                 self.state.state = 0
-                return
-
-            
             return
 
     def i_save_state(self) -> None:

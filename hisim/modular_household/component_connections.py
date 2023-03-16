@@ -286,6 +286,7 @@ def configure_ev_batteries(
                 source_weight=my_controller_carbattery.source_weight,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
+                output_description="Target Electricity for EV Battery Controller. ",
             )
 
             my_controller_carbattery.connect_dynamic_input(
@@ -333,6 +334,7 @@ def configure_smart_controller_for_smart_devices(
             source_weight=elem.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
+            output_description="Target electricity for Smart Device Controller. ",
         )
 
         elem.connect_dynamic_input(
@@ -404,6 +406,7 @@ def configure_battery(
             source_weight=my_advanced_battery.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
         )
     )
 
@@ -578,15 +581,11 @@ def configure_water_heating_electric(
     my_boiler.connect_only_predefined_connections(my_heatpump)
 
     if controlable:
-        my_heatpump_controller_l1.connect_only_predefined_connections(
-            my_electricity_controller
-        )
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
             my_electricity_controller.StorageTemperatureModifier,
         )
-        my_heatpump.connect_only_predefined_connections(my_electricity_controller)
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,
             source_component_output=my_heatpump.ElectricityOutput,
@@ -608,6 +607,7 @@ def configure_water_heating_electric(
             source_weight=my_heatpump.config.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
+            output_description="Target electricity for heat pump.",
         )
 
     else:
@@ -766,7 +766,6 @@ def configure_heating_electric(
             my_electricity_controller.component_name,
             my_electricity_controller.BuildingTemperatureModifier,
         )
-        my_heatpump.connect_only_predefined_connections(my_electricity_controller)
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,
             source_component_output=my_heatpump.ElectricityOutput,
@@ -788,6 +787,7 @@ def configure_heating_electric(
             source_weight=my_heatpump.config.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
+            output_description="Target electricity for HeatingHeat Pump. ",
         )
     else:
         my_electricity_controller.add_component_input_and_connect(
@@ -884,6 +884,7 @@ def configure_heating_with_buffer_electric(
     )
     building_heating_controller_config.day_of_heating_season_end = heating_season[0]
     building_heating_controller_config.day_of_heating_season_begin = heating_season[1]
+    building_heating_controller_config.t_buffer_activation_threshold_in_celsius = heatpump_l1_config.t_max_heating_in_celsius
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [
         count
     ] * 2
@@ -915,9 +916,6 @@ def configure_heating_with_buffer_electric(
     my_sim.add_component(my_buffer_controller)
 
     if controlable:
-        my_heatpump_controller_l1.connect_only_predefined_connections(
-            my_electricity_controller
-        )
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -929,7 +927,6 @@ def configure_heating_with_buffer_electric(
             my_electricity_controller.BuildingTemperatureModifier
         )
 
-        my_heatpump.connect_only_predefined_connections(my_electricity_controller)
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_heatpump,
             source_component_output=my_heatpump.ElectricityOutput,
@@ -951,6 +948,7 @@ def configure_heating_with_buffer_electric(
             source_weight=my_heatpump.config.source_weight,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
+            output_description="Target electricity for HeatingHeat Pump. ",
         )
 
     else:
@@ -1037,6 +1035,7 @@ def configure_heating_with_buffer(
     )
     building_heating_controller_config.day_of_heating_season_end = heating_season[0]
     building_heating_controller_config.day_of_heating_season_begin = heating_season[1] - 1
+    building_heating_controller_config.t_buffer_activation_threshold_in_celsius = heater_l1_config.t_max_heating_in_celsius
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [
         count
     ] * 2
@@ -1163,6 +1162,7 @@ def configure_elctrolysis_h2storage_chp_system(
         source_weight=my_chp.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
+        output_description="Target electricity for Fuel Cell. ",
     )
     my_chp_controller_l1.connect_dynamic_input(
         input_fieldname=generic_CHP.L1GenericCHPRuntimeController.ElectricityTarget,
@@ -1227,6 +1227,7 @@ def configure_elctrolysis_h2storage_chp_system(
         source_weight=my_electrolyzer.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
+        output_description="Target electricity for electrolyzer. ",
     )
     my_electrolyzer_controller_l1.connect_dynamic_input(
         input_fieldname=generic_electrolyzer.L1GenericElectrolyzerController.l2_ElectricityTarget,

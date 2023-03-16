@@ -6,6 +6,11 @@ It controls the heating system (heat transfer from buffer storage to building)
 only during the heating period.
 It is a ping pong control with an optional input from the Energy Management System,
 which enforces heating with electricity from PV.
+The buffer is controlled accoring to four modes:
+    (a) 0.5 * power when buffer temperature is within the upper half between upper target and increased upper target from Energy Management System (only in surplus case),
+    (b) 0.75 * power when buffer temperature is within the lower half beweet upper target and increase upper target from Energy Management System (only in surplus case),
+    (c) full power when building temperature is below lower target,
+    (d) off when temperature is higher than upper target.
 """
 
 from dataclasses import dataclass
@@ -58,8 +63,8 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
-        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=55.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
+        config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=19.5,
+        t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
 
@@ -69,10 +74,10 @@ class L1BuildingHeatControllerState:
 
     def __init__(
         self,
-        state: int = 0
+        state: float = 0
     ):
         """Initializes the class."""
-        self.state: int = state
+        self.state: float = state
 
     def clone(self) -> "L1BuildingHeatControllerState":
         """Clones itself."""
@@ -85,8 +90,8 @@ class L1BuildingHeatController(cp.Component):
 
     """L1 building controller. Processes signals ensuring comfort temperature of building.
 
-    Gets available surplus electricity and the temperature of building to control as input, as well as the temperatur of the buffer storage.
-    It outputs control signal 0/1 for turn off/switch on based on comfort temperature limits and available electricity.
+    Gets temperature of building to control as input, as well as a signal from the energy management system to increase the set temperatur of the buffer storage.
+    It outputs a control signal with four modes (0, 0.5, 0.75 and 1) for zero, half, three quarter and full power accordingly.
     It is only activated during the heating season.
 
     Components to connect to:
@@ -100,14 +105,10 @@ class L1BuildingHeatController(cp.Component):
     BuildingTemperatureModifier = "BuildingTemperatureModifier"
     BufferTemperature = "BufferTemperature"
     # Outputs
-    boiler_signal = "l2_DeviceSignal"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
 
     # #Forecasts
     # HeatPumpLoadForecast = "HeatPumpLoadForecast"
-
-    # Similar components to connect to:
-    # 1. Building
-    # 2. HeatPump
 
     @utils.measure_execution_time
     def __init__(
@@ -129,13 +130,12 @@ class L1BuildingHeatController(cp.Component):
         self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
-        self.previous_state: L1BuildingHeatControllerState = (
-            L1BuildingHeatControllerState()
-        )
+        self.previous_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
+        self.processed_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
 
         # Component Outputs
-        self.l2_device_signal_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.boiler_signal, LoadTypes.ON_OFF, Units.BINARY
+        self.heat_controller_target_percentage_channel: cp.ComponentOutput = self.add_output(
+            self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ON_OFF, Units.BINARY, output_description="Heating controller of buffer storage."
         )
 
         # Component Inputs
@@ -223,21 +223,40 @@ class L1BuildingHeatController(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control_heating(self, timestep: int, t_control: float, t_min_heating: float, t_max_heating: float, t_buffer_activation: float, t_buffer: float) -> None:
+    def control_heating(self, timestep: int, t_control: float, t_buffer: float, temperature_modifier: float) -> None:
         """ Controls the heating from buffer to building. """
         # prevent heating in summer
         if self.heating_season_begin > timestep > self.heating_season_end:
-            self.previous_state.state = 0
+            self.state.state = 0
             return
-        if t_control > t_max_heating:
-            self.previous_state.state = 0
-            return
-        if t_control < t_min_heating:
+        # activate heating when building temperature is below lower threshold
+        if t_control < self.config.t_min_heating_in_celsius:
             # start heating if temperature goes below lower limit
-            self.previous_state.state = 1
+            self.state.state = 1
             return
-        if t_buffer > t_buffer_activation:
-            self.previous_state.state = 1
+        # "normal" heat control when no surplus electricity is available
+        if temperature_modifier == 0:
+            # deactivate heating when building temperature is above upper threshold
+            if t_control > self.config.t_max_heating_in_celsius:
+                self.state.state = 0
+                return
+            # deactivate heating when temperature modifier is zero and signal comes from surplus control.
+            # states 0.5 and 0.75 are only activated when temperature modifier is greater than zero, which is only the case in surplus control.
+            if self.state.state in [0.5, 0.75]:
+                self.state.state = 0
+                return
+        # "surplus heat control" when storage is getting hot
+        if temperature_modifier > 0 and t_buffer > self.config.t_buffer_activation_threshold_in_celsius:
+            # heat with 75 % power and building can still be heated
+            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier / 2:
+                self.state.state = 0.75
+            # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
+            elif t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
+                self.state.state = 0.5
+            # deactivate heating when building temperature increases tolerance interval
+            else:  # if t_control >= self.config.t_max_heating_in_celsius + temperature_modifier:
+                self.state.state = 0
+            return
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -256,23 +275,22 @@ class L1BuildingHeatController(cp.Component):
     ) -> None:
         """Simulates the control of the building temperature, when building is heated from buffer."""
         if force_convergence:
-            return
-        # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
-        t_control = stsv.get_input_value(self.building_temperature_channel)
-        if self.buffer_temperature_channel.source_output is not None:
-            t_buffer = stsv.get_input_value(self.buffer_temperature_channel)
+            pass
         else:
-            t_buffer = 0
-        temperature_modifier = stsv.get_input_value(
-            self.building_temperature_modifier_channel
-        )
-        t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
-        t_max_target = self.config.t_max_heating_in_celsius + temperature_modifier
-        t_buffer_activation = self.config.t_buffer_activation_threshold_in_celsius
-        self.control_heating(
-            timestep=timestep, t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target, t_buffer_activation=t_buffer_activation, t_buffer=t_buffer
-        )
-        stsv.set_output_value(self.l2_device_signal_channel, self.state.state)
+            # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
+            t_control = stsv.get_input_value(self.building_temperature_channel)
+            if self.buffer_temperature_channel.source_output is not None:
+                t_buffer = stsv.get_input_value(self.buffer_temperature_channel)
+            else:
+                t_buffer = 0
+            temperature_modifier = stsv.get_input_value(
+                self.building_temperature_modifier_channel
+            )
+            self.control_heating(
+                timestep=timestep, t_control=t_control, t_buffer=t_buffer, temperature_modifier=temperature_modifier
+            )
+            self.processed_state = self.state.clone()
+        stsv.set_output_value(self.heat_controller_target_percentage_channel, self.processed_state.state)
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

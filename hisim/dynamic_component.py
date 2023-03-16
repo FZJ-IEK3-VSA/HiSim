@@ -77,7 +77,8 @@ class DynamicComponent(Component):
                              source_tags: list,
                              source_load_type: lt.LoadTypes,
                              source_unit: lt.Units,
-                             source_weight: int) -> ComponentOutput:
+                             source_weight: int,
+                             output_description: str) -> ComponentOutput:
         """ Adds an output channel to a component. """
         # Label Output and generate variable
         num_inputs = len(self.outputs)
@@ -86,7 +87,7 @@ class DynamicComponent(Component):
 
         # Define Output as Component Input and add it to inputs
         myoutput = ComponentOutput(object_name=self.component_name, field_name=source_output_name + label, load_type=source_load_type,
-                                   unit=source_unit, sankey_flow_direction=True)
+                                   unit=source_unit, sankey_flow_direction=True, output_description=output_description)
         self.outputs.append(myoutput)
         setattr(self, label, myoutput)
 

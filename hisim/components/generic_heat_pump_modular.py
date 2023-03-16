@@ -13,9 +13,7 @@ from hisim import log
 # Owned
 from hisim import utils
 from hisim.components import controller_l1_heatpump
-from hisim.components.controller_l2_energy_management_system import (
-    L2GenericEnergyManagementSystem,
-)
+
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 
@@ -100,9 +98,7 @@ class ModularHeatPump(cp.Component):
 
     # Inputs
     TemperatureOutside = "TemperatureOutside"
-    L1DeviceSignal = "L1DeviceSignal"
-    l1_RunTimeSignal = "l1_RunTimeSignal"
-    ems_flexible_electricity = "EMS Modulating Signal"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
@@ -134,7 +130,7 @@ class ModularHeatPump(cp.Component):
             ]
 
         # Inputs - Mandatories
-        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(
+        self.temperature_outside_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureOutside,
             lt.LoadTypes.ANY,
@@ -142,24 +138,16 @@ class ModularHeatPump(cp.Component):
             mandatory=True,
         )
 
-        self.EMS_Flexible_ElectricityC: cp.ComponentInput = self.add_input(
+        self.heat_controller_power_modifier_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.ems_flexible_electricity,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
-            mandatory=False,
-        )
-
-        self.L1HeatControllerTargetPercentage: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.L1DeviceSignal,
+            self.HeatControllerTargetPercentage,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             mandatory=True,
         )
 
         # Outputs
-        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
+        self.thermal_power_delicered_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalPowerDelivered,
             load_type=lt.LoadTypes.HEATING,
@@ -167,7 +155,7 @@ class ModularHeatPump(cp.Component):
             postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER],
             output_description="Thermal Power Delivered"
         )
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
+        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -176,7 +164,7 @@ class ModularHeatPump(cp.Component):
             output_description="Electricity Output"
         )
 
-        self.PowerModifierChannel: cp.ComponentOutput = self.add_output(
+        self.power_modifier_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.PowerModifier,
             load_type=lt.LoadTypes.ANY,
@@ -188,9 +176,6 @@ class ModularHeatPump(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(
             self.get_default_connections_from_controller_l1_heatpump()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_L2GenericEnergyManagementSystem()
         )
 
     def get_default_connections_from_weather(self):
@@ -207,20 +192,6 @@ class ModularHeatPump(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_L2GenericEnergyManagementSystem(self):
-        """ Sets default connections of Energy Management System. """
-        log.information("setting weather default connections in HeatPump")
-        connections = []
-        ems_classname = L2GenericEnergyManagementSystem.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                ModularHeatPump.ems_flexible_electricity,
-                ems_classname,
-                L2GenericEnergyManagementSystem.FlexibleElectricity,
-            )
-        )
-        return connections
-
     def get_default_connections_from_controller_l1_heatpump(self):
         """ Sets default connections of heat pump controller. """
         log.information("setting l1 default connections in HeatPump")
@@ -230,7 +201,7 @@ class ModularHeatPump(cp.Component):
         )
         connections.append(
             cp.ComponentConnection(
-                ModularHeatPump.L1DeviceSignal,
+                ModularHeatPump.HeatControllerTargetPercentage,
                 controller_classname,
                 controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage,
             )
@@ -298,9 +269,9 @@ class ModularHeatPump(cp.Component):
         """ Iteration of heat pump simulation. """
 
         # Inputs
-        target_percentage = stsv.get_input_value(self.L1HeatControllerTargetPercentage)
+        target_percentage = stsv.get_input_value(self.heat_controller_power_modifier_channel)
 
-        T_outside: float = stsv.get_input_value(self.TemperatureOutsideC)
+        T_outside: float = stsv.get_input_value(self.temperature_outside_channel)
         cop = self.cal_cop(T_outside)
         electric_power = self.config.power_th / cop
 
@@ -309,15 +280,12 @@ class ModularHeatPump(cp.Component):
             power_modifier = target_percentage
         if target_percentage == 0:
             power_modifier = 0
-        if target_percentage < 0:
-            flexible_electricity = stsv.get_input_value(self.EMS_Flexible_ElectricityC)
-            power_modifier = flexible_electricity / electric_power
 
         power_modifier = min(1, power_modifier)
 
         stsv.set_output_value(
-            self.ThermalPowerDeliveredC, self.config.power_th * power_modifier
+            self.thermal_power_delicered_channel, self.config.power_th * power_modifier
         )
-        stsv.set_output_value(self.PowerModifierChannel, power_modifier)
+        stsv.set_output_value(self.power_modifier_channel, power_modifier)
 
-        stsv.set_output_value(self.ElectricityOutputC, electric_power * power_modifier)
+        stsv.set_output_value(self.electricity_output_channel, electric_power * power_modifier)

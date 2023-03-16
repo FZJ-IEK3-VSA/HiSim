@@ -58,7 +58,7 @@ class EMSConfig(cp.ConfigBase):
             name="EMS L2EMSElectricityController",
             strategy="optimize_own_consumption",
             limit_to_shave=0,
-            building_temperature_offset_value=1,
+            building_temperature_offset_value=2,
             storage_temperature_offset_value=10,
         )
         return config

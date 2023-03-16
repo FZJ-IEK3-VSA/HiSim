@@ -5,7 +5,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 
-
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household_with_default_connections():

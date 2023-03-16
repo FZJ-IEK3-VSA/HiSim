@@ -15,7 +15,7 @@ class SystemConfig:
     """Defines the configuration and sizing of all components considered in a modular household."""
 
     #: decision on the consideration of Photovoltaic Panel
-    pv_included: bool = False
+    pv_included: bool = True
     #: peak power of the considered Photovoltaic Panel in Wp
     pv_peak_power: Optional[float] = 1e4
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
@@ -29,7 +29,7 @@ class SystemConfig:
     #: capacity of the considered battery in kWh
     battery_capacity: Optional[float] = 20.0  # in kWh
     #: decision on the consideration of heat pump
-    heatpump_included: bool = False
+    heatpump_included: bool = True
     #: maximal power of the considered heat pump in multiples of the default
     heatpump_power: Optional[float] = 1.0  # in multiples of default
     #: decision on the consideration of combined heat and power - in this case a fuel cell

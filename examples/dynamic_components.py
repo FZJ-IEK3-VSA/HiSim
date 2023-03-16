@@ -178,6 +178,7 @@ def dynamic_components_demonstration(
         source_weight=my_advanced_battery_1.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
+        output_description="Target electricity for battery controller (I). ",
     )
     electricity_to_or_from_battery_target_2 = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
@@ -185,6 +186,7 @@ def dynamic_components_demonstration(
         source_weight=my_advanced_battery_2.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
+        output_description="Target electricity for battery controller (II). ",
     )
 
     my_advanced_battery_1.connect_dynamic_input(
@@ -219,6 +221,7 @@ def dynamic_components_demonstration(
         source_weight=3,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
+        output_description="Target electricity for fuel cell (I). ",
     )
     electricity_from_fuel_cell_target_2 = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
@@ -226,6 +229,7 @@ def dynamic_components_demonstration(
         source_weight=4,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
+        output_description="Target electricity for fuel cell (II). ",
     )
 
     my_advanced_fuel_cell_1.connect_dynamic_input(

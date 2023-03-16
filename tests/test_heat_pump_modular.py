@@ -54,7 +54,6 @@ def test_heat_pump_modular():
     my_heat_pump.temperature_outside_channel.source_output = t_air_outdoorC
     my_heat_pump.heat_controller_power_modifier_channel.source_output = my_heat_pump_controller_l1.heat_pump_target_percentage_channel
     my_heat_pump_controller_l1.storage_temperature_channel.source_output = t_mC
-    my_heat_pump_controller_l1.flexible_electricity_input.source_output = ElectricityTargetC
 
     # indexing of in- and outputs
     t_mC.global_index = 0

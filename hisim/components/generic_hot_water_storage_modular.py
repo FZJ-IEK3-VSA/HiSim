@@ -1,9 +1,8 @@
 """ Simple hot water storage implementation: HotWaterStorage class together with state and configuration class.
 
 Energy bucket model: extracts energy, adds energy and converts back to temperatere.
-The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as boiler with input:
-hot water demand or as  buffer with input ThermalPowerToBuilding. Both options need input signal for heating power and have
-one output: the hot water storage temperature.
+The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as
+DHW hot water storage or as buffer storage.
 """
 # clean
 # Generic/Built-in
@@ -164,8 +163,8 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     Energy bucket model: extracts energy, adds energy and converts back to temperatere.
     The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as boiler with input:
-    hot water demand or as  buffer with input ThermalPowerToBuilding. Both options need input signal for heating power and have
-    one output: the hot water storage temperature.
+    WaterConsumption or as  buffer with input ThermalPowerDelivered from building component. Both options need input signal for heating power and have
+    two outputs: the hot water storage temperature, and the power extracted from the hot water storage.
 
     Components to connect to:
     (1a) Building Controller(controller_l1_building_heating) - if buffer
@@ -176,7 +175,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     """
 
     # Inputs
-    ThermalPowerDelivered = "ThermalPowerDelivered"  # either thermal energy delivered
+    ThermalPowerDelivered = "ThermalPowerDelivered"  
     ThermalPowerCHP = "ThermalPowerCHP"
     WaterConsumption = "WaterConsumption"
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
@@ -187,7 +186,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     TemperatureMean = "TemperatureMean"
 
     # outputs for buffer storage
-    PowerToBuilding = "PowerToBuilding"
+    PowerFromHotWaterStorage = "PowerFromHotWaterStorage"
 
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: StorageConfig
@@ -261,12 +260,13 @@ class HotWaterStorage(dycp.DynamicComponent):
             output_description="Temperature Mean"
         )
         # Outputs
-        self.power_to_building_channel: cp.ComponentOutput = self.add_output(
+        self.power_from_water_storage_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.PowerToBuilding,
+            self.PowerFromHotWaterStorage,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description="Power to Building"
+            postprocessing_flag=[lt.InandOutputType.DISCHARGE, self.use],
+            output_description="Power transfered to Building or Hot Water Pipe."
         )
 
         self.add_default_connections(
@@ -421,7 +421,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             stsv=stsv,
             thermal_energy_delivered=thermal_energy_delivered,
         )
-        stsv.set_output_value(self.power_to_building_channel, heatconsumption)
+        stsv.set_output_value(self.power_from_water_storage_channel, heatconsumption)
 
         # constant heat loss of heat storage with the assumption that environment has 20°C = 293 K -> based on energy balance in kJ
         # heat gain due to heating of storage -> based on energy balance in kJ

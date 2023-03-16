@@ -12,6 +12,7 @@ from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.utils import HISIMPATH
+from hisim.component_wrapper import ComponentWrapper
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -33,25 +34,13 @@ def get_euro_and_co2(
 def compute_consumption_production(
     all_outputs: List, results: pd.DataFrame
 ) -> pd.DataFrame:
-    """Computes electricity consumption and production based on results of hisim simulation."""
-
-    # replace that loop by searching for flags -> include also battery things and hydrogen things
-    # flags for Postprocessing: cp.ComponentOutput.postprocessing_flag -> loadtpyes.InandOutputType :
-    # Consumption, Production, StorageContent, ChargeDischarge
-    # CHARGE_DISCHARGE from battery has + and - sign and is production and consumption both in one output
-    # heat production of heat pump has - sign in summer, either separate or take absolute value
-    # flags for ComponentTypes: cp.ComponentOutput.component_type
-    # flags for LoadTypes: cp.ComponentOutput.load_type
-    # flags for Units: cp.ComponentOutput.unit
+    """Computes electricity consumption and production based on results of hisim simulation.
+    Also evaluates battery charge and discharge, because it is relevant for self consumption rates."""
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
     consumption_ids = []
     production_ids = []
     battery_charge_discharge_ids = []
-    hot_water_charge_ids = []
-    hot_water_discharge_ids = []
-    heating_charge_ids = [] 
-    heating_discharge_ids = []
 
     index: int
     output: ComponentOutput
@@ -62,10 +51,8 @@ def compute_consumption_production(
                 production_ids.append(index)
 
             elif (
-                (
                     InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
                     in output.postprocessing_flag
-                )
                 or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 in output.postprocessing_flag
             ):
@@ -89,6 +76,36 @@ def compute_consumption_production(
 
     return postprocessing_results
 
+def compute_hot_water_storage_losses_and_cycles(
+    all_outputs: List, results: pd.DataFrame,
+    timeresolution: int,
+) -> pd.DataFrame:
+    """Computes hot water storage losses and cycles. """
+
+    # initialize columns consumption, production, battery_charge, battery_discharge, storage
+    charge_sum_dhw = 0
+    charge_sum_buffer = 0
+    discharge_sum_dhw = 0
+    discharge_sum_buffer = 0
+
+    for index, output in enumerate(all_outputs):
+        if output.postprocessing_flag is not None:
+            if InandOutputType.CHARGE in output.postprocessing_flag:
+                if InandOutputType.WATER_HEATING in output.postprocessing_flag:
+                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution)
+                elif InandOutputType.HEATING in output.postprocessing_flag:
+                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution)
+            elif InandOutputType.DISCHARGE in output.postprocessing_flag:
+                if ComponentType.BOILER in output.postprocessing_flag:
+                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution)
+                elif ComponentType.BUFFER in output.postprocessing_flag:
+                    discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution) 
+        else:
+            continue
+        storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
+        storage_loss_dhw = charge_sum_dhw - discharge_sum_dhw
+    print(storage_loss_dhw, storage_loss_buffer)
+    return charge_sum_dhw, charge_sum_buffer
 
 def compute_self_consumption_and_injection(
     postprocessing_results: pd.DataFrame,
@@ -194,6 +211,7 @@ def compute_cost_of_fuel_type(
 
 
 def compute_kpis(
+    components: List[ComponentWrapper],
     results: pd.DataFrame,
     all_outputs: List[ComponentOutput],
     simulation_parameters: SimulationParameters,
@@ -315,6 +333,12 @@ def compute_kpis(
         )
         co2 = co2 + fuel_co2
         price = price + fuel_price
+
+    charge_sum_dhw, charge_sum_buffer = compute_hot_water_storage_losses_and_cycles(
+        all_outputs=all_outputs,
+        results=results,
+        timeresolution=simulation_parameters.seconds_per_timestep,
+        )
 
     # initilize lines for report
     lines: List = []

@@ -967,7 +967,7 @@ def configure_heating_with_buffer_electric(
     my_building.connect_input(
         input_fieldname=my_building.ThermalPowerDelivered,
         src_object_name=my_buffer.component_name,
-        src_field_name=my_buffer.PowerToBuilding
+        src_field_name=my_buffer.PowerFromHotWaterStorage
     )
 
     return my_heatpump, my_buffer, count

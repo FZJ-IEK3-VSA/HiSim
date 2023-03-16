@@ -26,9 +26,9 @@ class ConfigBase(JSONWizard):
 
     name: str
 
-    def __init__(self):
+    def __init__(self, name: str):
         """ Initializes. """
-        pass
+        self.name = name
 
     @classmethod
     def get_main_classname(cls):
@@ -46,7 +46,10 @@ class ConfigBase(JSONWizard):
         my_list = []
         if len(my_dict) > 0:
             for entry in my_dict.items():
-                my_list.append(entry[0] + ": " + str(entry[1]))
+                first_entry = entry[0].rsplit('_')
+                first_entry = ' '.join(first_entry)
+                first_entry = first_entry.capitalize()
+                my_list.append(first_entry + ": " + str(entry[1]))
         return my_list
 
 
@@ -67,10 +70,11 @@ class ComponentOutput:  # noqa: too-few-public-methods
 
     def __init__(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                  postprocessing_flag: Optional[List[Any]] = None,
-                 sankey_flow_direction: Optional[bool] = None):
+                 sankey_flow_direction: Optional[bool] = None,
+                 output_description: Optional[str] = None):
         """ Defines a component output. """
         self.full_name: str = object_name + " # " + field_name
-        self.component_name: str = object_name  # ComponentName
+        self.component_name: str = object_name
         self.field_name: str = field_name
         self.display_name: str = field_name
         self.load_type: lt.LoadTypes = load_type
@@ -78,6 +82,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.global_index: int = -1
         self.postprocessing_flag: Optional[List[Any]] = postprocessing_flag
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
+        self.output_description: Optional[str] = output_description
 
     def get_pretty_name(self):
         """ Gets a pretty name for a component output. """
@@ -178,11 +183,16 @@ class Component:
         self.simulation_repository: SimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
-    def add_default_connections(self, component: Type[Component], connections: List[ComponentConnection]) -> None:
+    def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """
-        classname: str = component.get_classname()
-        self.default_connections[classname] = connections
-        log.trace("added connections: " + str(self.default_connections))
+
+        # classname: str = component.get_classname()
+        component_name = connections[0].source_class_name
+        for connection in connections:
+            if connection.source_class_name != component_name:
+                raise ValueError("Trying to add connections to different components in one go.")
+        self.default_connections[component_name] = connections
+        log.trace("added default connections for connections from : " + component_name + "\n" + str(self.default_connections))
 
     def i_prepare_simulation(self) -> None:
         """ Gets called before the simulation to prepare the calculation. """
@@ -202,10 +212,14 @@ class Component:
         return myinput
 
     def add_output(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
-                   postprocessing_flag: Optional[List[Any]] = None, sankey_flow_direction: Optional[bool] = None) -> ComponentOutput:
+                   postprocessing_flag: Optional[List[Any]] = None,
+                   sankey_flow_direction: Optional[bool] = None,
+                   output_description: Optional[str] = None) -> ComponentOutput:
         """ Adds an output definition. """
+        if output_description is None:
+            raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
-        outp = ComponentOutput(object_name, field_name, load_type, unit, postprocessing_flag, sankey_flow_direction)
+        outp = ComponentOutput(object_name, field_name, load_type, unit, postprocessing_flag, sankey_flow_direction, output_description)
         self.outputs.append(outp)
         return outp
 
@@ -270,7 +284,7 @@ class Component:
     def get_outputs(self) -> List[ComponentOutput]:
         """ Delivers a list of outputs. """
         if len(self.outputs) == 0:
-            raise Exception("Error: Component " + self.component_name + " has no outputs defined")
+            raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
     def i_save_state(self) -> None:

@@ -58,23 +58,11 @@ def basic_household_with_default_connections(
     # Set occupancy
     # occupancy_profile = "CH01"
 
-    # Set building
-    building_code = "DE.N.SFH.05.Gen.ReEx.001.002"
-    building_heat_capacity_class = "medium"
-    initial_internal_temperature_in_celsius = 23
-    heating_reference_temperature_in_celsius = -14
-
     # Set heat pump controller
-    t_air_heating = 16.0
-    t_air_cooling = 24.0
+    temperature_air_heating_in_celsius = 16.0
+    temperature_air_cooling_in_celsius = 24.0
     offset = 0.5
     hp_mode = 2
-
-    # Set heat pump
-    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-    hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time = 60
-    hp_min_idle_time = 15
 
     # ==== Build Components ====
 
@@ -123,17 +111,10 @@ def basic_household_with_default_connections(
     my_sim.add_component(my_photovoltaic_system)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     # Build Building
-    my_building_config = building.BuildingConfig(
-        building_code=building_code,
-        building_heat_capacity_class=building_heat_capacity_class,
-        initial_internal_temperature_in_celsius=initial_internal_temperature_in_celsius,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        name="Building",
-    )
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        name="BaseLoad",
-        grid=[my_occupancy, "Subtract", my_photovoltaic_system],
+        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_base_electricity_load_profile)
@@ -144,11 +125,11 @@ def basic_household_with_default_connections(
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 
-    my_heat_pump_controller = generic_heat_pump.HeatPumpController(
-        t_air_heating=t_air_heating,
-        t_air_cooling=t_air_cooling,
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(name="GenericHeatPumpController", temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
         offset=offset,
-        mode=hp_mode,
+        mode=hp_mode),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
@@ -162,10 +143,7 @@ def basic_household_with_default_connections(
     my_sim.add_component(my_heat_pump_controller)
 
     my_heat_pump = generic_heat_pump.GenericHeatPump(
-        manufacturer=hp_manufacturer,
-        name=hp_name,
-        min_operation_time=hp_min_operation_time,
-        min_idle_time=hp_min_idle_time,
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump.connect_only_predefined_connections(
@@ -176,7 +154,7 @@ def basic_household_with_default_connections(
 
     # depending on type of heating device, hard to define default connections
     my_building.connect_input(
-        my_building.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
-        my_heat_pump.ThermalEnergyDelivered,
+        my_heat_pump.ThermalPowerDelivered,
     )

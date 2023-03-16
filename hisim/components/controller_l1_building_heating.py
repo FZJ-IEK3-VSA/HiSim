@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
 # clean
-""" Generic heating controller. """
+""" Generic heating controller with configuration and state.
+
+It controls the heating system (heat transfer from buffer storage to building)
+only during the heating period.
+It is a ping pong control with an optional input from the Energy Management System,
+which enforces heating with electricity from PV.
+"""
 
 from dataclasses import dataclass
 
 # Owned
-from typing import List, Optional, Any
+from typing import List, Any
 
 from dataclasses_json import dataclass_json
 
@@ -30,49 +36,30 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L1BuildingHeatingConfig():
+class L1BuildingHeatingConfig(cp.ConfigBase):
 
-    """L2 Controller Config."""
+    """Configuration of Building Controller. """
 
+    #: name of the device
     name: str
+    #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
+    #: lower set temperature of building, given in °C
     t_min_heating_in_celsius: float
+    #: upper set temperature of building, given in °C
     t_max_heating_in_celsius: float
-    cooling_considered: bool
-    t_min_cooling_in_celsius: Optional[float]
-    t_max_cooling_in_celsius: Optional[float]
-    day_of_heating_season_begin: Optional[int]
-    day_of_heating_season_end: Optional[int]
-
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        t_min_heating_in_celsius: float,
-        t_max_heating_in_celsius: float,
-        cooling_considered: bool,
-        t_min_cooling_in_celsius: Optional[float],
-        t_max_cooling_in_celsius: Optional[float],
-        day_of_heating_season_begin: Optional[int],
-        day_of_heating_season_end: Optional[int],
-    ):
-        """Initializes config."""
-        self.name = name
-        self.source_weight = source_weight
-        self.t_min_heating_in_celsius = t_min_heating_in_celsius
-        self.t_max_heating_in_celsius = t_max_heating_in_celsius
-        self.cooling_considered = cooling_considered
-        self.t_min_cooling_in_celsius = t_min_cooling_in_celsius
-        self.t_max_cooling_in_celsius = t_max_cooling_in_celsius
-        self.day_of_heating_season_begin = day_of_heating_season_begin
-        self.day_of_heating_season_end = day_of_heating_season_end
+    #: upper temperature of buffer, where heating of building is enforced.
+    t_buffer_activation_threshold_in_celsius: float
+    # julian day of simulation year, where heating season begins
+    day_of_heating_season_begin: int
+    # julian day of simulation year, where heating season ends
+    day_of_heating_season_end: int
 
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=22.0,
-                                         cooling_considered=False, t_min_cooling_in_celsius=23, t_max_cooling_in_celsius=25, day_of_heating_season_begin=270,
-                                         day_of_heating_season_end=150)
+        config = L1BuildingHeatingConfig(name='L1 Building TemperatureController' + name, source_weight=1, t_min_heating_in_celsius=20.0,
+        t_max_heating_in_celsius=22.0, t_buffer_activation_threshold_in_celsius=55.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
         return config
 
 
@@ -82,80 +69,36 @@ class L1BuildingHeatControllerState:
 
     def __init__(
         self,
-        timestep_actual: int = -1,
-        state: int = 0,
-        compulsory: int = 0,
-        count: int = 0,
+        state: int = 0
     ):
         """Initializes the class."""
-        self.timestep_actual: int = timestep_actual
         self.state: int = state
-        self.compulsory: int = compulsory
-        self.count: int = count
 
-    def clone(self):
+    def clone(self) -> "L1BuildingHeatControllerState":
         """Clones itself."""
         return L1BuildingHeatControllerState(
-            timestep_actual=self.timestep_actual,
-            state=self.state,
-            compulsory=self.compulsory,
-            count=self.count,
+            state=self.state
         )
-
-    def is_first_iteration(self, timestep):
-        """Only called for first iteration."""
-        if self.timestep_actual + 1 == timestep:
-            self.timestep_actual += 1
-            self.compulsory = 0
-            self.count = 0
-            return True
-        return False
-
-    def is_compulsory(self):
-        """Returns compulsory value."""
-        if self.count <= 1:
-            self.compulsory = 0
-        else:
-            self.compulsory = 1
-
-    def activate(self):
-        """Ativates."""
-        self.state = 1
-        self.compulsory = 1
-        self.count += 1
-
-    def deactivate(self):
-        """Deactivates the control signal."""
-        self.state = 0
-        self.compulsory = 1
-        self.count += 1
 
 
 class L1BuildingHeatController(cp.Component):
 
     """L1 building controller. Processes signals ensuring comfort temperature of building.
 
-    Gets available surplus electricity and the temperature of the storage or building to control as input,
-    and outputs control signal 0/1 for turn off/switch on based on comfort temperature limits and available electricity.
-    It optionally has different modes for cooling and heating selected by the time of the year.
+    Gets available surplus electricity and the temperature of building to control as input, as well as the temperatur of the buffer storage.
+    It outputs control signal 0/1 for turn off/switch on based on comfort temperature limits and available electricity.
+    It is only activated during the heating season.
 
-    Parameters
-    ----------
-    source_weight : int, optional
-        Weight of component, relevant if there is more than one component of same type, defines hierachy in control. The default is 1.
-    T_min_heating: float, optional
-        Minimum comfortable temperature for residents during heating period, in °C. The default is 19 °C.
-    T_max_heating: float, optional
-        Maximum comfortable temperature for residents during heating period, in °C. The default is 23 °C.
-    T_tolerance : float, optional
-        Temperature difference the building may go below or exceed the comfort temperature band with, because of recommendations from L3.
-        The default is 1 °C.
-
+    Components to connect to:
+    (1) Buffer (generic_hot_water_storage_modular)
+    (2) Building (building)
+    (3) Energy Management System (controller_l2_energy_management_system) - optional
     """
 
     # Inputs
     BuildingTemperature = "BuildingTemperature"
     BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    BufferTemperature = "BufferTemperature"
     # Outputs
     boiler_signal = "l2_DeviceSignal"
 
@@ -183,24 +126,8 @@ class L1BuildingHeatController(cp.Component):
 
         """ Initializes the class. """
         self.source_weight: int = config.source_weight
-        self.cooling_considered: bool = config.cooling_considered
-        if self.cooling_considered:
-            if config.day_of_heating_season_begin is None:
-                raise ValueError("Day of heating season begin was None")
-            if config.day_of_heating_season_end is None:
-                raise ValueError("Day of heating season end was None")
-            self.heating_season_begin = (
-                config.day_of_heating_season_begin
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-            self.heating_season_end = (
-                config.day_of_heating_season_end
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
+        self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
         self.previous_state: L1BuildingHeatControllerState = (
             L1BuildingHeatControllerState()
@@ -219,6 +146,15 @@ class L1BuildingHeatController(cp.Component):
             Units.CELSIUS,
             mandatory=True,
         )
+
+        self.buffer_temperature_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.BufferTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            mandatory=False,
+        )
+
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.BuildingTemperatureModifier,
@@ -227,15 +163,11 @@ class L1BuildingHeatController(cp.Component):
             mandatory=False,
         )
 
-        self.add_default_connections(Building, self.get_building_default_connections())
+        self.add_default_connections(self.get_building_default_connections())
         self.add_default_connections(
-            generic_hot_water_storage_modular.HotWaterStorage,
-            self.get_buffer_default_connections(),
+            self.get_default_connections_from_hot_water_storage()
         )
-        self.add_default_connections(
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-            self.get_ems_default_connections(),
-        )
+        self.add_default_connections(self.get_default_connections_from_ems())
 
     def get_building_default_connections(self):
         """Sets the default connections for the building."""
@@ -248,15 +180,15 @@ class L1BuildingHeatController(cp.Component):
             cp.ComponentConnection(
                 L1BuildingHeatController.BuildingTemperature,
                 building_classname,
-                Building.TemperatureMean,
+                Building.TemperatureMeanThermalMass,
             )
         )
         return connections
 
-    def get_ems_default_connections(self):
-        """Sets the default connections for the building."""
+    def get_default_connections_from_ems(self):
+        """Sets the default connections for the energy management system."""
         log.information(
-            "setting building default connections in L1 building Controller"
+            "setting energy management system default connections in L1 building Controller"
         )
         connections = []
         ems_classname = (
@@ -271,8 +203,8 @@ class L1BuildingHeatController(cp.Component):
         )
         return connections
 
-    def get_buffer_default_connections(self):
-        """Sets default connections for the boiler."""
+    def get_default_connections_from_hot_water_storage(self):
+        """Sets default connections for the buffer."""
         log.information("setting buffer default connections in L1 building Controller")
         connections = []
         boiler_classname = (
@@ -280,7 +212,7 @@ class L1BuildingHeatController(cp.Component):
         )
         connections.append(
             cp.ComponentConnection(
-                L1BuildingHeatController.BuildingTemperature,
+                L1BuildingHeatController.BufferTemperature,
                 boiler_classname,
                 generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
             )
@@ -291,14 +223,20 @@ class L1BuildingHeatController(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
-        """ Controlls the building heating. """
+    def control_heating(self, timestep: int, t_control: float, t_min_heating: float, t_max_heating: float, t_buffer_activation: float, t_buffer: float) -> None:
+        """ Controls the heating from buffer to building. """
+        # prevent heating in summer
+        if self.heating_season_begin > timestep > self.heating_season_end:
+            self.previous_state.state = 0
+            return
         if t_control > t_max_heating:
-            # print("t_control > t_max_heating"  + str(t_control) + " " + str(t_max_heating))
             self.previous_state.state = 0
             return
         if t_control < t_min_heating:
             # start heating if temperature goes below lower limit
+            self.previous_state.state = 1
+            return
+        if t_buffer > t_buffer_activation:
             self.previous_state.state = 1
 
     def i_save_state(self) -> None:
@@ -316,18 +254,23 @@ class L1BuildingHeatController(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """Core Simulation function."""
+        """Simulates the control of the building temperature, when building is heated from buffer."""
         if force_convergence:
             return
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         t_control = stsv.get_input_value(self.building_temperature_channel)
+        if self.buffer_temperature_channel.source_output is not None:
+            t_buffer = stsv.get_input_value(self.buffer_temperature_channel)
+        else:
+            t_buffer = 0
         temperature_modifier = stsv.get_input_value(
             self.building_temperature_modifier_channel
         )
         t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
         t_max_target = self.config.t_max_heating_in_celsius + temperature_modifier
+        t_buffer_activation = self.config.t_buffer_activation_threshold_in_celsius
         self.control_heating(
-            t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target
+            timestep=timestep, t_control=t_control, t_min_heating=t_min_target, t_max_heating=t_max_target, t_buffer_activation=t_buffer_activation, t_buffer=t_buffer
         )
         stsv.set_output_value(self.l2_device_signal_channel, self.state.state)
 

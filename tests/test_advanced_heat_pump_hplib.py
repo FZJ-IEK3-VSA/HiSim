@@ -4,8 +4,9 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
+import pytest
 
-
+@pytest.mark.base
 def test_heat_pump_hplib():
 
     # Definitions for HeatPump init
@@ -17,8 +18,7 @@ def test_heat_pump_hplib():
     simpars = SimulationParameters.one_day_only(2017,60)
     # Definitions for i_simulate
     timestep = 1
-    seconds_per_timestep = 60
-    force_convergence = False 
+    force_convergence = False
 
     # Create fake component outputs as inputs for simulation
     on_off_switch = cp.ComponentOutput("Fake_on_off_switch",

@@ -1,22 +1,23 @@
+""" Modular Heat Pump Class together with Configuration and State. """
 # Generic/Built-in
-import numpy as np
-import copy
-import matplotlib
-import seaborn
-from math import pi
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from typing import Optional, List, Any
 
-# Owned
-import hisim.utils as utils
+import numpy as np
+from dataclasses_json import dataclass_json
+
 import hisim.loadtypes as lt
 from hisim import component as cp
-from hisim.simulationparameters import SimulationParameters
-from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
-from hisim.components.weather import Weather
-from hisim.components import controller_l1_heatpump
 from hisim import log
+
+# Owned
+from hisim import utils
+from hisim.components import controller_l1_heatpump
+from hisim.components.controller_l2_energy_management_system import (
+    L2GenericEnergyManagementSystem,
+)
+from hisim.components.weather import Weather
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -31,51 +32,46 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig:
+    """ Configuration of a HeatPump. """
+    #: name of the device
     name: str
+    #: priority of the device in energy management system: the higher the number the lower the priority
     source_weight: int
-    parameter_string: str
+    #: manufacturer to search heat pump in data base
     manufacturer: str
+    #: device name to search heat pump in data base
     device_name: str
+    #: maximal thermal power of heat pump in kW
     power_th: float
-    cooling_considered: bool
-    heating_season_begin: Optional[int]
-    heating_season_end: Optional[int]
+    #: usage of the heatpump: either for heating or for water heating
+    water_vs_heating: lt.InandOutputType
 
-    def __init__(self, name: str, source_weight: int, manufacturer: str, device_name: str, power_th: float, cooling_considered: bool,
-                 heating_season_begin: Optional[int], heating_season_end: Optional[int]):
-        self.name = name
-        self.source_weight = source_weight
-        self.manufacturer = manufacturer
-        self.device_name = device_name
-        self.power_th = power_th
-        self.cooling_considered = cooling_considered
-        self.heating_season_begin = heating_season_begin
-        self.heating_season_end = heating_season_end
-        
     @staticmethod
-    def get_default_config_heating() -> Any:
+    def get_default_config_heating() -> "HeatPumpConfig":
+        """ Returns default configuration of a heat pump used for heating. """
         config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, cooling_considered=True, heating_season_begin=270,
-                                heating_season_end=150)
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
-    def get_default_config_waterheating() -> Any:
+    def get_default_config_waterheating() -> "HeatPumpConfig":
+        """ Returns default configuration of a heat pump used for water heating."""
         config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, cooling_considered=False, heating_season_begin=None,
-                                heating_season_end=None)
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
 
     @staticmethod
-    def get_default_config_heating_electric() -> Any:
+    def get_default_config_heating_electric() -> "HeatPumpConfig":
+        """ Returns default configuartion of simple electrical heating system with a COP of one. """
         config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+                                water_vs_heating=lt.InandOutputType.HEATING)
         return config
 
     @staticmethod
-    def get_default_config_waterheating_electric() -> Any:
+    def get_default_config_waterheating_electric() -> "HeatPumpConfig":
+        """ Returns default configuration of electrical heating rod for boiler. """
         config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
-                                cooling_considered=False, heating_season_begin=None, heating_season_end=None)
+                                water_vs_heating=lt.InandOutputType.WATER_HEATING)
         return config
 
 
@@ -83,44 +79,29 @@ class ModularHeatPumpState:
     """
     This data class saves the state of the heat pump.
     """
+    def __init__(self, state: int = 0):
+        """Initializes state. """
+        self.state = state
 
-    def __init__(self, state: float = 0, timestep: int = -1):
-        self.state: float = state
-        self.timestep = timestep
-
-    def clone(self):
-        return ModularHeatPumpState(state=self.state, timestep=self.timestep)
+    def clone(self) -> "ModularHeatPumpState":
+        """Creates copy of state. """
+        return ModularHeatPumpState(state=self.state)
 
 
 class ModularHeatPump(cp.Component):
     """
-    Heat pump implementation. It does support a refrigeration cycle. The heatpump_modular differs to heatpump in (a) minumum run- and
-    idle time are given in seconds (not in time steps), (b) the season for heating and cooling is explicitly separated by days of the year.
-    This is mostly done to avoid heating and cooling at the same day in spring and autum with PV surplus available. (c) heat pump modular needs
-    a generic_controller_l1_runtime signal. The run time is not controlled in the component itself but in the controller.
-    
-    STILL TO BE DONE: implement COP for cooling period. At the moment it cools with heating efficiencies.
+    Heat pump implementation. The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component but in the related controller.
+    This implementation does not consider cooling of buildings.
 
-    Parameters
-    ----------
-    manufacturer : str
-        Heat pump manufacturer
-    device_name : str
-        Heat pump model
-    heating_season_begin : int, optional
-        Day( julian day, number of day in year ), when heating season starts - and cooling season ends. The default is 270.
-    heating_season_end : int, optional
-        Day( julian day, number of day in year ), when heating season ends - and cooling season starts. The default is 150
-    name : str, optional
-        Name of heatpump within simulation. The default is 'HeatPump'
-    source_weight : int, optional
-        Weight of component, relevant if there is more than one heat pump, defines hierachy in control. The default is 1.
-        
+    Components to connect to:
+    (1) Weather
+    (2) Heat Pump Controller (controller_l1_heatpump)
     """
+
     # Inputs
     TemperatureOutside = "TemperatureOutside"
     L1DeviceSignal = "L1DeviceSignal"
-    l1_RunTimeSignal = 'l1_RunTimeSignal'
+    l1_RunTimeSignal = "l1_RunTimeSignal"
     ems_flexible_electricity = "EMS Modulating Signal"
 
     # Outputs
@@ -128,113 +109,169 @@ class ModularHeatPump(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     PowerModifier = "PowerModifier"
 
-    # Similar components to connect to:
-    # 1. HeatPump l1 controller
-    # 2. HeatPump l2 controller
-    # 3. HeatPump l3 controller ( optional )
-
     @utils.measure_execution_time
-    def __init__(self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters):
+    def __init__(
+        self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters
+    ):
 
-        super().__init__(name=config.name + '_w' + str(config.source_weight), my_simulation_parameters=my_simulation_parameters)
+        super().__init__(
+            name=config.name + "_w" + str(config.source_weight),
+            my_simulation_parameters=my_simulation_parameters,
+        )
         self.config = config
-        self.build(config)
+        self.build()
+        self.state = ModularHeatPumpState()
+        self.previous_state = ModularHeatPumpState()
 
-        if my_simulation_parameters.system_config.clever:
-            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        if my_simulation_parameters.surplus_control:
+            postprocessing_flag = [
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                self.config.water_vs_heating,
+            ]
         else:
-            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+            postprocessing_flag = [
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+            ]
 
         # Inputs - Mandatories
-        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(self.component_name, self.TemperatureOutside, lt.LoadTypes.ANY, lt.Units.CELSIUS,
-                                                                     mandatory=True)
+        self.TemperatureOutsideC: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureOutside,
+            lt.LoadTypes.ANY,
+            lt.Units.CELSIUS,
+            mandatory=True,
+        )
 
-        self.EMS_Flexible_ElectricityC: cp.ComponentInput = self.add_input(self.component_name, self.ems_flexible_electricity,
-                                                                           lt.LoadTypes.ELECTRICITY, lt.Units.WATT, mandatory=False)
+        self.EMS_Flexible_ElectricityC: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ems_flexible_electricity,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            mandatory=False,
+        )
 
-        self.L1HeatControllerTargetPercentage: cp.ComponentInput = self.add_input(self.component_name, self.L1DeviceSignal, lt.LoadTypes.ANY, lt.Units.PERCENT,
-                                                                 mandatory=True)
+        self.L1HeatControllerTargetPercentage: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.L1DeviceSignal,
+            lt.LoadTypes.ANY,
+            lt.Units.PERCENT,
+            mandatory=True,
+        )
 
         # Outputs
-        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ThermalPowerDelivered,
-                                                                          load_type=lt.LoadTypes.HEATING, unit=lt.Units.WATT,
-                                                                          postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER])
-        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.ElectricityOutput,
-                                                                      load_type=lt.LoadTypes.ELECTRICITY, unit=lt.Units.WATT,
-                                                                      postprocessing_flag=postprocessing_flag)
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerDelivered,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            postprocessing_flag=[lt.InandOutputType.HEAT_TO_BUFFER],
+            output_description="Thermal Power Delivered"
+        )
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            postprocessing_flag=postprocessing_flag,
+            output_description="Electricity Output"
+        )
 
-        self.PowerModifierChannel: cp.ComponentOutput = self.add_output(object_name=self.component_name, field_name=self.PowerModifier,
-                                                                      load_type=lt.LoadTypes.ANY, unit=lt.Units.ANY,postprocessing_flag=[])
+        self.PowerModifierChannel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.PowerModifier,
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.ANY,
+            postprocessing_flag=[],
+            output_description="Power Modifier"
+        )
 
-        self.add_default_connections(Weather, self.get_weather_default_connections())
-        self.add_default_connections(controller_l1_heatpump.L1HeatPumpController, self.get_l1_heatpump_controller_default_connections())
-        self.add_default_connections(L2GenericEnergyManagementSystem, self.get_ems_default_connections())
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(
+            self.get_default_connections_from_controller_l1_heatpump()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_L2GenericEnergyManagementSystem()
+        )
 
-    def get_weather_default_connections(self):
+    def get_default_connections_from_weather(self):
+        """ Sets default connections of Weather. """
         log.information("setting weather default connections in HeatPump")
         connections = []
         weather_classname = Weather.get_classname()
-        connections.append(cp.ComponentConnection(ModularHeatPump.TemperatureOutside, weather_classname, Weather.TemperatureOutside))
+        connections.append(
+            cp.ComponentConnection(
+                ModularHeatPump.TemperatureOutside,
+                weather_classname,
+                Weather.TemperatureOutside,
+            )
+        )
         return connections
 
-    def get_ems_default_connections(self):
+    def get_default_connections_from_L2GenericEnergyManagementSystem(self):
+        """ Sets default connections of Energy Management System. """
         log.information("setting weather default connections in HeatPump")
         connections = []
         ems_classname = L2GenericEnergyManagementSystem.get_classname()
         connections.append(
-            cp.ComponentConnection(ModularHeatPump.ems_flexible_electricity, ems_classname, L2GenericEnergyManagementSystem.FlexibleElectricity))
+            cp.ComponentConnection(
+                ModularHeatPump.ems_flexible_electricity,
+                ems_classname,
+                L2GenericEnergyManagementSystem.FlexibleElectricity,
+            )
+        )
         return connections
 
-    def get_l1_heatpump_controller_default_connections(self):
+    def get_default_connections_from_controller_l1_heatpump(self):
+        """ Sets default connections of heat pump controller. """
         log.information("setting l1 default connections in HeatPump")
         connections = []
-        controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()
-        connections.append(cp.ComponentConnection(ModularHeatPump.L1DeviceSignal, controller_classname,
-                                                  controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage))
+        controller_classname = (
+            controller_l1_heatpump.L1HeatPumpController.get_classname()
+        )
+        connections.append(
+            cp.ComponentConnection(
+                ModularHeatPump.L1DeviceSignal,
+                controller_classname,
+                controller_l1_heatpump.L1HeatPumpController.HeatControllerTargetPercentage,
+            )
+        )
         return connections
 
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation. """
+        """Prepares the simulation."""
         pass
 
-    def build(self, config):
-        self.name = config.name
-        self.source_weight = config.source_weight
-        self.manufacturer = config.manufacturer
-        self.devicename = config.device_name
-
+    def build(self):
+        """ Initialization function of Modular Heat Pump."""
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
         heat_pump_found = False
+        heat_pump = None
         for heat_pump in heat_pumps_database:
-            if heat_pump["Manufacturer"] == config.manufacturer and heat_pump["Name"] == config.device_name:
+            if (
+                heat_pump["Manufacturer"] == self.config.manufacturer
+                and heat_pump["Name"] == self.config.device_name
+            ):
                 heat_pump_found = True
                 break
 
-        if heat_pump_found == False:
+        if not heat_pump_found or heat_pump is None:
             raise Exception("Heat pump model not registered in the database")
 
         # Interpolates COP data from the database
         self.cop_ref = []
         self.t_out_ref = []
-        for heat_pump_cops in heat_pump['COP']:
+        for heat_pump_cops in heat_pump["COP"]:
             self.t_out_ref.append(float([*heat_pump_cops][0][1:].split("/")[0]))
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
         self.cop_coef = np.polyfit(self.t_out_ref, self.cop_ref, 1)
-        self.power_th = config.power_th
-        self.cooling_considered = config.cooling_considered
-        if self.cooling_considered:
-            self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-
-        self.state = ModularHeatPumpState()
-        self.previous_state = ModularHeatPumpState()
 
         # Writes info to report
         self.write_to_report()
 
     def cal_cop(self, t_out: float) -> float:
+        """ Returns coefficient of performance of selected heat pump. """
         val: float = self.cop_coef[0] * t_out + self.cop_coef[1]
         return val
 
@@ -248,20 +285,24 @@ class ModularHeatPump(cp.Component):
         pass
 
     def write_to_report(self) -> List[str]:
+        """ Writes relevant data to report. """
         lines: List[str] = []
-        lines.append("Name: {}".format(self.name + str(self.source_weight)))
-        lines.append("Manufacturer: {}".format(self.name))
-        lines.append("Max power: {:4.0f} kW".format((self.power_th) * 1E-3))
+        lines.append("Name: {}".format(self.config.name + str(self.config.source_weight)))
+        lines.append("Manufacturer: {}".format(self.config.name))
+        lines.append("Max power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
         return lines
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
+        """ Iteration of heat pump simulation. """
 
         # Inputs
         target_percentage = stsv.get_input_value(self.L1HeatControllerTargetPercentage)
 
         T_outside: float = stsv.get_input_value(self.TemperatureOutsideC)
         cop = self.cal_cop(T_outside)
-        electric_power = self.power_th / cop
+        electric_power = self.config.power_th / cop
 
         # calculate modulation
         if target_percentage > 0:
@@ -272,15 +313,11 @@ class ModularHeatPump(cp.Component):
             flexible_electricity = stsv.get_input_value(self.EMS_Flexible_ElectricityC)
             power_modifier = flexible_electricity / electric_power
 
-        if power_modifier > 1:
-            power_modifier = 1
+        power_modifier = min(1, power_modifier)
 
-        stsv.set_output_value(self.ThermalPowerDeliveredC, self.power_th * power_modifier)
+        stsv.set_output_value(
+            self.ThermalPowerDeliveredC, self.config.power_th * power_modifier
+        )
         stsv.set_output_value(self.PowerModifierChannel, power_modifier)
 
-        stsv.set_output_value(self.ElectricityOutputC,  electric_power * power_modifier)
-
-        # #put forecast into dictionary  # if self.my_simulation_parameters.system_config.predictive:  #     #only in first timestep  #     if self.state.timestep + 1 == timestep:  #         self.state.timestep += 1  #         self.previous_state.timestep += 1  #         runtime = stsv.get_input_value( self.l1_RunTimeSignalC )
-
-        #         self.simulation_repository.set_dynamic_entry(component_type = lt.ComponentType.HEAT_PUMP, source_weight = self.source_weight, entry =[self.power_th / cop] * runtime)
-
+        stsv.set_output_value(self.ElectricityOutputC, electric_power * power_modifier)

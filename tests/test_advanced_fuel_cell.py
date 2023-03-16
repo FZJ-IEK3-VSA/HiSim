@@ -6,22 +6,24 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
+import pytest
 
+@pytest.mark.base
 def test_chp_system():
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
 
     # CHP-System
-    min_operation_time=60
-    min_idle_time = 15
-    gas_type = "Methan"
-    operating_mode = "electricity"
-    p_el_max=3_000
+    # min_operation_time=60
+    # min_idle_time = 15
+    # gas_type = "Methan"
+    # operating_mode = "electricity"
+    # p_el_max=3_000
 
     #===================================================================================================================
     # Set Gas Heater
-    my_chp_system_config= advanced_fuel_cell.CHP.get_default_config()
+    my_chp_system_config= advanced_fuel_cell.CHPConfig.get_default_config()
     my_chp_system_config.min_operation_time=60
     my_chp_system_config.min_idle_time = 15
     my_chp_system_config.gas_type = "Methan"

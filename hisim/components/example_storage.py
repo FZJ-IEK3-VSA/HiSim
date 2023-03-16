@@ -45,7 +45,7 @@ class ExampleStorageState:
             amount = self.max_val - self.fill
             self.fill += amount
             return amount
-        raise Exception("forgotten case")
+        raise ValueError("forgotten case")
 
     def withdraw(self, val: float) -> float:
         """Returns how much is taken out of the storage."""
@@ -62,7 +62,7 @@ class ExampleStorageState:
             amount = self.fill
             self.fill = 0
             return amount
-        raise Exception("forgotten case")
+        raise ValueError("forgotten case")
 
 
 @dataclass_json
@@ -139,18 +139,21 @@ class SimpleStorage(Component):
             SimpleStorage.ActualStorageDelta,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
+            output_description="Actual Storage Delta"
         )
         self.current_fill: ComponentOutput = self.add_output(
             self.simplestorageconfig.name,
             SimpleStorage.CurrentFillLevel,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
+            output_description="Current Fill Level"
         )
         self.current_fill_percent: ComponentOutput = self.add_output(
             self.simplestorageconfig.name,
             SimpleStorage.CurrentFillLevelPercent,
             self.simplestorageconfig.loadtype,
             lt.Units.PERCENT,
+            output_description="Current Fill Level in Percent"
         )
 
     def i_save_state(self) -> None:
@@ -161,15 +164,19 @@ class SimpleStorage(Component):
         """Restores the previous state of the storage."""
         self.state = copy.copy(self.previous_state)
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Simulates the storage."""
 
         charging = stsv.get_input_value(self.charging_input)
         discharging = stsv.get_input_value(self.discharging_input)
         if charging < 0:
-            raise Exception("trying to charge with negative amount" + str(charging))
+            raise ValueError("trying to charge with negative amount" + str(charging))
         if discharging > 0:
-            raise Exception("trying to discharge with positive amount: " + str(discharging))
+            raise ValueError(
+                "trying to discharge with positive amount: " + str(discharging)
+            )
         charging_delta = self.state.store(charging)
         discharging_delta = self.state.withdraw(discharging * -1) * -1
         actual_delta = charging_delta + discharging_delta

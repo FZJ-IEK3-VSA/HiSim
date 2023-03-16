@@ -2,9 +2,10 @@ HiSim Package Structure
 =====
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 5
 
    component
    components
    postprocessing
    simulator
+   modularexampleinterfaces

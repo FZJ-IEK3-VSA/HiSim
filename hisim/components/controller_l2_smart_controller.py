@@ -1,31 +1,61 @@
+"""L2 Smart Controller Module."""
+
+# clean
 # Generic/Built-in
 
 # Owned
-from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
-from hisim.components.generic_heat_pump  import HeatPumpController
-from hisim.components.generic_ev_charger  import EVChargerController
-from typing import List, Any, Dict
-from hisim import loadtypes as lt
-from abc import ABC, abstractmethod
+from typing import List, Any, Dict, Optional
+from hisim.component import Component, SingleTimeStepValues
+from hisim.components.generic_heat_pump import GenericHeatPumpController, GenericHeatPumpControllerConfig
+from hisim.components.generic_ev_charger import EVChargerController
 from hisim.simulationparameters import SimulationParameters
 
 
 class SmartController(Component):
 
-    def __init__(self,my_simulation_parameters: SimulationParameters, controllers: Dict[Any,Any] = {"HeatPump":["mode"], "EVCharger":["mode"]})  -> None:
-        super().__init__(name="SmartController", my_simulation_parameters=my_simulation_parameters)
-        self.WrappedControllers:List[Any] = []
+    """Smart Controller class."""
+
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        controllers: Optional[Dict[str, list[str]]],
+    ) -> None:
+        """Construct all necessary attributes."""
+        super().__init__(
+            name="SmartController", my_simulation_parameters=my_simulation_parameters
+        )
+        if controllers is None:
+            controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}
+        self.wrapped_controllers: List[Any] = []
         self.build(controllers)
 
-    def build(self, controllers:Dict[Any,Any]) -> None:
+    def build(self, controllers: Dict[str, list[str]]) -> None:
+        """Build wrapped controllers."""
         for controller_name in controllers:
             if "HeatPump" in controller_name:
-                self.WrappedControllers.append(HeatPumpController(my_simulation_parameters=self.my_simulation_parameters))
+                ghpcc = GenericHeatPumpControllerConfig("generic heat pump controller",
+                                                        temperature_air_heating_in_celsius=15,
+                                                        temperature_air_cooling_in_celsius=25,
+                                                        offset=0,
+                                                        mode=1)
+                self.wrapped_controllers.append(
+
+                    GenericHeatPumpController(
+                        my_simulation_parameters=self.my_simulation_parameters, config=ghpcc
+                    )
+                )
+
             elif "EVCharger" in controller_name:
-                self.WrappedControllers.append(EVChargerController(my_simulation_parameters=self.my_simulation_parameters))
+                self.wrapped_controllers.append(
+                    EVChargerController(
+                        my_simulation_parameters=self.my_simulation_parameters
+                    )
+                )
+
         self.add_io()
 
-    def connect_similar_inputs(self, components:List[Any]) -> None:
+    def connect_similar_inputs(self, components: List[Any]) -> None:
+        """Connect similar inputs."""
         if len(self.inputs) == 0:
             raise Exception("The component " + self.component_name + " has no inputs.")
 
@@ -36,44 +66,63 @@ class SmartController(Component):
             if isinstance(component, Component) is False:
                 raise Exception("Input variable is not a component")
             has_not_been_connected = True
-            for index, controller in enumerate(self.WrappedControllers):
-                for input in self.WrappedControllers[index].inputs:
-                        for output in component.outputs:
-                            if input.field_name == output.field_name:
-                                has_not_been_connected = False
-                                self.WrappedControllers[index].connect_input(self.WrappedControllers[index].field_name, component.component_name, output.field_name)
-            if has_not_been_connected:
-                raise Exception("No similar inputs from {} are compatible with the outputs of {}!".format(self.WrappedControllers[index].component_name, component.component_name))
+            index = None
+            for index, _ in enumerate(self.wrapped_controllers):
+                for input_channel in self.wrapped_controllers[index].inputs:
+                    for output in component.outputs:
+                        if input_channel.field_name == output.field_name:
+                            has_not_been_connected = False
+                            self.wrapped_controllers[index].connect_input(
+                                self.wrapped_controllers[index].field_name,
+                                component.component_name,
+                                output.field_name,
+                            )
+            if has_not_been_connected and index is not None:
+                raise Exception(
+                    f"No similar inputs from {self.wrapped_controllers[index].component_name} are compatible with the outputs of {component.component_name}!"
+                )
 
     def add_io(self) -> None:
-        for controller in self.WrappedControllers:
-            for input in controller.inputs:
-                self.inputs.append(input)
+        """Add inputs and outputs."""
+        for controller in self.wrapped_controllers:
+            for input_channel in controller.inputs:
+                self.inputs.append(input_channel)
             for output in controller.outputs:
                 self.outputs.append(output)
 
     def i_save_state(self) -> None:
-        for index, controller in enumerate(self.WrappedControllers):
-            self.WrappedControllers[index].i_save_state()
+        """Save the current state."""
+        for index, _ in enumerate(self.wrapped_controllers):
+            self.wrapped_controllers[index].i_save_state()
 
     def i_restore_state(self) -> None:
-        for index, controller in enumerate(self.WrappedControllers):
-            self.WrappedControllers[index].i_restore_state()
+        """Restore the previous state."""
+        for index, _ in enumerate(self.wrapped_controllers):
+            self.wrapped_controllers[index].i_restore_state()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublecheck."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
-        for index, controller in enumerate(self.WrappedControllers):
-            self.WrappedControllers[index].i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
+        """Simulate the Smart Controller class."""
+        for index, _ in enumerate(self.wrapped_controllers):
+            self.wrapped_controllers[index].i_simulate(
+                timestep=timestep, stsv=stsv, force_convergence=force_convergence
+            )
 
     def connect_electricity(self, component: Any) -> None:
-        for index, controller in enumerate(self.WrappedControllers):
-            if hasattr(self.WrappedControllers[index], "ElectricityInput"):
+        """Connect Electricity input."""
+        for index, _ in enumerate(self.wrapped_controllers):
+            if hasattr(self.wrapped_controllers[index], "ElectricityInput"):
                 if isinstance(component, Component) is False:
                     raise Exception("Input has to be a component!")
-                elif hasattr(component, "ElectricityOutput") is False:
+                if hasattr(component, "ElectricityOutput") is False:
                     raise Exception("Input Component does not have Electricity Output!")
-                self.connect_input(self.WrappedControllers[index].ELECTRICITY_INPUT, component.component_name,
-                                   component.ElectricityOutput)
-
+                self.connect_input(
+                    self.wrapped_controllers[index].ELECTRICITY_INPUT,
+                    component.component_name,
+                    component.ElectricityOutput,
+                )

@@ -6,7 +6,7 @@ import itertools
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import numpy as np
 import pandas as pd
@@ -34,10 +34,11 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class UtspLpgConnectorConfig:
+class UtspLpgConnectorConfig(cp.ConfigBase):
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
+    name: str
     url: str
     api_key: str
     household: JsonReference
@@ -46,17 +47,17 @@ class UtspLpgConnectorConfig:
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
 
-    @staticmethod
-    def get_default_config(
-        url: str = "http://localhost:443/api/v1/profilerequest", api_key: str = ""
-    ) -> "UtspLpgConnectorConfig":
+    @classmethod
+    def get_default_UTSP_connector_config(cls) -> Any:
+
         """Creates a default configuration. Chooses default values for the LPG parameters."""
-        result_path = os.path.join(utils.get_input_directory(), "lpg_profiles")
+
         config = UtspLpgConnectorConfig(
-            url,
-            api_key,
-            Households.CHR01_Couple_both_at_Work,
-            result_path,
+            name="UTSPConnector",
+            url="http://localhost:443/api/v1/profilerequest",
+            api_key="",
+            household=Households.CHR01_Couple_both_at_Work,
+            result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
@@ -102,11 +103,11 @@ class UtspLpgConnector(cp.Component):
         config: UtspLpgConnectorConfig,
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
+        self.utsp_config = config
         super().__init__(
-            name=UtspLpgConnector.__name__,
+            name=self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        self.utsp_config = config
         self.build()
 
         # Inputs - Not Mandatory
@@ -126,13 +127,18 @@ class UtspLpgConnector(cp.Component):
         )
 
         self.number_of_residents_c: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY
+            self.component_name,
+            self.NumberByResidents,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description=f"here a description for LPG UTSP {self.NumberByResidents} will follow.",
         )
         self.heating_by_residents_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
         )
         self.electricity_output_c: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -142,6 +148,7 @@ class UtspLpgConnector(cp.Component):
             postprocessing_flag=[
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
             ],
+            output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow.",
         )
 
         self.water_consumption_c: cp.ComponentOutput = self.add_output(
@@ -149,6 +156,7 @@ class UtspLpgConnector(cp.Component):
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
+            output_description=f"here a description for LPG UTSP {self.WaterConsumption} will follow.",
         )
 
     def i_save_state(self) -> None:
@@ -167,7 +175,9 @@ class UtspLpgConnector(cp.Component):
         """Gets called after the iterations are finished at each time step for potential debugging purposes."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Sets the current output values with data retrieved during initialization."""
         if self.ww_mass_input.source_output is not None:
             # ww demand
@@ -236,7 +246,7 @@ class UtspLpgConnector(cp.Component):
             self.water_consumption_c, self.water_consumption[timestep]
         )
 
-        if self.my_simulation_parameters.system_config.predictive:
+        if self.my_simulation_parameters.predictive_control:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
@@ -260,11 +270,12 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(self) -> Tuple[str, str, str, str]:
+    def get_profiles_from_utsp(self) -> Tuple[Tuple[str, str, str, str], List[str]]:
         """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
-        :return: electricity, warm water, high bodily activity and low bodily activity result file contents
-        :rtype: Tuple[str]
+        :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
+                 and a list of filenames of all additionally saved files
+        :rtype: Tuple[Tuple[str, str, str, str], List[str]]
         """
         # Create an LPG configuration and set the simulation parameters
         start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
@@ -344,22 +355,33 @@ class UtspLpgConnector(cp.Component):
         flexibility_file = result.data[flexibility].decode()
 
         # Save flexibility and transportation files
-        self.save_result_file(flexibility, flexibility_file)
+        saved_files: List[str] = []
+        path = self.save_result_file(flexibility, flexibility_file)
+        saved_files.append(path)
         for filename in itertools.chain(
             car_states.keys(), car_locations.keys(), driving_distances.keys()
         ):
             if filename in result.data:
-                self.save_result_file(filename, result.data[filename].decode())
+                path = self.save_result_file(filename, result.data[filename].decode())
+                saved_files.append(path)
 
-        return electricity_file, warm_water_file, high_activity_file, low_activity_file
+        return (
+            electricity_file,
+            warm_water_file,
+            high_activity_file,
+            low_activity_file,
+        ), saved_files
 
-    def save_result_file(self, name: str, content: str) -> None:
-        """Saves a result file in the folder specified in the config object.
+    def save_result_file(self, name: str, content: str) -> str:
+        """
+        Saves a result file in the folder specified in the config object.
 
         :param name: the name for the file
         :type name: str
         :param content: the content that will be written into the file
         :type content: str
+        :return: path of the file that was saved
+        :rtype: str
         """
         filepath = os.path.join(self.utsp_config.result_path, name)
         directory = os.path.dirname(filepath)
@@ -374,6 +396,7 @@ class UtspLpgConnector(cp.Component):
         # Create the result file
         with open(filepath, "w", encoding="utf-8") as result_file:
             result_file.write(content)
+        return filepath
 
     def build(self):
         """Retrieves and preprocesses all data for this component."""
@@ -382,21 +405,43 @@ class UtspLpgConnector(cp.Component):
             parameter_class=self.utsp_config,
             my_simulation_parameters=self.my_simulation_parameters,
         )
+        cache_complete = False
         if file_exists:
-            dataframe = pd.read_csv(
-                cache_filepath, sep=",", decimal=".", encoding="cp1252"
-            )
-            self.number_of_residents = dataframe["number_of_residents"].tolist()
-            self.heating_by_residents = dataframe["heating_by_residents"].tolist()
-            self.electricity_consumption = dataframe["electricity_consumption"].tolist()
-            self.water_consumption = dataframe["water_consumption"].tolist()
-        else:
+            with open(cache_filepath, "r", encoding="utf-8") as file:
+                cache_content: Dict = json.load(file)
+            saved_files = cache_content["saved_files"]
+            cache_complete = True
+            # check if all of the additionally saved files that belong to the cached results
+            # are also still there
+            for filename in saved_files:
+                if not os.path.isfile(filename):
+                    log.information(
+                        f"A cache file for {self.component_name} was found, "
+                        "but some of the additional result files from the UTSP could not be "
+                        "found anymore, so the cache is discarded."
+                    )
+                    cache_complete = False
+                    break
+            if cache_complete:
+                cached_data = io.StringIO(cache_content["data"])
+                dataframe = pd.read_csv(
+                    cached_data, sep=",", decimal=".", encoding="cp1252"
+                )
+                self.number_of_residents = dataframe["number_of_residents"].tolist()
+                self.heating_by_residents = dataframe["heating_by_residents"].tolist()
+                self.electricity_consumption = dataframe[
+                    "electricity_consumption"
+                ].tolist()
+                self.water_consumption = dataframe["water_consumption"].tolist()
+
+        if not cache_complete:
+            result_data, saved_files = self.get_profiles_from_utsp()
             (
                 electricity,
                 warm_water,
                 high_activity,
                 low_activity,
-            ) = self.get_profiles_from_utsp()
+            ) = result_data
 
             ################################
             # Calculates heating generated by residents and loads number of residents
@@ -520,14 +565,18 @@ class UtspLpgConnector(cp.Component):
                     "water_consumption",
                 ],
             )
-
-            database.to_csv(cache_filepath)
+            # dump the dataframe to str
+            cache_file = io.StringIO()
+            database.to_csv(cache_file)
+            database_str = cache_file.getvalue()
+            # save the dataframe and the list of additional files in the cache
+            cache_content = {"saved_files": saved_files, "data": database_str}
+            with open(cache_filepath, "w", encoding="utf-8") as file:
+                json.dump(cache_content, file)
             del data
             del database
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):
         """Adds a report entry for this component."""
-        lines = []
-        lines.append(f"Name: {self.component_name}")
-        return lines
+        return self.utsp_config.get_string_dict()

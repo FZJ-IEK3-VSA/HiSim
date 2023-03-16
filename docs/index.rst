@@ -50,7 +50,7 @@ Documentation Reference
 About Us
 ==================
 
-.. figure:: https://www.fz-juelich.de/SharedDocs/Bilder/IEK/IEK-3/Abteilungen2015/VSA_DepartmentPicture_2019-02-04_459x244_2480x1317.jpg?__blob=normal
+.. figure:: https://github.com/OfficialCodexplosive/README_Assets/blob/master/iek3-wide.png?raw=true
    :target: https://www.fz-juelich.de/iek/iek-3/DE/Home/home_node.html
    :align: center
    :alt: IEK-3 Team
@@ -61,6 +61,7 @@ We are the `Institute of Energy and Climate Research - Techno-economic Systems A
 
 License
 =========================================================
+
 HiSim is distributed under `MIT License <https://github.com/FZJ-IEK3-VSA/HiSim/blob/main/LICENSE>`_ .
 
 Copyright (C) 2020-2021 Noah Pflugradt, Vitor Zago, Frank Burkard, Tjarko Tjaden, Leander Kotzur, Detlef Stolten
@@ -68,17 +69,34 @@ Copyright (C) 2020-2021 Noah Pflugradt, Vitor Zago, Frank Burkard, Tjarko Tjaden
 Contribution
 ============================================================
 
-This software is developed together with the **Hochschule Emden/Leer** inside the project `Piegstrom`.
+This software is developed together with the **Hochschule Emden/Leer** inside the project `Piegstrom` and `4wardEnergy Research  <https://www.4wardenergy.at/en>`_ inside the EU project `WHY <https://www.why-h2020.eu>`_. 
+
 
 Acknowledgement
 ================================================
+.. |tag1| image:: https://www.helmholtz.de/fileadmin/user_upload/05_aktuelles/Marke_Design/logos/HG_LOGO_S_ENG_RGB.jpg
+   :width: 200px
 
-This work was supported by the Helmholtz Association under the Joint Initiative `Energy System 2050 - A Contribution of the Research Field Energy <https://www.helmholtz.de/en/research/energy/energy_system_2050/>`_.
+.. |tag2| image:: https://www.dwd.de/SharedDocs/bilder/DE/logos/dwd/dwd_logo_258x69.png?__blob=normal&v=1
+   :width: 200px
+
+.. |tag3| image:: ../eulogo.png
+   :width: 200px
+
+.. |tag4| image:: ../whylogo.jpg
+   :width: 200px
+
+This work was supported by the `Helmholtz Association <https://www.fz-juelich.de/iek/iek-3/EN/Home/home_node.html>`_ under the Joint Initiative `Energy System 2050 - A Contribution of the Research Field Energy <https://www.helmholtz.de/en/research/energy/energy_system_2050/>`_ .
+
+|tag1|
+
+For this work weather data is based on data from `German Weather Service (Deutscher Wetterdienst-DWD) <https://www.dwd.de/DE/Home/home_node.html/>`_, individual values are averaged.
+
+
+|tag2|
+
+This project has received funding from the European Union’s Horizon 2020 research and innovation programme under grant agreement No 891943. 
+
+|tag3| |tag4|
 
 .. _iek3link:
-
-.. figure:: https://www.helmholtz.de/fileadmin/user_upload/05_aktuelles/Marke_Design/logos/HG_LOGO_S_ENG_RGB.jpg
-   :target: https://www.fz-juelich.de/iek/iek-3/EN/Home/home_node.html
-   :align: left
-   :width: 200
-   :alt: Helmholtz Logo

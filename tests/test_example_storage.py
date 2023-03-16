@@ -2,6 +2,8 @@
 
 # clean
 
+import pytest
+
 from hisim import component as cp
 from hisim.components import example_storage
 from hisim.simulationparameters import SimulationParameters
@@ -10,6 +12,7 @@ from hisim import log
 from tests import functions_for_testing as fft
 
 
+@pytest.mark.base
 def test_example_storage():
     """Test for the Example Storage."""
 
@@ -44,7 +47,7 @@ def test_example_storage():
     stsv.values[discharging_output.global_index] = -10  # fake discharg input
 
     timestep = 300
-    
+
     print("\n")
     log.information("timestep = " + str(timestep))
     log.information("fill state (in the beginning) = " + str(my_example_storage.state.fill))

@@ -5,8 +5,9 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import utils
+import pytest
 
-
+@pytest.mark.base
 @utils.measure_execution_time
 def test_dynamic_components_example():
     path = "../examples/dynamic_components.py"

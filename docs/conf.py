@@ -1,3 +1,4 @@
+# pylint: skip-file
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -14,13 +15,14 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim')))
 sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim', 'components')))
+sys.path.insert(0, os.path.abspath(os.path.join('..', 'hisim', 'postprocessing')))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'House Infrastructure Simulator'
-copyright = '2021, Vitor Hugo Bellotto Zago'
-author = 'Vitor Hugo Bellotto Zago'
+copyright = '2020-2022, Forschungszentrum Jülich, IEK-3'
+author = 'Vitor Hugo Bellotto Zago, Noah Pflugradt'
 
 # The full version, including alpha/beta/rc tags
 release = '0.1'
@@ -31,7 +33,10 @@ release = '0.1'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = [ 'sphinx.ext.autodoc' ]
+extensions = [ 'sphinx.ext.duration',
+   'sphinx.ext.doctest',
+   'sphinx.ext.autodoc',
+   'sphinx.ext.autosummary']
 numfig = True
 
 

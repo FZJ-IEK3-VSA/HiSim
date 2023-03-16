@@ -1,6 +1,5 @@
-simulator module
+Simulator
 ================
-
 .. automodule:: simulator
    :members:
    :undoc-members:

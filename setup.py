@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 
 """The setup script."""
-
+# clean
 from setuptools import setup, find_packages
 
-with open("README.md") as readme_file:
+with open("README.md", encoding="utf-8") as readme_file:
     readme = readme_file.read()
 
-with open("requirements.txt") as requirements_file:
+with open("requirements.txt", encoding="utf-8") as requirements_file:
     requirements = requirements_file.read().splitlines()
 
 setup_requirements = [
@@ -52,6 +52,6 @@ setup(
     test_suite="tests",
     tests_require=test_requirements,
     url="https://github.com/FZJ-IEK3-VSA/HiSim",
-    version="0.1.0",
+    version="0.1.1",
     zip_safe=False,
 )

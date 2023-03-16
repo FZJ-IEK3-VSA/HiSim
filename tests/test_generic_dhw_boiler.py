@@ -1,3 +1,4 @@
+import pytest
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import generic_heat_source
 from hisim.components import controller_l1_heatpump
@@ -6,6 +7,8 @@ from hisim import loadtypes as lt
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 
+
+@pytest.mark.base
 def test_simple_bucket_boiler_state():
 
     #simulation parameters
@@ -40,7 +43,7 @@ def test_simple_bucket_boiler_state():
 
     my_boiler_controller_l1.storage_temperature_channel.source_output = my_boiler.temperature_mean_c
     my_boiler.water_consumption_c.source_output = WW_use
-    my_boiler.thermal_power_delivered_c.source_output = my_heater.ThermalPowerDeliveredC
+    my_boiler.thermal_power_delivered_channel.source_output = my_heater.ThermalPowerDeliveredC
     my_heater.l1_heatsource_taget_percentage.source_output = my_boiler_controller_l1.heat_pump_target_percentage_channel
 
     # indexing of in- and outputs
@@ -83,7 +86,7 @@ def test_simple_bucket_boiler_state():
     my_boiler.i_simulate(j, stsv, False)
 
     #check if heat loss in boiler corresponds to heatloss originated from 1 l hot water use and u-value heat loss
-    assert stsv.values[2] == my_heater.power_th * my_heater.efficiency
+    assert stsv.values[2] == my_heater.config.power_th * my_heater.config.efficiency
 
     #check if heater stops heating when temperature of boiler is too high
     stsv.values[0] = 0

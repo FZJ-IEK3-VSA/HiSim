@@ -1,9 +1,12 @@
+import pytest
 from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
+
+@pytest.mark.base
 def test_weather():
     mysim:  SimulationParameters = SimulationParameters.full_year(year=2021,
                                                                            seconds_per_timestep=60)

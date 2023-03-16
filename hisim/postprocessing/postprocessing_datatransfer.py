@@ -10,19 +10,20 @@ from hisim.simulationparameters import SimulationParameters
 
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
 
-    """ Data class for transfering the result data to this class. """
+    """Data class for transfering the result data to this class."""
 
-    def __init__(self,
-                 results: Any,
-                 all_outputs: Any,
-                 simulation_parameters: SimulationParameters,
-                 wrapped_components: List[ComponentWrapper],
-                 mode: Any,
-                 setup_function: Any,
-                 execution_time: Any,
-                 results_monthly: Any,
-                 ) -> None:
-        """ Initializes the values. """
+    def __init__(
+        self,
+        results: Any,
+        all_outputs: Any,
+        simulation_parameters: SimulationParameters,
+        wrapped_components: List[ComponentWrapper],
+        mode: Any,
+        setup_function: Any,
+        execution_time: Any,
+        results_monthly: Any,
+    ) -> None:
+        """Initializes the values."""
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
         self.time_correction_factor = simulation_parameters.seconds_per_timestep / 3600
         self.results = results
@@ -35,6 +36,10 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.results_monthly = results_monthly
         self.post_processing_options = simulation_parameters.post_processing_options
 
-        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
+        log.information(
+            "Selected "
+            + str(len(self.post_processing_options))
+            + " post processing options:"
+        )
         for option in self.post_processing_options:
             log.information("Selected post processing option: " + str(option))

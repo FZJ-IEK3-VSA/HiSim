@@ -1,46 +1,39 @@
+# clean
+
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Tuple, Union
 
 import pandas as pd
-from dataclasses_json import dataclass_json
 
-from building_sizer.kpi_config import KPIConfig
 from hisim.component import ComponentOutput
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
+from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim.utils import HISIMPATH
 
 
-@dataclass_json
-@dataclass()
-class FuelCost:
-
-    """ Defines the fuel costs in terms of euros and co2. """
-
-    electricity_consumption_in_euro_per_kwh: float = 0.35
-    electricity_injection_in_euro_per_kwh: float = 0.2
-    electricity_consumption_in_kg_co2_per_kwh: float = 0.2
-    oil_consumption_in_euro_per_kwh: float = 0.17
-    oil_consumption_in_kg_co2_per_kwh: float = 0.3
+def read_in_fuel_costs() -> pd.DataFrame:
+    """Reads data for cost from csv."""
+    price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 1, 2])
+    price_frame.index = price_frame["fuel type"]  # type: ignore
+    price_frame.drop(columns=["fuel type"], inplace=True)
+    return price_frame
 
 
-def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simulation_parameters: SimulationParameters) -> Any:  # noqa: MC0001
-    """Calculation of several KPIs."""
-    results['consumption'] = 0
-    results['production'] = 0
-    results['battery_charge'] = 0
-    results['battery_discharge'] = 0
-    results['storage'] = 0
-    index: int
-    output: ComponentOutput
+def get_euro_and_co2(
+    fuel_costs: pd.DataFrame, fuel: Union[LoadTypes, InandOutputType]
+) -> Tuple[float, float]:
+    """Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel."""
+    column = fuel_costs.iloc[fuel_costs.index == fuel.value]
+    return (float(column["EUR per kWh"]), float(column["kgC02 per kWh"]))
 
-    electricity_price_consumption = pd.Series()
-    electricity_price_injection = pd.Series()
-    self_consumption = pd.Series()
 
-    price_config = FuelCost()
+def compute_consumption_production(
+    all_outputs: List, results: pd.DataFrame
+) -> pd.DataFrame:
+    """Computes electricity consumption and production based on results of hisim simulation."""
 
     # replace that loop by searching for flags -> include also battery things and hydrogen things
     # flags for Postprocessing: cp.ComponentOutput.postprocessing_flag -> loadtpyes.InandOutputType :
@@ -51,88 +44,277 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     # flags for LoadTypes: cp.ComponentOutput.load_type
     # flags for Units: cp.ComponentOutput.unit
 
-    for index, output in enumerate(all_outputs):
+    # initialize columns consumption, production, battery_charge, battery_discharge, storage
+    results["consumption"] = 0
+    results["production"] = 0
+    results["battery_charge"] = 0
+    results["battery_discharge"] = 0
+    results["storage"] = 0
+    index: int
+    output: ComponentOutput
 
+    for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
             if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
-                results['production'] = results['production'] + results.iloc[:, index]
+                results["production"] = results["production"] + results.iloc[:, index]
 
             elif (
-                    InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag) \
-                    or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag:
-                results['consumption'] = results['consumption'] + results.iloc[:, index]
+                (
+                    InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+                    in output.postprocessing_flag
+                )
+                or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                in output.postprocessing_flag
+            ):
+                results["consumption"] = results["consumption"] + results.iloc[:, index]
 
             elif InandOutputType.STORAGE_CONTENT in output.postprocessing_flag:
-                results['storage'] = results['storage'] + results.iloc[:, index]
+                results["storage"] = results["storage"] + results.iloc[:, index]
 
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BATTERY in output.postprocessing_flag:
-                    results["battery_charge"] = results["battery_charge"] + results.iloc[:, index].clip(lower=0)
-                    results["battery_discharge"] = results["battery_discharge"] - results.iloc[:, index].clip(upper=0)
+                    results["battery_charge"] = results[
+                        "battery_charge"
+                    ] + results.iloc[:, index].clip(lower=0)
+                    results["battery_discharge"] = results[
+                        "battery_discharge"
+                    ] - results.iloc[:, index].clip(upper=0)
                 elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
-                    results["consumption"] = results["consumption"] + results.iloc[:, index].clip(lower=0)
-
-            elif LoadTypes.PRICE in output.postprocessing_flag:
-                if InandOutputType.ELECTRICITY_CONSUMPTION in output.postprocessing_flag:
-                    electricity_price_consumption = results.iloc[:, index]
-                elif InandOutputType.ELECTRICITY_INJECTION in output.postprocessing_flag:
-                    electricity_price_injection = results.iloc[:, index]
-                else:
-                    continue
+                    results["consumption"] = results["consumption"] + results.iloc[
+                        :, index
+                    ].clip(lower=0)
 
         else:
             continue
 
-    # sum over time make it more clear and better
-    consumption_sum = results['consumption'].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
-    production_sum = results['production'].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
+    return results
 
+
+def compute_self_consumption_and_injection(
+    results: pd.DataFrame,
+) -> Tuple[pd.Series, pd.Series]:
+    """ Computes the self consumption and the grid injection. """
+    # account for battery
+    production_with_battery = results["production"] + results["battery_discharge"]
+    consumption_with_battery = results["consumption"] + results["battery_charge"]
+
+    # evaluate injection and sum over time
+    injection = production_with_battery - consumption_with_battery
+
+    # evaluate self consumption and immidiately sum over time
+    # battery is charged (counting to consumption) and discharged (counting to production)
+    # -> only one direction can be counted, otherwise the self-consumption can be greater than 100.
+    # Here the production side is counted (battery_discharge).
+    self_consumption = (
+        pd.concat(
+            (
+                production_with_battery[
+                    production_with_battery <= results["consumption"]
+                ],
+                results["consumption"][
+                    results["consumption"] < production_with_battery
+                ],
+            )
+        )
+        .groupby(level=0)
+        .sum()
+    )
+
+    return injection, self_consumption
+
+
+def search_electricity_prices_in_results(
+    all_outputs: List, results: pd.DataFrame
+) -> Tuple[pd.Series, pd.Series]:
+    """Extracts electricity price consumption and electricity price production from results."""
+    electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype)
+    electricity_price_injection = pd.Series(dtype=pd.Float64Dtype)
+    for index, output in enumerate(all_outputs):
+        if output.postprocessing_flag is not None:
+            if LoadTypes.PRICE in output.postprocessing_flag:
+                if (
+                    InandOutputType.ELECTRICITY_CONSUMPTION
+                    in output.postprocessing_flag
+                ):
+                    electricity_price_consumption = results.iloc[:, index]
+                elif (
+                    InandOutputType.ELECTRICITY_INJECTION in output.postprocessing_flag
+                ):
+                    electricity_price_injection = results.iloc[:, index]
+                else:
+                    continue
+    return electricity_price_consumption, electricity_price_injection
+
+
+def compute_energy_from_power(
+    power_timeseries: pd.Series, timeresolution: int
+) -> float:
+    """ Computes the energy from a power value. """
+    if power_timeseries.empty:
+        return 0.0
+    return float(power_timeseries.sum() * timeresolution / 3.6e6)
+
+
+def compute_cost_of_fuel_type(
+    results: pd.DataFrame,
+    all_outputs: List,
+    timeresolution: int,
+    price_frame: pd.DataFrame,
+    fuel: LoadTypes,
+) -> Tuple[float, float]:
+    """ Computes the cost of the fuel type. """
+    fuel_consumption = pd.Series(dtype=pd.Float64Dtype)
+    for index, output in enumerate(all_outputs):
+        if output.postprocessing_flag is not None:
+            if InandOutputType.FUEL_CONSUMPTION in output.postprocessing_flag:
+                if fuel in output.postprocessing_flag:
+                    fuel_consumption = results.iloc[:, index]
+                else:
+                    continue
+
+    # convert liters to Wh
+    if not fuel_consumption.empty:
+        if fuel == LoadTypes.OIL:
+            liters_to_watt_hours = 1e4 / 1.0526315789474
+        elif fuel == LoadTypes.DIESEL:
+            liters_to_watt_hours = 9.8e3
+        else:
+            liters_to_watt_hours = 1
+        consumption_sum = (
+            compute_energy_from_power(
+                power_timeseries=fuel_consumption, timeresolution=timeresolution
+            )
+            * liters_to_watt_hours
+        )
+    else:
+        consumption_sum = 0
+
+    price, co2 = get_euro_and_co2(fuel_costs=price_frame, fuel=fuel)
+    return consumption_sum * price, consumption_sum * co2
+
+
+def compute_kpis(
+    results: pd.DataFrame,
+    all_outputs: List[ComponentOutput],
+    simulation_parameters: SimulationParameters,
+) -> Any:  # noqa: MC0001
+    """Calculation of several KPIs."""
+    # initialize prices
+    price = 0.0
+    co2 = 0.0
+
+    price_frame = read_in_fuel_costs()
+
+    # compute consumption and production and extract price signals
+    results = compute_consumption_production(all_outputs=all_outputs, results=results)
+    (
+        electricity_price_consumption,
+        electricity_price_injection,
+    ) = search_electricity_prices_in_results(all_outputs=all_outputs, results=results)
+
+    # sum consumption and production over time make it more clear and better
+    consumption_sum = compute_energy_from_power(
+        power_timeseries=results["consumption"],
+        timeresolution=simulation_parameters.seconds_per_timestep,
+    )
+
+    production_sum = compute_energy_from_power(
+        power_timeseries=results["production"],
+        timeresolution=simulation_parameters.seconds_per_timestep,
+    )
+
+    # computes injection and self consumption + autarky and self consumption rates
     if production_sum > 0:
-        # account for battery
-        production_with_battery = results['production'] + results['battery_discharge']
-        consumption_with_battery = results['consumption'] + results['battery_charge']
+        injection, self_consumption = compute_self_consumption_and_injection(
+            results=results
+        )
+        injection_sum = compute_energy_from_power(
+            power_timeseries=injection[injection > 0],
+            timeresolution=simulation_parameters.seconds_per_timestep,
+        )
 
-        # evaluate injection and sum over time
-        injection = (production_with_battery - consumption_with_battery)
-        injection_sum = injection[injection > 0].sum() * simulation_parameters.seconds_per_timestep / 3.6e6
+        self_consumption_sum = compute_energy_from_power(
+            power_timeseries=self_consumption,
+            timeresolution=simulation_parameters.seconds_per_timestep,
+        )
 
-        # evaluate self consumption and immidiately sum over time
-        self_consumption = pd.concat((results["production"][results["production"] <= consumption_with_battery],
-        consumption_with_battery[consumption_with_battery < results["production"]])).groupby(level=0).sum()
-        self_consumption_sum = self_consumption.sum() * simulation_parameters.seconds_per_timestep / 3.6e6
+        self_consumption_rate = 100 * (self_consumption_sum / production_sum)
+        autarky_rate = 100 * (self_consumption_sum / consumption_sum)
 
-        battery_losses = 0
+        if not results["storage"].empty:
+            # battery_soc = float(results["storage"][-1]) * 100
+            battery_losses = compute_energy_from_power(
+                power_timeseries=results["battery_charge"],
+                timeresolution=simulation_parameters.seconds_per_timestep,
+            ) - compute_energy_from_power(
+                power_timeseries=results["battery_discharge"],
+                timeresolution=simulation_parameters.seconds_per_timestep,
+            )
+
     else:
         self_consumption_sum = 0
         injection_sum = 0
+        self_consumption_rate = 0
+        autarky_rate = 0
         battery_losses = 0
+        # battery_soc = 0
     h2_system_losses = 0  # explicitly compute that
 
     # Electricity Price
-    price = 0
-    co2 = 0
+    electricity_price_constant, co2_price_constant = get_euro_and_co2(
+        fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
+    )
+    electricity_inj_price_constant, _ = get_euro_and_co2(
+        fuel_costs=price_frame, fuel=InandOutputType.ELECTRICITY_INJECTION
+    )
+
     if production_sum > 0:
         # evaluate electricity price
         if not electricity_price_injection.empty:
-            price = price - (injection[injection > 0] * electricity_price_injection[injection > 0]).sum() \
-                * simulation_parameters.seconds_per_timestep / 3.6e6
+            price = price - compute_energy_from_power(
+                power_timeseries=injection[injection > 0]
+                * electricity_price_injection[injection > 0],
+                timeresolution=simulation_parameters.seconds_per_timestep,
+            )
+            price = price + compute_energy_from_power(
+                power_timeseries=results["consumption"] - self_consumption,
+                timeresolution=simulation_parameters.seconds_per_timestep,
+            )
         else:
-            price = price - injection_sum * price_config.electricity_injection_in_euro_per_kwh
-        self_consumption_rate = 100 * (self_consumption_sum / production_sum)
-        autarky_rate = 100 * (self_consumption_sum / consumption_sum)
-    else:
-        self_consumption_rate = 0
-        autarky_rate = 0
+            price = (
+                price
+                - injection_sum * electricity_inj_price_constant
+                + (consumption_sum - self_consumption_sum) * electricity_price_constant
+            )
 
-    if not electricity_price_consumption.empty:
-        # substract self consumption from consumption for bill calculation
-        if not self_consumption.empty:
-            results['consumption'] = results['consumption'] - self_consumption
-        price = price + (results['consumption'] * electricity_price_consumption).sum() \
-            * simulation_parameters.seconds_per_timestep / 3.6e6
     else:
-        price = price + (consumption_sum - self_consumption_sum) * price_config.electricity_consumption_in_euro_per_kwh
-    co2 = co2 + (consumption_sum - self_consumption_sum) * price_config.electricity_consumption_in_kg_co2_per_kwh
+        if not electricity_price_consumption.empty:
+            # substract self consumption from consumption for bill calculation
+            price = price + compute_energy_from_power(
+                power_timeseries=results["consumption"] * electricity_price_consumption,
+                timeresolution=simulation_parameters.seconds_per_timestep,
+            )
+        else:
+            price = price + consumption_sum * electricity_price_constant
+
+    co2 = co2 + (consumption_sum - self_consumption_sum) * co2_price_constant
+
+    # compute cost and co2 for LoadTypes other than electricity
+    for fuel in [
+        LoadTypes.GAS,
+        LoadTypes.OIL,
+        LoadTypes.DISTRICTHEATING,
+        LoadTypes.DIESEL,
+    ]:
+        fuel_price, fuel_co2 = compute_cost_of_fuel_type(
+            results=results,
+            all_outputs=all_outputs,
+            timeresolution=simulation_parameters.seconds_per_timestep,
+            price_frame=price_frame,
+            fuel=fuel,
+        )
+        co2 = co2 + fuel_co2
+        price = price + fuel_price
 
     # initilize lines for report
     lines: List = []
@@ -141,7 +323,7 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append(f"Self-Consumption: {self_consumption_sum:4.0f} kWh")
     lines.append(f"Injection: {injection_sum:4.0f} kWh")
     lines.append(f"Battery losses: {battery_losses:4.0f} kWh")
-    lines.append(f"Battery content: {0:4.0f} kWh")
+    lines.append(f"Battery content: {0:3.0f} %")
     lines.append(f"Hydrogen system losses: {h2_system_losses:4.0f} kWh")
     lines.append(f"Hydrogen storage content: {0:4.0f} kWh")
     lines.append(f"Autarky Rate: {autarky_rate:3.1f} %")
@@ -150,12 +332,17 @@ def compute_kpis(results: pd.DataFrame, all_outputs: List[ComponentOutput], simu
     lines.append(f"CO2 emitted due to electricity use: {co2:3.0f} kg")
 
     # initialize json interface to pass kpi's to building_sizer
-    kpi_config = KPIConfig(self_consumption_rate=self_consumption_rate, autarky_rate=autarky_rate,
-    injection=injection_sum, economic_cost=price, co2_cost=co2)
+    kpi_config = KPIConfig(
+        self_consumption_rate=self_consumption_rate,
+        autarky_rate=autarky_rate,
+        injection=injection_sum,
+        economic_cost=price,
+        co2_cost=co2,
+    )
 
     pathname = os.path.join(simulation_parameters.result_directory, "kpi_config.json")
     config_file_written = kpi_config.to_json()  # type: ignore
-    with open(pathname, 'w', encoding="utf-8") as outfile:
+    with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
 
     return lines

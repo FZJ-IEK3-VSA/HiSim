@@ -4,7 +4,9 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
+import pytest
 
+@pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household_with_default_connections():
     path = "../examples/default_connections.py"

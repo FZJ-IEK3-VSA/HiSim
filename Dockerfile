@@ -1,5 +1,4 @@
-#FROM continuumio/miniconda3:4.10.3-alpine
-FROM python
+FROM python:3.9-slim
 
 WORKDIR /app
 
@@ -19,10 +18,11 @@ RUN pip install -e .
 
 # Copy source code to image
 COPY hisim hisim
-COPY building_sizer building_sizer
 
 # Copy the examples folder containing the modular_household file
 COPY examples examples 
+# Remove any previous simulation results
+RUN rm -f -r examples/results
 
 # Set an environment variable flag so HiSim can check whether it runs in a container or not
 ENV HISIM_IN_DOCKER_CONTAINER true
@@ -36,4 +36,4 @@ RUN mkdir /results
 WORKDIR /app/examples
 
 # Temporary solution for the custom json interface for the WHY toolkit: always uses modular_household_explicit in modular_household.py
-ENTRYPOINT mv /input/request.json system_config.json && python3 ../hisim/hisim_main.py modular_example modular_household_explicit && cd results/modular_household_explicit* && mv * /results
+ENTRYPOINT mv /input/request.json modular_example_config.json && python3 ../hisim/hisim_main.py modular_example modular_household_explicit && cd results/modular_household_explicit* && mv * /results

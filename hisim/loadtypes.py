@@ -17,15 +17,17 @@ import enum
 @enum.unique
 class Locations(str, enum.Enum):
 
-    """ To parse locations for climate data. """
+    """To parse locations for climate data."""
 
     AACHEN = "Aachen"
+    MADRID = "Madrid"
+    FR = "FR"
 
 
 @enum.unique
 class ChargingLocations(str, enum.Enum):
 
-    """ To parse locations for EV Charging. """
+    """To parse locations for EV Charging."""
 
     AT_HOME = "AtHome"
     AT_WORK = "AtWork"
@@ -34,14 +36,15 @@ class ChargingLocations(str, enum.Enum):
 @enum.unique
 class OccupancyProfiles(str, enum.Enum):
 
-    """ To parse LPG predefined household strings. """
+    """To parse LPG predefined household strings."""
 
     CH01 = "CH01"
 
 
 class BuildingCodes(str, enum.Enum):
+    # TODO: Discussed DN & JG: don't use enums for building types. Raise exception in building component if code doesn't exist.
 
-    """ To parse predefined house types from tabula. """
+    """To parse predefined house types from tabula."""
 
     DE_N_SFH_05_GEN_REEX_001_002 = "DE.N.SFH.05.Gen.ReEx.001.002"
 
@@ -49,7 +52,7 @@ class BuildingCodes(str, enum.Enum):
 @enum.unique
 class DisplayNames(str, enum.Enum):
 
-    """ For the sankey plotting. """
+    """For the sankey plotting."""
 
     ELECTRICITY_OUTPUT = "ElectricityOutput"
     ELECTRICITY_INPUT = "ElectricityInput"
@@ -58,7 +61,7 @@ class DisplayNames(str, enum.Enum):
 @enum.unique
 class Termination(str, enum.Enum):
 
-    """ For the simulation status of modular household. """
+    """For the simulation status of modular household."""
 
     SUCCESSFUL = "Sucessful"
     INVESTMENT_EXCEEDED = "InvestmentExceeded"
@@ -67,7 +70,7 @@ class Termination(str, enum.Enum):
 @enum.unique
 class LoadTypes(str, enum.Enum):
 
-    """ Load type named constants so that they are the same everywhere and no typos happen. """
+    """Load type named constants so that they are the same everywhere and no typos happen."""
 
     ANY = "Any"
 
@@ -95,13 +98,13 @@ class LoadTypes(str, enum.Enum):
 
     # Controllers:
     ON_OFF = "OnOff"  # encoding: 0 means off and 1 means on
-    ACTIVATION = 'Activation'
+    ACTIVATION = "Activation"
 
 
 @enum.unique
 class Units(str, enum.Enum):
 
-    """ Unit Constants. """
+    """Unit Constants."""
 
     # Unphysical
     ANY = "-"
@@ -137,28 +140,28 @@ class Units(str, enum.Enum):
 
     # Degrees
     CELSIUS = "°C"
-    KELVIN = 'K'
+    KELVIN = "K"
 
     # Degrees
     DEGREES = "Degrees"
 
     # Time
     SECONDS = "s"
-    TIMESTEPS = 'timesteps'
-    YEARS = 'years'
+    TIMESTEPS = "timesteps"
+    YEARS = "years"
 
     # Cost
     EUR_PER_KWH = "Euros per kWh"
     EURO = "Euro"
 
     # Binary for controllers
-    BINARY = 'binary'
+    BINARY = "binary"
 
 
 @enum.unique
 class ComponentType(str, enum.Enum):
 
-    """ Component types for use in dynamic controllers. """
+    """Component types for use in dynamic controllers."""
 
     PV = "PV"
     SMART_DEVICE = "SmartDevice"
@@ -168,6 +171,7 @@ class ComponentType(str, enum.Enum):
     GAS_HEATER = "GasHeater"
     BATTERY = "Battery"
     CAR_BATTERY = "CarBattery"
+    CAR = "Car"
     FUEL_CELL = "FuelCell"
     ELECTROLYZER = "Electrolyzer"
     CHP = "CHP"
@@ -180,9 +184,21 @@ class ComponentType(str, enum.Enum):
 
 
 @enum.unique
+class HeatingSystems(str, enum.Enum):
+
+    """To parse heating systems in simulation inputs."""
+
+    HEAT_PUMP = "HeatPump"
+    ELECTRIC_HEATING = "ELectricHeating"
+    OIL_HEATING = "OilHeating"
+    GAS_HEATING = "GasHeating"
+    DISTRICT_HEATING = "DistrictHeating"
+
+
+@enum.unique
 class InandOutputType(str, enum.Enum):
 
-    """ For dynamic controllers. """
+    """For dynamic controllers."""
 
     MASS_FLOW = "Massflow"
     CONTROL_SIGNAL = "ControlSignal"
@@ -209,3 +225,6 @@ class InandOutputType(str, enum.Enum):
     HEAT_TO_BUFFER = "HeatToBuffer"
     THERMAL_PRODUCTION = "ThermalProduction"
     FUEL_CONSUMPTION = "FuelConsumption"
+
+    WATER_HEATING = "WaterHeating"
+    HEATING = "Heating"

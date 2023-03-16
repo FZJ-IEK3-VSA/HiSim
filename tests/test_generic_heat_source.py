@@ -1,3 +1,4 @@
+import pytest
 from hisim import component as cp
 #import components as cps
 #import components
@@ -6,6 +7,8 @@ from hisim.components import controller_l1_heatpump
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
+
+@pytest.mark.base
 def test_heat_source():
 
     #simulation parameters
@@ -62,4 +65,3 @@ def test_heat_source():
     # Check if the delivered heat is indeed that corresponded to the heat pump model
     assert my_heat_source_config.power_th / 60 == stsv.values[2]
     assert my_heat_source_config.power_th == stsv.values[3]
-

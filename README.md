@@ -18,9 +18,7 @@ Clone repository
 To clone this repository, enter the following command to your terminal:
 
 ```python
-git
-clone
-https: // github.com / FZJ - IEK3 - VSA / HiSim.git
+git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
 ```
 
 Virtual Environment
@@ -30,36 +28,26 @@ virtual environment to be created. For Windows users, setting the virtual enviro
 the command line:
 
 ```python
-python - m
-venv
-hisimvenv
+python -m venv hisimvenv
 ```
 
 After its creation, the virtual environment can be activated in the same directory:
 
-```python
+```python 
 hisimvenv\Scripts\activate
 ```
 
 For Linux/Mac users, the virtual environment is set up and activated as follows:
 
-```python
-virtual
-hisimvenv
-source
-hisimvenv / bin / activate
+```python 
+virtual hisimvenv source hisimvenv/bin/activate
 ```
 
 Alternatively, Anaconda can be used to set up and activate the virtual environment:
 
-```python
-conda
-create - n
-hisimvenv
-python = 3.9
-conda
-activate
-hisimvenv
+```python 
+conda create -n hisimvenv python=3.9
+conda activate hisimvenv
 ```
 
 With the successful activation, `hisim` is ready to be locally installed.
@@ -69,8 +57,7 @@ Install package
 After setting up the virtual environment, install the package to your local libraries:
 
 ```python
-pip
-install - e.
+pip install -e .
 ```
 
 Run Simple Examples
@@ -78,9 +65,7 @@ Run Simple Examples
 Run the python interpreter in the `hisim/examples` directory with the following command:
 
 ```python
-python.. / hisim / hisim_main.py
-examples
-first_example
+python ../hisim/hisim_main.py simple_examples.py first_example
 ```
 
 This command executes `hisim_main.py` on the setup function `first_example` implemented in the file `examples.py` that
@@ -94,9 +79,7 @@ The directory `hisim\examples` also contains a basic household configuration in 
 first setup function (`basic_household_explicit`) can be executed with the following command:
 
 ```python
-python.. / hisim / hisim_main.py
-basic_household.py
-basic_household_explicit
+python ../hisim/hisim_main.py basic_household.py basic_household_explicit
 ```
 
 The system is set up with the following elements:

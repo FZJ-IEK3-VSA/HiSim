@@ -1,3 +1,4 @@
+import pytest
 from hisim import component as cp
 #import components as cps
 #import components
@@ -6,6 +7,8 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
+
+@pytest.mark.base
 def test_storage():
 
     seconds_per_timestep = 60
@@ -18,7 +21,7 @@ def test_storage():
 
     #===================================================================================================================
     # Set Storage
-    my_storage_config= generic_heat_water_storage.HeatStorage.get_default_config()
+    my_storage_config= generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config()
     my_storage_config.V_SP_heating_water =V_SP_heating_water
     my_storage_config.V_SP_warm_water = V_SP_warm_water
     my_storage_config.temperature_of_warm_water_extratcion = temperature_of_warm_water_extratcion
@@ -86,4 +89,3 @@ def test_storage():
     assert 6.26 == stsv.values[my_storage.UA_SP_C.global_index]
     # Temperature of choosed storage (warm-Water) to be heated up
     assert stsv.values[my_storage.T_sp_C_ww.global_index] == stsv.values[my_storage.T_sp_C.global_index]
-

@@ -1,7 +1,7 @@
 """Test for the Example Template."""
 
 # clean
-
+import pytest
 from hisim import component as cp
 from hisim.components import example_template
 from hisim.simulationparameters import SimulationParameters
@@ -10,6 +10,7 @@ from hisim import log
 from tests import functions_for_testing as fft
 
 
+@pytest.mark.base
 def test_example_template():
     """Test for the Example Template."""
 

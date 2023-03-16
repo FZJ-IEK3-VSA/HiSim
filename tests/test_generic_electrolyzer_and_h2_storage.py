@@ -1,3 +1,4 @@
+import pytest
 from hisim import component as cp
 #import components as cps
 #import components
@@ -7,6 +8,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
 
+
+@pytest.mark.base
 def test_hydrogen_generator():
 
     seconds_per_timestep = 60
@@ -18,8 +21,8 @@ def test_hydrogen_generator():
     starting_fill = 0  # [kg_H2]
     max_charging_rate_hour = 2  # [kg/h]
     max_discharging_rate_hour = 2  # [kg/h]
-    max_charging_rate = max_charging_rate_hour / 3600
-    max_discharging_rate = max_discharging_rate_hour / 3600
+    # max_charging_rate = max_charging_rate_hour / 3600
+    # max_discharging_rate = max_discharging_rate_hour / 3600
     energy_for_charge = 0  # [kWh/kg]
     energy_for_discharge = 0  # [kWh/kg]
     loss_factor_per_day = 0  # [lost_%/day]
@@ -32,8 +35,9 @@ def test_hydrogen_generator():
     max_power_percent = 100             # [%]
     min_hydrogen_production_rate_hour = 300  # [Nl/h]
     max_hydrogen_production_rate_hour = 5000   # [Nl/h]   #500
-    min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600   # [Nl/s]
+
+    # min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
+    # max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600   # [Nl/s]
     pressure_hydrogen_output = 30       # [bar]     --> max pressure mode at 35 bar
 
 

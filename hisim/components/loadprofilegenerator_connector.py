@@ -6,7 +6,6 @@ from typing import Any
 from os import path, listdir, makedirs
 import shutil
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 import pandas as pd
 import numpy as np
 
@@ -15,8 +14,6 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.components.configuration import PhysicsConfig
 from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -30,7 +27,9 @@ __status__ = "development"
 
 @dataclass
 class OccupancyConfig(cp.ConfigBase):
-    def get_main_classname(self):
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the fully qualified class name for the class that is getting configured. Used for Json."""
         return Occupancy.get_full_classname()
 
     name: str
@@ -70,10 +69,10 @@ class Occupancy(cp.Component):
 
     # Outputs
     # output
-    WW_MassOutput = "Mass Output"  # kg/s
-    WW_TemperatureOutput = "Temperature Output"  # °C
-    EnergyDischarged = "Energy Discharged"  # W
-    DemandSatisfied = "Demand Satisfied"  # 0 or 1
+    # WW_MassOutput = "Mass Output"  # kg/s
+    # WW_TemperatureOutput = "Temperature Output"  # °C
+    # EnergyDischarged = "Energy Discharged"  # W
+    # DemandSatisfied = "Demand Satisfied"  # 0 or 1
 
     NumberByResidents = "NumberByResidents"
     HeatingByResidents = "HeatingByResidents"
@@ -125,13 +124,18 @@ class Occupancy(cp.Component):
         # self.demand_satisfied: cp.ComponentOutput = self.add_output(self.ComponentName, self.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
         self.number_of_residentsC: cp.ComponentOutput = self.add_output(
-            self.component_name, self.NumberByResidents, lt.LoadTypes.ANY, lt.Units.ANY
+            self.component_name,
+            self.NumberByResidents,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description=f"here a description for {self.NumberByResidents} will follow.",
         )
         self.heating_by_residentsC: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.HeatingByResidents} will follow.",
         )
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -141,6 +145,7 @@ class Occupancy(cp.Component):
             postprocessing_flag=[
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
             ],
+            output_description=f"here a description for Occupancy {self.ElectricityOutput} will follow.",
         )
 
         self.water_consumptionC: cp.ComponentOutput = self.add_output(
@@ -148,6 +153,7 @@ class Occupancy(cp.Component):
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
             lt.Units.LITER,
+            output_description=f"here a description for {self.WaterConsumption} will follow.",
         )
 
     def i_save_state(self) -> None:
@@ -165,82 +171,58 @@ class Occupancy(cp.Component):
 
     @graph_call_path_factory(method_pattern)
     def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_conversion: bool
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        if self.ww_mass_input.source_output is not None:
-            # ww demand
-            ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
+        # if self.ww_mass_input.source_output is not None:
+        # ww demand
+        # ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
 
-            # From Thermal Energy Storage
-            ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)  # kg/s
-            # ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
-            ww_mass_input: float = ww_mass_input_per_sec
-            ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)  # °C
+        # From Thermal Energy Storage
+        # ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)  # kg/s
+        # ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
+        # ww_mass_input: float = ww_mass_input_per_sec
+        # ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)  # °C
 
-            # Information import
-            freshwater_temperature = (
-                HouseholdWarmWaterDemandConfig.freshwater_temperature
-            )
-            temperature_difference_hot = (
-                HouseholdWarmWaterDemandConfig.temperature_difference_hot
-            )  # Grädigkeit
-            temperature_difference_cold = (
-                HouseholdWarmWaterDemandConfig.temperature_difference_cold
-            )
-            energy_losses_watt = HouseholdWarmWaterDemandConfig.heat_exchanger_losses
-            # energy_losses = energy_losses_watt * self.seconds_per_timestep
-            energy_losses = 0
-            specific_heat = 4180 / 3600
+        # Information import
+        # freshwater_temperature = (HouseholdWarmWaterDemandConfig.freshwater_temperature)
+        # temperature_difference_hot = (HouseholdWarmWaterDemandConfig.temperature_difference_hot)  # Grädigkeit
+        # temperature_difference_cold = (HouseholdWarmWaterDemandConfig.temperature_difference_cold)
+        # energy_losses_watt = HouseholdWarmWaterDemandConfig.heat_exchanger_losses
+        # energy_losses = energy_losses_watt * self.seconds_per_timestep
+        # energy_losses = 0
+        # specific_heat = 4180 / 3600
 
-            ww_energy_demand = (
-                specific_heat
-                * self.water_consumption[timestep]
-                * (ww_temperature_demand - freshwater_temperature)
-            )
+        # ww_energy_demand = (specific_heat * self.water_consumption[timestep] * (ww_temperature_demand - freshwater_temperature))
 
-            if (
-                ww_temperature_input
-                > (ww_temperature_demand + temperature_difference_hot)
-                or ww_energy_demand == 0
-            ):
-                demand_satisfied = 1
-            else:
-                demand_satisfied = 0
+        # if (ww_temperature_input > (ww_temperature_demand + temperature_difference_hot) or ww_energy_demand == 0):
+        #     demand_satisfied = 1
+        # else:
+        #     demand_satisfied = 0
 
-            if ww_energy_demand > 0 and (
-                ww_mass_input == 0 and ww_temperature_input == 0
-            ):
-                """first iteration --> random numbers"""
-                ww_temperature_input = 40.45
-                ww_mass_input = 9.3
+        # if ww_energy_demand > 0 and (ww_mass_input == 0 and ww_temperature_input == 0):
+        # """first iteration --> random numbers"""
+        # ww_temperature_input = 40.45
+        # ww_mass_input = 9.3
 
-            """
-            Warm water is provided by the warmwater stoage.
-            The household needs water at a certain temperature. To get the correct temperature the amount of water from
-            the wws is regulated and is depending on the temperature provided by the wws. The backflowing water to wws
-            is cooled down to the temperature of (freshwater+temperature_difference_cold) --> ww_temperature_output.
-            """
-            if ww_energy_demand > 0:
-                # heating up the freshwater. The mass is consistent
-                energy_discharged = ww_energy_demand + energy_losses
-                ww_temperature_output: float = (
-                    freshwater_temperature + temperature_difference_cold
-                )
-                ww_mass_input = energy_discharged / (
-                    PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-                    * (ww_temperature_input - ww_temperature_output)
-                )
-            else:
-                ww_temperature_output = ww_temperature_input
-                ww_mass_input = 0
-                energy_discharged = 0
+        # """
+        # Warm water is provided by the warmwater stoage.
+        # The household needs water at a certain temperature. To get the correct temperature the amount of water from
+        # the wws is regulated and is depending on the temperature provided by the wws. The backflowing water to wws
+        # is cooled down to the temperature of (freshwater+temperature_difference_cold) --> ww_temperature_output.
+        # """
+        # if ww_energy_demand > 0:
+        #     # heating up the freshwater. The mass is consistent
+        #     energy_discharged = ww_energy_demand + energy_losses
+        #     ww_temperature_output: float = (freshwater_temperature + temperature_difference_cold)
+        #     # ww_mass_input = energy_discharged / (PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * (ww_temperature_input - ww_temperature_output))
+        # else:
+        #     ww_temperature_output = ww_temperature_input
+        #     # ww_mass_input = 0
+        #     # energy_discharged = 0
 
-            ww_mass_output = ww_mass_input
+        # ww_mass_output = ww_mass_input
 
-            # stsv.set_output_value(self.ww_mass_output, ww_mass_output)
-            # stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)
-            # stsv.set_output_value(self.demand_satisfied, demand_satisfied)
-            # stsv.set_output_value(self.energy_discharged, energy_discharged)
+        # stsv.set_output_value(self.ww_mass_output, ww_mass_output)  # stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)  # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
         stsv.set_output_value(
             self.number_of_residentsC, self.number_of_residents[timestep]
@@ -253,15 +235,22 @@ class Occupancy(cp.Component):
         )
         stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep])
 
-        if self.my_simulation_parameters.system_config.predictive == True:
-            last_forecast_timestep = int( timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep )
-            if (last_forecast_timestep > len(self.electricity_consumption)):
+        if self.my_simulation_parameters.predictive_control:
+            last_forecast_timestep = int(
+                timestep
+                + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+            )
+            if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
-            #log.information( type(self.temperature))
-            demandforecast = self.electricity_consumption[ timestep : last_forecast_timestep ]
-            self.simulation_repository.set_entry( self.Electricity_Demand_Forecast_24h, demandforecast )
+            # log.information( type(self.temperature))
+            demandforecast = self.electricity_consumption[
+                timestep:last_forecast_timestep
+            ]
+            self.simulation_repository.set_entry(
+                self.Electricity_Demand_Forecast_24h, demandforecast
+            )
 
-        if self.my_simulation_parameters.system_config.predictive == True:
+        if self.my_simulation_parameters.predictive_control:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
@@ -284,19 +273,11 @@ class Occupancy(cp.Component):
         )
 
         # create directories to put in files for cars and smart devices
-        for tag in ['utsp_reports', 'utsp_results']:
+        for tag in ["utsp_reports", "utsp_results"]:
             isExist = path.exists(utils.HISIMPATH[tag])
             if not isExist:
-               # Create a new directory because it does not exist
-               makedirs(utils.HISIMPATH[tag])
-
-        # copy example files for ev and smart devices to right folder
-        reportfiles = listdir(utils.HISIMPATH['utsp_example_reports'])
-        for file in reportfiles:
-            shutil.copyfile(path.join(utils.HISIMPATH['utsp_example_reports'], file), path.join(utils.HISIMPATH['utsp_reports'], file))
-        resultfiles = listdir(utils.HISIMPATH['utsp_example_results'])
-        for file in resultfiles:
-            shutil.copyfile(path.join(utils.HISIMPATH['utsp_example_results'], file), path.join(utils.HISIMPATH['utsp_results'], file))
+                # Create a new directory because it does not exist
+                makedirs(utils.HISIMPATH[tag])
 
         if file_exists:
             dataframe = pd.read_csv(
@@ -320,7 +301,7 @@ class Occupancy(cp.Component):
                 "number_of_residents"
             ]
             for filepath in filepaths:
-                with open(filepath) as json_file:
+                with open(filepath, encoding="utf-8") as json_file:
                     json_filex = json.load(json_file)
                 occupancy_profile.append(json_filex)
 
@@ -354,7 +335,7 @@ class Occupancy(cp.Component):
             # convert electricity consumption and water consumption to desired format and unit
             self.electricity_consumption = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60W / min
+            ).tolist()  # 1 kWh/min == 60 000 W / min
             self.water_consumption = pd.to_numeric(
                 pre_water_consumption["Sum [L]"]
             ).tolist()
@@ -380,7 +361,7 @@ class Occupancy(cp.Component):
                             sum(
                                 occupancy_profile[mode]["Values"][
                                     timestep
-                                    * steps_ratio:(timestep + 1)
+                                    * steps_ratio : (timestep + 1)
                                     * steps_ratio
                                 ]
                             )
@@ -395,11 +376,11 @@ class Occupancy(cp.Component):
                         )
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n:n + steps_ratio]) / steps_ratio
+                    sum(self.electricity_consumption[n : n + steps_ratio]) / steps_ratio
                     for n in range(0, steps_original, steps_ratio)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n:n + steps_ratio])
+                    sum(self.water_consumption[n : n + steps_ratio])
                     for n in range(0, steps_original, steps_ratio)
                 ]
 
@@ -429,13 +410,9 @@ class Occupancy(cp.Component):
 
             database.to_csv(cache_filepath)
             del data
-            del database
-            # utils.save_cache("Occupancy", parameters, database)
+            del database  # utils.save_cache("Occupancy", parameters, database)
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):
         """Writes a report."""
-        lines = []
-        lines.append(f"Name: {self.component_name}")
-        lines.append(f"Profile: {self.profile_name}")
-        return lines
+        return self.occupancyConfig.get_string_dict()

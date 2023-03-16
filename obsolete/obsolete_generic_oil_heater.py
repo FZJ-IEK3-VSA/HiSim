@@ -198,7 +198,7 @@
 #                                                        lt.Units.Celsius,
 #                                                        mandatory = True )
         
-#         if self.my_simulation_parameters.system_config.predictive and self.my_simulation_parameters.system_config.heating_device_included == 'oil_heater':
+#         if self.my_simulation_parameters.predictive_control and system_config.heating_device_included == 'oil_heater':
 #             self.OilHeaterSignalC: cp.ComponentInput = self.add_input( self.ComponentName,
 #                                                                        self.OilHeaterSignal,
 #                                                                        lt.LoadTypes.Any,
@@ -297,7 +297,7 @@
 #                 if self.state.state < 0:
 #                     self.state.state = -1
         
-#             if self.my_simulation_parameters.system_config.predictive:
+#             if self.my_simulation_parameters.predictive_control:
 #                 #put forecast into dictionary
 #                 if self.state.state > 0:
 #                     self.simulation_repository.set_entry( self.OilHeaterLoadForecast, [ self.P_on ] * max( 1, self.on_time - timestep + self.state.timestep_of_last_action ) )

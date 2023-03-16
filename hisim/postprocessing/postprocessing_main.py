@@ -132,7 +132,9 @@ class PostProcessor:
         if PostProcessingOptions.PLOT_SINGLE_DAYS in ppdt.post_processing_options:
             log.information("Making single day plots.")
             start = timer()
-            self.make_single_day_plots(days, ppdt, report_image_entries=report_image_entries)
+            self.make_single_day_plots(
+                days, ppdt, report_image_entries=report_image_entries
+            )
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
@@ -235,7 +237,9 @@ class PostProcessor:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata
             if len(building_data) == 0:
-                log.warning("Building needs to be defined to generate csv for housing data base.")
+                log.warning(
+                    "Building needs to be defined to generate csv for housing data base."
+                )
             else:
                 log.information("Generating csv for housing data base. ")
                 start = timer()
@@ -243,11 +247,13 @@ class PostProcessor:
                     all_outputs=ppdt.all_outputs,
                     results=ppdt.results,
                     simulation_parameters=ppdt.simulation_parameters,
-                    building_data=building_data
+                    building_data=building_data,
                 )
                 end = timer()
                 duration = end - start
-                log.information("Generating csv for housing data base took " + f"{duration:1.2f}s.")
+                log.information(
+                    "Generating csv for housing data base took " + f"{duration:1.2f}s."
+                )
 
         # only a single day has been calculated. This gets special charts for debugging.
         if (
@@ -259,7 +265,9 @@ class PostProcessor:
                 "Making special single day plots for a single day calculation for testing."
             )
             start = timer()
-            self.make_special_one_day_debugging_plots(ppdt, report_image_entries=report_image_entries)
+            self.make_special_one_day_debugging_plots(
+                ppdt, report_image_entries=report_image_entries
+            )
             end = timer()
             duration = end - start
             log.information(
@@ -282,8 +290,9 @@ class PostProcessor:
         systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(
-        self, ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry]
+        self,
+        ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -325,7 +334,11 @@ class PostProcessor:
         log.information("Plotting sankeys.")
         # TODO:   self.plot_sankeys()
 
-    def make_bar_charts(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry]) -> None:
+    def make_bar_charts(
+        self,
+        ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry],
+    ) -> None:
         """Make bar charts."""
         for index, output in enumerate(ppdt.all_outputs):
             my_bar = charts.BarChart(
@@ -342,8 +355,10 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     def make_single_day_plots(
-        self, days: Dict[str, int], ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry]
+        self,
+        days: Dict[str, int],
+        ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -361,7 +376,11 @@ class PostProcessor:
             my_entry = my_days.plot(close=True)
             report_image_entries.append(my_entry)
 
-    def make_carpet_plots(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry]) -> None:
+    def make_carpet_plots(
+        self,
+        ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry],
+    ) -> None:
         """Make carpet plots."""
         for index, output in enumerate(ppdt.all_outputs):
             log.trace("Making carpet plots")
@@ -386,11 +405,17 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     @utils.measure_memory_leak
-    def make_line_plots(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry]) -> None:
+    def make_line_plots(
+        self,
+        ppdt: PostProcessingDataTransfer,
+        report_image_entries: List[ReportImageEntry],
+    ) -> None:
         """Makes the line plots."""
         for index, output in enumerate(ppdt.all_outputs):
             if output.output_description is None:
-                raise ValueError("Output description was missing for " + output.full_name)
+                raise ValueError(
+                    "Output description was missing for " + output.full_name
+                )
             my_line = charts.Line(
                 output=output.full_name,
                 component_name=output.component_name,
@@ -509,7 +534,10 @@ class PostProcessor:
                             ]
                         )
                         if entry.output_description is None:
-                            raise ValueError("Component had no description: " + str(entry.component_name))
+                            raise ValueError(
+                                "Component had no description: "
+                                + str(entry.component_name)
+                            )
                         report.write_with_normal_alignment([entry.output_description])
                         output_type_counter = output_type_counter + 1
                     report.write_figures_to_report(entry.file_path)
@@ -572,13 +600,15 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write network charts to report."""
+        systemchart = SystemChart(ppdt)
         report.open()
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + ". System Network Charts"]
         )
         report.write_figures_to_report_with_size_four_six(
             os.path.join(
-                ppdt.simulation_parameters.result_directory, "System_no_Edge_labels.png"
+                ppdt.simulation_parameters.result_directory,
+                f"System_no_Edge_labels{systemchart.figure_format_system_chart}",
             )
         )
         report.write_with_center_alignment(
@@ -592,7 +622,7 @@ class PostProcessor:
         report.write_figures_to_report_with_size_seven_four(
             os.path.join(
                 ppdt.simulation_parameters.result_directory,
-                "System_with_Edge_labels.png",
+                f"System_with_Edge_labels{systemchart.figure_format_system_chart}",
             )
         )
         self.figure_counter = self.figure_counter + 1

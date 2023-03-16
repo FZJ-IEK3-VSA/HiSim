@@ -2,6 +2,8 @@
 # clean
 import os
 import re
+from strenum import StrEnum
+
 
 class Chart:  # noqa: too-few-public-methods
 
@@ -38,13 +40,13 @@ class Chart:  # noqa: too-few-public-methods
 
     def __init__(
         self,
-        output,
-        component_name,
-        output_description,
-        chart_type,
-        units,
-        directory_path,
-        time_correction_factor,
+        output=None,
+        component_name=None,
+        output_description=None,
+        chart_type=None,
+        units=None,
+        directory_path=None,
+        time_correction_factor=None,
         output2=None,
     ):
         """Initializes the base class."""
@@ -52,6 +54,8 @@ class Chart:  # noqa: too-few-public-methods
         self.component_name = component_name
         self.output_description = output_description
         self.type = chart_type
+        self.figure_format = FigureFormat.JPG
+
         if hasattr(units, "value"):
             self.units = units.value
             self.ylabel = units.value
@@ -98,12 +102,10 @@ class Chart:  # noqa: too-few-public-methods
         if output2 is not None:
             self.output2 = output2
             # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
-            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double.png"
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format}"
         else:
             # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
-            self.filename = (
-                f"{self.type.lower()}_{self.component_name}_{self.output_type}.png"
-            )
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 
@@ -113,3 +115,11 @@ class Chart:  # noqa: too-few-public-methods
         self.fontsize_label = 12
         self.fontsize_legend = 12
         self.fontsize_ticks = 10
+
+
+class FigureFormat(StrEnum):
+
+    """Set Figure Formats."""
+
+    PNG = ".png"
+    JPG = ".jpg"

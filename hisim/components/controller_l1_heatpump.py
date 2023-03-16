@@ -1,30 +1,26 @@
 # -*- coding: utf-8 -*-
 # clean
 """ 
-    Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered. This file contains Controller together with Configuration and State.
+    Generic heating controller with ping pong control and optional input for energy management system.
+    Runtime and idle time also considered. This file contains Controller together with Configuration and State.
     The heat source is controlled accoring to four modes:
-        (a) 0.5 * power when temperature is already above target and only runs due to minimal operation time, or temperature is between upper target and increased upper target from ESM
+        (a) 0.5 * power when temperature is already above target and only runs due to minimal operation time,
+            or temperature is between upper target and increased upper target from ESM
         (b) 0.75 * power when temperature is within tolerance range,
         (c) full power when temperature is below lower target,
         (d) off when temperature is already below target and only runs due to minimal idle time, or temperature is above upper target.
 """
 
-from dataclasses import dataclass
-
 # Owned
+from dataclasses import dataclass
 from typing import List
-
-# Generic/Built-in
-
 from dataclasses_json import dataclass_json
 
-from hisim.component import ConfigBase
-from hisim import utils
+# Generic/Built-in
 from hisim import component as cp
-from hisim import log
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import building
-from hisim.components import controller_l2_energy_management_system
+from hisim import log, utils
+from hisim.component import ConfigBase
+from hisim.components import building, generic_hot_water_storage_modular
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 

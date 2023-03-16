@@ -2,6 +2,7 @@ from hisim import component as cp
 #import components as cps
 #import components
 from hisim.components import generic_heat_pump
+import pytest
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
@@ -10,7 +11,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
-import pytest
+
 
 
 @pytest.mark.base

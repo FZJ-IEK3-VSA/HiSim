@@ -6,6 +6,7 @@ from hisim import component as cp
 # from hisim.components import weather
 # from hisim.components import building
 # from hisim import loadtypes as lt
+import pytest
 from hisim.simulationparameters import SimulationParameters
 # from hisim.json_generator import JsonConfigurationGenerator
 from hisim.json_executor import JsonExecutor
@@ -14,7 +15,6 @@ from hisim import utils
 from hisim import hisim_main
 # from hisim import log
 # import os
-import pytest
 
 @pytest.mark.examples
 @utils.measure_execution_time

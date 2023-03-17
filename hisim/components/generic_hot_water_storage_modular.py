@@ -4,26 +4,24 @@ Energy bucket model: extracts energy, adds energy and converts back to temperate
 The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as
 DHW hot water storage or as buffer storage.
 """
+from dataclasses import dataclass
 # clean
 # Generic/Built-in
-from typing import List, Any
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-
+from typing import Any, List, Optional
 import numpy as np
+from dataclasses_json import dataclass_json
 
 # Owned
 import hisim.component as cp
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 import hisim.dynamic_component as dycp
-from hisim import loadtypes as lt
-from hisim.simulationparameters import SimulationParameters
-from hisim.components.loadprofilegenerator_connector import Occupancy
-from hisim.components import generic_heat_pump_modular
-from hisim.components import generic_heat_source
-from hisim.components import generic_CHP
-from hisim.components import controller_l1_building_heating
 import hisim.log
+from hisim import loadtypes as lt
+from hisim.components import (controller_l1_building_heating, generic_CHP,
+                              generic_heat_pump_modular, generic_heat_source)
+from hisim.components.loadprofilegenerator_connector import Occupancy
+from hisim.components.loadprofilegenerator_utsp_connector import \
+    UtspLpgConnector
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -57,6 +55,8 @@ class StorageConfig:
     warm_water_temperature: float
     #: temperature of water, which is heated up - relevant for DHW only
     drain_water_temperature: float
+    #: energy of full cycle in kWh
+    energy_full_cycle: Optional[float]
     #: power of heat source in kW
     power: float
 
@@ -65,7 +65,7 @@ class StorageConfig:
         """ Returns default configuration for boiler. """
         config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=500,
                                surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
-                               power=0)
+                               energy_full_cycle=None, power=0)
         return config
 
     @staticmethod
@@ -79,7 +79,7 @@ class StorageConfig:
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
             name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=0, surface=surface, u_value=0.36,
-            warm_water_temperature=50, drain_water_temperature=10, power=power)
+            warm_water_temperature=50, drain_water_temperature=10, energy_full_cycle=None, power=power)
         return config
 
     def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float, multiplier: float) -> None:
@@ -94,6 +94,8 @@ class StorageConfig:
         # cylinder surface area = floor and ceiling area + lateral surface
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
 
+    def compute_default_cycle(self, temperature_difference_in_kelvin: float):
+        self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
 
 class StorageState:
 
@@ -381,6 +383,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.drain_water_temperature = config.drain_water_temperature
         self.warm_water_temperature = config.warm_water_temperature
         self.power = config.power
+        self.config = config
 
     def write_to_report(self):
         """Writes to report."""

@@ -442,9 +442,6 @@ def configure_water_heating(
         Integer tracking component hierachy for EMS.
 
     """
-    boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
-    )
     fuel_translator = {
         lt.HeatingSystems.GAS_HEATING: lt.LoadTypes.GAS,
         lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
@@ -459,6 +456,10 @@ def configure_water_heating(
     )
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
+    boiler_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+    )
+    boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heater_config.t_max_heating_in_celsius - heater_config.t_min_heating_in_celsius)
 
     heater_config.power_th = (
         my_occupancy.max_hot_water_demand
@@ -526,11 +527,6 @@ def configure_water_heating_electric(
         Integer tracking component hierachy for EMS.
 
     """
-
-    boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
-    )
-
     if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:
         heatpump_config = (
             generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
@@ -559,6 +555,10 @@ def configure_water_heating_electric(
             - HouseholdWarmWaterDemandConfig.freshwater_temperature
         )
     )
+    boiler_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+    )
+    boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius)
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=boiler_config
@@ -878,6 +878,7 @@ def configure_heating_with_buffer_electric(
         temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius,
         multiplier=buffer_volume
     )
+    buffer_config.compute_default_cycle(temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating(
         "buffer"
@@ -1029,6 +1030,7 @@ def configure_heating_with_buffer(
         temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius,
         multiplier=buffer_volume
     )
+    buffer_config.compute_default_cycle(temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius)
 
     building_heating_controller_config = controller_l1_building_heating.L1BuildingHeatingConfig.get_default_config_heating(
         "buffer"

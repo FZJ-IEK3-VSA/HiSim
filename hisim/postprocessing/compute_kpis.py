@@ -13,6 +13,7 @@ from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
+from hisim.components import generic_hot_water_storage_modular
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -63,20 +64,19 @@ def compute_consumption_production(
                 elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                     consumption_ids.append(index)
         else:
-            continue
-
-    pos = lambda col : col[col > 0]
-    neg = lambda col : col[col < 0]   
+            continue  
 
     postprocessing_results = pd.DataFrame()
-    postprocessing_results[ "consumption" ] = results.iloc[:,consumption_ids].agg(pos).sum(axis=1)
-    postprocessing_results[ "production" ] = results.iloc[:,production_ids].agg(pos).sum(axis=1)
-    postprocessing_results["battery_charge"] = results.iloc[:,battery_charge_discharge_ids].agg(pos).sum(axis=1)
-    postprocessing_results["battery_discharge"] = results.iloc[:,battery_charge_discharge_ids].agg(neg).sum(axis=1) * (-1)
+    postprocessing_results[ "consumption" ] = pd.DataFrame(results.iloc[:,consumption_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results[ "production" ] = pd.DataFrame(results.iloc[:,production_ids]).clip(lower=0).sum(axis=1)
+
+    postprocessing_results["battery_charge"] = pd.DataFrame(results.iloc[:,battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["battery_discharge"] = pd.DataFrame(results.iloc[:,battery_charge_discharge_ids]).clip(upper=0).sum(axis=1) * (-1)
 
     return postprocessing_results
 
 def compute_hot_water_storage_losses_and_cycles(
+    components: List[ComponentWrapper],
     all_outputs: List, results: pd.DataFrame,
     timeresolution: int,
 ) -> pd.DataFrame:
@@ -87,6 +87,15 @@ def compute_hot_water_storage_losses_and_cycles(
     charge_sum_buffer = 0
     discharge_sum_dhw = 0
     discharge_sum_buffer = 0
+
+    # get cycle of water storages from 
+    for elem in components:
+        if isinstance(elem.my_component, generic_hot_water_storage_modular.HotWaterStorage):
+            use = elem.my_component.use
+            if use == ComponentType.BUFFER:
+                cycle_buffer = elem.my_component.config.energy_full_cycle
+            elif use == ComponentType.BOILER:
+                cycle_dhw = elem.my_component.config.energy_full_cycle
 
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
@@ -102,10 +111,16 @@ def compute_hot_water_storage_losses_and_cycles(
                     discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution) 
         else:
             continue
-        storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
+        cycles_dhw = charge_sum_dhw / cycle_dhw
         storage_loss_dhw = charge_sum_dhw - discharge_sum_dhw
-    print(storage_loss_dhw, storage_loss_buffer)
-    return charge_sum_dhw, charge_sum_buffer
+        cycles_buffer = charge_sum_buffer / cycle_buffer
+        storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
+    if cycle_buffer == 0:
+        building_heating = charge_sum_buffer
+    else:
+        building_heating = discharge_sum_buffer
+
+    return cycles_dhw, storage_loss_dhw, discharge_sum_dhw, cycles_buffer, storage_loss_buffer, building_heating
 
 def compute_self_consumption_and_injection(
     postprocessing_results: pd.DataFrame,
@@ -114,6 +129,7 @@ def compute_self_consumption_and_injection(
     # account for battery
     production_with_battery = postprocessing_results["production"] + postprocessing_results["battery_discharge"]
     consumption_with_battery = postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
+
 
     # evaluate injection and sum over time
     injection = production_with_battery - consumption_with_battery
@@ -260,7 +276,6 @@ def compute_kpis(
         autarky_rate = 100 * (self_consumption_sum / consumption_sum)
 
         if not postprocessing_results["battery_charge"].empty:
-            # battery_soc = float(results["storage"][-1]) * 100
             battery_losses = compute_energy_from_power(
                 power_timeseries=postprocessing_results["battery_charge"],
                 timeresolution=simulation_parameters.seconds_per_timestep,
@@ -334,7 +349,8 @@ def compute_kpis(
         co2 = co2 + fuel_co2
         price = price + fuel_price
 
-    charge_sum_dhw, charge_sum_buffer = compute_hot_water_storage_losses_and_cycles(
+    cycles_dhw, loss_dhw, use_dhw, cycles_buffer, loss_buffer, use_heating = compute_hot_water_storage_losses_and_cycles(
+        components=components,
         all_outputs=all_outputs,
         results=results,
         timeresolution=simulation_parameters.seconds_per_timestep,
@@ -347,7 +363,12 @@ def compute_kpis(
     lines.append(f"Self-Consumption: {self_consumption_sum:4.0f} kWh")
     lines.append(f"Injection: {injection_sum:4.0f} kWh")
     lines.append(f"Battery losses: {battery_losses:4.0f} kWh")
-    lines.append(f"Battery content: {0:3.0f} %")
+    lines.append(f"DHW storage heat loss: {loss_dhw:4.0f} kWh")
+    lines.append(f"DHW storage heat cycles: {cycles_dhw:4.0f} Cycles")
+    lines.append(f"DHW energy provided: {use_dhw:4.0f} kWh")
+    lines.append(f"Buffer storage heat loss: {loss_buffer:4.0f} kWh")
+    lines.append(f"Buffer storage heat cycles: {cycles_buffer:4.0f} Cycles")
+    lines.append(f"Heating energy provided: {use_heating:4.0f} kWh")
     lines.append(f"Hydrogen system losses: {h2_system_losses:4.0f} kWh")
     lines.append(f"Hydrogen storage content: {0:4.0f} kWh")
     lines.append(f"Autarky Rate: {autarky_rate:3.1f} %")

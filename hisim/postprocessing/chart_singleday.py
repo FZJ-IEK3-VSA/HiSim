@@ -7,7 +7,7 @@ from matplotlib.dates import DateFormatter
 
 from hisim.postprocessing.chartbase import Chart
 from hisim.postprocessing.report_image_entries import ReportImageEntry
-
+from hisim.simulationparameters import FigureFormat
 
 class ChartSingleDay(Chart):
 
@@ -25,6 +25,7 @@ class ChartSingleDay(Chart):
         day: Any = 0,
         month: Any = 0,
         output2: Any = None,
+        figure_format: FigureFormat = None,
     ):
         """Initializes the class."""
         if output2 is not None:
@@ -37,6 +38,7 @@ class ChartSingleDay(Chart):
                 time_correction_factor=time_correction_factor,
                 output_description=output_description,
                 output2=output2,
+                figure_format=figure_format,
             )
         else:
             super().__init__(
@@ -47,6 +49,7 @@ class ChartSingleDay(Chart):
                 directory_path=directory_path,
                 time_correction_factor=time_correction_factor,
                 output_description=output_description,
+                figure_format=figure_format,
             )
         self.axis: plt.axis
         self.ax2: plt.axis
@@ -100,6 +103,7 @@ class ChartSingleDay(Chart):
             self.month,
             self.data,
             self.output_description,
+            self.figure_format,
         )
         my_double.filename = (
             f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}"

@@ -2,7 +2,6 @@
 # clean
 import os
 import re
-from strenum import StrEnum
 
 
 class Chart:  # noqa: too-few-public-methods
@@ -48,13 +47,14 @@ class Chart:  # noqa: too-few-public-methods
         directory_path,
         time_correction_factor,
         output2=None,
+        figure_format=None,
     ):
         """Initializes the base class."""
         self.output = output
         self.component_name = component_name
         self.output_description = output_description
         self.type = chart_type
-        self.figure_format = FigureFormat.JPG
+        self.figure_format = figure_format
 
         if hasattr(units, "value"):
             self.units = units.value
@@ -117,9 +117,3 @@ class Chart:  # noqa: too-few-public-methods
         self.fontsize_ticks = 10
 
 
-class FigureFormat(StrEnum):
-
-    """Set Figure Formats."""
-
-    PNG = ".png"
-    JPG = ".jpg"

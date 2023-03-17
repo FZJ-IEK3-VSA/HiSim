@@ -1,14 +1,15 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 # clean
 from __future__ import annotations
-from typing import List, Optional
+from typing import List, Optional, Any
+import enum
+
 import datetime
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
-
 
 @dataclass()
 class SimulationParameters(JSONWizard):
@@ -56,6 +57,9 @@ class SimulationParameters(JSONWizard):
         self.surplus_control = surplus_control
         self.predictive_control = predictive_control
         self.prediction_horizon = prediction_horizon
+
+        self.figure_format = FigureFormat.PNG
+
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
@@ -237,3 +241,11 @@ class SimulationParameters(JSONWizard):
         lines.append(f"Seconds per timestep: {self.seconds_per_timestep}")
         lines.append(f"Total number of timesteps: {self.timesteps}")
         return lines
+
+class FigureFormat(str, enum.Enum):
+
+    """Set Figure Formats."""
+
+    PNG = ".png"
+    JPG = ".jpg"
+

@@ -308,6 +308,7 @@ class PostProcessor:
                     month=0,
                     output2=ppdt.results.iloc[:, 11],
                     output_description=output.output_description,
+                    figure_format=ppdt.simulation_parameters.figure_format
                 )
             else:
                 my_days = ChartSingleDay(
@@ -320,6 +321,7 @@ class PostProcessor:
                     day=0,
                     month=0,
                     output_description=output.output_description,
+                    figure_format=ppdt.simulation_parameters.figure_format
                 )
             my_entry = my_days.plot(close=True)
             report_image_entries.append(my_entry)
@@ -350,6 +352,7 @@ class PostProcessor:
                 ),
                 time_correction_factor=ppdt.time_correction_factor,
                 output_description=output.output_description,
+                figure_format=ppdt.simulation_parameters.figure_format
             )
             my_entry = my_bar.plot(data=ppdt.results_monthly.iloc[:, index])
             report_image_entries.append(my_entry)
@@ -372,6 +375,7 @@ class PostProcessor:
                 month=days["month"],
                 data=ppdt.results.iloc[:, index],
                 output_description=output.output_description,
+                figure_format=ppdt.simulation_parameters.figure_format
             )
             my_entry = my_days.plot(close=True)
             report_image_entries.append(my_entry)
@@ -391,6 +395,7 @@ class PostProcessor:
                 directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
                 output_description=output.output_description,
+                figure_format=ppdt.simulation_parameters.figure_format
             )
 
             my_entry = my_carpet.plot(
@@ -423,6 +428,7 @@ class PostProcessor:
                 directory_path=ppdt.simulation_parameters.result_directory,
                 time_correction_factor=ppdt.time_correction_factor,
                 output_description=output.output_description,
+                figure_format=ppdt.simulation_parameters.figure_format
             )
             my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
             report_image_entries.append(my_entry)

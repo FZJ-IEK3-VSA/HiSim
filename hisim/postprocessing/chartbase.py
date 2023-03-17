@@ -4,6 +4,7 @@ import os
 import re
 from strenum import StrEnum
 
+
 class Chart:  # noqa: too-few-public-methods
 
     """Parent class for plots to be exported."""
@@ -104,9 +105,7 @@ class Chart:  # noqa: too-few-public-methods
             self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format}"
         else:
             # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
-            self.filename = (
-                f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
-            )
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 
@@ -116,6 +115,7 @@ class Chart:  # noqa: too-few-public-methods
         self.fontsize_label = 12
         self.fontsize_legend = 12
         self.fontsize_ticks = 10
+
 
 class FigureFormat(StrEnum):
 

@@ -14,6 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
 from hisim.components import generic_hot_water_storage_modular
+from hisim import log
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -79,14 +80,14 @@ def compute_hot_water_storage_losses_and_cycles(
     components: List[ComponentWrapper],
     all_outputs: List, results: pd.DataFrame,
     timeresolution: int,
-) -> pd.DataFrame:
+) -> Tuple[float, float, float, float, float, float]:
     """Computes hot water storage losses and cycles. """
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
-    charge_sum_dhw = 0
-    charge_sum_buffer = 0
-    discharge_sum_dhw = 0
-    discharge_sum_buffer = 0
+    charge_sum_dhw = 0.0
+    charge_sum_buffer = 0.0
+    discharge_sum_dhw = 0.0
+    discharge_sum_buffer = 0.0
 
     # get cycle of water storages from 
     for elem in components:
@@ -111,9 +112,17 @@ def compute_hot_water_storage_losses_and_cycles(
                     discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution) 
         else:
             continue
-        cycles_dhw = charge_sum_dhw / cycle_dhw
+        if cycle_dhw is not None:
+            cycles_dhw = charge_sum_dhw / cycle_dhw
+        else:
+            cycles_dhw = 0
+            log.error("Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. ")
         storage_loss_dhw = charge_sum_dhw - discharge_sum_dhw
-        cycles_buffer = charge_sum_buffer / cycle_buffer
+        if cycle_buffer is not None:
+            cycles_buffer = charge_sum_buffer / cycle_buffer
+        else:
+            cycles_buffer = 0
+            log.error("Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. ")
         storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
     if cycle_buffer == 0:
         building_heating = charge_sum_buffer

@@ -459,7 +459,7 @@ def configure_water_heating(
     boiler_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
-    boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heater_config.t_max_heating_in_celsius - heater_config.t_min_heating_in_celsius)
+    boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius)
 
     heater_config.power_th = (
         my_occupancy.max_hot_water_demand
@@ -1070,7 +1070,7 @@ def configure_heating_with_buffer(
     my_building.connect_input(
         input_fieldname=my_building.ThermalPowerDelivered,
         src_object_name=my_buffer.component_name,
-        src_field_name=my_buffer.PowerToBuilding
+        src_field_name=my_buffer.PowerFromHotWaterStorage
     )
 
     return my_heater, my_buffer, count

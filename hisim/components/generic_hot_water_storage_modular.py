@@ -94,7 +94,7 @@ class StorageConfig:
         # cylinder surface area = floor and ceiling area + lateral surface
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
 
-    def compute_default_cycle(self, temperature_difference_in_kelvin: float):
+    def compute_default_cycle(self, temperature_difference_in_kelvin: float) -> None:
         self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
 
 class StorageState:

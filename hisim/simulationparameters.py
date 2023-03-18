@@ -1,7 +1,7 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 # clean
 from __future__ import annotations
-from typing import List, Optional, Any
+from typing import List, Optional
 import enum
 
 import datetime
@@ -10,6 +10,7 @@ from dataclass_wizard import JSONWizard
 
 from hisim import log
 from hisim.postprocessingoptions import PostProcessingOptions
+
 
 @dataclass()
 class SimulationParameters(JSONWizard):
@@ -59,7 +60,6 @@ class SimulationParameters(JSONWizard):
         self.prediction_horizon = prediction_horizon
 
         self.figure_format = FigureFormat.PNG
-
 
     @classmethod
     def full_year(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
@@ -114,7 +114,6 @@ class SimulationParameters(JSONWizard):
         pars.enable_all_options()
         return pars
 
-
     @classmethod
     def full_year_plots_only(
         cls, year: int, seconds_per_timestep: int
@@ -129,9 +128,10 @@ class SimulationParameters(JSONWizard):
         pars.enable_plots_only()
         return pars
 
-
     @classmethod
-    def january_only_with_all_options(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+    def january_only_with_all_options(
+        cls, year: int, seconds_per_timestep: int
+    ) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""
         pars = cls(
             datetime.datetime(year, 1, 1),
@@ -143,7 +143,9 @@ class SimulationParameters(JSONWizard):
         return pars
 
     @classmethod
-    def january_only_with_only_charts(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+    def january_only_with_only_charts(
+        cls, year: int, seconds_per_timestep: int
+    ) -> SimulationParameters:
         """Generates a parameter set for a single january, primarily for unit testing."""
         pars = cls(
             datetime.datetime(year, 1, 1),
@@ -242,10 +244,10 @@ class SimulationParameters(JSONWizard):
         lines.append(f"Total number of timesteps: {self.timesteps}")
         return lines
 
+
 class FigureFormat(str, enum.Enum):
 
     """Set Figure Formats."""
 
     PNG = ".png"
     JPG = ".jpg"
-

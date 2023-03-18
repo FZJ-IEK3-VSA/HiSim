@@ -16,6 +16,7 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import loadprofilegenerator_connector
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 from hisim.simulationparameters import FigureFormat
+
 mpl.rcParams["agg.path.chunksize"] = 10000
 
 
@@ -267,7 +268,7 @@ class SankeyHISIM(Chart):
         directorypath,
         time_correction_factor,
         output_description,
-        figure_format: FigureFormat,
+        figure_format,
     ):
         """Initializes the Sankey chart."""
         super().__init__(
@@ -278,7 +279,7 @@ class SankeyHISIM(Chart):
             units=units,
             directory_path=directorypath,
             time_correction_factor=time_correction_factor,
-            figure_format=figure_format
+            figure_format=figure_format,
         )
         self.filename = f"{self.output}{self.figure_format}"
 

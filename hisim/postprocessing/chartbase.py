@@ -115,5 +115,3 @@ class Chart:  # noqa: too-few-public-methods
         self.fontsize_label = 12
         self.fontsize_legend = 12
         self.fontsize_ticks = 10
-
-

@@ -53,6 +53,7 @@ class Simulator:
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
+        self.iteration_logging_path: str = ""
 
 
     def set_simulation_parameters(

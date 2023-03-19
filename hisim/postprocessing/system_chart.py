@@ -4,7 +4,7 @@
 import os
 import pydot
 
-import log
+from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 
 

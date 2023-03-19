@@ -107,7 +107,7 @@ def basic_household_new(
         my_simulation_parameters = SimulationParameters.full_year_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
+    # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

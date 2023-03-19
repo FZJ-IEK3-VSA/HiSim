@@ -12,6 +12,7 @@ from hisim.components import generic_heat_pump_for_house_with_hds
 from hisim.components import sumbuilder
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
+from hisim import postprocessingoptions
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -103,9 +104,11 @@ def basic_household_new(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy

@@ -55,7 +55,6 @@ class Simulator:
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
 
-
     def set_simulation_parameters(
         self, my_simulation_parameters: SimulationParameters
     ) -> None:
@@ -134,7 +133,8 @@ class Simulator:
             # actual values and previous values
             if stsv.is_close_enough_to_previous(previous_values):
                 continue_calculation = False
-            if iterative_tries > 2 and postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING in self._simulation_parameters.post_processing_options:
+            if iterative_tries > 2 and postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING \
+                    in self._simulation_parameters.post_processing_options:
                 myerr = stsv.get_differences_for_error_msg(previous_values,  self.all_outputs)
                 with open(self.iteration_logging_path, 'a', encoding="utf-8") as filestream:
                     filestream.write(myerr + "\n")

@@ -35,7 +35,7 @@ class SystemChart:
         return files
 
     def make_graphviz_chart(self, with_labels: bool, with_class_names: bool, filename: str, caption: str) -> Optional[SystemChartEntry]:
-        se = SystemChartEntry(filename, caption)
+        se:  Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
         try:
             """Visualizes the entire system with graphviz."""
             graph = pydot.Dot(graph_type="digraph")
@@ -56,7 +56,7 @@ class SystemChart:
                     node_a = node_dict[component_input.src_object_name]
                     node_b = node_dict[component.my_component.component_name]
                     key = (node_a, node_b)
-                    this_edge_label = (str(component_input.src_field_name) + " -> " + component_input.field_name + " in " + component_input.unit)
+                    this_edge_label = str(component_input.src_field_name) + " -> " + component_input.field_name + " in " + component_input.unit
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")
                     if key not in edge_labels:
                         edge_labels[key] = this_edge_label

@@ -3,10 +3,14 @@
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass()
 class SystemChartEntry:
-    Path: str
-    Caption: str
+
+    """Class for system charts entries."""
+
+    path: str
+    caption: str
 
 
 class ReportImageEntry:

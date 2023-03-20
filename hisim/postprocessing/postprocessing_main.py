@@ -214,7 +214,9 @@ class PostProcessor:
         ):
             log.information("Writing network charts to report.")
             start = timer()
-            self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
+            self.write_network_charts_to_report(
+                ppdt, report, system_chart_entries=system_chart_entries
+            )
             end = timer()
             duration = end - start
             log.information(
@@ -288,7 +290,9 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function.")
 
-    def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> List[SystemChartEntry]:
+    def make_network_charts(
+        self, ppdt: PostProcessingDataTransfer
+    ) -> List[SystemChartEntry]:
         """Generates the network charts that show the connection of the elements."""
         systemchart = SystemChart(ppdt)
         return systemchart.make_chart()
@@ -607,27 +611,22 @@ class PostProcessor:
         report.close()
 
     def write_network_charts_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator, system_chart_entries: List[SystemChartEntry]
+        self,
+        ppdt: PostProcessingDataTransfer,
+        report: reportgenerator.ReportGenerator,
+        system_chart_entries: List[SystemChartEntry],
     ) -> None:
         """Write network charts to report."""
-        systemchart = SystemChart(ppdt)
         report.open()
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + ". System Network Charts"]
         )
         for entry in system_chart_entries:
             report.write_figures_to_report_with_size_four_six(
-                os.path.join(
-                    ppdt.simulation_parameters.result_directory, entry.Path
-                )
+                os.path.join(ppdt.simulation_parameters.result_directory, entry.path)
             )
             report.write_with_center_alignment(
-                [
-                    "Fig."
-                    + str(self.figure_counter)
-                    + ": "
-                    + entry.Caption
-                ]
+                ["Fig." + str(self.figure_counter) + ": " + entry.caption]
             )
             self.figure_counter = self.figure_counter + 1
         self.chapter_counter = self.chapter_counter + 1

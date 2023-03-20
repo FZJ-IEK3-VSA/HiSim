@@ -104,7 +104,7 @@ def household_with_hds(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_plots_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)

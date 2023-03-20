@@ -15,6 +15,7 @@ from hisim.components import generic_heat_pump
 from hisim.components import advanced_heat_pump_hplib
 from hisim.components import loadprofilegenerator_connector
 from hisim.postprocessing.report_image_entries import ReportImageEntry
+from hisim.simulationparameters import FigureFormat
 
 mpl.rcParams["agg.path.chunksize"] = 10000
 
@@ -31,6 +32,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         directory_path: str,
         time_correction_factor: float,
         output_description: str,
+        figure_format: FigureFormat,
     ) -> None:
         """Initalizes a carpot plot."""
         super().__init__(
@@ -41,6 +43,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
             directory_path=directory_path,
             time_correction_factor=time_correction_factor,
             output_description=output_description,
+            figure_format=figure_format,
         )
 
     def plot(self, xdims: int, data: Any) -> ReportImageEntry:
@@ -114,10 +117,13 @@ class Line(Chart):  # noqa: too-few-public-methods
         directory_path: str,
         time_correction_factor: float,
         output_description: str,
+        figure_format: FigureFormat,
     ):
         """Initializes a line chart."""
         if output_description is None:
-            raise ValueError("Output description was None for component " + component_name)
+            raise ValueError(
+                "Output description was None for component " + component_name
+            )
 
         super().__init__(
             output=output,
@@ -127,6 +133,7 @@ class Line(Chart):  # noqa: too-few-public-methods
             directory_path=directory_path,
             time_correction_factor=time_correction_factor,
             output_description=output_description,
+            figure_format=figure_format,
         )
 
     @utils.measure_memory_leak
@@ -197,6 +204,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         directory_path: str,
         time_correction_factor: float,
         output_description: str,
+        figure_format: FigureFormat,
     ):
         """Initializes the classes."""
         super().__init__(
@@ -207,8 +215,9 @@ class BarChart(Chart):  # noqa: too-few-public-methods
             directory_path=directory_path,
             time_correction_factor=time_correction_factor,
             output_description=output_description,
+            figure_format=figure_format,
         )
-        self.filename = f"monthly_{self.output}.png"
+        self.filename = f"monthly_{self.output}{self.figure_format}"
 
     def plot(self, data: Any) -> ReportImageEntry:
         """Plots the bar chart."""
@@ -259,6 +268,7 @@ class SankeyHISIM(Chart):
         directorypath,
         time_correction_factor,
         output_description,
+        figure_format,
     ):
         """Initializes the Sankey chart."""
         super().__init__(
@@ -269,8 +279,9 @@ class SankeyHISIM(Chart):
             units=units,
             directory_path=directorypath,
             time_correction_factor=time_correction_factor,
+            figure_format=figure_format,
         )
-        self.filename = f"{self.output}.png"
+        self.filename = f"{self.output}{self.figure_format}"
 
     def plot(self, data):
         """Executes the plot."""

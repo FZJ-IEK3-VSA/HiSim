@@ -93,7 +93,7 @@ def compute_consumption_production(
 def compute_self_consumption_and_injection(
     results: pd.DataFrame,
 ) -> Tuple[pd.Series, pd.Series]:
-    """ Computes the self consumption and the grid injection. """
+    """Computes the self consumption and the grid injection."""
     # account for battery
     production_with_battery = results["production"] + results["battery_discharge"]
     consumption_with_battery = results["consumption"] + results["battery_charge"]
@@ -149,7 +149,7 @@ def search_electricity_prices_in_results(
 def compute_energy_from_power(
     power_timeseries: pd.Series, timeresolution: int
 ) -> float:
-    """ Computes the energy from a power value. """
+    """Computes the energy from a power value."""
     if power_timeseries.empty:
         return 0.0
     return float(power_timeseries.sum() * timeresolution / 3.6e6)
@@ -162,7 +162,7 @@ def compute_cost_of_fuel_type(
     price_frame: pd.DataFrame,
     fuel: LoadTypes,
 ) -> Tuple[float, float]:
-    """ Computes the cost of the fuel type. """
+    """Computes the cost of the fuel type."""
     fuel_consumption = pd.Series(dtype=pd.Float64Dtype)
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:

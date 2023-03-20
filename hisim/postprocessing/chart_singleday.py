@@ -25,6 +25,7 @@ class ChartSingleDay(Chart):
         day: Any = 0,
         month: Any = 0,
         output2: Any = None,
+        figure_format: Any = None,
     ):
         """Initializes the class."""
         if output2 is not None:
@@ -37,6 +38,7 @@ class ChartSingleDay(Chart):
                 time_correction_factor=time_correction_factor,
                 output_description=output_description,
                 output2=output2,
+                figure_format=figure_format,
             )
         else:
             super().__init__(
@@ -47,6 +49,7 @@ class ChartSingleDay(Chart):
                 directory_path=directory_path,
                 time_correction_factor=time_correction_factor,
                 output_description=output_description,
+                figure_format=figure_format,
             )
         self.axis: plt.axis
         self.ax2: plt.axis
@@ -57,7 +60,7 @@ class ChartSingleDay(Chart):
         self.plot_title: str
         self.filename = (
             f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m"
-            f"{self.month}_d{self.day}.png"
+            f"{self.month}_d{self.day}{self.figure_format}"
         )
 
         self.filepath = os.path.join(self.directory_path, self.filename)
@@ -100,10 +103,11 @@ class ChartSingleDay(Chart):
             self.month,
             self.data,
             self.output_description,
+            self.figure_format,
         )
         my_double.filename = (
             f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}"
-            f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}.png"
+            f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}{self.figure_format}"
         )
         my_double.filepath = os.path.join(self.directory_path, my_double.filename)
         my_double.plot(close=False)

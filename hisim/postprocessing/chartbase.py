@@ -3,6 +3,7 @@
 import os
 import re
 
+
 class Chart:  # noqa: too-few-public-methods
 
     """Parent class for plots to be exported."""
@@ -46,12 +47,15 @@ class Chart:  # noqa: too-few-public-methods
         directory_path,
         time_correction_factor,
         output2=None,
+        figure_format=None,
     ):
         """Initializes the base class."""
         self.output = output
         self.component_name = component_name
         self.output_description = output_description
         self.type = chart_type
+        self.figure_format = figure_format
+
         if hasattr(units, "value"):
             self.units = units.value
             self.ylabel = units.value
@@ -98,12 +102,10 @@ class Chart:  # noqa: too-few-public-methods
         if output2 is not None:
             self.output2 = output2
             # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
-            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double.png"
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format}"
         else:
             # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
-            self.filename = (
-                f"{self.type.lower()}_{self.component_name}_{self.output_type}.png"
-            )
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 

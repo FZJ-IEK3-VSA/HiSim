@@ -188,7 +188,8 @@ disable=raw-checker-failed,
         consider-using-max-builtin,
         broad-exception-raised,
         cyclic-import,
-        consider-using-generator
+        consider-using-generator,
+        broad-except
 
 
 

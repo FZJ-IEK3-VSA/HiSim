@@ -1,16 +1,19 @@
 """ Module for visualizing the entire system as a flow chart. """
 # clean
 
-import os
 from typing import Optional
-import pydot
 from typing import List
+
+import os
+import pydot
+
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
 
 
 class SystemChart:
+
     """Class for generating charts that show all the components."""
 
     def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -20,22 +23,25 @@ class SystemChart:
     def make_chart(self) -> List[SystemChartEntry]:
         """Makes different charts. Entry point for the class."""
         files: List[SystemChartEntry] = []
-        f1 = self.make_graphviz_chart(with_labels=False, with_class_names=True, filename="System_no_Edge_with_class_labels.png",
+        file1 = self.make_graphviz_chart(with_labels=False, with_class_names=True, filename="System_no_Edge_with_class_labels.png",
             caption="System Chart of all components")
-        if f1 is not None:
-            files.append(f1)
-        f2 = self.make_graphviz_chart(with_labels=False, with_class_names=False, filename="System_no_Edge_labels.png",
+        if file1 is not None:
+            files.append(file1)
+        file2 = self.make_graphviz_chart(with_labels=False, with_class_names=False, filename="System_no_Edge_labels.png",
             caption="System Chart of all components and all outputs.")
-        if f2 is not None:
-            files.append(f2)
-        f3 = self.make_graphviz_chart(with_labels=True, with_class_names=False, filename="System_with_Edge_labels.png",
+        if file2 is not None:
+            files.append(file2)
+        file3 = self.make_graphviz_chart(with_labels=True, with_class_names=False, filename="System_with_Edge_labels.png",
             caption="System Chart with labels on all edges.")
-        if f3 is not None:
-            files.append(f3)
+        if file3 is not None:
+            files.append(file3)
         return files
 
     def make_graphviz_chart(self, with_labels: bool, with_class_names: bool, filename: str, caption: str) -> Optional[SystemChartEntry]:
-        se:  Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
+        """ Generates the system charts with graphviz. """
+
+        system_chart_entry:  Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
+
         try:
             """Visualizes the entire system with graphviz."""
             graph = pydot.Dot(graph_type="digraph")
@@ -70,7 +76,7 @@ class SystemChart:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1]))
             fullpath = os.path.join(self.ppdt.simulation_parameters.result_directory, filename)
             graph.write_png(fullpath)  # noqa: no-member
-        except Exception as exc:
+        except Exception as exc:  # noqa
             log.error("Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: " + str(exc))
-            se = None
-        return se
+            system_chart_entry = None
+        return system_chart_entry

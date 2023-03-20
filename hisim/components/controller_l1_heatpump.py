@@ -352,7 +352,4 @@ class L1HeatPumpController(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""
-        lines: List[str] = []
-        lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(self.config.get_string_dict())  # type: ignore
-        return lines
+        return self.config.get_string_dict()

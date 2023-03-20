@@ -10,7 +10,6 @@ import time
 
 import pandas as pd
 
-# Owned
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
@@ -19,7 +18,7 @@ import hisim.component as cp
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
-
+from hisim import postprocessingoptions
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
 __copyright__ = "Copyright 2020-2022, FZJ-IEK-3"
@@ -48,11 +47,13 @@ class Simulator:
         if my_simulation_parameters is not None:
             self._simulation_parameters = my_simulation_parameters
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
+        self.iteration_logging_path: str = ""
 
     def set_simulation_parameters(
         self, my_simulation_parameters: SimulationParameters
@@ -132,7 +133,11 @@ class Simulator:
             # actual values and previous values
             if stsv.is_close_enough_to_previous(previous_values):
                 continue_calculation = False
-
+            if iterative_tries > 2 and postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING \
+                    in self._simulation_parameters.post_processing_options:
+                myerr = stsv.get_differences_for_error_msg(previous_values,  self.all_outputs)
+                with open(self.iteration_logging_path, 'a', encoding="utf-8") as filestream:
+                    filestream.write(myerr + "\n")
             if iterative_tries > 10:
                 force_convergence = True
             if iterative_tries > 100:
@@ -170,6 +175,7 @@ class Simulator:
             "Using result directory: " + self._simulation_parameters.result_directory
         )
         log.LOGGING_LEVEL = self._simulation_parameters.logging_level
+        self.iteration_logging_path = os.path.join(self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt")
 
     # @profile
     # @utils.measure_execution_time

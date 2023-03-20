@@ -21,7 +21,7 @@ from hisim.postprocessing.generate_csv_for_housing_database import (
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.report_image_entries import ReportImageEntry
+from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 
 
 class PostProcessor:
@@ -117,6 +117,7 @@ class PostProcessor:
             dirpath=ppdt.simulation_parameters.result_directory
         )
         days = {"month": 0, "day": 0}
+        system_chart_entries: List[SystemChartEntry] = []
         # Make plots
         if PostProcessingOptions.PLOT_LINE in ppdt.post_processing_options:
             log.information("Making line plots.")
@@ -167,7 +168,7 @@ class PostProcessor:
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
             log.information("Computing network charts.")
             start = timer()
-            self.make_network_charts(ppdt)
+            system_chart_entries = self.make_network_charts(ppdt)
             end = timer()
             duration = end - start
             log.information("Computing network charts took " + f"{duration:1.2f}s.")
@@ -213,7 +214,7 @@ class PostProcessor:
         ):
             log.information("Writing network charts to report.")
             start = timer()
-            self.write_network_charts_to_report(ppdt, report)
+            self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
             end = timer()
             duration = end - start
             log.information(
@@ -287,10 +288,10 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function.")
 
-    def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> None:
+    def make_network_charts(self, ppdt: PostProcessingDataTransfer) -> List[SystemChartEntry]:
         """Generates the network charts that show the connection of the elements."""
         systemchart = SystemChart(ppdt)
-        systemchart.make_chart()
+        return systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(
         self,
@@ -606,7 +607,7 @@ class PostProcessor:
         report.close()
 
     def write_network_charts_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator, system_chart_entries: List[SystemChartEntry]
     ) -> None:
         """Write network charts to report."""
         systemchart = SystemChart(ppdt)
@@ -614,36 +615,21 @@ class PostProcessor:
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + ". System Network Charts"]
         )
-        report.write_figures_to_report_with_size_four_six(
-            os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                f"System_no_Edge_labels{systemchart.figure_format_system_chart}",
+        for entry in system_chart_entries:
+            report.write_figures_to_report_with_size_four_six(
+                os.path.join(
+                    ppdt.simulation_parameters.result_directory, entry.Path
+                )
             )
-        )
-        report.write_with_center_alignment(
-            [
-                "Fig."
-                + str(self.figure_counter)
-                + ": "
-                + "System Chart of all components."
-            ]
-        )
-        report.write_figures_to_report_with_size_seven_four(
-            os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                f"System_with_Edge_labels{systemchart.figure_format_system_chart}",
+            report.write_with_center_alignment(
+                [
+                    "Fig."
+                    + str(self.figure_counter)
+                    + ": "
+                    + entry.Caption
+                ]
             )
-        )
-        self.figure_counter = self.figure_counter + 1
-        report.write_with_center_alignment(
-            [
-                "Fig."
-                + str(self.figure_counter)
-                + ": "
-                + "System Chart of all components and all outputs."
-            ]
-        )
-        self.figure_counter = self.figure_counter + 1
+            self.figure_counter = self.figure_counter + 1
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
         report.close()

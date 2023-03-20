@@ -12,6 +12,7 @@ from hisim.components import generic_heat_pump_for_house_with_hds
 from hisim.components import sumbuilder
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
+from hisim import postprocessingoptions
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -22,7 +23,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def basic_household_new(
+def household_with_hds(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Basic household example.
@@ -107,6 +108,8 @@ def basic_household_new(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

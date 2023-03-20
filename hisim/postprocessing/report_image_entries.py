@@ -1,6 +1,12 @@
 """Report Image Entry Module."""
 
+from dataclasses import dataclass
 from typing import Optional
+
+@dataclass()
+class SystemChartEntry:
+    Path: str
+    Caption: str
 
 
 class ReportImageEntry:

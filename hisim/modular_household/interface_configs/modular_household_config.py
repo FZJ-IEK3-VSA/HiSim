@@ -15,9 +15,9 @@ class ModularHouseholdConfig:
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
 
-def write_config(config: ModularHouseholdConfig):
+def write_config(config: ModularHouseholdConfig) -> None:
     with open("modular_example_config.json", "w", encoding="utf-8") as f:
-        f.write(config.to_json())
+        f.write(config.to_json())  # type: ignore
 
 
 def read_in_configs(pathname: str) -> ModularHouseholdConfig:

@@ -97,6 +97,7 @@ class StorageConfig:
     def compute_default_cycle(self, temperature_difference_in_kelvin: float) -> None:
         self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
 
+
 class StorageState:
 
     """Data class saves the state of the simulation results."""
@@ -177,7 +178,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     """
 
     # Inputs
-    ThermalPowerDelivered = "ThermalPowerDelivered"  
+    ThermalPowerDelivered = "ThermalPowerDelivered"
     ThermalPowerCHP = "ThermalPowerCHP"
     WaterConsumption = "WaterConsumption"
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"

@@ -64,7 +64,8 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
         config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=19.5,
-        t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
+                                         t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270,
+                                         day_of_heating_season_end=150)
         return config
 
 
@@ -289,7 +290,4 @@ class L1BuildingHeatController(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""
-        lines: List[str] = []
-        lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(self.config.get_string_dict())  # type: ignore
-        return lines
+        return self.config.get_string_dict()

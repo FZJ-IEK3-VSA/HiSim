@@ -638,7 +638,7 @@ class PostProcessor:
     ) -> None:
         """Computes KPI's and writes them to report and csv."""
         kpi_compute_return = compute_kpis(
-            components = ppdt.wrapped_components,
+            components=ppdt.wrapped_components,
             results=ppdt.results,
             all_outputs=ppdt.all_outputs,
             simulation_parameters=ppdt.simulation_parameters,

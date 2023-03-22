@@ -192,8 +192,8 @@ def modular_household_explicit(
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 name="UTSPConnector",
-                url=system_config_.url,
-                api_key=system_config_.api_key,
+                url=arche_type_config_.url,
+                api_key=arche_type_config_.api_key,
                 household=occupancy_profile,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,

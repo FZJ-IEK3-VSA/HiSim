@@ -23,11 +23,11 @@ class SystemConfig:
     #: decision on the consideration of a buffer storage for heating
     buffer_included: bool = True
     #: volume of the considered buffer storage in multiples of the default size
-    buffer_volume: Optional[float] = 2.5  # in multiples of default
+    buffer_volume: Optional[float] = 1.0  # in multiples of default
     #: decision on the consideration of battery
     battery_included: bool = False
     #: capacity of the considered battery in kWh
-    battery_capacity: Optional[float] = 20.0  # in kWh
+    battery_capacity: Optional[float] = 10.0  # in kWh
     #: decision on the consideration of heat pump
     heatpump_included: bool = True
     #: maximal power of the considered heat pump in multiples of the default

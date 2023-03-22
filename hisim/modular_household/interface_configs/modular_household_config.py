@@ -3,6 +3,7 @@ from typing import Optional
 from hisim.modular_household.interface_configs import archetype_config, system_config
 from dataclasses_json import dataclass_json
 from hisim import log
+import json
 
 
 @dataclass_json
@@ -12,6 +13,12 @@ class ModularHouseholdConfig:
     system_config_: Optional[system_config.SystemConfig] = None
     #: configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
+
+
+def write_config(config: ModularHouseholdConfig):
+    with open("modular_example_config.json", "w", encoding="utf-8") as f:
+        f.write(config.to_json())
+
 
 def read_in_configs(pathname: str) -> ModularHouseholdConfig:
     """Reads in ModularHouseholdConfig file and loads default if file cannot be found. """

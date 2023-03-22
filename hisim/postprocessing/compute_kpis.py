@@ -88,8 +88,10 @@ def compute_hot_water_storage_losses_and_cycles(
     charge_sum_buffer = 0.0
     discharge_sum_dhw = 0.0
     discharge_sum_buffer = 0.0
+    cycle_buffer = None
+    cycle_dhw = None
 
-    # get cycle of water storages from 
+    # get cycle of water storages
     for elem in components:
         if isinstance(elem.my_component, generic_hot_water_storage_modular.HotWaterStorage):
             use = elem.my_component.use

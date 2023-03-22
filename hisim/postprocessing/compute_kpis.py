@@ -37,6 +37,7 @@ def compute_consumption_production(
     all_outputs: List, results: pd.DataFrame
 ) -> pd.DataFrame:
     """Computes electricity consumption and production based on results of hisim simulation.
+
     Also evaluates battery charge and discharge, because it is relevant for self consumption rates."""
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
@@ -362,11 +363,8 @@ def compute_kpis(
         price = price + fuel_price
 
     cycles_dhw, loss_dhw, use_dhw, cycles_buffer, loss_buffer, use_heating = compute_hot_water_storage_losses_and_cycles(
-        components=components,
-        all_outputs=all_outputs,
-        results=results,
-        timeresolution=simulation_parameters.seconds_per_timestep,
-        )
+        components=components, all_outputs=all_outputs, results=results, timeresolution=simulation_parameters.seconds_per_timestep,
+    )
 
     # initilize lines for report
     lines: List = []

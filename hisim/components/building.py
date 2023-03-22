@@ -879,7 +879,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         # Internal heat capacity per m2 reference area [Wh/(m^2.K)] (TABULA: Internal heat capacity)
         self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin = float(
-            self.buildingdata["c_m"].values[0] * (1 / self.scaling_factor)
+            self.buildingdata["c_m"].values[0] * (1e3 / self.scaling_factor)
         )
 
         # Heat transfer coefficient by ventilation
@@ -1198,7 +1198,7 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("--------------------------------------------")
         lines.append(
             f"Floor Related Thermal Capacitance of Thermal Mass, based on ISO 13790 [kWh/m2.K]: "
-            f"{(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin * 3600 / (1000 *self.scaled_conditioned_floor_area_in_m2)):.2f}"
+            f"{(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin / (3.6e6 *self.scaled_conditioned_floor_area_in_m2)):.2f}"
         )
         lines.append(
             f"Floor Related Thermal Capacitance of Thermal Mass, based on TABULA [kWh/m2.K]: "

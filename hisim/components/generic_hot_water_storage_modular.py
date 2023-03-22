@@ -95,6 +95,7 @@ class StorageConfig:
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
 
     def compute_default_cycle(self, temperature_difference_in_kelvin: float) -> None:
+        """ Computes energy needed to heat storage from lower threshold of hysteresis to upper threshold. """
         self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
 
 

@@ -814,7 +814,8 @@ class Building(dynamic_component.DynamicComponent):
             "heavy": 3.0,
             "very heavy": 3.5,
         }
-        self.building_heat_capacity_class_f_c = {
+
+        self.building_heat_capacity_class_f_c_in_kilojoule_per_m2_per_kelvin = {
             "very light": 8e4,
             "light": 1.1e5,
             "medium": 1.65e5,
@@ -848,7 +849,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
-            self.building_heat_capacity_class_f_c[self.building_heat_capacity_class]
+            self.building_heat_capacity_class_f_c_in_kilojoule_per_m2_per_kelvin[self.building_heat_capacity_class] * 1e3
             * self.scaled_conditioned_floor_area_in_m2
         )
 

@@ -38,7 +38,8 @@ def compute_consumption_production(
 ) -> pd.DataFrame:
     """Computes electricity consumption and production based on results of hisim simulation.
 
-    Also evaluates battery charge and discharge, because it is relevant for self consumption rates."""
+    Also evaluates battery charge and discharge, because it is relevant for self consumption rates.
+    """
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
     consumption_ids = []

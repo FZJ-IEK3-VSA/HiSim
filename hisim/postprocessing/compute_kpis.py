@@ -55,8 +55,8 @@ def compute_consumption_production(
             elif (
                     InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
                     in output.postprocessing_flag
-                or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-                in output.postprocessing_flag
+                    or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                    in output.postprocessing_flag
             ):
                 consumption_ids.append(index)
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
@@ -65,16 +65,17 @@ def compute_consumption_production(
                 elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                     consumption_ids.append(index)
         else:
-            continue  
+            continue
 
     postprocessing_results = pd.DataFrame()
-    postprocessing_results[ "consumption" ] = pd.DataFrame(results.iloc[:,consumption_ids]).clip(lower=0).sum(axis=1)
-    postprocessing_results[ "production" ] = pd.DataFrame(results.iloc[:,production_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["consumption"] = pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["production"] = pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
 
-    postprocessing_results["battery_charge"] = pd.DataFrame(results.iloc[:,battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
-    postprocessing_results["battery_discharge"] = pd.DataFrame(results.iloc[:,battery_charge_discharge_ids]).clip(upper=0).sum(axis=1) * (-1)
+    postprocessing_results["battery_charge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(upper=0).sum(axis=1) * (-1)
 
     return postprocessing_results
+
 
 def compute_hot_water_storage_losses_and_cycles(
     components: List[ComponentWrapper],
@@ -104,14 +105,14 @@ def compute_hot_water_storage_losses_and_cycles(
         if output.postprocessing_flag is not None:
             if InandOutputType.CHARGE in output.postprocessing_flag:
                 if InandOutputType.WATER_HEATING in output.postprocessing_flag:
-                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution)
+                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
                 elif InandOutputType.HEATING in output.postprocessing_flag:
-                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution)
+                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
             elif InandOutputType.DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BOILER in output.postprocessing_flag:
-                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution)
+                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
                 elif ComponentType.BUFFER in output.postprocessing_flag:
-                    discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:,index], timeresolution=timeresolution) 
+                    discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
         else:
             continue
         if cycle_dhw is not None:
@@ -133,6 +134,7 @@ def compute_hot_water_storage_losses_and_cycles(
 
     return cycles_dhw, storage_loss_dhw, discharge_sum_dhw, cycles_buffer, storage_loss_buffer, building_heating
 
+
 def compute_self_consumption_and_injection(
     postprocessing_results: pd.DataFrame,
 ) -> Tuple[pd.Series, pd.Series]:
@@ -140,7 +142,6 @@ def compute_self_consumption_and_injection(
     # account for battery
     production_with_battery = postprocessing_results["production"] + postprocessing_results["battery_discharge"]
     consumption_with_battery = postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
-
 
     # evaluate injection and sum over time
     injection = production_with_battery - consumption_with_battery

@@ -61,10 +61,13 @@ class StorageConfig:
     power: float
 
     @staticmethod
-    def get_default_config_boiler():
+    def get_default_config_boiler(number_of_households: int) -> "StorageConfig":
         """ Returns default configuration for boiler. """
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=500,
-                               surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
+        volume = 150 * number_of_households
+        radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
+        surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
+        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,
+                               surface=surface, u_value=0.36, warm_water_temperature=40, drain_water_temperature=10,
                                energy_full_cycle=None, power=0)
         return config
 
@@ -134,7 +137,7 @@ class StorageState:
             self.temperature_in_kelvin * self.volume_in_l * 0.977 * 4.182
         )  # energy given in kJ
 
-    def set_temperature_from_energy(self, energy_in_kilo_joule):
+    def set_temperature_from_energy(self, energy_in_kilo_joule: float) -> None:
         """Converts energy contained in storage (kJ) into temperature (K)."""
         # 0.977 is the density of water in kg/l
         # 4.182 is the specific heat of water in kJ / (K * kg)

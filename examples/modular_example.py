@@ -170,7 +170,36 @@ def modular_household_explicit(
     ev_included = system_config_.ev_included
     charging_station = system_config_.charging_station
 
-    """BASICS"""
+    # BASICS
+    # Build Weather
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum[location]
+    )
+    my_weather = weather.Weather(
+        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_weather)
+
+    # Build building
+    reference_temperature, heating_season = get_heating_reference_temperature_and_season_from_location(
+        location=location
+    )
+
+    my_building_config = building.BuildingConfig(
+        name="Building_1",
+        building_code=building_code,
+        building_heat_capacity_class="medium",
+        initial_internal_temperature_in_celsius=23,
+        heating_reference_temperature_in_celsius=reference_temperature,
+        absolute_conditioned_floor_area_in_m2=floor_area,
+        total_base_area_in_m2=None,
+    )
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_building)
+
+    # build occupancy
     if utsp_connected:
         if mobility_set is None:
             this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
@@ -209,46 +238,19 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile or ""
+            "Occupancy", occupancy_profile or "", location, int(my_building.buildingdata["n_Apartment"])
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
         )
 
-    """TODO: pass url and api, chose bettery directory or use inputs"""
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+
+    """TODO: pass url and api, chose better directory or use inputs"""
 
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
-
-    # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum[location]
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
-    my_sim.add_component(my_weather)
-
-    # Build building
-    reference_temperature, heating_season = get_heating_reference_temperature_and_season_from_location(
-        location=location
-    )
-
-    my_building_config = building.BuildingConfig(
-        name="Building_1",
-        building_code=building_code,
-        building_heat_capacity_class="medium",
-        initial_internal_temperature_in_celsius=23,
-        heating_reference_temperature_in_celsius=reference_temperature,
-        absolute_conditioned_floor_area_in_m2=floor_area,
-        total_base_area_in_m2=None,
-    )
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_sim.add_component(my_building)
 
     # load economic parameters:
     economic_parameters_file = path.join(
@@ -412,6 +414,7 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
+            number_of_households=int(my_building.buildingdata["n_Apartment"]),
             controlable=clever,
             count=count,
         )
@@ -423,6 +426,7 @@ def modular_household_explicit(
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
             water_heating_system_installed=water_heating_system_installed,
+            number_of_households=int(my_building.buildingdata["n_Apartment"]),
             count=count,
         )
 

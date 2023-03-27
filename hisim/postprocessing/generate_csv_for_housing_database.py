@@ -34,7 +34,7 @@ def get_factor_cooking(
         scaling_factors.index = scaling_factors["CountryID"]
         try:
             scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
-        except:
+        except:  # pylint: disable=bare-except
             scaling_factor_line = scaling_factors.loc["EU"]
         return float(scaling_factor_line["ratio cooking to total"])
 

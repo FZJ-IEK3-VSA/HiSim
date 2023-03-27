@@ -439,6 +439,8 @@ def configure_water_heating(
         The initialized occupancy component.
     water_heating_system_installed: str
         Type of installed WaterHeatingSystem
+    number_of_households: int
+        Number of households considered in reference building.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -525,6 +527,8 @@ def configure_water_heating_electric(
         Type of installed WaterHeatingSystem
     controlable: bool
         True if control of heating device is smart, False if not.
+    number_of_households: int
+        Number of households considered in reference building.
     count: int
         Integer tracking component hierachy for EMS.
 

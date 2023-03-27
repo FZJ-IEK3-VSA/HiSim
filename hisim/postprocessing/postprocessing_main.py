@@ -7,6 +7,7 @@ from timeit import default_timer as timer
 import pandas as pd
 
 from hisim.components import building
+from hisim.components import loadprofilegenerator_connector
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
 from hisim import log
@@ -239,9 +240,12 @@ class PostProcessor:
             in ppdt.post_processing_options
         ):
             building_data = pd.DataFrame()
+            occupancy_config = None
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata
+                elif isinstance(elem.my_component, loadprofilegenerator_connector.Occupancy):
+                    occupancy_config = elem.my_component.occupancyConfig
             if len(building_data) == 0:
                 log.warning(
                     "Building needs to be defined to generate csv for housing data base."
@@ -254,6 +258,7 @@ class PostProcessor:
                     results=ppdt.results,
                     simulation_parameters=ppdt.simulation_parameters,
                     building_data=building_data,
+                    occupancy_config=occupancy_config,
                 )
                 end = timer()
                 duration = end - start

@@ -49,8 +49,7 @@ class OccupancyConfig(cp.ConfigBase):
         """
         if self.profile_name != "AVG":
             return float(self.number_of_apartments), float(self.number_of_apartments), self.number_of_apartments
-        scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";")
-        scaling_factors.index = scaling_factors["CountryID"].to_list()
+        scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";",index_col=1)
         if self.country_name in scaling_factors.index:
             scaling_factor_line = scaling_factors.loc[self.country_name]
         else:

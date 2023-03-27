@@ -30,13 +30,12 @@ def get_factor_cooking(
 
     if occupancy_config.profile_name != "AVG":
         return 0
-    scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";")
-    scaling_factors.index = scaling_factors["CountryID"].to_list()
+    scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";", index_col=1)
     if occupancy_config.country_name in scaling_factors.index:
         scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
     else:
         scaling_factor_line = scaling_factors.loc["EU"]
-        log.warning("Scaling Factor for " + occupancy_config.country_name + "is not available, EU average is used per default." )
+        log.warning("Scaling Factor for " + occupancy_config.country_name + "is not available, EU average is used per default.")
     return float(scaling_factor_line["ratio cooking to total"])
 
 

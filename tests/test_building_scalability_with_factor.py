@@ -23,7 +23,6 @@ def test_building_scalability():
     """Test function for the building module."""
 
     # Sets inputs
-    my_occupancy_profile = "CH01"
     absolute_conditioned_floor_area_in_m2 = 121.2
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.full_year(
@@ -60,9 +59,7 @@ def test_building_scalability():
     log.information(my_residence_config.building_code)
 
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=my_occupancy_profile, name="Occupancy-1"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,

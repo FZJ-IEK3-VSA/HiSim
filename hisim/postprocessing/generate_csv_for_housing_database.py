@@ -3,7 +3,7 @@
 """ Computes all relevant parameters for data base of Energy System Models, as well as parameters needed for validation of the building types."""
 
 import os
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
@@ -44,7 +44,7 @@ def generate_csv_for_database(
     results: pd.DataFrame,
     simulation_parameters: SimulationParameters,
     building_data: pd.DataFrame,
-    occupancy_config: OccupancyConfig,
+    occupancy_config: Optional[OccupancyConfig],
 ) -> None:
     """Extracts relevant data from the HiSIM simulation and puts it together in a .csv file.
 
@@ -109,7 +109,7 @@ def generate_csv_for_database(
         index=pd.MultiIndex.from_tuples(tuples, names=["Category", "Fuel"]),
     )
 
-    remaining_electricity = 0
+    remaining_electricity = 0.0
 
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
@@ -180,7 +180,7 @@ def generate_csv_for_database(
             continue
 
     if occupancy_config is None:
-        factor_cooking = 0
+        factor_cooking = 0.0
     else:
         factor_cooking = get_factor_cooking(occupancy_config)
 

@@ -41,9 +41,6 @@ def dynamic_components_demonstration(
     seconds_per_timestep = 60 * 15
     # Set weather
 
-    # # Set occupancy
-    # occupancy_profile = "CH01"
-
     # Set photovoltaic system
     time = 2019
     power = 3e3
@@ -106,9 +103,7 @@ def dynamic_components_demonstration(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )
 
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name="CH01", name="Occupancy"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

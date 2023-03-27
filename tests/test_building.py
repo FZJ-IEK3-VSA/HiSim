@@ -28,7 +28,6 @@ def test_building():
 
     t_one = time.perf_counter()
 
-    my_occupancy_profile = "CH01"
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
@@ -56,9 +55,7 @@ def test_building():
     #         log.information(building_code)
 
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=my_occupancy_profile, name="Occupancy-1"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,

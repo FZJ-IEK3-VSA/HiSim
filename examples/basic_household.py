@@ -59,9 +59,6 @@ def basic_household_explicit(
     tilt = 30
     source_weight = -1
 
-    # Set Occupancy
-    occupancy_profile = "CH01"
-
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
@@ -79,9 +76,7 @@ def basic_household_explicit(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

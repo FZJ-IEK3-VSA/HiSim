@@ -56,9 +56,6 @@ def test_house_with_pv_and_hp_for_heating_test(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Occupancy
-    occupancy_profile = "CH01"
-
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.5
     temperature_air_cooling_in_celsius = 20.5
@@ -106,9 +103,7 @@ def test_house_with_pv_and_hp_for_heating_test(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

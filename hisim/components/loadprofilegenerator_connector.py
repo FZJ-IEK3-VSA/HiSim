@@ -13,6 +13,7 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim import log
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -48,20 +49,20 @@ class OccupancyConfig(cp.ConfigBase):
         """
         if self.profile_name != "AVG":
             return float(self.number_of_apartments), float(self.number_of_apartments), self.number_of_apartments
+        scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";")
+        scaling_factors.index = scaling_factors["CountryID"].to_list()
+        if self.country_name in scaling_factors.index:
+            scaling_factor_line = scaling_factors.loc[self.country_name]
         else:
-            scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";")
-            scaling_factors.index = scaling_factors["CountryID"]
-            try:
-                scaling_factor_line = scaling_factors.loc[self.country_name]
-            except:
-                scaling_factor_line = scaling_factors.loc["EU"]
-            factor_electricity_consumption = (
-                float(scaling_factor_line["Unit consumption per dwelling for cooking (toe/dw)"]) * 1.163e4 +
-                float(scaling_factor_line["Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"])
-                ) * self.number_of_apartments  # 1 toe = 1.163e4 kWh
-            factor_hot_water_consumption = float(scaling_factor_line["Unit consumption of hot water per dwelling (toe/dw)"]) * 4.1868e7 \
-                * self.number_of_apartments / ((40 - 10) * 0.977 * 4.182)  # 1 toe = 4.1868e7 kJ, than Joule to liter with given temperature difference
-            return factor_electricity_consumption, factor_hot_water_consumption, self.number_of_apartments
+            scaling_factor_line = scaling_factors.loc["EU"]
+            log.warning("Scaling Factor for " + self.country_name + "is not available, EU average is used per default." )
+        factor_electricity_consumption = (
+            float(scaling_factor_line["Unit consumption per dwelling for cooking (toe/dw)"]) * 1.163e4 +
+            float(scaling_factor_line["Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"])
+            ) * self.number_of_apartments  # 1 toe = 1.163e4 kWh
+        factor_hot_water_consumption = float(scaling_factor_line["Unit consumption of hot water per dwelling (toe/dw)"]) * 4.1868e7 \
+            * self.number_of_apartments / ((40 - 10) * 0.977 * 4.182)  # 1 toe = 4.1868e7 kJ, than Joule to liter with given temperature difference
+        return factor_electricity_consumption, factor_hot_water_consumption, self.number_of_apartments
 
 
 class Occupancy(cp.Component):

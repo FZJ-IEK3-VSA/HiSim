@@ -134,15 +134,13 @@ HISIMPATH: Dict[str, Any] = {
                 os.path.join(
                     hisim_inputs,
                     "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
+                    "WHY_reference_data",
                     "BodilyActivityLevel.High.HH1.json",
                 ),
                 os.path.join(
                     hisim_inputs,
                     "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
+                    "WHY_reference_data",
                     "BodilyActivityLevel.Low.HH1.json",
                 ),
             ],

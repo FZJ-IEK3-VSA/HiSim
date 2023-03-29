@@ -64,7 +64,8 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     def get_default_config_heating(name: str) -> Any:
         """ Default config for the heating controller. """
         config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=19.5,
-        t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270, day_of_heating_season_end=150)
+                                         t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270,
+                                         day_of_heating_season_end=150)
         return config
 
 
@@ -234,17 +235,15 @@ class L1BuildingHeatController(cp.Component):
             # start heating if temperature goes below lower limit
             self.state.state = 1
             return
-        # "normal" heat control when no surplus electricity is available
-        if temperature_modifier == 0:
-            # deactivate heating when building temperature is above upper threshold
-            if t_control > self.config.t_max_heating_in_celsius:
-                self.state.state = 0
-                return
-            # deactivate heating when temperature modifier is zero and signal comes from surplus control.
-            # states 0.5 and 0.75 are only activated when temperature modifier is greater than zero, which is only the case in surplus control.
-            if self.state.state in [0.5, 0.75]:
-                self.state.state = 0
-                return
+        # deactivate heating when building temperature is above upper threshold
+        if t_control > self.config.t_max_heating_in_celsius + temperature_modifier:
+            self.state.state = 0
+            return
+        # deactivate heating when temperature modifier is zero and signal comes from surplus control.
+        # states 0.5 and 0.75 are only activated when temperature modifier is greater than zero, which is only the case in surplus control.
+        if self.state.state in [0.5, 0.75] and temperature_modifier == 0:
+            self.state.state = 0
+            return
         # "surplus heat control" when storage is getting hot
         if temperature_modifier > 0 and t_buffer > self.config.t_buffer_activation_threshold_in_celsius:
             # heat with 75 % power and building can still be heated
@@ -253,10 +252,7 @@ class L1BuildingHeatController(cp.Component):
             # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
             elif t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
                 self.state.state = 0.5
-            # deactivate heating when building temperature increases tolerance interval
-            else:  # if t_control >= self.config.t_max_heating_in_celsius + temperature_modifier:
-                self.state.state = 0
-            return
+        return
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -294,7 +290,4 @@ class L1BuildingHeatController(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""
-        lines: List[str] = []
-        lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(self.config.get_string_dict())  # type: ignore
-        return lines
+        return self.config.get_string_dict()

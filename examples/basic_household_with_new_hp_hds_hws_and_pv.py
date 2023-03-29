@@ -66,9 +66,6 @@ def household_with_hds(
     tilt = 30
     source_weight = -1
 
-    # Set Occupancy
-    occupancy_profile = "CH01"
-
     # Set Heat Pump Controller
     set_water_storage_temperature_for_heating_in_celsius = 49
     set_water_storage_temperature_for_cooling_in_celsius = 52
@@ -114,9 +111,8 @@ def household_with_hds(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

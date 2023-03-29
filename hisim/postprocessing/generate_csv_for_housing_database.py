@@ -3,13 +3,15 @@
 """ Computes all relevant parameters for data base of Energy System Models, as well as parameters needed for validation of the building types."""
 
 import os
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
+from hisim import log
+from hisim.components.loadprofilegenerator_connector import OccupancyConfig
 
 
 def compute_energy_from_power(
@@ -21,11 +23,28 @@ def compute_energy_from_power(
     return float(power_timeseries.sum() * seconds_per_timestep / 3.6e6)
 
 
+def get_factor_cooking(
+        occupancy_config: OccupancyConfig
+) -> float:
+    """Reads in portion of electricity consumption which is assigned to cooking. """
+
+    if occupancy_config.profile_name != "AVG":
+        return 0
+    scaling_factors = pd.read_csv(utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";", index_col=1)
+    if occupancy_config.country_name in scaling_factors.index:
+        scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
+    else:
+        scaling_factor_line = scaling_factors.loc["EU"]
+        log.warning("Scaling Factor for " + occupancy_config.country_name + "is not available, EU average is used per default.")
+    return float(scaling_factor_line["ratio cooking to total"])
+
+
 def generate_csv_for_database(
     all_outputs: List,
     results: pd.DataFrame,
     simulation_parameters: SimulationParameters,
     building_data: pd.DataFrame,
+    occupancy_config: Optional[OccupancyConfig],
 ) -> None:
     """Extracts relevant data from the HiSIM simulation and puts it together in a .csv file.
 
@@ -90,8 +109,7 @@ def generate_csv_for_database(
         index=pd.MultiIndex.from_tuples(tuples, names=["Category", "Fuel"]),
     )
 
-    # heating_results = pd.DataFrame({'Oil': [0], 'Gas': [0], 'Distributed Stream': [0], 'Solar': [0], 'Electricity': [0],
-    # 'FuelCell': [0]})
+    remaining_electricity = 0.0
 
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
@@ -145,9 +163,7 @@ def generate_csv_for_database(
                 InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
                 in output.postprocessing_flag
             ):
-                csv_frame[("RemainingLoad", "Electricity [kWh]")] = csv_frame[
-                    ("RemainingLoad", "Electricity [kWh]")
-                ] + compute_energy_from_power(
+                remaining_electricity = remaining_electricity + compute_energy_from_power(
                     power_timeseries=results.iloc[:, index],
                     seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                 )
@@ -156,14 +172,20 @@ def generate_csv_for_database(
                 in output.postprocessing_flag
             ):
                 if ComponentType.SMART_DEVICE in output.postprocessing_flag:
-                    csv_frame[("RemainingLoad", "Electricity [kWh]")] = csv_frame[
-                        ("RemainingLoad", "Electricity [kWh]")
-                    ] + compute_energy_from_power(
+                    remaining_electricity = remaining_electricity + compute_energy_from_power(
                         power_timeseries=results.iloc[:, index],
                         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                     )
         else:
             continue
+
+    if occupancy_config is None:
+        factor_cooking = 0.0
+    else:
+        factor_cooking = get_factor_cooking(occupancy_config)
+
+    csv_frame[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity * (1 - factor_cooking)
+    csv_frame[("Cooking", "Electricity [kWh]")] = remaining_electricity * factor_cooking
 
     # extract infos from used climate data to compare to climate information used for tabula evaluation
     building_code = building_data["Code_BuildingVariant"].to_list()[0]

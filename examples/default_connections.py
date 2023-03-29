@@ -55,9 +55,6 @@ def basic_household_with_default_connections(
     tilt = 30
     source_weight = 0
 
-    # Set occupancy
-    # occupancy_profile = "CH01"
-
     # Set heat pump controller
     temperature_air_heating_in_celsius = 16.0
     temperature_air_cooling_in_celsius = 24.0
@@ -73,9 +70,7 @@ def basic_household_with_default_connections(
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name="CH01", name="Occupancy1"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

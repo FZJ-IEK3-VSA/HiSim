@@ -814,7 +814,8 @@ class Building(dynamic_component.DynamicComponent):
             "heavy": 3.0,
             "very heavy": 3.5,
         }
-        self.building_heat_capacity_class_f_c = {
+
+        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin = {
             "very light": 8e4,
             "light": 1.1e5,
             "medium": 1.65e5,
@@ -848,7 +849,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
-            self.building_heat_capacity_class_f_c[self.building_heat_capacity_class]
+            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[self.building_heat_capacity_class]
             * self.scaled_conditioned_floor_area_in_m2
         )
 
@@ -879,7 +880,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         # Internal heat capacity per m2 reference area [Wh/(m^2.K)] (TABULA: Internal heat capacity)
         self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin = float(
-            self.buildingdata["c_m"].values[0] * (1 / self.scaling_factor)
+            self.buildingdata["c_m"].values[0] / self.scaling_factor
         )
 
         # Heat transfer coefficient by ventilation
@@ -1197,12 +1198,12 @@ class Building(dynamic_component.DynamicComponent):
         lines.append("Building Thermal Capacitances:")
         lines.append("--------------------------------------------")
         lines.append(
-            f"Floor Related Thermal Capacitance of Thermal Mass, based on ISO 13790 [kWh/m2.K]: "
-            f"{(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin * 3600 / (1000 *self.scaled_conditioned_floor_area_in_m2)):.2f}"
+            f"Floor Related Thermal Capacitance of Thermal Mass, based on ISO 13790 [Wh/m2.K]: "
+            f"{(self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin / (3.6e3 *self.scaled_conditioned_floor_area_in_m2)):.2f}"
         )
         lines.append(
-            f"Floor Related Thermal Capacitance of Thermal Mass, based on TABULA [kWh/m2.K]: "
-            f"{(self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin / 1000):.2f}"
+            f"Floor Related Thermal Capacitance of Thermal Mass, based on TABULA [Wh/m2.K]: "
+            f"{(self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin):.2f}"
         )
         lines.append(
             "-------------------------------------------------------------------------------------------"

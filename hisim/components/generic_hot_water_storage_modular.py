@@ -63,7 +63,7 @@ class StorageConfig:
     @staticmethod
     def get_default_config_boiler(number_of_households: int) -> "StorageConfig":
         """ Returns default configuration for boiler. """
-        volume = 200 * number_of_households
+        volume = 230 * number_of_households
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,

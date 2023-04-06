@@ -17,7 +17,7 @@ from hisim import log, utils
 from hisim.component import (Component, ComponentOutput, ConfigBase,
                              SingleTimeStepValues)
 from hisim.simulationparameters import SimulationParameters
-from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -393,7 +393,7 @@ class Weather(Component):
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
-    @graph_call_path_factory(method_pattern)
+    @graph_call_path_factory(METHOD_PATTERN)
     def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig):
         """ Initializes the entire class. """
         super().__init__(name="Weather", my_simulation_parameters=my_simulation_parameters)
@@ -511,7 +511,7 @@ class Weather(Component):
         """Double chekc."""
         pass
 
-    @graph_call_path_factory(method_pattern)
+    @graph_call_path_factory(METHOD_PATTERN)
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """ Performs the simulation. """
         if self.last_timestep_with_update == timestep:

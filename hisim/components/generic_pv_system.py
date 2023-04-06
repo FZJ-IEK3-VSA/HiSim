@@ -19,7 +19,7 @@ from hisim import utils
 from hisim.component import ConfigBase
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

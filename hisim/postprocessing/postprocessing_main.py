@@ -22,7 +22,7 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry
-from wrappedcallgraph.callgraphwrap import method_pattern
+from wrappedcallgraph.callgraphwrap import METHOD_PATTERN
 
 
 class PostProcessor:
@@ -290,7 +290,7 @@ class PostProcessor:
 
     def make_callgraph_chart(self):
         """Make Pycallgraph chart."""
-        method_pattern.make_graphviz_chart(with_labels=True, time_resolution=10, filename='HISIM_Method_Pattern.png')
+        METHOD_PATTERN.make_graphviz_chart(with_labels=True, time_resolution=10, filename='HISIM_Method_Pattern.png')
 
     def make_special_one_day_debugging_plots(
         self, ppdt: PostProcessingDataTransfer,

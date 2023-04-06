@@ -1,14 +1,16 @@
 """ Module for visualizing selected methods as a flow chart. """
 from functools import wraps
-import pydot
+from typing import Any
 import time
 from collections import defaultdict
 import inspect
-import seaborn as sns
 import cProfile
+import pydot
+import seaborn as sns
 
 
 def graph_call_path_factory(node_container):
+    """Graph call path factory function."""
     def register_method(func):
         @wraps(func)
         def function_wrapper_for_node_storage(*args, **kwargs):
@@ -25,7 +27,8 @@ def graph_call_path_factory(node_container):
                 }
 
             for frame in curr_frame[1:]:
-                info = MethodChart.extract_source(frame)
+                method_chart = MethodChart()
+                info = method_chart.extract_source(frame=frame)
 
                 if (
                     info in node_container.rank["Root"]
@@ -65,6 +68,7 @@ def graph_call_path_factory(node_container):
 
 
 class MethodChart:
+
     """Class for generating charts that show the components."""
 
     def __init__(self, profiler: bool = False) -> None:
@@ -74,11 +78,12 @@ class MethodChart:
         self.wrapped_method_timer: dict = {}
         self.wrapped_method_src: defaultdict = defaultdict(list)
         self.rank: defaultdict = defaultdict(list)
+        self.color_palette: dict = {}
         self.profiler: bool = profiler
         if self.profiler:
-            self.pr: cProfile = cProfile.Profile()
+            self.profile: cProfile.Profile = cProfile.Profile()
 
-    def extract_source(frame: inspect.FrameInfo) -> str:
+    def extract_source(self, frame: inspect.FrameInfo) -> Any:
         """Extracts the class and function name from a frame object."""
         function_name = frame[3]
         try:
@@ -119,7 +124,9 @@ class MethodChart:
 
     def set_depth(self, rank: list) -> list:
         """Define the source nodes present at the max depth.
-        If node is present in the root patway, the final node is selected."""
+
+        If node is present in the root patway, the final node is selected.
+        """
         max_depth = max((self.wrapped_method_src[node]) for node in rank)
         src_nodes = [
             node for node in rank if self.wrapped_method_src[node] == max_depth
@@ -176,10 +183,10 @@ class MethodChart:
                         graph.add_edge(pydot.Edge(node_a, node_b))
 
         if self.profiler:
-            self.pr.dump_stats("profile.pstats")
+            self.profile.dump_stats("profile.pstats")
 
         graph.write_png(filename)
 
 
-global method_pattern
-method_pattern = MethodChart()
+global METHOD_PATTERN
+METHOD_PATTERN = MethodChart()

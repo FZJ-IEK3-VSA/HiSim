@@ -1,19 +1,25 @@
+"""Pycallgraph tester module."""
 import os
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from wrappedcallgraph.callgraphwrap import method_pattern
+from wrappedcallgraph.callgraphwrap import METHOD_PATTERN
 
 
-class PyCallGraph_Obj:
+class PyCallGraphObject:
+
+    """PyCallGraph Object Class."""
+
     def __init__(self) -> None:
+        """Initializes the class."""
 
         self.execute()
-        method_pattern.make_graphviz_chart(
+        METHOD_PATTERN.make_graphviz_chart(
             time_resolution=10, filename="wrappedcallgraph/HISIM_Method_Pattern.png"
         )
 
     def execute(self):
+        """Executes a hisim example."""
         path = "examples/basic_household.py"
         func = "basic_household_explicit"
         mysimpar = SimulationParameters.one_day_only(
@@ -23,4 +29,4 @@ class PyCallGraph_Obj:
         log.information(os.getcwd())
 
 
-run = PyCallGraph_Obj()
+run = PyCallGraphObject()

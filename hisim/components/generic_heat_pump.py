@@ -35,7 +35,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim import log
-from wrappedcallgraph.callgraphwrap import graph_call_path_factory, method_pattern
+from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

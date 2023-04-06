@@ -15,7 +15,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
-from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
+# from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -107,7 +107,7 @@ class Occupancy(cp.Component):
     # Similar components to connect to:
     # None
     @utils.measure_execution_time
-    @graph_call_path_factory(METHOD_PATTERN)
+    # @graph_call_path_factory(METHOD_PATTERN)
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
     ) -> None:
@@ -192,7 +192,7 @@ class Occupancy(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    @graph_call_path_factory(METHOD_PATTERN)
+    # @graph_call_path_factory(METHOD_PATTERN)
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:

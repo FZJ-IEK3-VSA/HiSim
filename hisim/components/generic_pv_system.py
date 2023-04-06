@@ -19,7 +19,6 @@ from hisim import utils
 from hisim.component import ConfigBase
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -448,7 +447,6 @@ class PVSystem(cp.Component):
     def write_to_report(self):
         return self.pvconfig.get_string_dict()
 
-    # @graph_call_path_factory(method_pattern)
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
 
         if hasattr(self, "output"):

@@ -11,7 +11,7 @@ from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
 from hisim import log
-from wrappedcallgraph.callgraphwrap import MethodChart
+
 class SystemChart:
 
     """Class for generating charts that show all the components."""
@@ -19,7 +19,7 @@ class SystemChart:
     def __init__(self, ppdt: PostProcessingDataTransfer) -> None:
         """Initizalizes the class."""
         self.ppdt: PostProcessingDataTransfer = ppdt
-        # self.wrapped_method_nodes: MethodChart = wrapped_method_nodes
+
 
     def make_chart(self) -> List[SystemChartEntry]:
         """Makes different charts. Entry point for the class."""

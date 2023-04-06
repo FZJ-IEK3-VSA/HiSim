@@ -35,7 +35,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim import log
-from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -467,7 +466,6 @@ class GenericHeatPump(cp.Component):
         )
         return self.heatpump_config.get_string_dict() + lines
 
-    # @graph_call_path_factory(method_pattern)
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues,  force_convergence: bool) -> None:
         # Inputs
         state_c = stsv.get_input_value(self.state_channel)

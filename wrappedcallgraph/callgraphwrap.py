@@ -99,7 +99,7 @@ class MethodChart:
         palette = sns.color_palette("light:#5A9", max_value + 1).as_hex()
         self.color_palette = {
             method: palette[self.wrapped_method_counter[method]]
-            for method in self.wrapped_method_counter
+            for method in self.wrapped_method_counter.items()
         }
 
     def set_order_rank(self) -> None:
@@ -117,7 +117,7 @@ class MethodChart:
             summed_time = [
                 sum(
                     self.wrapped_method_timer[node]["time"]
-                    for node in self.wrapped_method_timer
+                    for node in self.wrapped_method_timer.items()
                 )
             ]
             self.wrapped_method_timer[main_node]["time"] = summed_time[0]
@@ -188,5 +188,5 @@ class MethodChart:
         graph.write_png(filename)
 
 
-global METHOD_PATTERN
+# global METHOD_PATTERN
 METHOD_PATTERN = MethodChart()

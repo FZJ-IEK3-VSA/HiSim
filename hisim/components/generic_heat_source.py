@@ -122,7 +122,7 @@ class HeatSource(cp.Component):
         )
 
         # Outputs
-        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
+        self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalPowerDelivered,
             load_type=lt.LoadTypes.HEATING,
@@ -130,7 +130,7 @@ class HeatSource(cp.Component):
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
             output_description="Thermal Power Delivered"
         )
-        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
+        self.fuel_delivered_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.FuelDelivered,
             load_type=self.config.fuel,
@@ -144,9 +144,9 @@ class HeatSource(cp.Component):
         )
 
         if config.fuel == lt.LoadTypes.OIL:
-            self.FuelDeliveredC.unit = lt.Units.LITER
+            self.fuel_delivered_channel.unit = lt.Units.LITER
         else:
-            self.FuelDeliveredC.unit = lt.Units.WATT_HOUR
+            self.fuel_delivered_channel.unit = lt.Units.WATT_HOUR
 
         self.add_default_connections(
             self.get_default_connections_controller_l1_heatpump()
@@ -216,14 +216,14 @@ class HeatSource(cp.Component):
             power_modifier = 1
 
         stsv.set_output_value(
-            self.ThermalPowerDeliveredC,
+            self.thermal_power_delivered_channel,
             self.config.power_th * power_modifier * self.config.efficiency,
         )
 
         if self.config.fuel == lt.LoadTypes.OIL:
             # conversion from Wh oil to liter oil
             stsv.set_output_value(
-                self.FuelDeliveredC,
+                self.fuel_delivered_channel,
                 power_modifier
                 * self.config.power_th
                 * 1.0526315789474e-4
@@ -232,7 +232,7 @@ class HeatSource(cp.Component):
             )
         else:
             stsv.set_output_value(
-                self.FuelDeliveredC,
+                self.fuel_delivered_channel,
                 power_modifier
                 * self.config.power_th
                 * self.my_simulation_parameters.seconds_per_timestep

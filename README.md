@@ -13,6 +13,16 @@ Forschungszentrum Jülich und Hochschule Emden/Leer. For detailed documentation,
 access [ReadTheDocs](https://household-infrastructure-simulator.readthedocs.io/en/latest/) of this repository.
 
 
+# Install Graphviz
+
+If you want to use the feature that generates system charts, you need to install GraphViz in your system. If you don't
+have Graphviz installed, you will experience error messages about a missing dot.exe under Windows.
+
+Follow the installation instructions from here:
+https://www.graphviz.org/download/
+
+(or simply disable the system charts)
+
 Clone repository
 -----------------------
 To clone this repository, enter the following command to your terminal:

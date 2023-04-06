@@ -289,10 +289,10 @@ class LocationEnum(Enum):
         WeatherDataSourceEnum.NSRDB_15min,
     )  # noqa: invalid-name
     ES = (
-        "Barcelona",
+        "Malaga",
         "NSRDB_15min",
-        "Barcelona",
-        "398308_41.41_2.14_2019.csv",
+        "Malaga",
+        "213028_36.73_-4.42_2019.csv",
         WeatherDataSourceEnum.NSRDB_15min,
     )  # noqa: invalid-name
     DK = (
@@ -316,8 +316,6 @@ class LocationEnum(Enum):
         "1267064_42.69_23.30_2019.csv",
         WeatherDataSourceEnum.NSRDB_15min,
     )  # noqa: invalid-name
-
-
 
 
 @dataclass

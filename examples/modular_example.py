@@ -22,7 +22,7 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs,
+    read_in_configs
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
@@ -90,11 +90,13 @@ def modular_household_explicit(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        # )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        )
         # my_simulation_parameters.post_processing_options.append(
         #     PostProcessingOptions.MAKE_NETWORK_CHARTS
         # )
@@ -168,57 +170,7 @@ def modular_household_explicit(
     ev_included = system_config_.ev_included
     charging_station = system_config_.charging_station
 
-    """BASICS"""
-    if utsp_connected:
-        if mobility_set is None:
-            this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
-            hisim.log.information(
-                "Default is used for mobility set, because None was defined."
-            )
-        else:
-            this_mobility_set = mobility_set
-        if mobility_distance is None:
-            this_mobility_distance = (
-                TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
-            )
-            hisim.log.information(
-                "Default is used for mobility distance, because None was defined."
-            )
-        else:
-            this_mobility_distance = mobility_distance
-
-        my_occupancy_config = (
-            loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                name="UTSPConnector",
-                url=system_config_.url,
-                api_key=system_config_.api_key,
-                household=occupancy_profile,
-                result_path=hisim.utils.HISIMPATH["results"],
-                travel_route_set=this_mobility_distance,
-                transportation_device_set=this_mobility_set,
-                charging_station_set=charging_station,
-            )
-        )
-
-        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-            config=my_occupancy_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
-    else:
-        # Build occupancy
-        my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile or ""
-        )
-        my_occupancy = loadprofilegenerator_connector.Occupancy(
-            config=my_occupancy_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
-
-    """TODO: pass url and api, chose bettery directory or use inputs"""
-
-    my_sim.add_component(my_occupancy)
-    consumption.append(my_occupancy)
-
+    # BASICS
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum[location]
@@ -245,8 +197,60 @@ def modular_household_explicit(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
+
+    # build occupancy
+    if utsp_connected:
+        if mobility_set is None:
+            this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
+            hisim.log.information(
+                "Default is used for mobility set, because None was defined."
+            )
+        else:
+            this_mobility_set = mobility_set
+        if mobility_distance is None:
+            this_mobility_distance = (
+                TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+            )
+            hisim.log.information(
+                "Default is used for mobility distance, because None was defined."
+            )
+        else:
+            this_mobility_distance = mobility_distance
+
+        my_occupancy_config = (
+            loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                name="UTSPConnector",
+                url=arche_type_config_.url,
+                api_key=arche_type_config_.api_key,
+                household=occupancy_profile,
+                result_path=hisim.utils.HISIMPATH["results"],
+                travel_route_set=this_mobility_distance,
+                transportation_device_set=this_mobility_set,
+                charging_station_set=charging_station,
+            )
+        )
+
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+            config=my_occupancy_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+    else:
+        # Build occupancy
+        my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
+            "Occupancy", occupancy_profile or "", location, int(my_building.buildingdata["n_Apartment"])
+        )
+        my_occupancy = loadprofilegenerator_connector.Occupancy(
+            config=my_occupancy_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+
+    """TODO: pass url and api, chose better directory or use inputs"""
+
+    my_sim.add_component(my_occupancy)
+    consumption.append(my_occupancy)
 
     # load economic parameters:
     economic_parameters_file = path.join(
@@ -300,9 +304,9 @@ def modular_household_explicit(
             ev_included=ev_included,
             occupancy_config=my_occupancy_config,
         )
-    if clever is False:
-        for car in my_cars:
-            consumption.append(car)
+        if clever is False:
+            for car in my_cars:
+                consumption.append(car)
 
     # """SMART DEVICES"""
     if utsp_connected:
@@ -410,6 +414,7 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
+            number_of_households=int(my_building.buildingdata["n_Apartment"]),
             controlable=clever,
             count=count,
         )
@@ -421,6 +426,7 @@ def modular_household_explicit(
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
             water_heating_system_installed=water_heating_system_installed,
+            number_of_households=int(my_building.buildingdata["n_Apartment"]),
             count=count,
         )
 
@@ -447,7 +453,6 @@ def modular_household_explicit(
                 heating_season=heating_season,
                 count=count,
             )
-
             """TODO: repair! """
             # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:

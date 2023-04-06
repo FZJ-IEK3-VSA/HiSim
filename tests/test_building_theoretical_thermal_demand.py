@@ -51,9 +51,6 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Occupancy
-    occupancy_profile = "CH01"
-
     # Set Fake Heater
     set_heating_temperature_for_building_in_celsius = 20
     set_cooling_temperature_for_building_in_celsius = 22
@@ -95,9 +92,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

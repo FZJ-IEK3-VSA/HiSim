@@ -1,23 +1,27 @@
 # -*- coding: utf-8 -*-
 # clean
-""" Generic heating controller with ping pong control and optional input for energy management system. Runtime and idle time also considered."""
 
-from dataclasses import dataclass
+""" Generic heating controller with ping pong control and optional input for energy management system.
+
+Runtime and idle time also considered. This file contains Controller together with Configuration and State.
+The heat source is controlled accoring to four modes:
+(a) 0.5 * power when temperature is already above target and only runs due to minimal operation time,
+or temperature is between upper target and increased upper target from ESM
+(b) 0.75 * power when temperature is within tolerance range,
+(c) full power when temperature is below lower target,
+(d) off when temperature is already below target and only runs due to minimal idle time, or temperature is above upper target.
+"""
 
 # Owned
+from dataclasses import dataclass
 from typing import List
-
-# Generic/Built-in
-
 from dataclasses_json import dataclass_json
 
-from hisim.component import ConfigBase
-from hisim import utils
+# Generic/Built-in
 from hisim import component as cp
-from hisim import log
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import building
-from hisim.components import controller_l2_energy_management_system
+from hisim import log, utils
+from hisim.component import ConfigBase
+from hisim.components import building, generic_hot_water_storage_modular
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -59,7 +63,7 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
         """ Returns default configuration for the controller of building heating. """
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=19.0, t_max_heating_in_celsius=21.0,
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=19.5, t_max_heating_in_celsius=20.5,
                                   cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
                                   min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
@@ -68,7 +72,7 @@ class L1HeatPumpConfig(ConfigBase):
     def get_default_config_heat_source_controller_buffer(name: str) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=50.0,
+        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=40.0,
                                   cooling_considered=True, day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150,
                                   min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
         return config
@@ -128,19 +132,20 @@ class L1HeatPumpController(cp.Component):
     """L1 building controller. Processes signals ensuring comfort temperature of building/buffer or boiler.
 
     Gets available surplus electricity and the temperature of the storage or building to control as input,
-    and outputs control signal 0/1 for turn off/switch on based on comfort temperature limits and available electricity.
+    and outputs power signal for heat source based on comfort temperature limits and available electricity.
     In addition, run time control is considered, so that e. g. heat pumps do not continuosly turn on and off.
     It is optionally only activated during the heating season.
 
+    Components to connect to:
+    (1) Building or Buffer Storage (generic_hot_water_storage_modular)
+    (2) Energy Management System (controller_l2_energy_management_system) -> optional if set temperatures are increased when surplus is available.
     """
 
     # Inputs
     StorageTemperature = "StorageTemperature"
     StorageTemperatureModifier = "StorageTemperatureModifier"
-    FlexibileElectricity = "FlexibleElectricity"
     # Outputs
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
-    OnOffState = "OnOffState"
 
     @utils.measure_execution_time
     def __init__(
@@ -194,10 +199,6 @@ class L1HeatPumpController(cp.Component):
             Units.PERCENT,
             output_description="Heat Controller Target Percentage"
         )
-        self.on_off_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.OnOffState, LoadTypes.ANY, Units.ANY,
-            output_description="On Off Channel"
-        )
 
         # Component Inputs
         self.storage_temperature_channel: cp.ComponentInput = self.add_input(
@@ -215,39 +216,10 @@ class L1HeatPumpController(cp.Component):
             mandatory=False,
         )
 
-        self.flexible_electricity_input: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.FlexibileElectricity,
-            LoadTypes.ELECTRICITY,
-            Units.WATT,
-            mandatory=False,
-        )
-
         self.add_default_connections(
             self.get_default_connections_generic_hot_water_storage_modular()
         )
         self.add_default_connections(self.get_default_connections_from_building())
-        self.add_default_connections(
-            self.get_default_connections_from_controller_l2_energy_management_system()
-        )
-
-    def get_default_connections_from_controller_l2_energy_management_system(self):
-        """Sets the default connections for the building."""
-        log.information(
-            "setting building default connections in L1 building Controller"
-        )
-        connections = []
-        ems_classname = (
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
-        )
-        connections.append(
-            cp.ComponentConnection(
-                L1HeatPumpController.FlexibileElectricity,
-                ems_classname,
-                controller_l2_energy_management_system.L2GenericEnergyManagementSystem.FlexibleElectricity,
-            )
-        )
-        return connections
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
@@ -310,27 +282,23 @@ class L1HeatPumpController(cp.Component):
         stsv.set_output_value(
             self.heat_pump_target_percentage_channel, modulating_signal
         )
-        stsv.set_output_value(self.on_off_channel, self.state.on_off)
 
-    def calc_percentage(self, t_storage: float, temperature_modifier: float) -> None:
+    def calc_percentage(self, t_storage: float) -> None:
         """Calculate the heat pump target percentage."""
         if t_storage < self.config.t_min_heating_in_celsius:
+            # full power when temperature is below lower threshold
             self.state.percentage = 1
             return
         if (
             t_storage < self.config.t_max_heating_in_celsius
-            and temperature_modifier == 0
         ):
+            # 75 % power when temperature is within threshold
             self.state.percentage = 0.75
             return
         if (
             t_storage >= self.config.t_max_heating_in_celsius
-            and temperature_modifier == 0
         ):
-            self.state.percentage = 0.5
-            return
-        t_max_target = self.config.t_min_heating_in_celsius + temperature_modifier
-        if t_storage < t_max_target:
+            # 50 % power when temperature is already in tolerance of surplus
             self.state.percentage = 0.5
             return
 
@@ -347,7 +315,7 @@ class L1HeatPumpController(cp.Component):
             >= timestep
         ):
             # mandatory on, minimum runtime not reached
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
         if (
             self.state.on_off == 0
@@ -356,35 +324,32 @@ class L1HeatPumpController(cp.Component):
             >= timestep
         ):
             # mandatory off, minimum resting time not reached
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
-        # check signals and turn on or off if it is necessary
-        t_min_target = self.config.t_min_heating_in_celsius + temperature_modifier
-        # prevent heating in summer
         if self.cooling_considered:
             if (
                 self.heating_season_begin > timestep > self.heating_season_end
-                and t_storage >= t_min_target - 40
+                and t_storage >= self.config.t_min_heating_in_celsius - 30
             ):
+                # prevent heating in summer
                 self.state.deactivate(timestep)
                 return
-        if t_storage < t_min_target:
+        if t_storage < self.config.t_min_heating_in_celsius:
+            # activate heating when storage temperature is too low
             self.state.activate(timestep)
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
-        t_max_target = self.config.t_max_heating_in_celsius + temperature_modifier
-        if t_storage > t_max_target:
-            self.calc_percentage(t_storage, temperature_modifier)
+        if t_storage > self.config.t_max_heating_in_celsius + temperature_modifier:
+            # deactivate heating when storage temperature is too high
             self.state.deactivate(timestep)
+            self.calc_percentage(t_storage)
             return
         if temperature_modifier > 0 and t_storage < self.config.t_max_heating_in_celsius:
+            # activate heating when surplus electricity is available
             self.state.activate(timestep)
-            self.calc_percentage(t_storage, temperature_modifier)
+            self.calc_percentage(t_storage)
             return
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""
-        lines: List[str] = []
-        lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(self.config.get_string_dict())  # type: ignore
-        return lines
+        return self.config.get_string_dict()

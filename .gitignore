@@ -152,6 +152,7 @@ tests/finished.flag
 examples/finished.flag
 examples/ac_results_5b
 examples/network_t1.png
+examples/*jpg
 examples/*.png
 hisim/inputs/cfg.json
 cfg.json
@@ -171,7 +172,6 @@ examples/mypath/Results/DrivingDistance.Car 2, 22kW Charging Power, avg. Speed 3
 
 #personal file (JG)
 covert_building_sizer_to_tar_gz.py
-tests/test_all_hisim_configs.py
 pylint_mass_call.cmd
 counter_test.csv
 hisim/inputs/extract_relevant_climate_data.py

@@ -151,8 +151,8 @@ class SingleTimeStepValues:
         error_msg = ""
         for i in range(count):
             if abs(previous_values.values[i] - self.values[i]) > 0.0001:
-                error_msg += outputs[i].get_pretty_name() + " previously: " + str(
-                    previous_values.values[i]) + " currently: " + str(self.values[i])
+                error_msg += outputs[i].get_pretty_name() + " previously: " + f"{previous_values.values[i]:4.2f}" \
+                    + " currently: " + f"{self.values[i]:4.2f}" + " | "
         return error_msg
 
 

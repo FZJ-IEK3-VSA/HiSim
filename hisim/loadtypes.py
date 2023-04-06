@@ -219,6 +219,8 @@ class InandOutputType(str, enum.Enum):
     ELECTRICITY_CONSUMPTION_UNCONTROLLED = "Consumption without any EMS control"
     STORAGE_CONTENT = "StorageContent"
     CHARGE_DISCHARGE = "ChargeDischarge"
+    CHARGE = "Charge"
+    DISCHARGE = "Discharge"
 
     # Heating
     HEAT_TO_BUILDING = "HeatToBuilding"

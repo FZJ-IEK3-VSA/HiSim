@@ -1,30 +1,27 @@
 """ Simple hot water storage implementation: HotWaterStorage class together with state and configuration class.
 
 Energy bucket model: extracts energy, adds energy and converts back to temperatere.
-The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as boiler with input:
-hot water demand or as  buffer with input ThermalPowerToBuilding. Both options need input signal for heating power and have
-one output: the hot water storage temperature.
+The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as
+DHW hot water storage or as buffer storage.
 """
+from dataclasses import dataclass
 # clean
 # Generic/Built-in
-from typing import List, Any
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-
+from typing import Any, List, Optional
 import numpy as np
+from dataclasses_json import dataclass_json
 
 # Owned
 import hisim.component as cp
-from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 import hisim.dynamic_component as dycp
-from hisim import loadtypes as lt
-from hisim.simulationparameters import SimulationParameters
-from hisim.components.loadprofilegenerator_connector import Occupancy
-from hisim.components import generic_heat_pump_modular
-from hisim.components import generic_heat_source
-from hisim.components import generic_CHP
-from hisim.components import controller_l1_building_heating
 import hisim.log
+from hisim import loadtypes as lt
+from hisim.components import (controller_l1_building_heating, generic_CHP,
+                              generic_heat_pump_modular, generic_heat_source)
+from hisim.components.loadprofilegenerator_connector import Occupancy
+from hisim.components.loadprofilegenerator_utsp_connector import \
+    UtspLpgConnector
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -58,15 +55,20 @@ class StorageConfig:
     warm_water_temperature: float
     #: temperature of water, which is heated up - relevant for DHW only
     drain_water_temperature: float
+    #: energy of full cycle in kWh
+    energy_full_cycle: Optional[float]
     #: power of heat source in kW
     power: float
 
     @staticmethod
-    def get_default_config_boiler():
+    def get_default_config_boiler(number_of_households: int) -> "StorageConfig":
         """ Returns default configuration for boiler. """
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=500,
-                               surface=2.0, u_value=0.36, warm_water_temperature=50, drain_water_temperature=10,
-                               power=0)
+        volume = 230 * number_of_households
+        radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
+        surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
+        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,
+                               surface=surface, u_value=0.36, warm_water_temperature=40, drain_water_temperature=10,
+                               energy_full_cycle=None, power=0)
         return config
 
     @staticmethod
@@ -80,7 +82,7 @@ class StorageConfig:
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
             name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=0, surface=surface, u_value=0.36,
-            warm_water_temperature=50, drain_water_temperature=10, power=power)
+            warm_water_temperature=50, drain_water_temperature=10, energy_full_cycle=None, power=power)
         return config
 
     def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float, multiplier: float) -> None:
@@ -94,6 +96,10 @@ class StorageConfig:
         radius = (self.volume * 1e-3 / (4 * np.pi))**(1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
+
+    def compute_default_cycle(self, temperature_difference_in_kelvin: float) -> None:
+        """ Computes energy needed to heat storage from lower threshold of hysteresis to upper threshold. """
+        self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
 
 
 class StorageState:
@@ -131,7 +137,7 @@ class StorageState:
             self.temperature_in_kelvin * self.volume_in_l * 0.977 * 4.182
         )  # energy given in kJ
 
-    def set_temperature_from_energy(self, energy_in_kilo_joule):
+    def set_temperature_from_energy(self, energy_in_kilo_joule: float) -> None:
         """Converts energy contained in storage (kJ) into temperature (K)."""
         # 0.977 is the density of water in kg/l
         # 4.182 is the specific heat of water in kJ / (K * kg)
@@ -164,11 +170,11 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     Energy bucket model: extracts energy, adds energy and converts back to temperatere.
     The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as boiler with input:
-    hot water demand or as  buffer with input ThermalPowerToBuilding. Both options need input signal for heating power and have
-    one output: the hot water storage temperature.
+    WaterConsumption or as  buffer with input ThermalPowerDelivered from building component. Both options need input signal for heating power and have
+    two outputs: the hot water storage temperature, and the power extracted from the hot water storage.
 
     Components to connect to:
-    (1a) Building Controller(controller_l1_generic_runtime) - if buffer
+    (1a) Building Controller(controller_l1_building_heating) - if buffer
     (1b) Occupancy Profile (either loadprofilegenerator_connector or loadprofilegenerator_utsp_connector) - if boiler
     (2a) Heat Source (generic_heat_source)
     (2b) Heat Pump (generic_heat_pump_modular)
@@ -176,10 +182,10 @@ class HotWaterStorage(dycp.DynamicComponent):
     """
 
     # Inputs
-    ThermalPowerDelivered = "ThermalPowerDelivered"  # either thermal energy delivered
+    ThermalPowerDelivered = "ThermalPowerDelivered"
     ThermalPowerCHP = "ThermalPowerCHP"
     WaterConsumption = "WaterConsumption"
-    L1DeviceSignal = "L1DeviceSignal"
+    HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
     my_component_inputs: List[dycp.DynamicConnectionInput] = []
     my_component_outputs: List[dycp.DynamicConnectionOutput] = []
 
@@ -187,7 +193,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     TemperatureMean = "TemperatureMean"
 
     # outputs for buffer storage
-    PowerToBuilding = "PowerToBuilding"
+    PowerFromHotWaterStorage = "PowerFromHotWaterStorage"
 
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: StorageConfig
@@ -215,7 +221,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
         # inputs
         if self.use == lt.ComponentType.BOILER:
-            self.water_consumption_c: cp.ComponentInput = self.add_input(
+            self.water_consumption_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterConsumption,
                 lt.LoadTypes.WARM_WATER,
@@ -225,9 +231,9 @@ class HotWaterStorage(dycp.DynamicComponent):
             self.add_default_connections(self.get_occupancy_default_connections())
             self.add_default_connections(self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
-            self.l1_device_signal_c: cp.ComponentInput = self.add_input(
+            self.heat_controller_target_percentage_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
-                self.L1DeviceSignal,
+                self.HeatControllerTargetPercentage,
                 lt.LoadTypes.ON_OFF,
                 lt.Units.BINARY,
                 mandatory=True,
@@ -252,7 +258,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         )
 
         # Outputs
-        self.temperature_mean_c: cp.ComponentOutput = self.add_output(
+        self.temperature_mean_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureMean,
             load_type=lt.LoadTypes.TEMPERATURE,
@@ -261,12 +267,13 @@ class HotWaterStorage(dycp.DynamicComponent):
             output_description="Temperature Mean"
         )
         # Outputs
-        self.power_to_building_channel: cp.ComponentOutput = self.add_output(
+        self.power_from_water_storage_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.PowerToBuilding,
+            self.PowerFromHotWaterStorage,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description="Power to Building"
+            postprocessing_flag=[lt.InandOutputType.DISCHARGE, self.use],
+            output_description="Power transfered to Building or Hot Water Pipe."
         )
 
         self.add_default_connections(
@@ -358,9 +365,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         heating_controller_classname = controller_l1_building_heating.L1BuildingHeatController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HotWaterStorage.L1DeviceSignal,
+                HotWaterStorage.HeatControllerTargetPercentage,
                 heating_controller_classname,
-                controller_l1_building_heating.L1BuildingHeatController.boiler_signal,
+                controller_l1_building_heating.L1BuildingHeatController.HeatControllerTargetPercentage,
             )
         )
         return connections
@@ -381,6 +388,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.drain_water_temperature = config.drain_water_temperature
         self.warm_water_temperature = config.warm_water_temperature
         self.power = config.power
+        self.config = config
 
     def write_to_report(self):
         """Writes to report."""
@@ -421,7 +429,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             stsv=stsv,
             thermal_energy_delivered=thermal_energy_delivered,
         )
-        stsv.set_output_value(self.power_to_building_channel, heatconsumption)
+        stsv.set_output_value(self.power_from_water_storage_channel, heatconsumption)
 
         # constant heat loss of heat storage with the assumption that environment has 20°C = 293 K -> based on energy balance in kJ
         # heat gain due to heating of storage -> based on energy balance in kJ
@@ -442,7 +450,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
         # save outputs
         stsv.set_output_value(
-            self.temperature_mean_c, self.state.temperature_in_kelvin - 273.15
+            self.temperature_mean_channel, self.state.temperature_in_kelvin - 273.15
         )
 
     def calculate_heat_consumption(
@@ -455,10 +463,10 @@ class HotWaterStorage(dycp.DynamicComponent):
             # heat loss due to hot water consumption -> base on energy balance in kJ
             # 0.977 density of water in kg/l
             # 4.182 specific heat of water in kJ K^(-1) kg^(-1)
-            return stsv.get_input_value(self.water_consumption_c) \
+            return stsv.get_input_value(self.water_consumption_channel) \
                 * (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
         if self.use == lt.ComponentType.BUFFER:
-            heatconsumption = stsv.get_input_value(self.l1_device_signal_c) \
+            heatconsumption = stsv.get_input_value(self.heat_controller_target_percentage_channel) \
                 * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
             available_energy = self.state.return_available_energy()\
                 + thermal_energy_delivered

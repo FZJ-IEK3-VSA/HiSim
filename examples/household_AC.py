@@ -76,9 +76,6 @@ def household_AC_explicit(
     tilt = 30
     source_weight = -1
 
-    # Set occupancy
-    occupancy_profile = "CH01"
-
     # Set air conditioner controller
     t_air_heating = 16.0
     t_air_cooling = 24.0
@@ -115,9 +112,7 @@ def household_AC_explicit(
         # my_simulation_parameters.enable_all_options()
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name="CH01", name="Occupancy"
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

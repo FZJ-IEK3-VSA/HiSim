@@ -63,6 +63,7 @@ HISIMPATH: Dict[str, Any] = {
         "heating_reference_temperature_per_location.csv",
     ),
     "fuel_costs": os.path.join(hisim_inputs, "fuelcosts", "fuel_costs.csv"),
+    "occupancy_scaling_factors_per_country": os.path.join(hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"),
     "occupancy": {
         "CH01": {
             "number_of_residents": [
@@ -133,31 +134,27 @@ HISIMPATH: Dict[str, Any] = {
                 os.path.join(
                     hisim_inputs,
                     "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
+                    "WHY_reference_data",
                     "BodilyActivityLevel.High.HH1.json",
                 ),
                 os.path.join(
                     hisim_inputs,
                     "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
+                    "WHY_reference_data",
                     "BodilyActivityLevel.Low.HH1.json",
                 ),
             ],
             "electricity_consumption": os.path.join(
                 hisim_inputs,
                 "loadprofiles",
-                "electrical-warmwater-presence-load_1-family",
-                "data_processed",
-                "why_reference_data.csv",
+                "WHY_reference_data",
+                "AVG.csv",
             ),
             "water_consumption": os.path.join(
                 hisim_inputs,
                 "loadprofiles",
-                "electrical-warmwater-presence-load_1-family",
-                "data_processed",
-                "SumProfiles.HH1.Warm Water.csv",
+                "WHY_reference_data",
+                "WarmWater.csv",
             ),
         },
     },

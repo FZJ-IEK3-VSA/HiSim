@@ -190,7 +190,7 @@ import seaborn as sns
 # # global METHOD_PATTERN
 # METHOD_PATTERN = MethodChart(False)
 
-#######################################################################################################################
+# #######################################################################################################################
 # Test Noah's Ideas
 class MethodChartCallGraphFactory:
 
@@ -265,6 +265,12 @@ class SingletonType(type):
             cls._instances[cls] = super(SingletonType, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
     
+class MethodCall:
+    name: str
+    classname: str
+    timer: Any
+    callcounter: int
+    functioncalls: dict
 
 class MethodChartSingletonNodeContainer(object, metaclass=SingletonType):
 

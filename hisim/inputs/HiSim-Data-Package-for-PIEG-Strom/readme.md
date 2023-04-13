@@ -1,6 +1,6 @@
 # HiSim Data Package for PIEG-Strom
 
-Collection with weather data as well as thermal and electrical loadprofiles for the HiSim Framework (https://github.com/FZJ-IEK3-VSA/HiSim) regarding the simulations for VDI 4657 guideline and the webtool "PIEG-Strom Online"
+Collection with weather data as well as thermal and electrical loadprofiles for the HiSim Framework (https://github.com/FZJ-IEK3-VSA/HiSim) regarding the simulations for VDI 4657 guideline.
 
 ## Information
 

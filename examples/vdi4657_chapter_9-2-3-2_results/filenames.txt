@@ -1,0 +1,16 @@
+Filename:
+
+[LP]_[short-name]_[chp]_[4]_[average]_[2015]_[e,a,vollzyklen]_[sim,fit,dif].[filetype]
+
+LP =  load profile followed by short-name of profile according VDI 4657-3
+chp = combined heat and power
+4 = test reference year -> location number 4 (Potsdam)
+average = test reference year -> avarage
+2015 = test reference year -> 2015
+a = degree of self-sufficiency (Autarkiegrad)
+e = self consumption rate (Eigenverbrauchsanteil)
+vollzyklen = äquivalente Vollzyklen
+sim = raw data from simulation
+fit =  data created by fit-function
+dif = difference between simulation and fit-function
+filetype = pdf, png or pdf

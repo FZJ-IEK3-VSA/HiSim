@@ -193,6 +193,7 @@ def modular_household_explicit(
         heating_reference_temperature_in_celsius=reference_temperature,
         absolute_conditioned_floor_area_in_m2=floor_area,
         total_base_area_in_m2=None,
+        number_of_apartments=None
     )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters

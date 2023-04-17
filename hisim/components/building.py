@@ -338,7 +338,10 @@ class Building(dynamic_component.DynamicComponent):
         self.get_building()
         self.build()
         self.get_physical_param()
-        self.get_number_of_apartments(conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2, scaling_factor=self.scaling_factor)
+        self.get_number_of_apartments(
+            conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
+            scaling_factor=self.scaling_factor,
+        )
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
@@ -511,7 +514,7 @@ class Building(dynamic_component.DynamicComponent):
             self.NumberOfApartments,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description=f"here a description for {self.NumberOfApartments} will follow."
+            output_description=f"here a description for {self.NumberOfApartments} will follow.",
         )
         # =================================================================================================================================
         # Add and get default connections
@@ -744,8 +747,7 @@ class Building(dynamic_component.DynamicComponent):
             theoretical_thermal_building_demand_in_watt,
         )
         stsv.set_output_value(
-            self.number_of_apartments_channel,
-            self.number_of_apartments
+            self.number_of_apartments_channel, self.number_of_apartments
         )
 
         # Saves solar gains cache
@@ -865,7 +867,9 @@ class Building(dynamic_component.DynamicComponent):
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
-            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[self.building_heat_capacity_class]
+            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[
+                self.building_heat_capacity_class
+            ]
             * self.scaled_conditioned_floor_area_in_m2
         )
 
@@ -926,40 +930,49 @@ class Building(dynamic_component.DynamicComponent):
             self.buildingconfig.building_heat_capacity_class
         )
 
-    def get_number_of_apartments(self, conditioned_floor_area_in_m2: float, scaling_factor: float) -> None:
-        """Get number of apartments either from config or from tabula or through approximation with data from
-        https://www.umweltbundesamt.de/daten/private-haushalte-konsum/wohnen/wohnflaeche#zahl-der-wohnungen-gestiegen."""
+    def get_number_of_apartments(
+        self, conditioned_floor_area_in_m2: float, scaling_factor: float
+    ) -> None:
+        """Get number of apartments.
+
+        Either from config or from tabula or through approximation with data from
+        https://www.umweltbundesamt.de/daten/private-haushalte-konsum/wohnen/wohnflaeche#zahl-der-wohnungen-gestiegen.
+        """
 
         if self.buildingconfig.number_of_apartments is not None:
             number_of_apartments_origin = self.buildingconfig.number_of_apartments
 
             if number_of_apartments_origin == 0:
                 # check table from the link for the year 2021
-                average_living_area_per_apartment_in_2021_in_m2 = 92.1 
-                number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
+                average_living_area_per_apartment_in_2021_in_m2 = 92.1
+                number_of_apartments = (
+                    conditioned_floor_area_in_m2
+                    / average_living_area_per_apartment_in_2021_in_m2
+                )
             elif number_of_apartments_origin > 0:
                 number_of_apartments = number_of_apartments_origin
 
             else:
                 raise ValueError("Number of apartments can not be negative.")
-                
+
         elif self.buildingconfig.number_of_apartments is None:
             number_of_apartments_origin = self.buildingdata["n_Apartment"].values[0]
 
             # if no value given or if the area given in the config is bigger than the tabula ref area
             if number_of_apartments_origin == 0 or scaling_factor != 1:
                 # check table from the link for the year 2021
-                average_living_area_per_apartment_in_2021_in_m2 = 92.1 
-                number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
+                average_living_area_per_apartment_in_2021_in_m2 = 92.1
+                number_of_apartments = (
+                    conditioned_floor_area_in_m2
+                    / average_living_area_per_apartment_in_2021_in_m2
+                )
             elif number_of_apartments_origin > 0:
                 number_of_apartments = number_of_apartments_origin
 
             else:
                 raise ValueError("Number of apartments can not be negative.")
-            
+
         self.number_of_apartments = number_of_apartments
-
-
 
     def get_windows(
         self,

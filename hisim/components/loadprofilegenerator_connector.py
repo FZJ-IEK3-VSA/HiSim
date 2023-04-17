@@ -273,18 +273,18 @@ class Occupancy(cp.Component):
         # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
         real_number_of_apartments = stsv.get_input_value(self.real_number_of_apartments_channel)
-        scaling_factor_according_to_apartment_number = self.get_scaling_factor_according_to_number_of_apartments(real_number_of_apartments=real_number_of_apartments)
+        scaling_factor_according_to_number_of_apartments = self.get_scaling_factor_according_to_number_of_apartments(real_number_of_apartments=real_number_of_apartments)
 
         stsv.set_output_value(
-            self.number_of_residentsC, self.number_of_residents[timestep] * scaling_factor_according_to_apartment_number
+            self.number_of_residentsC, self.number_of_residents[timestep] * scaling_factor_according_to_number_of_apartments
         )
         stsv.set_output_value(
-            self.heating_by_residentsC, self.heating_by_residents[timestep] * scaling_factor_according_to_apartment_number
+            self.heating_by_residentsC, self.heating_by_residents[timestep] * scaling_factor_according_to_number_of_apartments
         )
         stsv.set_output_value(
-            self.electricity_outputC, self.electricity_consumption[timestep] * scaling_factor_according_to_apartment_number
+            self.electricity_outputC, self.electricity_consumption[timestep] * scaling_factor_according_to_number_of_apartments
         )
-        stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep] * scaling_factor_according_to_apartment_number)
+        stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep] * scaling_factor_according_to_number_of_apartments)
 
         if self.my_simulation_parameters.predictive_control:
             last_forecast_timestep = int(

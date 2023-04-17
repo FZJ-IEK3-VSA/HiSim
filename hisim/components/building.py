@@ -220,6 +220,7 @@ class Building(dynamic_component.DynamicComponent):
     ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    NumberOfApartments = "NumberOfApartments"
 
     @utils.measure_execution_time
     def __init__(
@@ -504,6 +505,14 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
         )
+
+        self.number_of_apartments_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.NumberOfApartments,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description=f"here a description for {self.NumberOfApartments} will follow."
+        )
         # =================================================================================================================================
         # Add and get default connections
 
@@ -733,6 +742,10 @@ class Building(dynamic_component.DynamicComponent):
         stsv.set_output_value(
             self.theoretical_thermal_building_demand_channel,
             theoretical_thermal_building_demand_in_watt,
+        )
+        stsv.set_output_value(
+            self.number_of_apartments_channel,
+            self.number_of_apartments
         )
 
         # Saves solar gains cache
@@ -1210,6 +1223,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         lines.append("Building Areas:")
         lines.append("--------------------------------------------")
+        lines.append(f"Number of Apartments: {self.number_of_apartments}")
         lines.append(
             f"Conditioned Floor Area (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
         )

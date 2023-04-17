@@ -108,6 +108,7 @@ class BuildingConfig(cp.ConfigBase):
     initial_internal_temperature_in_celsius: float
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
+    number_of_apartments: Optional[float]
 
     @classmethod
     def get_default_german_single_family_home(
@@ -122,6 +123,7 @@ class BuildingConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=-14,
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
+            number_of_apartments=None,
         )
         return config
 
@@ -335,6 +337,7 @@ class Building(dynamic_component.DynamicComponent):
         self.get_building()
         self.build()
         self.get_physical_param()
+        self.get_number_of_apartments(conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2, scaling_factor=self.scaling_factor)
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
@@ -909,6 +912,31 @@ class Building(dynamic_component.DynamicComponent):
         self.building_heat_capacity_class = (
             self.buildingconfig.building_heat_capacity_class
         )
+
+    def get_number_of_apartments(self, conditioned_floor_area_in_m2: float, scaling_factor: float):
+        """Get number of apartments either from config or from tabula or through approximation with data from
+        https://www.umweltbundesamt.de/daten/private-haushalte-konsum/wohnen/wohnflaeche#zahl-der-wohnungen-gestiegen."""
+
+        if self.buildingconfig.number_of_apartments is not None:
+            number_of_apartments_origin = self.buildingconfig.number_of_apartments
+            
+        else:
+            number_of_apartments_origin = self.buildingdata["n_Apartment"].values[0]
+
+        # if no value given or if the area given in the config is bigger than the tabula ref area
+        if number_of_apartments_origin == 0 or scaling_factor != 1:
+            # check table from the link for the year 2021
+            average_living_area_per_apartment_in_2021_in_m2 = 92.1 
+            number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
+        elif number_of_apartments_origin > 0:
+            number_of_apartments = number_of_apartments_origin
+
+        else:
+            raise ValueError("Number of apartments can not be negative.")
+        
+        self.number_of_apartments = number_of_apartments
+
+
 
     def get_windows(
         self,

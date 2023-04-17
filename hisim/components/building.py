@@ -121,7 +121,7 @@ class BuildingConfig(cp.ConfigBase):
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,
             heating_reference_temperature_in_celsius=-14,
-            absolute_conditioned_floor_area_in_m2=121.2,
+            absolute_conditioned_floor_area_in_m2=None,
             total_base_area_in_m2=None,
             number_of_apartments=None,
         )
@@ -932,21 +932,31 @@ class Building(dynamic_component.DynamicComponent):
 
         if self.buildingconfig.number_of_apartments is not None:
             number_of_apartments_origin = self.buildingconfig.number_of_apartments
-            
-        else:
+
+            if number_of_apartments_origin == 0:
+                # check table from the link for the year 2021
+                average_living_area_per_apartment_in_2021_in_m2 = 92.1 
+                number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
+            elif number_of_apartments_origin > 0:
+                number_of_apartments = number_of_apartments_origin
+
+            else:
+                raise ValueError("Number of apartments can not be negative.")
+                
+        elif self.buildingconfig.number_of_apartments is None:
             number_of_apartments_origin = self.buildingdata["n_Apartment"].values[0]
 
-        # if no value given or if the area given in the config is bigger than the tabula ref area
-        if number_of_apartments_origin == 0 or scaling_factor != 1:
-            # check table from the link for the year 2021
-            average_living_area_per_apartment_in_2021_in_m2 = 92.1 
-            number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
-        elif number_of_apartments_origin > 0:
-            number_of_apartments = number_of_apartments_origin
+            # if no value given or if the area given in the config is bigger than the tabula ref area
+            if number_of_apartments_origin == 0 or scaling_factor != 1:
+                # check table from the link for the year 2021
+                average_living_area_per_apartment_in_2021_in_m2 = 92.1 
+                number_of_apartments = conditioned_floor_area_in_m2 / average_living_area_per_apartment_in_2021_in_m2
+            elif number_of_apartments_origin > 0:
+                number_of_apartments = number_of_apartments_origin
 
-        else:
-            raise ValueError("Number of apartments can not be negative.")
-        
+            else:
+                raise ValueError("Number of apartments can not be negative.")
+            
         self.number_of_apartments = number_of_apartments
 
 

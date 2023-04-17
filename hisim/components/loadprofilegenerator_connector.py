@@ -258,7 +258,6 @@ class Occupancy(cp.Component):
         real_number_of_apartments = stsv.get_input_value(self.real_number_of_apartments_channel)
         scaling_factor_according_to_number_of_apartments = self.get_scaling_factor_according_to_number_of_apartments(real_number_of_apartments=real_number_of_apartments)
 
-
         stsv.set_output_value(
             self.number_of_residentsC, self.number_of_residents[timestep] * scaling_factor_according_to_number_of_apartments
         )

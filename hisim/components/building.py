@@ -926,7 +926,7 @@ class Building(dynamic_component.DynamicComponent):
             self.buildingconfig.building_heat_capacity_class
         )
 
-    def get_number_of_apartments(self, conditioned_floor_area_in_m2: float, scaling_factor: float):
+    def get_number_of_apartments(self, conditioned_floor_area_in_m2: float, scaling_factor: float) -> None:
         """Get number of apartments either from config or from tabula or through approximation with data from
         https://www.umweltbundesamt.de/daten/private-haushalte-konsum/wohnen/wohnflaeche#zahl-der-wohnungen-gestiegen."""
 

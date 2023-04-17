@@ -456,7 +456,7 @@ class Occupancy(cp.Component):
         return self.occupancyConfig.get_string_dict()
 
 
-    def get_scaling_factor_according_to_number_of_apartments(self, real_number_of_apartments: float):
+    def get_scaling_factor_according_to_number_of_apartments(self, real_number_of_apartments: float) -> float:
         """Get scaling factor according to the real number of apartments which is given by the building component."""
 
         scaling_factor = real_number_of_apartments / self.occupancyConfig.number_of_apartments

@@ -160,6 +160,3 @@ def test_building_scalability():
 
         # test if occupancy outputs are upscaled correctly
         assert occupancy_outputs_upscaled == [x * scaling_factor_number_of_apartments for x in occupancy_outputs]
-
-
-

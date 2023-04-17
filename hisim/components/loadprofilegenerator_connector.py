@@ -15,6 +15,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
+# from hisim.components.building import Building
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -138,7 +139,7 @@ class Occupancy(cp.Component):
             self.RealNumberOfApartments,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            True
+            False,
         )
 
         # Outputs
@@ -185,6 +186,22 @@ class Occupancy(cp.Component):
             lt.Units.LITER,
             output_description=f"here a description for {self.WaterConsumption} will follow.",
         )
+        
+    # def get_default_connections_from_building(
+    #     self,
+    # ):
+    #     """Get building default connections."""
+    #     log.information("setting building default connections")
+    #     connections = []
+    #     building_classname = Building.get_classname()
+    #     connections.append(
+    #         cp.ComponentConnection(
+    #             Occupancy.RealNumberOfApartments,
+    #             building_classname,
+    #             Building.NumberOfApartments,
+    #         )
+    #     )
+    #     return connections
 
     def i_save_state(self) -> None:
         pass
@@ -256,18 +273,18 @@ class Occupancy(cp.Component):
         # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
         real_number_of_apartments = stsv.get_input_value(self.real_number_of_apartments_channel)
-        scaling_factor_according_to_number_of_apartments = self.get_scaling_factor_according_to_number_of_apartments(real_number_of_apartments=real_number_of_apartments)
+        scaling_factor_according_to_apartment_number = self.get_scaling_factor_according_to_number_of_apartments(real_number_of_apartments=real_number_of_apartments)
 
         stsv.set_output_value(
-            self.number_of_residentsC, self.number_of_residents[timestep] * scaling_factor_according_to_number_of_apartments
+            self.number_of_residentsC, self.number_of_residents[timestep] * scaling_factor_according_to_apartment_number
         )
         stsv.set_output_value(
-            self.heating_by_residentsC, self.heating_by_residents[timestep] * scaling_factor_according_to_number_of_apartments
+            self.heating_by_residentsC, self.heating_by_residents[timestep] * scaling_factor_according_to_apartment_number
         )
         stsv.set_output_value(
-            self.electricity_outputC, self.electricity_consumption[timestep] * scaling_factor_according_to_number_of_apartments
+            self.electricity_outputC, self.electricity_consumption[timestep] * scaling_factor_according_to_apartment_number
         )
-        stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep] * scaling_factor_according_to_number_of_apartments)
+        stsv.set_output_value(self.water_consumptionC, self.water_consumption[timestep] * scaling_factor_according_to_apartment_number)
 
         if self.my_simulation_parameters.predictive_control:
             last_forecast_timestep = int(
@@ -465,6 +482,7 @@ class Occupancy(cp.Component):
             scaling_factor_according_to_number_of_apartments = scaling_factor
         
         else:
-            raise ValueError("scaling factor according to number of apartments can not be zero or negative.")
+            # raise ValueError("scaling factor according to number of apartments can not be zero or negative.")
+            scaling_factor_according_to_number_of_apartments = 1
 
         return scaling_factor_according_to_number_of_apartments

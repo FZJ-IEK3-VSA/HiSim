@@ -486,8 +486,7 @@ class MPC_Controller(cp.Component):
 
 
         """ choose a concerete solver: The default linear solver used with ipopt is mumps (MUltifrontal Massively Parallel Solver).
-        For Fatser solution, the default sover is replced with HSL solver 'ma27'. A free version is available for Academic Purposes
-        ONLY. Please follow the steps provided at the end of the script to obtain, compile, and interface HSL solver.
+        For a faster solution, the default sover is replced with HSL solver 'ma27' (see 'sol_opts' > 'linear_solver'). A free version is available for Academic Purposes ONLY. Please follow the steps provided at the end of the script to obtain, compile, and interface HSL solver.
 
         * Remark: when including the battery in the building energy system one optimization time step with { HiSim time_step = 60 sec and sampling rate = 1 }  takes around 57 sec using the ma27 solver.
         The aforementioned is only for the optimization and not the entire household.
@@ -505,7 +504,7 @@ class MPC_Controller(cp.Component):
                 'print_level': 0,
                 'sb': 'yes',
                 'acceptable_tol': 1e-3,
-                # 'linear_solver':'ma27',
+                # 'linear_solver':'ma27', # options: 'mumps','ma27'
                 'acceptable_obj_change_tol': 1e-3
             },
             'print_time': False,
@@ -768,7 +767,7 @@ class MPC_Controller(cp.Component):
 
 """Follow the steps below to install HSL solvers.
 
-HSL Solevrs: "HSL. A collection of Fortran codes for large scale scientific computation. http://www.hsl.rl.ac.uk/"
+HSL Solvers: "HSL. A collection of Fortran codes for large scale scientific computation. http://www.hsl.rl.ac.uk/"
 
 
 How to install HSL solver for Windows and interface to Casadi?

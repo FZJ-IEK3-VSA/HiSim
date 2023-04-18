@@ -1,4 +1,4 @@
-"""Air-conditioned houshold."""
+"""Air-conditioned household."""
 from typing import Optional
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
@@ -24,7 +24,7 @@ __status__ = "development"
 
 
 def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
-    """Hosuhold Model.
+    """Household Model.
 
     This setup function emulates an air conditioned house. Here the residents have their electricity covered by a photovoltaic system,
     a battery, and the electric grid.
@@ -85,6 +85,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
             1. a basic case that only includes building - air conditioning. No PV or battery
             2. a building with pv generation installed
             3. a building with PV and battery.
+            Please adjust the variable "flexibility_element = ... " accordingly
 
         To investigate the impact of Demand response programs. Fixed and dynamic price signal are available.
         Please adjust the variable "pricing_scheme=..." accordingly
@@ -164,7 +165,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     # Set simulation parameters
     if control == "MPC":
-        seconds_per_timestep = 60*20
+        seconds_per_timestep = 60*20    # multiply seconds_per_timestep with factor (e.g. 20) to run MPC with bigger sampling time
     else:
         seconds_per_timestep = 60
 
@@ -177,7 +178,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.enable_all_options()
         if control == "MPC":
-            my_simulation_parameters.result_directory = os.path.join("ac_results_5", location+" Full year " + str(seconds_per_timestep/60) + " min MPC controller results "+ flexibility_element + " for " + pricing_scheme + " pricing" + " for "+ mpc_scheme)
+            my_simulation_parameters.result_directory = os.path.join("ac_results", location+" Full year " + str(seconds_per_timestep/60) + " min MPC controller results "+ flexibility_element + " for " + pricing_scheme + " pricing" + " for "+ mpc_scheme)
 
         else:
             my_simulation_parameters.result_directory = os.path.join("ac_results_5", "Full Year Simulation for " + location + " Control Type is "+ control)

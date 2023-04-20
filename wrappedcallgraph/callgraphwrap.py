@@ -1,12 +1,13 @@
 """ Module for visualizing selected methods as a flow chart. """
 from functools import wraps
-from typing import Any
+from typing import Any, List
 import time
 from collections import defaultdict
 import inspect
 import cProfile
 import pydot
 import seaborn as sns
+from dataclasses import dataclass, field
 
 
 # def graph_call_path_factory(node_container):
@@ -255,82 +256,123 @@ class MethodChartCallGraphFactory:
 
         return register_method
     
-
-
-class SingletonType(type):
-    _instances = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instances:
-            cls._instances[cls] = super(SingletonType, cls).__call__(*args, **kwargs)
-        return cls._instances[cls]
-    
+@dataclass
 class MethodCall:
+    """
+    This MethodCall class depicts the call.
+    """
     name: str
     classname: str
     timer: Any
     callcounter: int
     functioncalls: dict
 
-class MethodChartSingletonNodeContainer(object, metaclass=SingletonType):
+# https://refactoring.guru/design-patterns/singleton/python/example#example-0
+class SingletonMetaClass(type):
+    """
+    The Singleton class can be implemented in different ways in Python. Some
+    possible methods include: base class, decorator, metaclass. We will use the
+    metaclass because it is best suited for this purpose.
+    """
+    _instances = {}
 
-    """Class for generating charts that show the components."""
-
-    def __init__(self) -> None:
-        """Initizalizes the class."""
-        self.wrapped_method_nodes: dict = {}
-        self.wrapped_method_counter: dict = {}
-        self.wrapped_method_timer: dict = {}
-        self.wrapped_method_src: defaultdict = defaultdict(list)
-        self.rank: defaultdict = defaultdict(list)
-        # self.profiler: bool = profiler
-        # if self.profiler:
-        #     self.profile: cProfile.Profile = cProfile.Profile()
-
-    def extract_source(self, frame: inspect.FrameInfo) -> Any:
-        """Extracts the class and function name from a frame object."""
-        function_name = frame[3]
-        try:
-            class_name = frame[0].f_locals["self"].__class__.__name__
-            source = class_name + "." + function_name
-        except KeyError:
-            source = function_name
-        return source
-
-
-    def set_order_rank(self) -> None:
-        """Clusters nodes by common source."""
-        for base_node in list(self.rank["Root"]):
-            src_nodes = self.wrapped_method_src[base_node]
-            if src_nodes:
-                self.rank[tuple(src_nodes)].append(base_node)
-                self.rank["Root"].remove(base_node)
-
-    def sum_time(self) -> None:
-        """Aggregate total time for main function."""
-        if "main" in self.rank["Root"][0]:
-            main_node = self.rank["Root"][0]
-            summed_time = [
-                sum(
-                    self.wrapped_method_timer[node]["time"]
-                    for node in self.wrapped_method_timer
-                )
-            ]
-            self.wrapped_method_timer[main_node]["time"] = summed_time[0]
-
-    def set_depth(self, rank: list) -> list:
-        """Define the source nodes present at the max depth.
-
-        If node is present in the root patway, the final node is selected.
+    def __call__(cls, *args, **kwargs):
         """
-        max_depth = max((self.wrapped_method_src[node]) for node in rank)
-        src_nodes = [
-            node for node in rank if self.wrapped_method_src[node] == max_depth
-        ]
-        root_src_nodes = [node for node in self.rank["Root"] if node in src_nodes]
-        for node in root_src_nodes[:-1]:
-            src_nodes.remove(node)
-        return src_nodes
+        Possible changes to the value of the `__init__` argument do not affect
+        the returned instance.
+        """
+        if cls not in cls._instances:
+            cls._instances[cls] = super(SingletonMetaClass, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+    
+
+@dataclass
+class SingletonDataClassNode(metaclass=SingletonMetaClass):
+
+    """Singleton class that contains the data (MethodCall dataclasses) in call stack."""
+
+    name: str
+    call_stack: List[MethodCall] = field(default_factory=lambda: [])
+
+    # Creating an empty stack
+    def check_empty(self):
+        return len(self.call_stack) == 0
+
+
+    # Adding items into the stack
+    def add_child(self, childnode):
+        self.call_stack.append(childnode)
+        return childnode
+
+
+    # Removing an element from the stack
+    def pop(self):
+        if (self.check_empty(self.call_stack)):
+            return "stack is empty"
+
+        return self.call_stack.pop()
+    
+    # https://qwilka.github.io/PyCon_Limerick_2020/#38
+    def show_tree_structure(self, indent=2, _pre=""):
+        print(_pre + self.name)
+        for _c in self.call_stack:
+            _c.show_tree_structure(indent, _pre=_pre + " "*indent)
+
+    # def __init__(self) -> None:
+    #     """Initizalizes the class."""
+    #     self.wrapped_method_nodes: dict = {}
+    #     self.wrapped_method_counter: dict = {}
+    #     self.wrapped_method_timer: dict = {}
+    #     self.wrapped_method_src: defaultdict = defaultdict(list)
+    #     self.rank: defaultdict = defaultdict(list)
+    #     # self.profiler: bool = profiler
+    #     # if self.profiler:
+    #     #     self.profile: cProfile.Profile = cProfile.Profile()
+
+    # def extract_source(self, frame: inspect.FrameInfo) -> Any:
+    #     """Extracts the class and function name from a frame object."""
+    #     function_name = frame[3]
+    #     try:
+    #         class_name = frame[0].f_locals["self"].__class__.__name__
+    #         source = class_name + "." + function_name
+    #     except KeyError:
+    #         source = function_name
+    #     return source
+
+
+    # def set_order_rank(self) -> None:
+    #     """Clusters nodes by common source."""
+    #     for base_node in list(self.rank["Root"]):
+    #         src_nodes = self.wrapped_method_src[base_node]
+    #         if src_nodes:
+    #             self.rank[tuple(src_nodes)].append(base_node)
+    #             self.rank["Root"].remove(base_node)
+
+    # def sum_time(self) -> None:
+    #     """Aggregate total time for main function."""
+    #     if "main" in self.rank["Root"][0]:
+    #         main_node = self.rank["Root"][0]
+    #         summed_time = [
+    #             sum(
+    #                 self.wrapped_method_timer[node]["time"]
+    #                 for node in self.wrapped_method_timer
+    #             )
+    #         ]
+    #         self.wrapped_method_timer[main_node]["time"] = summed_time[0]
+
+    # def set_depth(self, rank: list) -> list:
+    #     """Define the source nodes present at the max depth.
+
+    #     If node is present in the root patway, the final node is selected.
+    #     """
+    #     max_depth = max((self.wrapped_method_src[node]) for node in rank)
+    #     src_nodes = [
+    #         node for node in rank if self.wrapped_method_src[node] == max_depth
+    #     ]
+    #     root_src_nodes = [node for node in self.rank["Root"] if node in src_nodes]
+    #     for node in root_src_nodes[:-1]:
+    #         src_nodes.remove(node)
+    #     return src_nodes
 
 class MethodChartGraph():
 
@@ -398,5 +440,5 @@ class MethodChartGraph():
 
         graph.write_png(filename)
 
-METHOD_CHART_NODE_CONTAINER = MethodChartSingletonNodeContainer()
+METHOD_CHART_NODE_CONTAINER = SingletonDataClassNode()
 # METHOD_PATTERN = MethodChartGraph(singleton_node_container=METHOD_CONTAINER)

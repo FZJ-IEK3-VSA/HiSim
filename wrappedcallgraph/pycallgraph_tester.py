@@ -3,7 +3,7 @@ import os
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from wrappedcallgraph.callgraphwrap import MethodChartGraph, MethodChartCallGraphFactory, MethodChartSingletonNodeContainer #import METHOD_PATTERN
+from wrappedcallgraph.callgraphwrap import MethodChartGraph, MethodChartCallGraphFactory, SingletonDataClassNode #import METHOD_PATTERN
 
 
 # class PyCallGraphObject:
@@ -44,7 +44,7 @@ class PyCallGraphObject:
         # METHOD_PATTERN.make_graphviz_chart(
         #     time_resolution=10, filename="wrappedcallgraph/HISIM_Method_Pattern.png"
         # )
-        method_node_container = MethodChartSingletonNodeContainer()
+        method_node_container = SingletonDataClassNode()
         method_graph = MethodChartGraph(singleton_node_container=method_node_container)
 
 

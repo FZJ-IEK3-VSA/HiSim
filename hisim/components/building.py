@@ -501,6 +501,7 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
         )
+
         # =================================================================================================================================
         # Add and get default connections
 
@@ -746,10 +747,6 @@ class Building(dynamic_component.DynamicComponent):
                     decimal=".",
                     index=False,
                 )
-        # log.information("building timestep " + str(timestep))
-        # log.information("building thermal power input " + str(thermal_power_delivered_in_watt))
-        # log.information("building real indoor air temperature " + str(indoor_air_temperature_in_celsius))
-        # log.information("buiding theoretical demand " + str(theoretical_thermal_building_demand_in_watt))
 
     # =================================================================================================================================
 
@@ -849,7 +846,9 @@ class Building(dynamic_component.DynamicComponent):
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
-            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[self.building_heat_capacity_class]
+            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[
+                self.building_heat_capacity_class
+            ]
             * self.scaled_conditioned_floor_area_in_m2
         )
 
@@ -1064,7 +1063,7 @@ class Building(dynamic_component.DynamicComponent):
                     self.conditioned_floor_area_in_m2
                 )
 
-            self.scaling_factor = 1
+            self.scaling_factor = 1.0
 
         for w_i in self.windows_and_door:
             self.scaled_windows_and_door_envelope_areas_in_m2.append(
@@ -1084,44 +1083,32 @@ class Building(dynamic_component.DynamicComponent):
             "West",
             "Horizontal",
         ]
+
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
-        # then the total_wall_area = 4 * area_of_one_wall
-        if (
-            self.conditioned_floor_area_in_m2 == 0
-            and self.buildingconfig.total_base_area_in_m2 is not None
-        ):
-            total_wall_area_in_m2 = (
-                4
-                * math.sqrt(self.buildingconfig.total_base_area_in_m2)
-                * self.room_height_in_m2
-            )
-        elif (
-            self.conditioned_floor_area_in_m2 == 0
-            and self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None
-        ):
-            total_wall_area_in_m2 = (
-                4
-                * math.sqrt(self.buildingconfig.absolute_conditioned_floor_area_in_m2)
-                * self.room_height_in_m2
-            )
-        else:
-            total_wall_area_in_m2 = (
-                4
-                * math.sqrt(self.conditioned_floor_area_in_m2)
-                * self.room_height_in_m2
-            )
+        total_wall_area_in_m2_tabula = (
+            4 * math.sqrt(self.conditioned_floor_area_in_m2) * self.room_height_in_m2
+        )
+        scaled_total_wall_area_in_m2 = (
+            4
+            * math.sqrt(self.scaled_conditioned_floor_area_in_m2)
+            * self.room_height_in_m2
+        )
+
         self.scaled_window_areas_in_m2 = []
         for windows_direction in self.windows_directions:
             window_area_in_m2 = float(
                 self.buildingdata["A_Window_" + windows_direction]
             )
-            factor_window_area_to_wall_area_tabula = (
-                window_area_in_m2 / total_wall_area_in_m2
-            )
-            self.scaled_window_areas_in_m2.append(
-                self.scaled_conditioned_floor_area_in_m2
-                * factor_window_area_to_wall_area_tabula
-            )
+            if self.scaling_factor != 1.0:
+                factor_window_area_to_wall_area_tabula = (
+                    window_area_in_m2 / total_wall_area_in_m2_tabula
+                )
+                self.scaled_window_areas_in_m2.append(
+                    scaled_total_wall_area_in_m2
+                    * factor_window_area_to_wall_area_tabula
+                )
+            else:
+                self.scaled_window_areas_in_m2.append(window_area_in_m2)
 
     # =====================================================================================================================================
 
@@ -2005,9 +1992,9 @@ class Window:
         """
         if window_azimuth_angle is None:
             window_azimuth_angle = 0
-            log.warning(
-                "window azimuth angle was set to 0 south because no value was set."
-            )
+            # log.warning(
+            #     "window azimuth angle was set to 0 south because no value was set."
+            # )
         poa_irrad = pvlib.irradiance.get_total_irradiance(
             window_tilt_angle,
             window_azimuth_angle,

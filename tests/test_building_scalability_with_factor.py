@@ -6,6 +6,7 @@ The window areas are scaled via the ratio of window area to wall area.
 """
 # clean
 import numpy as np
+import math
 import pytest
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
@@ -120,6 +121,7 @@ def test_building_scalability():
         my_residence.scaled_windows_and_door_envelope_areas_in_m2
     )
     window_areas_without_scaling = my_residence.scaled_window_areas_in_m2
+    log.information(str(window_areas_without_scaling))
 
     # check building test with different absolute conditioned floor areas
     scaling_factors = [1, 5, 12]
@@ -150,7 +152,11 @@ def test_building_scalability():
         window_and_door_surfaces_with_scaling = (
             my_residence.scaled_windows_and_door_envelope_areas_in_m2
         )
-        window_areas_with_scaling = my_residence.scaled_window_areas_in_m2
+        # scaled_window_area = window_area / total_wall_area * scaled_total_wall_area
+        # = window_area / (4 * sqrt(conditioned_floor_area) * room_height) * 4 * sqrt(scaled_conditioned_floor_area) * room_height
+        # = window_area * sqrt(scaled_conditioned_floor_area / conditioned_floor_area)
+        scaling_factor_for_window_areas = math.sqrt(absolute_conditioned_floor_area_in_m2_scaled / absolute_conditioned_floor_area_in_m2)
+        window_areas_with_scaling = [x * scaling_factor_for_window_areas for x in window_areas_without_scaling]
         log.information(
             "Opaque surface areas "
             + str(factor)
@@ -158,6 +164,14 @@ def test_building_scalability():
             + str(opaque_surfaces_with_scaling)
             + "\n"
         )
+        log.information(
+            "window areas "
+            + str(factor)
+            + " times upscaled: "
+            + str(window_areas_with_scaling)
+            + "\n"
+        )
+
 
         # test if opaque envelope surface areas of building scale with conditioned floor area
         np.testing.assert_allclose(
@@ -175,7 +189,7 @@ def test_building_scalability():
 
         # test if window areas of building scale with conditioned floor area
         np.testing.assert_allclose(
-            [x * factor for x in window_areas_without_scaling],
+            my_residence.scaled_window_areas_in_m2,
             window_areas_with_scaling,
             rtol=0.01,
         )

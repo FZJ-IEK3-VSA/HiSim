@@ -12,7 +12,7 @@ import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component_wrapper import ComponentWrapper
-from hisim import sim_repository
+from hisim import sim_repository, sim_repository_singleton
 from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
 from hisim import log
@@ -52,6 +52,7 @@ class Simulator:
         self.all_outputs: List[cp.ComponentOutput] = []
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
+        self.singleton_simulation_repository = sim_repository_singleton.SingletonSimRepository
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
 
@@ -68,7 +69,8 @@ class Simulator:
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
         # set the repository
-        component.set_sim_repo(self.simulation_repository)
+        # component.set_sim_repo(self.simulation_repository)
+        component.set_sim_repo(self.singleton_simulation_repository)
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable)

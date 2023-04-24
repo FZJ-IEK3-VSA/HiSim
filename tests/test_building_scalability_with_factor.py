@@ -5,8 +5,8 @@ divided by the conditioned floor area given by TABULA.
 The window areas are scaled via the ratio of window area to wall area.
 """
 # clean
-import numpy as np
 import math
+import numpy as np
 import pytest
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
@@ -60,7 +60,9 @@ def test_building_scalability():
     log.information(my_residence_config.building_code)
 
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -155,8 +157,13 @@ def test_building_scalability():
         # scaled_window_area = window_area / total_wall_area * scaled_total_wall_area
         # = window_area / (4 * sqrt(conditioned_floor_area) * room_height) * 4 * sqrt(scaled_conditioned_floor_area) * room_height
         # = window_area * sqrt(scaled_conditioned_floor_area / conditioned_floor_area)
-        scaling_factor_for_window_areas = math.sqrt(absolute_conditioned_floor_area_in_m2_scaled / absolute_conditioned_floor_area_in_m2)
-        window_areas_with_scaling = [x * scaling_factor_for_window_areas for x in window_areas_without_scaling]
+        scaling_factor_for_window_areas = math.sqrt(
+            absolute_conditioned_floor_area_in_m2_scaled
+            / absolute_conditioned_floor_area_in_m2
+        )
+        window_areas_with_scaling = [
+            x * scaling_factor_for_window_areas for x in window_areas_without_scaling
+        ]
         log.information(
             "Opaque surface areas "
             + str(factor)
@@ -171,7 +178,6 @@ def test_building_scalability():
             + str(window_areas_with_scaling)
             + "\n"
         )
-
 
         # test if opaque envelope surface areas of building scale with conditioned floor area
         np.testing.assert_allclose(

@@ -30,6 +30,7 @@ def test_building_scalability():
     )
 
     repo = component.SimRepository()
+    repo_singleton = component.SingletonSimRepository(test_value="test")
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -54,6 +55,7 @@ def test_building_scalability():
         my_simulation_parameters=my_simulation_parameters,
     )
     my_residence.set_sim_repo(repo)
+    my_residence.set_singleton_sim_repo(repo_singleton)
     my_residence.i_prepare_simulation()
 
     log.information(my_residence_config.building_code)
@@ -65,6 +67,8 @@ def test_building_scalability():
         my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy.set_sim_repo(repo)
+    # occupancy needs singelton sim repo for i_simulate
+    my_occupancy.set_singleton_sim_repo(repo_singleton)
     my_occupancy.i_prepare_simulation()
 
     # Set Weather
@@ -141,6 +145,7 @@ def test_building_scalability():
             my_simulation_parameters=my_simulation_parameters,
         )
         my_residence.set_sim_repo(repo)
+        my_residence.set_singleton_sim_repo(repo_singleton)
         my_residence.i_prepare_simulation()
         my_residence.i_simulate(0, stsv, False)
 

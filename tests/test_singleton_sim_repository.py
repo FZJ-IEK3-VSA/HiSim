@@ -4,7 +4,7 @@
 
 import os
 from typing import Optional
-
+import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
@@ -19,8 +19,8 @@ from hisim import utils
 PATH = "../examples/household_for_test_sim_repository.py"
 FUNC = "test_house"
 
-
 @utils.measure_execution_time
+@pytest.mark.base
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements

@@ -54,7 +54,7 @@ def test_house_with_pv_and_hp_for_heating_test(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 60
 
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.5

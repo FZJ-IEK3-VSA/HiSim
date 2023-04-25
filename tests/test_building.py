@@ -34,6 +34,7 @@ def test_building():
     )
 
     repo = component.SimRepository()
+    repo_singleton = component.SingletonSimRepository(test_value="test")
     t_two = time.perf_counter()
     log.profile(f"T2: {t_two - t_one}")
 
@@ -61,6 +62,7 @@ def test_building():
         my_simulation_parameters=my_simulation_parameters,
     )
     my_occupancy.set_sim_repo(repo)
+    my_occupancy.set_singleton_sim_repo(repo_singleton)
     my_occupancy.i_prepare_simulation()
     t_three = time.perf_counter()
     log.profile(f"T2:{t_three - t_two}")
@@ -87,6 +89,8 @@ def test_building():
         my_simulation_parameters=my_simulation_parameters,
     )
     my_residence.set_sim_repo(repo)
+    # building i_prepare_simulation needs a singleton sim repo
+    my_residence.set_singleton_sim_repo(repo_singleton)
     my_residence.i_prepare_simulation()
 
     # Fake power delivered

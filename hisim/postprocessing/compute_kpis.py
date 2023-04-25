@@ -15,10 +15,11 @@ from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
 from hisim.components import generic_hot_water_storage_modular
 from hisim import log
+from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
-    """Reads data for cost from csv."""
+    """Reads data for costs and co2 emissions of fuels from csv."""
     price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 2, 4])
     price_frame.index = price_frame["fuel type"]  # type: ignore
     price_frame.drop(columns=["fuel type"], inplace=True)
@@ -218,14 +219,15 @@ def compute_cost_of_fuel_type(
                     fuel_consumption = results.iloc[:, index]
                 else:
                     continue
-
-    # convert liters to Wh
     if not fuel_consumption.empty:
-        consumption_sum = (
-            compute_energy_from_power(
-                power_timeseries=fuel_consumption, timeresolution=timeresolution
+        if fuel in [LoadTypes.ELECTRICITY, LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
+            consumption_sum = (
+                compute_energy_from_power(
+                    power_timeseries=fuel_consumption, timeresolution=timeresolution
+                )
             )
-        )
+        else:
+            consumption_sum = sum(fuel_consumption)
     else:
         consumption_sum = 0
 
@@ -373,6 +375,11 @@ def compute_kpis(
         components=components, all_outputs=all_outputs, results=results, timeresolution=simulation_parameters.seconds_per_timestep,
     )
 
+    # compute cost and co2 for investment/installation:
+    investment_cost, co2_footprint = compute_investment_cost(
+        components=components
+    )
+
     # initilize lines for report
     lines: List = []
     lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
@@ -392,14 +399,16 @@ def compute_kpis(
     lines.append(f"Self Consumption Rate: {self_consumption_rate:3.1f} %")
     lines.append(f"Cost for energy use: {price:3.0f} EUR")
     lines.append(f"CO2 emitted due energy use: {co2:3.0f} kg")
+    lines.append(f"Annual investment cost for equipment: {investment_cost:3.0f} EUR")
+    lines.append(f"Annual CO2 Footprint for equipment: {co2_footprint:3.0f} kg")
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(
         self_consumption_rate=self_consumption_rate,
         autarky_rate=autarky_rate,
         injection=injection_sum,
-        economic_cost=price,
-        co2_cost=co2,
+        economic_cost=price + investment_cost,
+        co2_cost=co2 + co2_footprint,
     )
 
     pathname = os.path.join(simulation_parameters.result_directory, "kpi_config.json")

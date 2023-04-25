@@ -86,7 +86,7 @@ def modular_household_explicit(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)

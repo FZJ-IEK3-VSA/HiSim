@@ -70,7 +70,7 @@ def basic_household_explicit(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)

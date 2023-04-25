@@ -253,25 +253,6 @@ def modular_household_explicit(
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
-    # load economic parameters:
-    economic_parameters_file = path.join(
-        hisim.utils.HISIMPATH["modular_household"], "EconomicParameters.json"
-    )
-    with open(file=economic_parameters_file, mode="r", encoding="utf-8") as inputfile:
-        economic_parameters = json.load(inputfile)
-    # (
-    #     pv_cost,
-    #     smart_devices_cost,
-    #     battery_cost,
-    #     surplus_controller_cost,
-    #     heatpump_cost,
-    #     buffer_cost,
-    #     chp_cost,
-    #     h2_storage_cost,
-    #     electrolyzer_cost,
-    #     ev_cost,
-    # ) = [0] * 10
-
     # add price signal
     my_price_signal = generic_price_signal.PriceSignal(
         config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
@@ -289,12 +270,6 @@ def modular_household_explicit(
             pv_peak_power=pv_peak_power,
             count=count,
         )
-        # pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included,
-        #                                                                pv_peak_power)
-        # production, count = component_connections.configure_pv_system(
-        #     my_sim=my_sim, my_simulation_parameters=my_simulation_parameters, my_weather=my_weather, production=production,
-        #     pv_peak_power=pv_peak_power, count=count)
-        # pv_cost = pv_cost + preprocessing.calculate_pv_investment_cost(economic_parameters, pv_included, pv_peak_power)
 
     # """CARS"""
     if mobility_set is not None:
@@ -357,25 +332,6 @@ def modular_household_explicit(
             source_weight=999,
         )
 
-        # surplus_controller_cost = (
-        #     preprocessing.calculate_surplus_controller_investment_cost(
-        #         economic_parameters
-        #     )
-        # )
-
-    if not needs_ems(
-        battery_included,
-        chp_included,
-        ev_included,
-        heating_system_installed,
-        smart_devices_included,
-        water_heating_system_installed,
-    ):
-        if economic_parameters["surpluscontroller_bought"]:
-            hisim.log.information(
-                "Error: Surplus Controller is bought but not needed/included"
-            )
-
     # """ EV BATTERY """
     if ev_included:
         if mobility_set is None:
@@ -389,9 +345,6 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             clever=clever,
         )  # could return ev_capacities if needed
-        # """TODO: repair! """
-        # for capacity in ev_capacities:
-        #     ev_cost = ev_cost + preprocessing.calculate_electric_vehicle_investment_cost(economic_parameters, ev_included, ev_capacity=capacity)
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
@@ -400,8 +353,6 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_smart_devices=my_smart_devices,
         )
-        # """ TODO: repair! """
-        # smart_devices_cost = preprocessing.calculate_smart_devices_investment_cost(economic_parameters, smart_devices_included)
 
     # """WATERHEATING"""
     if water_heating_system_installed in [
@@ -454,8 +405,6 @@ def modular_household_explicit(
                 heating_season=heating_season,
                 count=count,
             )
-            """TODO: repair! """
-            # heatpump_cost = heatpump_cost + preprocessing.calculate_heating_investment_cost(economic_parameters, heatpump_included, my_heater.power_th)
         else:
             (
                 _,
@@ -470,10 +419,6 @@ def modular_household_explicit(
                 heating_season=heating_season,
                 count=count,
             )
-
-        # buffer_cost = preprocessing.calculate_buffer_investment_cost(
-        #     economic_parameters, buffer_included, buffer_volume
-        # )
 
     else:
         if heating_system_installed in [
@@ -511,8 +456,6 @@ def modular_household_explicit(
             battery_capacity=battery_capacity,
             count=count,
         )
-        # """TODO: repair! """
-        # battery_cost = preprocessing.calculate_battery_investment_cost(economic_parameters, battery_included, battery_capacity)
 
     # """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included and h2_storage_included and electrolyzer_included and clever:
@@ -538,16 +481,6 @@ def modular_household_explicit(
                 src_field_name=my_chp.ThermalPowerDelivered,
             )
 
-        # chp_cost = preprocessing.calculate_chp_investment_cost(
-        #     economic_parameters, chp_included, chp_power
-        # )
-        # h2_storage_cost = preprocessing.calculate_h2storage_investment_cost(
-        #     economic_parameters, h2_storage_included, h2_storage_size
-        # )
-        # electrolyzer_cost = preprocessing.calculate_electrolyzer_investment_cost(
-        #     economic_parameters, electrolyzer_included, electrolyzer_power
-        # )
-
     if needs_ems(
         battery_included,
         chp_included,
@@ -557,61 +490,6 @@ def modular_household_explicit(
         water_heating_system_installed,
     ):
         my_sim.add_component(my_electricity_controller)
-
-    # co2_cost = 1000  # CO2 von Herstellung der Komponenten plus CO2 für den Stromverbrauch der Komponenten
-    # surplus_controller_cost = 400
-
-    # investment_cost = preprocessing.total_investment_cost_threshold_exceedance_check(
-    #     economic_parameters,
-    #     pv_cost,
-    #     smart_devices_cost,
-    #     battery_cost,
-    #     surplus_controller_cost,
-    #     heatpump_cost,
-    #     buffer_cost,
-    #     chp_cost,
-    #     h2_storage_cost,
-    #     electrolyzer_cost,
-    #     ev_cost,
-    # )
-    # preprocessing.investment_cost_per_component_exceedance_check(
-    #     economic_parameters,
-    #     pv_cost,
-    #     smart_devices_cost,
-    #     battery_cost,
-    #     surplus_controller_cost,
-    #     heatpump_cost,
-    #     buffer_cost,
-    #     chp_cost,
-    #     h2_storage_cost,
-    #     electrolyzer_cost,
-    #     ev_cost,
-    # )
-
-    # hisim.log.information(
-    #     "total investment_cost"
-    #     + str(investment_cost)
-    #     + "pv_cost"
-    #     + str(pv_cost)
-    #     + "smart_devices_cost"
-    #     + str(smart_devices_cost)
-    #     + "battery_cost"
-    #     + str(battery_cost)
-    #     + "surplus_controller_cost"
-    #     + str(surplus_controller_cost)
-    #     + "heatpump_cost"
-    #     + str(heatpump_cost)
-    #     + "buffer_cost"
-    #     + str(buffer_cost)
-    #     + "chp_cost"
-    #     + str(chp_cost)
-    #     + "h2_storage_cost"
-    #     + str(h2_storage_cost)
-    #     + "electrolyzer_cost"
-    #     + str(electrolyzer_cost)
-    #     + "ev_cost"
-    #     + str(ev_cost)
-    # )
 
 
 def needs_ems(

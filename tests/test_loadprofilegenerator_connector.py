@@ -27,7 +27,6 @@ def test_occupancy():
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])
     my_occupancy.set_singleton_sim_repo(repo_singleton)
-    print(repo_singleton.my_dict)
     my_occupancy.i_simulate(0, stsv, False)
     number_of_residents = []
     heating_by_residents = []

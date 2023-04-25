@@ -294,12 +294,12 @@ def modular_household_explicit(
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
-    # # add price signal
-    # my_price_signal = generic_price_signal.PriceSignal(
-    #     config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
-    #     my_simulation_parameters=my_simulation_parameters
-    # )
-    # my_sim.add_component(my_price_signal)
+    # add price signal
+    my_price_signal = generic_price_signal.PriceSignal(
+        config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
+        my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_price_signal)
 
     # """PV"""
     if pv_included:

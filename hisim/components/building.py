@@ -352,6 +352,7 @@ class Building(dynamic_component.DynamicComponent):
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
         )
         self.previous_state = self.state.self_copy()
+        self.write_important_variables_to_sim_respository()
 
         # =================================================================================================================================
         # Input channels
@@ -764,10 +765,6 @@ class Building(dynamic_component.DynamicComponent):
                     decimal=".",
                     index=False,
                 )
-        # log.information("building timestep " + str(timestep))
-        # log.information("building thermal power input " + str(thermal_power_delivered_in_watt))
-        # log.information("building real indoor air temperature " + str(indoor_air_temperature_in_celsius))
-        # log.information("buiding theoretical demand " + str(theoretical_thermal_building_demand_in_watt))
 
     # =================================================================================================================================
 
@@ -803,7 +800,7 @@ class Building(dynamic_component.DynamicComponent):
         """Build function.
 
         The function sets important constants and parameters for the calculations.
-        It imports the building dataset from TABULA and gets physical parameters and thermal conductances.
+        It imports the building dataset from TABULA and gets phys params and thermal conductances.
         """
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
@@ -842,11 +839,17 @@ class Building(dynamic_component.DynamicComponent):
         }
 
         self.ven_method = "EPISCOPE"
-
-        # Get physical parameters
+        # Get physical parameters 
         self.get_physical_param()
         # Gets conductances
         self.get_conductances()
+
+    def write_important_variables_to_sim_respository(self):
+        """Write entry for sim repository."""
+        dict_with_important_variables = {"buildingcode": self.buildingcode, "buildingdata": self.buildingdata, "number of apartments": self.number_of_apartments, "max thermal building demand [W]": self.max_thermal_building_demand_in_watt}
+        
+        for key_dict, value in dict_with_important_variables.items():
+            self.singleton_simulation_repository.set_entry(key=self.component_name + " " + key_dict, entry=value)
 
     def get_physical_param(
         self,

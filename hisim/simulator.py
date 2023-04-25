@@ -69,8 +69,8 @@ class Simulator:
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
         # set the repository
-        # component.set_sim_repo(self.simulation_repository)
-        component.set_sim_repo(self.singleton_simulation_repository)
+        component.set_sim_repo(self.simulation_repository)
+        component.set_singleton_sim_repo(self.singleton_simulation_repository)
 
         # set the wrapper
         wrap = ComponentWrapper(component, is_cachable)

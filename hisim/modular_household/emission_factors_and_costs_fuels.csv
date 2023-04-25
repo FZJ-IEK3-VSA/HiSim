@@ -1,4 +1,4 @@
-fuel type;Stage;Footprint;Unit;Cost;Unit;Comment
+Product/service;Stage;Footprint;Unit;Cost;Unit;Comment
 Electricity;Use;0.44;kgCO2eq/kWh;0.2525;EUR/kWh;
 DistrictHeating;Use;0.02;kgCO2eq/kWh;0.0033;EUR/kWh;Biomass
 Gas;Use;0.24;kgCO2eq/kWh;0.0861;EUR/kWh;

@@ -291,10 +291,10 @@ class Occupancy(cp.Component):
                 key="number of apartments"
             )
         else:
-            real_number_of_apartments = 1.0
-            log.warning(
-                "number of apartments was not found in sim repository, so it was set to 1."
-            )
+            real_number_of_apartments = self.occupancyConfig.number_of_apartments
+            # log.warning(
+            #     "number of apartments was not found in sim repository, so it was set to config value."
+            # )
 
         scaling_factor_according_to_number_of_apartments = (
             self.get_scaling_factor_according_to_number_of_apartments(

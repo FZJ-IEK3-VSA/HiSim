@@ -1,1 +1,0 @@
-{"component": "Battery", "capacity_unit": "Wh", "cost_unit": "Euro", "co2_unit": "kg", "time_unit": "years", "costfactor_unit": "%", "capacity_cost": [500, 1000, 2000, 10000], "cost": [1000, 1800, 2500, 5000], "time_costfactor": [2022, 2030, 2050], "costfactor": [100, 90, 60], "capacity_co2": [1000, 10000], "co2": [200, 2000]}

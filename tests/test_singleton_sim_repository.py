@@ -1,110 +1,159 @@
-"""Test for building module."""
+"""Test for singleton sim repostitory."""
 
 # clean
 
-import datetime
-import time
-import pytest
+import os
+from typing import Optional
 
-from hisim import component
+import hisim.simulator as sim
+from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.loadtypes import LoadTypes, Units
-from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository
 from hisim import log
 from hisim import utils
-from tests import functions_for_testing as fft
 
 
-@pytest.mark.base
+# PATH and FUNC needed to build simulator, PATH is fake
+PATH = "../examples/household_for_test_sim_repository.py"
+FUNC = "test_house"
+
+
 @utils.measure_execution_time
-def test_singleton_sim_repository():
-    """Test function for the singleton sim module."""
+def test_house(
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:  # noqa: too-many-statements
+    """The test should check if a normal simulation works with the singleton sim repository implementation.
 
-    seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=seconds_per_timestep
-    )
+    Also the singleton property is checked.
+    """
 
-    repo1 = component.SimRepository()
-    repo2 = component.SingletonSimRepository(test_value="test")
+    # =========================================================================================================================================================
+    # System Parameters
 
-    # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config,
+    # Set Simulation Parameters
+    year = 2021
+    seconds_per_timestep = 60 * 60
+
+    # =========================================================================================================================================================
+    # Build Components
+
+    # Build Simulation Parameters
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.one_day_only(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
+
+    # this part is copied from hisim_main
+    # Build Simulator
+    normalized_path = os.path.normpath(PATH)
+    path_in_list = normalized_path.split(os.sep)
+    if len(path_in_list) >= 1:
+        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+
+    my_sim: sim.Simulator = sim.Simulator(
+        module_directory=path_to_be_added,
+        setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_occupancy.i_prepare_simulation()
+    my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Occupancy
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.Aachen
     )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_weather.set_sim_repo(repo1)
-    my_weather.i_prepare_simulation()
 
-
-    # Set Residence
-    my_residence_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
+    # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    my_residence = building.Building(
-        config=my_residence_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_residence.i_prepare_simulation()
+    # =========================================================================================================================================================
+    # Connect Components
 
-    # Fake power delivered
-    thermal_power_delivered_output = component.ComponentOutput(
-        "FakeThermalDeliveryMachine",
-        "ThermalDelivery",
-        LoadTypes.HEATING,
-        Units.WATT,
+    # Building
+    my_building.connect_input(
+        my_building.Altitude, my_weather.component_name, my_weather.Altitude
+    )
+    my_building.connect_input(
+        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
+    )
+    my_building.connect_input(
+        my_building.DirectNormalIrradiance,
+        my_weather.component_name,
+        my_weather.DirectNormalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.DiffuseHorizontalIrradiance,
+        my_weather.component_name,
+        my_weather.DiffuseHorizontalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.GlobalHorizontalIrradiance,
+        my_weather.component_name,
+        my_weather.GlobalHorizontalIrradiance,
+    )
+    my_building.connect_input(
+        my_building.DirectNormalIrradianceExtra,
+        my_weather.component_name,
+        my_weather.DirectNormalIrradianceExtra,
+    )
+    my_building.connect_input(
+        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
+    )
+    my_building.connect_input(
+        my_building.TemperatureOutside,
+        my_weather.component_name,
+        my_weather.TemperatureOutside,
+    )
+    my_building.connect_input(
+        my_building.HeatingByResidents,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByResidents,
     )
 
+    # =========================================================================================================================================================
+    # Add Components to Simulator and run all timesteps
 
-    number_of_outputs = fft.get_number_of_outputs(
-        [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
-    )
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
-    my_residence.temperature_outside_channel.source_output = (
-        my_weather.air_temperature_output
-    )
-    my_residence.altitude_channel.source_output = my_weather.altitude_output
-    my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = (
-        my_weather.DNI_output
-    )
-    my_residence.direct_horizontal_irradiance_channel.source_output = (
-        my_weather.DHI_output
-    )
-    my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residentsC
-    )
-    my_residence.thermal_power_delivered_channel.source_output = (
-        thermal_power_delivered_output
+    my_sim.add_component(my_weather)
+    my_sim.add_component(my_occupancy)
+    my_sim.add_component(my_building)
+
+    my_sim.run_all_timesteps()
+
+    log.information(
+        "singelton sim repo" + str(my_sim.singleton_simulation_repository.my_dict)
     )
 
-    fft.add_global_index_of_components(
-        [my_occupancy, my_weather, my_residence, thermal_power_delivered_output]
+    # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6
+    original_singelton_sim_repository = my_sim.singleton_simulation_repository
+    new_singleton_sim_repository = SingletonSimRepository(test_value="RandomTestValue")
+
+    assert original_singelton_sim_repository is new_singleton_sim_repository
+    assert (
+        original_singelton_sim_repository.test_value
+        is new_singleton_sim_repository.test_value
     )
 
-    my_occupancy.i_simulate(0, stsv, False)
-    my_weather.i_simulate(0, stsv, False)
-    my_residence.i_simulate(0, stsv, False)
+    # Sanity check - a non-singleton class should create two separate instances
 
-    repo4 = component.SingletonSimRepository(test_value="test_new")
+    class NonSingleton:
 
-    log.information("Singleton Sim Repository Dict " + str(repo2.my_dict))
+        """Just a class to show the difference between a singleton and a non-singleton."""
 
-    # test if sim repository is singleton with same test_value
-    print(repo2.test_value, repo4.test_value)
-    assert repo2.test_value == repo4.test_value
+        pass
 
+    assert NonSingleton() is not NonSingleton()

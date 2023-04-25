@@ -46,6 +46,8 @@ pylint C:\Users\k.rieck\HiSim\hisim\simulator.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\sim_repository.py
 if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\hisim\sim_repository_singleton.py
+if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\utils.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\hisim\components\building.py
@@ -145,4 +147,6 @@ if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_occupancy_scalability.py
 if %errorlevel% neq 0 exit /b
 pylint C:\Users\k.rieck\HiSim\tests\test_simple_hot_water_storage.py
+if %errorlevel% neq 0 exit /b
+pylint C:\Users\k.rieck\HiSim\tests\test_singleton_sim_repository.py
 if %errorlevel% neq 0 exit /b

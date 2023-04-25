@@ -352,7 +352,6 @@ class Building(dynamic_component.DynamicComponent):
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
         )
         self.previous_state = self.state.self_copy()
-        self.write_important_variables_to_sim_respository()
 
         # =================================================================================================================================
         # Input channels
@@ -778,7 +777,21 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ) -> None:
         """Prepare the simulation."""
-        pass
+        if hasattr(Building, "singleton_simulation_repository"):
+            dict_with_important_variables_for_the_sim_repository = {
+                "buildingcode": self.buildingcode,
+                "buildingdata": self.buildingdata,
+                "number of apartments": self.number_of_apartments,
+                "max thermal building demand [W]": self.max_thermal_building_demand_in_watt,
+            }
+
+            for (
+                key_dict,
+                value,
+            ) in dict_with_important_variables_for_the_sim_repository.items():
+                self.singleton_simulation_repository.set_entry(
+                    key=key_dict, entry=value
+                )
 
     def i_restore_state(
         self,
@@ -839,17 +852,10 @@ class Building(dynamic_component.DynamicComponent):
         }
 
         self.ven_method = "EPISCOPE"
-        # Get physical parameters 
+        # Get physical parameters
         self.get_physical_param()
         # Gets conductances
         self.get_conductances()
-
-    def write_important_variables_to_sim_respository(self):
-        """Write entry for sim repository."""
-        dict_with_important_variables = {"buildingcode": self.buildingcode, "buildingdata": self.buildingdata, "number of apartments": self.number_of_apartments, "max thermal building demand [W]": self.max_thermal_building_demand_in_watt}
-        
-        for key_dict, value in dict_with_important_variables.items():
-            self.singleton_simulation_repository.set_entry(key=self.component_name + " " + key_dict, entry=value)
 
     def get_physical_param(
         self,

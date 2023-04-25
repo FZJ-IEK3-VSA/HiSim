@@ -180,7 +180,7 @@ class Component:
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
-        self.singleton_simulation_repository: SingletonSimRepository = SingletonSimRepository(test_value="singleton sim repository")
+        self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:

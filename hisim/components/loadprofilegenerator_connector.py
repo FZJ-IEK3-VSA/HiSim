@@ -524,15 +524,13 @@ class Occupancy(cp.Component):
     ) -> float:
         """Get scaling factor according to the real number of apartments which is given by the building component."""
 
-        if real_number_of_apartments is not None and real_number_of_apartments > 0:
+        if real_number_of_apartments is not None and real_number_of_apartments > 0 and self.occupancyConfig.number_of_apartments > 0:
             scaling_factor = (
                 real_number_of_apartments / self.occupancyConfig.number_of_apartments
             )
+            log.information("occupancy outputs will be scaled according to number of apartments.")
 
         else:
             scaling_factor = 1.0
-            log.warning(
-                "real number of apartments needs to be a positive float or int, otherwise scaling factor is set to 1.0"
-            )
 
         return scaling_factor

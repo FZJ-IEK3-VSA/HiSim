@@ -938,6 +938,7 @@ class Building(dynamic_component.DynamicComponent):
         """
 
         if self.buildingconfig.number_of_apartments is not None:
+            print("number of apart not none")
             number_of_apartments_origin = self.buildingconfig.number_of_apartments
 
             if number_of_apartments_origin == 0:
@@ -954,6 +955,7 @@ class Building(dynamic_component.DynamicComponent):
                 raise ValueError("Number of apartments can not be negative.")
 
         elif self.buildingconfig.number_of_apartments is None:
+
             number_of_apartments_origin = self.buildingdata["n_Apartment"].values[0]
 
             # if no value given or if the area given in the config is bigger than the tabula ref area

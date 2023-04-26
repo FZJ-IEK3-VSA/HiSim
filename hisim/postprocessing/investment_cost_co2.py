@@ -1,10 +1,13 @@
+"""Postprocessing: computes investment cost and CO2 footprint of technical equipment.
+Functions from this file are called in Postprocessing option compute_kpis."""
+
 from hisim.components import (generic_hot_water_storage_modular,
                               generic_pv_system,
                               generic_smart_device,
                               generic_heat_source,
                               advanced_battery_bslib,
                               generic_car
-)
+                              )
 
 from hisim.utils import HISIMPATH
 import pandas as pd

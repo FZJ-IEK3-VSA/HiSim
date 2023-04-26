@@ -83,7 +83,6 @@ jobs:
         prospector hisim/postprocessing/charts.py
         prospector hisim/postprocessing/chart_singleday.py
         prospector hisim/postprocessing/compute_kpis.py
-	prospector hisim/postprocessing/investment_cost_co2.py
         prospector hisim/postprocessing/generate_csv_for_housing_database.py
         prospector hisim/postprocessing/postprocessing_datatransfer.py
         prospector hisim/postprocessing/postprocessing_main.py

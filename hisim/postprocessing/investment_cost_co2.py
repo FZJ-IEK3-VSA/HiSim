@@ -1,5 +1,3 @@
-# clean
-
 """Postprocessing: computes investment cost and CO2 footprint of technical equipment.
 
 Functions from this file are called in Postprocessing option compute_kpis."""

@@ -1,10 +1,13 @@
+"""Postprocessing: computes investment cost and CO2 footprint of technical equipment.
+Functions from this file are called in Postprocessing option compute_kpis."""
+
 from hisim.components import (generic_hot_water_storage_modular,
                               generic_pv_system,
                               generic_smart_device,
                               generic_heat_source,
                               advanced_battery_bslib,
                               generic_car
-)
+                              )
 
 from hisim.utils import HISIMPATH
 import pandas as pd
@@ -12,17 +15,29 @@ from hisim.loadtypes import LoadTypes
 from typing import List, Tuple
 from hisim.component_wrapper import ComponentWrapper
 
+
 def read_in_component_costs() -> pd.DataFrame:
-    """Reads data for cost and co2 emissions of component installation/investment from csv."""
+    """Reads data for cost and co2 emissions of component installation/investment from csv.
+
+    :return: DataFrame with price and co2 footprint information of all relevant components.
+    :rtype: pd.DataFrame
+    """
     price_frame = pd.read_csv(HISIMPATH["component_costs"], sep=";", usecols=[0, 8, 9])
     price_frame.index = price_frame["Product/service"]  # type: ignore
     price_frame.drop(columns=["Product/service"], inplace=True)
     return price_frame
 
+
 def compute_investment_cost(
         components: List[ComponentWrapper],
-) -> Tuple[float, float]:
-    
+        ) -> Tuple[float, float]:
+    """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
+
+    :param components: List of all configured components in the HiSIM example.
+    :type components: List[ComponentWrapper]
+    :return: annual investment cost for considered equipment and annual C02 footprint.
+    :rtype: Tuple[float, float]
+    """
     # initialize values
     investment_cost = 0.0
     co2_emissions = 0.0
@@ -31,7 +46,7 @@ def compute_investment_cost(
     for component in components:
         if isinstance(component.my_component, generic_smart_device.SmartDevice):
             column = price_frame.iloc[price_frame.index == "Washing machine (or domestic appliances in general)"]
-            component_capacity = 1
+            component_capacity = 1.0
         elif isinstance(component.my_component, generic_pv_system.PVSystem):
             column = price_frame.iloc[price_frame.index == "Photovoltaic panel"]
             component_capacity = component.my_component.power * 1e-3
@@ -56,8 +71,8 @@ def compute_investment_cost(
                 column = price_frame.iloc[price_frame.index == "Electric vehicle"]
             elif component.my_component.fuel == LoadTypes.DIESEL:
                 column = price_frame.iloc[price_frame.index == "Diesel vehicle"]
-            component_capacity = 1
-        
+            component_capacity = 1.0
+
         else:
             continue
         co2_emissions = co2_emissions + float(column["annual Footprint"]) * component_capacity

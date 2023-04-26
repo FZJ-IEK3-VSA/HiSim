@@ -15,7 +15,6 @@ import hisim.utils
 from hisim.components import (
     building,
     controller_l2_energy_management_system,
-    generic_price_signal,
     loadprofilegenerator_connector,
     loadprofilegenerator_utsp_connector,
     weather,
@@ -252,12 +251,12 @@ def modular_household_explicit(
     my_sim.add_component(my_occupancy)
     consumption.append(my_occupancy)
 
-    # add price signal
-    my_price_signal = generic_price_signal.PriceSignal(
-        config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
-        my_simulation_parameters=my_simulation_parameters
-    )
-    my_sim.add_component(my_price_signal)
+    # # add price signal
+    # my_price_signal = generic_price_signal.PriceSignal(
+    #     config=generic_price_signal.PriceSignalConfig.get_default_price_signal_config(),
+    #     my_simulation_parameters=my_simulation_parameters
+    # )
+    # my_sim.add_component(my_price_signal)
 
     # """PV"""
     if pv_included:

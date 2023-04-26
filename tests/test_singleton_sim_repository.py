@@ -59,13 +59,6 @@ def test_house(
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Build Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -74,12 +67,19 @@ def test_house(
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
-
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    # Build Occupancy
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
 
     # =========================================================================================================================================================
     # Connect Components
@@ -131,22 +131,19 @@ def test_house(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
-
+    
     my_sim.run_all_timesteps()
 
     log.information(
-        "singelton sim repo" + str(my_sim.singleton_simulation_repository.my_dict)
+        "singelton sim repo" + str(SingletonSimRepository().my_dict)
     )
 
     # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6
-    original_singelton_sim_repository = my_sim.singleton_simulation_repository
-    new_singleton_sim_repository = SingletonSimRepository(test_value="RandomTestValue")
+    first_singelton_sim_repository = SingletonSimRepository()
+    second_singleton_sim_repository = SingletonSimRepository()
 
-    assert original_singelton_sim_repository is new_singleton_sim_repository
-    assert (
-        original_singelton_sim_repository.test_value
-        is new_singleton_sim_repository.test_value
-    )
+    assert first_singelton_sim_repository is second_singleton_sim_repository
+
 
     # Sanity check - a non-singleton class should create two separate instances
 

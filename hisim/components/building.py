@@ -79,7 +79,7 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-
+from hisim.sim_repository_singleton import SingletonSimRepository
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]
@@ -351,6 +351,9 @@ class Building(dynamic_component.DynamicComponent):
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
         )
         self.previous_state = self.state.self_copy()
+
+        SingletonSimRepository().set_entry(key="number of apartments", entry=self.number_of_apartments)
+
 
         # =================================================================================================================================
         # Input channels
@@ -766,21 +769,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ) -> None:
         """Prepare the simulation."""
-        if hasattr(self, "singleton_simulation_repository"):
-            dict_with_important_variables_for_the_sim_repository = {
-                "buildingcode": self.buildingcode,
-                "buildingdata": self.buildingdata,
-                "number of apartments": self.number_of_apartments,
-                "max thermal building demand [W]": self.max_thermal_building_demand_in_watt,
-            }
-
-            for (
-                key_dict,
-                value,
-            ) in dict_with_important_variables_for_the_sim_repository.items():
-                self.singleton_simulation_repository.set_entry(
-                    key=key_dict, entry=value
-                )
+        pass
 
     def i_restore_state(
         self,

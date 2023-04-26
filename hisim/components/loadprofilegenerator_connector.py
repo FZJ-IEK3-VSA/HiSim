@@ -14,6 +14,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -154,6 +155,17 @@ class Occupancy(cp.Component):
         self.occupancyConfig = config
         self.build()
 
+        if SingletonSimRepository().exist_entry(key="number of apartments"):
+            self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(key="number of apartments")
+        else:
+            self.real_number_of_apartments_from_building = self.occupancyConfig.number_of_apartments
+            log.warning("number of apartments was not found in singleton sim repository. you might want to check the order of the initialization of your components in your example.")
+
+        self.scaling_factor_according_to_number_of_apartments = (
+            self.get_scaling_factor_according_to_number_of_apartments(
+                real_number_of_apartments=self.real_number_of_apartments_from_building
+            )
+        )
         # Inputs - Not Mandatories
         self.ww_mass_input: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -284,43 +296,26 @@ class Occupancy(cp.Component):
         # stsv.set_output_value(self.ww_mass_output, ww_mass_output)  # stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)
         # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
-        if hasattr(self, "singleton_simulation_repository") and self.singleton_simulation_repository.exist_entry(
-            key="number of apartments"
-        ):
-            real_number_of_apartments = self.singleton_simulation_repository.get_entry(
-                key="number of apartments"
-            )
-        else:
-            real_number_of_apartments = self.occupancyConfig.number_of_apartments
-            # log.warning(
-            #     "number of apartments was not found in sim repository, so it was set to config value."
-            # )
-
-        scaling_factor_according_to_number_of_apartments = (
-            self.get_scaling_factor_according_to_number_of_apartments(
-                real_number_of_apartments=real_number_of_apartments
-            )
-        )
 
         stsv.set_output_value(
             self.number_of_residentsC,
             self.number_of_residents[timestep]
-            * scaling_factor_according_to_number_of_apartments,
+            * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
             self.heating_by_residentsC,
             self.heating_by_residents[timestep]
-            * scaling_factor_according_to_number_of_apartments,
+            * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
             self.electricity_outputC,
             self.electricity_consumption[timestep]
-            * scaling_factor_according_to_number_of_apartments,
+            * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
             self.water_consumptionC,
             self.water_consumption[timestep]
-            * scaling_factor_according_to_number_of_apartments,
+            * self.scaling_factor_according_to_number_of_apartments,
         )
 
         if self.my_simulation_parameters.predictive_control:
@@ -528,7 +523,7 @@ class Occupancy(cp.Component):
             scaling_factor = (
                 real_number_of_apartments / self.occupancyConfig.number_of_apartments
             )
-            log.information("occupancy outputs will be scaled according to number of apartments.")
+            log.information(f"occupancy outputs will be scaled with the factor {scaling_factor} according to the number of apartments")
 
         else:
             scaling_factor = 1.0

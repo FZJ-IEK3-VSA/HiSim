@@ -39,9 +39,8 @@ class SingletonSimRepository(metaclass=SingletonMeta):
 
     """Class for exchanging information across all components."""
 
-    def __init__(self, test_value: str) -> None:
+    def __init__(self) -> None:
         """Initializes the SimRepository."""
-        self.test_value = test_value
         self.my_dict: Dict[str, Any] = {}
         self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {
             elem: {} for elem in lt.ComponentType

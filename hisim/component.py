@@ -17,7 +17,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
-from hisim.sim_repository_singleton import SingletonSimRepository
 
 
 @dataclass
@@ -180,13 +179,12 @@ class Component:
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
-        self.singleton_simulation_repository: SingletonSimRepository
+        # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """
 
-        # classname: str = component.get_classname()
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:
@@ -203,12 +201,6 @@ class Component:
         if simulation_repository is None:
             raise ValueError("simulation repository was none")
         self.simulation_repository = simulation_repository
-
-    def set_singleton_sim_repo(self, simulation_repository: SingletonSimRepository) -> None:
-        """ Sets the SimRepository. """
-        if simulation_repository is None:
-            raise ValueError("simulation repository was none")
-        self.singleton_simulation_repository = simulation_repository
 
     def add_input(self, object_name: str, field_name: str, load_type: lt.LoadTypes, unit: lt.Units,
                   mandatory: bool) -> ComponentInput:

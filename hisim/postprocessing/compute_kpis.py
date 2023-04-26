@@ -3,7 +3,7 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from typing import Any, List, Tuple, Union
+from typing import List, Tuple, Union
 
 import pandas as pd
 
@@ -241,8 +241,7 @@ def compute_kpis(
     all_outputs: List[ComponentOutput],
     simulation_parameters: SimulationParameters,
 ) -> List[str]:  # noqa: MC0001
-    """Calculation of Kpi's: self consumption rate, autarky rate,
-    injection, annual CO2 emissions and annual cost.
+    """Calculation of Kpi's: self consumption rate, autarky rate, injection, annual CO2 emissions and annual cost.
 
     :param components: List of configured components in the HiSIM example
     :type components: List[ComponentWrapper]

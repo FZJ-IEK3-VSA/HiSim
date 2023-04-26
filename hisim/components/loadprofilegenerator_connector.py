@@ -284,7 +284,7 @@ class Occupancy(cp.Component):
         # stsv.set_output_value(self.ww_mass_output, ww_mass_output)  # stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)
         # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
-        if self.singleton_simulation_repository.exist_entry(
+        if hasattr(self, "singleton_simulation_repository") and self.singleton_simulation_repository.exist_entry(
             key="number of apartments"
         ):
             real_number_of_apartments = self.singleton_simulation_repository.get_entry(

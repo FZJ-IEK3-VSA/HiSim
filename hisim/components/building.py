@@ -777,21 +777,21 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ) -> None:
         """Prepare the simulation."""
+        if hasattr(self, "singleton_simulation_repository"):
+            dict_with_important_variables_for_the_sim_repository = {
+                "buildingcode": self.buildingcode,
+                "buildingdata": self.buildingdata,
+                "number of apartments": self.number_of_apartments,
+                "max thermal building demand [W]": self.max_thermal_building_demand_in_watt,
+            }
 
-        dict_with_important_variables_for_the_sim_repository = {
-            "buildingcode": self.buildingcode,
-            "buildingdata": self.buildingdata,
-            "number of apartments": self.number_of_apartments,
-            "max thermal building demand [W]": self.max_thermal_building_demand_in_watt,
-        }
-
-        for (
-            key_dict,
-            value,
-        ) in dict_with_important_variables_for_the_sim_repository.items():
-            self.singleton_simulation_repository.set_entry(
-                key=key_dict, entry=value
-            )
+            for (
+                key_dict,
+                value,
+            ) in dict_with_important_variables_for_the_sim_repository.items():
+                self.singleton_simulation_repository.set_entry(
+                    key=key_dict, entry=value
+                )
 
     def i_restore_state(
         self,

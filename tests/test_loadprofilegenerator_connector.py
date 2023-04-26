@@ -11,7 +11,7 @@ def test_occupancy():
     Tests Occupancy profile for profile CH01
     Year heating generated: 1719 kWh
     """
-    repo_singleton = component.SingletonSimRepository(test_value="test")
+
     my_occupancy_profile = "CH01"
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
@@ -26,7 +26,7 @@ def test_occupancy():
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_occupancy])
-    my_occupancy.set_singleton_sim_repo(repo_singleton)
+
     my_occupancy.i_simulate(0, stsv, False)
     number_of_residents = []
     heating_by_residents = []

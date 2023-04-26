@@ -80,6 +80,7 @@ from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
 from hisim.sim_repository_singleton import SingletonSimRepository
+
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]
@@ -352,8 +353,9 @@ class Building(dynamic_component.DynamicComponent):
         )
         self.previous_state = self.state.self_copy()
 
-        SingletonSimRepository().set_entry(key="number of apartments", entry=self.number_of_apartments)
-
+        SingletonSimRepository().set_entry(
+            key="number of apartments", entry=self.number_of_apartments
+        )
 
         # =================================================================================================================================
         # Input channels

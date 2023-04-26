@@ -16,7 +16,7 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
-def test_building_scalability():
+def test_occupancy_scalability():
     """Test function for the building module."""
 
     # Sets inputs
@@ -27,7 +27,7 @@ def test_building_scalability():
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
 
-    repo = component.SingletonSimRepository(test_value="test")
+    repo = component.SimRepository()
 
     # Set Residence
     my_residence_config = (
@@ -41,8 +41,7 @@ def test_building_scalability():
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_residence.set_singleton_sim_repo(repo)
-    my_residence.i_prepare_simulation()
+
 
     log.information("Building Code " + my_residence_config.building_code)
     log.information(
@@ -67,8 +66,7 @@ def test_building_scalability():
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_occupancy.set_singleton_sim_repo(repo)
-    my_occupancy.i_prepare_simulation()
+
 
     # Set Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -82,7 +80,7 @@ def test_building_scalability():
 
     # Set inputs
     number_of_outputs = fft.get_number_of_outputs(
-        [my_occupancy, my_weather, my_residence]
+        [my_weather, my_residence, my_occupancy]
     )
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
         number_of_outputs
@@ -100,7 +98,7 @@ def test_building_scalability():
         my_occupancy.heating_by_residentsC
     )
 
-    fft.add_global_index_of_components([my_occupancy, my_weather, my_residence])
+    fft.add_global_index_of_components([my_weather, my_residence, my_occupancy])
 
     log.information("Seconds per Timestep: " + str(seconds_per_timestep))
     log.information(
@@ -112,20 +110,20 @@ def test_building_scalability():
 
     my_residence.seconds_per_timestep = seconds_per_timestep
 
-    # Simulates
+    # First simulation
 
     my_weather.i_simulate(0, stsv, False)
     my_residence.i_simulate(0, stsv, False)
     my_occupancy.i_simulate(0, stsv, False)
 
-    occupancy_outputs = stsv.values[:4]
+    original_occupancy_outputs = stsv.values[-4:]
     log.information(
         "Occupancy Config Number of Apartments "
         + str(my_occupancy_config.number_of_apartments)
     )
-    log.information("Occupancy Outputs: " + str(occupancy_outputs))
+    log.information("Occupancy Outputs First Run: " + str(original_occupancy_outputs))
 
-    # check for different absolute conditioned floor areas
+    # Simulate again for different absolute conditioned floor areas
     scaling_factors = [1, 5, 10]
     for factor in scaling_factors:
         building_conditioned_floor_area_in_m2_scaled = (
@@ -144,10 +142,10 @@ def test_building_scalability():
             config=my_residence_config,
             my_simulation_parameters=my_simulation_parameters,
         )
-        # sim repo and i_prepare simulate must be called again to update the number of apartments
-        # the number of apartments is written in sim repository and occupancy reads the entry again in i_simulate
-        my_residence.set_singleton_sim_repo(repo)
-        my_residence.i_prepare_simulation()
+        my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config,
+        my_simulation_parameters=my_simulation_parameters,
+        )
 
         my_weather.i_simulate(0, stsv, False)
         my_residence.i_simulate(0, stsv, False)
@@ -161,8 +159,7 @@ def test_building_scalability():
         log.information(
             "Scaling factor apartments " + str(scaling_factor_number_of_apartments)
         )
-        occupancy_outputs_upscaled = stsv.values[0:4]
-
+        occupancy_outputs_upscaled = stsv.values[-4:]
         log.information(
             "Number of apartments in building upscaled "
             + str(number_of_apartments_building_upscaled)
@@ -174,5 +171,5 @@ def test_building_scalability():
 
         # test if occupancy outputs are upscaled correctly
         assert occupancy_outputs_upscaled == [
-            x * scaling_factor_number_of_apartments for x in occupancy_outputs
+            x * scaling_factor_number_of_apartments for x in original_occupancy_outputs
         ]

@@ -296,12 +296,12 @@ class Occupancy(cp.Component):
         # stsv.set_output_value(self.ww_mass_output, ww_mass_output)  # stsv.set_output_value(self.ww_temperature_output, ww_temperature_output)
         # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
-
+        log.information("occupancy i simulate, scaled number of residents: " + str(self.number_of_residents[timestep] * self.scaling_factor_according_to_number_of_apartments))
         stsv.set_output_value(
             self.number_of_residentsC,
-            self.number_of_residents[timestep]
-            * self.scaling_factor_according_to_number_of_apartments,
+            (self.number_of_residents[timestep] * self.scaling_factor_according_to_number_of_apartments),
         )
+
         stsv.set_output_value(
             self.heating_by_residentsC,
             self.heating_by_residents[timestep]

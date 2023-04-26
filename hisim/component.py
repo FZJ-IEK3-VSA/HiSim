@@ -134,6 +134,7 @@ class SingleTimeStepValues:
     def set_output_value(self, output: ComponentOutput, value: float) -> None:
         """ Sets a single output value in the single time step values array. """
         self.values[output.global_index] = value
+        log.information(f"stsv set output value {output.global_index}  {value}")
 
     def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:
         """ Checks if the values are sufficiently similar to another array. """

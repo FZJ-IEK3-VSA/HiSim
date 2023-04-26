@@ -254,7 +254,7 @@ def compute_kpis(
     :type simulation_parameters: SimulationParameters
     :return: Description for the report.
     :rtype: List[str]
-    """   
+    """
     # initialize prices
     price = 0.0
     co2 = 0.0

@@ -131,6 +131,7 @@ class CarBattery(Component):
                 InandOutputType.CHARGE_DISCHARGE,
                 ComponentType.CAR_BATTERY,
             ],
+            output_description=f"Charging power of the battery in Watt (Alternating current)",
         )
 
         self.p_bat: ComponentOutput = self.add_output(
@@ -138,6 +139,7 @@ class CarBattery(Component):
             field_name=self.DcBatteryPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
+            output_description=f"Charging power of the battery in Watt (Direct current).",
         )
 
         self.soc: ComponentOutput = self.add_output(
@@ -146,6 +148,7 @@ class CarBattery(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
+            output_description=f"State of charge of the battery.",
         )
 
         self.add_default_connections(

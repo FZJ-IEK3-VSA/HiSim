@@ -18,6 +18,7 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_source
 from hisim.components import controller_l1_building_heating
 from hisim.components import controller_l1_heatpump
+from hisim.components import controller_l1_chp
 from hisim.components import controller_l2_generic_heat_simple
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_hot_water_storage_modular
@@ -426,7 +427,7 @@ def configure_water_heating(
     water_heating_system_installed: lt.HeatingSystems,
     number_of_households: int,
     count: int,
-) -> int:
+) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
     """Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
     Parameters
@@ -495,7 +496,7 @@ def configure_water_heating(
     my_sim.add_component(my_heater)
 
     my_boiler.connect_only_predefined_connections(my_heater)
-    return count
+    return my_boiler, count
 
 
 def configure_water_heating_electric(
@@ -508,7 +509,7 @@ def configure_water_heating_electric(
     number_of_households: int,
     controlable: bool,
     count: int,
-) -> int:
+) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
     """Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
     Parameters
@@ -625,7 +626,7 @@ def configure_water_heating_electric(
             source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             source_weight=999,
         )
-    return count
+    return my_boiler, count
 
 
 def configure_heating(
@@ -1082,6 +1083,50 @@ def configure_heating_with_buffer(
     return my_heater, my_buffer, count
 
 
+def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
+                  my_boiler: generic_hot_water_storage_modular, chp_power: float, count: int) -> Tuple[generic_CHP.CHP, int]: 
+    """Sets up natural gas CHP.
+
+    :param my_sim: Simulation class.
+    :type my_sim: Any
+    :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
+    :type my_simulation_parameters: SimulationParameters
+    :param my_building: Building of the HiSIM example.
+    :type my_building: building.Building
+    :param my_boiler: Hot water storage of the HiSIM example.
+    :type my_building: generic_hot_water_storage_modular.HotWaterStorage
+    :param chp_power: Power of the CHP in Watt.
+    :type chp_power: float
+    :param count: Number of component outputs relevant in the energy management system.
+    :type count: int
+    :return: CHP component (instance of generic_CHP class) and new counter variable (+1).
+    :rtype: Tuple[generic_CHP.CHP, int]
+    """    
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config.source_weight = count
+    chp_config = generic_CHP.CHPConfig.get_default_config(name="CHP", total_power=chp_power)
+    chp_config.source_weight = count
+    count += 1
+
+    # fuel cell controller
+    my_chp_controller = controller_l1_chp.L1CHPController(
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
+        )
+    my_chp_controller.connect_only_predefined_connections(my_boiler)
+    my_chp_controller.connect_only_predefined_connections(my_building)
+    my_sim.add_component(my_chp_controller)
+
+    # fuel cell
+    my_chp = generic_CHP.CHP(
+        my_simulation_parameters=my_simulation_parameters, config=chp_config
+        )
+    # connect chp with controller intputs and add it to simulation
+    my_chp.connect_only_predefined_connections(my_chp_controller)
+    my_sim.add_component(my_chp)
+    
+    return my_chp, count
+
+
 def configure_elctrolysis_h2storage_chp_system(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
@@ -1091,7 +1136,7 @@ def configure_elctrolysis_h2storage_chp_system(
     h2_storage_size: Optional[float],
     electrolyzer_power: Optional[float],
     count: int,
-) -> Tuple[generic_CHP.GCHP, int]:
+) -> Tuple[generic_CHP.CHP, int]:
     """Sets electrolysis, H2-storage and chp system.
 
     Parameters

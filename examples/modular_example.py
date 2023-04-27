@@ -415,7 +415,7 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
-            number_of_households=int(my_building.buildingdata["n_Apartment"]),
+            number_of_households=int(my_building.buildingdata["n_Apartment"].iloc[0]),
             controlable=clever,
             count=count,
         )

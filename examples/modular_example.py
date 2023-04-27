@@ -199,11 +199,10 @@ def modular_household_explicit(
     chp_included = system_config_.chp_included
     if chp_included:
         chp_power = system_config_.chp_power
-    h2_storage_included = system_config_.h2_storage_included
-    if h2_storage_included:
+    hydrogen_setup_included = system_config_.hydrogen_setup_included
+    if hydrogen_setup_included:
+        fuel_cell_power = system_config_.fuel_cell_power
         h2_storage_size = system_config_.h2_storage_size
-    electrolyzer_included = system_config_.electrolyzer_included
-    if electrolyzer_included:
         electrolyzer_power = system_config_.electrolyzer_power
     ev_included = system_config_.ev_included
     charging_station = system_config_.charging_station
@@ -338,6 +337,7 @@ def modular_household_explicit(
     if needs_ems(
         battery_included,
         chp_included,
+        hydrogen_setup_included,
         ev_included,
         heating_system_installed,
         smart_devices_included,
@@ -399,7 +399,7 @@ def modular_household_explicit(
         lt.HeatingSystems.HEAT_PUMP,
         lt.HeatingSystems.ELECTRIC_HEATING,
     ]:
-        count = component_connections.configure_water_heating_electric(
+        my_boiler, count = component_connections.configure_water_heating_electric(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
@@ -412,7 +412,7 @@ def modular_household_explicit(
         """TODO: add heat pump cost. """
 
     else:
-        count = component_connections.configure_water_heating(
+        my_boiler, count = component_connections.configure_water_heating(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
@@ -496,32 +496,42 @@ def modular_household_explicit(
         )
 
     # """CHP + H2 STORAGE + ELECTROLYSIS"""
-    if chp_included and h2_storage_included and electrolyzer_included and clever:
-        (
-            my_chp,
-            count,
-        ) = component_connections.configure_elctrolysis_h2storage_chp_system(
+    if chp_included:
+        my_chp, count = component_connections.configure_chp(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_building=my_building,
-            my_electricity_controller=my_electricity_controller,
+            my_boiler=my_boiler,
             chp_power=chp_power,
-            h2_storage_size=h2_storage_size,
-            electrolyzer_power=electrolyzer_power,
-            count=count,
+            count=count
         )
-        if buffer_included:
-            my_buffer.connect_only_predefined_connections(my_chp)
-        else:
-            my_building.connect_input(
-                input_fieldname=my_building.ThermalPowerDelivered,
-                src_object_name=my_chp.component_name,
-                src_field_name=my_chp.ThermalPowerOutputBuilding,
-            )
+    # if chp_included and h2_storage_included and electrolyzer_included and clever:
+    #     (
+    #         my_chp,
+    #         count,
+    #     ) = component_connections.configure_elctrolysis_h2storage_chp_system(
+    #         my_sim=my_sim,
+    #         my_simulation_parameters=my_simulation_parameters,
+    #         my_building=my_building,
+    #         my_electricity_controller=my_electricity_controller,
+    #         chp_power=chp_power,
+    #         h2_storage_size=h2_storage_size,
+    #         electrolyzer_power=electrolyzer_power,
+    #         count=count,
+    #     )
+    #     if buffer_included:
+    #         my_buffer.connect_only_predefined_connections(my_chp)
+    #     else:
+    #         my_building.connect_input(
+    #             input_fieldname=my_building.ThermalPowerDelivered,
+    #             src_object_name=my_chp.component_name,
+    #             src_field_name=my_chp.ThermalPowerOutputBuilding,
+    #         )
 
     if needs_ems(
         battery_included,
         chp_included,
+        hydrogen_setup_included,
         ev_included,
         heating_system_installed,
         smart_devices_included,
@@ -533,6 +543,7 @@ def modular_household_explicit(
 def needs_ems(
     battery_included,
     chp_included,
+    hydrogen_setup_included,
     ev_included,
     heating_system_installed,
     smart_devices_included,
@@ -542,6 +553,8 @@ def needs_ems(
     if battery_included:
         return True
     if chp_included:
+        return True
+    if hydrogen_setup_included:
         return True
     if smart_devices_included:
         return True

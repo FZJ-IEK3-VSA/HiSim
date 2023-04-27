@@ -55,7 +55,6 @@ def test_building():
     #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
     #         log.information(building_code)
 
-
     t_three = time.perf_counter()
     log.profile(f"T2:{t_three - t_two}")
 
@@ -84,7 +83,9 @@ def test_building():
     my_residence.i_prepare_simulation()
 
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -112,9 +113,7 @@ def test_building():
     )
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = (
-        my_weather.DNI_output
-    )
+    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
     my_residence.direct_horizontal_irradiance_channel.source_output = (
         my_weather.DHI_output
     )

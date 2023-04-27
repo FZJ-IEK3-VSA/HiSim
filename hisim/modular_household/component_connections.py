@@ -1084,7 +1084,7 @@ def configure_heating_with_buffer(
 
 
 def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
-                  my_boiler: generic_hot_water_storage_modular, chp_power: float, count: int) -> Tuple[generic_CHP.CHP, int]: 
+                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> Tuple[generic_CHP.CHP, int]: 
     """Sets up natural gas CHP.
 
     :param my_sim: Simulation class.
@@ -1101,14 +1101,10 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     :type count: int
     :return: CHP component (instance of generic_CHP class) and new counter variable (+1).
     :rtype: Tuple[generic_CHP.CHP, int]
-    """    
+    """
+    # configure and add chp controller    
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
-    chp_config = generic_CHP.CHPConfig.get_default_config(name="CHP", total_power=chp_power)
-    chp_config.source_weight = count
-    count += 1
-
-    # fuel cell controller
     my_chp_controller = controller_l1_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
         )
@@ -1116,13 +1112,23 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     my_chp_controller.connect_only_predefined_connections(my_building)
     my_sim.add_component(my_chp_controller)
 
-    # fuel cell
+    # size chp power to hot water storage size
+    my_boiler.config.compute_default_cycle(
+        temperature_difference_in_kelvin=chp_controller_config.t_max_dhw_in_celsius - chp_controller_config.t_min_dhw_in_celsius)
+    chp_power = chp_power * my_boiler.config.energy_full_cycle * 3.6e6 / chp_controller_config.min_operation_time_in_seconds
+
+    # configure and add chp
+    chp_config = generic_CHP.CHPConfig.get_default_config_chp(total_power=chp_power)
+    chp_config.source_weight = count
     my_chp = generic_CHP.CHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
     # connect chp with controller intputs and add it to simulation
     my_chp.connect_only_predefined_connections(my_chp_controller)
     my_sim.add_component(my_chp)
+    my_boiler.connect_only_predefined_connections(my_chp)
+
+    count += 1
     
     return my_chp, count
 

@@ -295,11 +295,11 @@ class L1CHPController(cp.Component):
             # only consider water heating in summer
             self.state.mode = 0
             return
-        t_building = stsv.get_input_value(self.building_temperature_channel)
-        t_dhw = stsv.get_input_value(self.dhw_temperature_channel)
-        soc_dhw = (t_dhw - self.config.t_min_dhw_in_celsius) / (self.config.t_max_dhw_in_celsius - self.config.t_max_dhw_in_celsius)
-        soc_building = (t_building - self.config.t_min_heating_in_celsius) / (self.config.t_max_heating_in_celsius - self.config.t_max_heating_in_celsius)
-        if soc_dhw > soc_building:
+        # calculate heating level of DHW storage and building
+        soc_dhw = (t_dhw - self.config.t_min_dhw_in_celsius) / (self.config.t_max_dhw_in_celsius - self.config.t_min_dhw_in_celsius)
+        soc_building = (t_building - self.config.t_min_heating_in_celsius) / (self.config.t_max_heating_in_celsius - self.config.t_min_heating_in_celsius)
+        
+        if soc_building >= soc_dhw:
             self.state.mode = 0
             return
         self.state.mode = 1
@@ -327,6 +327,7 @@ class L1CHPController(cp.Component):
             and t_building >= self.config.t_min_heating_in_celsius - 30
         ):
             # only consider water heating in summer
+            print(timestep, t_dhw)
             if t_dhw < self.config.t_min_dhw_in_celsius:
                 self.state.activate(timestep)  # activate CHP when storage temperature is too low
                 return
@@ -334,6 +335,7 @@ class L1CHPController(cp.Component):
                 self.state.deactivate(timestep)  # deactivate CHP when storage temperature is too high
                 return
         else:
+            print(timestep, t_dhw, t_building)
             if t_building < self.config.t_min_heating_in_celsius or t_dhw < self.config.t_min_dhw_in_celsius:
                 # activate heating when either dhw storage or building temperature is too low
                 self.state.activate(timestep)

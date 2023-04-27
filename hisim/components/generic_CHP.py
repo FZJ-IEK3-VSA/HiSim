@@ -6,7 +6,7 @@ on or off. When it runs, it outputs a constant thermal and electrical power sign
 and needs a constant input of hydrogen or natural gas."""
 
 from dataclasses import dataclass
-from typing import List, Any
+from typing import List
 
 from dataclasses_json import dataclass_json
 
@@ -28,7 +28,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class CHPConfig:
+class CHPConfig(cp.ConfigBase):
     """Defininition of configuration of combined heat and power plant (CHP)."""
     #: name of the CHP
     name: str
@@ -159,6 +159,7 @@ class CHP(cp.Component):
                 lt.Units.WATT_HOUR,
                 output_description="Gas consumption of CHP in Wh."
             )
+        self.add_default_connections(self.get_default_connections_from_chp_controller())
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""

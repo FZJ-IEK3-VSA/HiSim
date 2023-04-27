@@ -3,7 +3,9 @@
 The aim is to test whether the occupancy outputs scale with the number of apartments of the building.
 """
 # clean
+from typing import Any, List, Tuple
 import pytest
+
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -19,12 +21,45 @@ from tests import functions_for_testing as fft
 def test_occupancy_scalability():
     """Test function for the building module."""
 
+    (
+        original_occupancy_outputs,
+        scaling_factor_apartments_zero,
+    ) = simulation_for_one_time_step(
+        scaling_factor_for_absolute_conditioned_floor_area=1
+    )
+    log.information(
+        str(original_occupancy_outputs) + " " + str(scaling_factor_apartments_zero)
+    )
+    (
+        scaled_occupancy_outputs,
+        scaling_factor_apartments_one,
+    ) = simulation_for_one_time_step(
+        scaling_factor_for_absolute_conditioned_floor_area=3
+    )
+    log.information(
+        str(scaled_occupancy_outputs) + " " + str(scaling_factor_apartments_one)
+    )
+    # test if occupancy outputs are upscaled correctly
+    assert scaled_occupancy_outputs == [
+        x * scaling_factor_apartments_one for x in original_occupancy_outputs
+    ]
+
+
+def simulation_for_one_time_step(
+    scaling_factor_for_absolute_conditioned_floor_area: int,
+) -> Tuple[List[float], Any]:
+    """Simulate for one timestep and one scaling factor for the floor area."""
     # Sets inputs
-    absolute_conditioned_floor_area_in_m2 = None
+    absolute_conditioned_floor_area_in_m2 = 121.2
     number_of_apartments = None
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
+    )
+
+    building_conditioned_floor_area_in_m2_scaled = (
+        scaling_factor_for_absolute_conditioned_floor_area
+        * absolute_conditioned_floor_area_in_m2
     )
 
     repo = component.SimRepository()
@@ -34,7 +69,7 @@ def test_occupancy_scalability():
         building.BuildingConfig.get_default_german_single_family_home()
     )
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
-        absolute_conditioned_floor_area_in_m2
+        building_conditioned_floor_area_in_m2_scaled
     )
     my_residence_config.number_of_apartments = number_of_apartments
     my_residence = building.Building(
@@ -42,31 +77,30 @@ def test_occupancy_scalability():
         my_simulation_parameters=my_simulation_parameters,
     )
 
-
-    log.information("Building Code " + my_residence_config.building_code)
+    log.information("Set Building Code " + my_residence_config.building_code)
     log.information(
-        "Building Config Number of Apartments "
+        "Set Building Config Number of Apartments "
         + str(my_residence_config.number_of_apartments)
     )
     log.information(
-        "Building Config Absolute Conditioned Floor Area: "
+        "Set Building Config Absolute Conditioned Floor Area: "
         + str(my_residence_config.absolute_conditioned_floor_area_in_m2)
     )
 
-    building_conditioned_floor_area_in_m2 = (
-        my_residence.scaled_conditioned_floor_area_in_m2
-    )
     building_number_of_apartments = my_residence.number_of_apartments
 
     # Set Occupancy
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     )
+    log.information(
+        "Set Occupancy Config Number of Apartments "
+        + str(my_occupancy_config.number_of_apartments)
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-
 
     # Set Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -102,74 +136,25 @@ def test_occupancy_scalability():
 
     log.information("Seconds per Timestep: " + str(seconds_per_timestep))
     log.information(
-        "Building Conditioned Floor Area " + str(building_conditioned_floor_area_in_m2)
+        "Building Conditioned Floor Area "
+        + str(building_conditioned_floor_area_in_m2_scaled)
     )
     log.information(
-        "Building Number of apartments " + str(building_number_of_apartments) + "\n"
+        "Building Number of apartments " + str(building_number_of_apartments)
     )
 
     my_residence.seconds_per_timestep = seconds_per_timestep
 
     # First simulation
 
-    my_weather.i_simulate(0, stsv, False)
-    my_residence.i_simulate(0, stsv, False)
-    my_occupancy.i_simulate(0, stsv, False)
+    my_weather.i_simulate(1, stsv, False)
+    my_residence.i_simulate(1, stsv, False)
+    my_occupancy.i_simulate(1, stsv, False)
 
-    original_occupancy_outputs = stsv.values[-4:]
-    log.information(
-        "Occupancy Config Number of Apartments "
-        + str(my_occupancy_config.number_of_apartments)
+    scaling_factor_number_of_apartments = (
+        building_number_of_apartments / my_occupancy_config.number_of_apartments
     )
-    log.information("Occupancy Outputs First Run: " + str(original_occupancy_outputs))
 
-    # Simulate again for different absolute conditioned floor areas
-    scaling_factors = [1, 5, 10]
-    for factor in scaling_factors:
-        building_conditioned_floor_area_in_m2_scaled = (
-            factor * building_conditioned_floor_area_in_m2
-        )
-        log.information(
-            "Building conditioned floor area "
-            + str(factor)
-            + " times upscaled: "
-            + str(building_conditioned_floor_area_in_m2_scaled)
-        )
-        my_residence_config.absolute_conditioned_floor_area_in_m2 = (
-            building_conditioned_floor_area_in_m2_scaled
-        )
-        my_residence = building.Building(
-            config=my_residence_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
-        my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config,
-        my_simulation_parameters=my_simulation_parameters,
-        )
+    occupancy_outputs = stsv.values[-4:]
 
-        my_weather.i_simulate(0, stsv, False)
-        my_residence.i_simulate(0, stsv, False)
-        my_occupancy.i_simulate(0, stsv, False)
-
-        number_of_apartments_building_upscaled = my_residence.number_of_apartments
-        scaling_factor_number_of_apartments = (
-            number_of_apartments_building_upscaled
-            / my_occupancy_config.number_of_apartments
-        )
-        log.information(
-            "Scaling factor apartments " + str(scaling_factor_number_of_apartments)
-        )
-        occupancy_outputs_upscaled = stsv.values[-4:]
-        log.information(
-            "Number of apartments in building upscaled "
-            + str(number_of_apartments_building_upscaled)
-        )
-
-        log.information(
-            "Occupancy outputs upscaled " + str(occupancy_outputs_upscaled) + "\n"
-        )
-
-        # test if occupancy outputs are upscaled correctly
-        assert occupancy_outputs_upscaled == [
-            x * scaling_factor_number_of_apartments for x in original_occupancy_outputs
-        ]
+    return occupancy_outputs, scaling_factor_number_of_apartments

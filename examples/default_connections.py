@@ -72,18 +72,9 @@ def basic_household_with_default_connections(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_sim.add_component(my_base_electricity_load_profile)
-
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_sim.add_component(my_building)
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
@@ -91,6 +82,7 @@ def basic_household_with_default_connections(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_occupancy)
+
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -100,6 +92,16 @@ def basic_household_with_default_connections(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_weather)
+
+    # Build Grid and connect building inputs
+    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
+        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.add_component(my_base_electricity_load_profile)
+
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+    my_sim.add_component(my_building)
 
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(

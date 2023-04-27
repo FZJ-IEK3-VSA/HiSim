@@ -3,7 +3,7 @@
 from typing import Any, Dict
 from threading import Lock
 from hisim import loadtypes as lt
-
+import enum
 
 # https://refactoring.guru/design-patterns/singleton/python/example#example-1
 
@@ -41,26 +41,26 @@ class SingletonSimRepository(metaclass=SingletonMeta):
 
     def __init__(self) -> None:
         """Initializes the SimRepository."""
-        self.my_dict: Dict[str, Any] = {}
+        self.my_dict: Dict[Any, Any] = {}
         self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {
             elem: {} for elem in lt.ComponentType
         }
 
-    def set_entry(self, key: str, entry: Any) -> None:
+    def set_entry(self, key: Any, entry: Any) -> None:
         """Sets an entry in the SimRepository."""
         self.my_dict[key] = entry
 
-    def get_entry(self, key: str) -> Any:
+    def get_entry(self, key: Any) -> Any:
         """Gets an entry from the SimRepository."""
         return self.my_dict[key]
 
-    def exist_entry(self, key: str) -> bool:
+    def exist_entry(self, key: Any) -> bool:
         """Checks if an entry exists."""
         if key in self.my_dict:
             return True
         return False
 
-    def delete_entry(self, key: str) -> None:
+    def delete_entry(self, key: Any) -> None:
         """Deletes an existing entry."""
         self.my_dict.pop(key)
 
@@ -96,3 +96,9 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         del self.my_dict
         self.my_dynamic_dict.clear()
         del self.my_dynamic_dict
+
+class SingletonDictKeyEnum(enum.Enum):
+
+    """Class for setting dictionary keys in the singleton sim repository."""
+
+    NUMBEROFAPARTMENTS = 1

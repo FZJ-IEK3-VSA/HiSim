@@ -14,7 +14,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -155,11 +155,10 @@ class Occupancy(cp.Component):
         self.occupancyConfig = config
         self.build()
 
-        if SingletonSimRepository().exist_entry(key="number of apartments"):
-            self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(key="number of apartments")
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
+            self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
         else:
-            self.real_number_of_apartments_from_building = self.occupancyConfig.number_of_apartments
-            log.warning("number of apartments was not found in singleton sim repository. you might want to check the order of the initialization of your components in your example.")
+            raise KeyError("Key was not found in the singleton sim repository. Please check the order of the initialization of the components in your example.")
 
         self.scaling_factor_according_to_number_of_apartments = (
             self.get_scaling_factor_according_to_number_of_apartments(

@@ -79,7 +79,7 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-from hisim.sim_repository_singleton import SingletonSimRepository
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -354,7 +354,7 @@ class Building(dynamic_component.DynamicComponent):
         self.previous_state = self.state.self_copy()
 
         SingletonSimRepository().set_entry(
-            key="number of apartments", entry=self.number_of_apartments
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=self.number_of_apartments
         )
 
         # =================================================================================================================================

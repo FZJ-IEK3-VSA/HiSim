@@ -2,10 +2,12 @@
 # clean
 from typing import Any, Dict
 from threading import Lock
-from hisim import loadtypes as lt
 import enum
+from hisim import loadtypes as lt
+
 
 # https://refactoring.guru/design-patterns/singleton/python/example#example-1
+
 
 class SingletonMeta(type):
 
@@ -96,6 +98,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         del self.my_dict
         self.my_dynamic_dict.clear()
         del self.my_dynamic_dict
+
 
 class SingletonDictKeyEnum(enum.Enum):
 

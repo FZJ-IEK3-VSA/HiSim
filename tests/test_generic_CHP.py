@@ -42,7 +42,7 @@ def test_chp_system():
     my_chp_controller.ElectricityTargetC.source_output = electricity_target
     my_chp_controller.HydrogenSOCC.source_output = hydrogensoc
     my_chp_controller.l2_DeviceSignalC.source_output = l2_devicesignal
-    my_chp.L1DeviceSignalC.source_output = my_chp_controller.L1DeviceSignalC
+    my_chp.chp_onoff_signal_channel.source_output = my_chp_controller.L1DeviceSignalC
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components([my_chp, my_chp_controller, electricity_target, hydrogensoc, l2_devicesignal])
@@ -56,9 +56,9 @@ def test_chp_system():
         my_chp_controller.i_simulate(t, stsv, False)
         my_chp.i_simulate(t, stsv, False)
 
-    assert stsv.values[my_chp.ThermalPowerDeliveredC.global_index] == 3000
-    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 2000
-    assert stsv.values[my_chp.FuelDeliveredC.global_index] > 4e-5
+    assert stsv.values[my_chp.thermal_power_output_channel.global_index] == 3000
+    assert stsv.values[my_chp.electricity_output_channel.global_index] == 2000
+    assert stsv.values[my_chp.fuel_consumption_channel.global_index] > 4e-5
 
     # #test if chp shuts down when too little hydrogen in storage and electricty as well as heat needed
     stsv.values[electricity_target.global_index] = 2.5e3
@@ -69,9 +69,9 @@ def test_chp_system():
         my_chp_controller.i_simulate(tt, stsv, False)
         my_chp.i_simulate(tt, stsv, False)
 
-    assert stsv.values[my_chp.ThermalPowerDeliveredC.global_index] == 0
-    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
-    assert stsv.values[my_chp.FuelDeliveredC.global_index] == 0
+    assert stsv.values[my_chp.thermal_power_output_channel.global_index] == 0
+    assert stsv.values[my_chp.electricity_output_channel.global_index] == 0
+    assert stsv.values[my_chp.fuel_consumption_channel.global_index] == 0
 
     # test if chp shuts down when hydrogen is ok, electricity is needed, but heat not
     stsv.values[electricity_target.global_index] = 2.5e3
@@ -90,9 +90,9 @@ def test_chp_system():
         my_chp_controller.i_simulate(it, stsv, False)
         my_chp.i_simulate(it, stsv, False)
 
-    assert stsv.values[my_chp.ThermalPowerDeliveredC.global_index] == 0
-    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
-    assert stsv.values[my_chp.FuelDeliveredC.global_index] == 0
+    assert stsv.values[my_chp.thermal_power_output_channel.global_index] == 0
+    assert stsv.values[my_chp.electricity_output_channel.global_index] == 0
+    assert stsv.values[my_chp.fuel_consumption_channel.global_index] == 0
 
     # test if chp shuts down when hydrogen is ok, heat is needed, but electricity not
     stsv.values[electricity_target.global_index] = 2.5e3
@@ -111,6 +111,6 @@ def test_chp_system():
         my_chp_controller.i_simulate(tt, stsv, False)
         my_chp.i_simulate(tt, stsv, False)
 
-    assert stsv.values[my_chp.ThermalPowerDeliveredC.global_index] == 0
-    assert stsv.values[my_chp.ElectricityOutputC.global_index] == 0
-    assert stsv.values[my_chp.FuelDeliveredC.global_index] == 0
+    assert stsv.values[my_chp.thermal_power_output_channel.global_index] == 0
+    assert stsv.values[my_chp.electricity_output_channel.global_index] == 0
+    assert stsv.values[my_chp.fuel_consumption_channel.global_index] == 0

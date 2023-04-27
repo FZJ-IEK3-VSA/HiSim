@@ -102,6 +102,11 @@ def test_house_with_pv_and_hp_for_heating_test(
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
@@ -114,12 +119,6 @@ def test_house_with_pv_and_hp_for_heating_test(
     )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
-
-    # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump

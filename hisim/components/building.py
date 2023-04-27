@@ -943,7 +943,7 @@ class Building(dynamic_component.DynamicComponent):
         ].values[0]
 
         for index, windows_direction in enumerate(self.windows_directions):
-            window_area = float(self.buildingdata["A_Window_" + windows_direction])
+            window_area = float(self.buildingdata["A_Window_" + windows_direction].iloc[0])
             if window_area != 0.0:
                 if windows_direction == "Horizontal":
                     window_tilt_angle = 0
@@ -1097,7 +1097,7 @@ class Building(dynamic_component.DynamicComponent):
         self.scaled_window_areas_in_m2 = []
         for windows_direction in self.windows_directions:
             window_area_in_m2 = float(
-                self.buildingdata["A_Window_" + windows_direction]
+                self.buildingdata["A_Window_" + windows_direction].iloc[0]
             )
             if self.scaling_factor != 1.0:
                 factor_window_area_to_wall_area_tabula = (
@@ -1357,10 +1357,10 @@ class Building(dynamic_component.DynamicComponent):
         self.thermal_conductance_by_ventilation_in_watt_per_kelvin = (
             heat_capacity_of_air_per_volume_in_watt_hour_per_m3_per_kelvin
             * float(
-                self.buildingdata["n_air_use"] + self.buildingdata["n_air_infiltration"]
+                self.buildingdata["n_air_use"].iloc[0] + self.buildingdata["n_air_infiltration"].iloc[0]
             )
             * self.scaled_conditioned_floor_area_in_m2
-            * float(self.buildingdata["h_room"])
+            * float(self.buildingdata["h_room"].iloc[0])
         )
 
     def get_conductances(

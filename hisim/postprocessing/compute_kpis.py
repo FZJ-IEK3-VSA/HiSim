@@ -30,7 +30,7 @@ def get_euro_and_co2(
 ) -> Tuple[float, float]:
     """Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel."""
     column = fuel_costs.iloc[fuel_costs.index == fuel.value]
-    return (float(column["EUR per kWh"]), float(column["kgC02 per kWh"]))
+    return (float(column["EUR per kWh"].iloc[0]), float(column["kgC02 per kWh"].iloc[0]))
 
 
 def compute_consumption_production(

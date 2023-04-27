@@ -77,12 +77,13 @@ def basic_household_with_default_connections(
     )
 
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_occupancy)
-
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -125,10 +126,13 @@ def basic_household_with_default_connections(
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(name="GenericHeatPumpController", temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(
+            name="GenericHeatPumpController",
+            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+            offset=offset,
+            mode=hp_mode,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump_controller.connect_only_predefined_connections(my_building)

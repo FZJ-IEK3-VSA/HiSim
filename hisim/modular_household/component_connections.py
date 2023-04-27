@@ -1126,7 +1126,13 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     # connect chp with controller intputs and add it to simulation
     my_chp.connect_only_predefined_connections(my_chp_controller)
     my_sim.add_component(my_chp)
+
+    # connect power output of CHP
     my_boiler.connect_only_predefined_connections(my_chp)
+    my_building.connect_input(input_fieldname=my_building.ThermalPowerCHP,
+                              src_object_name=my_chp.component_name,
+                              src_field_name=my_chp.ThermalPowerOutputBuilding,
+)
 
     count += 1
     

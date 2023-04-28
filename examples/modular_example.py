@@ -311,6 +311,14 @@ def modular_household_explicit(
             source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             source_weight=999,
         )
+        my_electricity_controller.add_component_inputs_and_connect(
+            source_component_classes=production,
+            outputstring="ElectricityOutput",
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            source_weight=999,
+        )
 
     # """ EV BATTERY """
     if ev_included:
@@ -438,24 +446,26 @@ def modular_household_explicit(
         )
 
     # """CHP + H2 STORAGE + ELECTROLYSIS"""
-    if chp_included and not buffer_included and clever:
-        production, count = component_connections.configure_chp(
+    if chp_included and not buffer_included:
+        count = component_connections.configure_chp(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_building=my_building,
             my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            production=production,
+            controlable=clever,
             count=count,
         )
-    if chp_included and buffer_included and clever:
-        production, count = component_connections.configure_chp_with_buffer(
+    if chp_included and buffer_included:
+        count = component_connections.configure_chp_with_buffer(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_buffer=my_buffer,
             my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            production=production,
+            controlable=clever,
             count=count,
         )
 
@@ -491,14 +501,6 @@ def modular_household_explicit(
         smart_devices_included,
         water_heating_system_installed,
     ):
-        my_electricity_controller.add_component_inputs_and_connect(
-            source_component_classes=production,
-            outputstring="ElectricityOutput",
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-            source_weight=999,
-        )
         my_sim.add_component(my_electricity_controller)
 
 

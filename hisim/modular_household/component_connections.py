@@ -1085,8 +1085,9 @@ def configure_heating_with_buffer(
 
 
 def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
-                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float,
-                  production: List, count: int) -> Tuple[List, int]:
+                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
+                  my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+                  chp_power: float, controlable: bool, count: int, ) -> int:
     """Sets up natural gas CHP. It heats the DHW storage and the building in winter.
 
     :param my_sim: Simulation class.
@@ -1097,14 +1098,16 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     :type my_building: building.Building
     :param my_boiler: Hot water storage of the HiSIM example.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
+    :param my_electricity_controller: Energy Management System of the HiSIM example
+    :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param chp_power: Power of the CHP in multiples of default (<=1).
     :type chp_power: float
-    :param production: _description_
-    :type production: List
+    :param controlable: When True, surplus control of Energy Management System is activated.
+    :type controlable: bool
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
-    :return: Collection of HiSIM components producing electricity and new counter variable (+1).
-    :rtype: Tuple[List,int]
+    :return: New counter variable (+1).
+    :rtype: int
     """
 
     # configure and add chp controller
@@ -1132,21 +1135,52 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     my_chp.connect_only_predefined_connections(my_chp_controller)
     my_sim.add_component(my_chp)
 
-    # connect power output of CHP
+    # connect thermal power output of CHP
     my_boiler.connect_only_predefined_connections(my_chp)
     my_building.connect_input(input_fieldname=my_building.ThermalPowerCHP,
                               src_object_name=my_chp.component_name,
                               src_field_name=my_chp.ThermalPowerOutputBuilding,
                               )
-    production.append(my_chp)
+ 
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_chp,
+        source_component_output="ElectricityOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.CHP, lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=my_chp.config.source_weight,
+    )
+
+    # connect to EMS electricity controller
+    if controlable:
+        ems_target_electricity = my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.CHP,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=my_chp.config.source_weight,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for CHP. ",
+        )
+
+        my_chp_controller.connect_dynamic_input(
+            input_fieldname=my_chp_controller.ElectricityTarget,
+            src_object=ems_target_electricity,
+        )
+
+    # counting variable
     count += 1
 
-    return production, count
+    return count
 
 
 def configure_chp_with_buffer(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
-        my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, production: List, count: int) -> Tuple[List, int]:
+        my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
+        my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        chp_power: float, controlable: bool, count: int, ) -> int:
     """Sets up natural gas CHP. It heats the DHW storage and the buffer storage for heating.
 
     :param my_sim: Simulation class.
@@ -1157,14 +1191,16 @@ def configure_chp_with_buffer(
     :type my_buffer: generic_hot_water_storage_modular.HotWaterStorage
     :param my_boiler: Hot water storage of the HiSIM example.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
+    :param my_electricity_controller: Energy Management System of the HiSIM example
+    :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param chp_power: Power of the CHP in multiples of default (<=1)
     :type chp_power: float
-    :param production: _description_
-    :type production: List
+    :param controlable: When True, surplus control of Energy Management System is activated.
+    :type controlable: bool
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
-    :return: Collection of HiSIM components producing electricity and new counter variable (+1).
-    :rtype: Tuple[List,int]
+    :return: New counter variable (+1).
+    :rtype: int
     """
     # configure and add chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
@@ -1201,10 +1237,38 @@ def configure_chp_with_buffer(
         src_field_name=my_chp.ThermalPowerOutputBuilding,
         )
 
-    production.append(my_chp)
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_chp,
+        source_component_output="ElectricityOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.CHP, lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=my_chp.config.source_weight,
+    )
+
+    # connect to EMS electricity controller
+    if controlable:
+        ems_target_electricity = my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.CHP,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=my_chp.config.source_weight,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for CHP. ",
+        )
+
+        my_chp_controller.connect_dynamic_input(
+            input_fieldname=my_chp_controller.ElectricityTarget,
+            src_object=ems_target_electricity,
+        )
+
+    # counting variable
     count += 1
 
-    return production, count
+    return count
 
 
 def configure_elctrolysis_h2storage_chp_system(

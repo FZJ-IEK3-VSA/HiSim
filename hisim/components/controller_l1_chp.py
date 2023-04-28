@@ -4,6 +4,7 @@
 """ Generic CHP controller with minimal runtime.
 
 Heat is transfered to the drain hot water storage and either the buffer storage or the building directly.
+CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is only activated when both electricity and heat are needed.
 """
 
 # Owned
@@ -137,6 +138,7 @@ class L1CHPController(cp.Component):
     # Inputs
     BuildingTemperature = "BuildingTemperature"
     HotWaterStorageTemperature = "HotWaterStorageTemperature"
+    ElectricityTarget = "ElectricityTarget"
 
     # Outputs
     CHPControllerOnOffSignal = "CHPControllerOnOffSignal"
@@ -216,6 +218,14 @@ class L1CHPController(cp.Component):
             mandatory=True,
         )
 
+        self.electricity_target_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricityTarget,
+            LoadTypes.ELECTRICITY,
+            Units.WATT,
+            mandatory=False,
+        )
+
         self.add_default_connections(
             self.get_default_connections_generic_hot_water_storage_modular()
         )
@@ -278,6 +288,10 @@ class L1CHPController(cp.Component):
         else:
             t_building = stsv.get_input_value(self.building_temperature_channel)
             t_dhw = stsv.get_input_value(self.dhw_temperature_channel)
+            if self.electricity_target_channel.source_output is not None:
+                electricity_target = stsv.get_input_value(self.electricity_target_channel)
+            else:
+                electricity_target = 0
             self.determine_heating_mode(timestep, stsv, t_building, t_dhw)
             self.calculate_state(timestep, stsv, t_building, t_dhw)
             self.processed_state = self.state.clone()
@@ -322,6 +336,7 @@ class L1CHPController(cp.Component):
         ):
             # mandatory off, minimum resting time not reached
             return
+        # control according to set temperatures
         if (
             self.heating_season_begin > timestep > self.heating_season_end
             and t_building >= self.config.t_min_heating_in_celsius - 30

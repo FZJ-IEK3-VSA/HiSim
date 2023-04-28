@@ -264,7 +264,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             stsv.set_output_value(output=output, value=deltademand)
             deltademand = deltademand - previous_signal
 
-        elif component_type == lt.ComponentType.FUEL_CELL:
+        elif component_type in [lt.ComponentType.FUEL_CELL, lt.ComponentType.CHP]:
             if deltademand < 0:
                 stsv.set_output_value(output=output, value=deltademand)
                 deltademand = deltademand + previous_signal
@@ -291,7 +291,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def postprocess_battery(
         self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int
     ) -> Any:
-        """ Updates battery signal and total demand, if behaviour of battery changed in given iteration. """
+        """Updates battery signal and total demand, if behaviour of battery changed in given iteration. """
         previous_signal = stsv.get_input_value(component_input=self.inputs_sorted[ind])
         stsv.set_output_value(
             output=self.outputs_sorted[ind], value=deltademand + previous_signal
@@ -309,36 +309,31 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output = self.outputs_sorted[ind]
             if component_type in [
                 lt.ComponentType.BATTERY,
-                lt.ComponentType.FUEL_CELL,
+                lt.ComponentType.CHP,
                 lt.ComponentType.ELECTROLYZER,
                 lt.ComponentType.HEAT_PUMP,
                 lt.ComponentType.SMART_DEVICE,
                 lt.ComponentType.CAR_BATTERY,
-            ]:
-                if not skip_chp or component_type in [
-                    lt.ComponentType.BATTERY,
-                    lt.ComponentType.ELECTROLYZER,
-                    lt.ComponentType.HEAT_PUMP,
-                    lt.ComponentType.SMART_DEVICE,
-                    lt.ComponentType.CAR_BATTERY,
-                ]:
-                    (
-                        delta_demand,
-                        is_battery,
-                    ) = self.control_electricity_component_iterative(
-                        deltademand=delta_demand,
-                        stsv=stsv,
-                        component_type=component_type,
-                        input_channel=single_input,
-                        output=output,
-                    )
-                else:
-                    stsv.set_output_value(output=output, value=0)
-                if is_battery is not None:
-                    delta_demand = self.postprocess_battery(
-                        deltademand=delta_demand, stsv=stsv, ind=is_battery
-                    )
-                    skip_chp = True
+            ] or (not skip_chp and component_type in [
+                lt.ComponentType.CHP,
+            ]):
+                (
+                    delta_demand,
+                    is_battery,
+                ) = self.control_electricity_component_iterative(
+                    deltademand=delta_demand,
+                    stsv=stsv,
+                    component_type=component_type,
+                    input_channel=single_input,
+                    output=output,
+                )
+            else:
+                stsv.set_output_value(output=output, value=0)
+            if is_battery is not None:
+                delta_demand = self.postprocess_battery(
+                    deltademand=delta_demand, stsv=stsv, ind=is_battery
+                )
+                skip_chp = True
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
@@ -349,6 +344,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         if timestep == 0:
             self.sort_source_weights_and_components()
+            print([elem.source_output.field_name for elem in self.consumption_ems_controlled_inputs])
 
         # ELECTRICITY #
 

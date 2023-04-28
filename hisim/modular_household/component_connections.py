@@ -1095,12 +1095,12 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     :type my_building: building.Building
     :param my_boiler: Hot water storage of the HiSIM example.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
-    :param chp_power: Power of the CHP in Watt.
+    :param chp_power: Power of the CHP in multiples of default (<=1).
     :type chp_power: float
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
-    :return: CHP component (instance of generic_CHP class) and new counter variable (+1).
-    :rtype: Tuple[generic_CHP.CHP, int]
+    :return: New counter variable (+1).
+    :rtype: int
     """
     # configure and add chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
@@ -1152,12 +1152,12 @@ def configure_chp_with_buffer(
     :type my_buffer: generic_hot_water_storage_modular.HotWaterStorage
     :param my_boiler: Hot water storage of the HiSIM example.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
-    :param chp_power: Power of the CHP in Watt.
+    :param chp_power: Power of the CHP in multiples of default (<=1)
     :type chp_power: float
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
-    :return: CHP component (instance of generic_CHP class) and new counter variable (+1).
-    :rtype: Tuple[generic_CHP.CHP, int]
+    :return: New counter variable (+1).
+    :rtype: int
     """
     # configure and add chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
@@ -1196,7 +1196,7 @@ def configure_chp_with_buffer(
 
     count += 1
 
-    return my_chp, count
+    return count
 
 
 def configure_elctrolysis_h2storage_chp_system(

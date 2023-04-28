@@ -10,10 +10,11 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
+    ConfigBase
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from typing import Optional
+from typing import Optional, Any, List
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -222,63 +223,77 @@ class HeatPumpHplib(Component):
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
+    
+    def i_prepare_simulation(self) -> None:
+        pass
 
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        # Parameter
-        time_on_min = 600  # [s]
-        time_off_min = time_on_min
-
-        # Load input values
-        on_off: float = stsv.get_input_value(self.on_off_switch)
-        t_in_primary = stsv.get_input_value(self.t_in_primary)
-        t_in_secondary = stsv.get_input_value(self.t_in_secondary)
-        t_amb = stsv.get_input_value(self.t_amb)
-        time_on = self.state.time_on
-        time_off = self.state.time_off
-        on_off_previous = self.state.on_off_previous
-
-        # Overwrite on_off to realize minimum time of or time off
-        if on_off_previous == 1 & time_on < time_on_min:
-            on_off = 1
-        elif on_off_previous == 0 & time_off < time_off_min:
-            on_off = 0
-
-        # OnOffSwitch
-        if on_off == 1:
-            # Calulate outputs
-            results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb)
-            p_th = results["P_th"].values[0]
-            p_el = results["P_el"].values[0]
-            cop = results["COP"].values[0]
-            t_out = results["T_out"].values[0]
-            m_dot = results["m_dot"].values[0]
-            time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
-            time_off = 0
+        if force_convergence:
+            pass
         else:
-            # Calulate outputs
-            p_th = 0
-            p_el = 0
-            cop = None
-            t_out = None
-            m_dot = 0
-            time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
-            time_on = 0
+            # Parameter
+            time_on_min = 600  # [s]
+            time_off_min = time_on_min / 10
 
-        # write values for output time series
-        stsv.set_output_value(self.p_th, p_th)
-        stsv.set_output_value(self.p_el, p_el)
-        stsv.set_output_value(self.cop, cop)
-        stsv.set_output_value(self.t_out, t_out)
-        stsv.set_output_value(self.m_dot, m_dot)
-        stsv.set_output_value(self.time_on, time_on)
-        stsv.set_output_value(self.time_off, time_off)
+            # Load input values
+            on_off: float = stsv.get_input_value(self.on_off_switch)
+            t_in_primary = stsv.get_input_value(self.t_in_primary)
+            t_in_secondary = stsv.get_input_value(self.t_in_secondary)
+            t_amb = stsv.get_input_value(self.t_amb)
+            time_on = self.state.time_on
+            time_off = self.state.time_off
+            on_off_previous = self.state.on_off_previous
+            # print("tp ", timestep)
+            # print("hp on/off before overwrite ", on_off_previous, on_off)
+            # Overwrite on_off to realize minimum time of or time off
+            if on_off_previous == 1 & time_on < time_on_min:
+                on_off = 1
+            elif on_off_previous == 0 & time_off < time_off_min:
+                on_off = 0
 
-        # write values to state
-        self.state.time_on = time_on
-        self.state.time_off = time_off
-        self.state.on_off_previous = on_off
+            # OnOffSwitch
+            if on_off == 1:
+                # Calulate outputs
+                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb)
+                p_th = results["P_th"].values[0]
+                p_el = results["P_el"].values[0]
+                cop = results["COP"].values[0]
+                t_out = results["T_out"].values[0]
+                m_dot = results["m_dot"].values[0]
+                time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
+                time_off = 0
+            else:
+                # Calulate outputs
+                p_th = 0
+                p_el = 0
+                cop = None
+                t_out = None
+                m_dot = 0
+                time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
+                time_on = 0
+
+            # write values for output time series
+            stsv.set_output_value(self.p_th, p_th)
+            stsv.set_output_value(self.p_el, p_el)
+            stsv.set_output_value(self.cop, cop)
+            stsv.set_output_value(self.t_out, t_out)
+            stsv.set_output_value(self.m_dot, m_dot)
+            stsv.set_output_value(self.time_on, time_on)
+            stsv.set_output_value(self.time_off, time_off)
+            
+            
+            # print("hp t_außen ", t_in_primary)
+            # print("hp t_water ", t_in_secondary)
+            # print("hp on/off ", on_off_previous, on_off)
+            # print("hp t_out ", t_out)
+            # print("hp pout ", p_th)
+
+            # write values to state
+            self.state.time_on = time_on
+            self.state.time_off = time_off
+            self.state.on_off_previous = on_off
 
 
 @dataclass
@@ -286,3 +301,210 @@ class HeatPumpState:
     time_on: int = 0
     time_off: int = 0
     on_off_previous: float = 0
+
+
+# ===========================================================================
+# try to implement a hplib controller l1
+@dataclass_json
+@dataclass
+class HeatPumpHplibControllerL1Config(ConfigBase):
+
+    """HeatPump Controller Config Class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatPumpHplibControllerL1Config.get_full_classname()
+
+    name: str
+    set_water_storage_temperature_for_heating_in_celsius: float
+    set_water_storage_temperature_for_cooling_in_celsius: float
+    offset: float
+    mode: int
+
+    @classmethod
+    def get_default_generic_heat_pump_controller_config(cls):
+        """Gets a default Generic Heat Pump Controller."""
+        return HeatPumpHplibControllerL1Config(
+            name="HeatPumpController",
+            set_water_storage_temperature_for_heating_in_celsius=49,
+            set_water_storage_temperature_for_cooling_in_celsius=55,
+            offset=0.0,
+            mode=1,
+        )
+class HeatPumpHplibControllerL1(Component):
+
+    """Heat Pump Controller.
+
+    It takes data from other
+    components and sends signal to the heat pump for
+    activation or deactivation.
+    On/off Switch with respect to water temperature from storage.
+
+    Parameters
+    ----------
+    t_air_heating: float
+        Minimum comfortable temperature for residents
+    t_air_cooling: float
+        Maximum comfortable temperature for residents
+    offset: float
+        Temperature offset to compensate the hysteresis
+        correction for the building temperature change
+    mode : int
+        Mode index for operation type for this heat pump
+
+    """
+
+    # Inputs
+    WaterTemperatureInputFromHeatWaterStorage = (
+        "WaterTemperatureInputFromHeatWaterStorage"
+    )
+
+    # Outputs
+    State = "State"
+
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: HeatPumpHplibControllerL1Config,
+    ) -> None:
+        """Construct all the neccessary attributes."""
+        self.heatpump_controller_config = config
+        super().__init__(
+            self.heatpump_controller_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        self.water_temperature_input_from_heat_water_storage_in_celsius: float = 35
+        self.build(
+            set_water_storage_temperature_for_heating_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_heating_in_celsius,
+            set_water_storage_temperature_for_cooling_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
+            offset=self.heatpump_controller_config.offset,
+            mode=self.heatpump_controller_config.mode,
+        )
+
+        self.water_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterTemperatureInputFromHeatWaterStorage,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
+        )
+
+        self.state_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.State,
+            LoadTypes.ANY,
+            Units.ANY,
+            output_description=f"here a description for {self.State} will follow.",
+        )
+
+        self.controller_heatpumpmode: Any
+        self.previous_heatpump_mode: Any
+
+    def build(
+        self,
+        set_water_storage_temperature_for_heating_in_celsius: float,
+        set_water_storage_temperature_for_cooling_in_celsius: float,
+        offset: float,
+        mode: float,
+    ) -> None:
+        """Build function.
+
+        The function sets important constants and parameters for the calculations.
+        """
+        # Sth
+        self.controller_heatpumpmode = "off"
+        self.previous_heatpump_mode = self.controller_heatpumpmode
+
+        # Configuration
+        self.set_water_storage_temperature_for_heating_in_celsius = (
+            set_water_storage_temperature_for_heating_in_celsius
+        )
+        self.set_water_storage_temperature_for_cooling_in_celsius = (
+            set_water_storage_temperature_for_cooling_in_celsius
+        )
+        self.offset = offset
+
+        self.mode = mode
+
+    def i_prepare_simulation(self) -> None:
+        """Prepare the simulation."""
+        pass
+
+    def i_save_state(self) -> None:
+        """Save the current state."""
+        self.previous_heatpump_mode = self.controller_heatpumpmode
+
+    def i_restore_state(self) -> None:
+        """Restore the previous state."""
+        self.controller_heatpumpmode = self.previous_heatpump_mode
+
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublecheck."""
+        pass
+
+    def write_to_report(self) -> List[str]:
+        """Write important variables to report."""
+        return self.heatpump_controller_config.get_string_dict()
+
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
+        """Simulate the heat pump comtroller."""
+
+        if force_convergence:
+            pass
+        else:
+            # Retrieves inputs
+
+            self.water_temperature_input_from_heat_water_storage_in_celsius = (
+                stsv.get_input_value(self.water_temperature_input_channel)
+            )
+
+            if self.mode == 1:
+                self.conditions(
+                    water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius,
+                )
+
+            if self.controller_heatpumpmode == "on":
+                state = 1
+            if self.controller_heatpumpmode == "off":
+                state = 0
+
+            # state=0
+
+            stsv.set_output_value(self.state_channel, state)
+
+    def conditions(self, water_temperature_input_in_celsius: float) -> None:
+        """Set conditions for the heat pump controller mode."""
+
+        maximum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius + self.offset
+        )
+        minimum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius
+        )
+        minimum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
+        )
+        maximum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius
+        )
+
+        if self.controller_heatpumpmode == "on":
+            if water_temperature_input_in_celsius > maximum_heating_set_temperature:
+                self.controller_heatpumpmode = "off"
+                return
+        elif self.controller_heatpumpmode == "on":
+            if water_temperature_input_in_celsius < minimum_cooling_set_temperature:
+                self.controller_heatpumpmode = "off"
+                return
+        elif self.controller_heatpumpmode == "off":
+            if water_temperature_input_in_celsius < minimum_heating_set_temperature:
+                self.controller_heatpumpmode = "on"
+                return
+            if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
+                self.controller_heatpumpmode = "on"
+                return
+        else:
+            raise ValueError("unknown mode")

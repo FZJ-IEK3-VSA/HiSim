@@ -55,7 +55,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            water_temperature_in_distribution_system_in_celsius=50,
+            water_temperature_in_distribution_system_in_celsius=40,
             heating_system=HeatingSystemType.FLOORHEATING,
         )
         return config
@@ -152,7 +152,7 @@ class HeatDistribution(cp.Component):
         )
 
         self.thermal_power_delivered_in_watt: float = 0.0
-        self.water_temperature_output_in_celsius: float = 50.0
+        self.water_temperature_output_in_celsius: float = 40.0
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
 

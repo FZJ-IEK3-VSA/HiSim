@@ -50,9 +50,9 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Get a default simplehotwaterstorage config."""
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
-            mean_water_temperature_in_storage_in_celsius=50,
-            cool_water_temperature_in_storage_in_celsius=50,
-            hot_water_temperature_in_storage_in_celsius=50,
+            mean_water_temperature_in_storage_in_celsius=40,
+            cool_water_temperature_in_storage_in_celsius=40,
+            hot_water_temperature_in_storage_in_celsius=40,
             volume_heating_water_storage_in_liter=100,
         )
         return config
@@ -97,11 +97,11 @@ class SimpleHotWaterStorage(cp.Component):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.start_water_temperature_in_storage_in_celsius = 50.0
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 50.0
+        self.start_water_temperature_in_storage_in_celsius = 40
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 40
 
-        self.water_temperature_to_heat_distribution_system_in_celsius: float = 50.0
-        self.water_temperature_to_heat_generator_in_celsius: float = 50.0
+        self.water_temperature_to_heat_distribution_system_in_celsius: float = 40
+        self.water_temperature_to_heat_generator_in_celsius: float = 40
         self.build()
 
         # =================================================================================================================================
@@ -219,10 +219,10 @@ class SimpleHotWaterStorage(cp.Component):
 
             if water_temperature_from_heat_distribution_system_in_celsius == 0:
                 """first iteration --> random numbers"""
-                water_temperature_from_heat_distribution_system_in_celsius = 50
-            if water_temperature_from_heat_generator_in_celsius == 0:
+                water_temperature_from_heat_distribution_system_in_celsius = 40
+            if water_temperature_from_heat_generator_in_celsius == 0 or water_temperature_from_heat_generator_in_celsius is None:
                 """first iteration --> random numbers"""
-                water_temperature_from_heat_generator_in_celsius = 50
+                water_temperature_from_heat_generator_in_celsius = 40
 
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
                 water_temperature_from_heat_distribution_system_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
@@ -233,6 +233,8 @@ class SimpleHotWaterStorage(cp.Component):
                 previous_mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
                 seconds_per_timestep=self.seconds_per_timestep,
             )
+            if self.mean_water_temperature_in_water_storage_in_celsius > 90 or self.mean_water_temperature_in_water_storage_in_celsius < 0:
+                raise ValueError(f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low. \n Current timestep is {timestep}.")
 
             # Calculations ------------------------------------------------------------------------------------------------------
 
@@ -308,6 +310,7 @@ class SimpleHotWaterStorage(cp.Component):
             water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second
             * seconds_per_timestep
         )
+
         self.mean_water_temperature_in_water_storage_in_celsius = (
             water_mass_in_storage_in_kg
             * previous_mean_water_temperature_in_water_storage_in_celsius

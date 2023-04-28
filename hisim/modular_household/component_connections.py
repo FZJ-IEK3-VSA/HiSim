@@ -1084,7 +1084,7 @@ def configure_heating_with_buffer(
 
 
 def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
-                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> Tuple[generic_CHP.CHP, int]:
+                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> int:
     """Sets up natural gas CHP. It heats the DHW storage and the building in winter.
 
     :param my_sim: Simulation class.
@@ -1141,7 +1141,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
 
 def configure_chp_with_buffer(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
-        my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> Tuple[generic_CHP.CHP, int]:
+        my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> int:
     """Sets up natural gas CHP. It heats the DHW storage and the buffer storage for heating.
 
     :param my_sim: Simulation class.
@@ -1167,7 +1167,7 @@ def configure_chp_with_buffer(
         )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_input(
-        input_filedname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name, src_filed_name=my_buffer.TemperatureMean
+        input_fieldname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name, src_field_name=my_buffer.TemperatureMean
                                     )
     my_sim.add_component(my_chp_controller)
 

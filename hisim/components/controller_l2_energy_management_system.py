@@ -198,7 +198,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             getattr(self, inputs[i].source_component_class) for i in sortindex
         ]
         self.outputs_sorted = []
-        for ind in range(len(source_weights)): # noqa
+        for ind in range(len(source_weights)):  # noqa
             output = self.get_dynamic_output(
                 tags=[
                     self.components_sorted[ind],

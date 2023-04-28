@@ -44,16 +44,16 @@ class CHPConfig(cp.ConfigBase):
     p_fuel: float
 
     @staticmethod
-    def get_default_config_chp(total_power: float) -> "CHPConfig":
+    def get_default_config_chp(thermal_power: float) -> "CHPConfig":
         config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.GAS, p_el=0.33 * total_power, p_th=0.5 * total_power, p_fuel=total_power
+            name="CHP", source_weight=1, use=lt.LoadTypes.GAS, p_el=(0.33 / 0.5) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.5) * thermal_power
         )
         return config
 
     @staticmethod
-    def get_default_config_fuelcell(total_power: float) -> "CHPConfig":
+    def get_default_config_fuelcell(thermal_power: float) -> "CHPConfig":
         config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el=0.48 * total_power, p_th=0.43 * total_power, p_fuel=total_power
+            name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el=(0.48 / 0.43) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.43) * thermal_power
         )
         return config
 
@@ -61,7 +61,7 @@ class CHPConfig(cp.ConfigBase):
 class GenericCHPState:
     """This data class saves the state of the CHP."""
 
-    def __init__(self, state: int = 0) -> None:
+    def __init__(self, state: int) -> None:
         self.state = state
 
     def clone(self) -> "GenericCHPState":
@@ -151,8 +151,8 @@ class CHP(cp.Component):
                 lt.Units.KG_PER_SEC,
                 output_description="Hydrogen consumption of CHP in kg / s."
             )
-        if self.config.use == lt.LoadTypes.GAS:
-            self.fuel_consumption_channel: cp.ComponentOutput = self.add_output(
+        elif self.config.use == lt.LoadTypes.GAS:
+            self.fuel_consumption_channel = self.add_output(
                 self.component_name,
                 self.FuelDelivered,
                 lt.LoadTypes.GAS,
@@ -178,7 +178,7 @@ class CHP(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         # Inputs
-        self.state.state = stsv.get_input_value(self.chp_onoff_signal_channel)
+        self.state.state = int(stsv.get_input_value(self.chp_onoff_signal_channel))
         mode = stsv.get_input_value(self.chp_heatingmode_signal_channel)
 
         # Outputs

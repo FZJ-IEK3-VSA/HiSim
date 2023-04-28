@@ -298,7 +298,7 @@ class L1CHPController(cp.Component):
         # calculate heating level of DHW storage and building
         soc_dhw = (t_dhw - self.config.t_min_dhw_in_celsius) / (self.config.t_max_dhw_in_celsius - self.config.t_min_dhw_in_celsius)
         soc_building = (t_building - self.config.t_min_heating_in_celsius) / (self.config.t_max_heating_in_celsius - self.config.t_min_heating_in_celsius)
-        
+
         if soc_building >= soc_dhw:
             self.state.mode = 0
             return

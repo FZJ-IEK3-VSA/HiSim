@@ -59,6 +59,7 @@ def configure_pv_system(
     pv_peak_power: Optional[float],
     count: int,
 ) -> Tuple[List, int]:
+
     """Sets PV System.
 
     Parameters
@@ -1097,7 +1098,8 @@ def configure_heating_with_buffer(
 
 
 def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
-                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> int:
+                  my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float,
+                  production: List, count: int) -> Tuple[List, int]:
     """Sets up natural gas CHP. It heats the DHW storage and the building in winter.
 
     :param my_sim: Simulation class.
@@ -1110,11 +1112,14 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
     :param chp_power: Power of the CHP in multiples of default (<=1).
     :type chp_power: float
+    :param production: _description_
+    :type production: List
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
-    :return: New counter variable (+1).
-    :rtype: int
+    :return: Collection of HiSIM components producing electricity and new counter variable (+1).
+    :rtype: Tuple[List,int]
     """
+
     # configure and add chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
@@ -1146,15 +1151,15 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
                               src_object_name=my_chp.component_name,
                               src_field_name=my_chp.ThermalPowerOutputBuilding,
                               )
-
+    production.append(my_chp)
     count += 1
 
-    return my_chp, count
+    return production, count
 
 
 def configure_chp_with_buffer(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
-        my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, count: int) -> int:
+        my_boiler: generic_hot_water_storage_modular.HotWaterStorage, chp_power: float, production: List, count: int) -> Tuple[List, int]:
     """Sets up natural gas CHP. It heats the DHW storage and the buffer storage for heating.
 
     :param my_sim: Simulation class.
@@ -1167,10 +1172,12 @@ def configure_chp_with_buffer(
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
     :param chp_power: Power of the CHP in multiples of default (<=1)
     :type chp_power: float
+    :param production: _description_
+    :type production: List
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
-    :return: New counter variable (+1).
-    :rtype: int
+    :return: Collection of HiSIM components producing electricity and new counter variable (+1).
+    :rtype: Tuple[List,int]
     """
     # configure and add chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
@@ -1207,9 +1214,10 @@ def configure_chp_with_buffer(
         src_field_name=my_chp.ThermalPowerOutputBuilding,
         )
 
+    production.append(my_chp)
     count += 1
 
-    return count
+    return production, count
 
 
 def configure_elctrolysis_h2storage_chp_system(

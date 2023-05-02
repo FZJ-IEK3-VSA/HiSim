@@ -1113,17 +1113,11 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     # configure and add chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
-    my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
-        )
-    my_chp_controller.connect_only_predefined_connections(my_boiler)
-    my_chp_controller.connect_only_predefined_connections(my_building)
-    my_sim.add_component(my_chp_controller)
 
     # size chp power to hot water storage size
     my_boiler.config.compute_default_cycle(
         temperature_difference_in_kelvin=chp_controller_config.t_max_dhw_in_celsius - chp_controller_config.t_min_dhw_in_celsius)
-    chp_power = chp_power * my_boiler.config.energy_full_cycle * 3.6e6 / chp_controller_config.min_operation_time_in_seconds
+    chp_power = chp_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
 
     # configure and add chp
     chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
@@ -1131,6 +1125,16 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     my_chp = generic_CHP.CHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
+
+    # add treshold electricity to chp controller and add it to simulation
+    chp_controller_config.electricity_threshold = chp_config.p_el / 2
+    my_chp_controller = controller_l1_chp.L1CHPController(
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
+    )
+    my_chp_controller.connect_only_predefined_connections(my_boiler)
+    my_chp_controller.connect_only_predefined_connections(my_building)
+    my_sim.add_component(my_chp_controller)
+
     # connect chp with controller intputs and add it to simulation
     my_chp.connect_only_predefined_connections(my_chp_controller)
     my_sim.add_component(my_chp)
@@ -1141,7 +1145,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
                               src_object_name=my_chp.component_name,
                               src_field_name=my_chp.ThermalPowerOutputBuilding,
                               )
- 
+
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_chp,
         source_component_output="ElectricityOutput",
@@ -1202,9 +1206,24 @@ def configure_chp_with_buffer(
     :return: New counter variable (+1).
     :rtype: int
     """
-    # configure and add chp controller
+    # configure chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
+
+    # size chp power to hot water storage size
+    my_boiler.config.compute_default_cycle(
+        temperature_difference_in_kelvin=chp_controller_config.t_max_dhw_in_celsius - chp_controller_config.t_min_dhw_in_celsius)
+    chp_power = chp_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds
+
+    # configure and add chp
+    chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
+    chp_config.source_weight = count
+    my_chp = generic_CHP.CHP(
+        my_simulation_parameters=my_simulation_parameters, config=chp_config
+        )
+
+    # add chop controller and adopt electricity threshold
+    chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
         my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
         )
@@ -1214,17 +1233,6 @@ def configure_chp_with_buffer(
                                     )
     my_sim.add_component(my_chp_controller)
 
-    # size chp power to hot water storage size
-    my_boiler.config.compute_default_cycle(
-        temperature_difference_in_kelvin=chp_controller_config.t_max_dhw_in_celsius - chp_controller_config.t_min_dhw_in_celsius)
-    chp_power = chp_power * my_boiler.config.energy_full_cycle * 3.6e6 / chp_controller_config.min_operation_time_in_seconds
-
-    # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
-    chp_config.source_weight = count
-    my_chp = generic_CHP.CHP(
-        my_simulation_parameters=my_simulation_parameters, config=chp_config
-        )
     # connect chp with controller intputs and add it to simulation
     my_chp.connect_only_predefined_connections(my_chp_controller)
     my_sim.add_component(my_chp)

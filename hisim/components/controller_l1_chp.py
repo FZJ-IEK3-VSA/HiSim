@@ -41,6 +41,8 @@ class L1CHPControllerConfig(ConfigBase):
     source_weight: int
     #: type of CHP: hydrogen or gas (hydrogen than considers also SOC of hydrogen storage)
     use: LoadTypes
+    #: minimal electricity demand to start operating, given in W:
+    electricity_threshold: float
     #: lower set temperature of building (or buffer storage), given in °C
     t_min_heating_in_celsius: float
     #: upper set temperature of building (or buffer storage), given in °C
@@ -62,8 +64,8 @@ class L1CHPControllerConfig(ConfigBase):
     def get_default_config(name: str, use: LoadTypes) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller."""
         config = L1CHPControllerConfig(
-            name=name, source_weight=1, use=use, t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=20.5,
-            t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60, day_of_heating_season_begin=270,
+            name=name, source_weight=1, use=use, electricity_threshold=300, t_min_heating_in_celsius=20.0,
+            t_max_heating_in_celsius=20.5, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60, day_of_heating_season_begin=270,
             day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4, min_idle_time_in_seconds=3600 * 2)
         return config
 
@@ -72,8 +74,8 @@ class L1CHPControllerConfig(ConfigBase):
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
-            name=name, source_weight=1, use=use, t_min_heating_in_celsius=31.0, t_max_heating_in_celsius=40.0,
-            t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60, day_of_heating_season_begin=270 - 1,
+            name=name, source_weight=1, use=use, electricity_threshold=300, t_min_heating_in_celsius=31.0,
+            t_max_heating_in_celsius=40.0, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60, day_of_heating_season_begin=270 - 1,
             day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4, min_idle_time_in_seconds=3600 * 2)
         return config
 
@@ -118,13 +120,15 @@ class L1CHPControllerState:
 
     def activate(self, timestep: int) -> None:
         """Activates the heat pump and remembers the time step."""
+        if self.on_off == 0:
+            self.activation_time_step = timestep
         self.on_off = 1
-        self.activation_time_step = timestep
 
     def deactivate(self, timestep: int) -> None:
         """Deactivates the heat pump and remembers the time step."""
+        if self.on_off == 1:
+            self.deactivation_time_step = timestep
         self.on_off = 0
-        self.deactivation_time_step = timestep
 
 
 class L1CHPController(cp.Component):
@@ -290,10 +294,14 @@ class L1CHPController(cp.Component):
             t_dhw = stsv.get_input_value(self.dhw_temperature_channel)
             if self.electricity_target_channel.source_output is not None:
                 electricity_target = stsv.get_input_value(self.electricity_target_channel)
+                if electricity_target <= - 350:
+                    electricity_threshold_ok = True
+                else:
+                    electricity_threshold_ok = False
             else:
-                electricity_target = 0
+                electricity_threshold_ok = True
             self.determine_heating_mode(timestep, stsv, t_building, t_dhw)
-            self.calculate_state(timestep, stsv, t_building, t_dhw)
+            self.calculate_state(timestep, stsv, t_building, t_dhw, electricity_threshold_ok)
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.chp_onoff_signal_channel, self.state.on_off)
         stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
@@ -318,7 +326,7 @@ class L1CHPController(cp.Component):
             return
         self.state.mode = 1
 
-    def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues, t_building: float, t_dhw: float) -> None:
+    def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues, t_building: float, t_dhw: float, electricity_threshold_ok: bool) -> None:
         """Calculate the CHP state and activate / deactives."""
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if (
@@ -336,6 +344,10 @@ class L1CHPController(cp.Component):
         ):
             # mandatory off, minimum resting time not reached
             return
+        # deactivate when electricity is not needed:
+        if not electricity_threshold_ok:
+            self.state.deactivate(timestep)
+            return
         # control according to set temperatures
         if (
             self.heating_season_begin > timestep > self.heating_season_end
@@ -343,14 +355,14 @@ class L1CHPController(cp.Component):
         ):
             # only consider water heating in summer
             if t_dhw < self.config.t_min_dhw_in_celsius:
-                self.state.activate(timestep)  # activate CHP when storage temperature is too low
+                self.state.activate(timestep)  # activate CHP when storage temperature is too low and electricity is needed
                 return
             if t_dhw > self.config.t_max_heating_in_celsius:
                 self.state.deactivate(timestep)  # deactivate CHP when storage temperature is too high
                 return
         else:
-            if t_building < self.config.t_min_heating_in_celsius or t_dhw < self.config.t_min_dhw_in_celsius:
-                # activate heating when either dhw storage or building temperature is too low
+            if (t_building < self.config.t_min_heating_in_celsius or t_dhw < self.config.t_min_dhw_in_celsius):
+                # activate heating when either dhw storage or building temperature is too low and electricity is needed
                 self.state.activate(timestep)
                 return
             if t_building > self.config.t_max_heating_in_celsius and t_dhw > self.config.t_max_dhw_in_celsius:

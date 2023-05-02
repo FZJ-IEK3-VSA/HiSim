@@ -435,16 +435,6 @@ def modular_household_explicit(
                 count=count,
             )
 
-    # """BATTERY"""
-    if battery_included and clever:
-        count = component_connections.configure_battery(
-            my_sim=my_sim,
-            my_simulation_parameters=my_simulation_parameters,
-            my_electricity_controller=my_electricity_controller,
-            battery_capacity=battery_capacity,
-            count=count,
-        )
-
     # """CHP + H2 STORAGE + ELECTROLYSIS"""
     if chp_included and not buffer_included:
         count = component_connections.configure_chp(
@@ -468,6 +458,18 @@ def modular_household_explicit(
             controlable=clever,
             count=count,
         )
+
+    # """BATTERY"""
+    if battery_included and clever:
+        count = component_connections.configure_battery(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_electricity_controller=my_electricity_controller,
+            battery_capacity=battery_capacity,
+            count=count,
+        )
+        # """TODO: repair! """
+        # battery_cost = preprocessing.calculate_battery_investment_cost(economic_parameters, battery_included, battery_capacity)
 
     # if chp_included and h2_storage_included and electrolyzer_included and clever:
     #     (

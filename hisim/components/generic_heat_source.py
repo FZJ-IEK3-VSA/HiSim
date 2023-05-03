@@ -50,7 +50,7 @@ class HeatSourceConfig:
             name="HeatingHeatSource",
             source_weight=1,
             fuel=lt.LoadTypes.DISTRICTHEATING,
-            power_th=6200,
+            power_th=6200.0,
             water_vs_heating=lt.InandOutputType.HEATING,
             efficiency=1.0,
         )
@@ -63,7 +63,7 @@ class HeatSourceConfig:
             name="DHWHeatSource",
             source_weight=1,
             fuel=lt.LoadTypes.DISTRICTHEATING,
-            power_th=3000,
+            power_th=3000.0,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             efficiency=1.0,
         )

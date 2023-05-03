@@ -1,0 +1,16 @@
+Product/service;Stage;Footprint;Unit;Cost;Unit;Lifetime;Unit;annual Footprint;annual cost
+Washing machine (or domestic appliances in general);Production;368.3;kgCO2eq/#;402;EUR/#;10;years;36.83;40.2
+Photovoltaic panel;Production;330.51;kgCO2eq/kW;794.41;EUR/kW;25;years;13.2204;31.7764
+Heat pump;Production;165.84;kgCO2eq/kW;1513.74;EUR/kW;10;years;16.584;151.374
+Biomass district heating system;Production;35.09;kgCO2eq/kW;2357.36;EUR/kW;20;years;1.7545;117.868
+Gas boiler;Production;49.47;kgCO2eq/kW;7416;EUR/#;20;years;2.4735;370.8
+Oil boiler;Production;19.4;kgCO2eq/kW;5562;EUR/#;20;years;0.97;278.1
+Electric heating;Production;1.21;kgCO2eq/kW;4635;EUR/#;20;years;0.0605;231.75
+Hydrogen fuelcell;Production;405.5;kgCO2eq/kW;6767.1;EUR/kW;5;years;81.1;1353.42
+Gas powered Combined Heat and Power;Production;171.35;kgCO2eq/kW;3151.8;EUR/kW;20;years;8.5675;157.59
+Hot Water tank;Production;29.79;kgCO2eq/kWh;14.51;EUR/l;100;years;0.2979;0.1451
+Hydrogen Storage;Production;20.18;kgCO2eq/kWh;712;EUR/kgH2;20;years;1.009;35.6
+Lithium iron phosphate battery;Production;130.7;kgCO2eq/kWh;535.81;EUR/kWh;5000;cycles;0.02614;0.107162
+Electrolyzer;Production;190.5;kgCO2eq/kW;880.65;EUR/kW;10;years;19.05;88.065
+Diesel vehicle;Production;9139.3;kgCO2eq/#;32035;EUR/#;18;years;507.7388889;1779.722222
+Electric vehicle;Production;8899.4;kgCO2eq/#;44498;EUR/#;18;years;494.4111111;2472.111111

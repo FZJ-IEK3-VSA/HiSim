@@ -19,29 +19,33 @@ from tests import functions_for_testing as fft
 @pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_occupancy_scalability():
-    """Test function for the building module."""
+    """Test function for the scability of the occupancy."""
 
+    # calculate occupancy outputs and respective scaling factor when
+    # the abs. cond. floor area is scaled with factor=1
     (
         original_occupancy_outputs,
-        scaling_factor_apartments_zero,
+        scaling_factor_apartments_for_area_factor_one,
     ) = simulation_for_one_time_step(
         scaling_factor_for_absolute_conditioned_floor_area=1
     )
     log.information(
-        str(original_occupancy_outputs) + " " + str(scaling_factor_apartments_zero)
+        str(original_occupancy_outputs) + " " + str(scaling_factor_apartments_for_area_factor_one)
     )
+    # calculate occupancy outputs and respective scaling factor when
+    # the abs. cond. floor area is scaled with factor=3
     (
         scaled_occupancy_outputs,
-        scaling_factor_apartments_one,
+        scaling_factor_apartments_for_area_factor_three,
     ) = simulation_for_one_time_step(
         scaling_factor_for_absolute_conditioned_floor_area=3
     )
     log.information(
-        str(scaled_occupancy_outputs) + " " + str(scaling_factor_apartments_one)
+        str(scaled_occupancy_outputs) + " " + str(scaling_factor_apartments_for_area_factor_three)
     )
-    # test if occupancy outputs are upscaled correctly
+    # now compare the two results and test if occupancy outputs are upscaled correctly
     assert scaled_occupancy_outputs == [
-        x * scaling_factor_apartments_one for x in original_occupancy_outputs
+        output * scaling_factor_apartments_for_area_factor_three for output in original_occupancy_outputs
     ]
 
 

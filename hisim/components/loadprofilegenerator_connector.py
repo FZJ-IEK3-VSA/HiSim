@@ -158,7 +158,9 @@ class Occupancy(cp.Component):
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
             self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
         else:
-            raise KeyError("Key was not found in the singleton sim repository. Please check the order of the initialization of the components in your example.")
+            raise KeyError("Key for number of apartments was not found in the singleton sim repository." +
+                           "This might be because the building was not initialized before the loadprofilegenerator_connector." +
+                           "Please check the order of the initialization of the components in your example.")
 
         self.scaling_factor_according_to_number_of_apartments = (
             self.get_scaling_factor_according_to_number_of_apartments(

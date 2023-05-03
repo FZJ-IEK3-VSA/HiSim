@@ -146,19 +146,26 @@ class CHP(cp.Component):
         )
         if self.config.use == lt.LoadTypes.HYDROGEN:
             self.fuel_consumption_channel: cp.ComponentOutput = self.add_output(
-                self.component_name,
-                self.FuelDelivered,
-                lt.LoadTypes.HYDROGEN,
-                lt.Units.KG_PER_SEC,
-                output_description="Hydrogen consumption of CHP in kg / s."
+                object_name=self.component_name,
+                field_name=self.FuelDelivered,
+                load_type=lt.LoadTypes.HYDROGEN,
+                unit=lt.Units.KG_PER_SEC,
+                postprocessing_flag=[
+                    lt.LoadTypes.HYDROGEN
+                ],
+                output_description="Hydrogen consumption of CHP in kg / s.",
             )
         elif self.config.use == lt.LoadTypes.GAS:
             self.fuel_consumption_channel = self.add_output(
-                self.component_name,
-                self.FuelDelivered,
-                lt.LoadTypes.GAS,
-                lt.Units.WATT_HOUR,
-                output_description="Gas consumption of CHP in Wh."
+                object_name=self.component_name,
+                field_name=self.FuelDelivered,
+                load_type=lt.LoadTypes.GAS,
+                unit=lt.Units.WATT_HOUR,
+                postprocessing_flag=[
+                    lt.InandOutputType.FUEL_CONSUMPTION,
+                    lt.LoadTypes.GAS
+                ],
+                output_description="Gas consumption of CHP in Wh.",
             )
         self.add_default_connections(self.get_default_connections_from_chp_controller())
 

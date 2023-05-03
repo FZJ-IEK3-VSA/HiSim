@@ -310,6 +310,7 @@ class SmartDevice(cp.Component):
                 # append first timestep which may not fill  the entire 15 minutes
                 elem_el.append(sum(el[:offset]) / offset)
 
+                i = 0
                 for i in range(z - 2):
                     elem_el.append(
                         sum(

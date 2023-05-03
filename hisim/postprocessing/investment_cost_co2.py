@@ -88,9 +88,9 @@ def compute_investment_cost(
         elif isinstance(component.my_component, generic_CHP.CHP):
             if component.my_component.config.use == LoadTypes.GAS:
                 column = price_frame.iloc[price_frame.index == "Gas powered Combined Heat and Power"]
-                print("CHP investment cost detected.")
             elif component.my_component.config.use == LoadTypes.HYDROGEN:
                 column = price_frame.iloc[price_frame.index == "Hydrogen fuelcell"]
+            component_capacity = component.my_component.config.p_fuel * 1e-3
         else:
             continue
         co2_emissions = (

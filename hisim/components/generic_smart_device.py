@@ -1,5 +1,6 @@
-"""Implementation of shiftable household devices like washing machines, dish washers or dryers. Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and
-activates the device when surplus from PV is available. The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
+"""Implementation of shiftable household devices like washing machines, dish washers or dryers.
+Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and activates the device when surplus from PV is available.
+The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
 the configuration is automatically adopted from the information provided by the LPG. """
 
 # Generic/Built-in
@@ -286,14 +287,14 @@ class SmartDevice(cp.Component):
                         sum(
                             el[
                                 offset
-                                + minutes_per_timestep * i : offset
+                                + minutes_per_timestep * i: offset
                                 + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                last = el[offset + (i + 1) * minutes_per_timestep :]
+                last = el[offset + (i + 1) * minutes_per_timestep:]
                 if offset != minutes_per_timestep:
                     elem_el.append(sum(last) / (minutes_per_timestep - offset))
                 electricity_profile.append(elem_el)

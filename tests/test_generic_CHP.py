@@ -1,35 +1,47 @@
 # -*- coding: utf-8 -*-
+
+"""Basic test of gas driven Combined heat and power.
+"""
+
 import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import generic_CHP
+from hisim.components import (
+    generic_CHP,
+    controller_l1_chp,
+    generic_hot_water_storage_modular,
+)
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-
-
-
-"""
-Created on Fri Jul 22 10:06:48 2022
-
-@author: Johanna
-"""
-
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jul 21 20:04:59 2022
-
-@author: Johanna
-"""
 
 @pytest.mark.base
 def test_chp_system():
     seconds_per_timestep = 60
+    thermal_power = 500  # thermal power in Watt
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
 
-    my_chp_config = generic_CHP.GCHPConfig.get_default_config()
-    my_chp = generic_CHP.GCHP(config=my_chp_config, my_simulation_parameters=my_simulation_parameters)
-    my_chp_controller_config = generic_CHP.L1CHPConfig.get_default_config()
-    my_chp_controller = generic_CHP.L1GenericCHPRuntimeController(config=my_chp_controller_config, my_simulation_parameters=my_simulation_parameters)
+    # configure and add chp
+    chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=thermal_power)
+    chp_config.source_weight = count
+    my_chp = generic_CHP.CHP(
+        my_simulation_parameters=my_simulation_parameters, config=chp_config
+        )
+    
+    # configure chp controller
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config.electricity_threshold = chp_config.p_el / 2
+    my_chp_controller = controller_l1_chp.L1CHPController(
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
+        )
+
+    my_chp_controller.connect_only_predefined_connections(my_boiler)
+    my_chp_controller.connect_input(
+        input_fieldname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name, src_field_name=my_buffer.TemperatureMean
+                                    )
+
+    # connect chp with controller intputs and add it to simulation
+    my_chp.connect_only_predefined_connections(my_chp_controller)
+
 
     # Set Fake Inputs
     electricity_target = cp.ComponentOutput('FakeElectricityTarget', "l2_ElectricityTarget", lt.LoadTypes.ELECTRICITY, lt.Units.WATT)

@@ -230,7 +230,7 @@ def compute_cost_of_fuel_type(
         # convert from Wh to kWh
         elif fuel in [LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
             consumption_sum = sum(fuel_consumption) * 1e-3
-        #stay with liters
+        # stay with liters
         else:
             consumption_sum = sum(fuel_consumption)
     else:

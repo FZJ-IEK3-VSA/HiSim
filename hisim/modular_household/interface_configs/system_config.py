@@ -33,7 +33,7 @@ class SystemConfig:
     #: maximal power of the considered heat pump in multiples of the default
     heatpump_power: Optional[float] = 1.0  # in multiples of default
     #: decision on the consideration of combined heat and power - in this case a fuel cell
-    chp_included: bool = False
+    chp_included: bool = True
     #: maximal power of the considered CHP in multiples of the default
     chp_power: Optional[float] = 1.0
     #: decision on the consideration of fuel cell + hydrogen storage + electrolyzer
@@ -45,7 +45,7 @@ class SystemConfig:
     #: maximal power of the electroylzer in Watt
     electrolyzer_power: Optional[float] = 5e3
     #: decision on the consideration of an electriv vehicle
-    ev_included: bool = True
+    ev_included: bool = False
     #: choice of charging station related to the options available in LoadProfileGenerator
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore

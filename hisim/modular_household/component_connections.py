@@ -1206,6 +1206,7 @@ def configure_chp_with_buffer(
     :return: New counter variable (+1).
     :rtype: int
     """
+
     # configure chp controller
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
@@ -1280,99 +1281,77 @@ def configure_chp_with_buffer(
 
 
 def configure_elctrolysis_h2storage_chp_system(
-    my_sim: Any,
-    my_simulation_parameters: SimulationParameters,
-    my_building: building.Building,
-    my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-    chp_power: Optional[float],
-    h2_storage_size: Optional[float],
-    electrolyzer_power: Optional[float],
-    count: int,
-) -> Tuple[generic_CHP.CHP, int]:
-    """Sets electrolysis, H2-storage and chp system.
+        my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
+        my_boiler: generic_hot_water_storage_modular.HotWaterStorage, my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
+        chp_power: float, h2_storage_size: Optional[float], electrolyzer_power: Optional[float], controlable: bool, count: int, ) -> Tuple[generic_CHP.CHP, int]:
+    """Sets electrolysis, H2-storage and chp system."""
 
-    Parameters
-    ----------
-    my_sim: str
-        filename of orginal built example.
-    my_simulation_parameters: SimulationParameters
-        The simulation parameters.
-    my_building: Building
-        The initialized building component.
-    my_electricity_controller: L2GenericEnergyManagementSystem
-        The initialized electricity controller.
-    chp_power: float or None
-        Maximum power (thermal+electrical+loss) of CHP in Watt.
-    h2_storage_size: float or None
-        Maximum capacity of hydrogen storage in kg hydrogen.
-    electrolyzer_power: float or None
-        Maximum power of electrolyzer in Watt.
-    count: int
-        Integer tracking component hierachy for EMS.
+    # configure and add chp controller
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="Fuel Cell Controller", use=lt.LoadTypes.HYDROGEN)
+    chp_controller_config.source_weight = count
 
-    """
-    # Fuel Cell default configurations
-    l2_config = controller_l2_generic_heat_simple.L2GenericHeatConfig.get_default_config_heating(
-        "chp"
-    )
-    l2_config.source_weight = count
-    l1_config_chp = generic_CHP.L1CHPConfig.get_default_config()
-    l1_config_chp.source_weight = count
-    if chp_power is not None:
-        chp_config = generic_CHP.GCHPConfig(
-            name="CHP",
-            source_weight=count,
-            p_el=0.3 * chp_power,
-            p_th=0.5 * chp_power,
-            p_fuel=chp_power,
-        )
-    else:
-        chp_config = generic_CHP.GCHPConfig.get_default_config()
-        chp_config.source_weight = count
-    count += 1
+    # size chp power to hot water storage size
+    my_boiler.config.compute_default_cycle(
+        temperature_difference_in_kelvin=chp_controller_config.t_max_dhw_in_celsius - chp_controller_config.t_min_dhw_in_celsius)
+    chp_power = chp_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
 
-    # fuel cell
-    my_chp = generic_CHP.GCHP(
+    # configure and add chp
+    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=chp_power)
+    chp_config.source_weight = count
+    my_chp = generic_CHP.CHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
+        )
+
+    # add treshold electricity to chp controller and add it to simulation
+    chp_controller_config.electricity_threshold = chp_config.p_el / 2
+    my_chp_controller = controller_l1_chp.L1CHPController(
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
+    my_chp_controller.connect_only_predefined_connections(my_boiler)
+    my_chp_controller.connect_only_predefined_connections(my_building)
+    my_sim.add_component(my_chp_controller)
+
+    # connect chp with controller intputs and add it to simulation
+    my_chp.connect_only_predefined_connections(my_chp_controller)
     my_sim.add_component(my_chp)
 
-    # heat controller of fuel cell
-    my_chp_controller_l2 = controller_l2_generic_heat_simple.L2GenericHeatController(
-        my_simulation_parameters=my_simulation_parameters, config=l2_config
-    )
-    my_chp_controller_l2.connect_only_predefined_connections(my_building)
-    my_sim.add_component(my_chp_controller_l2)
+    # connect thermal power output of CHP
+    my_boiler.connect_only_predefined_connections(my_chp)
+    my_building.connect_input(input_fieldname=my_building.ThermalPowerCHP,
+                              src_object_name=my_chp.component_name,
+                              src_field_name=my_chp.ThermalPowerOutputBuilding,
+                              )
 
-    # run time controller of fuel cell
-    my_chp_controller_l1 = generic_CHP.L1GenericCHPRuntimeController(
-        my_simulation_parameters=my_simulation_parameters, config=l1_config_chp
-    )
-    my_chp_controller_l1.connect_only_predefined_connections(my_chp_controller_l2)
-    my_sim.add_component(my_chp_controller_l1)
-    my_chp.connect_only_predefined_connections(my_chp_controller_l1)
-
-    # electricity controller of fuel cell
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_chp,
-        source_component_output=my_chp.ElectricityOutput,
+        source_component_output="ElectricityOutput",
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_REAL],
-        source_weight=my_chp.source_weight,
+        source_tags=[lt.ComponentType.CHP, lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=my_chp.config.source_weight,
     )
-    electricity_from_fuelcell_target = my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=my_chp.source_weight,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Fuel Cell. ",
-    )
-    my_chp_controller_l1.connect_dynamic_input(
-        input_fieldname=generic_CHP.L1GenericCHPRuntimeController.ElectricityTarget,
-        src_object=electricity_from_fuelcell_target,
-    )
+
+    # connect to EMS electricity controller
+    if controlable:
+        ems_target_electricity = my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.CHP,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=my_chp.config.source_weight,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for CHP. ",
+        )
+
+        my_chp_controller.connect_dynamic_input(
+            input_fieldname=my_chp_controller.ElectricityTarget,
+            src_object=ems_target_electricity,
+        )
+
+    # counting variable
+    count += 1
 
     # electrolyzer default configuration
     l1_config_electrolyzer = (
@@ -1462,6 +1441,6 @@ def configure_elctrolysis_h2storage_chp_system(
     my_sim.add_component(my_h2storage)
 
     my_electrolyzer_controller_l1.connect_only_predefined_connections(my_h2storage)
-    my_chp_controller_l1.connect_only_predefined_connections(my_h2storage)
+    my_chp_controller.connect_only_predefined_connections(my_h2storage)
 
     return my_chp, count

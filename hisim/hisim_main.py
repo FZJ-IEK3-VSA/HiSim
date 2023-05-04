@@ -8,8 +8,9 @@ from typing import Optional
 from hisim import log
 import hisim.simulator as sim
 from hisim.simulationparameters import SimulationParameters
+from wrappedcallgraph.callgraphwrap_test import register_method
 
-
+@register_method
 def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """ Core function. """
     log.information("#################################")

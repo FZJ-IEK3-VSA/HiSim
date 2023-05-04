@@ -17,7 +17,9 @@ from hisim import log, utils
 from hisim.component import (Component, ComponentOutput, ConfigBase,
                              SingleTimeStepValues)
 from hisim.simulationparameters import SimulationParameters
-from wrappedcallgraph.callgraphwrap import register_method
+from wrappedcallgraph.callgraphwrap_test import register_method
+
+
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]

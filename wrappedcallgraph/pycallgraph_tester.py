@@ -3,9 +3,12 @@ import os
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from wrappedcallgraph.callgraphwrap  import MethodChart
+import cProfile
 
+from wrappedcallgraph.callgraphwrap_test  import MethodChart
 
+profiler = cProfile.Profile()
+profiler.enable()
 class PyCallGraphObject:
 
     """PyCallGraph Object Class."""
@@ -17,7 +20,10 @@ class PyCallGraphObject:
         MethodChart.make_graphviz_chart(
             time_resolution=10, filename="HISIM_Method_Pattern.png"
         )
-
+        profiler.disable()
+        
+        profiler.dump_stats("profile.prof")
+        
     def execute(self):
         """Executes a hisim example."""
         path = "../examples/basic_household.py"

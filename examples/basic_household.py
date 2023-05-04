@@ -10,7 +10,7 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import sumbuilder
-# from wrappedcallgraph.callgraphwrap import MethodChartCallGraphFactory, METHOD_CHART_NODE_CONTAINER
+from wrappedcallgraph.callgraphwrap_test import register_method
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -20,8 +20,7 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
-
-# @MethodChartCallGraphFactory.graph_call_path_factory(METHOD_CHART_NODE_CONTAINER)
+@register_method
 def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """ Basic household example.
 

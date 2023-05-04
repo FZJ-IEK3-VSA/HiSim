@@ -19,6 +19,7 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
+from wrappedcallgraph.callgraphwrap_test import register_method
 
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
@@ -180,6 +181,7 @@ class Simulator:
 
     # @profile
     # @utils.measure_execution_time
+    @register_method
     def run_all_timesteps(self) -> None:
         """Performs all the timesteps of the simulation and saves the results in the attribute results."""
         # Error Tests

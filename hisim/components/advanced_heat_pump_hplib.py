@@ -235,7 +235,7 @@ class HeatPumpHplib(Component):
         else:
             # Parameter
             time_on_min = 600  # [s]
-            time_off_min = time_on_min / 10
+            time_off_min = time_on_min #/ 10
 
             # Load input values
             on_off: float = stsv.get_input_value(self.on_off_switch)
@@ -484,27 +484,27 @@ class HeatPumpHplibControllerL1(Component):
         minimum_heating_set_temperature = (
             self.set_water_storage_temperature_for_heating_in_celsius
         )
-        minimum_cooling_set_temperature = (
-            self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
-        )
-        maximum_cooling_set_temperature = (
-            self.set_water_storage_temperature_for_cooling_in_celsius
-        )
+        # minimum_cooling_set_temperature = (
+        #     self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
+        # )
+        # maximum_cooling_set_temperature = (
+        #     self.set_water_storage_temperature_for_cooling_in_celsius
+        # )
 
         if self.controller_heatpumpmode == "on":
             if water_temperature_input_in_celsius > maximum_heating_set_temperature:
                 self.controller_heatpumpmode = "off"
                 return
-        elif self.controller_heatpumpmode == "on":
-            if water_temperature_input_in_celsius < minimum_cooling_set_temperature:
-                self.controller_heatpumpmode = "off"
-                return
+        # elif self.controller_heatpumpmode == "on":
+        #     if water_temperature_input_in_celsius < minimum_cooling_set_temperature:
+        #         self.controller_heatpumpmode = "off"
+        #         return
         elif self.controller_heatpumpmode == "off":
             if water_temperature_input_in_celsius < minimum_heating_set_temperature:
                 self.controller_heatpumpmode = "on"
                 return
-            if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
-                self.controller_heatpumpmode = "on"
-                return
+            # if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
+            #     self.controller_heatpumpmode = "on"
+            #     return
         else:
             raise ValueError("unknown mode")

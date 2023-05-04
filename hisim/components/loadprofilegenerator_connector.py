@@ -36,24 +36,19 @@ class OccupancyConfig(cp.ConfigBase):
     name: str
     profile_name: str
     country_name: str
-    number_of_apartments: int
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
-        config = OccupancyConfig("Occupancy_1", "CH01", "DE", 1)
+        config = OccupancyConfig("Occupancy_1", "CH01", "DE")
         return config
 
-    def get_factors_from_country_and_profile(self) -> Tuple[float, float, int]:
+    def get_factors_from_country_and_profile(self) -> Tuple[float, float]:
         """Evaluates country specific scaling factors of profiles.
 
         This is especially relevant when european average profile (AVG) is used.
         """
         if self.profile_name != "AVG":
-            return (
-                float(self.number_of_apartments),
-                float(self.number_of_apartments),
-                self.number_of_apartments,
-            )
+            return(1, 1)
         scaling_factors = pd.read_csv(
             utils.HISIMPATH["occupancy_scaling_factors_per_country"],
             encoding="utf-8",
@@ -81,7 +76,7 @@ class OccupancyConfig(cp.ConfigBase):
                     "Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"
                 ]
             )
-        ) * self.number_of_apartments  # 1 toe = 1.163e4 kWh
+        )  # 1 toe = 1.163e4 kWh
         factor_hot_water_consumption = (
             float(
                 scaling_factor_line[
@@ -89,13 +84,11 @@ class OccupancyConfig(cp.ConfigBase):
                 ]
             )
             * 4.1868e7
-            * self.number_of_apartments
             / ((40 - 10) * 0.977 * 4.182)
         )  # 1 toe = 4.1868e7 kJ, than Joule to liter with given temperature difference
         return (
             factor_electricity_consumption,
-            factor_hot_water_consumption,
-            self.number_of_apartments,
+            factor_hot_water_consumption
         )
 
 
@@ -385,7 +378,6 @@ class Occupancy(cp.Component):
             (
                 scaling_electricity_consumption,
                 scaling_water_consumption,
-                scaling_number_of_residents,
             ) = self.occupancyConfig.get_factors_from_country_and_profile()
             # load occupancy profile
             occupancy_profile = []
@@ -441,13 +433,11 @@ class Occupancy(cp.Component):
                     for timestep in range(steps_original):
                         self.number_of_residents[timestep] += (
                             occupancy_profile[mode]["Values"][timestep]
-                            * scaling_number_of_residents
                         )
                         self.heating_by_residents[timestep] = (
                             self.heating_by_residents[timestep]
                             + gain_per_person[mode]
                             * occupancy_profile[mode]["Values"][timestep]
-                            * scaling_number_of_residents
                         )
 
             # average data, when time resolution of inputs is coarser than time resolution of simulation
@@ -462,7 +452,6 @@ class Occupancy(cp.Component):
                                     * steps_ratio
                                 ]
                             )
-                            * scaling_number_of_residents
                             / steps_ratio
                         )
                         self.number_of_residents[timestep] += np.round(
@@ -520,9 +509,9 @@ class Occupancy(cp.Component):
     ) -> float:
         """Get scaling factor according to the real number of apartments which is given by the building component."""
 
-        if real_number_of_apartments is not None and real_number_of_apartments > 0 and self.occupancyConfig.number_of_apartments > 0:
+        if real_number_of_apartments is not None and real_number_of_apartments > 0:
             scaling_factor = (
-                real_number_of_apartments / self.occupancyConfig.number_of_apartments
+                real_number_of_apartments
             )
             log.information(f"Occupancy outputs will be scaled with the factor {scaling_factor} according to the number of apartments")
 

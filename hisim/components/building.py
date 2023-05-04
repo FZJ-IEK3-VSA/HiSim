@@ -79,7 +79,6 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-# from wrappedcallgraph.callgraphwrap import graph_call_path_factory, METHOD_PATTERN
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -221,7 +220,6 @@ class Building(dynamic_component.DynamicComponent):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
 
     @utils.measure_execution_time
-    # @graph_call_path_factory(METHOD_PATTERN)
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -609,7 +607,6 @@ class Building(dynamic_component.DynamicComponent):
 
     # =================================================================================================================================
     # Simulation of the building class
-    # @graph_call_path_factory(METHOD_PATTERN)
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:

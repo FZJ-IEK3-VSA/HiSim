@@ -89,7 +89,7 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower = "ThermalOutputPower"
 
-    # @utils.graph_call_path_factory(max_depth=2, memory_flag=True, file_name="call_path")
+
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,

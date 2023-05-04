@@ -22,7 +22,7 @@ from hisim.components import (advanced_battery_bslib,
                               controller_l1_heatpump,
                               controller_l1_chp,
                               controller_l2_energy_management_system,
-                              controller_l2_generic_heat_simple, generic_car,
+                              generic_car,
                               generic_CHP, generic_electrolyzer,
                               generic_heat_pump_modular, generic_heat_source,
                               generic_hot_water_storage_modular,
@@ -1124,7 +1124,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     """
 
     # configure and add chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size
@@ -1221,7 +1221,7 @@ def configure_chp_with_buffer(
     """
 
     # configure chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size

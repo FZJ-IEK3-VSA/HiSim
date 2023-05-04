@@ -2,197 +2,11 @@
 from functools import wraps
 from typing import Any, List
 import time
-from collections import defaultdict
-import inspect
-import cProfile
 import pydot
 import seaborn as sns
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List
 from threading import Lock
-
-# def graph_call_path_factory(node_container):
-#     """Graph call path factory function."""
-#     def register_method(func):
-#         @wraps(func)
-#         def function_wrapper_for_node_storage(*args, **kwargs):
-#             """Collects function nodes, logs stack trace, and executes functions."""
-#             curr_frame = inspect.stack(0)
-#             base_node = curr_frame[0][0].f_locals["func"].__qualname__
-
-#             if base_node not in node_container.rank["Root"]:
-#                 node_container.rank["Root"].append(base_node)
-#                 node_container.wrapped_method_counter[base_node] = 0
-#                 node_container.wrapped_method_timer[base_node] = {
-#                     "start": time.perf_counter(),
-#                     "time": 0,
-#                 }
-
-#             for frame in curr_frame[1:]:
-
-#                 info = node_container.extract_source(frame=frame)
-
-#                 if (
-#                     info in node_container.rank["Root"]
-#                     and info not in node_container.wrapped_method_src[base_node]
-#                 ):
-#                     node_container.wrapped_method_src[base_node].append(info)
-
-#                 if frame[3] == "main" and info not in node_container.rank["Root"]:
-#                     node_container.rank["Root"].insert(0, info)
-#                     node_container.wrapped_method_counter[info] = 1
-#                     node_container.wrapped_method_timer[info] = {"start": 0, "time": 0}
-
-#             del curr_frame
-
-#             if node_container.profiler:
-#                 print("profiling enabled")
-#                 node_container.profile.enable()
-#                 start_time = time.perf_counter()
-#                 result = func(*args, **kwargs)
-#                 end_time = time.perf_counter()
-#                 node_container.profile.disable()
-#                 print("profiling disabled")
-#             else:
-#                 start_time = time.perf_counter()
-#                 result = func(*args, **kwargs)
-#                 end_time = time.perf_counter()
-
-#             total_time = end_time - start_time
-#             node_container.wrapped_method_counter[base_node] += 1
-#             node_container.wrapped_method_timer[base_node]["time"] += total_time
-
-#             return result
-
-#         return function_wrapper_for_node_storage
-
-#     return register_method
-
-
-# class MethodChart:
-
-#     """Class for generating charts that show the components."""
-
-#     def __init__(self, profiler: bool = False) -> None:
-#         """Initizalizes the class."""
-#         self.wrapped_method_nodes: dict = {}
-#         self.wrapped_method_counter: dict = {}
-#         self.wrapped_method_timer: dict = {}
-#         self.wrapped_method_src: defaultdict = defaultdict(list)
-#         self.rank: defaultdict = defaultdict(list)
-#         self.color_palette: dict = {}
-#         self.profiler: bool = profiler
-#         if self.profiler:
-#             self.profile: cProfile.Profile = cProfile.Profile()
-
-#     def extract_source(self, frame: inspect.FrameInfo) -> Any:
-#         """Extracts the class and function name from a frame object."""
-#         function_name = frame[3]
-#         try:
-#             class_name = frame[0].f_locals["self"].__class__.__name__
-#             source = class_name + "." + function_name
-#         except KeyError:
-#             source = function_name
-#         return source
-
-#     def set_color_scheme(self) -> None:
-#         """Assigns a color scheme to each node based on number of times called."""
-#         max_value = max(self.wrapped_method_counter.values())
-#         palette = sns.color_palette("light:#5A9", max_value + 1).as_hex()
-#         self.color_palette = {
-#             method: palette[self.wrapped_method_counter[method]]
-#             for method in self.wrapped_method_counter
-#         }
-
-#     def set_order_rank(self) -> None:
-#         """Clusters nodes by common source."""
-#         for base_node in list(self.rank["Root"]):
-#             src_nodes = self.wrapped_method_src[base_node]
-#             if src_nodes:
-#                 self.rank[tuple(src_nodes)].append(base_node)
-#                 self.rank["Root"].remove(base_node)
-
-#     def sum_time(self) -> None:
-#         """Aggregate total time for main function."""
-#         if "main" in self.rank["Root"][0]:
-#             main_node = self.rank["Root"][0]
-#             summed_time = [
-#                 sum(
-#                     self.wrapped_method_timer[node]["time"]
-#                     for node in self.wrapped_method_timer
-#                 )
-#             ]
-#             self.wrapped_method_timer[main_node]["time"] = summed_time[0]
-
-#     def set_depth(self, rank: list) -> list:
-#         """Define the source nodes present at the max depth.
-
-#         If node is present in the root patway, the final node is selected.
-#         """
-#         max_depth = max((self.wrapped_method_src[node]) for node in rank)
-#         src_nodes = [
-#             node for node in rank if self.wrapped_method_src[node] == max_depth
-#         ]
-#         root_src_nodes = [node for node in self.rank["Root"] if node in src_nodes]
-#         for node in root_src_nodes[:-1]:
-#             src_nodes.remove(node)
-#         return src_nodes
-
-#     def make_graphviz_chart(self, time_resolution: int, filename: str) -> None:
-#         """Visualizes the entire system with graphviz."""
-#         graph = pydot.Dot(graph_type="digraph", compound="true")
-#         graph.set_node_defaults(
-#             color="black", style="filled", shape="box", fontname="Arial", fontsize="10"
-#         )
-#         self.set_color_scheme()
-#         self.sum_time()
-#         self.set_order_rank()
-
-#         for rank in self.rank:
-#             for base_node in self.rank[rank]:
-#                 count_label = "Count: " + str(self.wrapped_method_counter[base_node])
-#                 time_label = "Time: " + str(
-#                     round(self.wrapped_method_timer[base_node]["time"], time_resolution)
-#                 )
-#                 if rank == "Root":
-#                     my_node = pydot.Node(
-#                         base_node,
-#                         label=base_node + "\\n" + count_label + "\\n" + time_label,
-#                         fillcolor=self.color_palette[base_node],
-#                         style="filled, dashed",
-#                     )
-#                 else:
-#                     my_node = pydot.Node(
-#                         base_node,
-#                         label=base_node + "\\n" + count_label + "\\n" + time_label,
-#                         fillcolor=self.color_palette[base_node],
-#                     )
-#                 self.wrapped_method_nodes[base_node] = my_node
-#                 graph.add_node(my_node)
-
-#         for rank in self.rank:
-#             if rank == "Root":
-#                 for i in range(1, len(self.rank[rank])):
-#                     node_a = self.wrapped_method_nodes[self.rank[rank][i - 1]]
-#                     node_b = self.wrapped_method_nodes[self.rank[rank][i]]
-#                     graph.add_edge(pydot.Edge(node_a, node_b))
-#             else:
-#                 src_nodes = self.set_depth(rank)
-#                 for base_node in self.rank[rank]:
-#                     for src_node in src_nodes:
-#                         node_a = self.wrapped_method_nodes[src_node]
-#                         node_b = self.wrapped_method_nodes[base_node]
-#                         graph.add_edge(pydot.Edge(node_a, node_b))
-
-#         if self.profiler:
-#             self.profile.dump_stats("profile.pstats")
-
-#         graph.write_png(filename)
-
-# # global METHOD_PATTERN
-# METHOD_PATTERN = MethodChart(False)
-
-
 
 # https://refactoring.guru/design-patterns/singleton/python/example#example-1
 
@@ -205,19 +19,19 @@ def register_method(func):
         result = func(*args, **kwargs)
         end_time = time.perf_counter()
         total_time = end_time - start_time
-
-        if SingletonSimRepository().exist_entry(entry=func) is True:
-            SingletonSimRepository().edit(entry=func)
-            SingletonSimRepository().delete_entry(entry=func)
         
-            SingletonSimRepository().set_timer(entry=methodcall, time=total_time)
-            SingletonSimRepository().set_counter(entry=methodcall)
-            SingletonSimRepository().set_functioncalls(entry=methodcall)
-            SingletonSimRepository().set_entry(entry=func)
+        name = func.__module__ + '.' + func.__name__
+        methodcall = MethodCall(name)
+
+        if SingletonSimRepository().exist_entry(entry=methodcall):
+            SingletonSimRepository().edit(entry=methodcall, time=total_time)
+            SingletonSimRepository().delete_entry(entry=methodcall)
+            SingletonSimRepository().set_entry(entry=methodcall)
                 
         else:
-            SingletonSimRepository().create(entry=func)
-            SingletonSimRepository().set_entry(entry=func)
+            
+            SingletonSimRepository().create(entry=methodcall, time=total_time)
+            SingletonSimRepository().set_entry(entry=methodcall)
 
         return result
 
@@ -259,6 +73,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
     def __init__(self) -> None:
         """Initializes the Singleton."""
         self.my_list: List[MethodCall] = []
+        self.my_info: dict = {}
 
     def set_entry(self, entry: Any) -> None:
         """Sets an entry in the Singleton."""
@@ -283,35 +98,29 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         self.my_list.clear()
         del self.my_list
 
-    def set_name(self, entry: Any, name: str) -> None:
-        entry.name = name
-
-    def set_class(self, entry: Any, cls_class: str) -> None:
-        entry.classname = cls_class
-
-    def set_timer(self, entry: Any, time: float) -> None:
-        entry.timer += time
+    def edit(self, entry: Any, time: float) -> None:
+        self.my_info[entry.name]['timer'] += time
+        self.my_info[entry.name]['callcounter'] += 1
+        self.set_functioncalls(entry)
     
-    def set_counter(self, entry: Any) -> None:
-        entry.callcounter += 1
+    def create(self, entry: Any, time: float) -> None:
+        self.my_info[entry.name] = {'timer': time,
+                                    'callcounter': 1,
+                                    'functioncalls': []}
+        self.set_functioncalls(entry)
 
     def set_functioncalls(self, entry: Any) -> None:
         if len(self.my_list) > 0:
-            src_name = self.my_list[-1].name
-            base_name = entry.name
             if self.my_list[-1].name != entry.name:
-                entry.functioncalls.append(self.my_list[-1])
+                self.my_info[entry.name]['functioncalls'].append(self.my_list[-1])
 
 @dataclass
-class MethodCall(fname):
+class MethodCall:
     """
     This MethodCall class depicts the call.
     """
-    name: str = fname
+    name: str
     node: pydot.Node = None
-    timer: Any = 0.0
-    callcounter: int = 0
-    functioncalls: List[Any] = field(default_factory=list) 
 
 class MethodChart:
 
@@ -325,24 +134,23 @@ class MethodChart:
         )
 
         """Set node color scheme."""
-        max_value = max([methodcall.callcounter for methodcall in SingletonSimRepository().my_list])
+        max_value = max([SingletonSimRepository().my_info[item.name]['callcounter'] for item in SingletonSimRepository().my_list])
         palette = sns.color_palette("light:#5A9", max_value + 1).as_hex()
 
         """Generate callgraph."""
         for methodcall in SingletonSimRepository().my_list:
-            count_label = "Count: " + str(methodcall.callcounter)
-            time_label = "Time: " + str(round(methodcall.timer, time_resolution))
-            name_label = methodcall.classname + '.' + methodcall.name
+            count_label = "Count: " + str(SingletonSimRepository().my_info[methodcall.name]['callcounter'])
+            time_label = "Time: " + str(round(SingletonSimRepository().my_info[methodcall.name]['timer'], time_resolution))
 
             methodcall.node = pydot.Node(
                 methodcall.name,
-                label=name_label + "\\n" + count_label + "\\n" + time_label,
-                fillcolor=palette[methodcall.callcounter]
+                label=methodcall.name + "\\n" + count_label + "\\n" + time_label,
+                fillcolor=palette[SingletonSimRepository().my_info[methodcall.name]['callcounter']]
                 )
 
             graph.add_node(methodcall.node)
             
-            for src_node in methodcall.functioncalls:
+            for src_node in SingletonSimRepository().my_info[methodcall.name]['functioncalls']:
                 node_a = src_node.node
                 node_b = methodcall.node
                 graph.add_edge(pydot.Edge(node_a, node_b))

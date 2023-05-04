@@ -19,7 +19,6 @@ from hisim.components import generic_heat_source
 from hisim.components import controller_l1_building_heating
 from hisim.components import controller_l1_heatpump
 from hisim.components import controller_l1_chp
-from hisim.components import controller_l2_generic_heat_simple
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import loadprofilegenerator_connector
@@ -1111,7 +1110,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     """
 
     # configure and add chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size
@@ -1208,7 +1207,7 @@ def configure_chp_with_buffer(
     """
 
     # configure chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size

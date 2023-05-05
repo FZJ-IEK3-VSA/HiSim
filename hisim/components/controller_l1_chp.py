@@ -16,7 +16,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import log, utils
 from hisim.component import ConfigBase
-from hisim.components import building, generic_hot_water_storage_modular
+from hisim.components import building, generic_hot_water_storage_modular, generic_hydrogen_storage
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -43,7 +43,7 @@ class L1CHPControllerConfig(ConfigBase):
     use: LoadTypes
     #: minimal electricity demand to start operating, given in W:
     electricity_threshold: float
-    #: minimal state of charge of the hydrogen storage to start operating (only relevant for fuel cell), maximum value is 1:
+    #: minimal state of charge of the hydrogen storage to start operating in percent (only relevant for fuel cell):
     h2_soc_threshold: float
     #: lower set temperature of building (or buffer storage), given in °C
     t_min_heating_in_celsius: float
@@ -75,7 +75,7 @@ class L1CHPControllerConfig(ConfigBase):
     def get_default_config_fuel_cell() -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller."""
         config = L1CHPControllerConfig(
-            name="Fuel Cell Controller", source_weight=1, use=LoadTypes.HYDROGEN, electricity_threshold=300, h2_soc_threshold=0.08,
+            name="Fuel Cell Controller", source_weight=1, use=LoadTypes.HYDROGEN, electricity_threshold=300, h2_soc_threshold=8.0,
             t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=20.5, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60,
             day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2)
@@ -97,7 +97,7 @@ class L1CHPControllerConfig(ConfigBase):
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
-            name="CHP Controller", source_weight=1, use=LoadTypes.HYDROGEN, electricity_threshold=300, h2_soc_threshold=0.08,
+            name="CHP Controller", source_weight=1, use=LoadTypes.HYDROGEN, electricity_threshold=300, h2_soc_threshold=8.0,
             t_min_heating_in_celsius=31.0, t_max_heating_in_celsius=40.0, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60,
             day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2)
@@ -166,6 +166,7 @@ class L1CHPController(cp.Component):
     BuildingTemperature = "BuildingTemperature"
     HotWaterStorageTemperature = "HotWaterStorageTemperature"
     ElectricityTarget = "ElectricityTarget"
+    HydrogenSOC = "HydrogenSOC"
 
     # Outputs
     CHPControllerOnOffSignal = "CHPControllerOnOffSignal"
@@ -253,14 +254,21 @@ class L1CHPController(cp.Component):
             mandatory=False,
         )
 
-        self.add_default_connections(
-            self.get_default_connections_generic_hot_water_storage_modular()
+        self.hydrogen_soc_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HydrogenSOC,
+            LoadTypes.HYDROGEN,
+            Units.PERCENT,
+            mandatory=False,
         )
+
+        self.add_default_connections(self.get_default_connections_generic_hot_water_storage_modular())
         self.add_default_connections(self.get_default_connections_from_building())
+        self.add_default_connections(self.get_default_connections_from_h2_storage())
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
-        log.information("setting buffer default connections in L1 building Controller")
+        log.information("setting boiler default connections in L1 CHP/Fuel Cell controller")
         connections = []
         boiler_classname = (
             generic_hot_water_storage_modular.HotWaterStorage.get_classname()
@@ -276,7 +284,7 @@ class L1CHPController(cp.Component):
 
     def get_default_connections_from_building(self):
         """Sets default connections for the boiler."""
-        log.information("setting buffer default connections in L1 building Controller")
+        log.information("setting building default connections in L1 CHP/Fuel Cell Controller")
         connections = []
         building_classname = building.Building.get_classname()
         connections.append(
@@ -284,6 +292,20 @@ class L1CHPController(cp.Component):
                 L1CHPController.BuildingTemperature,
                 building_classname,
                 building.Building.TemperatureMeanThermalMass,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_h2_storage(self):
+        """Sets default connections for the hydrogen storage."""
+        log.information("setting hydrogen storage default connections in L1 CHP/Fuel Cell Controller")
+        connections = []
+        h2_storage_classname = generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                L1CHPController.HydrogenSOC,
+                h2_storage_classname,
+                generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
             )
         )
         return connections
@@ -313,8 +335,10 @@ class L1CHPController(cp.Component):
             # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
             self.state = self.processed_state.clone()
         else:
+            # control temperatures of boiler and building or buffer
             t_building = stsv.get_input_value(self.building_temperature_channel)
             t_dhw = stsv.get_input_value(self.dhw_temperature_channel)
+            # surplus/deficit electricity threshold exceeded?
             if self.electricity_target_channel.source_output is not None:
                 electricity_target = stsv.get_input_value(self.electricity_target_channel)
                 if electricity_target <= - 350:
@@ -323,8 +347,16 @@ class L1CHPController(cp.Component):
                     electricity_threshold_ok = False
             else:
                 electricity_threshold_ok = True
+            if self.hydrogen_soc_channel.source_output is not None:
+                hydrogen_soc = stsv.get_input_value(self.hydrogen_soc_channel)
+                if hydrogen_soc >= self.config.h2_soc_threshold:
+                    hydrogen_soc_ok = True
+                else:
+                    hydrogen_soc_ok = False
+            else:
+                hydrogen_soc_ok = True
             self.determine_heating_mode(timestep, stsv, t_building, t_dhw)
-            self.calculate_state(timestep, stsv, t_building, t_dhw, electricity_threshold_ok)
+            self.calculate_state(timestep, stsv, t_building, t_dhw, electricity_threshold_ok, hydrogen_soc_ok)
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.chp_onoff_signal_channel, self.state.on_off)
         stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
@@ -349,7 +381,8 @@ class L1CHPController(cp.Component):
             return
         self.state.mode = 1
 
-    def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues, t_building: float, t_dhw: float, electricity_threshold_ok: bool) -> None:
+    def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues, t_building: float, t_dhw: float,
+                        electricity_threshold_ok: bool, hydrogen_soc_ok: bool) -> None:
         """Calculate the CHP state and activate / deactives."""
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if (
@@ -369,6 +402,10 @@ class L1CHPController(cp.Component):
             return
         # deactivate when electricity is not needed:
         if not electricity_threshold_ok:
+            self.state.deactivate(timestep)
+            return
+        # deactivate when state of charge of hydrogen storage is too low:
+        if not hydrogen_soc_ok:
             self.state.deactivate(timestep)
             return
         # control according to set temperatures

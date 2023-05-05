@@ -6,7 +6,7 @@ In addition the controller takes care of minimum operation and indle times and t
 from dataclasses import dataclass
 from typing import List
 
-import utils
+from hisim import utils
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -51,16 +51,16 @@ class L1ElectrolyzerConfig(cp.ConfigBase):
 class L1ElectrolyzerControllerState():
     """This data class saves the state of the electrolyzer controller."""
 
-    def __init__(self, timestep_actual: int = -1, state: int = 0, timestep_of_last_action: int = 0,):
-        self.timestep_actual = timestep_actual
-        self.state = state
-        self.timestep_of_last_action = timestep_of_last_action
+    def __init__(self, state: int = 0, activation_time_step: int = 0, deactivation_time_step: int = 0):
+        self.state: int = state
+        self.activation_time_step: int = activation_time_step
+        self.deactivation_time_step: int = deactivation_time_step
 
     def clone(self) -> "L1ElectrolyzerControllerState":
         return L1ElectrolyzerControllerState(
-            timestep_actual=self.timestep_actual,
             state=self.state,
-            timestep_of_last_action=self.timestep_of_last_action,
+            activation_time_step=self.activation_time_step,
+            deactivation_time_step=self.deactivation_time_step
             )
 
     def activate(self, timestep: int) -> None:

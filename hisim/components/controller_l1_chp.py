@@ -70,7 +70,7 @@ class L1CHPControllerConfig(ConfigBase):
             t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=20.5, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60,
             day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4, min_idle_time_in_seconds=3600 * 2)
         return config
-    
+
     @staticmethod
     def get_default_config_fuel_cell() -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller."""
@@ -102,6 +102,7 @@ class L1CHPControllerConfig(ConfigBase):
             day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2)
         return config
+
 
 class L1CHPControllerState:
     """Data class that saves the state of the CHP controller."""
@@ -155,11 +156,17 @@ class L1CHPControllerState:
 
 
 class L1CHPController(cp.Component):
-    """L1 CHP Controller.
+    """L1 combined heat and power (CHP) or Fuel Cell Controller.
 
     Is activated when both Electricity and Heat are demanded. Decides if heat is transferred to
     Building or HotWaterStorage.
     When it is a fuel cell, also the SOC of the hydrogen storage is checked.
+
+    Components to connect to:
+    (1) Hot Water Storage (generic_hot_water_storage_modular)
+    (2) Either buffer storage or building (generic_hot_water_storage_modular or building)
+    (3) EMS controller (controller_l2_energy_management_system) -> optional if electricity should be involved in control.
+    (4) Hydrogen storage (generic_hydrogen_storage) -> optional if component is fuel cell and amount of hydrogen in storage is relevant.
     """
 
     # Inputs
@@ -295,7 +302,7 @@ class L1CHPController(cp.Component):
             )
         )
         return connections
-    
+
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage."""
         log.information("setting hydrogen storage default connections in L1 CHP/Fuel Cell Controller")

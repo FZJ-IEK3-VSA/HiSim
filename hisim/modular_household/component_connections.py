@@ -1124,7 +1124,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     """
 
     # configure and add chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp()
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size
@@ -1221,7 +1221,7 @@ def configure_chp_with_buffer(
     """
 
     # configure chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp_with_buffer(name="CHP Controller", use=lt.LoadTypes.GAS)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_chp_with_buffer()
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size
@@ -1293,23 +1293,23 @@ def configure_chp_with_buffer(
     return count
 
 
-def configure_elctrolysis_h2storage_chp_system(
+def configure_elctrolysis_h2storage_fuelcell_system(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
         my_boiler: generic_hot_water_storage_modular.HotWaterStorage, my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-        chp_power: float, h2_storage_size: Optional[float], electrolyzer_power: Optional[float], controlable: bool, count: int, ) -> Tuple[generic_CHP.CHP, int]:
+        fuel_cell_power: float, h2_storage_size: float, electrolyzer_power: float, controlable: bool, count: int, ) -> Tuple[generic_CHP.CHP, int]:
     """Sets electrolysis, H2-storage and chp system."""
 
     # configure and add chp controller
-    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config(name="Fuel Cell Controller", use=lt.LoadTypes.HYDROGEN)
+    chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_fuel_cell()
     chp_controller_config.source_weight = count
 
     # size chp power to hot water storage size
     my_boiler.config.compute_default_cycle(
         temperature_difference_in_kelvin=chp_controller_config.t_max_dhw_in_celsius - chp_controller_config.t_min_dhw_in_celsius)
-    chp_power = chp_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
+    fuel_cell_power = fuel_cell_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
 
     # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=chp_power)
+    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
     chp_config.source_weight = count
     my_chp = generic_CHP.CHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
@@ -1371,20 +1371,15 @@ def configure_elctrolysis_h2storage_chp_system(
         generic_electrolyzer.L1ElectrolyzerConfig.get_default_config()
     )
     l1_config_electrolyzer.source_weight = count
-    if electrolyzer_power is not None:
-        electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig(
-            name="Electrolyzer",
-            source_weight=count,
-            min_power=0.5 * electrolyzer_power,
-            max_power=electrolyzer_power,
-            min_hydrogen_production_rate_hour=0.125 * electrolyzer_power,
-            max_hydrogen_production_rate_hour=2 * electrolyzer_power,
-        )
-    else:
-        electrolyzer_config = (
-            generic_electrolyzer.GenericElectrolyzerConfig.get_default_config()
-        )
-        electrolyzer_config.source_weight = count
+    electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig(
+        name="Electrolyzer",
+        source_weight=count,
+        min_power=0.5 * electrolyzer_power,
+        max_power=electrolyzer_power,
+        min_hydrogen_production_rate_hour=0.125 * electrolyzer_power,
+        max_hydrogen_production_rate_hour=2 * electrolyzer_power,
+    )
+    electrolyzer_config.source_weight = count
     count += 1
 
     # electrolyzer
@@ -1431,25 +1426,12 @@ def configure_elctrolysis_h2storage_chp_system(
         src_object=electricity_to_electrolyzer_target,
     )
 
-    if h2_storage_size is not None:
-        h2_storage_config = (
-            generic_hydrogen_storage.GenericHydrogenStorageConfig(
-                name="HydrogenStorage",
-                source_weight=count,
-                min_capacity=0,
-                max_capacity=h2_storage_size,
-                max_charging_rate_hour=h2_storage_size * 1e-2,
-                max_discharging_rate_hour=h2_storage_size * 1e-2,
-                energy_for_charge=0,
-                energy_for_discharge=0,
-                loss_factor_per_day=0,
-            )
-        )
-    else:
-        h2_storage_config = (
-            generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config())
-        h2_storage_config.source_weigth = count
-
+    h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
+        capacity=h2_storage_size,
+        max_charging_rate=h2_storage_size * 1e-2,
+        max_discharging_rate=fuel_cell_power / (3.6e3 * 3.939e4),
+        source_weight=count,
+    )
     my_h2storage = generic_hydrogen_storage.GenericHydrogenStorage(
         my_simulation_parameters=my_simulation_parameters, config=h2_storage_config
     )

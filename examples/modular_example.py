@@ -512,17 +512,17 @@ def modular_household_explicit(
             count=count,
         )
 
-    # """CHP + H2 STORAGE + ELECTROLYSIS"""
-    if chp_included and h2_storage_included and electrolyzer_included and clever:
+    if hydrogen_setup_included:
         (
             my_chp,
             count,
-        ) = component_connections.configure_elctrolysis_h2storage_chp_system(
+        ) = component_connections.configure_elctrolysis_h2storage_fuelcell_system(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_building=my_building,
+            my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
-            chp_power=chp_power,
+            fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power,
             count=count,

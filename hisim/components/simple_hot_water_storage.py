@@ -243,13 +243,18 @@ class SimpleHotWaterStorage(cp.Component):
                 factor_for_water_input_portion,
             ) = self.calculate_mixing_factor_for_water_temperature_outputs()
 
-            # hds gets water from hp
-            self.water_temperature_to_heat_distribution_system_in_celsius = self.calculate_water_output_temperature(
-                mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-                mixing_factor_water_input_portion=factor_for_water_input_portion,
-                mixing_factor_water_storage_portion=factor_for_water_storage_portion,
-                water_input_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
-            )
+            # hds gets water from hp (if hp is not off meaning mass flow is not zero)
+            if water_mass_flow_rate_from_heat_generator_in_kg_per_second != 0:
+                self.water_temperature_to_heat_distribution_system_in_celsius = self.calculate_water_output_temperature(
+                    mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+                    mixing_factor_water_input_portion=factor_for_water_input_portion,
+                    mixing_factor_water_storage_portion=factor_for_water_storage_portion,
+                    water_input_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
+                )
+            # or else hds gets water from storage
+            else:
+                self.water_temperature_to_heat_distribution_system_in_celsius = self.mean_water_temperature_in_water_storage_in_celsius
+
             # hp gets water from hds
             self.water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
                 mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,

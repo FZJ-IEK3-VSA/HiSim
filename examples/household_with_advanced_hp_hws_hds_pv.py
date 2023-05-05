@@ -76,9 +76,8 @@ def household_with_hds_and_advanced_hp(
     model: str = "Generic"
     group_id: int = 4 # outdoor/air on/off type
     heating_reference_temperature: float = -7
-    p_th_set: float = 2000
+    p_th_set: float = 7000
     vorlauftemperatur = 40
-
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
@@ -102,7 +101,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_plots_only(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
@@ -113,6 +112,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters

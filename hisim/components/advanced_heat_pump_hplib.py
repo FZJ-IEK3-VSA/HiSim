@@ -233,9 +233,10 @@ class HeatPumpHplib(Component):
         if force_convergence:
             pass
         else:
+            # print("tp" , timestep)
             # Parameter
-            time_on_min = 600  # [s]
-            time_off_min = time_on_min #/ 10
+            time_on_min = 600 # [s]
+            time_off_min = time_on_min
 
             # Load input values
             on_off: float = stsv.get_input_value(self.on_off_switch)
@@ -245,14 +246,16 @@ class HeatPumpHplib(Component):
             time_on = self.state.time_on
             time_off = self.state.time_off
             on_off_previous = self.state.on_off_previous
-            # print("tp ", timestep)
-            # print("hp on/off before overwrite ", on_off_previous, on_off)
+            # print("hp state", on_off)
+            # print("hp state previous", on_off_previous)
             # Overwrite on_off to realize minimum time of or time off
-            if on_off_previous == 1 & time_on < time_on_min:
+            if on_off_previous == 1 and time_on < time_on_min:
                 on_off = 1
-            elif on_off_previous == 0 & time_off < time_off_min:
+                # print("first case")
+            elif on_off_previous == 0 and time_off < time_off_min:
                 on_off = 0
-
+            #     print("second case")
+            # print("hp state ", on_off)
             # OnOffSwitch
             if on_off == 1:
                 # Calulate outputs
@@ -268,8 +271,10 @@ class HeatPumpHplib(Component):
                 # Calulate outputs
                 p_th = 0
                 p_el = 0
-                cop = None
-                t_out = None
+                # cop = None
+                # t_out = None
+                cop = 0
+                t_out = t_in_secondary
                 m_dot = 0
                 time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
                 time_on = 0
@@ -283,13 +288,7 @@ class HeatPumpHplib(Component):
             stsv.set_output_value(self.time_on, time_on)
             stsv.set_output_value(self.time_off, time_off)
             
-            
-            # print("hp t_außen ", t_in_primary)
-            # print("hp t_water ", t_in_secondary)
-            # print("hp on/off ", on_off_previous, on_off)
-            # print("hp t_out ", t_out)
-            # print("hp pout ", p_th)
-
+            # print("time on/off", time_on, time_off, "\n")
             # write values to state
             self.state.time_on = time_on
             self.state.time_off = time_off
@@ -471,8 +470,6 @@ class HeatPumpHplibControllerL1(Component):
             if self.controller_heatpumpmode == "off":
                 state = 0
 
-            # state=0
-
             stsv.set_output_value(self.state_channel, state)
 
     def conditions(self, water_temperature_input_in_celsius: float) -> None:
@@ -481,6 +478,7 @@ class HeatPumpHplibControllerL1(Component):
         maximum_heating_set_temperature = (
             self.set_water_storage_temperature_for_heating_in_celsius + self.offset
         )
+
         minimum_heating_set_temperature = (
             self.set_water_storage_temperature_for_heating_in_celsius
         )

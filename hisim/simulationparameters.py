@@ -115,6 +115,19 @@ class SimulationParameters(JSONWizard):
         return pars
 
     @classmethod
+    def full_year_with_only_plots(
+        cls, year: int, seconds_per_timestep: int
+    ) -> SimulationParameters:
+        """Generates a parameter set for a full year with all the post processing, primarily for unit testing."""
+        pars = cls(
+            datetime.datetime(year, 1, 1),
+            datetime.datetime(year + 1, 1, 1),
+            seconds_per_timestep,
+            "",
+        )
+        pars.enable_plots_only()
+        return pars
+
     def one_day(
         cls, year: int, seconds_per_timestep: int
     ) -> SimulationParameters:

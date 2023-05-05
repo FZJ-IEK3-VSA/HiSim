@@ -101,7 +101,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)

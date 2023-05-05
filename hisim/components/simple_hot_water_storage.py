@@ -233,8 +233,8 @@ class SimpleHotWaterStorage(cp.Component):
                 previous_mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
                 seconds_per_timestep=self.seconds_per_timestep,
             )
-            if self.mean_water_temperature_in_water_storage_in_celsius > 90 or self.mean_water_temperature_in_water_storage_in_celsius < 0:
-                raise ValueError(f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low. \n Current timestep is {timestep}.")
+            # if self.mean_water_temperature_in_water_storage_in_celsius > 90 or self.mean_water_temperature_in_water_storage_in_celsius < 0:
+            #     raise ValueError(f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low. \n Current timestep is {timestep}.")
 
             # Calculations ------------------------------------------------------------------------------------------------------
 

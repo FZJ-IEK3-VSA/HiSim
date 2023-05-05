@@ -35,7 +35,7 @@ class SystemConfig:
     #: decision on the consideration of combined heat and power - in this case a fuel cell
     chp_included: bool = True
     #: maximal power of the considered CHP in multiples of the default
-    chp_power: Optional[float] = 1.0
+    chp_power: Optional[float] = 0.5
     #: decision on the consideration of fuel cell + hydrogen storage + electrolyzer
     hydrogen_setup_included: bool = False
     #: maximal power of the considered fuel cell in kW (heat and electricity combined)

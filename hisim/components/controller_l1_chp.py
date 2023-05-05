@@ -76,7 +76,7 @@ class L1CHPControllerConfig(ConfigBase):
         """Returns default configuration for the fuel cell controller."""
         config = L1CHPControllerConfig(
             name="Fuel Cell Controller", source_weight=1, use=LoadTypes.HYDROGEN, electricity_threshold=300, h2_soc_threshold=8.0,
-            t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=20.5, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60,
+            t_min_heating_in_celsius=20.0, t_max_heating_in_celsius=20.5, t_min_dhw_in_celsius=50, t_max_dhw_in_celsius=60,
             day_of_heating_season_begin=270, day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2)
         return config
@@ -87,7 +87,7 @@ class L1CHPControllerConfig(ConfigBase):
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
             name="CHP Controller", source_weight=1, use=LoadTypes.GAS, electricity_threshold=300, h2_soc_threshold=0,
-            t_min_heating_in_celsius=31.0, t_max_heating_in_celsius=40.0, t_min_dhw_in_celsius=42, t_max_dhw_in_celsius=60,
+            t_min_heating_in_celsius=35.0, t_max_heating_in_celsius=40.0, t_min_dhw_in_celsius=50, t_max_dhw_in_celsius=60,
             day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150, min_operation_time_in_seconds=3600 * 4,
             min_idle_time_in_seconds=3600 * 2)
         return config
@@ -341,7 +341,8 @@ class L1CHPController(cp.Component):
             # surplus/deficit electricity threshold exceeded?
             if self.electricity_target_channel.source_output is not None:
                 electricity_target = stsv.get_input_value(self.electricity_target_channel)
-                if electricity_target <= - 350:
+                if (electricity_target <= - self.config.electricity_threshold and self.state.on_off == 0) or \
+                        (electricity_target <= self.config.electricity_threshold and self.state.on_off == 1):
                     electricity_threshold_ok = True
                 else:
                     electricity_threshold_ok = False

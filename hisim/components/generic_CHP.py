@@ -204,9 +204,8 @@ class CHP(cp.Component):
         stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
         stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
 
-    def get_default_connections_from_chp_controller(
-        self,
-    ) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_chp_controller(self,) -> List[cp.ComponentConnection]:
+        """Sets default connections of the controller in the Fuel Cell / CHP."""
         log.information("setting l1 default connections in generic CHP")
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l1_chp.L1CHPController.get_classname()

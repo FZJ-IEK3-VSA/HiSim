@@ -69,7 +69,11 @@ class GenericCHPState:
 
 
 class CHP(cp.Component):
-    """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption."""
+    """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
+
+    Components to connect to:
+    (1) CHP or fuel cell controller (controller_l1_chp)
+    """
 
     # Inputs
     CHPControllerOnOffSignal = "CHPControllerOnOffSignal"
@@ -91,7 +95,7 @@ class CHP(cp.Component):
 
         self.config = config
         if self.config.use == lt.LoadTypes.HYDROGEN:
-            self.p_fuel = config.p_fuel * 1e-8 / 1.41  # converted to kg / s
+            self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
         else:
             self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
 
@@ -197,8 +201,6 @@ class CHP(cp.Component):
             stsv.set_output_value(self.thermal_power_output_building_channel, self.state.state * self.config.p_th)
 
         stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
-
-        # heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
         stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
 
     def get_default_connections_from_chp_controller(

@@ -471,28 +471,29 @@ def modular_household_explicit(
         # """TODO: repair! """
         # battery_cost = preprocessing.calculate_battery_investment_cost(economic_parameters, battery_included, battery_capacity)
 
-    # if chp_included and h2_storage_included and electrolyzer_included and clever:
-    #     (
-    #         my_chp,
-    #         count,
-    #     ) = component_connections.configure_elctrolysis_h2storage_chp_system(
-    #         my_sim=my_sim,
-    #         my_simulation_parameters=my_simulation_parameters,
-    #         my_building=my_building,
-    #         my_electricity_controller=my_electricity_controller,
-    #         chp_power=chp_power,
-    #         h2_storage_size=h2_storage_size,
-    #         electrolyzer_power=electrolyzer_power,
-    #         count=count,
-    #     )
-    #     if buffer_included:
-    #         my_buffer.connect_only_predefined_connections(my_chp)
-    #     else:
-    #         my_building.connect_input(
-    #             input_fieldname=my_building.ThermalPowerDelivered,
-    #             src_object_name=my_chp.component_name,
-    #             src_field_name=my_chp.ThermalPowerOutputBuilding,
-    #         )
+    if hydrogen_setup_included:
+        (
+            my_chp,
+            count,
+        ) = component_connections.configure_elctrolysis_h2storage_fuelcell_system(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_building=my_building,
+            my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
+            fuel_cell_power=fuel_cell_power,
+            h2_storage_size=h2_storage_size,
+            electrolyzer_power=electrolyzer_power,
+            count=count,
+        )
+        if buffer_included:
+            my_buffer.connect_only_predefined_connections(my_chp)
+        else:
+            my_building.connect_input(
+                input_fieldname=my_building.ThermalPowerDelivered,
+                src_object_name=my_chp.component_name,
+                src_field_name=my_chp.ThermalPowerOutputBuilding,
+            )
 
     if needs_ems(
         battery_included,

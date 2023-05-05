@@ -34,7 +34,7 @@ class CHPConfig(cp.ConfigBase):
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
-    #: type of CHP (fuel cell or gas driven):
+    #: type of CHP (fuel cell or gas driven)
     use: lt.LoadTypes
     #: electrical power of the CHP, when activated
     p_el: float

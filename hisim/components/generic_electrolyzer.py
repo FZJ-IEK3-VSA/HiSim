@@ -43,14 +43,15 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
     max_hydrogen_production_rate: float
 
     @staticmethod
-    def get_default_config() -> "GenericElectrolyzerConfig":
+    def get_default_config(p_el: float) -> "GenericElectrolyzerConfig":
+        """Returns the default configuration of an electrolyzer."""
         config = GenericElectrolyzerConfig(
             name="Electrolyzer",
             source_weight=1,
-            min_power=1200,
-            max_power=2400,
-            min_hydrogen_production_rate=300 * 8.989 / 3.6e4,
-            max_hydrogen_production_rate=5000 * 8.989 / 3.6e4,
+            min_power=p_el * 0.5,
+            max_power=p_el,
+            min_hydrogen_production_rate=p_el * (1/4) * 8.989 / 3.6e4,
+            max_hydrogen_production_rate=p_el * (50 / 24) * 8.989 / 3.6e4,
         )
         return config
 

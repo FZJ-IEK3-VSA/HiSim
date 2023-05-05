@@ -20,7 +20,6 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass
 class L1ElectrolyzerConfig(cp.ConfigBase):
     """Electrolyzer Controller Config."""
-
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -36,7 +35,7 @@ class L1ElectrolyzerConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config() -> "L1ElectrolyzerConfig":
-        """Returns the default configuration of an electrolyzer."""
+        """Returns the default configuration of an electrolyzer controller."""
         config = L1ElectrolyzerConfig(
             name="L1ElectrolyzerRuntimeController",
             source_weight=1,

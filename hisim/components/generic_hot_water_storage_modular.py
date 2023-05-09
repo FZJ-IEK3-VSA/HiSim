@@ -93,19 +93,7 @@ class StorageConfig(cp.ConfigBase):
                 + "This might be because the building was not initialized before the loadprofilegenerator_connector."
                 + "Please check the order of the initialization of the components in your example."
             )
-        # get default number of households
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-        ):
-            number_of_households = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-            )
-        else:
-            raise KeyError(
-                "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
-                + "Please check the order of the initialization of the components in your example."
-            )
+
         volume = 230 * max(number_of_households, 1)
         radius = (volume * 1e-3 / (4 * np.pi)) ** (
             1 / 3

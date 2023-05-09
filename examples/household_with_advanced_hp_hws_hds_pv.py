@@ -67,27 +67,27 @@ def household_with_hds_and_advanced_hp(
     source_weight = -1
 
     # Set Heat Pump Controller
-    set_water_storage_temperature_for_heating_in_celsius = 35
-    set_water_storage_temperature_for_cooling_in_celsius = 45
+    set_water_storage_temperature_for_heating_in_celsius = 32
+    set_water_storage_temperature_for_cooling_in_celsius = 38
     offset = 0.5
     hp_mode = 1
 
     # Set Heat Pump
     model: str = "Generic"
-    group_id: int = 4 # outdoor/air on/off type
+    group_id: int = 4  # outdoor/air on/off type
     heating_reference_temperature: float = -7
     p_th_set: float = 7000
     vorlauftemperatur = 40
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
-    mean_water_temperature_in_storage_in_celsius = 40
-    cool_water_temperature_in_storage_in_celsius = 40
-    hot_water_temperature_in_storage_in_celsius = 40
+    mean_water_temperature_in_storage_in_celsius = 35
+    cool_water_temperature_in_storage_in_celsius = 35
+    hot_water_temperature_in_storage_in_celsius = 35
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 40
+    water_temperature_in_distribution_system_in_celsius = 35
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
@@ -112,13 +112,17 @@ def household_with_hds_and_advanced_hp(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature
+    my_building_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature
+    )
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
 
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -180,7 +184,7 @@ def household_with_hds_and_advanced_hp(
             group_id=group_id,
             t_in=heating_reference_temperature,
             t_out_val=vorlauftemperatur,
-            p_th_set=p_th_set
+            p_th_set=p_th_set,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -230,16 +234,7 @@ def household_with_hds_and_advanced_hp(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
-    my_building.connect_input(
-        my_building.SetHeatingTemperature,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.SetHeatingTemperatureForBuilding,
-    )
-    my_building.connect_input(
-        my_building.SetCoolingTemperature,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.SetCoolingTemperatureForBuilding,
-    )
+
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
@@ -251,8 +246,7 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump.connect_input(
         my_heat_pump.OnOffSwitch,
         my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State
-
+        my_heat_pump_controller.State,
     )
     my_heat_pump.connect_input(
         my_heat_pump.TemperatureAmbient,
@@ -285,11 +279,7 @@ def household_with_hds_and_advanced_hp(
         my_heat_pump.component_name,
         my_heat_pump.MassFlowOutput,
     )
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatDistributionSystem,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
-    )
+
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_controller.connect_only_predefined_connections(
         my_weather, my_building, my_simple_hot_water_storage

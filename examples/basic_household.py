@@ -75,6 +75,12 @@ def basic_household_explicit(
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
@@ -106,13 +112,6 @@ def basic_household_explicit(
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Base Electricity Load Profile

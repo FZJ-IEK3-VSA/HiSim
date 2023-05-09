@@ -1,0 +1,6 @@
+fuel type;Stage;Footprint;Unit;Cost;Unit;Comment
+Electricity;Use;0.44;kgCO2eq/kWh;0.2525;EUR/kWh;
+DistrictHeating;Use;0.02;kgCO2eq/kWh;0.0033;EUR/kWh;Biomass
+Gas;Use;0.24;kgCO2eq/kWh;0.0861;EUR/kWh;
+Oil;Use;3.2;kgCO2eq/l;1.159835766;EUR/l;
+Diesel;Use;2.6649;kgCO2eq/l;1.617572993;EUR/l;

@@ -102,6 +102,7 @@ class PostProcessor:
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
                 PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
+                PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(

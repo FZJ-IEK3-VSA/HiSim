@@ -105,13 +105,36 @@ def household_with_hds(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT)
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS
+    )
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT
+    )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=heat_distribution_system.HeatDistributionControllerConfig(
+            name=hds_controller_name,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+        ),
+    )
+    # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
+
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
 
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -144,13 +167,6 @@ def household_with_hds(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
-
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         config=sumbuilder.ElectricityGridConfig(
@@ -160,7 +176,16 @@ def household_with_hds(
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
-
+    # Build Heat Distribution System
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
+        name=hds_name,
+        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
+        heating_system=heating_system,
+    )
+    my_heat_distribution_system = heat_distribution_system.HeatDistribution(
+        config=my_heat_distribution_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump_for_house_with_hds.HeatPumpControllerNew(
         config=generic_heat_pump_for_house_with_hds.HeatPumpControllerConfigNew(
@@ -198,27 +223,6 @@ def household_with_hds(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
-        name=hds_name,
-        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
-        heating_system=heating_system,
-    )
-    my_heat_distribution_system = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_system_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build Heat Distribution Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig(
-            name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-        ),
-    )
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
@@ -230,16 +234,7 @@ def household_with_hds(
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.ThermalPowerDelivered,
     )
-    my_building.connect_input(
-        my_building.SetHeatingTemperature,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.SetHeatingTemperatureForBuilding,
-    )
-    my_building.connect_input(
-        my_building.SetCoolingTemperature,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.SetCoolingTemperatureForBuilding,
-    )
+
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
@@ -261,11 +256,7 @@ def household_with_hds(
         my_simple_hot_water_storage.component_name,
         my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
     )
-    my_heat_pump.connect_input(
-        my_heat_pump.MaxThermalBuildingDemand,
-        my_building.component_name,
-        my_building.ReferenceMaxHeatBuildingDemand,
-    )
+
     # -----------------------------------------------------------------------------------------------------------------
     my_simple_hot_water_storage.connect_input(
         my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
@@ -277,16 +268,7 @@ def household_with_hds(
         my_heat_pump.component_name,
         my_heat_pump.WaterTemperatureOutput,
     )
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.HeatPumpWaterMassFlowRate,
-    )
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatDistributionSystem,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.HeatingDistributionSystemWaterMassFlowRate,
-    )
+
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_controller.connect_only_predefined_connections(
         my_weather, my_building, my_simple_hot_water_storage

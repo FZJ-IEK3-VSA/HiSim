@@ -668,7 +668,7 @@ class HeatPumpControllerNew(cp.Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        self.water_temperature_input_from_heat_water_storage_in_celsius: float = 50
+        self.water_temperature_input_from_heat_water_storage_in_celsius: float = 35
         self.build(
             set_water_storage_temperature_for_heating_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_heating_in_celsius,
             set_water_storage_temperature_for_cooling_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_cooling_in_celsius,

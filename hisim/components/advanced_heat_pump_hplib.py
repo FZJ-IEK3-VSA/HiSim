@@ -326,8 +326,8 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
-            set_water_storage_temperature_for_heating_in_celsius=49,
-            set_water_storage_temperature_for_cooling_in_celsius=55,
+            set_water_storage_temperature_for_heating_in_celsius=32,
+            set_water_storage_temperature_for_cooling_in_celsius=38,
             offset=0.0,
             mode=1,
         )

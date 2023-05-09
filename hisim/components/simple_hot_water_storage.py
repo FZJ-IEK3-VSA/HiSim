@@ -95,11 +95,11 @@ class SimpleHotWaterStorage(cp.Component):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.start_water_temperature_in_storage_in_celsius = 35
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 35
+        self.start_water_temperature_in_storage_in_celsius: float = 35.0
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 35.0
 
-        self.water_temperature_to_heat_distribution_system_in_celsius: float = 35
-        self.water_temperature_to_heat_generator_in_celsius: float = 35
+        self.water_temperature_to_heat_distribution_system_in_celsius: float = 35.0
+        self.water_temperature_to_heat_generator_in_celsius: float = 35.0
 
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM

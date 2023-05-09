@@ -85,8 +85,8 @@ class HeatPumpControllerConfigNew(cp.ConfigBase):
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpControllerConfigNew(
             name="HeatPumpController",
-            set_water_storage_temperature_for_heating_in_celsius=49,
-            set_water_storage_temperature_for_cooling_in_celsius=55,
+            set_water_storage_temperature_for_heating_in_celsius=32,
+            set_water_storage_temperature_for_cooling_in_celsius=38,
             offset=0.0,
             mode=1,
         )
@@ -218,10 +218,8 @@ class GenericHeatPumpNew(cp.Component):
         self.previous_state = self.state.clone()
         self.has_been_converted: Any
 
-        self.water_temperature_input_in_celsius: float = 50.0
-        # self.heatpump_water_mass_flow_rate_in_kg_per_second: float = 0
-        self.water_temperature_output_in_celsius: float = 50.0
-        # self.max_thermal_building_demand_in_watt: float = 0
+        self.water_temperature_input_in_celsius: float = 35
+        self.water_temperature_output_in_celsius: float = 35
         self.temperature_outside: float = 0
 
         self.state_from_heat_pump_controller: float = 0
@@ -586,20 +584,6 @@ class GenericHeatPumpNew(cp.Component):
                 self.water_temperature_output_in_celsius,
             )
 
-            # stsv.set_output_value(
-            #     self.heatpump_water_mass_flow_rate_input_channel,
-            #     self.heatpump_water_mass_flow_rate_in_kg_per_second,
-            # )
-            # log.information("hp timestep " + str(timestep))
-            # # log.information("hp hpc state " + str(self.state_from_heat_pump_controller))
-            # log.information(
-            #     "hp thermal power delivered "
-            #     + str(self.state.thermal_power_delivered_in_watt)
-            # )
-            # log.information("hp water temperature input " + str(self.water_temperature_input_in_celsius))
-            # log.information(
-            #     "hp water temperature output "
-            #     + str(self.water_temperature_output_in_celsius))
 
     def calculate_water_temperature_after_heat_transfer(
         self,
@@ -661,7 +645,7 @@ class HeatPumpControllerNew(cp.Component):
     """
 
     # Inputs
-    # TemperatureMean = "Residence Temperature"
+
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
@@ -888,10 +872,6 @@ class HeatPumpControllerNew(cp.Component):
             if set_temperature > maximum_cooling_set_temperature:  # 26
                 self.controller_heatpumpmode = "cooling"
                 return
-
-        # if timestep >= 60*24*30*3 and timestep <= 60*24*30*9:  #    state = 0
-
-        # log.information("Final state: {}\n".format(state))
 
     def prin1t_outpu1t(self, t_m: float, state: Any) -> None:
         """Print output of heat pump controller."""

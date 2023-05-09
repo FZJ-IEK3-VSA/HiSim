@@ -145,7 +145,7 @@ class HeatDistribution(cp.Component):
         )
 
         self.thermal_power_delivered_in_watt: float = 0.0
-        self.water_temperature_output_in_celsius: float = 40.0
+        self.water_temperature_output_in_celsius: float = 35
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
         if SingletonSimRepository().exist_entry(

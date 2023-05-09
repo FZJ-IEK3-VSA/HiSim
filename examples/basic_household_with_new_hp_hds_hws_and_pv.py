@@ -67,8 +67,8 @@ def household_with_hds(
     source_weight = -1
 
     # Set Heat Pump Controller
-    set_water_storage_temperature_for_heating_in_celsius = 49
-    set_water_storage_temperature_for_cooling_in_celsius = 52
+    set_water_storage_temperature_for_heating_in_celsius = 32
+    set_water_storage_temperature_for_cooling_in_celsius = 38
     offset = 0.5
     hp_mode = 1
 
@@ -81,13 +81,13 @@ def household_with_hds(
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
-    mean_water_temperature_in_storage_in_celsius = 50
-    cool_water_temperature_in_storage_in_celsius = 50
-    hot_water_temperature_in_storage_in_celsius = 50
+    mean_water_temperature_in_storage_in_celsius = 35
+    cool_water_temperature_in_storage_in_celsius = 35
+    hot_water_temperature_in_storage_in_celsius = 35
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 50
+    water_temperature_in_distribution_system_in_celsius = 35
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller

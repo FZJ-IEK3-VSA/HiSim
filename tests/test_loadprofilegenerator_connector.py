@@ -17,7 +17,7 @@ def test_occupancy():
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     my_simulation_parameters.predictive_control = False
     my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=my_occupancy_config.number_of_apartments)
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1)
     my_occupancy_config.profile_name=my_occupancy_profile
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 

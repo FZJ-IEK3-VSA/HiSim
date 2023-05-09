@@ -22,6 +22,7 @@ from hisim.components.configuration import PhysicsConfig
 from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -175,7 +176,6 @@ class GenericHeatPumpNew(cp.Component):
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
-    MaxThermalBuildingDemand = "MaxThermalBuildingDemand"
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
@@ -184,7 +184,6 @@ class GenericHeatPumpNew(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     NumberOfCycles = "NumberOfCycles"
     WaterTemperatureOutput = "WaterTemperatureOutput"
-    HeatPumpWaterMassFlowRate = "HeatPumpWaterMassFlowRate"
 
     # Similar components to connect to:
     # 1. Weather
@@ -220,12 +219,35 @@ class GenericHeatPumpNew(cp.Component):
         self.has_been_converted: Any
 
         self.water_temperature_input_in_celsius: float = 50.0
-        self.heatpump_water_mass_flow_rate_in_kg_per_second: float = 0
+        # self.heatpump_water_mass_flow_rate_in_kg_per_second: float = 0
         self.water_temperature_output_in_celsius: float = 50.0
-        self.max_thermal_building_demand_in_watt: float = 0
+        # self.max_thermal_building_demand_in_watt: float = 0
         self.temperature_outside: float = 0
 
         self.state_from_heat_pump_controller: float = 0
+
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+        ):
+            self.max_thermal_building_demand_in_watt = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+                )
+            )
+        else:
+            raise KeyError(
+                "Keys for max thermal building demand was not found in the singleton sim repository."
+                + "This might be because the heat pump was not initialized before the building."
+                + "Please check the order of the initialization of the components in your example."
+            )
+
+        self.heatpump_water_mass_flow_rate_in_kg_per_second = self.calc_heat_pump_water_mass_flow_rate(
+            max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR,
+            entry=self.heatpump_water_mass_flow_rate_in_kg_per_second,
+        )
 
         # Inputs - Mandatories
         self.state_channel: cp.ComponentInput = self.add_input(
@@ -246,14 +268,6 @@ class GenericHeatPumpNew(cp.Component):
             self.WaterTemperatureInputFromHeatWaterStorage,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
-            True,
-        )
-
-        self.max_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.MaxThermalBuildingDemand,
-            LoadTypes.HEATING,
-            Units.WATT,
             True,
         )
         # Outputs
@@ -295,14 +309,6 @@ class GenericHeatPumpNew(cp.Component):
             LoadTypes.WARM_WATER,
             Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureOutput} will follow.",
-        )
-
-        self.heatpump_water_mass_flow_rate_input_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.HeatPumpWaterMassFlowRate,
-            LoadTypes.WARM_WATER,
-            Units.KG_PER_SEC,
-            output_description=f"here a description for {self.HeatPumpWaterMassFlowRate} will follow.",
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
@@ -484,16 +490,6 @@ class GenericHeatPumpNew(cp.Component):
             self.water_temperature_input_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_from_heat_water_storage_channel
             )
-            self.max_thermal_building_demand_in_watt = stsv.get_input_value(
-                self.max_thermal_building_demand_channel
-            )
-
-            # Calculation of water mass flow rate of heat pump
-            self.heatpump_water_mass_flow_rate_in_kg_per_second = (
-                self.calc_heat_pump_water_mass_flow_rate(
-                    self.max_thermal_building_demand_in_watt
-                )
-            )
 
             # Calculation.ThermalEnergyDelivery
             # Heat Pump is on
@@ -535,11 +531,6 @@ class GenericHeatPumpNew(cp.Component):
                 stsv.set_output_value(
                     self.water_temperature_output_channel,
                     self.water_temperature_output_in_celsius,
-                )
-
-                stsv.set_output_value(
-                    self.heatpump_water_mass_flow_rate_input_channel,
-                    self.heatpump_water_mass_flow_rate_in_kg_per_second,
                 )
 
                 return
@@ -595,10 +586,10 @@ class GenericHeatPumpNew(cp.Component):
                 self.water_temperature_output_in_celsius,
             )
 
-            stsv.set_output_value(
-                self.heatpump_water_mass_flow_rate_input_channel,
-                self.heatpump_water_mass_flow_rate_in_kg_per_second,
-            )
+            # stsv.set_output_value(
+            #     self.heatpump_water_mass_flow_rate_input_channel,
+            #     self.heatpump_water_mass_flow_rate_in_kg_per_second,
+            # )
             # log.information("hp timestep " + str(timestep))
             # # log.information("hp hpc state " + str(self.state_from_heat_pump_controller))
             # log.information(

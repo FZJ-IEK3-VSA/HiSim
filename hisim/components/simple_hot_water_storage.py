@@ -12,6 +12,7 @@ from hisim.component import (
     ComponentOutput,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
@@ -68,10 +69,6 @@ class SimpleHotWaterStorage(cp.Component):
         "WaterTemperatureFromHeatDistributionSystem"
     )
     WaterTemperatureFromHeatGenerator = "WaterTemperaturefromHeatGenerator"
-    WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
-    WaterMassFlowRateFromHeatDistributionSystem = (
-        "WaterMassFlowRateFromHeatDistributionSystem"
-    )
 
     # Output
 
@@ -102,6 +99,27 @@ class SimpleHotWaterStorage(cp.Component):
 
         self.water_temperature_to_heat_distribution_system_in_celsius: float = 50.0
         self.water_temperature_to_heat_generator_in_celsius: float = 50.0
+
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
+        ) and SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR
+        ):
+            self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
+            )
+            self.water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR
+                )
+            )
+        else:
+            raise KeyError(
+                "Keys for water mass flow rates were not found in the singleton sim repository."
+                + "This might be because the simple hot water storage was not initialized before the heating_distribution_system and the heat generator."
+                + "Please check the order of the initialization of the components in your example."
+            )
+
         self.build()
 
         # =================================================================================================================================
@@ -124,23 +142,6 @@ class SimpleHotWaterStorage(cp.Component):
             )
         )
 
-        self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.WaterMassFlowRateFromHeatGenerator,
-                lt.LoadTypes.WARM_WATER,
-                lt.Units.KG_PER_SEC,
-                True,
-            )
-        )
-
-        self.water_mass_flow_rate_heat_distrution_system_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterMassFlowRateFromHeatDistributionSystem,
-            lt.LoadTypes.WARM_WATER,
-            lt.Units.KG_PER_SEC,
-            True,
-        )
         # Output channels
 
         self.water_temperature_heat_distribution_system_output_channel: ComponentOutput = self.add_output(
@@ -206,16 +207,6 @@ class SimpleHotWaterStorage(cp.Component):
             water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
                 self.water_temperature_heat_generator_input_channel
             )
-            water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
-            )
-            water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = (
-                stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_distrution_system_input_channel
-                )
-            )
 
             if water_temperature_from_heat_distribution_system_in_celsius == 0:
                 """first iteration --> random numbers"""
@@ -227,8 +218,8 @@ class SimpleHotWaterStorage(cp.Component):
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
                 water_temperature_from_heat_distribution_system_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
                 water_temperature_from_heat_generator_in_celsius=water_temperature_from_heat_generator_in_celsius,
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
-                water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second=self.water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+                water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
                 water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
                 previous_mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
                 seconds_per_timestep=self.seconds_per_timestep,

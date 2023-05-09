@@ -97,10 +97,6 @@ def simulation_for_one_time_step(
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     )
-    log.information(
-        "Set Occupancy Config Number of Apartments "
-        + str(my_occupancy_config.number_of_apartments)
-    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -156,7 +152,7 @@ def simulation_for_one_time_step(
     my_occupancy.i_simulate(1, stsv, False)
 
     scaling_factor_number_of_apartments = (
-        building_number_of_apartments / my_occupancy_config.number_of_apartments
+        building_number_of_apartments
     )
 
     occupancy_outputs = stsv.values[-4:]

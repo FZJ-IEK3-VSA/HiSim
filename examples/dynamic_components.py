@@ -104,7 +104,8 @@ def dynamic_components_demonstration(
     )
 
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=my_occupancy_config.number_of_apartments)
+    # choose 1 to be the default for the number of apartments
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1)
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

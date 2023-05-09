@@ -104,12 +104,19 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
-    # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=heat_distribution_system.HeatDistributionControllerConfig(
+            name=hds_controller_name,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+        ),
+    )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_config.heating_reference_temperature_in_celsius = (
@@ -189,6 +196,17 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Build Heat Distribution System
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
+        name=hds_name,
+        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
+        heating_system=heating_system,
+    )
+    my_heat_distribution_system = heat_distribution_system.HeatDistribution(
+        config=my_heat_distribution_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
         name=hws_name,
@@ -202,27 +220,6 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
-        name=hds_name,
-        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
-        heating_system=heating_system,
-    )
-    my_heat_distribution_system = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_system_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build Heat Distribution Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig(
-            name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-        ),
-    )
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 

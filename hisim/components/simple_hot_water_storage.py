@@ -110,7 +110,7 @@ class SimpleHotWaterStorage(cp.Component):
         else:
             raise KeyError(
                 "Keys for water mass flow rate of heating distribution system was not found in the singleton sim repository."
-                + "This might be because the simple hot water storage was not initialized before the heating_distribution_system."
+                + "This might be because the heating_distribution_system was not initialized before the simple hot water storage."
                 + "Please check the order of the initialization of the components in your example."
             )
         if SingletonSimRepository().exist_entry(

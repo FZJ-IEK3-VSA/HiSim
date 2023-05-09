@@ -240,8 +240,8 @@ class Building(dynamic_component.DynamicComponent):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.set_heating_temperature_in_celsius: float = 20
-        self.set_cooling_temperature_in_celsius: float = 23
+        self.set_heating_temperature_in_celsius_default: float = 20
+        self.set_cooling_temperature_in_celsius_default: float = 23
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -373,11 +373,9 @@ class Building(dynamic_component.DynamicComponent):
                 )
             )
         else:
-            raise KeyError(
-                "Keys for set heating temperatures were not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the heating_distribution_system_controller."
-                + "Please check the order of the initialization of the components in your example."
-            )
+            self.set_heating_temperature_in_celsius = self.set_heating_temperature_in_celsius_default
+            self.set_cooling_temperature_in_celsius = self.set_cooling_temperature_in_celsius_default
+            log.warning("Default temperature thresholds for cooling/heating in building are used.")
 
         # =================================================================================================================================
         # Input channels

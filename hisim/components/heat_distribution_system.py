@@ -439,8 +439,7 @@ class HeatDistributionController(cp.Component):
 
     """Heat Distribution Controller.
 
-    It takes data from other
-    components and sends signal to the heat distribution for
+    It takes data from the building, weather and water storage and sends signal to the heat distribution for
     activation or deactivation.
 
     """

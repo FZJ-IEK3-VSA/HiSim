@@ -105,3 +105,5 @@ class SingletonDictKeyEnum(enum.Enum):
     """Class for setting dictionary keys in the singleton sim repository."""
 
     NUMBEROFAPARTMENTS = 1
+    SETHEATINGTEMPERATUREFORBUILDING = 2
+    SETCOOLINGTEMPERATUREFORBUILDING = 3

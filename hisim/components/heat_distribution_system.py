@@ -10,6 +10,7 @@ from hisim.components.building import Building
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
@@ -466,8 +467,8 @@ class HeatDistributionController(cp.Component):
 
     # Outputs
     State = "State"
-    SetHeatingTemperatureForBuilding = "SetHeatingTemperatureForBuilding"
-    SetCoolingTemperatureForBuilding = "SetCoolingTemperatureForBuilding"
+    # SetHeatingTemperatureForBuilding = "SetHeatingTemperatureForBuilding"
+    # SetCoolingTemperatureForBuilding = "SetCoolingTemperatureForBuilding"
 
     # Similar components to connect to:
     # 1. Building
@@ -484,13 +485,18 @@ class HeatDistributionController(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state_controller: int = 0
-
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING, entry=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING, entry=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius
+        )
         self.build(
             set_heating_threshold_temperature=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
             # set_water_storage_temperature_for_heating_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_heating_in_celsius,
             # set_water_storage_temperature_for_cooling_in_celsius=self.heat_distribution_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
-            set_heating_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
+            # set_heating_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
+            # set_cooling_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
         )
 
         # Inputs
@@ -528,21 +534,21 @@ class HeatDistributionController(cp.Component):
             output_description=f"here a description for {self.State} will follow.",
         )
 
-        self.set_heating_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.SetHeatingTemperatureForBuilding,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.SetHeatingTemperatureForBuilding} will follow.",
-        )
+        # self.set_heating_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
+        #     self.component_name,
+        #     self.SetHeatingTemperatureForBuilding,
+        #     lt.LoadTypes.TEMPERATURE,
+        #     lt.Units.CELSIUS,
+        #     output_description=f"here a description for {self.SetHeatingTemperatureForBuilding} will follow.",
+        # )
 
-        self.set_cooling_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.SetCoolingTemperatureForBuilding,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.SetCoolingTemperatureForBuilding} will follow.",
-        )
+        # self.set_cooling_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
+        #     self.component_name,
+        #     self.SetCoolingTemperatureForBuilding,
+        #     lt.LoadTypes.TEMPERATURE,
+        #     lt.Units.CELSIUS,
+        #     output_description=f"here a description for {self.SetCoolingTemperatureForBuilding} will follow.",
+        # )
 
         self.controller_heat_distribution_mode: str = "off"
         self.previous_controller_heat_distribution_mode: str = "off"
@@ -606,8 +612,8 @@ class HeatDistributionController(cp.Component):
         set_heating_threshold_temperature: float,
         # set_water_storage_temperature_for_heating_in_celsius: float,
         # set_water_storage_temperature_for_cooling_in_celsius: float,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
+        # set_heating_temperature_for_building_in_celsius: float,
+        # set_cooling_temperature_for_building_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -627,12 +633,12 @@ class HeatDistributionController(cp.Component):
         # self.set_water_storage_temperature_for_cooling_in_celsius = (
         #     set_water_storage_temperature_for_cooling_in_celsius
         # )
-        self.set_heating_temperature_for_building_in_celsius = (
-            set_heating_temperature_for_building_in_celsius
-        )
-        self.set_cooling_temperature_for_building_in_celsius = (
-            set_cooling_temperature_for_building_in_celsius
-        )
+        # self.set_heating_temperature_for_building_in_celsius = (
+        #     set_heating_temperature_for_building_in_celsius
+        # )
+        # self.set_cooling_temperature_for_building_in_celsius = (
+        #     set_cooling_temperature_for_building_in_celsius
+        # )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -691,14 +697,14 @@ class HeatDistributionController(cp.Component):
                 raise ValueError("unknown mode")
 
             stsv.set_output_value(self.state_channel, self.state_controller)
-            stsv.set_output_value(
-                self.set_heating_temperature_for_building_channel,
-                self.set_heating_temperature_for_building_in_celsius,
-            )
-            stsv.set_output_value(
-                self.set_cooling_temperature_for_building_channel,
-                self.set_cooling_temperature_for_building_in_celsius,
-            )
+            # stsv.set_output_value(
+            #     self.set_heating_temperature_for_building_channel,
+            #     self.set_heating_temperature_for_building_in_celsius,
+            # )
+            # stsv.set_output_value(
+            #     self.set_cooling_temperature_for_building_channel,
+            #     self.set_cooling_temperature_for_building_in_celsius,
+            # )
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,

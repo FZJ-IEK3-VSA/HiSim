@@ -77,7 +77,7 @@ def household_with_hds_and_advanced_hp(
     group_id: int = 4  # outdoor/air on/off type
     heating_reference_temperature: float = -7
     p_th_set: float = 7000
-    vorlauftemperatur = 40
+    vorlauftemperatur = 35
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100

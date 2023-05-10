@@ -503,10 +503,7 @@ def modular_household_explicit(
 
     # """hydrogen storage with fuel cell and electrolyzer"""
     if hydrogen_setup_included and not buffer_included:
-        (
-            my_chp,
-            count,
-        ) = component_connections.configure_elctrolysis_h2storage_fuelcell_system(
+        count = component_connections.configure_elctrolysis_h2storage_fuelcell_system(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_building=my_building,
@@ -520,7 +517,18 @@ def modular_household_explicit(
         )
 
     if hydrogen_setup_included and buffer_included:
-        pass  # tbd
+        count = component_connections.configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_buffer=my_buffer,
+            my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
+            fuel_cell_power=fuel_cell_power,
+            h2_storage_size=h2_storage_size,
+            electrolyzer_power=electrolyzer_power * pv_peak_power,
+            controlable=clever,
+            count=count,
+        )
 
     # """BATTERY"""
     if battery_included and clever:

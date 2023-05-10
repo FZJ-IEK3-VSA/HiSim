@@ -14,6 +14,7 @@ from hisim.component import (
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from typing import Optional, Any, List
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -282,7 +283,7 @@ class HeatPumpHplib(Component):
                 # Calulate outputs for off mode
                 p_th = 0
                 p_el = 0
-                # None values or nans will cause troubles in post processing, that is why there are commented here
+                # None values or nans will cause troubles in post processing, that is why there are not used here
                 # cop = None
                 # t_out = None
                 cop = 0
@@ -328,9 +329,9 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         return HeatPumpHplibControllerL1Config.get_full_classname()
 
     name: str
-    set_water_storage_temperature_for_heating_in_celsius: float
-    set_water_storage_temperature_for_cooling_in_celsius: float
-    offset: float
+    # set_water_storage_temperature_for_heating_in_celsius: float
+    # set_water_storage_temperature_for_cooling_in_celsius: float
+    # offset_for_set_water_storage_temperature_in_celsius: float
     mode: int
 
     @classmethod
@@ -338,9 +339,9 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
-            set_water_storage_temperature_for_heating_in_celsius=32,
-            set_water_storage_temperature_for_cooling_in_celsius=38,
-            offset=0.0,
+            # set_water_storage_temperature_for_heating_in_celsius=32,
+            # set_water_storage_temperature_for_cooling_in_celsius=38,
+            # offset_for_set_water_storage_temperature_in_celsius=0.0,
             mode=1,
         )
 class HeatPumpHplibControllerL1(Component):
@@ -385,11 +386,16 @@ class HeatPumpHplibControllerL1(Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        self.water_temperature_input_from_heat_water_storage_in_celsius: float = 35
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE) and SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE):
+            self.set_heating_temperature_for_water_storage_in_celsius = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE)
+            self.set_cooling_temperature_for_water_storage_in_celsius = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE)
+        else:
+            raise KeyError("The keys set_heating/cooling_temperature_for_water_storage were not found in the singleton sim repository. This might be because the heat distribution system controller was not initialized before the heat pump controller. Please check the initialization order in your example.")
+        self.water_temperature_input_from_heat_water_storage_in_celsius: float = 22
         self.build(
-            set_water_storage_temperature_for_heating_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_heating_in_celsius,
-            set_water_storage_temperature_for_cooling_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
-            offset=self.heatpump_controller_config.offset,
+            # set_water_storage_temperature_for_heating_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_heating_in_celsius,
+            # set_water_storage_temperature_for_cooling_in_celsius=self.heatpump_controller_config.set_water_storage_temperature_for_cooling_in_celsius,
+            # offset=self.heatpump_controller_config.offset_for_set_water_storage_temperature_in_celsius,
             mode=self.heatpump_controller_config.mode,
         )
 
@@ -414,9 +420,9 @@ class HeatPumpHplibControllerL1(Component):
 
     def build(
         self,
-        set_water_storage_temperature_for_heating_in_celsius: float,
-        set_water_storage_temperature_for_cooling_in_celsius: float,
-        offset: float,
+        # set_water_storage_temperature_for_heating_in_celsius: float,
+        # set_water_storage_temperature_for_cooling_in_celsius: float,
+        # offset: float,
         mode: float,
     ) -> None:
         """Build function.
@@ -428,13 +434,13 @@ class HeatPumpHplibControllerL1(Component):
         self.previous_heatpump_mode = self.controller_heatpumpmode
 
         # Configuration
-        self.set_water_storage_temperature_for_heating_in_celsius = (
-            set_water_storage_temperature_for_heating_in_celsius
-        )
-        self.set_water_storage_temperature_for_cooling_in_celsius = (
-            set_water_storage_temperature_for_cooling_in_celsius
-        )
-        self.offset = offset
+        # self.set_water_storage_temperature_for_heating_in_celsius = (
+        #     set_water_storage_temperature_for_heating_in_celsius
+        # )
+        # self.set_water_storage_temperature_for_cooling_in_celsius = (
+        #     set_water_storage_temperature_for_cooling_in_celsius
+        # )
+        # self.offset = offset
 
         self.mode = mode
 
@@ -476,10 +482,9 @@ class HeatPumpHplibControllerL1(Component):
                 self.conditions_on_off(
                     water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius,
                 )
-            elif self.mode == 2:
-                self.conditions_heating_cooling_off_one(water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius)
-            elif self.mode == 3:
-                self.conditions_heating_cooling_off_two(water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius)
+            # elif self.mode == 2:
+            #     self.conditions_heating_cooling_off_one(water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius)
+
             else:
                 raise ValueError("Advanced HP Lib Controller Mode not known.")
 
@@ -488,23 +493,25 @@ class HeatPumpHplibControllerL1(Component):
             if self.controller_heatpumpmode == "off":
                 state = 0
 
-            if self.controller_heatpumpmode == "heating":
-                state = 1
-            if self.controller_heatpumpmode == "cooling":
-                state = -1
+            # if self.controller_heatpumpmode == "heating":
+            #     state = 1
+            # if self.controller_heatpumpmode == "cooling":
+            #     state = -1
 
             stsv.set_output_value(self.state_channel, state)
 
     def conditions_on_off(self, water_temperature_input_in_celsius: float) -> None:
         """Set conditions for the heat pump controller mode."""
 
-        maximum_heating_set_temperature = (
-            self.set_water_storage_temperature_for_heating_in_celsius + self.offset
-        )
+        # maximum_heating_set_temperature = (
+        #     self.set_water_storage_temperature_for_heating_in_celsius #+ self.offset
+        # )
 
-        minimum_heating_set_temperature = (
-            self.set_water_storage_temperature_for_heating_in_celsius
-        )
+        # minimum_heating_set_temperature = (
+        #     self.set_water_storage_temperature_for_heating_in_celsius
+        # )
+        set_heating_temperature_for_water_storage_in_celsius = self.set_heating_temperature_for_water_storage_in_celsius
+        set_cooling_temperature_for_water_storage_in_celsius = self.set_cooling_temperature_for_water_storage_in_celsius
         # minimum_cooling_set_temperature = (
         #     self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
         # )
@@ -513,7 +520,7 @@ class HeatPumpHplibControllerL1(Component):
         # )
 
         if self.controller_heatpumpmode == "on":
-            if water_temperature_input_in_celsius > maximum_heating_set_temperature:
+            if water_temperature_input_in_celsius > set_cooling_temperature_for_water_storage_in_celsius:
                 self.controller_heatpumpmode = "off"
                 return
         # elif self.controller_heatpumpmode == "on":
@@ -521,7 +528,7 @@ class HeatPumpHplibControllerL1(Component):
         #         self.controller_heatpumpmode = "off"
         #         return
         elif self.controller_heatpumpmode == "off":
-            if water_temperature_input_in_celsius < minimum_heating_set_temperature:
+            if water_temperature_input_in_celsius < set_heating_temperature_for_water_storage_in_celsius:
                 self.controller_heatpumpmode = "on"
                 return
             # if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
@@ -530,59 +537,36 @@ class HeatPumpHplibControllerL1(Component):
         else:
             raise ValueError("unknown mode")
         
-    def conditions_heating_cooling_off_one(self, water_temperature_input_in_celsius: float) -> None:
-        """Set conditions for the heat pump controller mode."""
+    # def conditions_heating_cooling_off_one(self, water_temperature_input_in_celsius: float) -> None:
+    #     """Set conditions for the heat pump controller mode."""
 
-        maximum_heating_set_temperature = (
-            self.set_water_storage_temperature_for_heating_in_celsius + self.offset
-        )
-        minimum_heating_set_temperature = (
-            self.set_water_storage_temperature_for_heating_in_celsius
-        )
-        minimum_cooling_set_temperature = (
-            self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
-        )
-        maximum_cooling_set_temperature = (
-            self.set_water_storage_temperature_for_cooling_in_celsius
-        )
+    #     maximum_heating_set_temperature = (
+    #         self.set_water_storage_temperature_for_heating_in_celsius + self.offset
+    #     )
+    #     minimum_heating_set_temperature = (
+    #         self.set_water_storage_temperature_for_heating_in_celsius
+    #     )
+    #     minimum_cooling_set_temperature = (
+    #         self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
+    #     )
+    #     maximum_cooling_set_temperature = (
+    #         self.set_water_storage_temperature_for_cooling_in_celsius
+    #     )
 
-        if self.controller_heatpumpmode == "heating":
-            if water_temperature_input_in_celsius > maximum_heating_set_temperature:
-                self.controller_heatpumpmode = "off"
-                return
-        elif self.controller_heatpumpmode == "cooling":
-            if water_temperature_input_in_celsius < minimum_cooling_set_temperature:
-                self.controller_heatpumpmode = "off"
-                return
-        elif self.controller_heatpumpmode == "off":
-            if water_temperature_input_in_celsius < minimum_heating_set_temperature:
-                self.controller_heatpumpmode = "heating"
-                return
-            if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
-                self.controller_heatpumpmode = "cooling"
-                return
-        else:
-            raise ValueError("unknown mode")
-        
-    def conditions_heating_cooling_off_two(self, water_temperature_input_in_celsius: float) -> None:
-        """Set conditions for the heat pump controller mode."""
-
-        heating_set_temperature = (
-            self.set_water_storage_temperature_for_heating_in_celsius
-        )
-
-        cooling_set_temperature = (
-            self.set_water_storage_temperature_for_cooling_in_celsius
-        )
-
-        if water_temperature_input_in_celsius > cooling_set_temperature:
-            self.controller_heatpumpmode = "cooling"
-            return
-
-        elif water_temperature_input_in_celsius < heating_set_temperature:
-            self.controller_heatpumpmode = "heating"
-            return
-        
-        else:
-            self.controller_heatpumpmode = "off"
-            return
+    #     if self.controller_heatpumpmode == "heating":
+    #         if water_temperature_input_in_celsius > maximum_heating_set_temperature:
+    #             self.controller_heatpumpmode = "off"
+    #             return
+    #     elif self.controller_heatpumpmode == "cooling":
+    #         if water_temperature_input_in_celsius < minimum_cooling_set_temperature:
+    #             self.controller_heatpumpmode = "off"
+    #             return
+    #     elif self.controller_heatpumpmode == "off":
+    #         if water_temperature_input_in_celsius < minimum_heating_set_temperature:
+    #             self.controller_heatpumpmode = "heating"
+    #             return
+    #         if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
+    #             self.controller_heatpumpmode = "cooling"
+    #             return
+    #     else:
+    #         raise ValueError("unknown mode")

@@ -51,9 +51,9 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Get a default simplehotwaterstorage config."""
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
-            mean_water_temperature_in_storage_in_celsius=35,
-            cool_water_temperature_in_storage_in_celsius=35,
-            hot_water_temperature_in_storage_in_celsius=35,
+            mean_water_temperature_in_storage_in_celsius=20,
+            cool_water_temperature_in_storage_in_celsius=20,
+            hot_water_temperature_in_storage_in_celsius=20,
             volume_heating_water_storage_in_liter=100,
         )
         return config
@@ -95,11 +95,11 @@ class SimpleHotWaterStorage(cp.Component):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.start_water_temperature_in_storage_in_celsius: float = 35.0
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 35.0
+        # self.start_water_temperature_in_storage_in_celsius: float = 20
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 22
 
-        self.water_temperature_to_heat_distribution_system_in_celsius: float = 35.0
-        self.water_temperature_to_heat_generator_in_celsius: float = 35.0
+        # self.water_temperature_to_heat_distribution_system_in_celsius: float = 20
+        # self.water_temperature_to_heat_generator_in_celsius: float = 20
 
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
@@ -239,13 +239,13 @@ class SimpleHotWaterStorage(cp.Component):
 
             if water_temperature_from_heat_distribution_system_in_celsius == 0:
                 """first iteration --> random numbers"""
-                water_temperature_from_heat_distribution_system_in_celsius = 35
+                water_temperature_from_heat_distribution_system_in_celsius = 22
             if (
                 water_temperature_from_heat_generator_in_celsius == 0
                 or water_temperature_from_heat_generator_in_celsius is None
             ):
                 """first iteration --> random numbers"""
-                water_temperature_from_heat_generator_in_celsius = 35
+                water_temperature_from_heat_generator_in_celsius = 22
 
             self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
                 water_temperature_from_heat_distribution_system_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,

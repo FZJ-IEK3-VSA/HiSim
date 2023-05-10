@@ -67,9 +67,9 @@ def household_with_hds_and_advanced_hp(
     source_weight = -1
 
     # Set Heat Pump Controller
-    set_water_storage_temperature_for_heating_in_celsius = 32
-    set_water_storage_temperature_for_cooling_in_celsius = 38
-    offset = 0.5
+    # set_water_storage_temperature_for_heating_in_celsius = 21
+    # set_water_storage_temperature_for_cooling_in_celsius = 22
+    # offset_for_set_water_storage_temperature_in_celsius = 0.5
     hp_mode = 1
 
     # Set Heat Pump
@@ -77,17 +77,17 @@ def household_with_hds_and_advanced_hp(
     group_id: int = 4  # outdoor/air on/off type
     heating_reference_temperature: float = -7
     p_th_set: float = 7000
-    vorlauftemperatur = 35
+    vorlauftemperatur = 20
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
-    mean_water_temperature_in_storage_in_celsius = 35
-    cool_water_temperature_in_storage_in_celsius = 35
-    hot_water_temperature_in_storage_in_celsius = 35
+    mean_water_temperature_in_storage_in_celsius = 20
+    cool_water_temperature_in_storage_in_celsius = 20
+    hot_water_temperature_in_storage_in_celsius = 20
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 35
+    water_temperature_in_distribution_system_in_celsius = 20
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
@@ -95,6 +95,9 @@ def household_with_hds_and_advanced_hp(
     set_heating_threshold_temperature = 16.0
     set_heating_temperature_for_building_in_celsius = 20
     set_cooling_temperature_for_building_in_celsius = 22
+    set_heating_temperature_for_water_storage_in_celsius = 20.5
+    set_cooling_temperature_for_water_storage_in_celsius = 21.5
+
 
     # =================================================================================================================================
     # Build Components
@@ -115,6 +118,8 @@ def household_with_hds_and_advanced_hp(
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            set_heating_temperature_for_water_storage_in_celsius=set_heating_temperature_for_water_storage_in_celsius,
+            set_cooling_temperature_for_water_storage_in_celsius=set_cooling_temperature_for_water_storage_in_celsius,
         ),
     )
     # Build Building
@@ -176,9 +181,9 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibControllerL1(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
-            set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
-            set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
-            offset=offset,
+            # set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
+            # set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
+            # offset_for_set_water_storage_temperature_in_celsius=offset_for_set_water_storage_temperature_in_celsius,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,

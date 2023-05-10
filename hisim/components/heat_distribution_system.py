@@ -56,7 +56,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            water_temperature_in_distribution_system_in_celsius=40,
+            water_temperature_in_distribution_system_in_celsius=20,
             heating_system=HeatingSystemType.FLOORHEATING,
         )
         return config
@@ -77,7 +77,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     set_heating_threshold_outside_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
-
+    set_heating_temperature_for_water_storage_in_celsius: float
+    set_cooling_temperature_for_water_storage_in_celsius: float
     @classmethod
     def get_default_heat_distribution_controller_config(cls):
         """Gets a default HeatDistribution Controller."""
@@ -85,7 +86,9 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             name="HeatDistributionController",
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_heating_temperature_for_building_in_celsius=20,
-            set_cooling_temperature_for_building_in_celsius=23,
+            set_cooling_temperature_for_building_in_celsius=24,
+            set_heating_temperature_for_water_storage_in_celsius=21,
+            set_cooling_temperature_for_water_storage_in_celsius=23
         )
 
 
@@ -145,7 +148,7 @@ class HeatDistribution(cp.Component):
         )
 
         self.thermal_power_delivered_in_watt: float = 0.0
-        self.water_temperature_output_in_celsius: float = 35
+        self.water_temperature_output_in_celsius: float = 20
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
         if SingletonSimRepository().exist_entry(
@@ -349,8 +352,7 @@ class HeatDistribution(cp.Component):
                 self.water_temperature_output_in_celsius
             )
             if state_controller == 1:
-
-                
+         
                 (
                     self.water_temperature_output_in_celsius,
                     self.thermal_power_delivered_in_watt,
@@ -361,9 +363,6 @@ class HeatDistribution(cp.Component):
                     residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-                # building gets the heat that it needs
-                # if water temp > buiding temp -> heating
-                # if water temp < building temp -> cooling
 
             elif state_controller == 0:
 
@@ -422,16 +421,53 @@ class HeatDistribution(cp.Component):
                 * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
             )
         )
-        # prevent that water temperature in hds gets colder than residence temperature in building
-        water_temperature_output_in_celsius = max(
-            water_temperature_output_in_celsius, residence_temperature_in_celsius
-        )
+        # prevent that water temperature in hds gets colder than residence temperature in building when heating (when theoretical thermal demand > 0)
+        if theoretical_thermal_buiding_demand_in_watt > 0:
+            # water in hds must be warmer than the building in order to exchange heat
+            if water_temperature_input_in_celsius > residence_temperature_in_celsius:
+                water_temperature_output_in_celsius = max(
+                    water_temperature_output_in_celsius, residence_temperature_in_celsius
+                )
+                thermal_power_delivered_effective_in_watt = (
+                    self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                        * water_mass_flow_in_kg_per_second
+                        * (water_temperature_input_in_celsius - water_temperature_output_in_celsius)
+                    )
+            else:
+                # water in hds is not warmer than the building, therefore heat exchange is not possible
+                water_temperature_output_in_celsius = water_temperature_input_in_celsius
+                thermal_power_delivered_effective_in_watt = 0
+                
+        # prevent that water temperature in hds gets hotter than residence temperature in building when cooling (when theoretical thermal demand < 0)
+        elif theoretical_thermal_buiding_demand_in_watt < 0:
+            # water in hds must be cooler than the building in order to cool building down
+            if water_temperature_input_in_celsius < residence_temperature_in_celsius:
+                water_temperature_output_in_celsius = min(
+                    water_temperature_output_in_celsius, residence_temperature_in_celsius
+                )
+                thermal_power_delivered_effective_in_watt = (
+                    self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                        * water_mass_flow_in_kg_per_second
+                        * (water_temperature_input_in_celsius - water_temperature_output_in_celsius)
+                    )
+            else:
+                # water in hds is not colder than building and therefore cooling is not possible
+                water_temperature_output_in_celsius = water_temperature_input_in_celsius
+                thermal_power_delivered_effective_in_watt = 0
+                
+        # in case no heating or cooling needed, water output is equal to water input
+        elif theoretical_thermal_buiding_demand_in_watt == 0:
+            water_temperature_output_in_celsius = water_temperature_input_in_celsius
+            thermal_power_delivered_effective_in_watt = 0
+        else:
+            raise ValueError(f"Theoretical thermal demand has unacceptable value here {theoretical_thermal_buiding_demand_in_watt}.")
 
-        thermal_power_delivered_effective_in_watt = (
-            self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            * water_mass_flow_in_kg_per_second
-            * (water_temperature_input_in_celsius - water_temperature_output_in_celsius)
-        )
+
+        # thermal_power_delivered_effective_in_watt = (
+        #     self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+        #     * water_mass_flow_in_kg_per_second
+        #     * (water_temperature_input_in_celsius - water_temperature_output_in_celsius)
+        # )
 
         return (
             water_temperature_output_in_celsius,
@@ -480,6 +516,10 @@ class HeatDistributionController(cp.Component):
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
             entry=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
+        )
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE, entry=self.heat_distribution_controller_config.set_heating_temperature_for_water_storage_in_celsius
+        )
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE, entry=self.heat_distribution_controller_config.set_cooling_temperature_for_water_storage_in_celsius
         )
         self.build(
             set_heating_threshold_temperature=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
@@ -653,7 +693,6 @@ class HeatDistributionController(cp.Component):
         self,
         theoretical_thermal_building_demand_in_watt: float,
         daily_average_outside_temperature_in_celsius: float,
-        # water_temperature_input_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
 

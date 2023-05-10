@@ -21,7 +21,7 @@ def test_chp_system():
 
     # configure and add chp
     chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=thermal_power)
-    my_chp = generic_CHP.CHP(
+    my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
 

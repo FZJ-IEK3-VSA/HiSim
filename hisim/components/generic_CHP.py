@@ -68,7 +68,7 @@ class GenericCHPState:
         return GenericCHPState(state=self.state)
 
 
-class CHP(cp.Component):
+class SimpleCHP(cp.Component):
     """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
 
     Components to connect to:
@@ -210,14 +210,14 @@ class CHP(cp.Component):
         controller_classname = controller_l1_chp.L1CHPController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                CHP.CHPControllerOnOffSignal,
+                SimpleCHP.CHPControllerOnOffSignal,
                 controller_classname,
                 controller_l1_chp.L1CHPController.CHPControllerOnOffSignal,
             )
         )
         connections.append(
             cp.ComponentConnection(
-                CHP.CHPControllerHeatingModeSignal,
+                SimpleCHP.CHPControllerHeatingModeSignal,
                 controller_classname,
                 controller_l1_chp.L1CHPController.CHPControllerHeatingModeSignal,
             )

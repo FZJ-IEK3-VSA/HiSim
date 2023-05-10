@@ -21,7 +21,7 @@ class SystemConfig:
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
     smart_devices_included: bool = False
     #: decision on the consideration of a buffer storage for heating
-    buffer_included: bool = False
+    buffer_included: bool = True
     #: volume of the considered buffer storage in multiples of the default size
     buffer_volume: Optional[float] = 1.0  # in multiples of default
     #: decision on the consideration of battery

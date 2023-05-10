@@ -70,7 +70,7 @@ def household_with_hds_and_advanced_hp(
     set_water_storage_temperature_for_heating_in_celsius = 34
     set_water_storage_temperature_for_cooling_in_celsius = 36
     offset = 0.5
-    hp_mode = 3
+    hp_mode = 1
 
     # Set Heat Pump
     model: str = "Generic"

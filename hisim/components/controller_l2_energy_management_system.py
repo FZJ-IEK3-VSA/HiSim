@@ -317,7 +317,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 component_type=component_type,
                 input_channel=single_input,
                 output=output,
-                )
+            )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Simulates iteration of surplus controller. """

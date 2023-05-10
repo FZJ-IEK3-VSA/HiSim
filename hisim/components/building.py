@@ -623,130 +623,132 @@ class Building(dynamic_component.DynamicComponent):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the thermal behaviour of the building."""
-
-        # Gets inputs
-        if hasattr(self, "solar_gain_through_windows") is False:
-            azimuth = stsv.get_input_value(self.azimuth_channel)
-            direct_normal_irradiance = stsv.get_input_value(
-                self.direct_normal_irradiance_channel
-            )
-            direct_horizontal_irradiance = stsv.get_input_value(
-                self.direct_horizontal_irradiance_channel
-            )
-            global_horizontal_irradiance = stsv.get_input_value(
-                self.global_horizontal_irradiance_channel
-            )
-            direct_normal_irradiance_extra = stsv.get_input_value(
-                self.direct_normal_irradiance_extra_channel
-            )
-            apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
-
-        self.internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(
-            self.occupancy_heat_gain_channel
-        )
-
-        temperature_outside_in_celsius = stsv.get_input_value(
-            self.temperature_outside_channel
-        )
-
-        thermal_power_delivered_in_watt = 0.0
-        if self.thermal_power_delivered_channel.source_output is not None:
-            thermal_power_delivered_in_watt = (
-                thermal_power_delivered_in_watt
-                + stsv.get_input_value(self.thermal_power_delivered_channel)
-            )
-        if self.thermal_power_chp_channel.source_output is not None:
-            thermal_power_delivered_in_watt = (
-                thermal_power_delivered_in_watt
-                + stsv.get_input_value(self.thermal_power_chp_channel)
-            )
-
-        previous_thermal_mass_temperature_in_celsius = (
-            self.state.thermal_mass_temperature_in_celsius
-        )
-
-        # Performs calculations
-        if hasattr(self, "solar_gain_through_windows") is False:
-            solar_heat_gain_through_windows = self.get_solar_heat_gain_through_windows(
-                azimuth=azimuth,
-                direct_normal_irradiance=direct_normal_irradiance,
-                direct_horizontal_irradiance=direct_horizontal_irradiance,
-                global_horizontal_irradiance=global_horizontal_irradiance,
-                direct_normal_irradiance_extra=direct_normal_irradiance_extra,
-                apparent_zenith=apparent_zenith,
-            )
+        if force_convergence:
+            pass
         else:
-            solar_heat_gain_through_windows = self.solar_heat_gain_through_windows[
-                timestep
-            ]
-
-        (
-            thermal_mass_average_bulk_temperature_in_celsius,
-            heat_loss_in_watt,
-            internal_surface_temperature_in_celsius,
-            indoor_air_temperature_in_celsius,
-        ) = self.calc_crank_nicolson(
-            thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
-            internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt,
-            solar_heat_gains_in_watt=solar_heat_gain_through_windows,
-            outside_temperature_in_celsius=temperature_outside_in_celsius,
-            thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
-        )
-        self.state.thermal_mass_temperature_in_celsius = (
-            thermal_mass_average_bulk_temperature_in_celsius
-        )
-
-        theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
-            set_heating_temperature_in_celsius=self.set_heating_temperature_in_celsius,
-            set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
-            previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
-            outside_temperature_in_celsius=temperature_outside_in_celsius,
-        )
-        # Returns outputs
-        stsv.set_output_value(
-            self.thermal_mass_temperature_channel,
-            thermal_mass_average_bulk_temperature_in_celsius,
-        )
-        stsv.set_output_value(
-            self.internal_surface_temperature_channel,
-            internal_surface_temperature_in_celsius,
-        )
-        stsv.set_output_value(
-            self.indoor_air_temperature_channel,
-            indoor_air_temperature_in_celsius,
-        )
-
-        # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
-        stsv.set_output_value(self.total_power_to_residence_channel, heat_loss_in_watt)
-
-        stsv.set_output_value(
-            self.solar_gain_through_windows_channel, solar_heat_gain_through_windows
-        )
-
-        stsv.set_output_value(
-            self.heat_loss_channel,
-            self.heat_loss_in_watt,
-        )
-
-        stsv.set_output_value(
-            self.theoretical_thermal_building_demand_channel,
-            theoretical_thermal_building_demand_in_watt,
-        )
-
-        # Saves solar gains cache
-        if not self.is_in_cache:
-            self.cache[timestep] = solar_heat_gain_through_windows
-            if timestep + 1 == self.my_simulation_parameters.timesteps:
-                database = pd.DataFrame(
-                    self.cache,
-                    columns=["solar_gain_through_windows"],
+            # Gets inputs
+            if hasattr(self, "solar_gain_through_windows") is False:
+                azimuth = stsv.get_input_value(self.azimuth_channel)
+                direct_normal_irradiance = stsv.get_input_value(
+                    self.direct_normal_irradiance_channel
                 )
-                database.to_csv(
-                    self.cache_file_path,
-                    sep=",",
-                    decimal=".",
-                    index=False,
+                direct_horizontal_irradiance = stsv.get_input_value(
+                    self.direct_horizontal_irradiance_channel
                 )
+                global_horizontal_irradiance = stsv.get_input_value(
+                    self.global_horizontal_irradiance_channel
+                )
+                direct_normal_irradiance_extra = stsv.get_input_value(
+                    self.direct_normal_irradiance_extra_channel
+                )
+                apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
+
+            self.internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(
+                self.occupancy_heat_gain_channel
+            )
+
+            temperature_outside_in_celsius = stsv.get_input_value(
+                self.temperature_outside_channel
+            )
+
+            thermal_power_delivered_in_watt = 0.0
+            if self.thermal_power_delivered_channel.source_output is not None:
+                thermal_power_delivered_in_watt = (
+                    thermal_power_delivered_in_watt
+                    + stsv.get_input_value(self.thermal_power_delivered_channel)
+                )
+            if self.thermal_power_chp_channel.source_output is not None:
+                thermal_power_delivered_in_watt = (
+                    thermal_power_delivered_in_watt
+                    + stsv.get_input_value(self.thermal_power_chp_channel)
+                )
+
+            previous_thermal_mass_temperature_in_celsius = (
+                self.state.thermal_mass_temperature_in_celsius
+            )
+
+            # Performs calculations
+            if hasattr(self, "solar_gain_through_windows") is False:
+                solar_heat_gain_through_windows = self.get_solar_heat_gain_through_windows(
+                    azimuth=azimuth,
+                    direct_normal_irradiance=direct_normal_irradiance,
+                    direct_horizontal_irradiance=direct_horizontal_irradiance,
+                    global_horizontal_irradiance=global_horizontal_irradiance,
+                    direct_normal_irradiance_extra=direct_normal_irradiance_extra,
+                    apparent_zenith=apparent_zenith,
+                )
+            else:
+                solar_heat_gain_through_windows = self.solar_heat_gain_through_windows[
+                    timestep
+                ]
+
+            (
+                thermal_mass_average_bulk_temperature_in_celsius,
+                heat_loss_in_watt,
+                internal_surface_temperature_in_celsius,
+                indoor_air_temperature_in_celsius,
+            ) = self.calc_crank_nicolson(
+                thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
+                internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt,
+                solar_heat_gains_in_watt=solar_heat_gain_through_windows,
+                outside_temperature_in_celsius=temperature_outside_in_celsius,
+                thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
+            )
+            self.state.thermal_mass_temperature_in_celsius = (
+                thermal_mass_average_bulk_temperature_in_celsius
+            )
+
+            theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
+                set_heating_temperature_in_celsius=self.set_heating_temperature_in_celsius,
+                set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
+                previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
+                outside_temperature_in_celsius=temperature_outside_in_celsius,
+            )
+            # Returns outputs
+            stsv.set_output_value(
+                self.thermal_mass_temperature_channel,
+                thermal_mass_average_bulk_temperature_in_celsius,
+            )
+            stsv.set_output_value(
+                self.internal_surface_temperature_channel,
+                internal_surface_temperature_in_celsius,
+            )
+            stsv.set_output_value(
+                self.indoor_air_temperature_channel,
+                indoor_air_temperature_in_celsius,
+            )
+
+            # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
+            stsv.set_output_value(self.total_power_to_residence_channel, heat_loss_in_watt)
+
+            stsv.set_output_value(
+                self.solar_gain_through_windows_channel, solar_heat_gain_through_windows
+            )
+
+            stsv.set_output_value(
+                self.heat_loss_channel,
+                self.heat_loss_in_watt,
+            )
+
+            stsv.set_output_value(
+                self.theoretical_thermal_building_demand_channel,
+                theoretical_thermal_building_demand_in_watt,
+            )
+
+            # Saves solar gains cache
+            if not self.is_in_cache:
+                self.cache[timestep] = solar_heat_gain_through_windows
+                if timestep + 1 == self.my_simulation_parameters.timesteps:
+                    database = pd.DataFrame(
+                        self.cache,
+                        columns=["solar_gain_through_windows"],
+                    )
+                    database.to_csv(
+                        self.cache_file_path,
+                        sep=",",
+                        decimal=".",
+                        index=False,
+                    )
 
     # =================================================================================================================================
 

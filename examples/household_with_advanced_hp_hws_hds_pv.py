@@ -67,14 +67,14 @@ def household_with_hds_and_advanced_hp(
     source_weight = -1
 
     # Set Heat Pump Controller
-    set_water_storage_temperature_for_heating_in_celsius = 34
-    set_water_storage_temperature_for_cooling_in_celsius = 36
+    set_water_storage_temperature_for_heating_in_celsius = 32
+    set_water_storage_temperature_for_cooling_in_celsius = 38
     offset = 0.5
     hp_mode = 1
 
     # Set Heat Pump
     model: str = "Generic"
-    group_id: int = 1  # outdoor/air on/off type
+    group_id: int = 4  # outdoor/air on/off type
     heating_reference_temperature: float = -7
     p_th_set: float = 7000
     vorlauftemperatur = 35

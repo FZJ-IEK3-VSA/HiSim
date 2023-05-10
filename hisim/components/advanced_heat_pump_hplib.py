@@ -230,78 +230,81 @@ class HeatPumpHplib(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-
-        # print("tp" , timestep)
-        # Parameter
-        time_on_min = 600 # [s]
-        time_off_min = time_on_min
-
-        # Load input values
-        on_off: float = stsv.get_input_value(self.on_off_switch)
-        t_in_primary = stsv.get_input_value(self.t_in_primary)
-        t_in_secondary = stsv.get_input_value(self.t_in_secondary)
-        t_amb = stsv.get_input_value(self.t_amb)
-        time_on = self.state.time_on
-        time_off = self.state.time_off
-        on_off_previous = self.state.on_off_previous
-
-        # Overwrite on_off to realize minimum time of or time off
-        if on_off_previous == 1 and time_on < time_on_min:
-            on_off = 1
-        elif on_off_previous == -1 and time_on < time_on_min:
-            on_off = -1
-        elif on_off_previous == 0 and time_off < time_off_min:
-            on_off = 0
-
-        # OnOffSwitch
-        if on_off == 1:
-            # Calulate outputs for heating mode
-            results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1)
-            p_th = results["P_th"].values[0]
-            p_el = results["P_el"].values[0]
-            cop = results["COP"].values[0]
-            eer = results["EER"].values[0]
-            t_out = results["T_out"].values[0]
-            m_dot = results["m_dot"].values[0]
-            time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
-            time_off = 0
-        elif on_off == -1:
-            # Calulate outputs for cooling mode
-            results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2)
-            p_th = results["P_th"].values[0]
-            p_el = results["P_el"].values[0]
-            cop = results["COP"].values[0]
-            eer = results["EER"].values[0]
-            t_out = results["T_out"].values[0]
-            m_dot = results["m_dot"].values[0]
-            time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
-            time_off = 0
+        if force_convergence:
+            pass
         else:
-            # Calulate outputs
-            p_th = 0
-            p_el = 0
-            # cop = None
-            # t_out = None
-            cop = 0
-            t_out = t_in_secondary
-            m_dot = 0
-            time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
-            time_on = 0
 
-        # write values for output time series
-        stsv.set_output_value(self.p_th, p_th)
-        stsv.set_output_value(self.p_el, p_el)
-        stsv.set_output_value(self.cop, cop)
-        stsv.set_output_value(self.t_out, t_out)
-        stsv.set_output_value(self.m_dot, m_dot)
-        stsv.set_output_value(self.time_on, time_on)
-        stsv.set_output_value(self.time_off, time_off)
-        
-        # print("time on/off", time_on, time_off, "\n")
-        # write values to state
-        self.state.time_on = time_on
-        self.state.time_off = time_off
-        self.state.on_off_previous = on_off
+            # Parameter
+            time_on_min = 600 # [s]
+            time_off_min = time_on_min
+
+            # Load input values
+            on_off: float = stsv.get_input_value(self.on_off_switch)
+            t_in_primary = stsv.get_input_value(self.t_in_primary)
+            t_in_secondary = stsv.get_input_value(self.t_in_secondary)
+            t_amb = stsv.get_input_value(self.t_amb)
+            time_on = self.state.time_on
+            time_off = self.state.time_off
+            on_off_previous = self.state.on_off_previous
+
+            # Overwrite on_off to realize minimum time of or time off
+            if on_off_previous == 1 and time_on < time_on_min:
+                on_off = 1
+            elif on_off_previous == -1 and time_on < time_on_min:
+                on_off = -1
+            elif on_off_previous == 0 and time_off < time_off_min:
+                on_off = 0
+
+            # OnOffSwitch
+            if on_off == 1:
+                # Calulate outputs for heating mode
+                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1)
+                p_th = results["P_th"].values[0]
+                p_el = results["P_el"].values[0]
+                cop = results["COP"].values[0]
+                eer = results["EER"].values[0]
+                t_out = results["T_out"].values[0]
+                m_dot = results["m_dot"].values[0]
+                time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
+                time_off = 0
+            elif on_off == -1:
+                # Calulate outputs for cooling mode
+                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2)
+                p_th = results["P_th"].values[0]
+                p_el = results["P_el"].values[0]
+                cop = results["COP"].values[0]
+                eer = results["EER"].values[0]
+                t_out = results["T_out"].values[0]
+                m_dot = results["m_dot"].values[0]
+                time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
+                time_off = 0
+            else:
+                # Calulate outputs for off mode
+                p_th = 0
+                p_el = 0
+                # None values or nans will cause troubles in post processing, that is why there are commented here
+                # cop = None
+                # t_out = None
+                cop = 0
+                t_out = t_in_secondary
+                m_dot = 0
+                time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
+                time_on = 0
+
+            # write values for output time series
+            stsv.set_output_value(self.p_th, p_th)
+            stsv.set_output_value(self.p_el, p_el)
+            stsv.set_output_value(self.cop, cop)
+            stsv.set_output_value(self.t_out, t_out)
+            stsv.set_output_value(self.m_dot, m_dot)
+            stsv.set_output_value(self.time_on, time_on)
+            stsv.set_output_value(self.time_off, time_off)
+            
+            # print("time on/off", time_on, time_off, "\n")
+            # write values to state
+            self.state.time_on = time_on
+            self.state.time_off = time_off
+            self.state.on_off_previous = on_off
 
 
 @dataclass

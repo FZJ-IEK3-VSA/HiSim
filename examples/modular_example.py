@@ -181,6 +181,7 @@ def modular_household_explicit(
         heating_reference_temperature_in_celsius=reference_temperature,
         absolute_conditioned_floor_area_in_m2=floor_area,
         total_base_area_in_m2=None,
+        number_of_apartments=None
     )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -226,7 +227,7 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile or "", location, int(my_building.buildingdata["n_Apartment"].iloc[0])
+            "Occupancy", occupancy_profile or "", location,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -354,7 +355,6 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
-            number_of_households=int(my_building.buildingdata["n_Apartment"].iloc[0]),
             controlable=clever,
             count=count,
         )
@@ -365,7 +365,6 @@ def modular_household_explicit(
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
             water_heating_system_installed=water_heating_system_installed,
-            number_of_households=int(my_building.buildingdata["n_Apartment"].iloc[0]),
             count=count,
         )
 

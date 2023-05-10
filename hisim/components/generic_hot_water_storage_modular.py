@@ -22,6 +22,7 @@ from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import \
     UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -61,8 +62,15 @@ class StorageConfig(cp.ConfigBase):
     power: float
 
     @staticmethod
-    def get_default_config_boiler(number_of_households: int) -> "StorageConfig":
+    def get_default_config_boiler() -> "StorageConfig":
         """ Returns default configuration for boiler. """
+        # get default number of households
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
+            number_of_households = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
+        else:
+            raise KeyError("Key for number of apartments was not found in the singleton sim repository." +
+                           "This might be because the building was not initialized before the loadprofilegenerator_connector." +
+                           "Please check the order of the initialization of the components in your example.")
         volume = 230 * max(number_of_households, 1)
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)

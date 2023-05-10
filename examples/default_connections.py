@@ -69,8 +69,17 @@ def basic_household_with_default_connections(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
+
+    # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building = building.Building(
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
+
     # Build occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -84,6 +93,16 @@ def basic_household_with_default_connections(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_weather)
+
+    # Build Grid and connect building inputs
+    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
+        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.add_component(my_base_electricity_load_profile)
+
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+    my_sim.add_component(my_building)
 
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
@@ -105,26 +124,15 @@ def basic_household_with_default_connections(
     )
     my_sim.add_component(my_photovoltaic_system)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-    # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_sim.add_component(my_base_electricity_load_profile)
-
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_sim.add_component(my_building)
 
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(name="GenericHeatPumpController", temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(
+            name="GenericHeatPumpController",
+            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+            offset=offset,
+            mode=hp_mode,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_pump_controller.connect_only_predefined_connections(my_building)

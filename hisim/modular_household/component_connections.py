@@ -425,7 +425,6 @@ def configure_water_heating(
     my_simulation_parameters: SimulationParameters,
     my_occupancy: loadprofilegenerator_connector.Occupancy,
     water_heating_system_installed: lt.HeatingSystems,
-    number_of_households: int,
     count: int,
 ) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
     """Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
@@ -440,8 +439,6 @@ def configure_water_heating(
         The initialized occupancy component.
     water_heating_system_installed: str
         Type of installed WaterHeatingSystem
-    number_of_households: int
-        Number of households considered in reference building.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -461,7 +458,7 @@ def configure_water_heating(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler(number_of_households)
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
     boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius)
 
@@ -506,7 +503,6 @@ def configure_water_heating_electric(
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     my_weather: weather.Weather,
     water_heating_system_installed: lt.HeatingSystems,
-    number_of_households: int,
     controlable: bool,
     count: int,
 ) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
@@ -528,8 +524,6 @@ def configure_water_heating_electric(
         Type of installed WaterHeatingSystem
     controlable: bool
         True if control of heating device is smart, False if not.
-    number_of_households: int
-        Number of households considered in reference building.
     count: int
         Integer tracking component hierachy for EMS.
 
@@ -563,7 +557,7 @@ def configure_water_heating_electric(
         )
     )
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler(number_of_households)
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
     boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius)
 

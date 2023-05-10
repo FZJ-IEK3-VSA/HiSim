@@ -19,6 +19,7 @@ from hisim.components import generic_heat_source
 from hisim.components import controller_l1_building_heating
 from hisim.components import controller_l1_heatpump
 from hisim.components import controller_l1_chp
+from hisim.components import controller_l1_electrolyzer
 from hisim.components import controller_l2_energy_management_system
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import loadprofilegenerator_connector
@@ -1353,19 +1354,13 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     count += 1
 
     # electrolyzer default configuration
-    l1_config_electrolyzer = (
-        generic_electrolyzer.L1ElectrolyzerConfig.get_default_config()
-    )
-    l1_config_electrolyzer.source_weight = count
-    electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig(
-        name="Electrolyzer",
-        source_weight=count,
-        min_power=0.5 * electrolyzer_power,
-        max_power=electrolyzer_power,
-        min_hydrogen_production_rate_hour=0.125 * electrolyzer_power,
-        max_hydrogen_production_rate_hour=2 * electrolyzer_power,
-    )
+    electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig.get_default_config(p_el=electrolyzer_power)
     electrolyzer_config.source_weight = count
+
+    # electrolyzer controller default configuration and counting variable
+    electrolyzer_controller_config = controller_l1_electrolyzer.L1ElectrolyzerConfig.get_default_config()
+    electrolyzer_controller_config.source_weight = count
+    electrolyzer_controller_config.P_min_electrolyzer = electrolyzer_config.min_power
     count += 1
 
     # electrolyzer
@@ -1375,14 +1370,15 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     my_sim.add_component(my_electrolyzer)
 
     # run time controller of electrolyzer
-    my_electrolyzer_controller_l1 = (
-        generic_electrolyzer.L1GenericElectrolyzerController(
+    my_electrolyzer_controller = (
+        controller_l1_electrolyzer.L1GenericElectrolyzerController(
             my_simulation_parameters=my_simulation_parameters,
-            config=l1_config_electrolyzer,
+            config=electrolyzer_controller_config,
         )
     )
-    my_sim.add_component(my_electrolyzer_controller_l1)
-    my_electrolyzer.connect_only_predefined_connections(my_electrolyzer_controller_l1)
+    my_sim.add_component(my_electrolyzer_controller)
+    my_electrolyzer.connect_only_predefined_connections(my_electrolyzer_controller)
+    print(my_electrolyzer)
 
     # electricity controller of fuel cell
     my_electricity_controller.add_component_input_and_connect(
@@ -1394,7 +1390,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
             lt.ComponentType.ELECTROLYZER,
             lt.InandOutputType.ELECTRICITY_REAL,
         ],
-        source_weight=my_electrolyzer.source_weight,
+        source_weight=my_electrolyzer.config.source_weight,
     )
     electricity_to_electrolyzer_target = my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
@@ -1402,19 +1398,20 @@ def configure_elctrolysis_h2storage_fuelcell_system(
             lt.ComponentType.ELECTROLYZER,
             lt.InandOutputType.ELECTRICITY_TARGET,
         ],
-        source_weight=my_electrolyzer.source_weight,
+        source_weight=my_electrolyzer.config.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for electrolyzer. ",
     )
-    my_electrolyzer_controller_l1.connect_dynamic_input(
-        input_fieldname=generic_electrolyzer.L1GenericElectrolyzerController.l2_ElectricityTarget,
+    my_electrolyzer_controller.connect_dynamic_input(
+        input_fieldname=controller_l1_electrolyzer.L1GenericElectrolyzerController.ElectricityTarget,
         src_object=electricity_to_electrolyzer_target,
     )
 
+    # hydrogen storage default configuration
     h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
         capacity=h2_storage_size,
-        max_charging_rate=h2_storage_size * 1e-2,
+        max_charging_rate=electrolyzer_power / (3.6e3 * 3.939e4),
         max_discharging_rate=fuel_cell_power / (3.6e3 * 3.939e4),
         source_weight=count,
     )
@@ -1425,7 +1422,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     my_h2storage.connect_only_predefined_connections(my_chp)
     my_sim.add_component(my_h2storage)
 
-    my_electrolyzer_controller_l1.connect_only_predefined_connections(my_h2storage)
+    my_electrolyzer_controller.connect_only_predefined_connections(my_h2storage)
     my_chp_controller.connect_only_predefined_connections(my_h2storage)
 
     return my_chp, count

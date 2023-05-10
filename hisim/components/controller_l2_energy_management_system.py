@@ -302,9 +302,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         return deltademand
 
-    def optimize_own_consumption_iterative(
-        self, delta_demand: float, stsv: cp.SingleTimeStepValues, timestep: int,
-    ) -> None:
+    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues, ) -> None:
         """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
         for ind in range(len(self.inputs_sorted)):  # noqa
             component_type = self.components_sorted[ind]
@@ -319,9 +317,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 output=output,
                 )
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-        ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """ Simulates iteration of surplus controller. """
         if timestep == 0:
             self.sort_source_weights_and_components()
@@ -350,9 +346,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         # Consumption of Electricity negative sign
         flexible_electricity = self.state.production - self.state.consumption_uncontrolled
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(
-                delta_demand=flexible_electricity, stsv=stsv, timestep=timestep,
-            )
+            self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv, )
 
         # Set other output values
         electricity_to_grid = (

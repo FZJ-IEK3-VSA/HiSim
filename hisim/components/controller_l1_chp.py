@@ -354,10 +354,7 @@ class L1CHPController(cp.Component):
                 electricity_threshold_ok = True
             if self.hydrogen_soc_channel.source_output is not None:
                 hydrogen_soc = stsv.get_input_value(self.hydrogen_soc_channel)
-                if hydrogen_soc >= self.config.h2_soc_threshold:
-                    hydrogen_soc_ok = True
-                else:
-                    hydrogen_soc_ok = False
+                hydrogen_soc_ok = hydrogen_soc >= self.config.h2_soc_threshold
             else:
                 hydrogen_soc_ok = True
             self.determine_heating_mode(timestep, t_building, t_dhw)

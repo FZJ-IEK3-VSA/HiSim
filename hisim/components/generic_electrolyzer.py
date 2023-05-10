@@ -87,7 +87,7 @@ class GenericElectrolyzer(cp.Component):
     """
 
     # Inputs
-    ElectricityTarget = "ElectricityTarget"
+    AvailableElectricity = "AvailbaleElectricity"
 
     # Outputs
     HydrogenOutput = "HydrogenOutput"
@@ -108,7 +108,7 @@ class GenericElectrolyzer(cp.Component):
         # Intputs
         self.electricity_target_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            GenericElectrolyzer.ElectricityTarget,
+            GenericElectrolyzer.AvailableElectricity,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
@@ -146,7 +146,7 @@ class GenericElectrolyzer(cp.Component):
         controller_classname = controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericElectrolyzer.ElectricityTarget,
+                GenericElectrolyzer.AvailableElectricity,
                 controller_classname,
                 controller_l1_electrolyzer.L1GenericElectrolyzerController.AvailableElectricity,
             )

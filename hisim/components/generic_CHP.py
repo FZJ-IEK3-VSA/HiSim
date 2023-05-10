@@ -38,9 +38,9 @@ class CHPConfig(cp.ConfigBase):
     use: lt.LoadTypes
     #: electrical power of the CHP, when activated
     p_el: float
-    #: thermal power of the CHP, when activated
+    #: thermal power of the CHP in Watt, when activated
     p_th: float
-    #: demanded power of fuel input, when activated
+    #: demanded power of fuel input in Watt, when activated
     p_fuel: float
 
     @staticmethod

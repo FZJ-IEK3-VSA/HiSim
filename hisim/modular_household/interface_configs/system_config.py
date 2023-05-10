@@ -18,7 +18,7 @@ class SystemConfig:
     #: decision on the consideration of smart control for EV charging and heat pump
     surplus_control_considered: bool = False
     #: decision on the consideration of Photovoltaic Panel
-    pv_included: bool = False
+    pv_included: bool = True
     #: peak power of the considered Photovoltaic Panel in Wp
     pv_peak_power: Optional[float] = 8e3
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
@@ -36,17 +36,17 @@ class SystemConfig:
     #: maximal power of the considered heat pump in multiples of the default
     heatpump_power: Optional[float] = 1.0  # in multiples of default
     #: decision on the consideration of combined heat and power - in this case a fuel cell
-    chp_included: bool = True
+    chp_included: bool = False
     #: maximal power of the considered CHP in multiples of the default
     chp_power: Optional[float] = 0.5
     #: decision on the consideration of fuel cell + hydrogen storage + electrolyzer
-    hydrogen_setup_included: bool = False
+    hydrogen_setup_included: bool = True
     #: maximal power of the considered fuel cell in kW (heat and electricity combined)
-    fuel_cell_power: Optional[float] = 12
+    fuel_cell_power: Optional[float] = 0.5
     #: size of the hydrogen storage in kg hydrogen
     h2_storage_size: Optional[float] = 100
     #: maximal power of the electroylzer in Watt
-    electrolyzer_power: Optional[float] = 5e3
+    electrolyzer_power: Optional[float] = 0.5
     #: decision on the consideration of an electriv vehicle
     ev_included: bool = False
     #: choice of charging station related to the options available in LoadProfileGenerator

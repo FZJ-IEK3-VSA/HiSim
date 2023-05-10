@@ -37,7 +37,7 @@ class L1ElectrolyzerConfig(cp.ConfigBase):
     def get_default_config() -> "L1ElectrolyzerConfig":
         """Returns the default configuration of an electrolyzer controller."""
         config = L1ElectrolyzerConfig(
-            name="L1ElectrolyzerRuntimeController",
+            name="L1 Electrolyzer Controller",
             source_weight=1,
             min_operation_time_in_seconds=14400,
             min_idle_time_in_seconds=7200,
@@ -130,7 +130,7 @@ class L1GenericElectrolyzerController(cp.Component):
         # add outputs
         self.available_electicity_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.ElectricityTarget,
+            self.AvailableElectricity,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description="Available Electricity for Electrolyzer from Electrolyzer Controller."
@@ -168,12 +168,17 @@ class L1GenericElectrolyzerController(cp.Component):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
 
         if force_convergence:
+            electricity_target = stsv.get_input_value(self.electricity_target_channel)
             self.state = self.processed_state
         else:
             electricity_target = stsv.get_input_value(self.electricity_target_channel)
             h2_soc = stsv.get_input_value(self.hydrogen_soc_channel)
             self.calculate_state(timestep, electricity_target, h2_soc)
             self.processed_state = self.state.clone()
+
+        # minimum power of electrolyzer fulfilled when running
+        if self.state.state == 1 and electricity_target < self.config.P_min_electrolyzer:
+            electricity_target = self.config.P_min_electrolyzer
         stsv.set_output_value(self.available_electicity_output_channel, self.state.state * electricity_target)
 
     def calculate_state(self, timestep: int, electricity_target: float, h2_soc: float) -> None:

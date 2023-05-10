@@ -402,7 +402,6 @@ def modular_household_explicit(
             controlable=clever,
             count=count,
         )
-        """TODO: add heat pump cost. """
 
     else:
         my_boiler, count = component_connections.configure_water_heating(
@@ -478,7 +477,7 @@ def modular_household_explicit(
                 count=count,
             )
 
-    # """CHP + H2 STORAGE + ELECTROLYSIS"""
+    # """natural gas CHP"""
     if chp_included and not buffer_included:
         count = component_connections.configure_chp(
             my_sim=my_sim,
@@ -502,17 +501,8 @@ def modular_household_explicit(
             count=count,
         )
 
-    # """BATTERY"""
-    if battery_included and clever:
-        count = component_connections.configure_battery(
-            my_sim=my_sim,
-            my_simulation_parameters=my_simulation_parameters,
-            my_electricity_controller=my_electricity_controller,
-            battery_capacity=battery_capacity,
-            count=count,
-        )
-
-    if hydrogen_setup_included:
+    # """hydrogen storage with fuel cell and electrolyzer"""
+    if hydrogen_setup_included and not buffer_included:
         (
             my_chp,
             count,
@@ -524,17 +514,23 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
-            electrolyzer_power=electrolyzer_power,
+            electrolyzer_power=electrolyzer_power * pv_peak_power,
+            controlable=clever,
             count=count,
         )
-        if buffer_included:
-            my_buffer.connect_only_predefined_connections(my_chp)
-        else:
-            my_building.connect_input(
-                input_fieldname=my_building.ThermalPowerDelivered,
-                src_object_name=my_chp.component_name,
-                src_field_name=my_chp.ThermalPowerDelivered,
-            )
+
+    if hydrogen_setup_included and buffer_included:
+        pass  # tbd
+
+    # """BATTERY"""
+    if battery_included and clever:
+        count = component_connections.configure_battery(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_electricity_controller=my_electricity_controller,
+            battery_capacity=battery_capacity,
+            count=count,
+        )
 
     if needs_ems(
         battery_included,

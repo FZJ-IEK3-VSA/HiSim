@@ -1135,7 +1135,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     # configure and add chp
     chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.CHP(
+    my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
 
@@ -1232,7 +1232,7 @@ def configure_chp_with_buffer(
     # configure and add chp
     chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.CHP(
+    my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
 
@@ -1294,7 +1294,7 @@ def configure_chp_with_buffer(
 
 
 def configure_electrolyzer_and_h2_storage(
-        my_sim: Any, my_simulation_parameters: SimulationParameters, my_chp: generic_CHP.CHP, my_chp_controller: controller_l1_chp.L1CHPController,
+        my_sim: Any, my_simulation_parameters: SimulationParameters, my_chp: generic_CHP.SimpleCHP, my_chp_controller: controller_l1_chp.L1CHPController,
         my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem, electrolyzer_power: float,
         h2_storage_size: float, fuel_cell_power: float, count: int,
         ) -> int:
@@ -1438,7 +1438,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     # configure and add chp
     chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.CHP(
+    my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
 
@@ -1541,7 +1541,7 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     # configure and add chp
     chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.CHP(
+    my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
         )
 

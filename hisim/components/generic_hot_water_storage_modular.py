@@ -429,12 +429,12 @@ class HotWaterStorage(dycp.DynamicComponent):
         """Sets chp default connections in hot water storage."""
         hisim.log.information("setting chp default connections in hot water storaage")
         connections = []
-        chp_classname = generic_CHP.CHP.get_classname()
+        chp_classname = generic_CHP.SimpleCHP.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerCHP,
                 chp_classname,
-                generic_CHP.CHP.ThermalPowerOutputBoiler,
+                generic_CHP.SimpleCHP.ThermalPowerOutputBoiler,
             )
         )
         return connections

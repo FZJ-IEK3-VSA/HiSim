@@ -348,11 +348,8 @@ class L1CHPController(cp.Component):
             # surplus/deficit electricity threshold exceeded?
             if self.electricity_target_channel.source_output is not None:
                 electricity_target = stsv.get_input_value(self.electricity_target_channel)
-                if (electricity_target <= - self.config.electricity_threshold and self.state.on_off == 0) or \
-                        (electricity_target <= self.config.electricity_threshold and self.state.on_off == 1):
-                    electricity_threshold_ok = True
-                else:
-                    electricity_threshold_ok = False
+                electricity_threshold_ok = (electricity_target <= - self.config.electricity_threshold and self.state.on_off == 0) or \
+                    (electricity_target <= self.config.electricity_threshold and self.state.on_off == 1)
             else:
                 electricity_threshold_ok = True
             if self.hydrogen_soc_channel.source_output is not None:
@@ -363,13 +360,13 @@ class L1CHPController(cp.Component):
                     hydrogen_soc_ok = False
             else:
                 hydrogen_soc_ok = True
-            self.determine_heating_mode(timestep, stsv, t_building, t_dhw)
-            self.calculate_state(timestep, stsv, t_building, t_dhw, electricity_threshold_ok, hydrogen_soc_ok)
+            self.determine_heating_mode(timestep, t_building, t_dhw)
+            self.calculate_state(timestep, t_building, t_dhw, electricity_threshold_ok, hydrogen_soc_ok)
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.chp_onoff_signal_channel, self.state.on_off)
         stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
 
-    def determine_heating_mode(self, timestep: int, stsv: cp.SingleTimeStepValues, t_building: float, t_dhw: float) -> None:
+    def determine_heating_mode(self, timestep: int, t_building: float, t_dhw: float) -> None:
         """Determines if hot water or building should be heated.
 
         The mode in the state is 0 if water heating is considered and 1 if heating is enforced."""
@@ -389,7 +386,7 @@ class L1CHPController(cp.Component):
             return
         self.state.mode = 1
 
-    def calculate_state(self, timestep: int, stsv: cp.SingleTimeStepValues, t_building: float, t_dhw: float,
+    def calculate_state(self, timestep: int, t_building: float, t_dhw: float,
                         electricity_threshold_ok: bool, hydrogen_soc_ok: bool) -> None:
         """Calculate the CHP state and activate / deactives."""
         # return device on if minimum operation time is not fulfilled and device was on in previous state

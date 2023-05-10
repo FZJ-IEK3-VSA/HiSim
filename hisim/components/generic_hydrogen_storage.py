@@ -144,12 +144,12 @@ class GenericHydrogenStorage(cp.Component):
     def get_default_connections_from_generic_CHP(self) -> List[cp.ComponentConnection]:
         log.information("setting fuel cell default connections in generic H2 storage")
         connections: List[cp.ComponentConnection] = []
-        chp_classname = generic_CHP.CHP.get_classname()
+        chp_classname = generic_CHP.SimpleCHP.get_classname()
         connections.append(
             cp.ComponentConnection(
                 GenericHydrogenStorage.HydrogenOutput,
                 chp_classname,
-                generic_CHP.CHP.FuelDelivered,
+                generic_CHP.SimpleCHP.FuelDelivered,
             )
         )
         return connections

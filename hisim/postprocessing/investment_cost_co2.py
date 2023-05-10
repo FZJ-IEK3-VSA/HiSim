@@ -85,7 +85,7 @@ def compute_investment_cost(
             elif component.my_component.config.fuel == LoadTypes.DIESEL:
                 column = price_frame.iloc[price_frame.index == "Diesel vehicle"]
             component_capacity = 1.0
-        elif isinstance(component.my_component, generic_CHP.CHP):
+        elif isinstance(component.my_component, generic_CHP.SimpleCHP):
             if component.my_component.config.use == LoadTypes.GAS:
                 column = price_frame.iloc[price_frame.index == "Gas powered Combined Heat and Power"]
             elif component.my_component.config.use == LoadTypes.HYDROGEN:

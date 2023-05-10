@@ -66,7 +66,9 @@ class EMSConfig(cp.ConfigBase):
 
 
 class EMSState():
-    """This dataclass saves the state of the Energy Management System."""
+
+    """Saves the state of the Energy Management System."""
+
     def __init__(self, production: float, consumption_uncontrolled: float, consumption_ems_controlled: float, ) -> None:
         """Initialize the heat pump controller state."""
         self.production = production
@@ -271,7 +273,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         component_type: lt.ComponentType,
         input_channel: cp.ComponentInput,
         output: cp.ComponentOutput,
-        timestep: int,
     ) -> float:
         """ Calculates available surplus electricity.
 
@@ -318,12 +319,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 component_type=component_type,
                 input_channel=single_input,
                 output=output,
-                timestep=timestep,
                 )
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+        ) -> None:
         """ Simulates iteration of surplus controller. """
         if timestep == 0:
             self.sort_source_weights_and_components()

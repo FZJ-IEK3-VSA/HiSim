@@ -246,23 +246,34 @@ class HeatPumpHplib(Component):
             time_on = self.state.time_on
             time_off = self.state.time_off
             on_off_previous = self.state.on_off_previous
-            # print("hp state", on_off)
-            # print("hp state previous", on_off_previous)
+
             # Overwrite on_off to realize minimum time of or time off
             if on_off_previous == 1 and time_on < time_on_min:
                 on_off = 1
-                # print("first case")
+            elif on_off_previous == -1 and time_on < time_on_min:
+                on_off = -1
             elif on_off_previous == 0 and time_off < time_off_min:
                 on_off = 0
-            #     print("second case")
-            # print("hp state ", on_off)
+
             # OnOffSwitch
             if on_off == 1:
-                # Calulate outputs
-                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb)
+                # Calulate outputs for heating mode
+                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1)
                 p_th = results["P_th"].values[0]
                 p_el = results["P_el"].values[0]
                 cop = results["COP"].values[0]
+                eer = results["EER"].values[0]
+                t_out = results["T_out"].values[0]
+                m_dot = results["m_dot"].values[0]
+                time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
+                time_off = 0
+            elif on_off == -1:
+                # Calulate outputs for cooling mode
+                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2)
+                p_th = results["P_th"].values[0]
+                p_el = results["P_el"].values[0]
+                cop = results["COP"].values[0]
+                eer = results["EER"].values[0]
                 t_out = results["T_out"].values[0]
                 m_dot = results["m_dot"].values[0]
                 time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
@@ -461,18 +472,29 @@ class HeatPumpHplibControllerL1(Component):
             )
 
             if self.mode == 1:
-                self.conditions(
+                self.conditions_on_off(
                     water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius,
                 )
+            elif self.mode == 2:
+                self.conditions_heating_cooling_off_one(water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius)
+            elif self.mode == 3:
+                self.conditions_heating_cooling_off_two(water_temperature_input_in_celsius=self.water_temperature_input_from_heat_water_storage_in_celsius)
+            else:
+                raise ValueError("Advanced HP Lib Controller Mode not known.")
 
             if self.controller_heatpumpmode == "on":
                 state = 1
             if self.controller_heatpumpmode == "off":
                 state = 0
 
+            if self.controller_heatpumpmode == "heating":
+                state = 1
+            if self.controller_heatpumpmode == "cooling":
+                state = -1
+
             stsv.set_output_value(self.state_channel, state)
 
-    def conditions(self, water_temperature_input_in_celsius: float) -> None:
+    def conditions_on_off(self, water_temperature_input_in_celsius: float) -> None:
         """Set conditions for the heat pump controller mode."""
 
         maximum_heating_set_temperature = (
@@ -506,3 +528,60 @@ class HeatPumpHplibControllerL1(Component):
             #     return
         else:
             raise ValueError("unknown mode")
+        
+    def conditions_heating_cooling_off_one(self, water_temperature_input_in_celsius: float) -> None:
+        """Set conditions for the heat pump controller mode."""
+
+        maximum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius + self.offset
+        )
+        minimum_heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius
+        )
+        minimum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius - self.offset
+        )
+        maximum_cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius
+        )
+
+        if self.controller_heatpumpmode == "heating":
+            if water_temperature_input_in_celsius > maximum_heating_set_temperature:
+                self.controller_heatpumpmode = "off"
+                return
+        elif self.controller_heatpumpmode == "cooling":
+            if water_temperature_input_in_celsius < minimum_cooling_set_temperature:
+                self.controller_heatpumpmode = "off"
+                return
+        elif self.controller_heatpumpmode == "off":
+            if water_temperature_input_in_celsius < minimum_heating_set_temperature:
+                self.controller_heatpumpmode = "heating"
+                return
+            if water_temperature_input_in_celsius > maximum_cooling_set_temperature:
+                self.controller_heatpumpmode = "cooling"
+                return
+        else:
+            raise ValueError("unknown mode")
+        
+    def conditions_heating_cooling_off_two(self, water_temperature_input_in_celsius: float) -> None:
+        """Set conditions for the heat pump controller mode."""
+
+        heating_set_temperature = (
+            self.set_water_storage_temperature_for_heating_in_celsius
+        )
+
+        cooling_set_temperature = (
+            self.set_water_storage_temperature_for_cooling_in_celsius
+        )
+
+        if water_temperature_input_in_celsius > cooling_set_temperature:
+            self.controller_heatpumpmode = "cooling"
+            return
+
+        elif water_temperature_input_in_celsius < heating_set_temperature:
+            self.controller_heatpumpmode = "heating"
+            return
+        
+        else:
+            self.controller_heatpumpmode = "off"
+            return

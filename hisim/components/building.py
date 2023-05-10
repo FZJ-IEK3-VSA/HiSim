@@ -1836,7 +1836,7 @@ class Building(dynamic_component.DynamicComponent):
                 indoor_air_temperature_set_in_celsius=indoor_air_temperature_set_in_celsius,
             )
         else:
-            raise ValueError("value error for theoretical building demand")
+            raise ValueError(f"Value error for theoretical building demand. Indoor_air_temp_zero has uncompatible value {indoor_air_temperature_zero_in_celsius} C.")
 
         return theoretical_thermal_building_demand_in_watt
 

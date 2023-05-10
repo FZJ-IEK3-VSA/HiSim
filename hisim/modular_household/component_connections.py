@@ -46,7 +46,6 @@ def configure_pv_system(
     pv_peak_power: Optional[float],
     count: int,
 ) -> Tuple[List, int]:
-
     """Sets PV System.
 
     Parameters
@@ -1023,7 +1022,7 @@ def configure_heating_with_buffer(
     heater_config.power_th = my_building.max_thermal_building_demand_in_watt
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer(
         "Buffer" + heating_system_installed.value + "Controller"
-    )
+        )
 
     heater_l1_config.day_of_heating_season_end = heating_season[0] + 1
     heater_l1_config.day_of_heating_season_begin = heating_season[1] - 1
@@ -1220,18 +1219,19 @@ def configure_chp_with_buffer(
     chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
     chp_config.source_weight = count
     my_chp = generic_CHP.SimpleCHP(
-        my_simulation_parameters=my_simulation_parameters, config=chp_config
-        )
+        my_simulation_parameters=my_simulation_parameters, config=chp_config,
+    )
 
     # add chop controller and adopt electricity threshold
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
-        )
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config,
+    )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_input(
-        input_fieldname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name, src_field_name=my_buffer.TemperatureMean
-                                    )
+        input_fieldname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name,
+        src_field_name=my_buffer.TemperatureMean,
+    )
     my_sim.add_component(my_chp_controller)
 
     # connect chp with controller intputs and add it to simulation
@@ -1244,7 +1244,7 @@ def configure_chp_with_buffer(
         input_fieldname=my_buffer.ThermalPowerCHP,
         src_object_name=my_chp.component_name,
         src_field_name=my_chp.ThermalPowerOutputBuilding,
-        )
+    )
 
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_chp,
@@ -1283,9 +1283,9 @@ def configure_chp_with_buffer(
 def configure_electrolyzer_and_h2_storage(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_chp: generic_CHP.SimpleCHP, my_chp_controller: controller_l1_chp.L1CHPController,
         my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem, electrolyzer_power: float,
-        h2_storage_size: float, fuel_cell_power: float, count: int,
-        ) -> int:
+        h2_storage_size: float, fuel_cell_power: float, count: int, ) -> int:
     """Configures electrolyzer and h2 storage with fuel cell already defined.
+
     (in configure_elctrolysis_h2storage_fuelcell_system (_with_buffer))
 
     :param my_sim: Simulation class.
@@ -1427,7 +1427,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     chp_config.source_weight = count
     my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
-        )
+    )
 
     # add treshold electricity to chp controller and add it to simulation
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
@@ -1444,10 +1444,11 @@ def configure_elctrolysis_h2storage_fuelcell_system(
 
     # connect thermal power output of CHP
     my_boiler.connect_only_predefined_connections(my_chp)
-    my_building.connect_input(input_fieldname=my_building.ThermalPowerCHP,
-                              src_object_name=my_chp.component_name,
-                              src_field_name=my_chp.ThermalPowerOutputBuilding,
-                              )
+    my_building.connect_input(
+        input_fieldname=my_building.ThermalPowerCHP,
+        src_object_name=my_chp.component_name,
+        src_field_name=my_chp.ThermalPowerOutputBuilding,
+    )
 
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_chp,
@@ -1530,7 +1531,7 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     chp_config.source_weight = count
     my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
-        )
+    )
 
     # add treshold electricity to chp controller and add it to simulation
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
@@ -1539,8 +1540,8 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_input(
-        input_fieldname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name, src_field_name=my_buffer.TemperatureMean
-                                    )
+        input_fieldname=my_chp_controller.BuildingTemperature, src_object_name=my_buffer.component_name, src_field_name=my_buffer.TemperatureMean,
+    )
     my_sim.add_component(my_chp_controller)
 
     # connect chp with controller intputs and add it to simulation

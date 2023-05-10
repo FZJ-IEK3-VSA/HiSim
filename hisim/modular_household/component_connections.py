@@ -1035,7 +1035,7 @@ def configure_heating_with_buffer(
         heating_system_installed=heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING)
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer(
         "Buffer" + heating_system_installed.value + "Controller"
-        )
+    )
 
     heater_l1_config.day_of_heating_season_end = heating_season[0] + 1
     heater_l1_config.day_of_heating_season_begin = heating_season[1] - 1
@@ -1136,7 +1136,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     chp_config.source_weight = count
     my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
-        )
+    )
 
     # add treshold electricity to chp controller and add it to simulation
     chp_controller_config.electricity_threshold = chp_config.p_el / 2

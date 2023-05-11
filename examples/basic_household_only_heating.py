@@ -135,11 +135,11 @@ def basic_household_only_heating(
         my_building.component_name,
         my_building.TemperatureMeanThermalMass,
     )
-    my_storage_controller.connect_input(
-        my_storage_controller.ReferenceMaxHeatBuildingDemand,
-        my_building.component_name,
-        my_building.ReferenceMaxHeatBuildingDemand,
-    )
+    # my_storage_controller.connect_input(
+    #     my_storage_controller.ReferenceMaxHeatBuildingDemand,
+    #     my_building.component_name,
+    #     my_building.ReferenceMaxHeatBuildingDemand,
+    # )
     # my_storage_controller.connect_input(my_storage_controller.RealHeatBuildingDemand, my_building_controller.component_name,
     #                                     my_building_controller.RealHeatBuildingDemand)
 

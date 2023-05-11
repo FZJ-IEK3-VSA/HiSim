@@ -1,5 +1,5 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-# from copy import deepcopy
+
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
@@ -15,7 +15,7 @@ from hisim.component import (
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from typing import Optional, Any, List
+from typing import Any, List
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -103,7 +103,7 @@ class HeatPumpHplib(Component):
 
         # Component has states
         self.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
-        self.previous_state = self.state.self_copy() #deepcopy(self.state)
+        self.previous_state = self.state.self_copy()
 
         # Load parameters from heat pump database
         self.parameters = hpl.get_parameters(
@@ -224,11 +224,11 @@ class HeatPumpHplib(Component):
         return lines
 
     def i_save_state(self) -> None:
-        self.previous_state = self.state.self_copy() #deepcopy(self.state)
+        self.previous_state = self.state.self_copy()
         #pass
 
     def i_restore_state(self) -> None:
-        self.state = self.previous_state.self_copy() #deepcopy(self.previous_state)
+        self.state = self.previous_state.self_copy()
         #pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:

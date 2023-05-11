@@ -66,7 +66,7 @@ def household_with_hds_and_advanced_hp(
     source_weight = -1
 
     # Set Heat Pump Controller
-    hp_mode = 3
+    hp_controller_mode = 2
 
     # Set Heat Pump
     model: str = "Generic"
@@ -177,7 +177,7 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibControllerL1(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
-            mode=hp_mode,
+            mode=hp_controller_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

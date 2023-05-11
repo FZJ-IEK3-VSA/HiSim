@@ -93,25 +93,6 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         )
 
 
-# class HeatDistributionState:
-
-#     """HeatDistributionState."""
-
-#     def __init__(
-#         self, water_temperature_in_distribution_system_in_celsius: float
-#     ) -> None:
-#         """Construct all the necessary attributes."""
-#         self.water_temperature_in_distribution_system_in_celsius = (
-#             water_temperature_in_distribution_system_in_celsius
-#         )
-
-#     def clone(self) -> Any:
-#         """Save previous state."""
-#         return HeatDistributionState(
-#             water_temperature_in_distribution_system_in_celsius=self.water_temperature_in_distribution_system_in_celsius
-#         )
-
-
 class HeatDistribution(cp.Component):
 
     """Heat Distribution System.
@@ -144,9 +125,6 @@ class HeatDistribution(cp.Component):
         )
         self.heat_distribution_system_config = config
         self.heating_system = self.heat_distribution_system_config.heating_system
-        # self.state = HeatDistributionState(
-        #     self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius
-        # )
 
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
@@ -349,9 +327,6 @@ class HeatDistribution(cp.Component):
             )
             # Calculations ----------------------------------------------------------------------------------------------------------
 
-            # self.state.water_temperature_in_distribution_system_in_celsius = (
-            #     self.water_temperature_output_in_celsius
-            # )
             if state_controller == 1:
 
                 (

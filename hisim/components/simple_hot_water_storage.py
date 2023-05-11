@@ -255,13 +255,6 @@ class SimpleHotWaterStorage(cp.Component):
                 previous_mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
                 seconds_per_timestep=self.seconds_per_timestep,
             )
-            # # final mean temperature depends on time factor
-            # self.final_mean_water_temperature_in_water_storage_in_celsius = self.calculate_water_output_temperature(
-            #     mean_water_temperature_in_water_storage_in_celsius=self.start_water_temperature_in_storage_in_celsius,
-            #     mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
-            #     water_input_temperature_in_celsius=mean_water_temperature_in_water_storage_in_celsius,
-            #     mixing_factor_water_input_portion=self.factor_for_water_input_portion
-            # )
 
             if (
                 self.mean_water_temperature_in_water_storage_in_celsius > 90
@@ -274,24 +267,22 @@ class SimpleHotWaterStorage(cp.Component):
             # Calculations ------------------------------------------------------------------------------------------------------
 
             if water_mass_flow_rate_from_heat_generator_in_kg_per_second != 0:
-                # hds gets water from hp (if hp is not off meaning mass flow is not zero)
+                # hds gets water from hp (if hp is not off, mass flow is not zero)
                 water_temperature_to_heat_distribution_system_in_celsius = self.calculate_water_output_temperature(
                     mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-                    # mean_water_temperature_in_water_storage_in_celsius=self.final_mean_water_temperature_in_water_storage_in_celsius,
                     mixing_factor_water_input_portion=self.factor_for_water_input_portion,
                     mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
                     water_input_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
                 )
-                # hp gets water from hds (if hp is not off meaning mass flow is not zero)
+                # hp gets water from hds (if hp is not off, mass flow is not zero)
                 water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
                     mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-                    # mean_water_temperature_in_water_storage_in_celsius=self.final_mean_water_temperature_in_water_storage_in_celsius,
                     mixing_factor_water_input_portion=self.factor_for_water_input_portion,
                     mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
                     water_input_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
                 )
 
-            # or else hds and hp get water from storage which mean temperature is calculated from storage water and hds water
+            # if the hp is off (mass flow is zero), hp and hds get water directly from storage
             else:
                 water_temperature_to_heat_distribution_system_in_celsius = (
                     self.mean_water_temperature_in_water_storage_in_celsius
@@ -299,17 +290,6 @@ class SimpleHotWaterStorage(cp.Component):
                 water_temperature_to_heat_generator_in_celsius = (
                     self.mean_water_temperature_in_water_storage_in_celsius
                 )
-
-                # self.water_temperature_to_heat_distribution_system_in_celsius = self.final_mean_water_temperature_in_water_storage_in_celsius
-                # self.water_temperature_to_heat_generator_in_celsius = self.final_mean_water_temperature_in_water_storage_in_celsius
-
-            # # hp gets water from hds
-            # self.water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
-            #     mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
-            #     mixing_factor_water_input_portion=self.factor_for_water_input_portion,
-            #     mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
-            #     water_input_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
-            # )
 
             # Set outputs -------------------------------------------------------------------------------------------------------
 

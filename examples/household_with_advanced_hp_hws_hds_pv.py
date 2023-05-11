@@ -12,7 +12,6 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import sumbuilder
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from hisim import postprocessingoptions
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -71,10 +70,10 @@ def household_with_hds_and_advanced_hp(
 
     # Set Heat Pump
     model: str = "Generic"
-    group_id: int = 1 # outdoor/air on/off type
-    heating_reference_temperature: float = -7 # t_in
-    p_th_set: float = 7000
-    vorlauftemperatur = 21 # t_out_val
+    group_id: int = 1  # outdoor/air on/off type
+    heating_reference_temperature: float = -7  # t_in
+    p_th_set: float = 10000
+    vorlauftemperatur = 21  # t_out_val
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
@@ -95,7 +94,6 @@ def household_with_hds_and_advanced_hp(
     set_cooling_temperature_for_building_in_celsius = 22
     set_heating_temperature_for_water_storage_in_celsius = 20.5
     set_cooling_temperature_for_water_storage_in_celsius = 21.5
-
 
     # =================================================================================================================================
     # Build Components
@@ -237,7 +235,7 @@ def household_with_hds_and_advanced_hp(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
         # my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
-        my_simple_hot_water_storage.WaterMeanTemperatureInStorage
+        my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
     )
 
     # -----------------------------------------------------------------------------------------------------------------

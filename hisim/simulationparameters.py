@@ -81,24 +81,12 @@ class SimulationParameters(JSONWizard):
         self.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         #self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
-        #self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        #self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
         self.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
         )
-        # self.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        # self.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # self.post_processing_options.append(
-        #     PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY
-        # )
-        # self.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
-        # self.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-        # self.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-        # self.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
-        # self.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
-        # self.post_processing_options.append(PostProcessingOptions.INCLUDE_IMAGES_IN_PDF_REPORT)
-        # self.post_processing_options.append(PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT)
-        # self.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
+
 
     @classmethod
     def full_year_all_options(

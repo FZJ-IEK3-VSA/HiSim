@@ -60,7 +60,7 @@ def test_house_with_pv_and_hp_for_heating_test(
     temperature_air_heating_in_celsius = 19.5
     temperature_air_cooling_in_celsius = 20.5
     offset = 0.5
-    hp_mode = 1
+    hp_mode = 2
 
     # Set Heat Pump
     # hp_min_operation_time = 1
@@ -71,7 +71,7 @@ def test_house_with_pv_and_hp_for_heating_test(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
@@ -137,7 +137,6 @@ def test_house_with_pv_and_hp_for_heating_test(
         mode=hp_mode),
         my_simulation_parameters=my_simulation_parameters,
     )
-    
     # =========================================================================================================================================================
     # Connect Components
 

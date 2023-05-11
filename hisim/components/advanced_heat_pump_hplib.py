@@ -1,5 +1,5 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from copy import deepcopy
+# from copy import deepcopy
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
@@ -103,7 +103,7 @@ class HeatPumpHplib(Component):
 
         # Component has states
         self.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
-        self.previous_state = deepcopy(self.state)
+        self.previous_state = self.state.self_copy() #deepcopy(self.state)
 
         # Load parameters from heat pump database
         self.parameters = hpl.get_parameters(
@@ -224,11 +224,11 @@ class HeatPumpHplib(Component):
         return lines
 
     def i_save_state(self) -> None:
-        self.previous_state = deepcopy(self.state)
+        self.previous_state = self.state.self_copy() #deepcopy(self.state)
         #pass
 
     def i_restore_state(self) -> None:
-        self.state = deepcopy(self.previous_state)
+        self.state = self.previous_state.self_copy() #deepcopy(self.previous_state)
         #pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
@@ -326,6 +326,17 @@ class HeatPumpState:
     time_off: int = 0
     time_on_cooling: int = 0
     on_off_previous: float = 0
+    
+    def self_copy(
+        self,
+    ):
+        """Copy the Building State."""
+        return HeatPumpState(
+            self.time_on,
+            self.time_off,
+            self.time_on_cooling,
+            self.on_off_previous
+        )
 
 
 # ===========================================================================

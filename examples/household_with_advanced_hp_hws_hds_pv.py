@@ -234,7 +234,6 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
-        # my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
         my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
     )
 

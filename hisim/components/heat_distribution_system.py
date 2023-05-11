@@ -56,7 +56,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            water_temperature_in_distribution_system_in_celsius=20,
+            water_temperature_in_distribution_system_in_celsius=22,
             heating_system=HeatingSystemType.FLOORHEATING,
         )
         return config
@@ -87,8 +87,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_heating_temperature_for_building_in_celsius=20,
             set_cooling_temperature_for_building_in_celsius=24,
-            set_heating_temperature_for_water_storage_in_celsius=21,
-            set_cooling_temperature_for_water_storage_in_celsius=23
+            set_heating_temperature_for_water_storage_in_celsius=21.5,
+            set_cooling_temperature_for_water_storage_in_celsius=22.5
         )
 
 
@@ -148,7 +148,7 @@ class HeatDistribution(cp.Component):
         # )
 
         self.thermal_power_delivered_in_watt: float = 0.0
-        self.water_temperature_output_in_celsius: float = 22
+        self.water_temperature_output_in_celsius: float = 21
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
         if SingletonSimRepository().exist_entry(

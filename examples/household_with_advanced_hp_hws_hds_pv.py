@@ -67,20 +67,18 @@ def household_with_hds_and_advanced_hp(
     source_weight = -1
 
     # Set Heat Pump Controller
-    # set_water_storage_temperature_for_heating_in_celsius = 21
-    # set_water_storage_temperature_for_cooling_in_celsius = 22
-    # offset_for_set_water_storage_temperature_in_celsius = 0.5
-    hp_mode = 1
+    hp_mode = 3
 
     # Set Heat Pump
     model: str = "Generic"
-    group_id: int = 4  # outdoor/air on/off type
-    heating_reference_temperature: float = -7
+    group_id: int = 1 # outdoor/air on/off type
+    heating_reference_temperature: float = -7 # t_in
     p_th_set: float = 7000
-    vorlauftemperatur = 20
+    vorlauftemperatur = 21 # t_out_val
+
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
-    volume_heating_water_storage_in_liter = 100
+    volume_heating_water_storage_in_liter = 500
     mean_water_temperature_in_storage_in_celsius = 21
     cool_water_temperature_in_storage_in_celsius = 21
     hot_water_temperature_in_storage_in_celsius = 21
@@ -94,9 +92,9 @@ def household_with_hds_and_advanced_hp(
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
     set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 24
-    set_heating_temperature_for_water_storage_in_celsius = 21.5
-    set_cooling_temperature_for_water_storage_in_celsius = 22.5
+    set_cooling_temperature_for_building_in_celsius = 22
+    set_heating_temperature_for_water_storage_in_celsius = 20.5
+    set_cooling_temperature_for_water_storage_in_celsius = 21.5
 
 
     # =================================================================================================================================
@@ -104,7 +102,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.three_months_with_plots_only(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
@@ -181,9 +179,6 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibControllerL1(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
-            # set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
-            # set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
-            # offset_for_set_water_storage_temperature_in_celsius=offset_for_set_water_storage_temperature_in_celsius,
             mode=hp_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,
@@ -241,7 +236,8 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
+        # my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
+        my_simple_hot_water_storage.WaterMeanTemperatureInStorage
     )
 
     # -----------------------------------------------------------------------------------------------------------------

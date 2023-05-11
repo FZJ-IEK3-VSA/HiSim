@@ -92,23 +92,23 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         )
 
 
-class HeatDistributionState:
+# class HeatDistributionState:
 
-    """HeatDistributionState."""
+#     """HeatDistributionState."""
 
-    def __init__(
-        self, water_temperature_in_distribution_system_in_celsius: float
-    ) -> None:
-        """Construct all the necessary attributes."""
-        self.water_temperature_in_distribution_system_in_celsius = (
-            water_temperature_in_distribution_system_in_celsius
-        )
+#     def __init__(
+#         self, water_temperature_in_distribution_system_in_celsius: float
+#     ) -> None:
+#         """Construct all the necessary attributes."""
+#         self.water_temperature_in_distribution_system_in_celsius = (
+#             water_temperature_in_distribution_system_in_celsius
+#         )
 
-    def clone(self) -> Any:
-        """Save previous state."""
-        return HeatDistributionState(
-            water_temperature_in_distribution_system_in_celsius=self.water_temperature_in_distribution_system_in_celsius
-        )
+#     def clone(self) -> Any:
+#         """Save previous state."""
+#         return HeatDistributionState(
+#             water_temperature_in_distribution_system_in_celsius=self.water_temperature_in_distribution_system_in_celsius
+#         )
 
 
 class HeatDistribution(cp.Component):
@@ -143,12 +143,12 @@ class HeatDistribution(cp.Component):
         )
         self.heat_distribution_system_config = config
         self.heating_system = self.heat_distribution_system_config.heating_system
-        self.state = HeatDistributionState(
-            self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius
-        )
+        # self.state = HeatDistributionState(
+        #     self.heat_distribution_system_config.water_temperature_in_distribution_system_in_celsius
+        # )
 
         self.thermal_power_delivered_in_watt: float = 0.0
-        self.water_temperature_output_in_celsius: float = 20
+        self.water_temperature_output_in_celsius: float = 22
         self.delta_temperature_in_celsius: float = 1.0
         self.build(heating_system=self.heating_system)
         if SingletonSimRepository().exist_entry(
@@ -348,9 +348,9 @@ class HeatDistribution(cp.Component):
             )
             # Calculations ----------------------------------------------------------------------------------------------------------
 
-            self.state.water_temperature_in_distribution_system_in_celsius = (
-                self.water_temperature_output_in_celsius
-            )
+            # self.state.water_temperature_in_distribution_system_in_celsius = (
+            #     self.water_temperature_output_in_celsius
+            # )
             if state_controller == 1:
          
                 (
@@ -625,11 +625,11 @@ class HeatDistributionController(cp.Component):
 
         The function sets important constants and parameters for the calculations.
         """
-        # Sth
-        self.controller_heat_distribution_mode = "off"
-        self.previous_controller_heat_distribution_mode = (
-            self.controller_heat_distribution_mode
-        )
+        # # Sth
+        # self.controller_heat_distribution_mode = "off"
+        # self.previous_controller_heat_distribution_mode = (
+        #     self.controller_heat_distribution_mode
+        # )
 
         # Configuration
         self.set_heating_threshold_temperature = set_heating_threshold_temperature

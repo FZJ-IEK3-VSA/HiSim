@@ -16,6 +16,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
+from copy import deepcopy
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -125,6 +126,10 @@ class SimpleHotWaterStorage(cp.Component):
             )
 
         self.build()
+        
+        # # Component has states
+        # self.state = SimpleWaterStorageState()
+        # self.previous_state = deepcopy(self.state)
 
         # =================================================================================================================================
         # Input channels
@@ -191,10 +196,12 @@ class SimpleHotWaterStorage(cp.Component):
 
     def i_save_state(self) -> None:
         """Save the current state."""
+        #self.previous_state = deepcopy(self.state)
         pass
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
+        #self.state = deepcopy(self.previous_state)
         pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
@@ -212,6 +219,7 @@ class SimpleHotWaterStorage(cp.Component):
             self.start_water_temperature_in_storage_in_celsius = (
                 self.mean_water_temperature_in_water_storage_in_celsius
             )
+            #self.start_water_temperature_in_storage_in_celsius = self.state.mean_temperature
             # Get inputs --------------------------------------------------------------------------------------------------------
             water_temperature_from_heat_distribution_system_in_celsius = (
                 stsv.get_input_value(
@@ -311,6 +319,7 @@ class SimpleHotWaterStorage(cp.Component):
                 self.mean_water_temperature_in_water_storage_in_celsius,
             )
 
+            # self.state.mean_temperature = self.mean_water_temperature_in_water_storage_in_celsius
     def build(self):
         """Build function.
 
@@ -403,3 +412,8 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         return water_temperature_output_in_celsius
+
+# @dataclass
+# class SimpleWaterStorageState():
+    
+#     mean_temperature: float = 20

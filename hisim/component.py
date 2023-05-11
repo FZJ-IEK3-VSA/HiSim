@@ -139,7 +139,7 @@ class SingleTimeStepValues:
         """ Checks if the values are sufficiently similar to another array. """
         count = len(self.values)
         for i in range(count):
-            if None not in (previous_values.values[i], self.values[i]) and abs(previous_values.values[i] - self.values[i]) > 0.0001:
+            if abs(previous_values.values[i] - self.values[i]) > 0.0001:
                 return False
         return True
 

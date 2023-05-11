@@ -143,6 +143,7 @@ class BuildingState:
         self.thermal_mass_temperature_in_celsius: float = (
             thermal_mass_temperature_in_celsius
         )
+
         # this is labeled as c_m in the paper [1] (** Check header)
         self.thermal_capacitance_in_joule_per_kelvin: float = (
             thermal_capacitance_in_joule_per_kelvin

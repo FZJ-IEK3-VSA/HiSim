@@ -81,22 +81,22 @@ def household_with_hds_and_advanced_hp(
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
-    mean_water_temperature_in_storage_in_celsius = 20
-    cool_water_temperature_in_storage_in_celsius = 20
-    hot_water_temperature_in_storage_in_celsius = 20
+    mean_water_temperature_in_storage_in_celsius = 21
+    cool_water_temperature_in_storage_in_celsius = 21
+    hot_water_temperature_in_storage_in_celsius = 21
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 20
+    water_temperature_in_distribution_system_in_celsius = 21
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
     set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 22
-    set_heating_temperature_for_water_storage_in_celsius = 20.5
-    set_cooling_temperature_for_water_storage_in_celsius = 21.5
+    set_cooling_temperature_for_building_in_celsius = 24
+    set_heating_temperature_for_water_storage_in_celsius = 21.5
+    set_cooling_temperature_for_water_storage_in_celsius = 22.5
 
 
     # =================================================================================================================================
@@ -104,7 +104,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.three_months_with_plots_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
@@ -298,9 +298,9 @@ def household_with_hds_and_advanced_hp(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_base_electricity_load_profile)
-    my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_building)
+    my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_heat_distribution_system)
+    my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)

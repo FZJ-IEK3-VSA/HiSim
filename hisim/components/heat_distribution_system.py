@@ -141,7 +141,7 @@ class HeatDistribution(cp.Component):
         else:
             raise KeyError(
                 "Keys for max thermal building demand was not found in the singleton sim repository."
-                + "This might be because the heating distribution system was not initialized before the building."
+                + "This might be because the building was not initialized before the heat distribution system."
                 + "Please check the order of the initialization of the components in your example."
             )
 

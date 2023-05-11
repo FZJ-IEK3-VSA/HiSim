@@ -6,6 +6,7 @@ from hisim.components import simple_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from tests import functions_for_testing as fft
 
 
@@ -13,7 +14,23 @@ from tests import functions_for_testing as fft
 def test_simple_storage():
     """Test for simple hot water storage."""
 
-    seconds_per_timestep = 60
+    
+    # calculate mixing factors and run simulation for different seconds per timestep
+    seconds_per_timesteps_to_test = [60, 60 * 15, 60 * 30, 60 * 60, 60 * 120]
+    for sec_per_timestep in seconds_per_timesteps_to_test:
+        if sec_per_timestep <= 3600:
+            factor_for_water_storage_portion = sec_per_timestep / 3600
+        elif sec_per_timestep > 3600:
+            factor_for_water_storage_portion = 1.0
+        
+        simulate_simple_water_storage(
+            sec_per_timestep, factor_for_water_storage_portion=factor_for_water_storage_portion
+        )
+        
+
+def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_storage_portion: float):
+    factor_for_water_storage_portion = factor_for_water_storage_portion
+    seconds_per_timestep = sec_per_timesteps
     my_simulation_parameters = SimulationParameters.one_day_only(
         2017, seconds_per_timestep
     )
@@ -25,6 +42,8 @@ def test_simple_storage():
     cool_water_temperature_in_storage_in_celsius = 50
     hot_water_temperature_in_storage_in_celsius = 50
 
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM, entry= 0.787)
+    water_mass_flow_rate_from_heat_distribution_system = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM)
     # ===================================================================================================================
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
@@ -53,12 +72,6 @@ def test_simple_storage():
         lt.Units.CELSIUS,
     )
 
-    water_mass_flow_rate_from_heat_distribution_system = cp.ComponentOutput(
-        "FakeWaterMassFlowRateFromHds",
-        "WaterMassFlowRateFromHeatDistributionSystem",
-        lt.LoadTypes.WARM_WATER,
-        lt.Units.KG_PER_SEC,
-    )
 
     water_mass_flow_rate_from_heat_generator = cp.ComponentOutput(
         "FakeWaterMassFlowRateFromHeatGenerator",
@@ -74,9 +87,7 @@ def test_simple_storage():
     my_simple_heat_water_storage.water_temperature_heat_generator_input_channel.source_output = (
         water_temperature_input_from_heat_generator
     )
-    my_simple_heat_water_storage.water_mass_flow_rate_heat_distrution_system_input_channel.source_output = (
-        water_mass_flow_rate_from_heat_distribution_system
-    )
+
     my_simple_heat_water_storage.water_mass_flow_rate_heat_generator_input_channel.source_output = (
         water_mass_flow_rate_from_heat_generator
     )
@@ -85,7 +96,6 @@ def test_simple_storage():
         [
             water_temperature_input_from_heat_distribution_system,
             water_temperature_input_from_heat_generator,
-            water_mass_flow_rate_from_heat_distribution_system,
             water_mass_flow_rate_from_heat_generator,
             my_simple_heat_water_storage,
         ]
@@ -97,7 +107,6 @@ def test_simple_storage():
         [
             water_temperature_input_from_heat_distribution_system,
             water_temperature_input_from_heat_generator,
-            water_mass_flow_rate_from_heat_distribution_system,
             water_mass_flow_rate_from_heat_generator,
             my_simple_heat_water_storage,
         ]
@@ -105,79 +114,65 @@ def test_simple_storage():
 
     stsv.values[water_temperature_input_from_heat_distribution_system.global_index] = 48
     stsv.values[water_temperature_input_from_heat_generator.global_index] = 52
-    stsv.values[water_mass_flow_rate_from_heat_distribution_system.global_index] = 0.787
     stsv.values[water_mass_flow_rate_from_heat_generator.global_index] = 0.59
 
     # Simulate for timestep 300
     timestep = 300
+    my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius = 50
 
-    my_simple_heat_water_storage.i_restore_state()
 
-    # calculate mixing factors for different seconds per timestep
-    factors_for_water_storage_portion = []
-    seconds_per_timesteps_to_test = [60, 60 * 15, 60 * 30, 60 * 60, 60 * 120]
-    for i in seconds_per_timesteps_to_test:
-        if i <= 3600:
-            factors_for_water_storage_portion.append(i / 3600)
-        elif i > 3600:
-            factors_for_water_storage_portion.append(1.0)
+    my_simple_heat_water_storage.i_simulate(timestep, stsv, False)
 
-    # simulate simple hot water storage for different seconds per timestep
-    for index, seconds_per_timestep in enumerate(seconds_per_timesteps_to_test):
-        log.information("sec per timestep " + str(seconds_per_timestep))
-        my_simple_heat_water_storage.seconds_per_timestep = seconds_per_timestep
+    water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[3]
+    water_temperature_output_in_celsius_to_heat_generator = stsv.values[4]
 
-        my_simple_heat_water_storage.i_simulate(timestep, stsv, False)
+    # test mean water temperature calculation in storage
+    mass_water_hds_in_kg = (
 
-        water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[4]
-        water_temperature_output_in_celsius_to_heat_generator = stsv.values[5]
+        water_mass_flow_rate_from_heat_distribution_system
+        * seconds_per_timestep
+    )
+    mass_water_hg_in_kg = (
+        stsv.values[water_mass_flow_rate_from_heat_generator.global_index]
+        * seconds_per_timestep
+    )
 
-        # test mean water temperature calculation in storage
-        mass_water_hds_in_kg = (
-            stsv.values[water_mass_flow_rate_from_heat_distribution_system.global_index]
-            * seconds_per_timestep
-        )
-        mass_water_hg_in_kg = (
-            stsv.values[water_mass_flow_rate_from_heat_generator.global_index]
-            * seconds_per_timestep
-        )
+    calculated_mean_water_temperature_in_celsius = (
+        my_simple_heat_water_storage.water_mass_in_storage_in_kg
+        * my_simple_heat_water_storage.start_water_temperature_in_storage_in_celsius
+        + mass_water_hg_in_kg
+        * stsv.values[water_temperature_input_from_heat_generator.global_index]
+        + mass_water_hds_in_kg
+        * stsv.values[
+            water_temperature_input_from_heat_distribution_system.global_index
+        ]
+    ) / (
+        my_simple_heat_water_storage.water_mass_in_storage_in_kg
+        + mass_water_hg_in_kg
+        + mass_water_hds_in_kg
+    )
+    # test if calculated mean water temperature is equal to simulated water temperature
+    assert (
+        calculated_mean_water_temperature_in_celsius
+        == my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
+    )
 
-        calculated_mean_water_temperature_in_celsius = (
-            my_simple_heat_water_storage.water_mass_in_storage_in_kg
-            * my_simple_heat_water_storage.start_water_temperature_in_storage_in_celsius
-            + mass_water_hg_in_kg
-            * stsv.values[water_temperature_input_from_heat_generator.global_index]
-            + mass_water_hds_in_kg
-            * stsv.values[
-                water_temperature_input_from_heat_distribution_system.global_index
-            ]
-        ) / (
-            my_simple_heat_water_storage.water_mass_in_storage_in_kg
-            + mass_water_hg_in_kg
-            + mass_water_hds_in_kg
-        )
-        # test if calculated mean water temperature is equal to simulated water temperature
-        assert (
-            calculated_mean_water_temperature_in_celsius
-            == my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
-        )
+    # test water output temperature for hp
+    assert (
+        factor_for_water_storage_portion
+        * my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
+        + (1 - factor_for_water_storage_portion)
+        * stsv.values[
+            water_temperature_input_from_heat_distribution_system.global_index
+        ]
+    ) == water_temperature_output_in_celsius_to_heat_generator
 
-        # test mixing factors and water output temperatures
+    # test water output temperature for hds
+    assert (
+        factor_for_water_storage_portion
+        * my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
+        + (1 - factor_for_water_storage_portion)
+        * stsv.values[water_temperature_input_from_heat_generator.global_index]
+    ) == water_temperature_output_in_celsius_to_heat_distribution_system
 
-        # test water output temperature for hp
-        assert (
-            factors_for_water_storage_portion[index]
-            * my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
-            + (1 - factors_for_water_storage_portion[index])
-            * stsv.values[
-                water_temperature_input_from_heat_distribution_system.global_index
-            ]
-        ) == water_temperature_output_in_celsius_to_heat_generator
-
-        # test water output temperature for hds
-        assert (
-            factors_for_water_storage_portion[index]
-            * my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius
-            + (1 - factors_for_water_storage_portion[index])
-            * stsv.values[water_temperature_input_from_heat_generator.global_index]
-        ) == water_temperature_output_in_celsius_to_heat_distribution_system
+    

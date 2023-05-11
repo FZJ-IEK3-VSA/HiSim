@@ -1,5 +1,4 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hplib import hplib as hpl

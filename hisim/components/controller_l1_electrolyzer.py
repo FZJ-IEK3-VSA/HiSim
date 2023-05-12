@@ -84,7 +84,8 @@ class L1GenericElectrolyzerController(cp.Component):
 
     Components to connect to:
     (1) energy management system (controller_l2_energy_management_system)
-    (2) hydrogen storage (generic_h2storage)"""
+    (2) hydrogen storage (generic_h2storage)
+    """
 
     # Inputs
     ElectricityTarget = "ElectricityTarget"

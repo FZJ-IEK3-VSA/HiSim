@@ -7,7 +7,6 @@ import os
 import datetime
 from typing import List, Tuple, Optional, cast
 import time
-
 import pandas as pd
 
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -36,20 +35,22 @@ class Simulator:
     def __init__(
         self,
         module_directory: str,
+        module_filename: str,
         setup_function: str,
         my_simulation_parameters: Optional[SimulationParameters],
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
-        if setup_function is None:
-            raise ValueError("No setup function was set")
-        self.setup_function = setup_function
+
         self._simulation_parameters: SimulationParameters
         if my_simulation_parameters is not None:
             self._simulation_parameters = my_simulation_parameters
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
-
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
+        if setup_function is None:
+            raise ValueError("No setup function was set")
+        self.setup_function = setup_function
+        self.module_filename = module_filename
         self.module_directory = module_directory
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
@@ -133,10 +134,17 @@ class Simulator:
             # actual values and previous values
             if stsv.is_close_enough_to_previous(previous_values):
                 continue_calculation = False
-            if iterative_tries > 2 and postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING \
-                    in self._simulation_parameters.post_processing_options:
-                myerr = stsv.get_differences_for_error_msg(previous_values,  self.all_outputs)
-                with open(self.iteration_logging_path, 'a', encoding="utf-8") as filestream:
+            if (
+                iterative_tries > 2
+                and postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING
+                in self._simulation_parameters.post_processing_options
+            ):
+                myerr = stsv.get_differences_for_error_msg(
+                    previous_values, self.all_outputs
+                )
+                with open(
+                    self.iteration_logging_path, "a", encoding="utf-8"
+                ) as filestream:
                     filestream.write(myerr + "\n")
             if iterative_tries > 10:
                 force_convergence = True
@@ -175,7 +183,9 @@ class Simulator:
             "Using result directory: " + self._simulation_parameters.result_directory
         )
         log.LOGGING_LEVEL = self._simulation_parameters.logging_level
-        self.iteration_logging_path = os.path.join(self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt")
+        self.iteration_logging_path = os.path.join(
+            self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
+        )
 
     # @profile
     # @utils.measure_execution_time
@@ -232,7 +242,11 @@ class Simulator:
             if self._simulation_parameters.timesteps % 500 == 0:
                 log.information("Starting step " + str(step))
 
-            (resulting_stsv, iteration_tries, force_convergence) = self.process_one_timestep(step, stsv)
+            (
+                resulting_stsv,
+                iteration_tries,
+                force_convergence,
+            ) = self.process_one_timestep(step, stsv)
             stsv = cp.SingleTimeStepValues(number_of_outputs)
             # Accumulates iteration counter
             total_iteration_tries_since_last_msg += iteration_tries
@@ -245,7 +259,13 @@ class Simulator:
 
             # For simulation longer than 5 seconds
             if elapsed.total_seconds() > 5:
-                lastmessage = self.show_progress(starttime, step, total_iteration_tries_since_last_msg, last_step, force_convergence)
+                lastmessage = self.show_progress(
+                    starttime,
+                    step,
+                    total_iteration_tries_since_last_msg,
+                    last_step,
+                    force_convergence,
+                )
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
         postprocessing_datatransfer = self.prepare_post_processing(
@@ -293,7 +313,11 @@ class Simulator:
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:1.2f}s.")
-        results_merged = self.get_std_results(self.results_data_frame)
+        (
+            results_merged_monthly,
+            results_merged_all_data,
+            results_merged_hourly,
+        ) = self.get_std_results(self.results_data_frame)
         ppdt = PostProcessingDataTransfer(
             results=self.results_data_frame,
             all_outputs=self.all_outputs,
@@ -301,14 +325,24 @@ class Simulator:
             wrapped_components=self.wrapped_components,
             mode=1,
             setup_function=self.setup_function,
+            module_filename=self.module_filename,
             execution_time=execution_time,
-            results_monthly=results_merged,
+            results_monthly=results_merged_monthly,
+            results_all_data=results_merged_all_data,
+            results_hourly=results_merged_hourly,
         )
         log.information("Finished preparing post processing")
         return ppdt
 
-    def show_progress(self, starttime: datetime.datetime, step: int, total_iteration_tries: int, last_step: int, force_covergence: bool) -> datetime.datetime:
-        """ Makes the pretty progress messages with time estimate. """
+    def show_progress(
+        self,
+        starttime: datetime.datetime,
+        step: int,
+        total_iteration_tries: int,
+        last_step: int,
+        force_covergence: bool,
+    ) -> datetime.datetime:
+        """Makes the pretty progress messages with time estimate."""
         # calculates elapsed time
         elapsed = datetime.datetime.now() - starttime
         elapsed_minutes, elapsed_seconds = divmod(elapsed.seconds, 60)
@@ -337,7 +371,9 @@ class Simulator:
         log.information(simulation_status)
         return datetime.datetime.now()
 
-    def get_std_results(self, results_data_frame: pd.DataFrame) -> pd.DataFrame:
+    def get_std_results(
+        self, results_data_frame: pd.DataFrame
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
         pd_timeline = pd.date_range(
             start=self._simulation_parameters.start_date,
@@ -346,7 +382,9 @@ class Simulator:
         )[:-1]
         n_columns = results_data_frame.shape[1]
         results_data_frame.index = pd_timeline
-        results_merged = pd.DataFrame()
+        results_merged_monthly = pd.DataFrame()
+        results_merged_hourly = pd.DataFrame()
+        results_merged_all_data = pd.DataFrame()
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(
                 results_data_frame.values[:, i_column],
@@ -355,10 +393,45 @@ class Simulator:
             )
             column_name1 = results_data_frame.columns[i_column]  # noqa
             column_name: str = cast(str, column_name1)
-            if "Temperature" in column_name or "Percent" in column_name:
-                temp_df = temp_df.resample("M").interpolate(method="linear")
+            if (
+                "Temperature" in column_name
+                or "Percent" in column_name
+                or "Any" in column_name
+                or "Speed" in column_name
+            ):
+                temp_df_monthly = temp_df.resample("M").interpolate(method="linear")
+                temp_df_all_data = temp_df.mean()
             else:
-                temp_df = temp_df.resample("M").sum()
-            results_merged[temp_df.columns[0]] = temp_df.values[:, 0]
-            results_merged.index = temp_df.index
-        return results_merged
+                temp_df_monthly = temp_df.resample("M").sum()
+                temp_df_all_data = temp_df.sum()
+
+            results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[
+                :, 0
+            ]
+            results_merged_monthly.index = temp_df_monthly.index
+
+            results_merged_all_data[
+                temp_df_monthly.columns[0]
+            ] = temp_df_all_data.values
+
+            if self._simulation_parameters.seconds_per_timestep != 3600:
+                if (
+                    "Temperature" in column_name
+                    or "Percent" in column_name
+                    or "Any" in column_name
+                    or "Speed" in column_name
+                ):
+                    temp_df_hourly = temp_df.resample("60T").interpolate(
+                        method="linear"
+                    )
+                else:
+                    temp_df_hourly = temp_df.resample("60T").sum()
+
+                results_merged_hourly[
+                    temp_df_hourly.columns[0]
+                ] = temp_df_hourly.values[:, 0]
+                results_merged_hourly.index = temp_df_hourly.index
+            else:
+                results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
+
+        return results_merged_monthly, results_merged_all_data, results_merged_hourly

@@ -8,6 +8,7 @@ from hisim.components import building
 from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
 from hisim.components import generic_gas_heater
+from hisim import postprocessingoptions
 
 
 __authors__ = "Maximilian Hillen"
@@ -49,13 +50,19 @@ def basic_household_only_heating(
     # =================================================================================================================================
     # Build Components
 
-    # Build system parameters
+    # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM)
+
+    # Build Building
+    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(), my_simulation_parameters=my_simulation_parameters)
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
@@ -73,14 +80,6 @@ def basic_household_only_heating(
         config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
-
-    # Build Building
-    my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    # my_building_controller = building.BuildingController(config=building.BuildingController.get_default_config(),
-    #                                                      my_simulation_parameters=my_simulation_parameters)
 
     # Build Storage
     my_storage = generic_heat_water_storage.HeatStorage(

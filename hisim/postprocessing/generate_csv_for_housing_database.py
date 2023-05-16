@@ -206,14 +206,14 @@ def generate_csv_for_database(
     csv_frame[("Annual Heating Demand HiSIM", "[kWh/(m*m*a)]")] = (
         csv_frame[("SpaceHeating", "Distributed Stream [kWh]")]
         / building_data["A_C_Ref"]
-    )
+    ).iloc[0]
     csv_frame[("HeatingDays HiSIM", "Number of Days")] = int(
         converting_data.loc[building_code.split(".")[0]]["NumberOfHeatingDays"]
     )
     csv_frame[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")] = float(
         converting_data.loc[building_code.split(".")[0]]["Average"]
     )
-    csv_frame[("Building Size", "Area [m*m]")] = building_data["A_C_Ref"]
+    csv_frame[("Building Size", "Area [m*m]")] = building_data["A_C_Ref"].iloc[0]
     csv_frame[("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")] = (
         building_data["q_ht"].to_list()[0]
         * (

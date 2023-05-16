@@ -4,6 +4,8 @@ import os
 import sys
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
+import string
+import json
 import pandas as pd
 
 from hisim.components import building
@@ -23,6 +25,7 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 class PostProcessor:
@@ -102,6 +105,7 @@ class PostProcessor:
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
                 PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
+                PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(
@@ -244,7 +248,9 @@ class PostProcessor:
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata
-                elif isinstance(elem.my_component, loadprofilegenerator_connector.Occupancy):
+                elif isinstance(
+                    elem.my_component, loadprofilegenerator_connector.Occupancy
+                ):
                     occupancy_config = elem.my_component.occupancyConfig
             if len(building_data) == 0:
                 log.warning(
@@ -285,6 +291,14 @@ class PostProcessor:
                 "Making special single day plots for a single day calculation for testing took "
                 + f"{duration:1.2f}s."
             )
+
+        # Write Outputs to pyam.IAMDataframe format for scenario evaluation
+        if (
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+            in ppdt.post_processing_options
+        ):
+            log.information("Prepare results for scenario evaluation with pyam.")
+            self.prepare_results_for_scenario_evaluation_with_pyam(ppdt)
 
         # Open file explorer
         if (
@@ -450,8 +464,7 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a CSV file."""
-        # log.information("ppdt.results " + str(ppdt.results))
-        # ppdt.results.to_excel(os.path.join(ppdt.simulation_parameters.result_directory, "all_results.xlsx"))
+
         for column in ppdt.results:
             ppdt.results[column].to_csv(
                 os.path.join(
@@ -676,3 +689,106 @@ class PostProcessor:
         ToDo: implement
         """
         pass  # noqa: unnecessary-pass
+
+    def prepare_results_for_scenario_evaluation_with_pyam(
+        self, ppdt: PostProcessingDataTransfer
+    ) -> None:
+        """Prepare the results for the scenario evaluation with pyam."""
+
+        simple_dict_hourly_data: Dict = {
+            "model": [],
+            "scenario": [],
+            "region": [],
+            "variable": [],
+            "unit": [],
+            "time": [],
+            "value": [],
+        }
+        simple_dict_all_data: Dict = {
+            "model": [],
+            "scenario": [],
+            "region": [],
+            "variable": [],
+            "unit": [],
+            "year": [],
+            "value": [],
+        }
+        model = "".join(["HiSim_", ppdt.module_filename])
+        scenario = ppdt.setup_function
+        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        year = ppdt.simulation_parameters.year
+        timeseries = (
+            ppdt.results_hourly.index
+        )  # .strftime("%Y-%m-%d %H:%M:%S").to_list()
+
+        for column in ppdt.results_hourly:
+            for index, timestep in enumerate(timeseries):
+                values = ppdt.results_hourly[column].values
+                column_splitted = str(
+                    "".join([x for x in column if x in string.ascii_letters + "'- "])
+                ).split(sep=" ")
+                variable = "".join(
+                    [
+                        column_splitted[0],
+                        "|",
+                        column_splitted[3],
+                        "|",
+                        column_splitted[2],
+                    ]
+                )
+                unit = column_splitted[5]
+                simple_dict_hourly_data["model"].append(model)
+                simple_dict_hourly_data["scenario"].append(scenario)
+                simple_dict_hourly_data["region"].append(region)
+                simple_dict_hourly_data["variable"].append(variable)
+                simple_dict_hourly_data["unit"].append(unit)
+                simple_dict_hourly_data["time"].append(timestep)
+                simple_dict_hourly_data["value"].append(values[index])
+
+        for column in ppdt.results_all_data:
+            value = ppdt.results_all_data[column].values[0]
+
+            column_splitted = str(
+                "".join([x for x in column if x in string.ascii_letters + "'- "])
+            ).split(sep=" ")
+            variable = "".join(
+                [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
+            )
+            unit = column_splitted[5]
+            simple_dict_all_data["model"].append(model)
+            simple_dict_all_data["scenario"].append(scenario)
+            simple_dict_all_data["region"].append(region)
+            simple_dict_all_data["variable"].append(variable)
+            simple_dict_all_data["unit"].append(unit)
+            simple_dict_all_data["year"].append(year)
+            simple_dict_all_data["value"].append(value)
+
+        # create dataframe
+        simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
+        simple_df_yearly_data = pd.DataFrame(simple_dict_all_data)
+        # write dictionary with all import parameters
+        data_information_dict = {
+            "model": model,
+            "scenario": scenario,
+            "region": region,
+            "year": year,
+            "duration in days": ppdt.simulation_parameters.duration.days,
+        }
+
+        pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
+        os.makedirs(pyam_data_folder)
+        file_name = f"{pyam_data_folder}{ppdt.module_filename}_{ppdt.setup_function}"
+        file_name_hourly = file_name + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+        file_name_yearly = file_name + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+        simple_df_hourly_data.to_csv(
+            file_name_hourly + ".csv",
+            index=None,
+        )
+        simple_df_yearly_data.to_csv(file_name_yearly + ".csv", index=None)
+        # Serializing json
+        json_object = json.dumps(data_information_dict, indent=4)
+        # Writing to sample.json
+        with open(
+            pyam_data_folder + "data_information_for_pyam.json", "w", encoding="utf-8"
+        ) as outfile:
+            outfile.write(json_object)

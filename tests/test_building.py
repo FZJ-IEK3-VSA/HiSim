@@ -34,6 +34,7 @@ def test_building():
     )
 
     repo = component.SimRepository()
+
     t_two = time.perf_counter()
     log.profile(f"T2: {t_two - t_one}")
 
@@ -54,14 +55,6 @@ def test_building():
     #             config=my_residence_config, my_simulation_parameters=my_simulation_parameters)
     #         log.information(building_code)
 
-    # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_occupancy.set_sim_repo(repo)
-    my_occupancy.i_prepare_simulation()
     t_three = time.perf_counter()
     log.profile(f"T2:{t_three - t_two}")
 
@@ -89,6 +82,16 @@ def test_building():
     my_residence.set_sim_repo(repo)
     my_residence.i_prepare_simulation()
 
+    # Set Occupancy
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_occupancy.set_sim_repo(repo)
+    my_occupancy.i_prepare_simulation()
     # Fake power delivered
     thermal_power_delivered_output = component.ComponentOutput(
         "FakeThermalDeliveryMachine",
@@ -110,9 +113,7 @@ def test_building():
     )
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = (
-        my_weather.DNI_output
-    )
+    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
     my_residence.direct_horizontal_irradiance_channel.source_output = (
         my_weather.DHI_output
     )

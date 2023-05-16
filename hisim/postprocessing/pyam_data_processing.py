@@ -97,7 +97,7 @@ class PyAmChartGenerator:
                 dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
             )
             # self.make_stack_plot_for_pyam_dataframe(dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data)
-            # self.make_sankey_plot_for_pyam_dataframe(dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data)
+            self.make_sankey_plot_for_pyam_dataframe(dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data)
         else:
             raise ValueError(
                 "This kind of data was not found in the pyamdaacollectorenum class."
@@ -450,49 +450,49 @@ class PyAmChartGenerator:
     ) -> None:
         """Make sankey plot."""
         print("Make sankey plot.")
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
-        ):
 
-            data = pyam_dataframe
-            model = "HiSim_basic_household"
-            scenario = "basic_household_explicit"
-            region = "Aachen"
-            unit = "W"
-            filtered_data = data.filter(
-                model=model, scenario=scenario, region=region, unit=unit
-            )
+        simulation_duration_key = list(dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys())[0]
+        print("Simulation duration chosen for sankey plot is", simulation_duration_key, "days.")
+        pyam_dataframe = dict_of_different_pyam_dataframes_of_different_simulation_parameters[simulation_duration_key]
+        data = pyam_dataframe
 
-            sankey_mapping = {
-                "ElectricityGridBaseLoad|Electricity|ElectricityOutput": (
-                    "PVSystemw-|Electricity|ElectricityOutput",
-                    "Occupancy|Electricity|ElectricityOutput",
-                )
-            }
-            fig = filtered_data.filter(year=2021).plot.sankey(mapping=sankey_mapping)
-            plotly.io.show(fig)
-            if os.path.exists(
-                self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\sankey_plot_for_{simulation_duration_key}.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\sankey_plot_for_{simulation_duration_key}.png"
-                )
+        model = "HiSim_basic_household"
+        scenario = "basic_household_explicit"
+        region = "Aachen"
+        unit = "W"
+        filtered_data = data.filter(
+            model=model, scenario=scenario, region=region, unit=unit, year=2021
+        )
+
+        sankey_mapping = {
+            "ElectrcityGridBaseLoad|Electricity|ElectricityOutput": (
+                "PV",
+                "Occupancy",
+            ),
+            "PVSystemw-|Electricity|ElectricityOutput": ("PV", "Grid"),
+            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy")
+        }
+        fig = filtered_data.plot.sankey(mapping=sankey_mapping)
+        plotly.io.show(fig)
+        # if os.path.exists(
+        #     self.result_folder
+        #     + f"simulation_duration_of_{simulation_duration_key}_days"
+        # ):
+        #     fig.savefig(
+        #         self.result_folder
+        #         + f"simulation_duration_of_{simulation_duration_key}_days"
+        #         + f"\\sankey_plot_for_{simulation_duration_key}.png"
+        #     )
+        # else:
+        #     os.makedirs(
+        #         self.result_folder
+        #         + f"simulation_duration_of_{simulation_duration_key}_days"
+        #     )
+        #     fig.savefig(
+        #         self.result_folder
+        #         + f"simulation_duration_of_{simulation_duration_key}_days"
+        #         + f"\\sankey_plot_for_{simulation_duration_key}.png"
+        #     )
 
 
 def main():

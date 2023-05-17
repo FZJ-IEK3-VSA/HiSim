@@ -411,8 +411,7 @@ class PIDController(cp.Component):
 
         log.information('gain Ki= {}'.format(integral_gain))
         log.information('gain Kp= {}'.format(proportional_gain))
-        return proportional_gain,integral_gain,derivative_gain
-        return A,B,C,D,damping_ratio,timestep_tm_o #Unused variables according to pylint warning W0612 (unused-variable) - possibly comment out these variables in the future
+        return proportional_gain,integral_gain,derivative_gain , C,D,damping_frequency,timestep_tm_o #Unused variables (C,D,damping_frequency,timestep_tm_o) according to pylint warning W0612 (unused-variable) - possibly comment out these variables in the future
 
 
     def determine_conditions(self,current_temperature: float,set_point: float) -> str:
@@ -434,11 +433,11 @@ class PIDController(cp.Component):
         return mode
 
 
-"""Future Work.
+"""Possible future work.
 
-How to enhnce receeding PI implementaion?
+How to enhance receeding PI implementation?
 
-Even though  PI controller cannot react to a dynamic electricity tariff or shift the cooling load to maximize PV self-consumption,
+Even though PI controller cannot react to a dynamic electricity tariff or shift the cooling load to maximize PV self-consumption,
 it is possible to achieve a reduction in total energy consumption compared to an on-off controller. Through this work, only a small
 reduction was observed. It may be interesting to investigate whether higher savings can be achieved using other techniques for tuning
 the PID parameters. Additionally, it is advised to consider the effect of sampling time on control performance. Larger sampling time
@@ -446,5 +445,5 @@ negatively influence the performance, see: doi: 10.1515/eletel-2016-0005
 
 In HiSim, minimum sampling time is one minute. It is suggested to research approaches which could compensate for sampling at 60 seconds.
 
-Another suggestion is to Add reference generation, (currently fix reference; possible: track optimized reference)
+Another suggestion is to add reference generation (currently fix reference; possible: track optimized reference)
 """

@@ -159,7 +159,7 @@ class AirConditioner(cp.Component):
             model_name=self.air_conditioner_config.model_name,
             min_operation_time=self.air_conditioner_config.min_operation_time,
             min_idle_time=self.air_conditioner_config.min_idle_time,
-            my_simulation_repository=self.air_conditioner_config.my_simulation_repository,
+            #my_simulation_repository=self.air_conditioner_config.my_simulation_repository, #comment out due to mypy error ('Incompatible default for argument 'my_simulation_repository')
         )
         self.t_outC: cp.ComponentInput = self.add_input(
             self.component_name,

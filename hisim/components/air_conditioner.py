@@ -11,7 +11,7 @@ from hisim import log
 import numpy as np
 from dataclasses_json import dataclass_json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any , Optional
 
 # owned
 from hisim import component as cp

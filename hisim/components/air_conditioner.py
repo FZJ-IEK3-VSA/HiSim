@@ -37,7 +37,7 @@ class AirConditionerConfig(cp.ConfigBase):
     min_operation_time: int
     min_idle_time: int
     control: str
-    #my_simulation_repository: cp.SimRepository #comment out due to mypy error ('Incompatible default for argument 'my_simulation_repository')
+    my_simulation_repository: Optional[cp.SimRepository] = None
 
     @classmethod
     def get_default_air_conditioner_config(cls) -> Any:
@@ -48,7 +48,7 @@ class AirConditionerConfig(cp.ConfigBase):
             min_operation_time=60 * 60,
             min_idle_time=15 * 60,
             control="on_off",
-            #my_simulation_repository=None, #comment out due to mypy error ('Incompatible default for argument 'my_simulation_repository')
+            my_simulation_repository=None,
         )
         return config
 
@@ -159,7 +159,7 @@ class AirConditioner(cp.Component):
             model_name=self.air_conditioner_config.model_name,
             min_operation_time=self.air_conditioner_config.min_operation_time,
             min_idle_time=self.air_conditioner_config.min_idle_time,
-            #my_simulation_repository=self.air_conditioner_config.my_simulation_repository, #comment out due to mypy error ('Incompatible default for argument 'my_simulation_repository')
+            my_simulation_repository=self.air_conditioner_config.my_simulation_repository,
         )
         self.t_outC: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -368,8 +368,8 @@ class AirConditioner(cp.Component):
 
         # Retrieves air conditioner from database - END
 
-        #self.air_conditioner_config.my_simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef) #comment out due to mypy error ('Incompatible default for argument 'my_simulation_repository')
-        #self.air_conditioner_config.my_simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef) #comment out due to mypy error ('Incompatible default for argument 'my_simulation_repository')
+        self.air_conditioner_config.my_simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
+        self.air_conditioner_config.my_simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)
         # Sets the time operation restricitions
         self.on_time = (
             self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep

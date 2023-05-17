@@ -368,8 +368,10 @@ class AirConditioner(cp.Component):
 
         # Retrieves air conditioner from database - END
 
-        self.air_conditioner_config.my_simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
-        self.air_conditioner_config.my_simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)
+        if my_simulation_repository is cp.SimRepository:
+            self.air_conditioner_config.my_simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
+            self.air_conditioner_config.my_simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)
+        
         # Sets the time operation restricitions
         self.on_time = (
             self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep

@@ -37,7 +37,7 @@ class AirConditionerConfig(cp.ConfigBase):
     min_operation_time: int
     min_idle_time: int
     control: str
-    my_simulation_repository: Optional[cp.SimRepository]
+    my_simulation_repository: Union[cp.SimRepository, None]
 
     @classmethod
     def get_default_air_conditioner_config(cls) -> Any:

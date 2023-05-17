@@ -314,8 +314,8 @@ class PIDController(cp.Component):
 
         A=np.matrix([[A11]])  #transition matrix
         B=np.matrix([[b11,b_d11,b_d12,b_d13,b_d14,b_d15]]) #selection matrix
-        #C=np.matrix([[c11],[c21]]) #design matrix #comment out due to pylint warning W0612 (unused-variable)
-        #D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]]) #comment out due to pylint warning W0612 (unused-variable)
+        C=np.matrix([[c11],[c21]]) #design matrix
+        D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]])
 
         A=A*0.5
         B=B*0.5
@@ -356,7 +356,7 @@ class PIDController(cp.Component):
         tf_tm=control.TransferFunction([B[0,0]], [1,-(A[0,0])])
 
         # open loop step response:
-        #timestep_tm_o, tm_o =control.forced_response(tf_tm,t,u) #comment out due to pylint warning W0612 (unused-variable)
+        timestep_tm_o, tm_o =control.forced_response(tf_tm,t,u)
 
         #steady state value:
         tm_steady_state=tm_o[ns]
@@ -400,7 +400,7 @@ class PIDController(cp.Component):
 
         damping_ratio=-np.log(over_shooting/100)/(np.pi**2+(np.log(over_shooting/100))**2)**(1/2)
         natural_frequency=4/(settling_time * damping_ratio)
-        #damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
+        damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2)
 
         m=1/B[0,0]
         b=-A[0,0]/B[0,0]
@@ -412,6 +412,7 @@ class PIDController(cp.Component):
         log.information('gain Ki= {}'.format(integral_gain))
         log.information('gain Kp= {}'.format(proportional_gain))
         return proportional_gain,integral_gain,derivative_gain
+        return A,B,C,D,damping_ratio,timestep_tm_o #Unused variables according to pylint warning W0612 (unused-variable) - possibly comment out these variables in the future
 
 
     def determine_conditions(self,current_temperature: float,set_point: float) -> str:

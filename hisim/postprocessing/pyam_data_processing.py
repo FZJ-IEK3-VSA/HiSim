@@ -451,7 +451,7 @@ class PyAmChartGenerator:
         """Make sankey plot."""
         print("Make sankey plot.")
 
-        simulation_duration_key = list(dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys())[0]
+        simulation_duration_key = list(dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys())[1]
         print("Simulation duration chosen for sankey plot is", simulation_duration_key, "days.")
         pyam_dataframe = dict_of_different_pyam_dataframes_of_different_simulation_parameters[simulation_duration_key]
         data = pyam_dataframe
@@ -473,7 +473,10 @@ class PyAmChartGenerator:
             "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy")
         }
         fig = filtered_data.plot.sankey(mapping=sankey_mapping)
-        plotly.io.show(fig)
+        # plotly.io.show(fig)
+        img = plotly.io.to_image(fig, format="png")
+        with open(self.result_folder   + f"simulation_duration_of_{simulation_duration_key}_days.png", "wb") as f:
+            f.write(img)
         # if os.path.exists(
         #     self.result_folder
         #     + f"simulation_duration_of_{simulation_duration_key}_days"

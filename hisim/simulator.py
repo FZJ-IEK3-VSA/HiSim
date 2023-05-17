@@ -5,7 +5,7 @@ It iterates over all components in each timestep until convergence and loops ove
 # clean
 import os
 import datetime
-from typing import List, Tuple, Optional, cast
+from typing import List, Tuple, Optional, cast, Dict, Any
 import time
 import pandas as pd
 
@@ -55,6 +55,7 @@ class Simulator:
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
+        self.config_dictionary: Dict[str, Any] = {}
 
     def set_simulation_parameters(
         self, my_simulation_parameters: SimulationParameters
@@ -75,6 +76,9 @@ class Simulator:
         wrap = ComponentWrapper(component, is_cachable)
         wrap.register_component_outputs(self.all_outputs)
         self.wrapped_components.append(wrap)
+        if component.component_name in self.config_dictionary:
+            raise ValueError("duplicate component name : " +  component.component_name)
+        self.config_dictionary[component.component_name] = component.config
 
     @utils.measure_execution_time
     def connect_all_components(self) -> None:
@@ -384,7 +388,7 @@ class Simulator:
         results_data_frame.index = pd_timeline
         results_merged_monthly = pd.DataFrame()
         results_merged_hourly = pd.DataFrame()
-        results_merged_all_data = pd.DataFrame()
+        results_merged_cumulative_data = pd.DataFrame()
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(
                 results_data_frame.values[:, i_column],
@@ -400,19 +404,19 @@ class Simulator:
                 or "Speed" in column_name
             ):
                 temp_df_monthly = temp_df.resample("M").interpolate(method="linear")
-                temp_df_all_data = temp_df.mean()
+                temp_df_cumulative_data = temp_df.mean()
             else:
                 temp_df_monthly = temp_df.resample("M").sum()
-                temp_df_all_data = temp_df.sum()
+                temp_df_cumulative_data = temp_df.sum()
 
             results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[
                 :, 0
             ]
             results_merged_monthly.index = temp_df_monthly.index
 
-            results_merged_all_data[
+            results_merged_cumulative_data[
                 temp_df_monthly.columns[0]
-            ] = temp_df_all_data.values
+            ] = temp_df_cumulative_data.values
 
             if self._simulation_parameters.seconds_per_timestep != 3600:
                 if (
@@ -434,4 +438,4 @@ class Simulator:
             else:
                 results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
 
-        return results_merged_monthly, results_merged_all_data, results_merged_hourly
+        return results_merged_monthly, results_merged_cumulative_data, results_merged_hourly

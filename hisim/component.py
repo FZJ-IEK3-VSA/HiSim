@@ -168,7 +168,7 @@ class Component:
         """ Gets the class name. Helper function for default connections. """
         return cls.__module__ + "." + cls.__name__
 
-    def __init__(self, name: str, my_simulation_parameters: SimulationParameters) -> None:
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters, my_config: Any) -> None: # TODO: upgraden auf configbase
         """ Initializes the component class. """
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
@@ -181,6 +181,7 @@ class Component:
         self.simulation_repository: SimRepository
         # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
+        self.config = my_config
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """

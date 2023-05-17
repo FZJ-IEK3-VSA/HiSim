@@ -358,7 +358,8 @@ class PIDController(cp.Component):
         tf_tm=control.TransferFunction([B[0,0]], [1,-(A[0,0])])
 
         # open loop step response:
-        #timestep_tm_o, tm_o =control.forced_response(tf_tm,t,u) #comment out due to pylint warning W0612 (unused-variable)
+        timestep_tm_o, tm_o =control.forced_response(tf_tm,t,u) #comment out due to pylint warning W0612 (unused-variable)
+        dummy1=timestep_tm_o
 
         #steady state value:
         tm_steady_state=tm_o[ns]

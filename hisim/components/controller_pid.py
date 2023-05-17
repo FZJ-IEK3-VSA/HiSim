@@ -296,13 +296,13 @@ class PIDController(cp.Component):
         b_d15=1/(self.c_m / seconds_per_timestep)
 
         """ #comment out due to pylint warning W0612 (unused-variable)
-        #c11=(self.h_tr_ms*self.h_tr_is)/X
-        #c21=(self.h_tr_ms*(self.h_tr_is+self.h_ve_adj))/X
+        c11=(self.h_tr_ms*self.h_tr_is)/X
+        c21=(self.h_tr_ms*(self.h_tr_is+self.h_ve_adj))/X
 
-        #d11=(self.h_tr_ms+self.h_tr_w+self.h_tr_is)/X
-        #d21=self.h_tr_is/X
+        d11=(self.h_tr_ms+self.h_tr_w+self.h_tr_is)/X
+        d21=self.h_tr_is/X
 
-        #d_d11=(self.h_tr_w*self.h_tr_is)/X #comment out due to pylint warning W0612 (unused-variable)
+        d_d11=(self.h_tr_w*self.h_tr_is)/X
         d_d12=(self.h_tr_ms+self.h_tr_is+self.h_tr_w)*self.h_ve_adj/X
         d_d13=(self.h_tr_ms+self.h_tr_is+self.h_tr_w)/X
         d_d14=self.h_tr_is/X
@@ -358,8 +358,8 @@ class PIDController(cp.Component):
         tf_tm=control.TransferFunction([B[0,0]], [1,-(A[0,0])])
 
         # open loop step response:
-        timestep_tm_o, tm_o =control.forced_response(tf_tm,t,u) #comment out due to pylint warning W0612 (unused-variable)
-        dummy1=timestep_tm_o
+        timestep_tm_o, tm_o =control.forced_response(tf_tm,t,u)
+        dummy1=timestep_tm_o #save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable) since function 'control.forced_response' can only be used with a return value with a tuple of length 2
 
         #steady state value:
         tm_steady_state=tm_o[ns]

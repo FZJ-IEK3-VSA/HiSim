@@ -18,8 +18,8 @@ __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
+__maintainer__ = "Marwa Alfouly"
+__email__ = "m.alfouly@fz-juelich.de"
 __status__ = "development"
 
 class PIDState:
@@ -79,7 +79,7 @@ class PIDController(cp.Component):
     integrator = "integrator"
     FeedForwardSignal="FeedForwardSignal"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, my_simulation_repository : cp.SimRepository = None) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, my_simulation_repository: Optional[cp.SimRepository] = None) -> None:
         """Constructs all the neccessary attributes."""
         super().__init__("PIDController", my_simulation_parameters=my_simulation_parameters)
 

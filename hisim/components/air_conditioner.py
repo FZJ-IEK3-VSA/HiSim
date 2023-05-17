@@ -299,7 +299,7 @@ class AirConditioner(cp.Component):
         """ Prepares the simulation."""
         pass
 
-    def build(self, manufacturer, model_name, min_operation_time, min_idle_time):
+    def build(self, manufacturer, model_name, min_operation_time, min_idle_time, my_simulation_repository):
         """Build function: The function retrieves air conditioner from databasesets sets important constants and parameters for the calculations."""
         # Simulation parameters
 

@@ -79,8 +79,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
-    set_heating_temperature_for_water_storage_in_celsius: float
-    set_cooling_temperature_for_water_storage_in_celsius: float
+    # set_heating_temperature_for_water_storage_in_celsius: float
+    # set_cooling_temperature_for_water_storage_in_celsius: float
 
     @classmethod
     def get_default_heat_distribution_controller_config(cls):
@@ -92,8 +92,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius = -14.0,
             set_heating_temperature_for_building_in_celsius=20,
             set_cooling_temperature_for_building_in_celsius=24,
-            set_heating_temperature_for_water_storage_in_celsius=21.5,
-            set_cooling_temperature_for_water_storage_in_celsius=22.5,
+            # set_heating_temperature_for_water_storage_in_celsius=21.5,
+            # set_cooling_temperature_for_water_storage_in_celsius=22.5,
         )
 
 
@@ -500,14 +500,14 @@ class HeatDistributionController(cp.Component):
             key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
             entry=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
         )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE,
-            entry=self.heat_distribution_controller_config.set_heating_temperature_for_water_storage_in_celsius,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE,
-            entry=self.heat_distribution_controller_config.set_cooling_temperature_for_water_storage_in_celsius,
-        )
+        # SingletonSimRepository().set_entry(
+        #     key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE,
+        #     entry=self.heat_distribution_controller_config.set_heating_temperature_for_water_storage_in_celsius,
+        # )
+        # SingletonSimRepository().set_entry(
+        #     key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE,
+        #     entry=self.heat_distribution_controller_config.set_cooling_temperature_for_water_storage_in_celsius,
+        # )
         self.build(
             set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=self.heat_distribution_controller_config.heating_reference_temperature_in_celsius,

@@ -223,7 +223,6 @@ class GenericHeatPump(cp.Component):
         self.state = GenericHeatPumpState(start_timestep=int(0), cycle_number=0)
         self.previous_state = self.state.clone()
         self.has_been_converted: Any
-        
         # Inputs - Mandatories
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, LoadTypes.ANY, Units.ANY, True
@@ -645,7 +644,6 @@ class GenericHeatPumpController(cp.Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        
         self.build(
             temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
             temperature_air_heating=self.heatpump_controller_config.temperature_air_heating_in_celsius,

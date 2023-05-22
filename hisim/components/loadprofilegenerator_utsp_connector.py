@@ -107,6 +107,7 @@ class UtspLpgConnector(cp.Component):
         super().__init__(
             name=self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.build()
 

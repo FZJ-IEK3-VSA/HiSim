@@ -42,7 +42,7 @@ class IdealizedElectricHeater(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "IdealizedElectricHeater", my_simulation_parameters=my_simulation_parameters
+            "IdealizedElectricHeater", my_simulation_parameters=my_simulation_parameters, my_config=["IdealizedElectricHeater", set_heating_temperature_for_building_in_celsius, set_cooling_temperature_for_building_in_celsius]
         )
 
         self.thermal_power_delivered_in_watt: float = 0

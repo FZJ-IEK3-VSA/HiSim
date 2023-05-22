@@ -82,6 +82,7 @@ class ExampleTransformer(Component):
         super().__init__(
             self.transformerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,

@@ -127,6 +127,7 @@ class AirConditioner(cp.Component):
         super().__init__(
             name=self.air_conditioner_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.build(
             manufacturer=self.air_conditioner_config.manufacturer,
@@ -432,6 +433,7 @@ class AirConditionercontroller(cp.Component):
         super().__init__(
             name=self.air_conditioner_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.build(
             t_air_cooling=self.air_conditioner_controller_config.t_air_cooling,

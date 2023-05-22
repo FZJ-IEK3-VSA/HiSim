@@ -218,7 +218,7 @@ class AdvancedElectrolyzer(Component):
     ):
 
         super().__init__(
-            config.component_name, my_simulation_parameters=my_simulation_parameters
+            config.component_name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
 
         # input
@@ -609,7 +609,7 @@ class HydrogenStorage(Component):
         config: ElectrolyzerWithHydrogenStorageConfig,
     ):
         super().__init__(
-            config.component_name, my_simulation_parameters=my_simulation_parameters
+            config.component_name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.charging_hydrogen: ComponentInput = self.add_input(
             self.component_name,

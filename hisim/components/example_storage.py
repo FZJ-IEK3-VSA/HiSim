@@ -114,6 +114,7 @@ class SimpleStorage(Component):
         super().__init__(
             self.simplestorageconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         # Initialized variables
         self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)

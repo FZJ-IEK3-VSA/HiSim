@@ -213,6 +213,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.build(config)

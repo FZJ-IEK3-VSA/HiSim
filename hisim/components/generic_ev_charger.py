@@ -77,7 +77,7 @@ class VehiclePure(cp.Component):
         profile: str = "CH01",
     ) -> None:
         super().__init__(
-            name="EV_charger", my_simulation_parameters=my_simulation_parameters
+            name="EV_charger", my_simulation_parameters=my_simulation_parameters, my_config=["EV_charger", manufacturer, model, soc, profile]
         )
         self.evconfig = EVConfig(
             my_simulation_parameters=my_simulation_parameters,
@@ -770,6 +770,7 @@ class EVChargerController(cp.Component):
         super().__init__(
             name="EVChargerController",
             my_simulation_parameters=my_simulation_parameters,
+            my_config=["EVChargerController", mode]
         )
         self.mode = mode
 

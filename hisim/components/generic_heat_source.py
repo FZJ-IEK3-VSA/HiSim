@@ -105,6 +105,7 @@ class HeatSource(cp.Component):
         super().__init__(
             config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         # introduce parameters of district heating

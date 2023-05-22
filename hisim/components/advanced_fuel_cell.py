@@ -167,7 +167,7 @@ class CHP(Component):
     ) -> None:
         self.chp_config = config
         super().__init__(
-            name=self.chp_config.name, my_simulation_parameters=my_simulation_parameters
+            name=self.chp_config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.min_operation_time = self.chp_config.min_operation_time
         self.min_idle_time = self.chp_config.min_idle_time

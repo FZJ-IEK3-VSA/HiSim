@@ -24,7 +24,7 @@ class RandomNumbers(Component):
         maximum: float,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
-        super().__init__(name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name, my_simulation_parameters=my_simulation_parameters, my_config=[name, timesteps, minimum, maximum])
         self.values: List[float] = []
         self.minimum = minimum
         self.maximum = maximum

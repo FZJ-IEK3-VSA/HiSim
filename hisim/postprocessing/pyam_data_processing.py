@@ -474,9 +474,11 @@ class PyAmChartGenerator:
         }
         fig = filtered_data.plot.sankey(mapping=sankey_mapping)
         # plotly.io.show(fig)
-        img = plotly.io.to_image(fig, format="png")
-        with open(self.result_folder   + f"simulation_duration_of_{simulation_duration_key}_days.png", "wb") as f:
-            f.write(img)
+        # Speichern Sie die Figure als PNG
+        fig.write_image(self.result_folder   + f"simulation_duration_of_{simulation_duration_key}_days.png", format="png")
+        # img = plotly.io.to_image(fig, format="png")
+        # with open(self.result_folder   + f"simulation_duration_of_{simulation_duration_key}_days.png", "wb") as f:
+        #     f.write(img)
         # if os.path.exists(
         #     self.result_folder
         #     + f"simulation_duration_of_{simulation_duration_key}_days"

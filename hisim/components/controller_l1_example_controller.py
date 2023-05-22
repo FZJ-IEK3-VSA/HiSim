@@ -28,7 +28,7 @@ class SimpleController(Component):
     def __init__(
         self, name: str, my_simulation_parameters: SimulationParameters
     ) -> None:
-        super().__init__(name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name, my_simulation_parameters=my_simulation_parameters, my_config=[name])
         self.input1: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.StorageFillLevel,

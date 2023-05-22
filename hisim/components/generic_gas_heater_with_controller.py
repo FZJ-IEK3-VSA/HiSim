@@ -86,7 +86,7 @@ class GasHeaterWithController(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.name, my_simulation_parameters=my_simulation_parameters
+            name=config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         # =================================================================================================================================
         # Initialization of variables
@@ -375,7 +375,7 @@ class GasHeaterController(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "GasHeaterController", my_simulation_parameters=my_simulation_parameters
+            "GasHeaterController", my_simulation_parameters=my_simulation_parameters, my_config=["GasHeaterController", set_heating_temperature_water_boiler_in_celsius, offset, mode]
         )
         self.state_controller: int = 0
         self.build(

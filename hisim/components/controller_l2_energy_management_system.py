@@ -101,6 +101,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.components_sorted: List[lt.ComponentType] = []

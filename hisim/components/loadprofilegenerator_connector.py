@@ -142,7 +142,7 @@ class Occupancy(cp.Component):
         self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
     ) -> None:
         super().__init__(
-            name="Occupancy", my_simulation_parameters=my_simulation_parameters
+            name="Occupancy", my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.profile_name = config.profile_name
         self.occupancyConfig = config

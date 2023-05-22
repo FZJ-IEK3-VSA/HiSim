@@ -66,6 +66,7 @@ class CSVLoader(cp.Component):
         super().__init__(
             name=self.csvconfig.component_name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.output1: cp.ComponentOutput = self.add_output(

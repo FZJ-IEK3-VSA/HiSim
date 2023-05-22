@@ -91,6 +91,7 @@ class Battery(Component):
             + "_w"
             + str(self.battery_config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.source_weight = self.battery_config.source_weight

@@ -397,7 +397,7 @@ class Weather(Component):
     ):
         """Initializes the entire class."""
         super().__init__(
-            name="Weather", my_simulation_parameters=my_simulation_parameters
+            name="Weather", my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         if my_simulation_parameters is None:
             raise Exception("Simparameters was none")

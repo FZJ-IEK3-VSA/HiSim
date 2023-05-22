@@ -79,7 +79,7 @@ class GenericBattery(cp.Component):
         soc: float = 10 / 15,
         base: bool = False,
     ) -> None:
-        super().__init__("Battery", my_simulation_parameters)
+        super().__init__("Battery", my_simulation_parameters, my_config=["Battery", manufacturer, model, soc, base])
 
         self.build(manufacturer=manufacturer, model=model, base=base)
 

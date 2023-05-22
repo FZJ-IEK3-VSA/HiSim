@@ -21,7 +21,7 @@ class CalculateOperation(cp.Component):
 
     def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units, my_simulation_parameters: SimulationParameters, ) -> None:
         """Initializes the class. """
-        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters, my_config=[name, loadtype, unit])
         self.operations: List[str] = []
         self.loadtype = loadtype
         self.unit = unit

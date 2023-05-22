@@ -82,6 +82,7 @@ class GCHP(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.build(config)
 
@@ -299,6 +300,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.build(config)

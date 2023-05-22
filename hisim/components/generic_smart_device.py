@@ -111,6 +111,7 @@ class SmartDevice(cp.Component):
         super().__init__(
             name=identifier.replace("/", "-") + "_w" + str(source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=[identifier.replace("/", "-") + "_w" + str(source_weight), identifier, source_weight]
         )
 
         self.build(

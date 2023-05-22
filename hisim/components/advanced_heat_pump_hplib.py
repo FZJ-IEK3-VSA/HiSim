@@ -85,7 +85,7 @@ class HeatPumpHplib(Component):
             Data frame containing the model parameters.
         """
         super().__init__(
-            name="HeatPump", my_simulation_parameters=my_simulation_parameters
+            name="HeatPump", my_simulation_parameters=my_simulation_parameters, my_config=config
         )
 
         self.model = config.model

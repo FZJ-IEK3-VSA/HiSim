@@ -113,6 +113,7 @@ class ModularHeatPump(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.config = config
         self.build()

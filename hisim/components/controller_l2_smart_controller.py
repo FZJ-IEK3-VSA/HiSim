@@ -22,7 +22,7 @@ class SmartController(Component):
     ) -> None:
         """Construct all necessary attributes."""
         super().__init__(
-            name="SmartController", my_simulation_parameters=my_simulation_parameters
+            name="SmartController", my_simulation_parameters=my_simulation_parameters, my_config=["SmartController", controllers]
         )
         if controllers is None:
             controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}

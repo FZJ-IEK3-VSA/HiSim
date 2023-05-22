@@ -14,6 +14,7 @@ from hisim.component import (
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.components.heat_distribution_system import HeatingSystemType
 from typing import Any, List
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -409,7 +410,20 @@ class HeatPumpHplibControllerL1(Component):
         #     self.set_cooling_temperature_for_water_storage_in_celsius = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE)
         # else:
         #     raise KeyError("The keys set_heating/cooling_temperature_for_water_storage were not found in the singleton sim repository. This might be because the heat distribution system controller was not initialized before the heat pump controller. Please check the initialization order in your example.")
-
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.HEATINGSYSTEM
+        ):
+            self.heating_system = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.HEATINGSYSTEM
+                )
+            )
+        else:
+            raise KeyError(
+                "Keys for heating system was not found in the singleton sim repository."
+                + "This might be because the heat distribution system  was not initialized before the advanced hplib controller."
+                + "Please check the order of the initialization of the components in your example."
+            )
         self.build(
             mode=self.heatpump_controller_config.mode,
         )
@@ -497,11 +511,12 @@ class HeatPumpHplibControllerL1(Component):
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system
                 )
-            elif self.mode == 2:
+            # cooling only for floor heating possible
+            elif self.mode == 2 and self.heating_system == HeatingSystemType.FLOORHEATING:
                 self.conditions_heating_cooling_off(water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius, set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system)
 
             else:
-                raise ValueError("Advanced HP Lib Controller Mode not known.")
+                raise ValueError("Either the Advanced HP Lib Controller Mode is neither 1 nor 2 or the heating system is not floor heating which is the condition for cooling (mode 2).")
 
             if self.controller_heatpumpmode == "on":
                 state = 1

@@ -159,6 +159,10 @@ class HeatDistribution(cp.Component):
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM,
             entry=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
         )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.HEATINGSYSTEM,
+            entry=self.heat_distribution_system_config.heating_system,
+        )
 
         # Inputs
         self.state_channel: cp.ComponentInput = self.add_input(
@@ -766,13 +770,13 @@ class HeatDistributionController(cp.Component):
         list with heating flow and heating return temperature
         """
         # TODO: make case for cooling (only with floor heating)
-        if daily_avg_outside_temperature_in_celsius > self.set_room_temperature_for_building_in_celsius:
-            flow_temperature_in_celsius = self.min_flow_temperature_in_celsius
-            return_temperature_in_celsius = self.min_return_temperature_in_celsius
-        else:
-            flow_temperature_in_celsius = self.min_flow_temperature_in_celsius + ((1/self.factor_of_oversizing_of_heat_distribution_system) * ((self.set_room_temperature_for_building_in_celsius-daily_avg_outside_temperature_in_celsius)/(self.set_room_temperature_for_building_in_celsius-self.heating_reference_temperature_in_celsius)))**(1/self.exponent_factor_of_heating_distribution_system) * (self.max_flow_temperature_in_celsius - self.min_flow_temperature_in_celsius)
-            return_temperature_in_celsius = self.min_return_temperature_in_celsius + ((1/self.factor_of_oversizing_of_heat_distribution_system) * ((self.set_room_temperature_for_building_in_celsius-daily_avg_outside_temperature_in_celsius)/(self.set_room_temperature_for_building_in_celsius-self.heating_reference_temperature_in_celsius)))**(1/self.exponent_factor_of_heating_distribution_system) * (self.max_return_temperature_in_celsius - self.min_return_temperature_in_celsius)
-        
+        # if daily_avg_outside_temperature_in_celsius > self.set_room_temperature_for_building_in_celsius:
+        #     flow_temperature_in_celsius = self.min_flow_temperature_in_celsius
+        #     return_temperature_in_celsius = self.min_return_temperature_in_celsius
+        # else:
+        flow_temperature_in_celsius = self.min_flow_temperature_in_celsius + ((1/self.factor_of_oversizing_of_heat_distribution_system) * ((self.set_room_temperature_for_building_in_celsius-daily_avg_outside_temperature_in_celsius)/(self.set_room_temperature_for_building_in_celsius-self.heating_reference_temperature_in_celsius)))**(1/self.exponent_factor_of_heating_distribution_system) * (self.max_flow_temperature_in_celsius - self.min_flow_temperature_in_celsius)
+        return_temperature_in_celsius = self.min_return_temperature_in_celsius + ((1/self.factor_of_oversizing_of_heat_distribution_system) * ((self.set_room_temperature_for_building_in_celsius-daily_avg_outside_temperature_in_celsius)/(self.set_room_temperature_for_building_in_celsius-self.heating_reference_temperature_in_celsius)))**(1/self.exponent_factor_of_heating_distribution_system) * (self.max_return_temperature_in_celsius - self.min_return_temperature_in_celsius)
+    
         list_of_heating_flow_and_return_temperature_in_celsius = [flow_temperature_in_celsius, return_temperature_in_celsius]
         
         return list_of_heating_flow_and_return_temperature_in_celsius

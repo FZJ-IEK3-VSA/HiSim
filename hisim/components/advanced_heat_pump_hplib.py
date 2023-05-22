@@ -497,8 +497,8 @@ class HeatPumpHplibControllerL1(Component):
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system
                 )
-            # elif self.mode == 2:
-            #     self.conditions_heating_cooling_off(water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius)
+            elif self.mode == 2:
+                self.conditions_heating_cooling_off(water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius, set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system)
 
             else:
                 raise ValueError("Advanced HP Lib Controller Mode not known.")
@@ -538,28 +538,28 @@ class HeatPumpHplibControllerL1(Component):
             raise ValueError("unknown mode")
         
         
-    # def conditions_heating_cooling_off(self, water_temperature_input_in_celsius: float) -> None:
-    #     """Set conditions for the heat pump controller mode."""
+    def conditions_heating_cooling_off(self, water_temperature_input_in_celsius: float, set_heating_flow_temperature_in_celsius: float) -> None:
+        """Set conditions for the heat pump controller mode."""
 
-    #     heating_set_temperature = self.set_heating_temperature_for_water_storage_in_celsius
-    #     cooling_set_temperature = self.set_cooling_temperature_for_water_storage_in_celsius
+        heating_set_temperature = set_heating_flow_temperature_in_celsius + 0.5
+        cooling_set_temperature = set_heating_flow_temperature_in_celsius - 0.5
 
 
-    #     if self.controller_heatpumpmode == "heating":
-    #         if water_temperature_input_in_celsius >= heating_set_temperature:
-    #             self.controller_heatpumpmode = "off"
-    #             return
-    #     elif self.controller_heatpumpmode == "cooling":
-    #         if water_temperature_input_in_celsius <= cooling_set_temperature:
-    #             self.controller_heatpumpmode = "off"
-    #             return
-    #     elif self.controller_heatpumpmode == "off":
-    #         if water_temperature_input_in_celsius < heating_set_temperature:
-    #             self.controller_heatpumpmode = "heating"
-    #             return
-    #         if water_temperature_input_in_celsius > cooling_set_temperature:
-    #             self.controller_heatpumpmode = "cooling"
-    #             return
+        if self.controller_heatpumpmode == "heating":
+            if water_temperature_input_in_celsius >= heating_set_temperature:
+                self.controller_heatpumpmode = "off"
+                return
+        elif self.controller_heatpumpmode == "cooling":
+            if water_temperature_input_in_celsius <= cooling_set_temperature:
+                self.controller_heatpumpmode = "off"
+                return
+        elif self.controller_heatpumpmode == "off":
+            if water_temperature_input_in_celsius < heating_set_temperature:
+                self.controller_heatpumpmode = "heating"
+                return
+            if water_temperature_input_in_celsius > cooling_set_temperature:
+                self.controller_heatpumpmode = "cooling"
+                return
             
-    #     else:
-    #         raise ValueError("unknown mode")
+        else:
+            raise ValueError("unknown mode")

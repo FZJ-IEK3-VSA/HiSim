@@ -66,11 +66,11 @@ def household_with_hds_and_advanced_hp(
     source_weight = -1
 
     # Set Heat Pump Controller
-    hp_controller_mode = 1
+    hp_controller_mode = 2
 
     # Set Heat Pump
     model: str = "Generic"
-    group_id: int = 4  # outdoor/air on/off type (choose 1 or 4)
+    group_id: int = 1  # outdoor/air on/off type (choose 1 or 4)
     heating_reference_temperature: float = -7  # t_in
     p_th_set: float = 10000
     vorlauftemperatur = 21  # t_out_val

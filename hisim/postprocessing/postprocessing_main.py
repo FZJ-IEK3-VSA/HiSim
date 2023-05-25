@@ -786,8 +786,8 @@ class PostProcessor:
                     ] = dict_config[key]
                 dict_config = rename_dict_config
                 del rename_dict_config
-            except:
-                ValueError("component.my_component.config.to_dict() does probably not work. That might be because the config of the component does not inherit from Configbase. Please change your config class according to the other component config classes with the configbase inheritance.")
+            except BaseException as e:
+                raise ValueError("component.my_component.config.to_dict() does probably not work. That might be because the config of the component does not inherit from Configbase. Please change your config class according to the other component config classes with the configbase inheritance.")
 
             try:
                 # try json dumping and if it works append data information dict

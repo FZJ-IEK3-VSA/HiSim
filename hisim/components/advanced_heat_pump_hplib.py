@@ -51,7 +51,7 @@ class HeatPumpHplibConfig(ConfigBase):
             model="Generic",
             group_id= 1,
             t_in= -7,
-            t_out= 52,
+            t_out_val= 52,
             p_th_set = 10000,
         )
 
@@ -217,12 +217,6 @@ class HeatPumpHplib(Component):
             output_description="Time turned off"
         )
 
-    @staticmethod
-    def get_defaul_config():
-        config = HeatPumpHplibConfig(
-            model="Generic", group_id=-1, t_in=-300, t_out_val=-300, p_th_set=-30
-        )
-        return config
 
     def write_to_report(self):
         """Write configuration to the report."""

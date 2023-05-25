@@ -776,15 +776,18 @@ class PostProcessor:
         }
         component_counter = 0
         for component in ppdt.wrapped_components:
-            # rename keys because some get overwritten if key anme exists several times
-            dict_config = component.my_component.config.to_dict()
-            rename_dict_config = {}
-            for key, value in dict_config.items():
-                rename_dict_config[
-                    f"component {component_counter} {key}"
-                ] = dict_config[key]
-            dict_config = rename_dict_config
-            del rename_dict_config
+            try:
+                # rename keys because some get overwritten if key name exists several times
+                dict_config = component.my_component.config.to_dict()
+                rename_dict_config = {}
+                for key, value in dict_config.items():
+                    rename_dict_config[
+                        f"component {component_counter} {key}"
+                    ] = dict_config[key]
+                dict_config = rename_dict_config
+                del rename_dict_config
+            except:
+                ValueError("component.my_component.config.to_dict() does probably not work. That might be because the config of the component does not inherit from Configbase. Please change your config class according to the other component config classes with the configbase inheritance.")
 
             try:
                 # try json dumping and if it works append data information dict

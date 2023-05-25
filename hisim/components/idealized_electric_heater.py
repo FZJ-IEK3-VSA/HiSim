@@ -2,9 +2,9 @@
 # clean
 # Owned
 from typing import List
-import hisim.component as cp
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
@@ -18,6 +18,7 @@ __version__ = ""
 __maintainer__ = "Katharina Rieck"
 __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
+
 
 @dataclass_json
 @dataclass
@@ -43,6 +44,7 @@ class IdealizedHeaterConfig(cp.ConfigBase):
             set_cooling_temperature_for_building_in_celsius=23.5,
         )
 
+
 class IdealizedElectricHeater(cp.Component):
 
     """Idealized Electric Heater System."""
@@ -62,11 +64,13 @@ class IdealizedElectricHeater(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config:IdealizedHeaterConfig
+        config: IdealizedHeaterConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "IdealizedElectricHeater", my_simulation_parameters=my_simulation_parameters, my_config=config
+            "IdealizedElectricHeater",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.thermal_power_delivered_in_watt: float = 0

@@ -55,6 +55,7 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
         )
         return config
 
+
 @dataclass_json
 @dataclass
 class GenericGasHeaterControllerConfig(cp.ConfigBase):
@@ -78,9 +79,9 @@ class GenericGasHeaterControllerConfig(cp.ConfigBase):
         """Get a default gasheater config."""
         config = GenericGasHeaterControllerConfig(
             name="GasheaterController",
-            set_heating_temperature_water_boiler_in_celsius= 0.0,
-            offset = 0.0,
-            mode = 1,
+            set_heating_temperature_water_boiler_in_celsius=0.0,
+            offset=0.0,
+            mode=1,
         )
         return config
 
@@ -115,7 +116,9 @@ class GasHeaterWithController(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         # =================================================================================================================================
         # Initialization of variables
@@ -398,11 +401,13 @@ class GasHeaterController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config:GenericGasHeaterControllerConfig
+        config: GenericGasHeaterControllerConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "GasHeaterController", my_simulation_parameters=my_simulation_parameters, my_config=config
+            "GasHeaterController",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.state_controller: int = 0
         self.build(

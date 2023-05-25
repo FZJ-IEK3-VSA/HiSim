@@ -9,7 +9,7 @@ from typing import Optional
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.random_numbers import RandomNumbers
+from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.example_transformer import (
     ExampleTransformer,
     ExampleTransformerConfig,
@@ -38,20 +38,14 @@ def first_example(
 
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
-        name="Random numbers 100-200",
-        timesteps=my_simulation_parameters.timesteps,
-        minimum=100,
-        maximum=200,
+        config=RandomNumbersConfig(name="Random numbers 100-200", timesteps=my_simulation_parameters.timesteps, minimum=100, maximum=200),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn1)
 
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
-        name="Random numbers 10-20",
-        timesteps=my_simulation_parameters.timesteps,
-        minimum=10,
-        maximum=20,
+        config=RandomNumbersConfig(name="Random numbers 10-20", timesteps=my_simulation_parameters.timesteps, minimum=10, maximum=20),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn2)

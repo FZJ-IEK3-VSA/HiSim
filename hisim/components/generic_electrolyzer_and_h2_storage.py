@@ -31,7 +31,8 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class ElectrolyzerWithStorageConfig(ConfigBase):
-    component_name: str
+    
+    name: str
     waste_energy: float  # [W]
     min_power: float  # [W]
     max_power: float  # [W]
@@ -49,7 +50,8 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
     @classmethod
     def get_default_config(cls):
         config = ElectrolyzerWithStorageConfig(
-            component_name="Electrolyzer",
+            
+            name="ElectrolyzerWithStorage",
             waste_energy=400,  # [W]
             min_power=1_200,  # [W]
             max_power=2_400,  # [W]
@@ -64,7 +66,8 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
-    component_name: str
+
+    name: str
     min_capacity: float  # [kg_H2]
     max_capacity: float  # [kg_H2]
     starting_fill: float  # [kg_H2]
@@ -82,7 +85,7 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     @classmethod
     def get_default_config(cls):
         config = ElectrolyzerWithHydrogenStorageConfig(
-            component_name="HydrogenStorage",
+            name="ElectrolyzerWithHydrogenStorage",
             min_capacity=0,
             max_capacity=500,
             starting_fill=400,
@@ -258,7 +261,7 @@ class AdvancedElectrolyzer(Component):
     ):
 
         super().__init__(
-            config.component_name, my_simulation_parameters=my_simulation_parameters, my_config=config
+            config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
 
         # input
@@ -635,7 +638,7 @@ class HydrogenStorage(Component):
         config: ElectrolyzerWithHydrogenStorageConfig,
     ):
         super().__init__(
-            config.component_name, my_simulation_parameters=my_simulation_parameters, my_config=config
+            config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.charging_hydrogen: ComponentInput = self.add_input(
             self.component_name,

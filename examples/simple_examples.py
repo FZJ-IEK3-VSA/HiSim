@@ -95,20 +95,22 @@ def second_example(
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
+        config=RandomNumbersConfig(
         name="Random numbers 100-200",
         timesteps=my_simulation_parameters.timesteps,
         minimum=100,
-        maximum=200,
+        maximum=200),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn1)
 
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
+        config=RandomNumbersConfig(
         name="Random numbers 10-20",
         timesteps=my_simulation_parameters.timesteps,
         minimum=10,
-        maximum=20,
+        maximum=20),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn2)

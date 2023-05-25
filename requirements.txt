@@ -16,3 +16,4 @@ pydot
 graphviz
 dataclass_wizard
 utspclient
+pyam-iamc

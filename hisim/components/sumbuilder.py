@@ -118,10 +118,10 @@ class ElectricityGrid(Component):
     ElectricityOutput = "ElectricityOutput"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: ElectricityGridConfig, ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: ElectricityGridConfig ) -> None:
         """ Initializes class. """
         self.electricity_grid_config = config
-        super().__init__(name=self.electricity_grid_config.name, my_simulation_parameters=my_simulation_parameters, )
+        super().__init__(name=self.electricity_grid_config.name, my_simulation_parameters=my_simulation_parameters, my_config=config)
         self.signal = self.electricity_grid_config.signal
         self.grid = self.electricity_grid_config.grid
         self.operations: List[str] = []
@@ -242,7 +242,7 @@ class SumBuilderForTwoInputs(Component):
 
     def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units, my_simulation_parameters: SimulationParameters, ) -> None:
         """ Initializes the class. """
-        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters, my_config=[name, loadtype, unit])
         self.input1: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForTwoInputs.SumInput1, loadtype, unit, True)
         self.input2: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForTwoInputs.SumInput2, loadtype, unit, False)
         self.output1: cp.ComponentOutput = self.add_output(self.component_name, SumBuilderForTwoInputs.SumOutput, loadtype, unit,
@@ -290,7 +290,7 @@ class SumBuilderForThreeInputs(Component):
 
     def __init__(self, name: str, loadtype: lt.LoadTypes, unit: lt.Units, my_simulation_parameters: SimulationParameters, ) -> None:
         """ Initializes the class. """
-        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters)
+        super().__init__(name=name, my_simulation_parameters=my_simulation_parameters, my_config=[name, loadtype, unit])
         self.input1: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForThreeInputs.SumInput1, loadtype, unit, True, )
         self.input2: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForThreeInputs.SumInput2, loadtype, unit, False, )
         self.input3: cp.ComponentInput = self.add_input(self.component_name, SumBuilderForThreeInputs.SumInput3, loadtype, unit, False, )

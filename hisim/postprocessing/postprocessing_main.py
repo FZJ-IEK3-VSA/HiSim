@@ -704,7 +704,7 @@ class PostProcessor:
             "time": [],
             "value": [],
         }
-        simple_dict_all_data: Dict = {
+        simple_dict_cumulative_data: Dict = {
             "model": [],
             "scenario": [],
             "region": [],
@@ -755,17 +755,17 @@ class PostProcessor:
                 [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
             )
             unit = column_splitted[5]
-            simple_dict_all_data["model"].append(model)
-            simple_dict_all_data["scenario"].append(scenario)
-            simple_dict_all_data["region"].append(region)
-            simple_dict_all_data["variable"].append(variable)
-            simple_dict_all_data["unit"].append(unit)
-            simple_dict_all_data["year"].append(year)
-            simple_dict_all_data["value"].append(value)
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(variable)
+            simple_dict_cumulative_data["unit"].append(unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(value)
 
         # create dataframe
         simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
-        simple_df_yearly_data = pd.DataFrame(simple_dict_all_data)
+        simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
         # write dictionary with all import parameters
         data_information_dict = {
             "model": model,
@@ -774,17 +774,56 @@ class PostProcessor:
             "year": year,
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
+        component_counter = 0
+        for component in ppdt.wrapped_components:
+            # rename keys because some get overwritten if key anme exists several times
+            dict_config = component.my_component.config.to_dict()
+            rename_dict_config = {}
+            for key, value in dict_config.items():
+                rename_dict_config[
+                    f"component {component_counter} {key}"
+                ] = dict_config[key]
+            dict_config = rename_dict_config
+            del rename_dict_config
+
+            try:
+                # try json dumping and if it works append data information dict
+                component.my_component.config.to_json()
+                data_information_dict.update(dict_config)
+                component_counter = component_counter + 1
+
+            except:
+                # else try to convert data types so that json dumping works out
+                for key, value in dict_config.items():
+                    if not isinstance(value, (int, float, str, bool, type(None))):
+                        if type(value) == list:
+                            # transform list to string so it can be json serializable later
+                            dict_config[key] = str(value).strip("[]")
+                            # append data information dict
+                            data_information_dict.update(dict_config)
+                            component_counter = component_counter + 1
+                        else:
+                            raise ValueError(
+                                "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
+                            )
 
         pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
         os.makedirs(pyam_data_folder)
         file_name = f"{pyam_data_folder}{ppdt.module_filename}_{ppdt.setup_function}"
-        file_name_hourly = file_name + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
-        file_name_yearly = file_name + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+        file_name_hourly = (
+            file_name
+            + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+        )
+        file_name_yearly = (
+            file_name
+            + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+        )
         simple_df_hourly_data.to_csv(
             file_name_hourly + ".csv",
             index=None,
         )
         simple_df_yearly_data.to_csv(file_name_yearly + ".csv", index=None)
+
         # Serializing json
         json_object = json.dumps(data_information_dict, indent=4)
         # Writing to sample.json

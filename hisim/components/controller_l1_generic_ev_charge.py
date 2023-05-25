@@ -27,7 +27,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class ChargingStationConfig:
+class ChargingStationConfig(cp.ConfigBase):
 
     """Definition of the configuration of Charging Station and the set point for the control."""
 

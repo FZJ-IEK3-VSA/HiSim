@@ -14,6 +14,7 @@ from hisim.component import (
     ComponentOutput,
     SingleTimeStepValues,
     ComponentConnection,
+    ConfigBase
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
@@ -32,7 +33,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class CarBatteryConfig:
+class CarBatteryConfig(ConfigBase):
     """Configuration of a Car Battery. """
     #: name of the device
     name: str
@@ -45,20 +46,20 @@ class CarBatteryConfig:
     #: battery capacity in in kWh
     e_bat_custom: float
 
-    @staticmethod
-    def get_default_config(
-        name: str = "CarBattery",
-        p_inv_custom: float = 5,
-        e_bat_custom: float = 10,
-        source_weight: int = 1,
-    ) -> Any:
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return CarBattery.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls) -> Any:
         """Returns default configuration of a Car Battery. """
         config = CarBatteryConfig(
+            name="CarBattery",
             system_id="SG1",
-            p_inv_custom=p_inv_custom,
-            e_bat_custom=e_bat_custom,
-            name=name,
-            source_weight=source_weight,
+            p_inv_custom= 5,
+            e_bat_custom= 10,
+            source_weight = 1,
         )
         return config
 

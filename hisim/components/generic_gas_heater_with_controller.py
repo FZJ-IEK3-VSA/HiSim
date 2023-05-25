@@ -55,6 +55,35 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
         )
         return config
 
+@dataclass_json
+@dataclass
+class GenericGasHeaterControllerConfig(cp.ConfigBase):
+
+    """Configuration of the GasHeaterController class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return GasHeaterController.get_full_classname()
+
+    name: str
+    set_heating_temperature_water_boiler_in_celsius: float
+    offset: float
+    mode: int
+
+    @classmethod
+    def get_default_controller_config(
+        cls,
+    ) -> Any:
+        """Get a default gasheater config."""
+        config = GenericGasHeaterControllerConfig(
+            name="GasheaterController",
+            set_heating_temperature_water_boiler_in_celsius= 0.0,
+            offset = 0.0,
+            mode = 1,
+        )
+        return config
+
 
 class GasHeaterWithController(cp.Component):
 
@@ -369,19 +398,17 @@ class GasHeaterController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_heating_temperature_water_boiler_in_celsius: float = 0.0,
-        offset: float = 0.0,
-        mode: int = 1,
+        config:GenericGasHeaterControllerConfig
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "GasHeaterController", my_simulation_parameters=my_simulation_parameters, my_config=["GasHeaterController", set_heating_temperature_water_boiler_in_celsius, offset, mode]
+            "GasHeaterController", my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.state_controller: int = 0
         self.build(
-            set_heating_temperature_water_boiler_in_celsius=set_heating_temperature_water_boiler_in_celsius,
-            offset=offset,
-            mode=mode,
+            set_heating_temperature_water_boiler_in_celsius=config.set_heating_temperature_water_boiler_in_celsius,
+            offset=config.offset,
+            mode=config.mode,
         )
 
         self.mean_water_temperature_gas_heater_controller_input_channel: cp.ComponentInput = self.add_input(

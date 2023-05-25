@@ -10,6 +10,7 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
+    ConfigBase
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -27,13 +28,32 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatPumpHplibConfig:
+class HeatPumpHplibConfig(ConfigBase):
+
+    name: str
     model: str
     group_id: int
     t_in: float
     t_out_val: float
     p_th_set: float
 
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatPumpHplib.get_full_classname()
+
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return HeatPumpHplibConfig(
+            name="HeatPumpHPLib",
+            model="Generic",
+            group_id= 1,
+            t_in= -7,
+            t_out= 52,
+            p_th_set = 10000,
+        )
 
 class HeatPumpHplib(Component):
     """
@@ -85,7 +105,7 @@ class HeatPumpHplib(Component):
             Data frame containing the model parameters.
         """
         super().__init__(
-            name="HeatPump", my_simulation_parameters=my_simulation_parameters, my_config=config
+            name=config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
 
         self.model = config.model

@@ -29,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class CarConfig:
+class CarConfig(cp.ConfigBase):
 
     """Definition of configuration of Car."""
 
@@ -42,8 +42,13 @@ class CarConfig:
     #: consumption per kilometer driven, either in kWh/km or l/km
     consumption_per_km: float
 
-    @staticmethod
-    def get_default_diesel_config() -> Any:
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return Car.get_full_classname()
+
+    @classmethod
+    def get_default_diesel_config(cls) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
             name="Car",
@@ -53,8 +58,8 @@ class CarConfig:
         )
         return config
 
-    @staticmethod
-    def get_default_ev_config() -> Any:
+    @classmethod
+    def get_default_ev_config(cls) -> Any:
         """Defines default configuration for electric vehicle."""
         config = CarConfig(
             name="Car",

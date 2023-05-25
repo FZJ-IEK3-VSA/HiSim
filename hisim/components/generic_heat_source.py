@@ -25,7 +25,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatSourceConfig:
+class HeatSourceConfig(cp.ConfigBase):
     """
     Configuration of a generic HeatSource.
     """
@@ -43,8 +43,13 @@ class HeatSourceConfig:
     #: efficiency of the fuel to heat conversion
     efficiency: float
 
-    @staticmethod
-    def get_default_config_heating() -> "HeatSourceConfig":
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatSource.get_full_classname()
+
+    @classmethod
+    def get_default_config_heating(cls) -> "HeatSourceConfig":
         """ Returns default configuration of a Heat Source used for heating"""
         config = HeatSourceConfig(
             name="HeatingHeatSource",
@@ -56,8 +61,8 @@ class HeatSourceConfig:
         )
         return config
 
-    @staticmethod
-    def get_default_config_waterheating() -> "HeatSourceConfig":
+    @classmethod
+    def get_default_config_waterheating(cls) -> "HeatSourceConfig":
         """ Returns default configuration of a Heat Source used for water heating (DHW)"""
         config = HeatSourceConfig(
             name="DHWHeatSource",

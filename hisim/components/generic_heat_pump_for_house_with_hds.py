@@ -198,7 +198,7 @@ class GenericHeatPumpNew(cp.Component):
         """Construct all the necessary attributes."""
         self.heatpump_config = config
         super().__init__(
-            self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters
+            self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name

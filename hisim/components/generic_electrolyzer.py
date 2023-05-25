@@ -35,7 +35,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericElectrolyzerConfig:
+class GenericElectrolyzerConfig(cp.ConfigBase):
     name: str
     source_weight: int
     min_power: float  # [W]
@@ -43,24 +43,13 @@ class GenericElectrolyzerConfig:
     min_hydrogen_production_rate_hour: float  # [Nl/h]
     max_hydrogen_production_rate_hour: float  # [Nl/h]
 
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        min_power: float,
-        max_power: float,
-        min_hydrogen_production_rate_hour: float,
-        max_hydrogen_production_rate_hour: float,
-    ) -> None:
-        self.name = name
-        self.source_weight = source_weight
-        self.min_power = min_power
-        self.max_power = max_power
-        self.min_hydrogen_production_rate_hour = min_hydrogen_production_rate_hour
-        self.max_hydrogen_production_rate_hour = max_hydrogen_production_rate_hour
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return GenericElectrolyzer.get_full_classname()
 
-    @staticmethod
-    def get_default_config() -> Any:
+    @classmethod
+    def get_default_config(cls) -> Any:
         config = GenericElectrolyzerConfig(
             name="Electrolyzer",
             source_weight=1,
@@ -241,7 +230,7 @@ class GenericElectrolyzer(cp.Component):
 
 @dataclass_json
 @dataclass
-class L1ElectrolyzerConfig:
+class L1ElectrolyzerConfig(cp.ConfigBase):
     """
     L1Electrolyzer Config
     """
@@ -253,24 +242,13 @@ class L1ElectrolyzerConfig:
     P_min_electrolyzer: float
     SOC_max_H2: float
 
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        min_operation_time: int,
-        min_idle_time: int,
-        P_min_electrolyzer: float,
-        SOC_max_H2: float,
-    ) -> None:
-        self.name = name
-        self.source_weight = source_weight
-        self.min_operation_time = min_operation_time
-        self.min_idle_time = min_idle_time
-        self.P_min_electrolyzer = P_min_electrolyzer
-        self.SOC_max_H2 = SOC_max_H2
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return L1GenericElectrolyzerController.get_full_classname()
 
-    @staticmethod
-    def get_default_config() -> Any:
+    @classmethod
+    def get_default_config(cls) -> Any:
         config = L1ElectrolyzerConfig(
             name="L1ElectrolyzerRuntimeController",
             source_weight=1,
@@ -354,6 +332,7 @@ class L1GenericElectrolyzerController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.build(config)

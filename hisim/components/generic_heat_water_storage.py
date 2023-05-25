@@ -423,6 +423,7 @@ class HeatStorageController(cp.Component):
         super().__init__(
             name=self.heatstoragecontroller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.initial_temperature_heating_storage = (
             self.heatstoragecontroller_config.initial_temperature_heating_storage

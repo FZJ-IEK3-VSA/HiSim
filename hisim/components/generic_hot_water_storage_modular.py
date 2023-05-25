@@ -36,7 +36,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class StorageConfig:
+class StorageConfig(cp.ConfigBase):
 
     """Used in the HotWaterStorageClass defining the basics."""
 
@@ -61,8 +61,13 @@ class StorageConfig:
     #: power of heat source in kW
     power: float
 
-    @staticmethod
-    def get_default_config_boiler() -> "StorageConfig":
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HotWaterStorage.get_full_classname()
+
+    @classmethod
+    def get_default_config_boiler(cls) -> "StorageConfig":
         """ Returns default configuration for boiler. """
         # get default number of households
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):

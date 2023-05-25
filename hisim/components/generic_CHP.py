@@ -192,7 +192,7 @@ class GCHP(cp.Component):
 
 @dataclass_json
 @dataclass
-class L1CHPConfig:
+class L1CHPConfig(cp.ConfigBase):
     """
     L1CHP Config
     """
@@ -203,22 +203,13 @@ class L1CHPConfig:
     min_idle_time: int
     min_h2_soc: float
 
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        min_operation_time: int,
-        min_idle_time: int,
-        min_h2_soc: float,
-    ) -> None:
-        self.name = name
-        self.source_weight = source_weight
-        self.min_operation_time = min_operation_time
-        self.min_idle_time = min_idle_time
-        self.min_h2_soc = min_h2_soc
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return L1GenericCHPRuntimeController.get_full_classname()
 
-    @staticmethod
-    def get_default_config() -> Any:
+    @classmethod
+    def get_default_config(cls) -> Any:
         config = L1CHPConfig(
             name="L1CHPRunTimeController",
             source_weight=1,

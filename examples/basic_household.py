@@ -71,7 +71,7 @@ def basic_household_explicit(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -79,6 +79,9 @@ def basic_household_explicit(
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM)
+    
+    
+    
     # Build Building
     my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(), my_simulation_parameters=my_simulation_parameters)
     # Build Occupancy

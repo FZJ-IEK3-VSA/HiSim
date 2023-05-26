@@ -129,6 +129,7 @@ class PyamDataCollector:
                 appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
             df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
+
             if kind_of_data == PyamDataCollectorEnum.HOURLY:
                 kind_of_data_set = "hourly"
             elif kind_of_data == PyamDataCollectorEnum.YEARLY:
@@ -142,6 +143,7 @@ class PyamDataCollector:
                 self.pyam_data_folder
                 + f"simulation_duration_of_{simulation_duration_key}_days"
             ):
+                print("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
                 df_pyam_for_one_simulation_duration.to_csv(
                     self.pyam_data_folder
                     + f"simulation_duration_of_{simulation_duration_key}_days"
@@ -154,6 +156,7 @@ class PyamDataCollector:
                     self.pyam_data_folder
                     + f"simulation_duration_of_{simulation_duration_key}_days"
                 )
+                print("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
                 df_pyam_for_one_simulation_duration.to_csv(
                     self.pyam_data_folder
                     + f"simulation_duration_of_{simulation_duration_key}_days"

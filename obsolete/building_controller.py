@@ -139,6 +139,7 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.heatingcomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         # =================================================================================================================================

@@ -787,7 +787,7 @@ class PostProcessor:
                 dict_config = rename_dict_config
                 del rename_dict_config
             except BaseException as e:
-                raise ValueError("component.my_component.config.to_dict() does probably not work. That might be because the config of the component does not inherit from Configbase. Please change your config class according to the other component config classes with the configbase inheritance.")
+                raise ValueError("component.my_component.config.to_dict() does probably not work. That might be because the config of the component does not inherit from Configbase. Please change your config class according to the other component config classes with the configbase inheritance.") from e
 
             try:
                 # try json dumping and if it works append data information dict
@@ -795,7 +795,7 @@ class PostProcessor:
                 data_information_dict.update(dict_config)
                 component_counter = component_counter + 1
 
-            except:
+            except Exception as ex:
                 # else try to convert data types so that json dumping works out
                 for key, value in dict_config.items():
                     if not isinstance(value, (int, float, str, bool, type(None))):
@@ -808,7 +808,7 @@ class PostProcessor:
                         else:
                             raise ValueError(
                                 "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
-                            )
+                            ) from ex
 
         pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
         os.makedirs(pyam_data_folder)

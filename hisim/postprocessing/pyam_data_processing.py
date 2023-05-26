@@ -11,7 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plotly
 from pyam_data_collection import PyamDataCollectorEnum
-import imgkit
+from html2image import Html2Image
 
 
 class PyAmChartGenerator:
@@ -98,7 +98,9 @@ class PyAmChartGenerator:
                 dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
             )
             # self.make_stack_plot_for_pyam_dataframe(dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data)
-            self.make_sankey_plot_for_pyam_dataframe(dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data)
+            self.make_sankey_plot_for_pyam_dataframe(
+                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
+            )
         else:
             raise ValueError(
                 "This kind of data was not found in the pyamdaacollectorenum class."
@@ -453,9 +455,19 @@ class PyAmChartGenerator:
         print("Make sankey plot.")
 
         # choose simulation duration key manually here, must be improved
-        simulation_duration_key = list(dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys())[0]
-        print("Simulation duration chosen for sankey plot is", simulation_duration_key, "days.")
-        pyam_dataframe = dict_of_different_pyam_dataframes_of_different_simulation_parameters[simulation_duration_key]
+        simulation_duration_key = list(
+            dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys()
+        )[0]
+        print(
+            "Simulation duration chosen for sankey plot is",
+            simulation_duration_key,
+            "days.",
+        )
+        pyam_dataframe = (
+            dict_of_different_pyam_dataframes_of_different_simulation_parameters[
+                simulation_duration_key
+            ]
+        )
         data = pyam_dataframe
 
         model = "HiSim_basic_household"
@@ -472,19 +484,42 @@ class PyAmChartGenerator:
                 "Occupancy",
             ),
             "PVSystemw-|Electricity|ElectricityOutput": ("PV", "Grid"),
-            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy")
+            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy"),
         }
         fig = filtered_data.plot.sankey(mapping=sankey_mapping)
-        #plotly.io.show(fig)
-        # Speichern Sie die Figure als PNG
-        plotly.offline.plot(fig, filename="test_sankey.html", auto_open=False)
-        #fig.write_image(self.result_folder + f"simulation_duration_of_{simulation_duration_key}_days.pdf", format="pdf", engine="kaleido", validate=True)
-        path_wkthmltoimage = "C:\\Program Files\\wkhtmltopdf\\bin\\wkhtmltoimage.exe"
-        config = imgkit.config(wkhtmltoimage=path_wkthmltoimage)
-        imgkit.from_file("test_sankey.html", "test_sankey.jpg", config=config)
-        # img = plotly.io.to_image(fig, format="png")
-        # with open(self.result_folder   + f"simulation_duration_of_{simulation_duration_key}_days.png", "wb") as f:
-        #     f.write(img)
+        # plotly.io.show(fig)
+
+        # save figure as html first
+        plotly.offline.plot(
+            fig,
+            filename=self.result_folder
+            + f"simulation_duration_of_{simulation_duration_key}_days"
+            + f"\\sankey_plot_for_{simulation_duration_key}.html",
+            auto_open=False,
+        )
+
+        # convert html file to png
+        hti = Html2Image()
+        with open(
+            self.result_folder
+            + f"simulation_duration_of_{simulation_duration_key}_days"
+            + f"\\sankey_plot_for_{simulation_duration_key}.html",
+            encoding="utf8",
+        ) as f:
+            hti.screenshot(
+                f.read(),
+                save_as=f"simulation_duration_of_{simulation_duration_key}_days"
+                + f"sankey_plot_for_{simulation_duration_key}.png",
+            )
+
+        # change directory of sankey output file
+        os.rename(
+            f"simulation_duration_of_{simulation_duration_key}_days"
+            + f"sankey_plot_for_{simulation_duration_key}.png",
+            self.result_folder
+            + f"simulation_duration_of_{simulation_duration_key}_days"
+            + f"\\sankey_plot_for_{simulation_duration_key}.png",
+        )
 
 
 def main():

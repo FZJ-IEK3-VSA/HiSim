@@ -17,3 +17,4 @@ graphviz
 dataclass_wizard
 utspclient
 pyam-iamc
+html2image

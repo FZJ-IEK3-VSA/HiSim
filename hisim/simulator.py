@@ -5,7 +5,7 @@ It iterates over all components in each timestep until convergence and loops ove
 # clean
 import os
 import datetime
-from typing import List, Tuple, Optional, cast, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any
 import time
 import pandas as pd
 
@@ -18,6 +18,8 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
+from hisim.loadtypes import Units
+
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
 __copyright__ = "Copyright 2020-2022, FZJ-IEK-3"
@@ -77,7 +79,7 @@ class Simulator:
         wrap.register_component_outputs(self.all_outputs)
         self.wrapped_components.append(wrap)
         if component.component_name in self.config_dictionary:
-            raise ValueError("duplicate component name : " +  component.component_name)
+            raise ValueError("duplicate component name : " + component.component_name)
         self.config_dictionary[component.component_name] = component.config
 
     @utils.measure_execution_time
@@ -385,6 +387,7 @@ class Simulator:
             freq=f"{self._simulation_parameters.seconds_per_timestep}S",
         )[:-1]
         n_columns = results_data_frame.shape[1]
+
         results_data_frame.index = pd_timeline
         results_merged_monthly = pd.DataFrame()
         results_merged_hourly = pd.DataFrame()
@@ -395,13 +398,9 @@ class Simulator:
                 index=pd_timeline,
                 columns=[results_data_frame.columns[i_column]],
             )
-            column_name1 = results_data_frame.columns[i_column]  # noqa
-            column_name: str = cast(str, column_name1)
+
             if (
-                "Temperature" in column_name
-                or "Percent" in column_name
-                or "Any" in column_name
-                or "Speed" in column_name
+                self.all_outputs[i_column].unit in (Units.CELSIUS, Units.ANY, Units.METER_PER_SECOND, Units.DEGREES)
             ):
                 temp_df_monthly = temp_df.resample("M").interpolate(method="linear")
                 temp_df_cumulative_data = temp_df.mean()
@@ -420,10 +419,7 @@ class Simulator:
 
             if self._simulation_parameters.seconds_per_timestep != 3600:
                 if (
-                    "Temperature" in column_name
-                    or "Percent" in column_name
-                    or "Any" in column_name
-                    or "Speed" in column_name
+                self.all_outputs[i_column].unit in (Units.CELSIUS, Units.ANY, Units.METER_PER_SECOND, Units.DEGREES)
                 ):
                     temp_df_hourly = temp_df.resample("60T").interpolate(
                         method="linear"
@@ -438,4 +434,8 @@ class Simulator:
             else:
                 results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
 
-        return results_merged_monthly, results_merged_cumulative_data, results_merged_hourly
+        return (
+            results_merged_monthly,
+            results_merged_cumulative_data,
+            results_merged_hourly,
+        )

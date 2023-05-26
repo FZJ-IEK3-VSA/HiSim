@@ -77,15 +77,22 @@ def basic_household_explicit(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM)
-    
-    
-    
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV
+    )
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+    )
+
     # Build Building
-    my_building = building.Building(config=building.BuildingConfig.get_default_german_single_family_home(), my_simulation_parameters=my_simulation_parameters)
+    my_building = building.Building(
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

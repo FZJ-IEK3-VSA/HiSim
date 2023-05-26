@@ -799,7 +799,7 @@ class PostProcessor:
                 # else try to convert data types so that json dumping works out
                 for key, value in dict_config.items():
                     if not isinstance(value, (int, float, str, bool, type(None))):
-                        if type(value) == list:
+                        if isinstance(value, list):
                             # transform list to string so it can be json serializable later
                             dict_config[key] = str(value).strip("[]")
                             # append data information dict

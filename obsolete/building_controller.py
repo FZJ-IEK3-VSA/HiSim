@@ -331,6 +331,7 @@ class Test_BuildingController(cp.Component):
         super().__init__(
             name="BuildingController",
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.minimal_building_temperature_in_celsius = (
             config.minimal_building_temperature_in_celsius

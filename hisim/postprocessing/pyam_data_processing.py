@@ -455,19 +455,9 @@ class PyAmChartGenerator:
         print("Make sankey plot.")
 
         # choose simulation duration key manually here, must be improved
-        simulation_duration_key = list(
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys()
-        )[0]
-        print(
-            "Simulation duration chosen for sankey plot is",
-            simulation_duration_key,
-            "days.",
-        )
-        pyam_dataframe = (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters[
-                simulation_duration_key
-            ]
-        )
+        simulation_duration_key = list(dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys())[0]
+        print("Simulation duration chosen for sankey plot is", simulation_duration_key, "days.")
+        pyam_dataframe = dict_of_different_pyam_dataframes_of_different_simulation_parameters[simulation_duration_key]
         data = pyam_dataframe
 
         model = "HiSim_basic_household"
@@ -484,43 +474,29 @@ class PyAmChartGenerator:
                 "Occupancy",
             ),
             "PVSystemw-|Electricity|ElectricityOutput": ("PV", "Grid"),
-            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy"),
+            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy")
         }
         fig = filtered_data.plot.sankey(mapping=sankey_mapping)
-        # plotly.io.show(fig)
 
         # save figure as html first
-        plotly.offline.plot(
-            fig,
-            filename=self.result_folder
-            + f"simulation_duration_of_{simulation_duration_key}_days"
-            + f"\\sankey_plot_for_{simulation_duration_key}.html",
-            auto_open=False,
-        )
+        plotly.offline.plot(fig, filename=self.result_folder
+                    + f"simulation_duration_of_{simulation_duration_key}_days"
+                    + f"\\sankey_plot_for_{simulation_duration_key}.html", auto_open=False)
 
         # convert html file to png
         hti = Html2Image()
-        with open(
-            self.result_folder
-            + f"simulation_duration_of_{simulation_duration_key}_days"
-            + f"\\sankey_plot_for_{simulation_duration_key}.html",
-            encoding="utf8",
-        ) as f:
-            hti.screenshot(
-                f.read(),
-                save_as=f"simulation_duration_of_{simulation_duration_key}_days"
-                + f"sankey_plot_for_{simulation_duration_key}.png",
-            )
+        with open(self.result_folder
+                    + f"simulation_duration_of_{simulation_duration_key}_days"
+                    + f"\\sankey_plot_for_{simulation_duration_key}.html", encoding="utf8") as f:
+            hti.screenshot(f.read(), save_as=f"simulation_duration_of_{simulation_duration_key}_days"
+                    + f"sankey_plot_for_{simulation_duration_key}.png")
 
-        # change directory of sankey output file
-        os.rename(
-            f"simulation_duration_of_{simulation_duration_key}_days"
-            + f"sankey_plot_for_{simulation_duration_key}.png",
-            self.result_folder
-            + f"simulation_duration_of_{simulation_duration_key}_days"
-            + f"\\sankey_plot_for_{simulation_duration_key}.png",
-        )
-
+        # change directory of sankey output file 
+        os.rename(f"simulation_duration_of_{simulation_duration_key}_days"
+                    + f"sankey_plot_for_{simulation_duration_key}.png", self.result_folder
+                    + f"simulation_duration_of_{simulation_duration_key}_days"
+                    + f"\\sankey_plot_for_{simulation_duration_key}.png")
+        
 
 def main():
     """Main function to execute the pyam data processing."""

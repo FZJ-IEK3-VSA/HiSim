@@ -3,6 +3,7 @@
 
 import glob
 import time
+import datetime
 import os
 from typing import Dict, Any
 import re
@@ -77,387 +78,338 @@ class PyAmChartGenerator:
     ) -> None:
         """Make plots for different kind of data."""
 
-        if kind_of_data == PyamDataCollectorEnum.HOURLY:
-            self.make_line_plot_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
+        for simulation_duration_key, pyam_dataframe in dict_of_data.items():
+
+            self.sub_results_folder = (
+                f"simulation_duration_of_{simulation_duration_key}_days\\"
             )
-            self.make_line_plot_with_filling_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
-            )
-        elif kind_of_data == PyamDataCollectorEnum.YEARLY:
-            self.make_bar_plot_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
-            )
-            self.make_box_plot_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
-            )
-            self.make_pie_plot_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
-            )
-            self.make_scatter_plot_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
-            )
-            # self.make_stack_plot_for_pyam_dataframe(dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data)
-            self.make_sankey_plot_for_pyam_dataframe(
-                dict_of_different_pyam_dataframes_of_different_simulation_parameters=dict_of_data
-            )
-        else:
-            raise ValueError(
-                "This kind of data was not found in the pyamdaacollectorenum class."
+            self.sub_sub_results_folder = (
+                f"pyam_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}"
             )
 
+            if kind_of_data == PyamDataCollectorEnum.HOURLY:
+                self.make_line_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+                self.make_line_plot_with_filling_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+            elif kind_of_data == PyamDataCollectorEnum.YEARLY:
+                self.make_bar_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+                self.make_box_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+                self.make_pie_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+                self.make_scatter_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+                # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe)
+                self.make_sankey_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                )
+            else:
+                raise ValueError(
+                    "This kind of data was not found in the pyamdaacollectorenum class."
+                )
+
     def make_line_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make line plot."""
         print("Make line plot with hourly data.")
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
+
+        data = pyam_dataframe
+        # model = "HiSim_basic_household"
+        # scenario="basic_household_explicit"
+        filtered_data = data.filter(
+            variable="Building|Heating|TheoreticalThermalBuildingDemand"
+        )
+        fig, a_x = plt.subplots(figsize=(12, 10))
+
+        filtered_data.plot.line(
+            ax=a_x,
+            color="scenario",
+            title="Building Theoretical Thermal Building Demand",
+        )
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
-
-            data = pyam_dataframe
-            # model = "HiSim_basic_household"
-            # scenario="basic_household_explicit"
-            filtered_data = data.filter(
-                variable="Building|Heating|TheoreticalThermalBuildingDemand"
-            )
-            fig, a_x = plt.subplots(figsize=(12, 10))
-
-            filtered_data.plot.line(
-                ax=a_x,
-                color="scenario",
-                title="Building Theoretical Thermal Building Demand",
-            )
-            if os.path.exists(
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\line_plot_for_{simulation_duration_key}_days.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\line_plot_for_{simulation_duration_key}_days.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\line_plot.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\line_plot.png"
+            )
 
     def make_line_plot_with_filling_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make line plot with filling."""
         print("Make line plot with filling.")
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
+
+        data = pyam_dataframe
+        model = "HiSim_basic_household"
+        scenario = "basic_household_explicit"
+        filtered_data = data.filter(
+            model=model, scenario=scenario, variable="Building|Heating|*"
+        )
+        fig, a_x = plt.subplots(figsize=(12, 10))
+
+        filtered_data.plot(
+            ax=a_x,
+            color="variable",
+            title="Building Heating Outputs",
+            fill_between=True,
+        )
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
-
-            data = pyam_dataframe
-            model = "HiSim_basic_household"
-            scenario = "basic_household_explicit"
-            filtered_data = data.filter(
-                model=model, scenario=scenario, variable="Building|Heating|*"
-            )
-            fig, a_x = plt.subplots(figsize=(12, 10))
-
-            filtered_data.plot(
-                ax=a_x,
-                color="variable",
-                title="Building Heating Outputs",
-                fill_between=True,
-            )
-            if os.path.exists(
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\line_plot_with_filling_for_{simulation_duration_key}_days.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\line_plot_with_filling_for_{simulation_duration_key}_days.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\line_plot_with_filling.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\line_plot_with_filling.png"
+            )
 
     def make_bar_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make bar plot."""
         print("Make bar plot.")
 
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
+        data = pyam_dataframe
+        model = "HiSim_basic_household"
+        scenario = "basic_household_explicit"
+        filtered_data = data.filter(
+            model=model, scenario=scenario, variable="Building|Heating|*"
+        )
+        fig, a_x = plt.subplots(figsize=(12, 10))
+
+        filtered_data.plot.bar(ax=a_x, stacked=True)
+        plt.legend(loc=1)
+        plt.tight_layout()
+        a_x.tick_params(axis="x", rotation=45)
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
-
-            data = pyam_dataframe
-            model = "HiSim_basic_household"
-            scenario = "basic_household_explicit"
-            filtered_data = data.filter(
-                model=model, scenario=scenario, variable="Building|Heating|*"
-            )
-            fig, a_x = plt.subplots(figsize=(12, 10))
-
-            filtered_data.plot.bar(ax=a_x, stacked=True)
-            plt.legend(loc=1)
-            plt.tight_layout()
-            a_x.tick_params(axis="x", rotation=45)
-            if os.path.exists(
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\bar_plot_for_{simulation_duration_key}.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\bar_plot_for_{simulation_duration_key}.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\bar_plot.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\bar_plot.png"
+            )
 
     def make_stack_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make stack plot."""
 
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
+        data = pyam_dataframe
+        model = "HiSim_basic_household"
+        scenario = "basic_household_explicit"
+        filtered_data = data.filter(
+            model=model,
+            scenario=scenario,
+            variable="Building|Heating|*",
+            region="Aachen",
+        )
+        print(filtered_data.timeseries())
+        fig = plt.subplots(figsize=(12, 10))
+
+        filtered_data.plot.stack(titel=scenario)
+        fig.subplots_adjust(right=0.55)
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
-
-            data = pyam_dataframe
-            model = "HiSim_basic_household"
-            scenario = "basic_household_explicit"
-            filtered_data = data.filter(
-                model=model,
-                scenario=scenario,
-                variable="Building|Heating|*",
-                region="Aachen",
-            )
-            print(filtered_data.timeseries())
-            fig = plt.subplots(figsize=(12, 10))
-
-            filtered_data.plot.stack(titel=scenario)
-            fig.subplots_adjust(right=0.55)
-            if os.path.exists(
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\stack_plot_for_{simulation_duration_key}.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\stack_plot_for_{simulation_duration_key}.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\stack_plot.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\stack_plot.png"
+            )
 
     def make_box_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make box plot."""
         print("Make box plot.")
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
+
+        data = pyam_dataframe
+        # model = "HiSim_basic_household"
+        # scenario="basic_household_explicit"
+        filtered_data = data.filter(
+            variable="Building|Heating|TheoreticalThermalBuildingDemand"
+        )
+        fig, a_x = plt.subplots(figsize=(12, 10))
+
+        filtered_data.plot.box(
+            ax=a_x,
+            by="variable",
+            legend=True,
+            x="year",
+            title="Theoretical Building Demand for all scenarios",
+        )
+        plt.tight_layout()
+        plt.legend(loc=1)
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
-
-            data = pyam_dataframe
-            # model = "HiSim_basic_household"
-            # scenario="basic_household_explicit"
-            filtered_data = data.filter(
-                variable="Building|Heating|TheoreticalThermalBuildingDemand"
-            )
-            fig, a_x = plt.subplots(figsize=(12, 10))
-
-            filtered_data.plot.box(
-                ax=a_x,
-                by="variable",
-                legend=True,
-                x="year",
-                title="Theoretical Building Demand for all scenarios",
-            )
-            plt.tight_layout()
-            plt.legend(loc=1)
-            if os.path.exists(
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\box_plot_for_{simulation_duration_key}.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\box_plot_for_{simulation_duration_key}.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\box_plot.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\box_plot.png"
+            )
 
     def make_pie_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make pie plot."""
         print("Make pie plot.")
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
+
+        data = pyam_dataframe
+        model = "HiSim_basic_household"
+        scenario = "basic_household_explicit"
+        filtered_data = data.filter(
+            model=model, scenario=scenario, variable="Building|Heating|*"
+        )
+        fig, a_x = plt.subplots(figsize=(12, 10))
+
+        filtered_data.plot.pie(
+            ax=a_x,
+            value="value",
+            category="variable",
+            title="Building Heating Outputs",
+        )
+        fig.subplots_adjust(right=0.75, left=0.3)
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
-
-            data = pyam_dataframe
-            model = "HiSim_basic_household"
-            scenario = "basic_household_explicit"
-            filtered_data = data.filter(
-                model=model, scenario=scenario, variable="Building|Heating|*"
-            )
-            fig, a_x = plt.subplots(figsize=(12, 10))
-
-            filtered_data.plot.pie(
-                ax=a_x,
-                value="value",
-                category="variable",
-                title="Building Heating Outputs",
-            )
-            fig.subplots_adjust(right=0.75, left=0.3)
-            if os.path.exists(
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\pie_plot_for_{simulation_duration_key}.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\pie_plot_for_{simulation_duration_key}.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\pie_plot.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\pie_plot.png"
+            )
 
     def make_scatter_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make scatter plot."""
         print("Make scatter plot.")
-        for (
-            simulation_duration_key,
-            pyam_dataframe,
-        ) in (
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters.items()
-        ):
 
-            data = pyam_dataframe
-            filtered_data = data
-            fig, a_x = plt.subplots(figsize=(12, 10))
-            filtered_data.plot.scatter(
-                ax=a_x,
-                x="Weather|Temperature|DailyAverageOutsideTemperatures",
-                y="Building|Temperature|TemperatureIndoorAir",
-            )
-            if os.path.exists(
+        data = pyam_dataframe
+        filtered_data = data
+        fig, a_x = plt.subplots(figsize=(12, 10))
+        filtered_data.plot.scatter(
+            ax=a_x,
+            x="Weather|Temperature|DailyAverageOutsideTemperatures",
+            y="Building|Temperature|TemperatureIndoorAir",
+        )
+        if os.path.exists(
+            self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
+        ):
+            fig.savefig(
                 self.result_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\scatter_plot_for_{simulation_duration_key}.png"
-                )
-            else:
-                os.makedirs(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                fig.savefig(
-                    self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\scatter_plot_for_{simulation_duration_key}.png"
-                )
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\scatter_plot.png"
+            )
+        else:
+            os.makedirs(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+            )
+            fig.savefig(
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\scatter_plot.png"
+            )
 
     def make_sankey_plot_for_pyam_dataframe(
-        self,
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters: Dict[
-            str, pyam.IamDataFrame
-        ],
+        self, pyam_dataframe: pyam.IamDataFrame
     ) -> None:
         """Make sankey plot."""
         print("Make sankey plot.")
 
-        # choose simulation duration key manually here, must be improved
-        simulation_duration_key = list(dict_of_different_pyam_dataframes_of_different_simulation_parameters.keys())[0]
-        print("Simulation duration chosen for sankey plot is", simulation_duration_key, "days.")
-        pyam_dataframe = dict_of_different_pyam_dataframes_of_different_simulation_parameters[simulation_duration_key]
         data = pyam_dataframe
 
         model = "HiSim_basic_household"
@@ -474,29 +426,43 @@ class PyAmChartGenerator:
                 "Occupancy",
             ),
             "PVSystemw-|Electricity|ElectricityOutput": ("PV", "Grid"),
-            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy")
+            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy"),
         }
         fig = filtered_data.plot.sankey(mapping=sankey_mapping)
 
         # save figure as html first
-        plotly.offline.plot(fig, filename=self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\sankey_plot_for_{simulation_duration_key}.html", auto_open=False)
+        plotly.offline.plot(
+            fig,
+            filename=self.result_folder
+            + self.sub_results_folder
+            + self.sub_sub_results_folder
+            + "\\sankey_plot.html",
+            auto_open=False,
+        )
 
         # convert html file to png
         hti = Html2Image()
-        with open(self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\sankey_plot_for_{simulation_duration_key}.html", encoding="utf8") as f:
-            hti.screenshot(f.read(), save_as=f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"sankey_plot_for_{simulation_duration_key}.png")
+        with open(
+            self.result_folder
+            + self.sub_results_folder
+            + self.sub_sub_results_folder
+            + "\\sankey_plot.html",
+            encoding="utf8",
+        ) as file:
+            hti.screenshot(
+                file.read(),
+                save_as="sankey_plot.png",
+            )
 
-        # change directory of sankey output file 
-        os.rename(f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"sankey_plot_for_{simulation_duration_key}.png", self.result_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\sankey_plot_for_{simulation_duration_key}.png")
-        
+        # change directory of sankey output file
+        os.rename(
+            "sankey_plot.png",
+            self.result_folder
+            + self.sub_results_folder
+            + self.sub_sub_results_folder
+            + "\\sankey_plot.png",
+        )
+
 
 def main():
     """Main function to execute the pyam data processing."""

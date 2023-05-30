@@ -24,7 +24,7 @@ from hisim import log
 
 @dataclass_json
 @dataclass
-class PIDControllerConfig(cp.ConfigBase):
+class PIDControllerOneConfig(cp.ConfigBase):
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
@@ -37,11 +37,11 @@ class PIDControllerConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_pid_controller_config(cls) -> Any:
-        config = PIDControllerConfig(name="PIDController", ki=1, kp=1, kd=1)
+        config = PIDControllerOneConfig(name="PIDController", ki=1, kp=1, kd=1)
         return config
 
 
-class PIDState:
+class PIDStateOne:
     """Represents the current internal state of the PID."""
 
     def __init__(self, integrator: float, derivator: float):
@@ -50,10 +50,10 @@ class PIDState:
         self.Derivator: float = derivator
 
     def clone(self):
-        return PIDState(self.Integrator, self.Derivator)
+        return PIDStateOne(self.Integrator, self.Derivator)
 
 
-class PIDController(cp.Component):
+class PIDControllerOne(cp.Component):
     # Inputs
     TemperatureMean = "Residence Temperature"  # uncontrolled temperature
 
@@ -70,7 +70,7 @@ class PIDController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: PIDControllerConfig,
+        config: PIDControllerOneConfig,
     ) -> None:
         self.pid_controller_config = config
         super().__init__(
@@ -86,7 +86,7 @@ class PIDController(cp.Component):
         self.ki = self.pid_controller_config.ki
         self.kp = self.pid_controller_config.kp
         self.kd = self.pid_controller_config.kd
-        self.state = PIDState(integrator=0, derivator=0)
+        self.state = PIDStateOne(integrator=0, derivator=0)
         self.previous_state = self.state.clone()
 
         self.t_mC: cp.ComponentInput = self.add_input(
@@ -141,7 +141,7 @@ class PIDController(cp.Component):
         building_classname = Building.get_classname()
         connections.append(
             cp.ComponentConnection(
-                PIDController.TemperatureMean,
+                PIDControllerOne.TemperatureMean,
                 building_classname,
                 Building.TemperatureMean,
             )

@@ -745,8 +745,8 @@ class PostProcessor:
                 simple_dict_hourly_data["time"].append(timestep)
                 simple_dict_hourly_data["value"].append(values[index])
 
-        for column in ppdt.results_all_data:
-            value = ppdt.results_all_data[column].values[0]
+        for column in ppdt.results_cumulative:
+            value = ppdt.results_cumulative[column].values[0]
 
             column_splitted = str(
                 "".join([x for x in column if x in string.ascii_letters + "'- "])
@@ -815,17 +815,17 @@ class PostProcessor:
         file_name = f"{pyam_data_folder}{ppdt.module_filename}_{ppdt.setup_function}"
         file_name_hourly = (
             file_name
-            + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+            + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
         )
         file_name_yearly = (
             file_name
-            + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}"
+            + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
         )
         simple_df_hourly_data.to_csv(
-            file_name_hourly + ".csv",
+            path_or_buf=file_name_hourly,
             index=None,
         )
-        simple_df_yearly_data.to_csv(file_name_yearly + ".csv", index=None)
+        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)
 
         # Serializing json
         json_object = json.dumps(data_information_dict, indent=4)

@@ -334,7 +334,7 @@ class Simulator:
             module_filename=self.module_filename,
             execution_time=execution_time,
             results_monthly=results_merged_monthly,
-            results_all_data=results_merged_all_data,
+            results_cumulative=results_merged_all_data,
             results_hourly=results_merged_hourly,
         )
         log.information("Finished preparing post processing")

@@ -10,7 +10,6 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import sumbuilder
-from hisim import postprocessingoptions
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

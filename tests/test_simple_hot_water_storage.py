@@ -5,7 +5,6 @@ from hisim import component as cp
 from hisim.components import simple_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from tests import functions_for_testing as fft
 
@@ -14,7 +13,6 @@ from tests import functions_for_testing as fft
 def test_simple_storage():
     """Test for simple hot water storage."""
 
-    
     # calculate mixing factors and run simulation for different seconds per timestep
     seconds_per_timesteps_to_test = [60, 60 * 15, 60 * 30, 60 * 60, 60 * 120]
     for sec_per_timestep in seconds_per_timesteps_to_test:
@@ -22,13 +20,17 @@ def test_simple_storage():
             factor_for_water_storage_portion = sec_per_timestep / 3600
         elif sec_per_timestep > 3600:
             factor_for_water_storage_portion = 1.0
-        
-        simulate_simple_water_storage(
-            sec_per_timestep, factor_for_water_storage_portion=factor_for_water_storage_portion
-        )
-        
 
-def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_storage_portion: float):
+        simulate_simple_water_storage(
+            sec_per_timestep,
+            factor_for_water_storage_portion=factor_for_water_storage_portion,
+        )
+
+
+def simulate_simple_water_storage(
+    sec_per_timesteps: int, factor_for_water_storage_portion: float
+) -> None:
+    """Simulate and test simple hot water storage."""
 
     seconds_per_timestep = sec_per_timesteps
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -42,8 +44,15 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     cool_water_temperature_in_storage_in_celsius = 50
     hot_water_temperature_in_storage_in_celsius = 50
 
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM, entry= 0.787)
-    water_mass_flow_rate_from_heat_distribution_system = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM)
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM,
+        entry=0.787,
+    )
+    water_mass_flow_rate_from_heat_distribution_system = (
+        SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
+        )
+    )
     # ===================================================================================================================
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
@@ -71,7 +80,6 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         lt.LoadTypes.TEMPERATURE,
         lt.Units.CELSIUS,
     )
-
 
     water_mass_flow_rate_from_heat_generator = cp.ComponentOutput(
         "FakeWaterMassFlowRateFromHeatGenerator",
@@ -120,7 +128,6 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
     timestep = 300
     my_simple_heat_water_storage.mean_water_temperature_in_water_storage_in_celsius = 50
 
-
     my_simple_heat_water_storage.i_simulate(timestep, stsv, False)
 
     water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[3]
@@ -128,9 +135,7 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
 
     # test mean water temperature calculation in storage
     mass_water_hds_in_kg = (
-
-        water_mass_flow_rate_from_heat_distribution_system
-        * seconds_per_timestep
+        water_mass_flow_rate_from_heat_distribution_system * seconds_per_timestep
     )
     mass_water_hg_in_kg = (
         stsv.values[water_mass_flow_rate_from_heat_generator.global_index]

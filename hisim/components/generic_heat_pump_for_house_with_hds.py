@@ -475,11 +475,8 @@ class GenericHeatPumpNew(cp.Component):
     ) -> None:
         """Simulate heat pump."""
 
-
         # Inputs
-        self.state_from_heat_pump_controller = stsv.get_input_value(
-            self.state_channel
-        )
+        self.state_from_heat_pump_controller = stsv.get_input_value(self.state_channel)
         self.temperature_outside = stsv.get_input_value(
             self.temperature_outside_channel
         )
@@ -521,9 +518,7 @@ class GenericHeatPumpNew(cp.Component):
                 self.electricity_output_channel,
                 self.state.electricity_input_in_watt,
             )
-            stsv.set_output_value(
-                self.number_of_cycles_channel, self.number_of_cycles
-            )
+            stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
             stsv.set_output_value(
                 self.water_temperature_output_channel,
                 self.water_temperature_output_in_celsius,
@@ -566,12 +561,8 @@ class GenericHeatPumpNew(cp.Component):
             self.thermal_power_delivered_channel,
             self.state.thermal_power_delivered_in_watt,
         )
-        stsv.set_output_value(
-            self.heating_channel, self.state.heating_power_in_watt
-        )
-        stsv.set_output_value(
-            self.cooling_channel, self.state.cooling_power_in_watt
-        )
+        stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
+        stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
         stsv.set_output_value(
             self.electricity_output_channel, self.state.electricity_input_in_watt
         )
@@ -581,7 +572,6 @@ class GenericHeatPumpNew(cp.Component):
             self.water_temperature_output_channel,
             self.water_temperature_output_in_celsius,
         )
-
 
     def calculate_water_temperature_after_heat_transfer(
         self,

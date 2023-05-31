@@ -29,7 +29,7 @@ def test_simple_storage():
         
 
 def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_storage_portion: float):
-    factor_for_water_storage_portion = factor_for_water_storage_portion
+
     seconds_per_timestep = sec_per_timesteps
     my_simulation_parameters = SimulationParameters.one_day_only(
         2017, seconds_per_timestep
@@ -174,5 +174,3 @@ def simulate_simple_water_storage(sec_per_timesteps: int, factor_for_water_stora
         + (1 - factor_for_water_storage_portion)
         * stsv.values[water_temperature_input_from_heat_generator.global_index]
     ) == water_temperature_output_in_celsius_to_heat_distribution_system
-
-    

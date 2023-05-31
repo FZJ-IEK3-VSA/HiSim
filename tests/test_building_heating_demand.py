@@ -13,7 +13,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.components import generic_heat_pump
+from hisim.components import idealized_electric_heater
 from hisim import log
 from hisim import utils
 
@@ -27,12 +27,12 @@ __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../examples/household_for_test_building_heat_demand.py"
-FUNC = "house_with_pv_and_hp_for_heating_test"
+FUNC = "house_with_idealized_electric_heater_for_heating_test"
 
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
-def test_house_with_pv_and_hp_for_heating_test(
+def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """Test for heating energy demand.
@@ -45,8 +45,7 @@ def test_house_with_pv_and_hp_for_heating_test(
         - Occupancy (Residents' Demands)
         - Weather
         - Building
-        - Heat Pump
-        - Heat Pump Controller
+        - Idealized Electric Heater
     """
 
     # =========================================================================================================================================================
@@ -56,15 +55,10 @@ def test_house_with_pv_and_hp_for_heating_test(
     year = 2021
     seconds_per_timestep = 60 * 60
 
-    # Set Heat Pump Controller
-    temperature_air_heating_in_celsius = 19.5
-    temperature_air_cooling_in_celsius = 20.5
-    offset = 0.5
-    hp_mode = 2
+    # Set Fake Heater
+    set_heating_temperature_for_building_in_celsius = 20
+    set_cooling_temperature_for_building_in_celsius = 22
 
-    # Set Heat Pump
-    # hp_min_operation_time = 1
-    # hp_min_idle_time = 1
 
     # =========================================================================================================================================================
     # Build Components
@@ -121,21 +115,11 @@ def test_house_with_pv_and_hp_for_heating_test(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Heat Pump
-    my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+    # Build Fake Heater
+    my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-        name="GenericHeatpumpController",
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
-        my_simulation_parameters=my_simulation_parameters,
+        set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
     )
     # =========================================================================================================================================================
     # Connect Components
@@ -182,27 +166,15 @@ def test_house_with_pv_and_hp_for_heating_test(
     )
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
-        my_heat_pump.component_name,
-        my_heat_pump.ThermalPowerDelivered,
+        my_idealized_electric_heater.component_name,
+        my_idealized_electric_heater.ThermalPowerDelivered,
     )
 
-    # Heat Pump
-    my_heat_pump.connect_input(
-        my_heat_pump.State,
-        my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
-    )
-
-    # Heat Pump Controller
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.TemperatureMean,
+    # Fake Heater
+    my_idealized_electric_heater.connect_input(
+        my_idealized_electric_heater.TheoreticalThermalBuildingDemand,
         my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
+        my_building.TheoreticalThermalBuildingDemand,
     )
 
     # =========================================================================================================================================================
@@ -211,19 +183,19 @@ def test_house_with_pv_and_hp_for_heating_test(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_heat_pump_controller)
+    my_sim.add_component(my_idealized_electric_heater)
 
     my_sim.run_all_timesteps()
 
     # =========================================================================================================================================================
     # Calculate annual heat pump heating energy
 
-    results_heatpump_heating = my_sim.results_data_frame[
-        "HeatPump - Heating [Heating - W]"
+    results_heating = my_sim.results_data_frame[
+        "IdealizedElectricHeater - HeatingPowerDelivered [Heating - W]"
     ]
-    sum_heating_in_watt_timestep = sum(results_heatpump_heating)
-    log.information("sum hp heating [W*timestep] " + str(sum_heating_in_watt_timestep))
+
+    sum_heating_in_watt_timestep = sum(results_heating)
+    log.information("sum heating [W*timestep] " + str(sum_heating_in_watt_timestep))
     timestep_factor = seconds_per_timestep / 3600
     sum_heating_in_watt_hour = sum_heating_in_watt_timestep * timestep_factor
     sum_heating_in_kilowatt_hour = sum_heating_in_watt_hour / 1000
@@ -245,9 +217,9 @@ def test_house_with_pv_and_hp_for_heating_test(
         "energy need for heating from heat pump [kWh/(a*m2)] "
         + str(energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2)
     )
-    # test whether tabula energy demand for heating is equal to energy demand for heating generated from heat pump with a tolerance of 30%
+    # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 15%
     np.testing.assert_allclose(
         energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
         energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2,
-        rtol=0.3,
+        rtol=0.15,
     )

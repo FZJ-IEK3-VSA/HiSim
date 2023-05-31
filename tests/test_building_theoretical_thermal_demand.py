@@ -91,7 +91,6 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.Aachen
@@ -103,7 +102,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
         set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius
+        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
     )
 
     # Build Building
@@ -113,7 +112,9 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

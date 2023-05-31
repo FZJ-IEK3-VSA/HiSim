@@ -56,9 +56,8 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     seconds_per_timestep = 60 * 60
 
     # Set Fake Heater
-    set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 22
-
+    set_heating_temperature_for_building_in_celsius = 19.5
+    set_cooling_temperature_for_building_in_celsius = 20.5
 
     # =========================================================================================================================================================
     # Build Components
@@ -102,7 +101,9 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -206,20 +207,23 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         my_building.buildingdata["q_h_nd"].values[0]
     )
 
-    energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2 = (
-        sum_heating_in_kilowatt_hour / my_building_config.absolute_conditioned_floor_area_in_m2
+    energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 = (
+        sum_heating_in_kilowatt_hour
+        / my_building_config.absolute_conditioned_floor_area_in_m2
     )
     log.information(
         "energy need for heating from tabula [kWh/(a*m2)] "
         + str(energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2)
     )
     log.information(
-        "energy need for heating from heat pump [kWh/(a*m2)] "
-        + str(energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2)
+        "energy need for heating from idealized electric heater [kWh/(a*m2)] "
+        + str(
+            energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2
+        )
     )
     # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 15%
     np.testing.assert_allclose(
         energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
-        energy_need_for_heating_from_heat_pump_in_kilowatt_hour_per_year_per_m2,
+        energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2,
         rtol=0.15,
     )

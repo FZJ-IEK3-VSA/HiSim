@@ -136,34 +136,24 @@ def test_hds():
             
             if calculated_water_output_temperature_in_celsius > stsv.values[residence_temperature_indoor_air.global_index]:
 
-                assert (
-                    water_output_temperature_in_celsius_from_simulation
-                    == calculated_water_output_temperature_in_celsius
-                )
-                
+                assert water_output_temperature_in_celsius_from_simulation == calculated_water_output_temperature_in_celsius
+
             # test if water out temperature is limited to residence temperature in case the thermal demand from building is too high
             elif (
                 calculated_water_output_temperature_in_celsius
                 < stsv.values[residence_temperature_indoor_air.global_index]):
-                assert (
-                    water_output_temperature_in_celsius_from_simulation
-                    == stsv.values[residence_temperature_indoor_air.global_index], 
-                )
-                
+                assert water_output_temperature_in_celsius_from_simulation == stsv.values[residence_temperature_indoor_air.global_index]
+
         elif (stsv.values[theoretical_thermal_building_demand.global_index] < 0):
 
             if calculated_water_output_temperature_in_celsius < stsv.values[residence_temperature_indoor_air.global_index]:
 
-                assert (
-                    water_output_temperature_in_celsius_from_simulation
-                    == calculated_water_output_temperature_in_celsius
-                )
-                
+                assert water_output_temperature_in_celsius_from_simulation == calculated_water_output_temperature_in_celsius
+
             # test if water out temperature is limited to residence temperature in case the thermal demand from building is too low
             elif (
                 calculated_water_output_temperature_in_celsius
                 > stsv.values[residence_temperature_indoor_air.global_index]):
-                assert (
-                    water_output_temperature_in_celsius_from_simulation
-                    == stsv.values[residence_temperature_indoor_air.global_index], 
-                )
+
+                assert water_output_temperature_in_celsius_from_simulation == stsv.values[residence_temperature_indoor_air.global_index]
+

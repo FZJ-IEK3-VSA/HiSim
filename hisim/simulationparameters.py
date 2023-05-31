@@ -80,13 +80,12 @@ class SimulationParameters(JSONWizard):
         """Enables line and carpet plots."""
         self.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        #self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
+        # self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
         self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
         self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
         self.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
         )
-
 
     @classmethod
     def full_year_all_options(
@@ -115,7 +114,6 @@ class SimulationParameters(JSONWizard):
         )
         pars.enable_plots_only()
         return pars
-
 
     @classmethod
     def january_only_with_all_options(
@@ -156,7 +154,7 @@ class SimulationParameters(JSONWizard):
             seconds_per_timestep,
             "",
         )
-        
+
     @classmethod
     def three_months_with_plots_only(
         cls, year: int, seconds_per_timestep: int
@@ -182,7 +180,7 @@ class SimulationParameters(JSONWizard):
             seconds_per_timestep,
             "",
         )
-      
+
     @classmethod
     def one_week_with_only_plots(
         cls, year: int, seconds_per_timestep: int
@@ -192,11 +190,11 @@ class SimulationParameters(JSONWizard):
             datetime.datetime(year, 1, 1),
             datetime.datetime(year, 1, 8),
             seconds_per_timestep,
-            "",)
-            
+            "",
+        )
+
         pars.enable_plots_only()
         return pars
-
 
     @classmethod
     def one_day_only(

@@ -30,7 +30,6 @@ class IdealizedElectricHeater(cp.Component):
     ThermalPowerDelivered = "ThermalPowerDelivered"
     HeatingPowerDelivered = "HeatingPowerDelivered"
 
-
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
@@ -49,8 +48,14 @@ class IdealizedElectricHeater(cp.Component):
         self.theoretical_thermal_building_in_watt: float = 0
         self.heating_in_watt: float = 0
 
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING, entry=set_heating_temperature_for_building_in_celsius)
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING, entry=set_cooling_temperature_for_building_in_celsius)
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
+            entry=set_heating_temperature_for_building_in_celsius,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
+            entry=set_cooling_temperature_for_building_in_celsius,
+        )
 
         # Inputs
 
@@ -78,7 +83,6 @@ class IdealizedElectricHeater(cp.Component):
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatingPowerDelivered} will follow.",
         )
-
 
     def build(
         self,

@@ -79,8 +79,6 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
-    # set_heating_temperature_for_water_storage_in_celsius: float
-    # set_cooling_temperature_for_water_storage_in_celsius: float
 
     @classmethod
     def get_default_heat_distribution_controller_config(cls):
@@ -89,11 +87,9 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             name="HeatDistributionController",
             heating_system=HeatingSystemType.FLOORHEATING,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
-            heating_reference_temperature_in_celsius = -14.0,
+            heating_reference_temperature_in_celsius=-14.0,
             set_heating_temperature_for_building_in_celsius=20,
             set_cooling_temperature_for_building_in_celsius=24,
-            # set_heating_temperature_for_water_storage_in_celsius=21.5,
-            # set_cooling_temperature_for_water_storage_in_celsius=22.5,
         )
 
 
@@ -504,18 +500,19 @@ class HeatDistributionController(cp.Component):
             key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
             entry=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
         )
-        # SingletonSimRepository().set_entry(
-        #     key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE,
-        #     entry=self.heat_distribution_controller_config.set_heating_temperature_for_water_storage_in_celsius,
-        # )
-        # SingletonSimRepository().set_entry(
-        #     key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE,
-        #     entry=self.heat_distribution_controller_config.set_cooling_temperature_for_water_storage_in_celsius,
-        # )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.HEATINGSYSTEM,
+            entry=self.heat_distribution_controller_config.heating_system,
+        )
+
         self.build(
             set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=self.heat_distribution_controller_config.heating_reference_temperature_in_celsius,
-            heating_system_type = self.heat_distribution_controller_config.heating_system
+            heating_system_type=self.heat_distribution_controller_config.heating_system,
+        )
+        self.prepare_calc_heating_dist_temperature(
+            set_room_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
+            factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
         # Inputs
@@ -628,8 +625,12 @@ class HeatDistributionController(cp.Component):
         The function sets important constants and parameters for the calculations.
         """
         # Configuration
-        self.set_heating_threshold_temperature_in_celsius = set_heating_threshold_temperature_in_celsius
-        self.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        self.set_heating_threshold_temperature_in_celsius = (
+            set_heating_threshold_temperature_in_celsius
+        )
+        self.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
         self.heating_system_type = heating_system_type
 
     def i_prepare_simulation(self) -> None:
@@ -671,9 +672,10 @@ class HeatDistributionController(cp.Component):
                 self.daily_avg_outside_temperature_input_channel
             )
 
-            self.prepare_calc_heating_dist_temperature(set_room_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
-                                                       factor_of_oversizing_of_heat_distribution_system=1.0)
-            list_of_heating_distribution_system_flow_and_return_temperatures = self.calc_heat_distribution_flow_and_return_temperatures(daily_avg_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius)
+            list_of_heating_distribution_system_flow_and_return_temperatures = self.calc_heat_distribution_flow_and_return_temperatures(
+                daily_avg_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius
+            )
+
             self.conditions_for_opening_or_shutting_heat_distribution(
                 theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
                 daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
@@ -688,7 +690,10 @@ class HeatDistributionController(cp.Component):
                 raise ValueError("unknown mode")
 
             stsv.set_output_value(self.state_channel, self.state_controller)
-            stsv.set_output_value(self.heating_flow_temperature_channel, list_of_heating_distribution_system_flow_and_return_temperatures[0])
+            stsv.set_output_value(
+                self.heating_flow_temperature_channel,
+                list_of_heating_distribution_system_flow_and_return_temperatures[0],
+            )
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
@@ -718,65 +723,120 @@ class HeatDistributionController(cp.Component):
 
         else:
             raise ValueError("unknown mode")
-        
-    # taken from hplib heating system and adapted here
-    def prepare_calc_heating_dist_temperature(self,
-                set_room_temperature_for_building_in_celsius: float = 20.0,
-                # t_hs_set: list = [35,28],
-                factor_of_oversizing_of_heat_distribution_system: float = 1.0,
-                # f_hs_exp: float = 1.1
-                ):
-        """
-        Function to set several input parameters for functions regarding the heating system.
 
-        Parameters:
-        ----------
-        minimal reference outside temperatur for building.
-        set room temperatur for building.
-        list with maximum heating flow and return temperature in °C
-                [35,28] for floor heating
-                [55,45] for low temperatur radiator
-                [70,55] for radtiator
-        factor of oversizing of heat distribution system
-        exponent factor of heating distribution system, e.g. 1.1 floor heating and 1.3 radiator
+    def prepare_calc_heating_dist_temperature(
+        self,
+        set_room_temperature_for_building_in_celsius: float = 20.0,
+        factor_of_oversizing_of_heat_distribution_system: float = 1.0,
+    ) -> None:
+        """Function to set several input parameters for functions regarding the heating system.
+
+        This function is taken from the HeatingSystem class of hplib and slightly adapted here.
         """
 
-        self.set_room_temperature_for_building_in_celsius = set_room_temperature_for_building_in_celsius
+        self.set_room_temperature_for_building_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
         if self.heating_system_type == HeatingSystemType.FLOORHEATING:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [35,28]
+            list_of_maximum_flow_and_return_temperatures_in_celsius = [35, 28]
             exponent_factor_of_heating_distribution_system = 1.1
-            
+
         elif self.heating_system_type == HeatingSystemType.RADIATOR:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [70,55]
+            list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
             exponent_factor_of_heating_distribution_system = 1.3
         else:
-            raise ValueError("Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class.")
+            raise ValueError(
+                "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
+            )
 
-        self.max_flow_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[0]
-        self.min_flow_temperature_in_celsius = set_room_temperature_for_building_in_celsius
-        self.max_return_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[1]
-        self.min_return_temperature_in_celsius = set_room_temperature_for_building_in_celsius
-        self.factor_of_oversizing_of_heat_distribution_system = factor_of_oversizing_of_heat_distribution_system
-        self.exponent_factor_of_heating_distribution_system = exponent_factor_of_heating_distribution_system
+        self.max_flow_temperature_in_celsius = (
+            list_of_maximum_flow_and_return_temperatures_in_celsius[0]
+        )
+        self.min_flow_temperature_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
+        self.max_return_temperature_in_celsius = (
+            list_of_maximum_flow_and_return_temperatures_in_celsius[1]
+        )
+        self.min_return_temperature_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
+        self.factor_of_oversizing_of_heat_distribution_system = (
+            factor_of_oversizing_of_heat_distribution_system
+        )
+        self.exponent_factor_of_heating_distribution_system = (
+            exponent_factor_of_heating_distribution_system
+        )
 
-    def calc_heat_distribution_flow_and_return_temperatures(self, daily_avg_outside_temperature_in_celsius: float):
-        """
-        Calculate the heat distribution flow and return temperature 
-        as a function of the moving average daily mean outside temperature.
-        Calculations are bsed on DIN V 4701-10, Section 5
+    def calc_heat_distribution_flow_and_return_temperatures(
+        self, daily_avg_outside_temperature_in_celsius: float
+    ) -> List[float]:
+        """Calculate the heat distribution flow and return temperature as a function of the moving average daily mean outside temperature.
 
-        Returns:
-        ----------
+        Calculations are based on DIN V 4701-10, Section 5
+
+        Returns
+        -------
         list with heating flow and heating return temperature
+
         """
-        # TODO: make case for cooling (only with floor heating)
-        # if daily_avg_outside_temperature_in_celsius > self.set_room_temperature_for_building_in_celsius:
-        #     flow_temperature_in_celsius = self.min_flow_temperature_in_celsius
-        #     return_temperature_in_celsius = self.min_return_temperature_in_celsius
-        # else:
-        flow_temperature_in_celsius = self.min_flow_temperature_in_celsius + ((1/self.factor_of_oversizing_of_heat_distribution_system) * ((self.set_room_temperature_for_building_in_celsius-daily_avg_outside_temperature_in_celsius)/(self.set_room_temperature_for_building_in_celsius-self.heating_reference_temperature_in_celsius)))**(1/self.exponent_factor_of_heating_distribution_system) * (self.max_flow_temperature_in_celsius - self.min_flow_temperature_in_celsius)
-        return_temperature_in_celsius = self.min_return_temperature_in_celsius + ((1/self.factor_of_oversizing_of_heat_distribution_system) * ((self.set_room_temperature_for_building_in_celsius-daily_avg_outside_temperature_in_celsius)/(self.set_room_temperature_for_building_in_celsius-self.heating_reference_temperature_in_celsius)))**(1/self.exponent_factor_of_heating_distribution_system) * (self.max_return_temperature_in_celsius - self.min_return_temperature_in_celsius)
-    
-        list_of_heating_flow_and_return_temperature_in_celsius = [flow_temperature_in_celsius, return_temperature_in_celsius]
-        
+        # cooling case, daily avg temperature is higher than set indoor temperature.
+        # flow and return temperatures can not be lower than set indoor temperature (because number would be complex)
+        if (
+            self.set_room_temperature_for_building_in_celsius
+            < daily_avg_outside_temperature_in_celsius
+        ):
+            flow_temperature_in_celsius = self.min_flow_temperature_in_celsius
+            return_temperature_in_celsius = self.min_return_temperature_in_celsius
+
+        else:
+            # heating case, daily avg outside temperature is lower than indoor temperature
+            flow_temperature_in_celsius = float(
+                self.min_flow_temperature_in_celsius
+                + (
+                    (1 / self.factor_of_oversizing_of_heat_distribution_system)
+                    * (
+                        (
+                            self.set_room_temperature_for_building_in_celsius
+                            - daily_avg_outside_temperature_in_celsius
+                        )
+                        / (
+                            self.set_room_temperature_for_building_in_celsius
+                            - self.heating_reference_temperature_in_celsius
+                        )
+                    )
+                )
+                ** (1 / self.exponent_factor_of_heating_distribution_system)
+                * (
+                    self.max_flow_temperature_in_celsius
+                    - self.min_flow_temperature_in_celsius
+                )
+            )
+            return_temperature_in_celsius = float(
+                self.min_return_temperature_in_celsius
+                + (
+                    (1 / self.factor_of_oversizing_of_heat_distribution_system)
+                    * (
+                        (
+                            self.set_room_temperature_for_building_in_celsius
+                            - daily_avg_outside_temperature_in_celsius
+                        )
+                        / (
+                            self.set_room_temperature_for_building_in_celsius
+                            - self.heating_reference_temperature_in_celsius
+                        )
+                    )
+                )
+                ** (1 / self.exponent_factor_of_heating_distribution_system)
+                * (
+                    self.max_return_temperature_in_celsius
+                    - self.min_return_temperature_in_celsius
+                )
+            )
+
+        list_of_heating_flow_and_return_temperature_in_celsius = [
+            flow_temperature_in_celsius,
+            return_temperature_in_celsius,
+        ]
+
         return list_of_heating_flow_and_return_temperature_in_celsius

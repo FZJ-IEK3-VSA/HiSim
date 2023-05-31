@@ -9,7 +9,7 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
-    ConfigBase
+    ConfigBase,
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -55,7 +55,7 @@ class HeatPumpHplib(Component):
     ThermalOutputPower = "ThermalOutputPower"  # W
     ElectricalInputPower = "ElectricalInputPower"  # W
     COP = "COP"  # -
-    EER = "EER" # -
+    EER = "EER"  # -
     TemperatureOutput = "TemperatureOutput"  # °C
     MassFlowOutput = "MassFlowOutput"  # kg/s
     TimeOn = "TimeOn"  # s
@@ -102,7 +102,9 @@ class HeatPumpHplib(Component):
         self.p_th_set = config.p_th_set
 
         # Component has states
-        self.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
+        self.state = HeatPumpState(
+            time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0
+        )
         self.previous_state = self.state.self_copy()
 
         # Load parameters from heat pump database
@@ -149,7 +151,7 @@ class HeatPumpHplib(Component):
             field_name=self.ThermalOutputPower,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
-            output_description=("Thermal output power in Watt")
+            output_description=("Thermal output power in Watt"),
         )
 
         self.p_el: ComponentOutput = self.add_output(
@@ -157,7 +159,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            output_description="Electricity input power in Watt"
+            output_description="Electricity input power in Watt",
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -165,21 +167,21 @@ class HeatPumpHplib(Component):
             field_name=self.COP,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            output_description="COP"
+            output_description="COP",
         )
         self.eer: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.EER,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            output_description="EER"
+            output_description="EER",
         )
         self.t_out: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TemperatureOutput,
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
-            output_description="Temperature Output in °C"
+            output_description="Temperature Output in °C",
         )
 
         self.m_dot: ComponentOutput = self.add_output(
@@ -187,7 +189,7 @@ class HeatPumpHplib(Component):
             field_name=self.MassFlowOutput,
             load_type=LoadTypes.VOLUME,
             unit=Units.KG_PER_SEC,
-            output_description="Mass flow output"
+            output_description="Mass flow output",
         )
 
         self.time_on: ComponentOutput = self.add_output(
@@ -195,7 +197,7 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOn,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
-            output_description="Time turned on"
+            output_description="Time turned on",
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -203,7 +205,7 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOff,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
-            output_description="Time turned off"
+            output_description="Time turned off",
         )
 
     @staticmethod
@@ -225,15 +227,15 @@ class HeatPumpHplib(Component):
 
     def i_save_state(self) -> None:
         self.previous_state = self.state.self_copy()
-        #pass
+        # pass
 
     def i_restore_state(self) -> None:
         self.state = self.previous_state.self_copy()
-        #pass
+        # pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         pass
-    
+
     def i_prepare_simulation(self) -> None:
         pass
 
@@ -245,7 +247,7 @@ class HeatPumpHplib(Component):
         else:
 
             # Parameter
-            time_on_min = 600 # [s]
+            time_on_min = 600  # [s]
             time_off_min = time_on_min
 
             # Load input values
@@ -269,7 +271,9 @@ class HeatPumpHplib(Component):
             # OnOffSwitch
             if on_off == 1:
                 # Calulate outputs for heating mode
-                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1)
+                results = hpl.simulate(
+                    t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1
+                )
                 p_th = results["P_th"].values[0]
                 p_el = results["P_el"].values[0]
                 cop = results["COP"].values[0]
@@ -280,14 +284,18 @@ class HeatPumpHplib(Component):
                 time_off = 0
             elif on_off == -1:
                 # Calulate outputs for cooling mode
-                results = hpl.simulate(t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2)
+                results = hpl.simulate(
+                    t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2
+                )
                 p_th = results["P_th"].values[0]
                 p_el = results["P_el"].values[0]
                 cop = results["COP"].values[0]
                 eer = results["EER"].values[0]
                 t_out = results["T_out"].values[0]
                 m_dot = results["m_dot"].values[0]
-                time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+                time_on_cooling = (
+                    time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+                )
                 time_off = 0
             else:
                 # Calulate outputs for off mode
@@ -312,7 +320,7 @@ class HeatPumpHplib(Component):
             stsv.set_output_value(self.m_dot, m_dot)
             stsv.set_output_value(self.time_on, time_on)
             stsv.set_output_value(self.time_off, time_off)
-            
+
             # write values to state
             self.state.time_on = time_on
             self.state.time_on_cooling = time_on_cooling
@@ -326,16 +334,13 @@ class HeatPumpState:
     time_off: int = 0
     time_on_cooling: int = 0
     on_off_previous: float = 0
-    
+
     def self_copy(
         self,
     ):
         """Copy the Building State."""
         return HeatPumpState(
-            self.time_on,
-            self.time_off,
-            self.time_on_cooling,
-            self.on_off_previous
+            self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
         )
 
 
@@ -350,7 +355,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return HeatPumpHplibControllerL1Config.get_full_classname()
+        return HeatPumpHplibControllerL1.get_full_classname()
 
     name: str
     mode: int
@@ -362,6 +367,8 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
             name="HeatPumpController",
             mode=1,
         )
+
+
 class HeatPumpHplibControllerL1(Component):
 
     """Heat Pump Controller.
@@ -389,7 +396,9 @@ class HeatPumpHplibControllerL1(Component):
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
+    HeatingFlowTemperatureFromHeatDistributionSystem = (
+        "HeatingFlowTemperatureFromHeatDistributionSystem"
+    )
 
     # Outputs
     State = "State"
@@ -405,18 +414,10 @@ class HeatPumpHplibControllerL1(Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
-        # if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE) and SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE):
-        #     self.set_heating_temperature_for_water_storage_in_celsius = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORWATERSTORAGE)
-        #     self.set_cooling_temperature_for_water_storage_in_celsius = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORWATERSTORAGE)
-        # else:
-        #     raise KeyError("The keys set_heating/cooling_temperature_for_water_storage were not found in the singleton sim repository. This might be because the heat distribution system controller was not initialized before the heat pump controller. Please check the initialization order in your example.")
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.HEATINGSYSTEM
-        ):
-            self.heating_system = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.HEATINGSYSTEM
-                )
+
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):
+            self.heating_system = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.HEATINGSYSTEM
             )
         else:
             raise KeyError(
@@ -435,7 +436,7 @@ class HeatPumpHplibControllerL1(Component):
             Units.CELSIUS,
             True,
         )
-        
+
         self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
             self.component_name,
             self.HeatingFlowTemperatureFromHeatDistributionSystem,
@@ -503,20 +504,31 @@ class HeatPumpHplibControllerL1(Component):
             water_temperature_input_from_heat_water_storage_in_celsius = (
                 stsv.get_input_value(self.water_temperature_input_channel)
             )
-            
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(self.heating_flow_temperature_from_heat_distribution_system_channel)
+
+            heating_flow_temperature_from_heat_distribution_system = (
+                stsv.get_input_value(
+                    self.heating_flow_temperature_from_heat_distribution_system_channel
+                )
+            )
 
             if self.mode == 1:
                 self.conditions_on_off(
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
-                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system
+                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                 )
             # cooling only for floor heating possible
-            elif self.mode == 2 and self.heating_system == HeatingSystemType.FLOORHEATING:
-                self.conditions_heating_cooling_off(water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius, set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system)
+            elif (
+                self.mode == 2 and self.heating_system == HeatingSystemType.FLOORHEATING
+            ):
+                self.conditions_heating_cooling_off(
+                    water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
+                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                )
 
             else:
-                raise ValueError("Either the Advanced HP Lib Controller Mode is neither 1 nor 2 or the heating system is not floor heating which is the condition for cooling (mode 2).")
+                raise ValueError(
+                    "Either the Advanced HP Lib Controller Mode is neither 1 nor 2 or the heating system is not floor heating which is the condition for cooling (mode 2)."
+                )
 
             if self.controller_heatpumpmode == "on":
                 state = 1
@@ -532,33 +544,41 @@ class HeatPumpHplibControllerL1(Component):
 
             stsv.set_output_value(self.state_channel, state)
 
-    def conditions_on_off(self, water_temperature_input_in_celsius: float, set_heating_flow_temperature_in_celsius: float) -> None:
+    def conditions_on_off(
+        self,
+        water_temperature_input_in_celsius: float,
+        set_heating_flow_temperature_in_celsius: float,
+    ) -> None:
         """Set conditions for the heat pump controller mode."""
 
-        # set_heating_temperature_for_water_storage_in_celsius = self.set_heating_temperature_for_water_storage_in_celsius
-        # set_cooling_temperature_for_water_storage_in_celsius = self.set_cooling_temperature_for_water_storage_in_celsius
-
-
         if self.controller_heatpumpmode == "on":
-            if water_temperature_input_in_celsius > set_heating_flow_temperature_in_celsius: #+ 1:
+            if (
+                water_temperature_input_in_celsius
+                > set_heating_flow_temperature_in_celsius + 0.5
+            ):  # + 1:
                 self.controller_heatpumpmode = "off"
                 return
 
         elif self.controller_heatpumpmode == "off":
-            if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius: #- 1:
+            if (
+                water_temperature_input_in_celsius
+                < set_heating_flow_temperature_in_celsius - 0.5
+            ):  # - 1:
                 self.controller_heatpumpmode = "on"
                 return
 
         else:
             raise ValueError("unknown mode")
-        
-        
-    def conditions_heating_cooling_off(self, water_temperature_input_in_celsius: float, set_heating_flow_temperature_in_celsius: float) -> None:
+
+    def conditions_heating_cooling_off(
+        self,
+        water_temperature_input_in_celsius: float,
+        set_heating_flow_temperature_in_celsius: float,
+    ) -> None:
         """Set conditions for the heat pump controller mode."""
 
-        heating_set_temperature = set_heating_flow_temperature_in_celsius + 0.5
-        cooling_set_temperature = set_heating_flow_temperature_in_celsius - 0.5
-
+        heating_set_temperature = set_heating_flow_temperature_in_celsius - 1.0
+        cooling_set_temperature = set_heating_flow_temperature_in_celsius + 1.0
 
         if self.controller_heatpumpmode == "heating":
             if water_temperature_input_in_celsius >= heating_set_temperature:
@@ -569,12 +589,12 @@ class HeatPumpHplibControllerL1(Component):
                 self.controller_heatpumpmode = "off"
                 return
         elif self.controller_heatpumpmode == "off":
-            if water_temperature_input_in_celsius < heating_set_temperature:
+            if water_temperature_input_in_celsius < heating_set_temperature - 0.5:
                 self.controller_heatpumpmode = "heating"
                 return
-            if water_temperature_input_in_celsius > cooling_set_temperature:
+            if water_temperature_input_in_celsius > cooling_set_temperature + 0.5:
                 self.controller_heatpumpmode = "cooling"
                 return
-            
+
         else:
             raise ValueError("unknown mode")

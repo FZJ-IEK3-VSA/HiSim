@@ -1,4 +1,4 @@
-# """ Module for visualizing selected methods as a flow chart. """
+""" Module for visualizing selected methods as a flow chart. """
 # from functools import wraps
 # from typing import Any, List
 # import time
@@ -19,7 +19,7 @@
 #         result = func(*args, **kwargs)
 #         end_time = time.perf_counter()
 #         total_time = end_time - start_time
-        
+
 #         name = func.__module__ + '.' + func.__name__
 
 #         methodcall = MethodCall(name)
@@ -28,14 +28,14 @@
 #             SingletonSimRepository().edit(entry=methodcall, timer=total_time)
 #             SingletonSimRepository().delete_entry(entry=methodcall)
 #             SingletonSimRepository().set_entry(entry=methodcall)
-                
+
 #         else:
 #             SingletonSimRepository().create(entry=methodcall, timer=total_time)
 #             SingletonSimRepository().set_entry(entry=methodcall)
 #         return result
 
 #     return function_wrapper_for_node_storage
-       
+
 
 # class SingletonMeta(type):
 
@@ -101,8 +101,8 @@
 #         self.my_info[entry.name]['timer'] += timer
 #         self.my_info[entry.name]['callcounter'] += 1
 #         self.set_functioncalls(entry)
-        
-    
+
+
 #     def create(self, entry: Any, timer: float) -> None:
 #         self.my_info[entry.name] = {'timer': timer,
 #                                     'callcounter': 1,
@@ -114,7 +114,6 @@
 #         if len(self.my_list) > 0:
 #             if self.my_list[-1].name != entry.name:
 #                 self.my_info[entry.name]['functioncalls'].append(self.my_list[-1])
-
 
 
 # @dataclass
@@ -155,7 +154,7 @@
 #                 )
 
 #             graph.add_node(methodcall.node)
-            
+
 #             for src_node in SingletonSimRepository().my_info[methodcall.name]['functioncalls']:
 #                 node_a = src_node.node
 #                 node_b = methodcall.node

@@ -109,7 +109,7 @@ class Occupancy(cp.Component):
     # Similar components to connect to:
     # None
     @utils.measure_execution_time
-    @register_method
+    #@register_method
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
     ) -> None:
@@ -193,7 +193,8 @@ class Occupancy(cp.Component):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
-
+    
+    @register_method
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:

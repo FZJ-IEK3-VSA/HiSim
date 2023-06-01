@@ -1,59 +1,70 @@
 """ Module for visualizing selected methods as a flow chart. """
 from functools import wraps
-from typing import Any, List
+from typing import Any, Dict, List
 import time
+from dataclasses import dataclass
+from threading import Lock
 import pydot
 import seaborn as sns
-from dataclasses import dataclass
-from typing import Any, Dict, List
-from threading import Lock
+
 
 # https://refactoring.guru/design-patterns/singleton/python/example#example-1
 
 """Graph call path factory function."""
+
+
 def register_method(func):
+    """Register method for storing the function's information."""
+
     @wraps(func)
     def function_wrapper_for_node_storage(*args, **kwargs):
         """Collects function nodes, logs singleton, and executes functions."""
-        name = func.__module__ + '.' + func.__name__
-        print("name ", name)
 
+        name = func.__module__ + "." + func.__name__
+
+        # create a methodcall object with the name of the wrapped function
         methodcall = MethodCall(name)
 
-        if SingletonSimRepository().exist_entry(entry=methodcall):
-            SingletonSimRepository().edit_callcounter(entry=methodcall)#total_time)
-            SingletonSimRepository().delete_entry(entry=methodcall)
-            SingletonSimRepository().set_entry(entry=methodcall)
+        # if the methodcall object exists already in list of all functions, increase callcounter of the methodcall
+        if SingletonSimRepository().exist_entry(
+            entry=methodcall, my_list=SingletonSimRepository().my_list_all_functions
+        ):
+            SingletonSimRepository().edit_callcounter(entry=methodcall)
 
-                
+        # else add the methodcall object to singleton list of all functions and to list of source functions
         else:
-            SingletonSimRepository().create(entry=methodcall, timer=0)#=total_time)
-            SingletonSimRepository().set_entry(entry=methodcall)
+            SingletonSimRepository().create(
+                entry=methodcall,
+                timer=0,
+                my_list=SingletonSimRepository().my_list_source_functions,
+            )
+            SingletonSimRepository().set_entry(
+                entry=methodcall, my_list=SingletonSimRepository().my_list_all_functions
+            )
+            SingletonSimRepository().set_entry(
+                entry=methodcall,
+                my_list=SingletonSimRepository().my_list_source_functions,
+            )
 
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
         end_time = time.perf_counter()
         total_time = end_time - start_time
         SingletonSimRepository().edit_timer(entry=methodcall, timer=total_time)
-        # name = func.__module__ + '.' + func.__name__
-        # print("name ", name)
 
-        # methodcall = MethodCall(name)
-
-        # if SingletonSimRepository().exist_entry(entry=methodcall):
-        #     SingletonSimRepository().edit_callcounter(entry=methodcall, timer=1)#total_time)
-        #     SingletonSimRepository().delete_entry(entry=methodcall)
-        #     SingletonSimRepository().set_entry(entry=methodcall)
-
-                
-        # else:
-        #     SingletonSimRepository().create(entry=methodcall, timer=1)#total_time)
-        #     SingletonSimRepository().set_entry(entry=methodcall)
+        # when the function execution is completed, the function will not call any other functions anymore and can be deleted from source function list
+        if SingletonSimRepository().exist_entry(
+            entry=methodcall, my_list=SingletonSimRepository().my_list_source_functions
+        ):
+            SingletonSimRepository().delete_entry(
+                entry=methodcall,
+                my_list=SingletonSimRepository().my_list_source_functions,
+            )
 
         return result
 
     return function_wrapper_for_node_storage
-       
+
 
 class SingletonMeta(type):
 
@@ -85,72 +96,88 @@ class SingletonMeta(type):
 
 class SingletonSimRepository(metaclass=SingletonMeta):
 
-    """Class for exchanging information across all components."""
+    """Singelton class to store information of the functions/methodcall objects.
+
+    Attributes
+    ----------
+    my_list_all_functions: List[MethodCall] = []
+        list for storing all the called functions as methodcall objects
+    my_list_source_functions: List[MethodCall] = []
+        list containing only the current possible source/parent functions as methocall objects
+    my_info: dict = {}
+        dictionary containing information about the methodcall objects
+
+    """
 
     def __init__(self) -> None:
         """Initializes the Singleton."""
-        self.my_list: List[MethodCall] = []
+        self.my_list_all_functions: List[MethodCall] = []
+        self.my_list_source_functions: List[MethodCall] = []
         self.my_info: dict = {}
 
-    def set_entry(self, entry: Any) -> None:
+    def set_entry(self, entry: Any, my_list: List[Any]) -> None:
         """Sets an entry in the Singleton."""
-        self.my_list.append(entry)
+        my_list.append(entry)
 
     def get_entry(self, entry: Any) -> Any:
         """Gets an entry from the Singleton."""
         return entry
 
-    def exist_entry(self, entry: Any) -> bool:
+    def exist_entry(self, entry: Any, my_list: List[Any]) -> bool:
         """Checks if an entry exists."""
-        if entry in self.my_list:
+        if entry in my_list:
             return True
         return False
 
-    def delete_entry(self, entry: Any) -> None:
+    def delete_entry(self, entry: Any, my_list: List[Any]) -> None:
         """Deletes an existing entry."""
-        self.my_list.remove(entry)
+        my_list.remove(entry)
 
-    def clear(self):
-        """Clears all lists at the end of the simulation to enable garbage collection and reduce memory consumption."""
-        self.my_list.clear()
-        del self.my_list
+    def clear(self, my_list: List[Any]) -> None:
+        """Clears all the list at the end of the simulation to enable garbage collection and reduce memory consumption."""
+        my_list.clear()
+        del my_list
 
     def edit_callcounter(self, entry: Any) -> None:
-        self.my_info[entry.name]['callcounter'] += 1
-        
-    def edit_timer(self, entry: Any, timer: float) -> None:
-        self.my_info[entry.name]['timer'] += timer
-        
-    
-    def create(self, entry: Any, timer: float) -> None:
-        self.my_info[entry.name] = {'timer': timer,
-                                    'callcounter': 1,
-                                    'start': time.perf_counter(),
-                                    'functioncalls': []}
-        self.set_functioncalls(entry)
+        """Increases the callcounter of the methodcall object by one."""
+        self.my_info[entry.name]["callcounter"] += 1
 
-    def set_functioncalls(self, entry: Any) -> None:
-        
-        if len(self.my_list) > 0:
-            #if self.my_list[-1].name != entry.name:
-            self.my_info[entry.name]['functioncalls'].append(self.my_list[-1])
-            print("entry ", entry.name)
-            print(" my_list ", self.my_list[-1])
+    def edit_timer(self, entry: Any, timer: float) -> None:
+        """Edits timer for the methodcall object."""
+        self.my_info[entry.name]["timer"] += timer
+
+    def create(self, entry: Any, timer: float, my_list: List[Any]) -> None:
+        """Creates an entry in the info dictionary for the methodcall object and sets its source functions."""
+        self.my_info[entry.name] = {
+            "timer": timer,
+            "callcounter": 1,
+            "start": time.perf_counter(),
+            "source_functions": [],
+        }
+        self.set_source_functions(entry, my_list=my_list)
+
+    def set_source_functions(self, entry: Any, my_list: List[Any]) -> None:
+        """Adds the source functions of the methodcall object to the info dictionary."""
+
+        if len(my_list) > 0:
+            if my_list[-1].name != entry.name:
+                self.my_info[entry.name]["source_functions"].append(my_list[-1])
 
 
 @dataclass
 class MethodCall:
-    """
-    This MethodCall class depicts the call.
-    """
+
+    """Methodcall class for depicting the call."""
+
     name: str
     node: pydot.Node = None
+
 
 class MethodChart:
 
     """Class for generating charts that show the components."""
 
-    def make_graphviz_chart(time_resolution: int, filename: str) -> None:
+    def make_graphviz_chart(self, time_resolution: int, filename: str) -> None:
         """Visualizes the entire system with graphviz."""
         graph = pydot.Dot(graph_type="digraph", compound="true", strict="true")
         graph.set_node_defaults(
@@ -158,28 +185,48 @@ class MethodChart:
         )
 
         """Set node color scheme."""
-        max_value = max([SingletonSimRepository().my_info[item.name]['callcounter'] for item in SingletonSimRepository().my_list])
+        max_value = max(
+            [
+                SingletonSimRepository().my_info[item.name]["callcounter"]
+                for item in SingletonSimRepository().my_list_all_functions
+            ]
+        )
         palette = sns.color_palette("light:#5A9", max_value + 1).as_hex()
 
-        """Sort list."""
-        node_list = sorted(SingletonSimRepository().my_list, key=lambda x: SingletonSimRepository().my_info[x.name]['start'])
-
         """Generate callgraph."""
-        for methodcall in node_list:
-            count_label = "Count: " + str(SingletonSimRepository().my_info[methodcall.name]['callcounter'])
-            time_label = "Time: " + str(round(SingletonSimRepository().my_info[methodcall.name]['timer'], time_resolution))
+        for methodcall in SingletonSimRepository().my_list_all_functions:
+            count_label = "Count: " + str(
+                SingletonSimRepository().my_info[methodcall.name]["callcounter"]
+            )
+            time_label = "Time: " + str(
+                round(
+                    SingletonSimRepository().my_info[methodcall.name]["timer"],
+                    time_resolution,
+                )
+            )
 
             methodcall.node = pydot.Node(
                 methodcall.name,
                 label=methodcall.name + "\\n" + count_label + "\\n" + time_label,
-                fillcolor=palette[SingletonSimRepository().my_info[methodcall.name]['callcounter']]
-                )
+                fillcolor=palette[
+                    SingletonSimRepository().my_info[methodcall.name]["callcounter"]
+                ],
+            )
 
             graph.add_node(methodcall.node)
-            
-            for src_node in SingletonSimRepository().my_info[methodcall.name]['functioncalls']:
+
+            for src_node in SingletonSimRepository().my_info[methodcall.name][
+                "source_functions"
+            ]:
+
                 node_a = src_node.node
                 node_b = methodcall.node
-                graph.add_edge(pydot.Edge(node_a, node_b))
+
+                if None not in (node_a, node_b):
+                    graph.add_edge(pydot.Edge(node_a, node_b))
+                else:
+                    raise ValueError(
+                        f"Edge cannot be created because at least one of the nodes is None: node_a: {node_a}, node_b: {node_b}"
+                    )
 
         graph.write_png(filename)

@@ -24,7 +24,7 @@ from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 from hisim.postprocessing.system_chart import SystemChartEntry
-# from wrappedcallgraph.callgraphwrap import METHOD_PATTERN, METHOD_CONTAINER
+from wrappedcallgraph.callgraphwrap_test import MethodChart
 
 
 class PostProcessor:
@@ -297,10 +297,10 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
         log.information("Finished main post processing function.")
 
-        # # Make callgraph
-        # if PostProcessingOptions.MAKE_CALLGRAPH_CHART in ppdt.post_processing_options:
-        #     log.information("Making Callgraph Chart.")
-        #     self.make_callgraph_chart()
+        # Make callgraph
+        if PostProcessingOptions.MAKE_CALLGRAPH_CHART in ppdt.post_processing_options:
+            log.information("Making Callgraph Chart.")
+            self.make_callgraph_chart(ppdt=ppdt)
 
 
     def make_network_charts(
@@ -310,10 +310,10 @@ class PostProcessor:
         systemchart = SystemChart(ppdt)
         return systemchart.make_chart()
 
-    # def make_callgraph_chart(self):
-    #     """Make Pycallgraph chart."""
-    #     # METHOD_PATTERN.make_graphviz_chart(with_labels=True, time_resolution=10, filename='HISIM_Method_Pattern.png')
-    #     METHOD_PATTERN.make_graphviz_chart()
+    def make_callgraph_chart(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Make Pycallgraph chart."""
+        methodchart = MethodChart()
+        methodchart.make_graphviz_chart(time_resolution=10, filename=ppdt.simulation_parameters.result_directory + "\\HiSim_Callgraph_Chart.png")
 
     def make_special_one_day_debugging_plots(
         self,

@@ -26,39 +26,39 @@ def register_method(func):
         methodcall = MethodCall(name)
 
         # if the methodcall object exists already in list of all functions, increase callcounter of the methodcall
-        if SingletonSimRepository().exist_entry(
-            entry=methodcall, my_list=SingletonSimRepository().my_list_all_functions
+        if SingletonForCallGraph().exist_entry(
+            entry=methodcall, my_list=SingletonForCallGraph().my_list_all_functions
         ):
-            SingletonSimRepository().edit_callcounter(entry=methodcall)
+            SingletonForCallGraph().edit_callcounter(entry=methodcall)
 
         # else add the methodcall object to singleton list of all functions and to list of source functions
         else:
-            SingletonSimRepository().create(
+            SingletonForCallGraph().create(
                 entry=methodcall,
                 timer=0,
-                my_list=SingletonSimRepository().my_list_source_functions,
+                my_list=SingletonForCallGraph().my_list_source_functions,
             )
-            SingletonSimRepository().set_entry(
-                entry=methodcall, my_list=SingletonSimRepository().my_list_all_functions
+            SingletonForCallGraph().set_entry(
+                entry=methodcall, my_list=SingletonForCallGraph().my_list_all_functions
             )
-            SingletonSimRepository().set_entry(
+            SingletonForCallGraph().set_entry(
                 entry=methodcall,
-                my_list=SingletonSimRepository().my_list_source_functions,
+                my_list=SingletonForCallGraph().my_list_source_functions,
             )
 
         start_time = time.perf_counter()
         result = func(*args, **kwargs)
         end_time = time.perf_counter()
         total_time = end_time - start_time
-        SingletonSimRepository().edit_timer(entry=methodcall, timer=total_time)
+        SingletonForCallGraph().edit_timer(entry=methodcall, timer=total_time)
 
         # when the function execution is completed, the function will not call any other functions anymore and can be deleted from source function list
-        if SingletonSimRepository().exist_entry(
-            entry=methodcall, my_list=SingletonSimRepository().my_list_source_functions
+        if SingletonForCallGraph().exist_entry(
+            entry=methodcall, my_list=SingletonForCallGraph().my_list_source_functions
         ):
-            SingletonSimRepository().delete_entry(
+            SingletonForCallGraph().delete_entry(
                 entry=methodcall,
-                my_list=SingletonSimRepository().my_list_source_functions,
+                my_list=SingletonForCallGraph().my_list_source_functions,
             )
 
         return result
@@ -66,7 +66,7 @@ def register_method(func):
     return function_wrapper_for_node_storage
 
 
-class SingletonMeta(type):
+class SingletonMetaForCallGraph(type):
 
     """A class for a thread-safe implementation of Singleton."""
 
@@ -94,7 +94,7 @@ class SingletonMeta(type):
         return cls._instances[cls]
 
 
-class SingletonSimRepository(metaclass=SingletonMeta):
+class SingletonForCallGraph(metaclass=SingletonMetaForCallGraph):
 
     """Singelton class to store information of the functions/methodcall objects.
 
@@ -187,20 +187,20 @@ class MethodChart:
         """Set node color scheme."""
         max_value = max(
             [
-                SingletonSimRepository().my_info[item.name]["callcounter"]
-                for item in SingletonSimRepository().my_list_all_functions
+                SingletonForCallGraph().my_info[item.name]["callcounter"]
+                for item in SingletonForCallGraph().my_list_all_functions
             ]
         )
         palette = sns.color_palette("light:#5A9", max_value + 1).as_hex()
 
         """Generate callgraph."""
-        for methodcall in SingletonSimRepository().my_list_all_functions:
+        for methodcall in SingletonForCallGraph().my_list_all_functions:
             count_label = "Count: " + str(
-                SingletonSimRepository().my_info[methodcall.name]["callcounter"]
+                SingletonForCallGraph().my_info[methodcall.name]["callcounter"]
             )
             time_label = "Time: " + str(
                 round(
-                    SingletonSimRepository().my_info[methodcall.name]["timer"],
+                    SingletonForCallGraph().my_info[methodcall.name]["timer"],
                     time_resolution,
                 )
             )
@@ -209,13 +209,13 @@ class MethodChart:
                 methodcall.name,
                 label=methodcall.name + "\\n" + count_label + "\\n" + time_label,
                 fillcolor=palette[
-                    SingletonSimRepository().my_info[methodcall.name]["callcounter"]
+                    SingletonForCallGraph().my_info[methodcall.name]["callcounter"]
                 ],
             )
 
             graph.add_node(methodcall.node)
 
-            for src_node in SingletonSimRepository().my_info[methodcall.name][
+            for src_node in SingletonForCallGraph().my_info[methodcall.name][
                 "source_functions"
             ]:
 

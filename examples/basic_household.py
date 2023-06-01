@@ -20,9 +20,12 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
+
 @register_method
-def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
-    """ Basic household example.
+def basic_household_explicit(
+    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+) -> None:  # noqa: too-many-statements
+    """Basic household example.
 
     This setup function emulates an household including the basic components. Here the residents have their
     electricity and heating needs covered by the photovoltaic system and the heat pump.
@@ -75,7 +78,9 @@ def basic_household_explicit(my_sim: Any, my_simulation_parameters: Optional[Sim
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

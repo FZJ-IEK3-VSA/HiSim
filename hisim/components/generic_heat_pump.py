@@ -32,9 +32,7 @@ from hisim.simulationparameters import SimulationParameters
 #from hisim.components.extended_storage import WaterSlice
 #from hisim.components.configuration import WarmWaterStorageConfig
 #from hisim.components.configuration import PhysicsConfig
-from hisim.components.building import Building
-from hisim.components.weather import Weather
-from hisim import log
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

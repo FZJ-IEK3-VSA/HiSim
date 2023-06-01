@@ -10,7 +10,7 @@ import pydot
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
-from hisim import log
+
 
 class SystemChart:
 

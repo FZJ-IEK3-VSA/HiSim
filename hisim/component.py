@@ -217,12 +217,12 @@ class Component:
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
+        # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""
 
-        # classname: str = component.get_classname()
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:

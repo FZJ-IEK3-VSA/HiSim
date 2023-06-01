@@ -36,7 +36,7 @@ The functions cited in this module are at some degree based on the tsib project:
 Kotzur, Leander, Detlef Stolten, and Hermann-Josef Wagner. Future grid load of the residential building sector. No. RWTH-2018-231872. Lehrstuhl für Brennstoffzellen (FZ Jülich), 2019.
 ID: http://hdl.handle.net/2128/21115
     http://nbn-resolving.org/resolver?verb=redirect&identifier=urn:nbn:de:0001-2019020614
-    
+
 The implementation of the tsib project can be found under the following repository:
 https://github.com/FZJ-IEK3-VSA/tsib
 """

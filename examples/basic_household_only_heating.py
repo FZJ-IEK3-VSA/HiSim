@@ -56,6 +56,14 @@ def basic_household_only_heating(
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Building
+    my_building = building.Building(
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    # my_building_controller = building.BuildingController(config=building.BuildingController.get_default_config(),
+    #                                                      my_simulation_parameters=my_simulation_parameters)
+
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
@@ -73,14 +81,6 @@ def basic_household_only_heating(
         config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
-
-    # Build Building
-    my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    # my_building_controller = building.BuildingController(config=building.BuildingController.get_default_config(),
-    #                                                      my_simulation_parameters=my_simulation_parameters)
 
     # Build Storage
     my_storage = generic_heat_water_storage.HeatStorage(

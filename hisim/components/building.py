@@ -79,6 +79,7 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -108,6 +109,7 @@ class BuildingConfig(cp.ConfigBase):
     initial_internal_temperature_in_celsius: float
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
+    number_of_apartments: Optional[float]
 
     @classmethod
     def get_default_german_single_family_home(
@@ -122,6 +124,7 @@ class BuildingConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=-14,
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
+            number_of_apartments=None,
         )
         return config
 
@@ -335,6 +338,10 @@ class Building(dynamic_component.DynamicComponent):
         self.get_building()
         self.build()
         self.get_physical_param()
+        self.get_number_of_apartments(
+            conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
+            scaling_factor=self.scaling_factor,
+        )
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
             heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
             initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
@@ -345,6 +352,10 @@ class Building(dynamic_component.DynamicComponent):
             thermal_capacitance_in_joule_per_kelvin=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
         )
         self.previous_state = self.state.self_copy()
+
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=self.number_of_apartments
+        )
 
         # =================================================================================================================================
         # Input channels
@@ -501,6 +512,7 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
         )
+
         # =================================================================================================================================
         # Add and get default connections
 
@@ -744,10 +756,6 @@ class Building(dynamic_component.DynamicComponent):
                     decimal=".",
                     index=False,
                 )
-        # log.information("building timestep " + str(timestep))
-        # log.information("building thermal power input " + str(thermal_power_delivered_in_watt))
-        # log.information("building real indoor air temperature " + str(indoor_air_temperature_in_celsius))
-        # log.information("buiding theoretical demand " + str(theoretical_thermal_building_demand_in_watt))
 
     # =================================================================================================================================
 
@@ -784,7 +792,7 @@ class Building(dynamic_component.DynamicComponent):
         """Build function.
 
         The function sets important constants and parameters for the calculations.
-        It imports the building dataset from TABULA and gets physical parameters and thermal conductances.
+        It imports the building dataset from TABULA and gets phys params and thermal conductances.
         """
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
@@ -823,7 +831,6 @@ class Building(dynamic_component.DynamicComponent):
         }
 
         self.ven_method = "EPISCOPE"
-
         # Get physical parameters
         self.get_physical_param()
         # Gets conductances
@@ -848,7 +855,9 @@ class Building(dynamic_component.DynamicComponent):
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
         self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin = (
-            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[self.building_heat_capacity_class]
+            self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin[
+                self.building_heat_capacity_class
+            ]
             * self.scaled_conditioned_floor_area_in_m2
         )
 
@@ -863,23 +872,23 @@ class Building(dynamic_component.DynamicComponent):
         # Reference properties from TABULA, but not used in the model (scaling factor added in case floor area is different to tabula floor area A_C_ref)
         # Floor area related heat load during heating season
         self.solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year = float(
-            (self.buildingdata["q_sol"].values[0]) * (1 / self.scaling_factor)
+            (self.buildingdata["q_sol"].values[0])
         )
         # Floor area related internal heat sources during heating season
         self.internal_heat_sources_reference_in_kilowatthour_per_m2_per_year = float(
-            self.buildingdata["q_int"].values[0] * (1 / self.scaling_factor)
+            self.buildingdata["q_int"].values[0]
         )
         # Floor area related annual losses
         self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year = float(
-            self.buildingdata["q_ht"].values[0] * (1 / self.scaling_factor)
+            self.buildingdata["q_ht"].values[0]
         )
         # Energy need for heating
         self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year = float(
-            self.buildingdata["q_h_nd"].values[0] * (1 / self.scaling_factor)
+            self.buildingdata["q_h_nd"].values[0]
         )
         # Internal heat capacity per m2 reference area [Wh/(m^2.K)] (TABULA: Internal heat capacity)
         self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin = float(
-            self.buildingdata["c_m"].values[0] / self.scaling_factor
+            self.buildingdata["c_m"].values[0]
         )
 
         # Heat transfer coefficient by ventilation
@@ -908,6 +917,52 @@ class Building(dynamic_component.DynamicComponent):
         self.building_heat_capacity_class = (
             self.buildingconfig.building_heat_capacity_class
         )
+
+    def get_number_of_apartments(
+        self, conditioned_floor_area_in_m2: float, scaling_factor: float
+    ) -> None:
+        """Get number of apartments.
+
+        Either from config or from tabula or through approximation with data from
+        https://www.umweltbundesamt.de/daten/private-haushalte-konsum/wohnen/wohnflaeche#zahl-der-wohnungen-gestiegen.
+        """
+
+        if self.buildingconfig.number_of_apartments is not None:
+            print("number of apart not none")
+            number_of_apartments_origin = self.buildingconfig.number_of_apartments
+
+            if number_of_apartments_origin == 0:
+                # check table from the link for the year 2021
+                average_living_area_per_apartment_in_2021_in_m2 = 92.1
+                number_of_apartments = (
+                    conditioned_floor_area_in_m2
+                    / average_living_area_per_apartment_in_2021_in_m2
+                )
+            elif number_of_apartments_origin > 0:
+                number_of_apartments = number_of_apartments_origin
+
+            else:
+                raise ValueError("Number of apartments can not be negative.")
+
+        elif self.buildingconfig.number_of_apartments is None:
+
+            number_of_apartments_origin = self.buildingdata["n_Apartment"].values[0]
+
+            # if no value given or if the area given in the config is bigger than the tabula ref area
+            if number_of_apartments_origin == 0 or scaling_factor != 1:
+                # check table from the link for the year 2021
+                average_living_area_per_apartment_in_2021_in_m2 = 92.1
+                number_of_apartments = (
+                    conditioned_floor_area_in_m2
+                    / average_living_area_per_apartment_in_2021_in_m2
+                )
+            elif number_of_apartments_origin > 0:
+                number_of_apartments = number_of_apartments_origin
+
+            else:
+                raise ValueError("Number of apartments can not be negative.")
+
+        self.number_of_apartments = number_of_apartments
 
     def get_windows(
         self,
@@ -943,7 +998,7 @@ class Building(dynamic_component.DynamicComponent):
         ].values[0]
 
         for index, windows_direction in enumerate(self.windows_directions):
-            window_area = float(self.buildingdata["A_Window_" + windows_direction])
+            window_area = float(self.buildingdata["A_Window_" + windows_direction].iloc[0])
             if window_area != 0.0:
                 if windows_direction == "Horizontal":
                     window_tilt_angle = 0
@@ -1063,7 +1118,7 @@ class Building(dynamic_component.DynamicComponent):
                     self.conditioned_floor_area_in_m2
                 )
 
-            self.scaling_factor = 1
+            self.scaling_factor = 1.0
 
         for w_i in self.windows_and_door:
             self.scaled_windows_and_door_envelope_areas_in_m2.append(
@@ -1083,44 +1138,32 @@ class Building(dynamic_component.DynamicComponent):
             "West",
             "Horizontal",
         ]
+
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
-        # then the total_wall_area = 4 * area_of_one_wall
-        if (
-            self.conditioned_floor_area_in_m2 == 0
-            and self.buildingconfig.total_base_area_in_m2 is not None
-        ):
-            total_wall_area_in_m2 = (
-                4
-                * math.sqrt(self.buildingconfig.total_base_area_in_m2)
-                * self.room_height_in_m2
-            )
-        elif (
-            self.conditioned_floor_area_in_m2 == 0
-            and self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None
-        ):
-            total_wall_area_in_m2 = (
-                4
-                * math.sqrt(self.buildingconfig.absolute_conditioned_floor_area_in_m2)
-                * self.room_height_in_m2
-            )
-        else:
-            total_wall_area_in_m2 = (
-                4
-                * math.sqrt(self.conditioned_floor_area_in_m2)
-                * self.room_height_in_m2
-            )
+        total_wall_area_in_m2_tabula = (
+            4 * math.sqrt(self.conditioned_floor_area_in_m2) * self.room_height_in_m2
+        )
+        scaled_total_wall_area_in_m2 = (
+            4
+            * math.sqrt(self.scaled_conditioned_floor_area_in_m2)
+            * self.room_height_in_m2
+        )
+
         self.scaled_window_areas_in_m2 = []
         for windows_direction in self.windows_directions:
             window_area_in_m2 = float(
-                self.buildingdata["A_Window_" + windows_direction]
+                self.buildingdata["A_Window_" + windows_direction].iloc[0]
             )
-            factor_window_area_to_wall_area_tabula = (
-                window_area_in_m2 / total_wall_area_in_m2
-            )
-            self.scaled_window_areas_in_m2.append(
-                self.scaled_conditioned_floor_area_in_m2
-                * factor_window_area_to_wall_area_tabula
-            )
+            if self.scaling_factor != 1.0:
+                factor_window_area_to_wall_area_tabula = (
+                    window_area_in_m2 / total_wall_area_in_m2_tabula
+                )
+                self.scaled_window_areas_in_m2.append(
+                    scaled_total_wall_area_in_m2
+                    * factor_window_area_to_wall_area_tabula
+                )
+            else:
+                self.scaled_window_areas_in_m2.append(window_area_in_m2)
 
     # =====================================================================================================================================
 
@@ -1181,6 +1224,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         lines.append("Building Areas:")
         lines.append("--------------------------------------------")
+        lines.append(f"Number of Apartments: {self.number_of_apartments}")
         lines.append(
             f"Conditioned Floor Area (A_f) [m2]: {self.scaled_conditioned_floor_area_in_m2:.2f}"
         )
@@ -1369,10 +1413,10 @@ class Building(dynamic_component.DynamicComponent):
         self.thermal_conductance_by_ventilation_in_watt_per_kelvin = (
             heat_capacity_of_air_per_volume_in_watt_hour_per_m3_per_kelvin
             * float(
-                self.buildingdata["n_air_use"] + self.buildingdata["n_air_infiltration"]
+                self.buildingdata["n_air_use"].iloc[0] + self.buildingdata["n_air_infiltration"].iloc[0]
             )
             * self.scaled_conditioned_floor_area_in_m2
-            * float(self.buildingdata["h_room"])
+            * float(self.buildingdata["h_room"].iloc[0])
         )
 
     def get_conductances(
@@ -1712,13 +1756,13 @@ class Building(dynamic_component.DynamicComponent):
 
         self.vals1_in_watt_per_m2_per_kelvin = float(
             self.buildingdata["h_Transmission"].values[0]
-        ) * (1 / self.scaling_factor)
+        )
 
         if self.vals1_in_watt_per_m2_per_kelvin is None:
             raise ValueError("h_Transmission was none.")
         self.vals2_in_watt_per_m2_per_kelvin = float(
             self.buildingdata["h_Ventilation"].values[0]
-        ) * (1 / self.scaling_factor)
+        )
 
         # with with dQ/dt = h * (T2-T1) * A -> [W]
         max_thermal_building_demand_in_watt = (

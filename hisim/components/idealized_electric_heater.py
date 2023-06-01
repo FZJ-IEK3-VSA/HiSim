@@ -27,6 +27,7 @@ class IdealizedElectricHeater(cp.Component):
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    HeatingPowerDelivered = "HeatingPowerDelivered"
     SetHeatingTemperatureForBuilding = "SetHeatingTemperatureForBuilding"
     SetCoolingTemperatureForBuilding = "SetCoolingTemperatureForBuilding"
 
@@ -46,8 +47,13 @@ class IdealizedElectricHeater(cp.Component):
 
         self.thermal_power_delivered_in_watt: float = 0
         self.theoretical_thermal_building_in_watt: float = 0
-        self.set_heating_temperature_for_building_in_celsius = set_heating_temperature_for_building_in_celsius
-        self.set_cooling_temperature_for_building_in_celsius = set_cooling_temperature_for_building_in_celsius
+        self.heating_in_watt: float = 0
+        self.set_heating_temperature_for_building_in_celsius = (
+            set_heating_temperature_for_building_in_celsius
+        )
+        self.set_cooling_temperature_for_building_in_celsius = (
+            set_cooling_temperature_for_building_in_celsius
+        )
 
         # Inputs
 
@@ -66,6 +72,14 @@ class IdealizedElectricHeater(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
+        )
+
+        self.heating_power_delivered_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatingPowerDelivered,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.HeatingPowerDelivered} will follow.",
         )
 
         self.set_heating_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
@@ -120,27 +134,34 @@ class IdealizedElectricHeater(cp.Component):
         """Simulate the Idealized Electric Heater."""
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
-        self.theoretical_thermal_building_in_watt = stsv.get_input_value(
+        theoretical_thermal_building_in_watt = stsv.get_input_value(
             self.theoretical_thermal_building_channel
         )
 
         # Calculations ----------------------------------------------------------------------------------------------------------
 
-        self.thermal_power_delivered_in_watt = self.theoretical_thermal_building_in_watt
+        thermal_power_delivered_in_watt = theoretical_thermal_building_in_watt
+
+        if thermal_power_delivered_in_watt >= 0:
+            heating_in_watt = thermal_power_delivered_in_watt
+        else:
+            heating_in_watt = 0
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
 
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            self.thermal_power_delivered_in_watt,
+            thermal_power_delivered_in_watt,
         )
+
+        stsv.set_output_value(self.heating_power_delivered_channel, heating_in_watt)
 
         stsv.set_output_value(
             self.set_heating_temperature_for_building_channel,
-            self.set_heating_temperature_for_building_in_celsius
+            self.set_heating_temperature_for_building_in_celsius,
         )
 
         stsv.set_output_value(
             self.set_cooling_temperature_for_building_channel,
-            self.set_cooling_temperature_for_building_in_celsius
+            self.set_cooling_temperature_for_building_in_celsius,
         )

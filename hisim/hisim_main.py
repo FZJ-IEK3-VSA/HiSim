@@ -10,15 +10,24 @@ import hisim.simulator as sim
 from hisim.simulationparameters import SimulationParameters
 from wrappedcallgraph.callgraphwrap_test import register_method
 
+
 @register_method
-def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
-    """ Core function. """
+def main(
+    path_to_module: str,
+    function_in_module: str,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:
+    """Core function."""
     log.information("#################################")
-    log.information("starting simulation of " + path_to_module + " " + function_in_module)
+    log.information(
+        "starting simulation of " + path_to_module + " " + function_in_module
+    )
     starttime = datetime.now()
     starting_date_time_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
     log.information("Start @ " + starting_date_time_str + " ")
-    log.profile(path_to_module + " " + function_in_module + "Start @ " + starting_date_time_str)
+    log.profile(
+        path_to_module + " " + function_in_module + "Start @ " + starting_date_time_str
+    )
     log.information("#################################")
     normalized_path = os.path.normpath(path_to_module)
     path_in_list = normalized_path.split(os.sep)
@@ -30,7 +39,8 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters:
             sys.path.append(path_to_be_added)
         else:
             raise ValueError(
-                f"Directory location of module location is nonexistent!\nDirectory entered: {path_to_be_added}")
+                f"Directory location of module location is nonexistent!\nDirectory entered: {path_to_be_added}"
+            )
     suffix = module_filename[-3:]
     if suffix != ".py":
         module_full_filename = f"{module_filename}.py"
@@ -45,9 +55,11 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters:
         raise ValueError(f"Python script {module_filename}.py could not be found")
 
     # Create a Simulator object based on setup function
-    my_sim: sim.Simulator = sim.Simulator(module_directory=path_to_be_added,
-                                          setup_function=function_in_module,
-                                          my_simulation_parameters=my_simulation_parameters)
+    my_sim: sim.Simulator = sim.Simulator(
+        module_directory=path_to_be_added,
+        setup_function=function_in_module,
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build method
     model_init_method = getattr(targetmodule, function_in_module)

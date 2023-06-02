@@ -73,6 +73,10 @@ def basic_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+        my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_CALLGRAPH_CHART)
+        my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building

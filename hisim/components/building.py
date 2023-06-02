@@ -80,7 +80,7 @@ from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-
+from wrappedcallgraph.callgraphwrap_test import register_method
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Dr. Noah Pflugradt"]

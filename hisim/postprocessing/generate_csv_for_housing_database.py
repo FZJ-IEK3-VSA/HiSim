@@ -7,7 +7,7 @@ from typing import List, Optional
 
 import pandas as pd
 
-from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
+from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, HeatingSystems
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import log
@@ -64,6 +64,7 @@ def generate_csv_for_database(
         "Distributed Stream [kWh]",
         "Solar [kWh]",
         "Electricity [kWh]",
+        "Electricity - HeatPump [kWh]",
         "FuelCell [kWh]",
     ]
     fuels_air_cooling = ["Electricity [kWh]"]
@@ -125,12 +126,21 @@ def generate_csv_for_database(
                 elif LoadTypes.OIL in output.postprocessing_flag:
                     csv_frame[("WaterHeating", "Oil [l]")] = sum(results.iloc[:, index])
                 else:
-                    csv_frame[
-                        ("WaterHeating", "Electricity [kWh]")
-                    ] = compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
+                    print(output.postprocessing_flag)
+                    if HeatingSystems.HEAT_PUMP in output.postprocessing_flag:
+                        csv_frame[
+                            ("WaterHeating", "Electricity - HeatPump [kWh]")
+                        ] = compute_energy_from_power(
+                            power_timeseries=results.iloc[:, index],
+                            seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+                        )
+                    elif HeatingSystems.ELECTRIC_HEATING in output.postprocessing_flag:
+                        csv_frame[
+                            ("WaterHeating", "Electricity [kWh]")
+                        ] = compute_energy_from_power(
+                            power_timeseries=results.iloc[:, index],
+                            seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+                        )
             elif InandOutputType.HEATING in output.postprocessing_flag:
                 if LoadTypes.DISTRICTHEATING in output.postprocessing_flag:
                     csv_frame[("SpaceHeating", "Distributed Stream [kWh]")] = (
@@ -143,12 +153,21 @@ def generate_csv_for_database(
                 elif LoadTypes.OIL in output.postprocessing_flag:
                     csv_frame[("SpaceHeating", "Oil [l]")] = sum(results.iloc[:, index])
                 else:
-                    csv_frame[
-                        ("SpaceHeating", "Electricity [kWh]")
-                    ] = compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
+                    print(output.postprocessing_flag)
+                    if HeatingSystems.HEAT_PUMP in output.postprocessing_flag:
+                        csv_frame[
+                            ("SpaceHeating", "Electricity - HeatPump [kWh]")
+                        ] = compute_energy_from_power(
+                            power_timeseries=results.iloc[:, index],
+                            seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+                        )
+                    elif HeatingSystems.ELECTRIC_HEATING in output.postprocessing_flag:
+                        csv_frame[
+                            ("SpaceHeating", "Electricity [kWh]")
+                        ] = compute_energy_from_power(
+                            power_timeseries=results.iloc[:, index],
+                            seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+                        )
             elif ComponentType.CAR in output.postprocessing_flag:
                 if LoadTypes.DIESEL in output.postprocessing_flag:
                     csv_frame[("Transport", "Diesel [l]")] = sum(results.iloc[:, index])

@@ -85,7 +85,7 @@ def modular_household_explicit(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
@@ -97,9 +97,9 @@ def modular_household_explicit(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.MAKE_NETWORK_CHARTS
-        # )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.MAKE_NETWORK_CHARTS
+        )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

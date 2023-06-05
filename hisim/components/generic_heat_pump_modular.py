@@ -43,33 +43,37 @@ class HeatPumpConfig:
     power_th: float
     #: usage of the heatpump: either for heating or for water heating
     water_vs_heating: lt.InandOutputType
+    #: category of the heat pump: either heat pump or heating rod
+    device_category: lt.HeatingSystems
 
     @staticmethod
     def get_default_config_heating() -> "HeatPumpConfig":
         """ Returns default configuration of a heat pump used for heating. """
         config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING)
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING,
+                                device_category=lt.HeatingSystems.HEAT_PUMP)
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> "HeatPumpConfig":
         """ Returns default configuration of a heat pump used for water heating."""
         config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING)
+                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING,
+                                device_category=lt.HeatingSystems.HEAT_PUMP)
         return config
 
     @staticmethod
     def get_default_config_heating_electric() -> "HeatPumpConfig":
         """ Returns default configuartion of simple electrical heating system with a COP of one. """
         config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                water_vs_heating=lt.InandOutputType.HEATING)
+                                water_vs_heating=lt.InandOutputType.HEATING, device_category=lt.HeatingSystems.ELECTRIC_HEATING)
         return config
 
     @staticmethod
     def get_default_config_waterheating_electric() -> "HeatPumpConfig":
         """ Returns default configuration of electrical heating rod for boiler. """
         config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
-                                water_vs_heating=lt.InandOutputType.WATER_HEATING)
+                                water_vs_heating=lt.InandOutputType.WATER_HEATING, device_category=lt.HeatingSystems.ELECTRIC_HEATING)
         return config
 
 
@@ -122,11 +126,12 @@ class ModularHeatPump(cp.Component):
         if my_simulation_parameters.surplus_control:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-                self.config.water_vs_heating,
+                self.config.water_vs_heating, self.config.device_category,
             ]
         else:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                self.config.water_vs_heating, self.config.device_category,
             ]
 
         # Inputs - Mandatories
@@ -152,7 +157,7 @@ class ModularHeatPump(cp.Component):
             field_name=self.ThermalPowerDelivered,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.CHARGE, self.config.water_vs_heating],
+            postprocessing_flag=[self.config.water_vs_heating],
             output_description="Thermal Power Delivered"
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(

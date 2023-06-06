@@ -168,7 +168,7 @@ class Component:
         """ Gets the class name. Helper function for default connections. """
         return cls.__module__ + "." + cls.__name__
 
-    def __init__(self, name: str, my_simulation_parameters: SimulationParameters, my_config: Any) -> None: # TODO: upgraden auf configbase
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters, my_config: ConfigBase) -> None:
         """ Initializes the component class. """
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
@@ -179,9 +179,12 @@ class Component:
         if my_simulation_parameters is None:
             raise ValueError("My Simulation parameters was None.")
         self.simulation_repository: SimRepository
-        # self.singleton_simulation_repository: SingletonSimRepository
         self.default_connections: Dict[str, List[ComponentConnection]] = {}
-        self.config = my_config
+        if isinstance(my_config, ConfigBase):
+            self.config = my_config
+        else:
+            raise ValueError("The argument my_config is not a ConfigBase object.",
+                             "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.")
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """ Adds a default connection list definition. """

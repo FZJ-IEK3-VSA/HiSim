@@ -92,7 +92,8 @@ class ModularHeatPumpState:
 
 class ModularHeatPump(cp.Component):
     """
-    Heat pump implementation. The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component but in the related controller.
+    Heat pump implementation. The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component,
+    but in the related controller.
     This implementation does not consider cooling of buildings.
 
     Components to connect to:

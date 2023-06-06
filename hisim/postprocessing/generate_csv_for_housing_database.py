@@ -112,6 +112,7 @@ def generate_csv_for_database(
     fuels_remaining_load = ["Electricity [kWh]"]
     fuels_annual_heating_demand = ["[kWh/(m*m*a)]"]
     fuels_building_size = ["Area [m*m]"]
+    fuels_construction_year = ["Period start", "Period end"]
     fuels_heating_days = ["Number of Days"]
     fuels_average_temperature = ["Temperature [C]"]
 
@@ -126,6 +127,7 @@ def generate_csv_for_database(
         + ["Annual Heating Demand HiSIM"]
         + ["Annual Heating Demand Tabula with HiSIM climate"]
         + ["Building Size"]
+        + ["Construction Year"] * 2
         + ["HeatingDays Tabula"]
         + ["HeatingDays HiSIM"]
         + ["AverageTemperatureInHeatingSeason Tabula"]
@@ -139,6 +141,7 @@ def generate_csv_for_database(
         + fuels_remaining_load
         + fuels_annual_heating_demand * 3
         + fuels_building_size
+        + fuels_construction_year
         + fuels_heating_days * 2
         + fuels_average_temperature * 2
     )
@@ -149,13 +152,13 @@ def generate_csv_for_database(
         index=pd.MultiIndex.from_tuples(tuples, names=["Category", "Fuel"]),
     )
     csv_frame_seasonal = pd.DataFrame({
-        "Summer-Day": [0] * (len(device_index) - 8),
-        "Summer-Night": [0] * (len(device_index) - 8),
-        "Winter-Day": [0] * (len(device_index) - 8),
-        "Winter-Night": [0] * (len(device_index) - 8),
-        "Intermediate-Day": [0] * (len(device_index) - 8),
-        "Intermediate-Night": [0] * (len(device_index) - 8),
-    }, index=pd.MultiIndex.from_tuples(tuples[:-8], names=["Category", "Fuel"]),
+        "Summer-Day": [0] * (len(device_index) - 10),
+        "Summer-Night": [0] * (len(device_index) - 10),
+        "Winter-Day": [0] * (len(device_index) - 10),
+        "Winter-Night": [0] * (len(device_index) - 10),
+        "Intermediate-Day": [0] * (len(device_index) - 10),
+        "Intermediate-Night": [0] * (len(device_index) - 10),
+    }, index=pd.MultiIndex.from_tuples(tuples[:-10], names=["Category", "Fuel"]),
     )
 
     remaining_electricity_annual = 0.0
@@ -362,6 +365,8 @@ def generate_csv_for_database(
         converting_data.loc[building_code.split(".")[0]]["Average"]
     )
     csv_frame_annual[("Building Size", "Area [m*m]")] = building_data["A_C_Ref"].iloc[0]
+    csv_frame_annual[("Construction Year", "Period start")] = building_data["Year1_Building"].iloc[0]
+    csv_frame_annual[("Construction Year", "Period end")] = building_data["Year2_Building"].iloc[0]
     csv_frame_annual[("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")] = (
         building_data["q_ht"].to_list()[0]
         * (

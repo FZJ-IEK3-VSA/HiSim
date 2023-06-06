@@ -210,10 +210,10 @@
               "Name":"HeatingRod",
               "Source":"not given",
               "COP":[
-                    {"A-7/W35":1},
-                    {"A-2/W35":1},
-                    {"A7/W35":1},
-                    {"A10/W35":1}
+                    {"A-7/W35":0.95},
+                    {"A-2/W35":0.95},
+                    {"A7/W35":0.95},
+                    {"A10/W35":0.95}
               ],
               "Heating Power A-7/35":1.0,
               "Nominal Heating Power A2/35":1.0,

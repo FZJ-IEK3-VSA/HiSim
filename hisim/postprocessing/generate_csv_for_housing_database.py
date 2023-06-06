@@ -4,7 +4,7 @@
 
 import datetime as dt
 import os
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -42,7 +42,7 @@ def get_factor_cooking(
 
 
 def compute_seasonal(
-        csv_frame_seasonal: pd.DataFrame, index_in_seasonal_frame: str, factor: float, output: pd.Series, day: pd.Series, night: pd.Series
+        csv_frame_seasonal: pd.DataFrame, index_in_seasonal_frame: Tuple[str, str], factor: float, output: pd.Series, day: pd.Series, night: pd.Series
         ) -> pd.DataFrame:
     """Takes annual time series and computes average consumption during day/night in summer, winter and intermediate time.
 
@@ -55,9 +55,6 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Day"] = output_day[
         ((output_day.index > dt.datetime(year=2019, month=6, day=21)) &
         (output_day.index < dt.datetime(year=2019, month=9, day=23)))].sum() * factor / 94
-    print( index_in_seasonal_frame, output_day[
-        ((output_day.index > dt.datetime(year=2019, month=6, day=21)) &
-        (output_day.index < dt.datetime(year=2019, month=9, day=23)))])
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Night"] = output_night[
         ((output_night.index > dt.datetime(year=2019, month=6, day=21, hour=12)) &
         (output_night.index < dt.datetime(year=2019, month=9, day=23, hour=12)))].sum() * factor / 94
@@ -341,7 +338,6 @@ def generate_csv_for_database(
 
     # extract infos from used climate data to compare to climate information used for tabula evaluation
     building_code = building_data["Code_BuildingVariant"].to_list()[0]
-    print(building_code)
     converting_data = pd.read_csv(utils.HISIMPATH["housing_reference_temperatures"])
     converting_data.index = converting_data["Location"]  # type: ignore
 
@@ -388,9 +384,6 @@ def generate_csv_for_database(
         )
     )
 
-    pathname = os.path.join(
-        simulation_parameters.result_directory, "csv_for_housing_data_base.csv"
-    )
     csv_frame_annual.to_csv(os.path.join(
         simulation_parameters.result_directory, "csv_for_housing_data_base_annual.csv"
     ), encoding="utf-8")

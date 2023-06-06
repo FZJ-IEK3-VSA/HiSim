@@ -5,36 +5,49 @@
 The functions are all called in modular_household.
 """
 
-from typing import List, Optional, Tuple, Any
-from os import listdir, path
 import json
+from os import listdir, path
+from typing import Any, List, Optional, Tuple
 
+import pandas as pd
 from utspclient.helpers.lpgpythonbindings import JsonReference
 
 import hisim.loadtypes as lt
-from hisim.component import Component
-from hisim.simulator import SimulationParameters
-from hisim.components import generic_heat_pump_modular
-from hisim.components import generic_heat_source
-from hisim.components import controller_l1_building_heating
-from hisim.components import controller_l1_heatpump
-from hisim.components import controller_l2_generic_heat_simple
-from hisim.components import controller_l2_energy_management_system
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import loadprofilegenerator_connector
-from hisim.components import weather
-from hisim.components import building
-from hisim.components import generic_pv_system
-from hisim.components import generic_smart_device
-from hisim.components import generic_car
-from hisim.components import controller_l1_generic_ev_charge
-from hisim.components import advanced_battery_bslib
-from hisim.components import advanced_ev_battery_bslib
-from hisim.components import generic_CHP
-from hisim.components import generic_electrolyzer
-from hisim.components import generic_hydrogen_storage
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
+from hisim.component import Component
+from hisim.components import (advanced_battery_bslib,
+                              advanced_ev_battery_bslib, building,
+                              controller_l1_building_heating,
+                              controller_l1_generic_ev_charge,
+                              controller_l1_heatpump,
+                              controller_l2_energy_management_system,
+                              controller_l2_generic_heat_simple, generic_car,
+                              generic_CHP, generic_electrolyzer,
+                              generic_heat_pump_modular, generic_heat_source,
+                              generic_hot_water_storage_modular,
+                              generic_hydrogen_storage, generic_pv_system,
+                              generic_smart_device,
+                              loadprofilegenerator_connector, weather)
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.simulator import SimulationParameters
+
+
+def get_heating_system_efficiency(
+        heating_system_installed: lt.HeatingSystems, water_vs_heating: lt.InandOutputType
+        ) -> float:
+    """Reads in type of heating system and returns related efficiency values.
+
+    :param heating_system_installed: type of installed heating system
+    :type heating_system_installed: lt.HeatingSystems
+    :param water_vs_heating: Heating vs. WaterHeating
+    :type water_vs_heating: lt.InandOutputType
+    :return: efficiency of the selected heater
+    :rtype: float
+    """
+
+    efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8")
+    efficiency_data.index = efficiency_data["Heater"]
+    return float(efficiency_data.loc[heating_system_installed.value, water_vs_heating.value])
 
 
 def configure_pv_system(
@@ -451,6 +464,8 @@ def configure_water_heating(
         generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
     )
     heater_config.fuel = fuel_translator[water_heating_system_installed]
+    heater_config.efficiency = get_heating_system_efficiency(
+        heating_system_installed=water_heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING)
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         "DHW" + water_heating_system_installed.value
     )
@@ -655,6 +670,8 @@ def configure_heating(
     }
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
+    heater_config.efficiency = get_heating_system_efficiency(
+        heating_system_installed=heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING)
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller(
         heating_system_installed.value
     )
@@ -1013,6 +1030,8 @@ def configure_heating_with_buffer(
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
     heater_config.power_th = my_building.max_thermal_building_demand_in_watt
+    heater_config.efficiency = get_heating_system_efficiency(
+        heating_system_installed=heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING)
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer(
         "Buffer" + heating_system_installed.value + "Controller"
     )

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from hisim import log
-from hisim.postprocessing.chartbase import Chart
+from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
 from hisim import utils
 from hisim.components import building
 from hisim.components import generic_heat_pump_modular
@@ -20,7 +20,7 @@ from hisim.simulationparameters import FigureFormat
 mpl.rcParams["agg.path.chunksize"] = 10000
 
 
-class Carpet(Chart):  # noqa: too-few-public-methods
+class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
     """Class for carpet plots."""
 
@@ -104,7 +104,7 @@ class Carpet(Chart):  # noqa: too-few-public-methods
         )
 
 
-class Line(Chart):  # noqa: too-few-public-methods
+class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
     """Makes a line chart."""
 
@@ -177,7 +177,7 @@ class Line(Chart):  # noqa: too-few-public-methods
         )
 
 
-class BarChart(Chart):  # noqa: too-few-public-methods
+class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
     """Makes Bar charts."""
 
@@ -256,7 +256,7 @@ class BarChart(Chart):  # noqa: too-few-public-methods
         )
 
 
-class SankeyHISIM(Chart):
+class SankeyHISIM(Chart, ChartFontsAndSize):
 
     """Class for sankey charts."""
 

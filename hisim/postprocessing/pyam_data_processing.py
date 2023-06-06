@@ -6,13 +6,16 @@ import time
 import datetime
 import os
 from typing import Dict, Any
+import numpy as np
 import re
 import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FuncFormatter, ScalarFormatter, EngFormatter
 import plotly
 from pyam_data_collection import PyamDataCollectorEnum
 from html2image import Html2Image
+from hisim.postprocessing.chartbase import ChartFontsAndSize
 
 
 class PyAmChartGenerator:
@@ -26,6 +29,9 @@ class PyAmChartGenerator:
         self.result_folder = (
             "..\\..\\examples\\results_for_scenario_comparison\\results\\"
         )
+
+        self.hisim_chartbase = ChartFontsAndSize()
+        self.hisim_chartbase.figsize = (10, 8)
 
         dict_of_yearly_pyam_dataframes_for_different_simulation_durations = (
             self.get_dataframe_and_create_pyam_dataframe(
@@ -88,6 +94,9 @@ class PyAmChartGenerator:
             )
 
             if kind_of_data == PyamDataCollectorEnum.HOURLY:
+                print(
+                    f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
+                )
                 self.make_line_plot_for_pyam_dataframe(
                     pyam_dataframe=pyam_dataframe,
                 )
@@ -95,6 +104,9 @@ class PyAmChartGenerator:
                     pyam_dataframe=pyam_dataframe,
                 )
             elif kind_of_data == PyamDataCollectorEnum.YEARLY:
+                print(
+                    f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
+                )
                 self.make_bar_plot_for_pyam_dataframe(
                     pyam_dataframe=pyam_dataframe,
                 )
@@ -113,7 +125,7 @@ class PyAmChartGenerator:
                 )
             else:
                 raise ValueError(
-                    "This kind of data was not found in the pyamdaacollectorenum class."
+                    "This kind of data was not found in the pyamdatacollectorenum class."
                 )
 
     def make_line_plot_for_pyam_dataframe(
@@ -128,13 +140,34 @@ class PyAmChartGenerator:
         filtered_data = data.filter(
             variable="Building|Heating|TheoreticalThermalBuildingDemand"
         )
-        fig, a_x = plt.subplots(figsize=(12, 10))
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
 
+        title = "Building Theoretical Thermal Building Demand"
         filtered_data.plot.line(
             ax=a_x,
             color="scenario",
-            title="Building Theoretical Thermal Building Demand",
+            title=title,
         )
+
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=f"{scale}{filtered_data.unit[0]}",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=filtered_data.time_col.capitalize(),
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
         if os.path.exists(
             self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
@@ -169,14 +202,34 @@ class PyAmChartGenerator:
         filtered_data = data.filter(
             model=model, scenario=scenario, variable="Building|Heating|*"
         )
-        fig, a_x = plt.subplots(figsize=(12, 10))
-
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+        title = "Building Heating Outputs"
         filtered_data.plot(
             ax=a_x,
             color="variable",
-            title="Building Heating Outputs",
+            title=title,
             fill_between=True,
         )
+
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=f"{scale}{filtered_data.unit[0]}",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=filtered_data.time_col.capitalize(),
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
         if os.path.exists(
             self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
@@ -211,9 +264,29 @@ class PyAmChartGenerator:
         filtered_data = data.filter(
             model=model, scenario=scenario, variable="Building|Heating|*"
         )
-        fig, a_x = plt.subplots(figsize=(12, 10))
-
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+        title = "Heating"
         filtered_data.plot.bar(ax=a_x, stacked=True)
+
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=f"{scale}{filtered_data.unit[0]}",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=filtered_data.time_col.capitalize(),
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
         plt.legend(loc=1)
         plt.tight_layout()
         a_x.tick_params(axis="x", rotation=45)
@@ -253,10 +326,30 @@ class PyAmChartGenerator:
             variable="Building|Heating|*",
             region="Aachen",
         )
-        print(filtered_data.timeseries())
-        fig = plt.subplots(figsize=(12, 10))
 
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+        title = str(scenario.capitalize())
         filtered_data.plot.stack(titel=scenario)
+
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=f"{scale}{filtered_data.unit[0]}",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=filtered_data.time_col.capitalize(),
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
         fig.subplots_adjust(right=0.55)
         if os.path.exists(
             self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
@@ -292,15 +385,34 @@ class PyAmChartGenerator:
         filtered_data = data.filter(
             variable="Building|Heating|TheoreticalThermalBuildingDemand"
         )
-        fig, a_x = plt.subplots(figsize=(12, 10))
-
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+        title = "Theoretical Building Demand for all scenarios"
         filtered_data.plot.box(
             ax=a_x,
             by="variable",
             legend=True,
             x="year",
-            title="Theoretical Building Demand for all scenarios",
+            title=title,
         )
+
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=f"{scale}{filtered_data.unit[0]}",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=filtered_data.time_col.capitalize(),
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
         plt.tight_layout()
         plt.legend(loc=1)
         if os.path.exists(
@@ -337,14 +449,18 @@ class PyAmChartGenerator:
         filtered_data = data.filter(
             model=model, scenario=scenario, variable="Building|Heating|*"
         )
-        fig, a_x = plt.subplots(figsize=(12, 10))
-
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+        title = "Building Heating Outputs"
         filtered_data.plot.pie(
             ax=a_x,
             value="value",
             category="variable",
-            title="Building Heating Outputs",
+            title=title,
         )
+
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         fig.subplots_adjust(right=0.75, left=0.3)
         if os.path.exists(
             self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
@@ -376,12 +492,36 @@ class PyAmChartGenerator:
 
         data = pyam_dataframe
         filtered_data = data
-        fig, a_x = plt.subplots(figsize=(12, 10))
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+        x = "Weather|Temperature|DailyAverageOutsideTemperatures"
+        y = "Building|Temperature|TemperatureIndoorAir"
         filtered_data.plot.scatter(
             ax=a_x,
-            x="Weather|Temperature|DailyAverageOutsideTemperatures",
-            y="Building|Temperature|TemperatureIndoorAir",
+            x=x,
+            y=y,
         )
+        title = "Indoor vs. Outdoor Temperature"
+
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        x_tick_labels, scale_x, x_tick_locations = self.set_axis_scale(a_x, x_or_y="x")
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=y.split(sep="|")[-1] + f" [{scale}°C]",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=x.split(sep="|")[-1] + f" [{scale}°C]",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
         if os.path.exists(
             self.result_folder + self.sub_results_folder + self.sub_sub_results_folder
         ):
@@ -455,13 +595,52 @@ class PyAmChartGenerator:
             )
 
         # change directory of sankey output file
-        os.rename(
-            "sankey_plot.png",
-            self.result_folder
-            + self.sub_results_folder
-            + self.sub_sub_results_folder
-            + "\\sankey_plot.png",
-        )
+        try:
+            os.rename(
+                "sankey_plot.png",
+                self.result_folder
+                + self.sub_results_folder
+                + self.sub_sub_results_folder
+                + "\\sankey_plot.png",
+            )
+        except:
+            pass
+
+    def set_axis_scale(self, ax: Any, x_or_y=Any):
+        """Get axis and unit and scale it properly."""
+
+        if x_or_y == "x":
+            tick_values = ax.get_xticks()
+        elif x_or_y == "y":
+            tick_values = ax.get_yticks()
+        else:
+            raise ValueError("x_or_y must be either 'x' or 'y'")
+
+        max_ticks = max(tick_values)
+        min_ticks = min(tick_values)
+
+        max_scale = max(abs(max_ticks), abs(min_ticks))
+
+        if max_scale >= 1e12:
+            new_tick_values = tick_values * 1e-12
+            scale = "T"
+        elif 1e9 <= max_scale < 1e12:
+            new_tick_values = tick_values * 1e-9
+            scale = "G"
+        elif 1e6 <= max_scale < 1e9:
+            new_tick_values = tick_values * 1e-6
+            scale = "M"
+        elif 1e3 <= max_scale < 1e6:
+            new_tick_values = tick_values * 1e-3
+            scale = "k"
+        elif -1e3 <= max_scale < 1e3:
+            new_tick_values = tick_values
+            scale = ""
+
+        tick_locations = tick_values
+        tick_labels = np.round(new_tick_values, 1)
+
+        return tick_labels, scale, tick_locations
 
 
 def main():

@@ -53,27 +53,27 @@ def compute_seasonal(
     output_day = output[day.index]
     output_night = output[night.index]
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Day"] = output_day[
-        ((output_day.index > dt.datetime(year=2019, month=6, day=21)) &
-        (output_day.index < dt.datetime(year=2019, month=9, day=23)))].sum() * factor / 94
+        ((output_day.index > dt.datetime(year=2019, month=6, day=21, hour=0)) &
+        (output_day.index < dt.datetime(year=2019, month=9, day=23, hour=0)))].sum() * factor / 94
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Night"] = output_night[
         ((output_night.index > dt.datetime(year=2019, month=6, day=21, hour=12)) &
         (output_night.index < dt.datetime(year=2019, month=9, day=23, hour=12)))].sum() * factor / 94
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Day"] = output_day[
-        ((output_day.index > dt.datetime(year=2019, month=12, day=21)) |
-        (output_day.index < dt.datetime(year=2019, month=3, day=23)))].sum() * factor / 92
+        ((output_day.index > dt.datetime(year=2019, month=12, day=21, hour=0)) |
+        (output_day.index < dt.datetime(year=2019, month=3, day=23, hour=0)))].sum() * factor / 92
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Night"] = output_night[
         ((output_night.index > dt.datetime(year=2019, month=12, day=21, hour=12)) |
         (output_night.index < dt.datetime(year=2019, month=3, day=23, hour=12)))].sum() * factor / 92
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Day"] = output_day[
-        ((output_day.index > dt.datetime(year=2019, month=3, day=23)) &
-        (output_day.index < dt.datetime(year=2019, month=6, day=21))) |
-        ((output_day.index > dt.datetime(year=2019, month=9, day=23)) &
-        (output_day.index < dt.datetime(year=2019, month=12, day=23)))].sum() * factor / 179
+        ((output_day.index > dt.datetime(year=2019, month=3, day=23, hour=0)) &
+        (output_day.index < dt.datetime(year=2019, month=6, day=21, hour=0))) |
+        ((output_day.index > dt.datetime(year=2019, month=9, day=23, hour=0)) &
+        (output_day.index < dt.datetime(year=2019, month=12, day=21, hour=0)))].sum() * factor / 179
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Night"] = output_night[
         ((output_night.index > dt.datetime(year=2019, month=3, day=23, hour=12)) &
-        (output_night.index > dt.datetime(year=2019, month=6, day=21, hour=12))) |
-        ((output_night.index < dt.datetime(year=2019, month=9, day=23, hour=12)) &
-        (output_night.index > dt.datetime(year=2019, month=12, day=21, hour=12)))].sum() * factor / 179
+        (output_night.index < dt.datetime(year=2019, month=6, day=21, hour=12))) |
+        ((output_night.index > dt.datetime(year=2019, month=9, day=23, hour=12)) &
+        (output_night.index < dt.datetime(year=2019, month=12, day=21, hour=12)))].sum() * factor / 179
 
     return csv_frame_seasonal
 
@@ -169,7 +169,7 @@ def generate_csv_for_database(
         if output.component_name == "Weather" and output.field_name == "Altitude":
             altitude_data = results.iloc[:, index]
             day = altitude_data[altitude_data > 0]
-            night = altitude_data[altitude_data < 0]
+            night = altitude_data[altitude_data <= 0]
 
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:

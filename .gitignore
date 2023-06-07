@@ -135,6 +135,7 @@ dmypy.json
 inputs/cache
 
 hisim/inputs/cache
+examples/results_for_scenario_comparison
 examples/results
 results/Results
 hisim/results

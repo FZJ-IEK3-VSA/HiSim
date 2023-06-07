@@ -161,8 +161,8 @@ class SimulationParameters(JSONWizard):
     ) -> SimulationParameters:
         """Generates a parameter set for a three months, primarily for unit testing."""
         pars = cls(
-            datetime.datetime(year, 3, 1),
-            datetime.datetime(year, 5, 31),
+            datetime.datetime(year, 6, 1),
+            datetime.datetime(year, 8, 31),
             seconds_per_timestep,
             "",
         )

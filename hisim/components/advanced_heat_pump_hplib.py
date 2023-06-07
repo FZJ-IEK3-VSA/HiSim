@@ -103,8 +103,7 @@ class HeatPumpHplib(Component):
 
         # Component has states
         self.state = HeatPumpState(
-            time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0
-        )
+            time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
         self.previous_state = self.state.self_copy()
 
         # Load parameters from heat pump database
@@ -242,91 +241,94 @@ class HeatPumpHplib(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        if force_convergence:
-            pass
+
+        # Parameter
+        time_on_min = 600 # [s]
+        time_off_min = time_on_min
+
+        # Load input values
+        on_off: float = stsv.get_input_value(self.on_off_switch)
+        t_in_primary = stsv.get_input_value(self.t_in_primary)
+        t_in_secondary = stsv.get_input_value(self.t_in_secondary)
+        t_amb = stsv.get_input_value(self.t_amb)
+        time_on = self.state.time_on
+        time_on_cooling = self.state.time_on_cooling
+        time_off = self.state.time_off
+        on_off_previous = self.state.on_off_previous
+
+        # Overwrite on_off to realize minimum time of or time off
+        if on_off_previous == 1 and time_on < time_on_min:
+            on_off = 1
+        elif on_off_previous == -1 and time_on_cooling < time_on_min:
+            on_off = -1
+        elif on_off_previous == 0 and time_off < time_off_min:
+            on_off = 0
+
+
+
+        # OnOffSwitch
+        if on_off == 1:
+            # Calulate outputs for heating mode
+            results = hpl.simulate(
+                t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1
+            )
+            p_th = results["P_th"].values[0]
+            p_el = results["P_el"].values[0]
+            cop = results["COP"].values[0]
+            eer = results["EER"].values[0]
+            t_out = results["T_out"].values[0]
+            m_dot = results["m_dot"].values[0]
+            time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
+            time_on_cooling = 0
+            time_off = 0
+
+        elif on_off == -1:
+            # Calulate outputs for cooling mode
+            results = hpl.simulate(
+                t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2
+            )
+            p_th = results["P_th"].values[0]
+            p_el = results["P_el"].values[0]
+            cop = results["COP"].values[0]
+            eer = results["EER"].values[0]
+            t_out = results["T_out"].values[0]
+            m_dot = results["m_dot"].values[0]
+            time_on_cooling = (
+                time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
+            )
+            time_on = 0
+            time_off = 0
         else:
+            # Calulate outputs for off mode
+            p_th = 0
+            p_el = 0
+            # None values or nans will cause troubles in post processing, that is why there are not used here
+            # cop = None
+            # t_out = None
+            cop = 0
+            eer = 0
+            t_out = t_in_secondary
+            m_dot = 0
+            time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
+            time_on = 0
+            time_on_cooling = 0
 
-            # Parameter
-            time_on_min = 600  # [s]
-            time_off_min = time_on_min
-
-            # Load input values
-            on_off: float = stsv.get_input_value(self.on_off_switch)
-            t_in_primary = stsv.get_input_value(self.t_in_primary)
-            t_in_secondary = stsv.get_input_value(self.t_in_secondary)
-            t_amb = stsv.get_input_value(self.t_amb)
-            time_on = self.state.time_on
-            time_on_cooling = self.state.time_on_cooling
-            time_off = self.state.time_off
-            on_off_previous = self.state.on_off_previous
-
-            # Overwrite on_off to realize minimum time of or time off
-            if on_off_previous == 1 and time_on < time_on_min:
-                on_off = 1
-            elif on_off_previous == -1 and time_on_cooling < time_on_min:
-                on_off = -1
-            elif on_off_previous == 0 and time_off < time_off_min:
-                on_off = 0
-
-            # OnOffSwitch
-            if on_off == 1:
-                # Calulate outputs for heating mode
-                results = hpl.simulate(
-                    t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1
-                )
-                p_th = results["P_th"].values[0]
-                p_el = results["P_el"].values[0]
-                cop = results["COP"].values[0]
-                eer = results["EER"].values[0]
-                t_out = results["T_out"].values[0]
-                m_dot = results["m_dot"].values[0]
-                time_on = time_on + self.my_simulation_parameters.seconds_per_timestep
-                time_off = 0
-            elif on_off == -1:
-                # Calulate outputs for cooling mode
-                results = hpl.simulate(
-                    t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2
-                )
-                p_th = results["P_th"].values[0]
-                p_el = results["P_el"].values[0]
-                cop = results["COP"].values[0]
-                eer = results["EER"].values[0]
-                t_out = results["T_out"].values[0]
-                m_dot = results["m_dot"].values[0]
-                time_on_cooling = (
-                    time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
-                )
-                time_off = 0
-            else:
-                # Calulate outputs for off mode
-                p_th = 0
-                p_el = 0
-                # None values or nans will cause troubles in post processing, that is why there are not used here
-                # cop = None
-                # t_out = None
-                cop = 0
-                eer = 0
-                t_out = t_in_secondary
-                m_dot = 0
-                time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
-                time_on = 0
-
-            # write values for output time series
-            stsv.set_output_value(self.p_th, p_th)
-            stsv.set_output_value(self.p_el, p_el)
-            stsv.set_output_value(self.cop, cop)
-            stsv.set_output_value(self.eer, eer)
-            stsv.set_output_value(self.t_out, t_out)
-            stsv.set_output_value(self.m_dot, m_dot)
-            stsv.set_output_value(self.time_on, time_on)
-            stsv.set_output_value(self.time_off, time_off)
-
-            # write values to state
-            self.state.time_on = time_on
-            self.state.time_on_cooling = time_on_cooling
-            self.state.time_off = time_off
-            self.state.on_off_previous = on_off
-
+        # write values for output time series
+        stsv.set_output_value(self.p_th, p_th)
+        stsv.set_output_value(self.p_el, p_el)
+        stsv.set_output_value(self.cop, cop)
+        stsv.set_output_value(self.eer, eer)
+        stsv.set_output_value(self.t_out, t_out)
+        stsv.set_output_value(self.m_dot, m_dot)
+        stsv.set_output_value(self.time_on, time_on)
+        stsv.set_output_value(self.time_off, time_off)
+        
+        # write values to state
+        self.state.time_on = time_on
+        self.state.time_on_cooling = time_on_cooling
+        self.state.time_off = time_off
+        self.state.on_off_previous = on_off
+        
 
 @dataclass
 class HeatPumpState:
@@ -335,13 +337,13 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
+
     def self_copy(
         self,
     ):
-        """Copy the Building State."""
+        """Copy the Heat Pump State."""
         return HeatPumpState(
-            self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
-        )
+            self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous)
 
 
 # ===========================================================================
@@ -399,6 +401,9 @@ class HeatPumpHplibControllerL1(Component):
     HeatingFlowTemperatureFromHeatDistributionSystem = (
         "HeatingFlowTemperatureFromHeatDistributionSystem"
     )
+    StatefromHeatDistributionSystem = "StatefromHeatDistributionSystem"
+    
+    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
     # Outputs
     State = "State"
@@ -444,6 +449,24 @@ class HeatPumpHplibControllerL1(Component):
             Units.CELSIUS,
             True,
         )
+        
+        self.state_from_heat_distribution_system_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.StatefromHeatDistributionSystem,
+            LoadTypes.ANY,
+            Units.ANY,
+            False,
+        )
+        
+        self.daily_avg_outside_temperature_input_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.DailyAverageOutsideTemperature,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
+        )
 
         self.state_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -455,6 +478,7 @@ class HeatPumpHplibControllerL1(Component):
 
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
+
 
     def build(
         self,
@@ -510,6 +534,13 @@ class HeatPumpHplibControllerL1(Component):
                     self.heating_flow_temperature_from_heat_distribution_system_channel
                 )
             )
+            
+            # state_from_heat_distribution_system = stsv.get_input_value(self.state_from_heat_distribution_system_channel)
+            
+            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
+                self.daily_avg_outside_temperature_input_channel
+            )
+            
 
             if self.mode == 1:
                 self.conditions_on_off(
@@ -529,20 +560,27 @@ class HeatPumpHplibControllerL1(Component):
                 raise ValueError(
                     "Either the Advanced HP Lib Controller Mode is neither 1 nor 2 or the heating system is not floor heating which is the condition for cooling (mode 2)."
                 )
+                
+            summer_mode = self.summer_condition(daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                                  set_heating_threshold_temperature_in_celsius=16.0)
 
-            if self.controller_heatpumpmode == "on":
+            # state of heat distribution controller is off when daily avg outside temperature is > 16°C
+            # in that case the heat pump should not be heating
+            if self.controller_heatpumpmode == "heating" and summer_mode == "on":
                 state = 1
+            elif self.controller_heatpumpmode == "heating" and summer_mode == "off":
+                state = 0
             elif self.controller_heatpumpmode == "off":
                 state = 0
-
-            elif self.controller_heatpumpmode == "heating":
-                state = 1
             elif self.controller_heatpumpmode == "cooling":
                 state = -1
             else:
                 raise ValueError("Advanced HP Lib Controller State unknown.")
+            
+
 
             stsv.set_output_value(self.state_channel, state)
+            
 
     def conditions_on_off(
         self,
@@ -551,10 +589,10 @@ class HeatPumpHplibControllerL1(Component):
     ) -> None:
         """Set conditions for the heat pump controller mode."""
 
-        if self.controller_heatpumpmode == "on":
+        if self.controller_heatpumpmode == "heating":
             if (
                 water_temperature_input_in_celsius
-                > set_heating_flow_temperature_in_celsius + 0.5
+                > set_heating_flow_temperature_in_celsius + 1.0
             ):  # + 1:
                 self.controller_heatpumpmode = "off"
                 return
@@ -562,9 +600,9 @@ class HeatPumpHplibControllerL1(Component):
         elif self.controller_heatpumpmode == "off":
             if (
                 water_temperature_input_in_celsius
-                < set_heating_flow_temperature_in_celsius - 0.5
+                < set_heating_flow_temperature_in_celsius - 1.0
             ):  # - 1:
-                self.controller_heatpumpmode = "on"
+                self.controller_heatpumpmode = "heating"
                 return
 
         else:
@@ -577,8 +615,8 @@ class HeatPumpHplibControllerL1(Component):
     ) -> None:
         """Set conditions for the heat pump controller mode."""
 
-        heating_set_temperature = set_heating_flow_temperature_in_celsius - 1.0
-        cooling_set_temperature = set_heating_flow_temperature_in_celsius + 1.0
+        heating_set_temperature = set_heating_flow_temperature_in_celsius - 1.5
+        cooling_set_temperature = set_heating_flow_temperature_in_celsius + 1.5
 
         if self.controller_heatpumpmode == "heating":
             if water_temperature_input_in_celsius >= heating_set_temperature:
@@ -598,3 +636,28 @@ class HeatPumpHplibControllerL1(Component):
 
         else:
             raise ValueError("unknown mode")
+
+        
+    def summer_condition(
+        self,
+        daily_average_outside_temperature_in_celsius: float,
+        set_heating_threshold_temperature_in_celsius: float
+    ) -> str:
+        """Set conditions for the valve in heat distribution."""
+
+        
+        if (
+            daily_average_outside_temperature_in_celsius
+            > set_heating_threshold_temperature_in_celsius
+        ):
+            summer_mode = "off"
+            return summer_mode
+        elif (
+                daily_average_outside_temperature_in_celsius
+                < set_heating_threshold_temperature_in_celsius
+            ):
+                summer_mode = "on"
+                return summer_mode
+
+        else:
+            raise ValueError(f"daily average temperature is not acceptable {daily_average_outside_temperature_in_celsius}°C")

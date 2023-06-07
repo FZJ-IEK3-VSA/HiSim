@@ -86,7 +86,7 @@ class Simulator:
         """Connects the inputs from every component to the corresponding outputs."""
         for wrapped_component in self.wrapped_components:
             wrapped_component.prepare_calculation()
-    @register_method
+
     def process_one_timestep(
         self, timestep: int, previous_stsv: cp.SingleTimeStepValues
     ) -> Tuple[cp.SingleTimeStepValues, int, bool]:

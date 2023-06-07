@@ -92,6 +92,18 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             set_cooling_temperature_for_building_in_celsius=24,
         )
 
+@dataclass
+class HeatDistributionSystemState:
+
+    water_output_temperature_in_celsius: float = 25
+    thermal_power_delivered_in_watt: float = 0
+
+    def self_copy(self):
+        """Copy the Heat Distribution State."""
+        return HeatDistributionSystemState(
+            self.water_output_temperature_in_celsius,
+            self.thermal_power_delivered_in_watt
+        )
 
 class HeatDistribution(cp.Component):
 
@@ -138,6 +150,7 @@ class HeatDistribution(cp.Component):
                     key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
                 )
             )
+
         else:
             raise KeyError(
                 "Keys for max thermal building demand was not found in the singleton sim repository."
@@ -159,6 +172,9 @@ class HeatDistribution(cp.Component):
             key=SingletonDictKeyEnum.HEATINGSYSTEM,
             entry=self.heat_distribution_system_config.heating_system,
         )
+        
+        self.state: HeatDistributionSystemState = HeatDistributionSystemState(water_output_temperature_in_celsius=21, thermal_power_delivered_in_watt=0)
+        self.previous_state = self.state.self_copy()
 
         # Inputs
         self.state_channel: cp.ComponentInput = self.add_input(
@@ -282,10 +298,11 @@ class HeatDistribution(cp.Component):
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
         # choose delta T depending on the chosen heating system
+        # DIN/TS 18599-12: 2021-04, p.238
         if heating_system == HeatingSystemType.FLOORHEATING:
-            self.delta_temperature_in_celsius = 3
+            self.delta_temperature_in_celsius = 7
         elif heating_system == HeatingSystemType.RADIATOR:
-            self.delta_temperature_in_celsius = 20
+            self.delta_temperature_in_celsius = 15
         else:
             raise ValueError("unknown heating system.")
 
@@ -295,11 +312,13 @@ class HeatDistribution(cp.Component):
 
     def i_save_state(self) -> None:
         """Save the current state."""
-        pass
+        self.previous_state = self.state.self_copy()
+        #pass
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
-        pass
+        self.state = self.previous_state.self_copy()
+        #pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -313,57 +332,61 @@ class HeatDistribution(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the heat distribution system."""
-        if force_convergence:
-            pass
-        else:
-            # Get inputs ------------------------------------------------------------------------------------------------------------
-            state_controller = stsv.get_input_value(self.state_channel)
-            theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
-                self.theoretical_thermal_building_demand_channel
-            )
 
-            water_temperature_input_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
-            )
+        # Get inputs ------------------------------------------------------------------------------------------------------------
+        state_controller = stsv.get_input_value(self.state_channel)
+        theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
+            self.theoretical_thermal_building_demand_channel
+        )
 
-            residence_temperature_input_in_celsius = stsv.get_input_value(
-                self.residence_temperature_input_channel
-            )
-            # Calculations ----------------------------------------------------------------------------------------------------------
+        water_temperature_input_in_celsius = stsv.get_input_value(
+            self.water_temperature_input_channel
+        )
 
-            if state_controller == 1:
+        residence_temperature_input_in_celsius = stsv.get_input_value(
+            self.residence_temperature_input_channel
+        )
 
-                (
-                    self.water_temperature_output_in_celsius,
-                    self.thermal_power_delivered_in_watt,
-                ) = self.determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
-                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
-                    water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-                    theoretical_thermal_buiding_demand_in_watt=theoretical_thermal_building_demand_in_watt,
-                    residence_temperature_in_celsius=residence_temperature_input_in_celsius,
-                )
+        # Calculations ----------------------------------------------------------------------------------------------------------
 
-            elif state_controller == 0:
-
-                self.thermal_power_delivered_in_watt = 0.0
-
-                self.water_temperature_output_in_celsius = (
-                    water_temperature_input_in_celsius
-                )
-
-            else:
-                raise ValueError("unknown mode")
-
-            # Set outputs -----------------------------------------------------------------------------------------------------------
-
-            stsv.set_output_value(
-                self.water_temperature_output_channel,
+        if state_controller == 1:
+        
+            (
                 self.water_temperature_output_in_celsius,
-            )
-            stsv.set_output_value(
-                self.thermal_power_delivered_channel,
                 self.thermal_power_delivered_in_watt,
+            ) = self.determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
+                water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+                water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
+                theoretical_thermal_buiding_demand_in_watt=theoretical_thermal_building_demand_in_watt,
+                residence_temperature_in_celsius=residence_temperature_input_in_celsius,
             )
+
+        elif state_controller == 0:
+
+            self.thermal_power_delivered_in_watt = 0.0
+
+            self.water_temperature_output_in_celsius = (
+                water_temperature_input_in_celsius
+            )
+
+        else:
+            raise ValueError("unknown hds controller mode")
+
+        # Set outputs -----------------------------------------------------------------------------------------------------------
+
+        stsv.set_output_value(
+            self.water_temperature_output_channel,
+            self.state.water_output_temperature_in_celsius
+            #self.water_temperature_output_in_celsius,
+        )
+        stsv.set_output_value(
+            self.thermal_power_delivered_channel,
+            self.state.thermal_power_delivered_in_watt
+            #self.thermal_power_delivered_in_watt,
+        )
+        
+        self.state.water_output_temperature_in_celsius = self.water_temperature_output_in_celsius
+        self.state.thermal_power_delivered_in_watt = self.thermal_power_delivered_in_watt
 
     def calc_heating_distribution_system_water_mass_flow_rate(
         self,
@@ -400,10 +423,11 @@ class HeatDistribution(cp.Component):
                 * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
             )
         )
-        # prevent that water temperature in hds gets colder than residence temperature in building when heating (when theoretical thermal demand > 0)
+
         if theoretical_thermal_buiding_demand_in_watt > 0:
             # water in hds must be warmer than the building in order to exchange heat
             if water_temperature_input_in_celsius > residence_temperature_in_celsius:
+                # prevent that water output temperature in hds gets colder than residence temperature in building when heating
                 water_temperature_output_in_celsius = max(
                     water_temperature_output_in_celsius,
                     residence_temperature_in_celsius,
@@ -421,10 +445,11 @@ class HeatDistribution(cp.Component):
                 water_temperature_output_in_celsius = water_temperature_input_in_celsius
                 thermal_power_delivered_effective_in_watt = 0
 
-        # prevent that water temperature in hds gets hotter than residence temperature in building when cooling (when theoretical thermal demand < 0)
+        
         elif theoretical_thermal_buiding_demand_in_watt < 0:
             # water in hds must be cooler than the building in order to cool building down
             if water_temperature_input_in_celsius < residence_temperature_in_celsius:
+                # prevent that water output temperature in hds gets hotter than residence temperature in building when cooling
                 water_temperature_output_in_celsius = min(
                     water_temperature_output_in_celsius,
                     residence_temperature_in_celsius,
@@ -678,7 +703,7 @@ class HeatDistributionController(cp.Component):
 
             self.conditions_for_opening_or_shutting_heat_distribution(
                 theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                #daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
             )
 
             if self.controller_heat_distribution_mode == "on":
@@ -695,10 +720,11 @@ class HeatDistributionController(cp.Component):
                 list_of_heating_distribution_system_flow_and_return_temperatures[0],
             )
 
+
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
         theoretical_thermal_building_demand_in_watt: float,
-        daily_average_outside_temperature_in_celsius: float,
+        #daily_average_outside_temperature_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
 
@@ -706,7 +732,8 @@ class HeatDistributionController(cp.Component):
             # no heat exchange with building if theres no demand and if avg temp outside too high
             if (
                 theoretical_thermal_building_demand_in_watt == 0
-                and daily_average_outside_temperature_in_celsius
+                # and
+                # daily_average_outside_temperature_in_celsius
                 > self.set_heating_threshold_temperature_in_celsius
             ):
                 self.controller_heat_distribution_mode = "off"
@@ -715,7 +742,8 @@ class HeatDistributionController(cp.Component):
             # if heating or cooling is needed for building or if avg temp outside too low
             if (
                 theoretical_thermal_building_demand_in_watt != 0
-                or daily_average_outside_temperature_in_celsius
+                # or 
+                # daily_average_outside_temperature_in_celsius
                 < self.set_heating_threshold_temperature_in_celsius
             ):
                 self.controller_heat_distribution_mode = "on"
@@ -773,7 +801,7 @@ class HeatDistributionController(cp.Component):
     ) -> List[float]:
         """Calculate the heat distribution flow and return temperature as a function of the moving average daily mean outside temperature.
 
-        Calculations are based on DIN V 4701-10, Section 5
+        Calculations are based on DIN/TS 18599-12: 2021-04, p.170, Eq. 127,128
 
         Returns
         -------

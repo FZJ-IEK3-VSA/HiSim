@@ -486,6 +486,7 @@ def configure_water_heating(
             - HouseholdWarmWaterDemandConfig.temperature_difference_hot
             - HouseholdWarmWaterDemandConfig.freshwater_temperature
         )
+        * my_occupancy.scaling_factor_according_to_number_of_apartments
     )
 
     my_boiler = generic_hot_water_storage_modular.HotWaterStorage(
@@ -571,6 +572,7 @@ def configure_water_heating_electric(
             - HouseholdWarmWaterDemandConfig.temperature_difference_hot
             - HouseholdWarmWaterDemandConfig.freshwater_temperature
         )
+        * my_occupancy.scaling_factor_according_to_number_of_apartments
     )
     boiler_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()

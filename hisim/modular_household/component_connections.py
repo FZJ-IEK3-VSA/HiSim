@@ -483,6 +483,7 @@ def configure_water_heating(
         * (3600 / my_simulation_parameters.seconds_per_timestep)
         * (
             HouseholdWarmWaterDemandConfig.ww_temperature_demand
+            - HouseholdWarmWaterDemandConfig.temperature_difference_hot
             - HouseholdWarmWaterDemandConfig.freshwater_temperature
         )
     )
@@ -567,6 +568,7 @@ def configure_water_heating_electric(
         * (3600 / my_simulation_parameters.seconds_per_timestep)
         * (
             HouseholdWarmWaterDemandConfig.ww_temperature_demand
+            - HouseholdWarmWaterDemandConfig.temperature_difference_hot
             - HouseholdWarmWaterDemandConfig.freshwater_temperature
         )
     )

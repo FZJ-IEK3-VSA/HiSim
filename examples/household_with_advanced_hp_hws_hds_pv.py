@@ -12,6 +12,7 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import sumbuilder
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
+from hisim.postprocessingoptions import PostProcessingOptions
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -48,7 +49,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set Weather
     location = "Aachen"
@@ -79,7 +80,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
-    volume_heating_water_storage_in_liter = 2000
+    volume_heating_water_storage_in_liter = 500
     mean_water_temperature_in_storage_in_celsius = 21
     cool_water_temperature_in_storage_in_celsius = 21
     hot_water_temperature_in_storage_in_celsius = 21
@@ -103,7 +104,7 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
@@ -235,9 +236,9 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
+        #my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
         # my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
-        # my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
+        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.HeatingFlowTemperatureFromHeatDistributionSystem,

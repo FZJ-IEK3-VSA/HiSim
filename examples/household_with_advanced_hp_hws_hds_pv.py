@@ -83,9 +83,8 @@ def household_with_hds_and_advanced_hp(
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 500
-    mean_water_temperature_in_storage_in_celsius = 21
-    cool_water_temperature_in_storage_in_celsius = 21
-    hot_water_temperature_in_storage_in_celsius = 21
+    temperature_loss_in_celsius_per_hour = 0.21
+
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
@@ -95,7 +94,7 @@ def household_with_hds_and_advanced_hp(
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature_for_heat_distribution_system_in_celsius = set_heating_threshold_temperature_for_heat_pump_in_celsius
-    set_heating_temperature_for_building_in_celsius = 21
+    set_heating_temperature_for_building_in_celsius = 19
     set_cooling_temperature_for_building_in_celsius = 22
 
     # =================================================================================================================================
@@ -212,9 +211,7 @@ def household_with_hds_and_advanced_hp(
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
-        cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
-        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius,
+        temperature_loss_in_celsius_per_hour=temperature_loss_in_celsius_per_hour
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

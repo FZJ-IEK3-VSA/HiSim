@@ -348,7 +348,18 @@ class HeatDistribution(cp.Component):
         )
 
         # Calculations ----------------------------------------------------------------------------------------------------------
-
+        # if self.water_temperature_output_in_celsius != 0:
+        #     if abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius)) < 0.05:
+        #         pass
+        #     else: 
+        #         print(f"Changes in hds between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius))}")
+                
+        # if self.thermal_power_delivered_in_watt != 0:
+        #     if abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt)) < 0.05:
+        #         pass
+        #     else: 
+        #         print(f"Changes in hds between prev thermal power and thermal power are higher than 5%: {abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt))}")
+                
         if state_controller == 1:
         
             (
@@ -388,17 +399,7 @@ class HeatDistribution(cp.Component):
         self.state.water_output_temperature_in_celsius = self.water_temperature_output_in_celsius
         self.state.thermal_power_delivered_in_watt = self.thermal_power_delivered_in_watt
         
-        if self.water_temperature_output_in_celsius != 0:
-            if abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius)) < 0.02:
-                pass
-            else: 
-                print(f"Changes in hds between prev temperature and mean temperature are higher than 2%: {abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius))}")
-                
-        if self.thermal_power_delivered_in_watt != 0:
-            if abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt)) < 0.02:
-                pass
-            else: 
-                print(f"Changes in hds between prev thermal power and thermal power are higher than 2%: {abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt))}")
+        
 
     def calc_heating_distribution_system_water_mass_flow_rate(
         self,

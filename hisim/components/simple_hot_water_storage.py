@@ -40,9 +40,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
     name: str
     volume_heating_water_storage_in_liter: float
-    mean_water_temperature_in_storage_in_celsius: float
-    cool_water_temperature_in_storage_in_celsius: float
-    hot_water_temperature_in_storage_in_celsius: float
+    temperature_loss_in_celsius_per_hour: float
+
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
@@ -51,10 +50,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Get a default simplehotwaterstorage config."""
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
-            mean_water_temperature_in_storage_in_celsius=22,
-            cool_water_temperature_in_storage_in_celsius=22,
-            hot_water_temperature_in_storage_in_celsius=22,
             volume_heating_water_storage_in_liter=300,
+            temperature_loss_in_celsius_per_hour=0.21
         )
         return config
 
@@ -62,14 +59,14 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 class SimpleHotWaterStorageState:
 
     mean_water_temperature_in_celsius: float = 25
-    temperature_loss_in_celsius: int = 0
+    temperature_loss_in_celsius_per_timestep: int = 0
 
 
     def self_copy(self):
         """Copy the Simple Hot Water Storage State."""
         return SimpleHotWaterStorageState(
             self.mean_water_temperature_in_celsius,
-            self.temperature_loss_in_celsius
+            self.temperature_loss_in_celsius_per_timestep
         )
 class SimpleHotWaterStorage(cp.Component):
 
@@ -117,6 +114,7 @@ class SimpleHotWaterStorage(cp.Component):
         # Initialization of variables
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
+        self.temperature_loss_in_celsius_per_hour = self.waterstorageconfig.temperature_loss_in_celsius_per_hour
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 21
 
@@ -145,7 +143,7 @@ class SimpleHotWaterStorage(cp.Component):
 
         self.build()
         
-        self.state: SimpleHotWaterStorageState = SimpleHotWaterStorageState(mean_water_temperature_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius, temperature_loss_in_celsius=0)
+        self.state: SimpleHotWaterStorageState = SimpleHotWaterStorageState(mean_water_temperature_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius, temperature_loss_in_celsius_per_timestep=0)
         self.previous_state = self.state.self_copy()
 
         # =================================================================================================================================
@@ -444,18 +442,9 @@ class SimpleHotWaterStorage(cp.Component):
         )
         
         
-        
-        # make heat loss for mean storage temperature every hour (0.1°C/h) but only until min temp of 15°C is reached (regular Kellertemperatur)
-
-        if timestep%(3600/self.seconds_per_timestep) == 0.0 and self.mean_water_temperature_in_water_storage_in_celsius >= 15.0:
+        self.state.temperature_loss_in_celsius_per_timestep = self.calculate_temperature_loss(mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius, seconds_per_timestep=self.seconds_per_timestep, temperature_loss_in_celsius_per_hour=self.temperature_loss_in_celsius_per_hour)
+        self.state.mean_water_temperature_in_celsius = self.mean_water_temperature_in_water_storage_in_celsius - self.state.temperature_loss_in_celsius_per_timestep
             
-            self.state.temperature_loss_in_celsius = 1
-            self.state.mean_water_temperature_in_celsius = self.mean_water_temperature_in_water_storage_in_celsius - self.state.temperature_loss_in_celsius
-
-        else:
-            
-            self.state.temperature_loss_in_celsius = 0
-            self.state.mean_water_temperature_in_celsius = self.mean_water_temperature_in_water_storage_in_celsius - self.state.temperature_loss_in_celsius
 
 
         
@@ -557,6 +546,21 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         return water_temperature_output_in_celsius
+    
+    
+    def calculate_temperature_loss(self, mean_water_temperature_in_water_storage_in_celsius: float, seconds_per_timestep:float, temperature_loss_in_celsius_per_hour: float):
+        """Calculate temperature loss in celsius per timestep."""
+        
+        # make heat loss for mean storage temperature every timestep but only until min temp of 16°C is reached (regular Kellertemperatur)
+        # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
+        
+        if mean_water_temperature_in_water_storage_in_celsius >= 16.0:
+            temperature_loss_in_celsius_per_timestep = temperature_loss_in_celsius_per_hour/(3600/seconds_per_timestep)
+        else:
+            temperature_loss_in_celsius_per_timestep = 0
+            
+        return temperature_loss_in_celsius_per_timestep
+            
     
     #########################################################################################################################################################
 

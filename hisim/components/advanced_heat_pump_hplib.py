@@ -36,6 +36,8 @@ class HeatPumpHplibConfig:
     t_out_val: float
     p_th_set: float
     cycling_mode: bool
+    minimum_running_time_in_seconds: Optional[int]
+    minimum_idle_time_in_seconds: Optional[int]
 
 
 class HeatPumpHplib(Component):
@@ -103,6 +105,10 @@ class HeatPumpHplib(Component):
         self.p_th_set = config.p_th_set
 
         self.cycling_mode = config.cycling_mode
+        
+        self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
+        
+        self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
         # Component has states
         self.state = HeatPumpState(
@@ -214,7 +220,7 @@ class HeatPumpHplib(Component):
     @staticmethod
     def get_defaul_config():
         config = HeatPumpHplibConfig(
-            model="Generic", group_id=-1, t_in=-300, t_out_val=-300, p_th_set=-30
+            model="Generic", group_id=-1, t_in=-300, t_out_val=-300, p_th_set=-30, minimum_running_time_in_seconds=600, minimum_idle_time_in_seconds=600
         )
         return config
 
@@ -259,9 +265,12 @@ class HeatPumpHplib(Component):
         if self.cycling_mode == True:
 
             # Parameter
-            time_on_min = 600  # [s]
-            time_off_min = time_on_min
+            time_on_min = self.minimum_running_time_in_seconds # [s]
+            time_off_min = self.minimum_idle_time_in_seconds
             on_off_previous = self.state.on_off_previous
+            
+            if time_on_min is None or time_off_min is None:
+                raise ValueError("When the cycling mode is true, the minimum running time and minimum idle time of the heat pump must be given an integer value.")
 
             # Overwrite on_off to realize minimum time of or time off
             if on_off_previous == 1 and time_on < time_on_min:

@@ -70,7 +70,7 @@ def household_with_hds_and_advanced_hp(
     hp_controller_mode = (
         1  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
-    set_heating_threshold_temperature_for_heat_pump_in_celsius = 14.0
+    set_heating_threshold_temperature_for_heat_pump_in_celsius = 16.0
 
     # Set Heat Pump
     model: str = "Generic"
@@ -78,12 +78,14 @@ def household_with_hds_and_advanced_hp(
     heating_reference_temperature_in_celsius: float = -7  # t_in
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
-    cycling_mode = False
+    cycling_mode = True
+    minimum_running_time_in_seconds = 1200
+    minimum_idle_time_in_seconds = 1200
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 500
-    temperature_loss_in_celsius_per_hour = 0.21
+    temperature_loss_in_celsius_per_hour = 1
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
@@ -195,6 +197,8 @@ def household_with_hds_and_advanced_hp(
             t_out_val=flow_temperature_in_celsius,
             p_th_set=set_thermal_output_power_in_watt,
             cycling_mode=cycling_mode,
+            minimum_running_time_in_seconds=minimum_running_time_in_seconds,
+            minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

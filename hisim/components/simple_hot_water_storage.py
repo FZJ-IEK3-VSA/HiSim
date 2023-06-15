@@ -338,22 +338,22 @@ class SimpleHotWaterStorage(cp.Component):
             mass_of_input_water_flows_from_heat_distribution_system_in_kg=water_mass_from_heat_distribution_system_in_kg,
             previous_mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
         )
-        if (
-            self.mean_water_temperature_in_water_storage_in_celsius != 0
-            and abs(
-                1
-                - (
-                    self.state.mean_water_temperature_in_celsius
-                    / self.mean_water_temperature_in_water_storage_in_celsius
-                )
-            )
-            < 0.05
-        ):
-            pass
-        else:
-            print(
-                f"Changes in hws between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.mean_water_temperature_in_celsius / self.mean_water_temperature_in_water_storage_in_celsius))}"
-            )
+        # if (
+        #     self.mean_water_temperature_in_water_storage_in_celsius != 0
+        #     and abs(
+        #         1
+        #         - (
+        #             self.state.mean_water_temperature_in_celsius
+        #             / self.mean_water_temperature_in_water_storage_in_celsius
+        #         )
+        #     )
+        #     < 0.05
+        # ):
+        #     pass
+        # else:
+        #     print(
+        #         f"Changes in hws between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.mean_water_temperature_in_celsius / self.mean_water_temperature_in_water_storage_in_celsius))}"
+        #     )
 
         previous_thermal_energy_in_storage_in_watt_hour = self.calculate_thermal_energy_in_storage(
             mean_water_temperature_in_storage_in_celsius=self.state.mean_water_temperature_in_celsius,

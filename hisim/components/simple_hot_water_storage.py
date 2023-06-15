@@ -42,7 +42,6 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     temperature_loss_in_celsius_per_hour: float
 
-
     @classmethod
     def get_default_simplehotwaterstorage_config(
         cls,
@@ -51,9 +50,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=300,
-            temperature_loss_in_celsius_per_hour=0.21
+            temperature_loss_in_celsius_per_hour=0.21,
         )
         return config
+
 
 @dataclass
 class SimpleHotWaterStorageState:
@@ -61,19 +61,20 @@ class SimpleHotWaterStorageState:
     mean_water_temperature_in_celsius: float = 25
     temperature_loss_in_celsius_per_timestep: int = 0
 
-
     def self_copy(self):
         """Copy the Simple Hot Water Storage State."""
         return SimpleHotWaterStorageState(
             self.mean_water_temperature_in_celsius,
-            self.temperature_loss_in_celsius_per_timestep
+            self.temperature_loss_in_celsius_per_timestep,
         )
+
+
 class SimpleHotWaterStorage(cp.Component):
 
     """SimpleHotWaterStorage class."""
 
     # Input
-
+    # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureFromHeatDistributionSystem = (
         "WaterTemperatureFromHeatDistributionSystem"
     )
@@ -89,16 +90,21 @@ class SimpleHotWaterStorage(cp.Component):
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
 
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
-    
+
     # make some more outputs for testing simple storage
-    
+
     ThermalEnergyInStorage = "ThermalEnergyInStorage"
     ThermalEnergyInputFromHeatGenerator = "ThermalEnergyInputFromHeatGenerator"
-    ThermalEnergyInputFromHeatDistributionSystem = "ThermalEnergyInputFromHeatDistributionSystem"
+    ThermalEnergyInputFromHeatDistributionSystem = (
+        "ThermalEnergyInputFromHeatDistributionSystem"
+    )
     ThermalEnergyOutputToHeatGenerator = "ThermalEnergyOutputToHeatGenerator"
-    ThermalEnergyOutputToHeatDistributionSystem = "ThermalEnergyOutputToHeatDistributionSystem"
+    ThermalEnergyOutputToHeatDistributionSystem = (
+        "ThermalEnergyOutputToHeatDistributionSystem"
+    )
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
+    StandbyHeatLoss = "StandbyHeatLoss"
 
     @utils.measure_execution_time
     def __init__(
@@ -114,7 +120,9 @@ class SimpleHotWaterStorage(cp.Component):
         # Initialization of variables
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
-        self.temperature_loss_in_celsius_per_hour = self.waterstorageconfig.temperature_loss_in_celsius_per_hour
+        self.temperature_loss_in_celsius_per_hour = (
+            self.waterstorageconfig.temperature_loss_in_celsius_per_hour
+        )
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 21
 
@@ -142,8 +150,11 @@ class SimpleHotWaterStorage(cp.Component):
             )
 
         self.build()
-        
-        self.state: SimpleHotWaterStorageState = SimpleHotWaterStorageState(mean_water_temperature_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius, temperature_loss_in_celsius_per_timestep=0)
+
+        self.state: SimpleHotWaterStorageState = SimpleHotWaterStorageState(
+            mean_water_temperature_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            temperature_loss_in_celsius_per_timestep=0,
+        )
         self.previous_state = self.state.self_copy()
 
         # =================================================================================================================================
@@ -174,7 +185,7 @@ class SimpleHotWaterStorage(cp.Component):
                 False,
             )
         )
-        
+
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
@@ -209,21 +220,21 @@ class SimpleHotWaterStorage(cp.Component):
             self.component_name,
             self.ThermalEnergyInStorage,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR, 
+            lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyInStorage} will follow.",
         )
         self.thermal_energy_input_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyInputFromHeatGenerator,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR, 
+            lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyInputFromHeatGenerator} will follow.",
         )
         self.thermal_energy_input_from_heat_distribution_system_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyInputFromHeatDistributionSystem,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR, 
+            lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyInputFromHeatDistributionSystem} will follow.",
         )
 
@@ -245,9 +256,17 @@ class SimpleHotWaterStorage(cp.Component):
             self.component_name,
             self.ThermalEnergyIncreaseInStorage,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR, output_description=f"here a description for {self.ThermalEnergyIncreaseInStorage} will follow.",
+            lt.Units.WATT_HOUR,
+            output_description=f"here a description for {self.ThermalEnergyIncreaseInStorage} will follow.",
         )
 
+        self.stand_by_heat_loss_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.StandbyHeatLoss,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT_HOUR,
+            output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -300,11 +319,15 @@ class SimpleHotWaterStorage(cp.Component):
                     self.water_mass_flow_rate_heat_generator_input_channel
                 )
             )
-            
-        water_mass_from_heat_generator_in_kg, water_mass_from_heat_distribution_system_in_kg = self.calculate_masses_of_water_flows(
+
+        (
+            water_mass_from_heat_generator_in_kg,
+            water_mass_from_heat_distribution_system_in_kg,
+        ) = self.calculate_masses_of_water_flows(
             water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
             water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
-            seconds_per_timestep=self.seconds_per_timestep)
+            seconds_per_timestep=self.seconds_per_timestep,
+        )
 
         # mean temperature in storage when all water flows are mixed with previous mean water storage temp
         self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
@@ -315,20 +338,46 @@ class SimpleHotWaterStorage(cp.Component):
             mass_of_input_water_flows_from_heat_distribution_system_in_kg=water_mass_from_heat_distribution_system_in_kg,
             previous_mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
         )
-        if self.mean_water_temperature_in_water_storage_in_celsius != 0 and abs(1- (self.state.mean_water_temperature_in_celsius / self.mean_water_temperature_in_water_storage_in_celsius)) < 0.05:
+        if (
+            self.mean_water_temperature_in_water_storage_in_celsius != 0
+            and abs(
+                1
+                - (
+                    self.state.mean_water_temperature_in_celsius
+                    / self.mean_water_temperature_in_water_storage_in_celsius
+                )
+            )
+            < 0.05
+        ):
             pass
-        else: 
-            print(f"Changes in hws between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.mean_water_temperature_in_celsius / self.mean_water_temperature_in_water_storage_in_celsius))}")
+        else:
+            print(
+                f"Changes in hws between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.mean_water_temperature_in_celsius / self.mean_water_temperature_in_water_storage_in_celsius))}"
+            )
 
-        previous_thermal_energy_in_storage_in_watt_hour = self.calculate_thermal_energy_in_storage(mean_water_temperature_in_storage_in_celsius=self.state.mean_water_temperature_in_celsius, mass_in_storage_in_kg=self.water_mass_in_storage_in_kg)
-        thermal_energy_in_storage_in_watt_hour = self.calculate_thermal_energy_in_storage(mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius, mass_in_storage_in_kg=self.water_mass_in_storage_in_kg)
-        
-        thermal_energy_input_from_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(water_mass_in_kg=water_mass_from_heat_generator_in_kg, water_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius)
-        thermal_energy_input_from_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow(water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg, water_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius)
-        
-        thermal_energy_increase_current_vs_previous_mean_temperature_in_watt_hour = self.calculate_thermal_energy_increase_or_decrease_in_storage(thermal_energy_in_storage_in_watt_hour=thermal_energy_in_storage_in_watt_hour, previous_thermal_energy_in_storage_in_watt_hour=previous_thermal_energy_in_storage_in_watt_hour)
+        previous_thermal_energy_in_storage_in_watt_hour = self.calculate_thermal_energy_in_storage(
+            mean_water_temperature_in_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
+            mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
+        )
+        thermal_energy_in_storage_in_watt_hour = self.calculate_thermal_energy_in_storage(
+            mean_water_temperature_in_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
+        )
 
-        
+        thermal_energy_input_from_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_heat_generator_in_kg,
+            water_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
+        )
+        thermal_energy_input_from_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg,
+            water_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
+        )
+
+        thermal_energy_increase_current_vs_previous_mean_temperature_in_watt_hour = self.calculate_thermal_energy_increase_or_decrease_in_storage(
+            thermal_energy_in_storage_in_watt_hour=thermal_energy_in_storage_in_watt_hour,
+            previous_thermal_energy_in_storage_in_watt_hour=previous_thermal_energy_in_storage_in_watt_hour,
+        )
+
         if (
             self.mean_water_temperature_in_water_storage_in_celsius > 90
             or self.mean_water_temperature_in_water_storage_in_celsius < 0
@@ -337,22 +386,20 @@ class SimpleHotWaterStorage(cp.Component):
                 f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
             )
 
-
         # Calculations ------------------------------------------------------------------------------------------------------
-
 
         if state_controller == 1:
 
             # hds gets water from hp (if hp is not off, mass flow is not zero)
             water_temperature_to_heat_distribution_system_in_celsius = self.calculate_water_output_temperature(
-                mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,#self.mean_water_temperature_in_water_storage_in_celsius,# 
+                mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,  # self.mean_water_temperature_in_water_storage_in_celsius,#
                 mixing_factor_water_input_portion=self.factor_for_water_input_portion,
                 mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
                 water_input_temperature_in_celsius=water_temperature_from_heat_generator_in_celsius,
             )
             # hp gets water from hds (if hp is not off, mass flow is not zero)
             water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
-                mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,#self.mean_water_temperature_in_water_storage_in_celsius,# 
+                mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,  # self.mean_water_temperature_in_water_storage_in_celsius,#
                 mixing_factor_water_input_portion=self.factor_for_water_input_portion,
                 mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
                 water_input_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
@@ -366,7 +413,6 @@ class SimpleHotWaterStorage(cp.Component):
             #     self.mean_water_temperature_in_water_storage_in_celsius
             # )
 
-
             water_temperature_to_heat_distribution_system_in_celsius = (
                 self.state.mean_water_temperature_in_celsius
             )
@@ -374,20 +420,29 @@ class SimpleHotWaterStorage(cp.Component):
                 self.state.mean_water_temperature_in_celsius
             )
             water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
-                mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,#self.mean_water_temperature_in_water_storage_in_celsius,# 
+                mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,  # self.mean_water_temperature_in_water_storage_in_celsius,#
                 mixing_factor_water_input_portion=self.factor_for_water_input_portion,
                 mixing_factor_water_storage_portion=self.factor_for_water_storage_portion,
                 water_input_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
             )
-            
+
         else:
             raise ValueError("unknown storage controller state.")
-        
+
         ### calc output energies
-        
-        thermal_energy_output_to_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(water_mass_in_kg=water_mass_from_heat_generator_in_kg, water_temperature_in_celsius=water_temperature_to_heat_generator_in_celsius)
-        thermal_energy_output_to_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow( water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg, water_temperature_in_celsius=water_temperature_to_heat_distribution_system_in_celsius)
-        
+
+        thermal_energy_output_to_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_heat_generator_in_kg,
+            water_temperature_in_celsius=water_temperature_to_heat_generator_in_celsius,
+        )
+        thermal_energy_output_to_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg,
+            water_temperature_in_celsius=water_temperature_to_heat_distribution_system_in_celsius,
+        )
+        stand_by_heat_loss_in_watt_hour_per_timestep = self.calculate_stand_by_heat_loss(
+            temperature_loss_in_celsius_per_timestep=self.state.temperature_loss_in_celsius_per_timestep,
+            water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
+        )
 
         # Set outputs -------------------------------------------------------------------------------------------------------
 
@@ -405,19 +460,18 @@ class SimpleHotWaterStorage(cp.Component):
         #     self.water_temperature_mean_channel,
         #     self.mean_water_temperature_in_water_storage_in_celsius,
         # )
-        
+
         stsv.set_output_value(
             self.water_temperature_mean_channel,
             self.state.mean_water_temperature_in_celsius,
         )
 
-        
         #############################################################################
         stsv.set_output_value(
             self.thermal_energy_in_storage_channel,
             thermal_energy_in_storage_in_watt_hour,
         )
-        
+
         stsv.set_output_value(
             self.thermal_energy_input_from_heat_generator_channel,
             thermal_energy_input_from_heat_generator_in_watt_hour,
@@ -426,7 +480,7 @@ class SimpleHotWaterStorage(cp.Component):
             self.thermal_energy_input_from_heat_distribution_system_channel,
             thermal_energy_input_from_heat_distribution_system_in_watt_hour,
         )
-        
+
         stsv.set_output_value(
             self.thermal_energy_output_to_heat_generator_channel,
             thermal_energy_output_to_heat_generator_in_watt_hour,
@@ -435,20 +489,26 @@ class SimpleHotWaterStorage(cp.Component):
             self.thermal_energy_output_to_heat_distribution_system_channel,
             thermal_energy_output_to_heat_distribution_system_in_watt_hour,
         )
-        
+
         stsv.set_output_value(
             self.thermal_energy_increase_in_storage_channel,
             thermal_energy_increase_current_vs_previous_mean_temperature_in_watt_hour,
         )
-        
-        
-        self.state.temperature_loss_in_celsius_per_timestep = self.calculate_temperature_loss(mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius, seconds_per_timestep=self.seconds_per_timestep, temperature_loss_in_celsius_per_hour=self.temperature_loss_in_celsius_per_hour)
-        self.state.mean_water_temperature_in_celsius = self.mean_water_temperature_in_water_storage_in_celsius - self.state.temperature_loss_in_celsius_per_timestep
-            
 
+        stsv.set_output_value(
+            self.stand_by_heat_loss_channel,
+            stand_by_heat_loss_in_watt_hour_per_timestep,
+        )
 
-        
-        
+        self.state.temperature_loss_in_celsius_per_timestep = self.calculate_temperature_loss(
+            mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            seconds_per_timestep=self.seconds_per_timestep,
+            temperature_loss_in_celsius_per_hour=self.temperature_loss_in_celsius_per_hour,
+        )
+        self.state.mean_water_temperature_in_celsius = (
+            self.mean_water_temperature_in_water_storage_in_celsius
+            - self.state.temperature_loss_in_celsius_per_timestep
+        )
 
     def build(self):
         """Build function.
@@ -459,20 +519,24 @@ class SimpleHotWaterStorage(cp.Component):
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
         # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
-        self.density_water_at_50_degree_celsius_in_kg_per_liter = 0.988
+        self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
         self.water_mass_in_storage_in_kg = (
-            self.density_water_at_50_degree_celsius_in_kg_per_liter
+            self.density_water_at_40_degree_celsius_in_kg_per_liter
             * self.waterstorageconfig.volume_heating_water_storage_in_liter
         )
         (
             self.factor_for_water_storage_portion,
             self.factor_for_water_input_portion,
         ) = self.calculate_mixing_factor_for_water_temperature_outputs()
-        
-        
-    def calculate_masses_of_water_flows(self, water_mass_flow_rate_from_heat_generator_in_kg_per_second: float, water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float, seconds_per_timestep: float):
-        """"Calculate masses of the water flows in kg."""
-        
+
+    def calculate_masses_of_water_flows(
+        self,
+        water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
+        water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second: float,
+        seconds_per_timestep: float,
+    ):
+        """ "Calculate masses of the water flows in kg."""
+
         mass_of_input_water_flows_from_heat_generator_in_kg = (
             water_mass_flow_rate_from_heat_generator_in_kg_per_second
             * seconds_per_timestep
@@ -481,8 +545,11 @@ class SimpleHotWaterStorage(cp.Component):
             water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second
             * seconds_per_timestep
         )
-        
-        return mass_of_input_water_flows_from_heat_generator_in_kg, mass_of_input_water_flows_from_heat_distribution_system_in_kg
+
+        return (
+            mass_of_input_water_flows_from_heat_generator_in_kg,
+            mass_of_input_water_flows_from_heat_distribution_system_in_kg,
+        )
 
     def calculate_mean_water_temperature_in_water_storage(
         self,
@@ -546,56 +613,95 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         return water_temperature_output_in_celsius
-    
-    
-    def calculate_temperature_loss(self, mean_water_temperature_in_water_storage_in_celsius: float, seconds_per_timestep:float, temperature_loss_in_celsius_per_hour: float):
+
+    def calculate_temperature_loss(
+        self,
+        mean_water_temperature_in_water_storage_in_celsius: float,
+        seconds_per_timestep: float,
+        temperature_loss_in_celsius_per_hour: float,
+    ):
         """Calculate temperature loss in celsius per timestep."""
-        
+
         # make heat loss for mean storage temperature every timestep but only until min temp of 16°C is reached (regular Kellertemperatur)
         # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
-        
+
         if mean_water_temperature_in_water_storage_in_celsius >= 16.0:
-            temperature_loss_in_celsius_per_timestep = temperature_loss_in_celsius_per_hour/(3600/seconds_per_timestep)
+            temperature_loss_in_celsius_per_timestep = (
+                temperature_loss_in_celsius_per_hour / (3600 / seconds_per_timestep)
+            )
         else:
             temperature_loss_in_celsius_per_timestep = 0
-            
+
         return temperature_loss_in_celsius_per_timestep
-            
-    
+
     #########################################################################################################################################################
 
-    def calculate_thermal_energy_in_storage(self, mean_water_temperature_in_storage_in_celsius: float, mass_in_storage_in_kg: float):
-        
+    def calculate_thermal_energy_in_storage(
+        self,
+        mean_water_temperature_in_storage_in_celsius: float,
+        mass_in_storage_in_kg: float,
+    ):
+
         # Q = c * m * (Tout - Tin)
         # calc thermal energy with respect to 0°C temperature
-        
-        thermal_energy_in_storage_in_joule = self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius * mass_in_storage_in_kg * (mean_water_temperature_in_storage_in_celsius) # T_mean - 0°C
+
+        thermal_energy_in_storage_in_joule = (
+            self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            * mass_in_storage_in_kg
+            * (mean_water_temperature_in_storage_in_celsius)
+        )  # T_mean - 0°C
         # 1Wh = J / 3600
-        thermal_energy_in_storage_in_watt_hour = thermal_energy_in_storage_in_joule / 3600
-        
+        thermal_energy_in_storage_in_watt_hour = (
+            thermal_energy_in_storage_in_joule / 3600
+        )
+
         return thermal_energy_in_storage_in_watt_hour
-    
-    
-    def calculate_thermal_energy_of_water_flow(self, water_mass_in_kg: float, water_temperature_in_celsius: float):
-        
+
+    def calculate_thermal_energy_of_water_flow(
+        self, water_mass_in_kg: float, water_temperature_in_celsius: float
+    ):
+
         # Q = c * m * (Tout - Tin)
         # calc thermal energy input with respect to 0°C temperature
-        thermal_energy_of_input_water_flow_in_watt_hour = (1/3600) * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius * water_mass_in_kg * water_temperature_in_celsius
-        
+        thermal_energy_of_input_water_flow_in_watt_hour = (
+            (1 / 3600)
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            * water_mass_in_kg
+            * water_temperature_in_celsius
+        )
+
         return thermal_energy_of_input_water_flow_in_watt_hour
-    
-    def calculate_thermal_energy_increase_or_decrease_in_storage(self, thermal_energy_in_storage_in_watt_hour: float, previous_thermal_energy_in_storage_in_watt_hour: float):
-        
-        thermal_energy_difference_in_watt_hour = thermal_energy_in_storage_in_watt_hour - previous_thermal_energy_in_storage_in_watt_hour
+
+    def calculate_thermal_energy_increase_or_decrease_in_storage(
+        self,
+        thermal_energy_in_storage_in_watt_hour: float,
+        previous_thermal_energy_in_storage_in_watt_hour: float,
+    ):
+
+        thermal_energy_difference_in_watt_hour = (
+            thermal_energy_in_storage_in_watt_hour
+            - previous_thermal_energy_in_storage_in_watt_hour
+        )
 
         return thermal_energy_difference_in_watt_hour
-    
-    
-    
+
+    def calculate_stand_by_heat_loss(
+        self,
+        temperature_loss_in_celsius_per_timestep: float,
+        water_mass_in_storage_in_kg: float,
+    ):
+
+        heat_loss_in_watt_hour_per_timestep = (
+            water_mass_in_storage_in_kg
+            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            / 3600
+            * temperature_loss_in_celsius_per_timestep
+        )
+
+        return heat_loss_in_watt_hour_per_timestep
 
 
 class SimpleHotWaterStorageController(cp.Component):
-
 
     # Inputs
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
@@ -609,7 +715,7 @@ class SimpleHotWaterStorageController(cp.Component):
         # config: HeatPumpHplibControllerL1Config,
     ) -> None:
         """Construct all the neccessary attributes."""
-        #self.heatpump_controller_config = config
+        # self.heatpump_controller_config = config
         super().__init__(
             "SimpleHotWaterStorageController",
             my_simulation_parameters=my_simulation_parameters,
@@ -645,9 +751,7 @@ class SimpleHotWaterStorageController(cp.Component):
             output_description=f"here a description for {self.State} will follow.",
         )
 
-
-    def build(
-        self) -> None:
+    def build(self) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -699,7 +803,9 @@ class SimpleHotWaterStorageController(cp.Component):
                     )
                 )
 
-            self.conditions_on_off(water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second)
+            self.conditions_on_off(
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second
+            )
 
             if self.controller_mode == "on":
                 state = 1
@@ -712,8 +818,7 @@ class SimpleHotWaterStorageController(cp.Component):
             stsv.set_output_value(self.state_channel, state)
 
     def conditions_on_off(
-        self,
-        water_mass_flow_rate_from_heat_generator_in_kg_per_second
+        self, water_mass_flow_rate_from_heat_generator_in_kg_per_second
     ) -> None:
         """Set conditions for the simple hot water storage controller mode."""
 

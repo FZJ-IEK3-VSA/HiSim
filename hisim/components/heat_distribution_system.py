@@ -2,7 +2,7 @@
 # clean
 
 from enum import IntEnum
-from typing import List, Any
+from typing import List, Any, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
@@ -46,7 +46,6 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
-    water_temperature_in_distribution_system_in_celsius: float
     heating_system: HeatingSystemType
 
     @classmethod
@@ -56,7 +55,6 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            water_temperature_in_distribution_system_in_celsius=22,
             heating_system=HeatingSystemType.FLOORHEATING,
         )
         return config
@@ -75,7 +73,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
 
     name: str
     heating_system: HeatingSystemType
-    set_heating_threshold_outside_temperature_in_celsius: float
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
@@ -92,6 +90,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             set_cooling_temperature_for_building_in_celsius=24,
         )
 
+
 @dataclass
 class HeatDistributionSystemState:
 
@@ -102,8 +101,9 @@ class HeatDistributionSystemState:
         """Copy the Heat Distribution State."""
         return HeatDistributionSystemState(
             self.water_output_temperature_in_celsius,
-            self.thermal_power_delivered_in_watt
+            self.thermal_power_delivered_in_watt,
         )
+
 
 class HeatDistribution(cp.Component):
 
@@ -172,8 +172,10 @@ class HeatDistribution(cp.Component):
             key=SingletonDictKeyEnum.HEATINGSYSTEM,
             entry=self.heat_distribution_system_config.heating_system,
         )
-        
-        self.state: HeatDistributionSystemState = HeatDistributionSystemState(water_output_temperature_in_celsius=21, thermal_power_delivered_in_watt=0)
+
+        self.state: HeatDistributionSystemState = HeatDistributionSystemState(
+            water_output_temperature_in_celsius=21, thermal_power_delivered_in_watt=0
+        )
         self.previous_state = self.state.self_copy()
 
         # Inputs
@@ -313,12 +315,12 @@ class HeatDistribution(cp.Component):
     def i_save_state(self) -> None:
         """Save the current state."""
         self.previous_state = self.state.self_copy()
-        #pass
+        # pass
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
         self.state = self.previous_state.self_copy()
-        #pass
+        # pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -351,17 +353,17 @@ class HeatDistribution(cp.Component):
         # if self.water_temperature_output_in_celsius != 0:
         #     if abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius)) < 0.05:
         #         pass
-        #     else: 
+        #     else:
         #         print(f"Changes in hds between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius))}")
-                
+
         # if self.thermal_power_delivered_in_watt != 0:
         #     if abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt)) < 0.05:
         #         pass
-        #     else: 
+        #     else:
         #         print(f"Changes in hds between prev thermal power and thermal power are higher than 5%: {abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt))}")
-                
+
         if state_controller == 1:
-        
+
             (
                 self.water_temperature_output_in_celsius,
                 self.thermal_power_delivered_in_watt,
@@ -388,18 +390,20 @@ class HeatDistribution(cp.Component):
         stsv.set_output_value(
             self.water_temperature_output_channel,
             self.state.water_output_temperature_in_celsius
-            #self.water_temperature_output_in_celsius,
+            # self.water_temperature_output_in_celsius,
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
             self.state.thermal_power_delivered_in_watt
-            #self.thermal_power_delivered_in_watt,
+            # self.thermal_power_delivered_in_watt,
         )
-        
-        self.state.water_output_temperature_in_celsius = self.water_temperature_output_in_celsius
-        self.state.thermal_power_delivered_in_watt = self.thermal_power_delivered_in_watt
-        
-        
+
+        self.state.water_output_temperature_in_celsius = (
+            self.water_temperature_output_in_celsius
+        )
+        self.state.thermal_power_delivered_in_watt = (
+            self.thermal_power_delivered_in_watt
+        )
 
     def calc_heating_distribution_system_water_mass_flow_rate(
         self,
@@ -458,7 +462,6 @@ class HeatDistribution(cp.Component):
                 water_temperature_output_in_celsius = water_temperature_input_in_celsius
                 thermal_power_delivered_effective_in_watt = 0
 
-        
         elif theoretical_thermal_buiding_demand_in_watt < 0:
             # water in hds must be cooler than the building in order to cool building down
             if water_temperature_input_in_celsius < residence_temperature_in_celsius:
@@ -716,16 +719,33 @@ class HeatDistributionController(cp.Component):
 
             self.conditions_for_opening_or_shutting_heat_distribution(
                 theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
-                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
             )
 
-            if self.controller_heat_distribution_mode == "on":
+            # no heating threshold for the heat distribution system
+            if (
+                self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                is None
+            ):
+                summer_mode = "on"
+
+            # turning heat distributon system off when the average daily outside temperature is above a certain threshold
+            else:
+                summer_mode = self.summer_condition(
+                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                    set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                )
+
+            if self.controller_heat_distribution_mode == "on" and summer_mode == "on":
                 self.state_controller = 1
+            elif (
+                self.controller_heat_distribution_mode == "on" and summer_mode == "off"
+            ):
+                self.state_controller = 0
             elif self.controller_heat_distribution_mode == "off":
                 self.state_controller = 0
             else:
 
-                raise ValueError("unknown mode")
+                raise ValueError("unknown hds controller mode.")
 
             stsv.set_output_value(self.state_channel, self.state_controller)
             stsv.set_output_value(
@@ -733,32 +753,50 @@ class HeatDistributionController(cp.Component):
                 list_of_heating_distribution_system_flow_and_return_temperatures[0],
             )
 
-
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
         theoretical_thermal_building_demand_in_watt: float,
-        daily_average_outside_temperature_in_celsius: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
 
         if self.controller_heat_distribution_mode == "on":
-            # no heat exchange with building if theres no demand and if avg temp outside too high
-            if (
-                theoretical_thermal_building_demand_in_watt == 0
-            ):
+            # no heat exchange with building if theres no demand
+            if theoretical_thermal_building_demand_in_watt == 0:
                 self.controller_heat_distribution_mode = "off"
                 return
         elif self.controller_heat_distribution_mode == "off":
-            # if heating or cooling is needed for building or if avg temp outside too low
-            if (
-                theoretical_thermal_building_demand_in_watt != 0
-
-            ):
+            # if heating or cooling is needed for building
+            if theoretical_thermal_building_demand_in_watt != 0:
                 self.controller_heat_distribution_mode = "on"
                 return
 
         else:
-            raise ValueError("unknown mode")
+            raise ValueError("unknown hds controller mode.")
+
+    def summer_condition(
+        self,
+        daily_average_outside_temperature_in_celsius: float,
+        set_heating_threshold_temperature_in_celsius: float,
+    ) -> str:
+        """Set conditions for the valve in heat distribution."""
+
+        if (
+            daily_average_outside_temperature_in_celsius
+            > set_heating_threshold_temperature_in_celsius
+        ):
+            summer_mode = "off"
+            return summer_mode
+        elif (
+            daily_average_outside_temperature_in_celsius
+            < set_heating_threshold_temperature_in_celsius
+        ):
+            summer_mode = "on"
+            return summer_mode
+
+        else:
+            raise ValueError(
+                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+            )
 
     def prepare_calc_heating_dist_temperature(
         self,
@@ -824,8 +862,6 @@ class HeatDistributionController(cp.Component):
         ):
             flow_temperature_in_celsius = self.min_flow_temperature_in_celsius
             return_temperature_in_celsius = self.min_return_temperature_in_celsius
-            
-
 
         else:
             # heating case, daily avg outside temperature is lower than indoor temperature

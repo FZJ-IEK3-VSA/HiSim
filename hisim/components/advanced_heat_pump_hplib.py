@@ -101,12 +101,13 @@ class HeatPumpHplib(Component):
         self.t_out_val = config.t_out_val
 
         self.p_th_set = config.p_th_set
-        
+
         self.cycling_mode = config.cycling_mode
 
         # Component has states
         self.state = HeatPumpState(
-            time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
+            time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0
+        )
         self.previous_state = self.state.self_copy()
 
         # Load parameters from heat pump database
@@ -245,7 +246,6 @@ class HeatPumpHplib(Component):
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
 
-
         # Load input values
         on_off: float = stsv.get_input_value(self.on_off_switch)
         t_in_primary = stsv.get_input_value(self.t_in_primary)
@@ -254,12 +254,12 @@ class HeatPumpHplib(Component):
         time_on = self.state.time_on
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
-        
+
         # cycling means periodic turning on and off of the heat pump
         if self.cycling_mode == True:
-            
+
             # Parameter
-            time_on_min = 600 # [s]
+            time_on_min = 600  # [s]
             time_off_min = time_on_min
             on_off_previous = self.state.on_off_previous
 
@@ -270,15 +270,12 @@ class HeatPumpHplib(Component):
                 on_off = -1
             elif on_off_previous == 0 and time_off < time_off_min:
                 on_off = 0
-       
-        # heat pump is turned on and off only according to heat pump controller        
+
+        # heat pump is turned on and off only according to heat pump controller
         elif self.cycling_mode == False:
             pass
         else:
             raise ValueError("Cycling mode of the advanced hplib unknown.")
-            
-
-
 
         # OnOffSwitch
         if on_off == 1:
@@ -339,13 +336,13 @@ class HeatPumpHplib(Component):
         stsv.set_output_value(self.m_dot, m_dot)
         stsv.set_output_value(self.time_on, time_on)
         stsv.set_output_value(self.time_off, time_off)
-        
+
         # write values to state
         self.state.time_on = time_on
         self.state.time_on_cooling = time_on_cooling
         self.state.time_off = time_off
         self.state.on_off_previous = on_off
-        
+
 
 @dataclass
 class HeatPumpState:
@@ -354,13 +351,13 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
-
     def self_copy(
         self,
     ):
         """Copy the Heat Pump State."""
         return HeatPumpState(
-            self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous)
+            self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
+        )
 
 
 # ===========================================================================
@@ -378,7 +375,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
 
     name: str
     mode: int
-    heating_threshold_temperature_in_celsius: Optional[float]
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(cls):
@@ -386,7 +383,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
             mode=1,
-            heating_threshold_temperature_in_celsius=None,
+            set_heating_threshold_outside_temperature_in_celsius=None,
         )
 
 
@@ -421,7 +418,7 @@ class HeatPumpHplibControllerL1(Component):
         "HeatingFlowTemperatureFromHeatDistributionSystem"
     )
     StatefromHeatDistributionSystem = "StatefromHeatDistributionSystem"
-    
+
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
     # Outputs
@@ -489,7 +486,6 @@ class HeatPumpHplibControllerL1(Component):
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-
     def build(
         self,
         mode: float,
@@ -545,11 +541,9 @@ class HeatPumpHplibControllerL1(Component):
                 )
             )
 
-            
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
-            
 
             if self.mode == 1:
                 self.conditions_on_off(
@@ -571,14 +565,18 @@ class HeatPumpHplibControllerL1(Component):
                 )
 
             # no heating threshold for the heat pump
-            if self.heatpump_controller_config.heating_threshold_temperature_in_celsius is None:
+            if (
+                self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                is None
+            ):
                 summer_mode = "on"
 
             # turning heat pump off when the average daily outside temperature is above a certain threshold
             else:
-                summer_mode = self.summer_condition(daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                                    set_heating_threshold_temperature_in_celsius=self.heatpump_controller_config.heating_threshold_temperature_in_celsius)
-            
+                summer_mode = self.summer_condition(
+                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                    set_heating_threshold_temperature_in_celsius=self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                )
 
             # state of heat distribution controller is off when daily avg outside temperature is > 16°C
             # in that case the heat pump should not be heating
@@ -592,11 +590,8 @@ class HeatPumpHplibControllerL1(Component):
                 state = -1
             else:
                 raise ValueError("Advanced HP Lib Controller State unknown.")
-            
-
 
             stsv.set_output_value(self.state_channel, state)
-            
 
     def conditions_on_off(
         self,
@@ -616,7 +611,7 @@ class HeatPumpHplibControllerL1(Component):
         elif self.controller_heatpumpmode == "off":
             if (
                 water_temperature_input_in_celsius
-                < set_heating_flow_temperature_in_celsius -0.5
+                < set_heating_flow_temperature_in_celsius - 0.5
             ):  # - 1:
                 self.controller_heatpumpmode = "heating"
                 return
@@ -653,15 +648,13 @@ class HeatPumpHplibControllerL1(Component):
         else:
             raise ValueError("unknown mode")
 
-        
     def summer_condition(
         self,
         daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: float
+        set_heating_threshold_temperature_in_celsius: float,
     ) -> str:
         """Set conditions for the valve in heat distribution."""
 
-        
         if (
             daily_average_outside_temperature_in_celsius
             > set_heating_threshold_temperature_in_celsius
@@ -669,11 +662,13 @@ class HeatPumpHplibControllerL1(Component):
             summer_mode = "off"
             return summer_mode
         elif (
-                daily_average_outside_temperature_in_celsius
-                < set_heating_threshold_temperature_in_celsius
-            ):
-                summer_mode = "on"
-                return summer_mode
+            daily_average_outside_temperature_in_celsius
+            < set_heating_threshold_temperature_in_celsius
+        ):
+            summer_mode = "on"
+            return summer_mode
 
         else:
-            raise ValueError(f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable.")
+            raise ValueError(
+                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+            )

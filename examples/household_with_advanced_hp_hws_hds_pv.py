@@ -68,7 +68,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Heat Pump Controller
     hp_controller_mode = (
-        1 # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
+        1  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
     set_heating_threshold_temperature_for_heat_pump_in_celsius = 14.0
 
@@ -85,15 +85,13 @@ def household_with_hds_and_advanced_hp(
     volume_heating_water_storage_in_liter = 500
     temperature_loss_in_celsius_per_hour = 0.21
 
-
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 21
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
-    set_heating_threshold_temperature_for_heat_distribution_system_in_celsius = set_heating_threshold_temperature_for_heat_pump_in_celsius
+    set_heating_threshold_temperature_for_heat_distribution_system_in_celsius = None
     set_heating_temperature_for_building_in_celsius = 19
     set_cooling_temperature_for_building_in_celsius = 22
 
@@ -105,7 +103,9 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.EXPORT_TO_CSV
+    )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
@@ -117,13 +117,15 @@ def household_with_hds_and_advanced_hp(
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            heating_system=heating_system
+            heating_system=heating_system,
         ),
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    my_building_config.building_code="DE.N.SFH.05.Gen.ReEx.001.003"
+    my_building_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
+    my_building_config.building_code = "DE.N.SFH.05.Gen.ReEx.001.003"
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -179,8 +181,9 @@ def household_with_hds_and_advanced_hp(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
             mode=hp_controller_mode,
-            heating_threshold_temperature_in_celsius=set_heating_threshold_temperature_for_heat_pump_in_celsius),
-            my_simulation_parameters=my_simulation_parameters,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature_for_heat_pump_in_celsius,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
@@ -197,10 +200,11 @@ def household_with_hds_and_advanced_hp(
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
-        name=hds_name,
-        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
-        heating_system=heating_system,
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig(
+            name=hds_name,
+            heating_system=heating_system,
+        )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -208,17 +212,23 @@ def household_with_hds_and_advanced_hp(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
-        name=hws_name,
-        volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        temperature_loss_in_celsius_per_hour=temperature_loss_in_celsius_per_hour
+    my_simple_heat_water_storage_config = (
+        simple_hot_water_storage.SimpleHotWaterStorageConfig(
+            name=hws_name,
+            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+            temperature_loss_in_celsius_per_hour=temperature_loss_in_celsius_per_hour,
+        )
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    
-    my_simple_hot_water_storage_controller = simple_hot_water_storage.SimpleHotWaterStorageController(my_simulation_parameters=my_simulation_parameters)
+
+    my_simple_hot_water_storage_controller = (
+        simple_hot_water_storage.SimpleHotWaterStorageController(
+            my_simulation_parameters=my_simulation_parameters
+        )
+    )
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
@@ -237,6 +247,8 @@ def household_with_hds_and_advanced_hp(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
         my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
+        # my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
+        # my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.HeatingFlowTemperatureFromHeatDistributionSystem,
@@ -295,7 +307,7 @@ def household_with_hds_and_advanced_hp(
     my_simple_hot_water_storage_controller.connect_input(
         my_simple_hot_water_storage_controller.WaterMassFlowRateFromHeatGenerator,
         my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput
+        my_heat_pump.MassFlowOutput,
     )
 
     # -----------------------------------------------------------------------------------------------------------------

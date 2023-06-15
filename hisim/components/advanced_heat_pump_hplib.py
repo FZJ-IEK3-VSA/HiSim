@@ -15,7 +15,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
-from typing import Any, List
+from typing import Any, List, Optional
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -35,6 +35,7 @@ class HeatPumpHplibConfig:
     t_in: float
     t_out_val: float
     p_th_set: float
+    cycling_mode: bool
 
 
 class HeatPumpHplib(Component):
@@ -100,6 +101,8 @@ class HeatPumpHplib(Component):
         self.t_out_val = config.t_out_val
 
         self.p_th_set = config.p_th_set
+        
+        self.cycling_mode = config.cycling_mode
 
         # Component has states
         self.state = HeatPumpState(
@@ -242,9 +245,6 @@ class HeatPumpHplib(Component):
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
 
-        # Parameter
-        time_on_min = 600 # [s]
-        time_off_min = time_on_min
 
         # Load input values
         on_off: float = stsv.get_input_value(self.on_off_switch)
@@ -254,15 +254,29 @@ class HeatPumpHplib(Component):
         time_on = self.state.time_on
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
-        on_off_previous = self.state.on_off_previous
+        
+        # cycling means periodic turning on and off of the heat pump
+        if self.cycling_mode == True:
+            
+            # Parameter
+            time_on_min = 600 # [s]
+            time_off_min = time_on_min
+            on_off_previous = self.state.on_off_previous
 
-        # Overwrite on_off to realize minimum time of or time off
-        if on_off_previous == 1 and time_on < time_on_min:
-            on_off = 1
-        elif on_off_previous == -1 and time_on_cooling < time_on_min:
-            on_off = -1
-        elif on_off_previous == 0 and time_off < time_off_min:
-            on_off = 0
+            # Overwrite on_off to realize minimum time of or time off
+            if on_off_previous == 1 and time_on < time_on_min:
+                on_off = 1
+            elif on_off_previous == -1 and time_on_cooling < time_on_min:
+                on_off = -1
+            elif on_off_previous == 0 and time_off < time_off_min:
+                on_off = 0
+       
+        # heat pump is turned on and off only according to heat pump controller        
+        elif self.cycling_mode == False:
+            pass
+        else:
+            raise ValueError("Cycling mode of the advanced hplib unknown.")
+            
 
 
 
@@ -298,7 +312,7 @@ class HeatPumpHplib(Component):
             )
             time_on = 0
             time_off = 0
-        else:
+        elif on_off == 0:
             # Calulate outputs for off mode
             p_th = 0
             p_el = 0
@@ -312,6 +326,9 @@ class HeatPumpHplib(Component):
             time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
             time_on = 0
             time_on_cooling = 0
+
+        else:
+            raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
         # write values for output time series
         stsv.set_output_value(self.p_th, p_th)
@@ -361,6 +378,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
 
     name: str
     mode: int
+    heating_threshold_temperature_in_celsius: Optional[float]
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(cls):
@@ -368,6 +386,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
             mode=1,
+            heating_threshold_temperature_in_celsius=None,
         )
 
 
@@ -449,15 +468,6 @@ class HeatPumpHplibControllerL1(Component):
             Units.CELSIUS,
             True,
         )
-        
-        self.state_from_heat_distribution_system_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.StatefromHeatDistributionSystem,
-            LoadTypes.ANY,
-            Units.ANY,
-            False,
-        )
-        
         self.daily_avg_outside_temperature_input_channel: ComponentInput = (
             self.add_input(
                 self.component_name,
@@ -534,8 +544,7 @@ class HeatPumpHplibControllerL1(Component):
                     self.heating_flow_temperature_from_heat_distribution_system_channel
                 )
             )
-            
-            # state_from_heat_distribution_system = stsv.get_input_value(self.state_from_heat_distribution_system_channel)
+
             
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
@@ -560,9 +569,16 @@ class HeatPumpHplibControllerL1(Component):
                 raise ValueError(
                     "Either the Advanced HP Lib Controller Mode is neither 1 nor 2 or the heating system is not floor heating which is the condition for cooling (mode 2)."
                 )
-                
-            summer_mode = self.summer_condition(daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                                  set_heating_threshold_temperature_in_celsius=16.0)
+
+            # no heating threshold for the heat pump
+            if self.heatpump_controller_config.heating_threshold_temperature_in_celsius is None:
+                summer_mode = "on"
+
+            # turning heat pump off when the average daily outside temperature is above a certain threshold
+            else:
+                summer_mode = self.summer_condition(daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                                    set_heating_threshold_temperature_in_celsius=self.heatpump_controller_config.heating_threshold_temperature_in_celsius)
+            
 
             # state of heat distribution controller is off when daily avg outside temperature is > 16°C
             # in that case the heat pump should not be heating
@@ -592,7 +608,7 @@ class HeatPumpHplibControllerL1(Component):
         if self.controller_heatpumpmode == "heating":
             if (
                 water_temperature_input_in_celsius
-                > set_heating_flow_temperature_in_celsius + 1.0
+                > set_heating_flow_temperature_in_celsius + 0.5
             ):  # + 1:
                 self.controller_heatpumpmode = "off"
                 return
@@ -600,7 +616,7 @@ class HeatPumpHplibControllerL1(Component):
         elif self.controller_heatpumpmode == "off":
             if (
                 water_temperature_input_in_celsius
-                < set_heating_flow_temperature_in_celsius - 1.0
+                < set_heating_flow_temperature_in_celsius -0.5
             ):  # - 1:
                 self.controller_heatpumpmode = "heating"
                 return
@@ -660,4 +676,4 @@ class HeatPumpHplibControllerL1(Component):
                 return summer_mode
 
         else:
-            raise ValueError(f"daily average temperature is not acceptable {daily_average_outside_temperature_in_celsius}°C")
+            raise ValueError(f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable.")

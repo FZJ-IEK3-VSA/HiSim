@@ -70,6 +70,7 @@ def household_with_hds_and_advanced_hp(
     hp_controller_mode = (
         1 # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
+    set_heating_threshold_temperature_for_heat_pump_in_celsius = 14.0
 
     # Set Heat Pump
     model: str = "Generic"
@@ -77,6 +78,7 @@ def household_with_hds_and_advanced_hp(
     heating_reference_temperature_in_celsius: float = -7  # t_in
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
+    cycling_mode = False
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
@@ -92,8 +94,8 @@ def household_with_hds_and_advanced_hp(
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
-    set_heating_threshold_temperature = 18.0
-    set_heating_temperature_for_building_in_celsius = 20
+    set_heating_threshold_temperature_for_heat_distribution_system_in_celsius = set_heating_threshold_temperature_for_heat_pump_in_celsius
+    set_heating_temperature_for_building_in_celsius = 21
     set_cooling_temperature_for_building_in_celsius = 22
 
     # =================================================================================================================================
@@ -112,7 +114,7 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
         config=heat_distribution_system.HeatDistributionControllerConfig(
             name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature_for_heat_distribution_system_in_celsius,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -178,8 +180,8 @@ def household_with_hds_and_advanced_hp(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
             mode=hp_controller_mode,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
+            heating_threshold_temperature_in_celsius=set_heating_threshold_temperature_for_heat_pump_in_celsius),
+            my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
@@ -190,6 +192,7 @@ def household_with_hds_and_advanced_hp(
             t_in=heating_reference_temperature_in_celsius,
             t_out_val=flow_temperature_in_celsius,
             p_th_set=set_thermal_output_power_in_watt,
+            cycling_mode=cycling_mode,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -236,8 +239,6 @@ def household_with_hds_and_advanced_hp(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
-        #my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
-        # my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
         my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
     )
     my_heat_pump_controller.connect_input(
@@ -245,12 +246,7 @@ def household_with_hds_and_advanced_hp(
         my_heat_distribution_controller.component_name,
         my_heat_distribution_controller.HeatingFlowTemperature,
     )
-    
-    # my_heat_pump_controller.connect_input(
-    #     my_heat_pump_controller.StatefromHeatDistributionSystem,
-    #     my_heat_distribution_controller.component_name,
-    #     my_heat_distribution_controller.State,
-    # )
+
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.DailyAverageOutsideTemperature,
         my_weather.component_name,

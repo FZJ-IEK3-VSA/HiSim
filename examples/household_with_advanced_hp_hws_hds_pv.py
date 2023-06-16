@@ -78,14 +78,14 @@ def household_with_hds_and_advanced_hp(
     heating_reference_temperature_in_celsius: float = -7  # t_in
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
-    cycling_mode = True
+    cycling_mode = False
     minimum_running_time_in_seconds = 1200
     minimum_idle_time_in_seconds = 1200
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 500
-    temperature_loss_in_celsius_per_hour = 1
+    temperature_loss_in_celsius_per_hour = 0.21
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"

@@ -49,7 +49,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 15
 
     # Set Weather
     location = "Aachen"
@@ -68,13 +68,14 @@ def household_with_hds_and_advanced_hp(
 
     # Set Heat Pump Controller
     hp_controller_mode = (
-        1  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
+        2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
-    set_heating_threshold_temperature_for_heat_pump_in_celsius = 16.0
+    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = None
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = None
 
     # Set Heat Pump
     model: str = "Generic"
-    group_id: int = 4  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
@@ -93,9 +94,11 @@ def household_with_hds_and_advanced_hp(
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
-    set_heating_threshold_temperature_for_heat_distribution_system_in_celsius = None
-    set_heating_temperature_for_building_in_celsius = 19
-    set_cooling_temperature_for_building_in_celsius = 22
+    set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
+        None
+    )
+    set_temperature_for_building_in_celsius = 20.0
+    set_cooling_threshold_water_temperature_in_celsius = 17.0
 
     # =================================================================================================================================
     # Build Components
@@ -115,11 +118,11 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
         config=heat_distribution_system.HeatDistributionControllerConfig(
             name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature_for_heat_distribution_system_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
+            set_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
+            set_cooling_threshold_water_temperature_in_celsius=set_cooling_threshold_water_temperature_in_celsius,
         ),
     )
     # Build Building
@@ -183,7 +186,8 @@ def household_with_hds_and_advanced_hp(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
             mode=hp_controller_mode,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature_for_heat_pump_in_celsius,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
+            set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

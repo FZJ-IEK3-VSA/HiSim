@@ -416,9 +416,9 @@ class SimpleHotWaterStorage(cp.Component):
             water_temperature_to_heat_distribution_system_in_celsius = (
                 self.state.mean_water_temperature_in_celsius
             )
-            water_temperature_to_heat_generator_in_celsius = (
-                self.state.mean_water_temperature_in_celsius
-            )
+            # water_temperature_to_heat_generator_in_celsius = (
+            #     self.state.mean_water_temperature_in_celsius
+            # )
             water_temperature_to_heat_generator_in_celsius = self.calculate_water_output_temperature(
                 mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,  # self.mean_water_temperature_in_water_storage_in_celsius,#
                 mixing_factor_water_input_portion=self.factor_for_water_input_portion,
@@ -622,7 +622,7 @@ class SimpleHotWaterStorage(cp.Component):
     ):
         """Calculate temperature loss in celsius per timestep."""
 
-        # make heat loss for mean storage temperature every timestep but only until min temp of 16°C is reached (regular Kellertemperatur)
+        # make heat loss for mean storage temperature every timestep but only until min temp of 16°C is reached (regular basement temperature)
         # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
 
         if mean_water_temperature_in_water_storage_in_celsius >= 16.0:

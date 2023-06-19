@@ -75,8 +75,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     heating_system: HeatingSystemType
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     heating_reference_temperature_in_celsius: float
-    set_heating_temperature_for_building_in_celsius: float
-    set_cooling_temperature_for_building_in_celsius: float
+    set_temperature_for_building_in_celsius: float
+    set_cooling_threshold_water_temperature_in_celsius: float
 
     @classmethod
     def get_default_heat_distribution_controller_config(cls):
@@ -86,8 +86,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             heating_system=HeatingSystemType.FLOORHEATING,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=-14.0,
-            set_heating_temperature_for_building_in_celsius=20,
-            set_cooling_temperature_for_building_in_celsius=24,
+            set_temperature_for_building_in_celsius=20,
+            set_cooling_threshold_water_temperature_in_celsius=17.0,
         )
 
 
@@ -535,11 +535,7 @@ class HeatDistributionController(cp.Component):
         self.state_controller: int = 0
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
-            entry=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
-            entry=self.heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
+            entry=self.heat_distribution_controller_config.set_temperature_for_building_in_celsius,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.HEATINGSYSTEM,
@@ -550,9 +546,10 @@ class HeatDistributionController(cp.Component):
             set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=self.heat_distribution_controller_config.heating_reference_temperature_in_celsius,
             heating_system_type=self.heat_distribution_controller_config.heating_system,
+            set_cooling_threshold_water_temperature_in_celsius=self.heat_distribution_controller_config.set_cooling_threshold_water_temperature_in_celsius,
         )
         self.prepare_calc_heating_dist_temperature(
-            set_room_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
+            set_room_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_temperature_for_building_in_celsius,
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
@@ -660,6 +657,7 @@ class HeatDistributionController(cp.Component):
         set_heating_threshold_temperature_in_celsius: float,
         heating_reference_temperature_in_celsius: float,
         heating_system_type: HeatingSystemType,
+        set_cooling_threshold_water_temperature_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -673,6 +671,10 @@ class HeatDistributionController(cp.Component):
             heating_reference_temperature_in_celsius
         )
         self.heating_system_type = heating_system_type
+
+        self.set_cooling_threshold_water_temperature_in_celsius = (
+            set_cooling_threshold_water_temperature_in_celsius
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -712,6 +714,9 @@ class HeatDistributionController(cp.Component):
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
+            water_input_temperature_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_from_heat_water_storage_channel
+            )
 
             list_of_heating_distribution_system_flow_and_return_temperatures = self.calc_heat_distribution_flow_and_return_temperatures(
                 daily_avg_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius
@@ -726,7 +731,7 @@ class HeatDistributionController(cp.Component):
                 self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius
                 is None
             ):
-                summer_mode = "on"
+                summer_mode = "off"
 
             # turning heat distributon system off when the average daily outside temperature is above a certain threshold
             else:
@@ -735,17 +740,28 @@ class HeatDistributionController(cp.Component):
                     set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
                 )
 
-            if self.controller_heat_distribution_mode == "on" and summer_mode == "on":
+            dew_point_protection_mode = self.dew_point_protection_condition(
+                water_input_temperature_in_celsius=water_input_temperature_in_celsius,
+                set_cooling_threshold_water_temperature_in_celsius=self.set_cooling_threshold_water_temperature_in_celsius,
+            )
+
+            if (
+                self.controller_heat_distribution_mode == "on"
+                and summer_mode == "off"
+                and dew_point_protection_mode == "off"
+            ):
                 self.state_controller = 1
-            elif (
-                self.controller_heat_distribution_mode == "on" and summer_mode == "off"
+            elif self.controller_heat_distribution_mode == "on" and (
+                summer_mode == "on" or dew_point_protection_mode == "on"
             ):
                 self.state_controller = 0
             elif self.controller_heat_distribution_mode == "off":
                 self.state_controller = 0
             else:
 
-                raise ValueError("unknown hds controller mode.")
+                raise ValueError(
+                    "unknown hds controller mode or summer mode or dew point protection mode."
+                )
 
             stsv.set_output_value(self.state_channel, self.state_controller)
             stsv.set_output_value(
@@ -784,18 +800,43 @@ class HeatDistributionController(cp.Component):
             daily_average_outside_temperature_in_celsius
             > set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "off"
+            summer_mode = "on"
             return summer_mode
         elif (
             daily_average_outside_temperature_in_celsius
             < set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "on"
+            summer_mode = "off"
             return summer_mode
 
         else:
             raise ValueError(
                 f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+            )
+
+    def dew_point_protection_condition(
+        self,
+        water_input_temperature_in_celsius: float,
+        set_cooling_threshold_water_temperature_in_celsius: float,
+    ) -> str:
+        """Set conditions for the valve in heat distribution."""
+
+        if (
+            water_input_temperature_in_celsius
+            > set_cooling_threshold_water_temperature_in_celsius
+        ):
+            dew_point_protection_mode = "off"
+            return dew_point_protection_mode
+        elif (
+            water_input_temperature_in_celsius
+            < set_cooling_threshold_water_temperature_in_celsius
+        ):
+            dew_point_protection_mode = "on"
+            return dew_point_protection_mode
+
+        else:
+            raise ValueError(
+                f"daily average temperature {water_input_temperature_in_celsius}°C or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius}°C is not acceptable."
             )
 
     def prepare_calc_heating_dist_temperature(
@@ -860,8 +901,15 @@ class HeatDistributionController(cp.Component):
             self.set_room_temperature_for_building_in_celsius
             < daily_avg_outside_temperature_in_celsius
         ):
-            flow_temperature_in_celsius = self.min_flow_temperature_in_celsius
-            return_temperature_in_celsius = self.min_return_temperature_in_celsius
+            # prevent that flow and return temperatures get colder than 19 °C because this could cause condensation of the indoor air on the heating system
+            # https://suissetec.ch/files/PDFs/Merkblaetter/Heizung/Deutsch/2021_11_MB_Kuehlung_mit_Fussbodenheizung_DE_Web.pdf
+
+            flow_temperature_in_celsius = max(
+                self.min_flow_temperature_in_celsius, 19.0
+            )
+            return_temperature_in_celsius = max(
+                self.min_return_temperature_in_celsius, 19.0
+            )
 
         else:
             # heating case, daily avg outside temperature is lower than indoor temperature

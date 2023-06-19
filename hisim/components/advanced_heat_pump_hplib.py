@@ -105,9 +105,9 @@ class HeatPumpHplib(Component):
         self.p_th_set = config.p_th_set
 
         self.cycling_mode = config.cycling_mode
-        
+
         self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
-        
+
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
         # Component has states
@@ -220,7 +220,13 @@ class HeatPumpHplib(Component):
     @staticmethod
     def get_defaul_config():
         config = HeatPumpHplibConfig(
-            model="Generic", group_id=-1, t_in=-300, t_out_val=-300, p_th_set=-30, minimum_running_time_in_seconds=600, minimum_idle_time_in_seconds=600
+            model="Generic",
+            group_id=-1,
+            t_in=-300,
+            t_out_val=-300,
+            p_th_set=-30,
+            minimum_running_time_in_seconds=600,
+            minimum_idle_time_in_seconds=600,
         )
         return config
 
@@ -265,12 +271,14 @@ class HeatPumpHplib(Component):
         if self.cycling_mode == True:
 
             # Parameter
-            time_on_min = self.minimum_running_time_in_seconds # [s]
+            time_on_min = self.minimum_running_time_in_seconds  # [s]
             time_off_min = self.minimum_idle_time_in_seconds
             on_off_previous = self.state.on_off_previous
-            
+
             if time_on_min is None or time_off_min is None:
-                raise ValueError("When the cycling mode is true, the minimum running time and minimum idle time of the heat pump must be given an integer value.")
+                raise ValueError(
+                    "When the cycling mode is true, the minimum running time and minimum idle time of the heat pump must be given an integer value."
+                )
 
             # Overwrite on_off to realize minimum time of or time off
             if on_off_previous == 1 and time_on < time_on_min:
@@ -385,6 +393,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(cls):
@@ -393,6 +402,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
             name="HeatPumpController",
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=None,
+            set_cooling_threshold_outside_temperature_in_celsius=20.0,
         )
 
 
@@ -554,18 +564,34 @@ class HeatPumpHplibControllerL1(Component):
                 self.daily_avg_outside_temperature_input_channel
             )
 
+            # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
+            summer_heating_mode = self.summer_heating_condition(
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            )
+
+            # mode 1 is on/off controller
             if self.mode == 1:
                 self.conditions_on_off(
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    summer_heating_mode=summer_heating_mode,
                 )
-            # cooling only for floor heating possible
+
+            # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
             elif (
                 self.mode == 2 and self.heating_system == HeatingSystemType.FLOORHEATING
             ):
+                # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
+                summer_cooling_mode = self.summer_cooling_condition(
+                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                    set_cooling_threshold_temperature_in_celsius=self.heatpump_controller_config.set_cooling_threshold_outside_temperature_in_celsius,
+                )
                 self.conditions_heating_cooling_off(
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    summer_heating_mode=summer_heating_mode,
+                    summer_cooling_mode=summer_cooling_mode,
                 )
 
             else:
@@ -573,30 +599,12 @@ class HeatPumpHplibControllerL1(Component):
                     "Either the Advanced HP Lib Controller Mode is neither 1 nor 2 or the heating system is not floor heating which is the condition for cooling (mode 2)."
                 )
 
-            # no heating threshold for the heat pump
-            if (
-                self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius
-                is None
-            ):
-                summer_mode = "on"
-
-            # turning heat pump off when the average daily outside temperature is above a certain threshold
-            else:
-                summer_mode = self.summer_condition(
-                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                    set_heating_threshold_temperature_in_celsius=self.heatpump_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-                )
-
-            # state of heat distribution controller is off when daily avg outside temperature is > 16°C
-            # in that case the heat pump should not be heating
-            if self.controller_heatpumpmode == "heating" and summer_mode == "on":
+            if self.controller_heatpumpmode == "heating":
                 state = 1
-            elif self.controller_heatpumpmode == "heating" and summer_mode == "off":
-                state = 0
-            elif self.controller_heatpumpmode == "off":
-                state = 0
             elif self.controller_heatpumpmode == "cooling":
                 state = -1
+            elif self.controller_heatpumpmode == "off":
+                state = 0
             else:
                 raise ValueError("Advanced HP Lib Controller State unknown.")
 
@@ -606,21 +614,26 @@ class HeatPumpHplibControllerL1(Component):
         self,
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
+        summer_heating_mode: str,
     ) -> None:
         """Set conditions for the heat pump controller mode."""
 
         if self.controller_heatpumpmode == "heating":
             if (
                 water_temperature_input_in_celsius
-                > set_heating_flow_temperature_in_celsius + 0.5
+                > (set_heating_flow_temperature_in_celsius + 0.5)
+                or summer_heating_mode == "off"
             ):  # + 1:
                 self.controller_heatpumpmode = "off"
                 return
 
         elif self.controller_heatpumpmode == "off":
+
+            # heat pump is only turned on if the water temperature is below the flow temperature and if the avg daily outside temperature is cold enough (summer mode on)
             if (
                 water_temperature_input_in_celsius
-                < set_heating_flow_temperature_in_celsius - 0.5
+                < (set_heating_flow_temperature_in_celsius - 1.0)
+                and summer_heating_mode == "on"
             ):  # - 1:
                 self.controller_heatpumpmode = "heating"
                 return
@@ -632,52 +645,111 @@ class HeatPumpHplibControllerL1(Component):
         self,
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
+        summer_heating_mode: str,
+        summer_cooling_mode: str,
     ) -> None:
-        """Set conditions for the heat pump controller mode."""
+        """Set conditions for the heat pump controller mode according to the flow temperature."""
 
-        heating_set_temperature = set_heating_flow_temperature_in_celsius - 1.5
-        cooling_set_temperature = set_heating_flow_temperature_in_celsius + 1.5
+        heating_set_temperature = set_heating_flow_temperature_in_celsius
+        cooling_set_temperature = set_heating_flow_temperature_in_celsius
 
         if self.controller_heatpumpmode == "heating":
-            if water_temperature_input_in_celsius >= heating_set_temperature:
+            if (
+                water_temperature_input_in_celsius >= heating_set_temperature
+                or summer_heating_mode == "off"
+            ):
                 self.controller_heatpumpmode = "off"
                 return
         elif self.controller_heatpumpmode == "cooling":
-            if water_temperature_input_in_celsius <= cooling_set_temperature:
+            if (
+                water_temperature_input_in_celsius <= cooling_set_temperature
+                or summer_cooling_mode == "off"
+            ):
                 self.controller_heatpumpmode = "off"
                 return
+
         elif self.controller_heatpumpmode == "off":
-            if water_temperature_input_in_celsius < heating_set_temperature - 0.5:
+
+            # heat pump is only turned on if the water temperature is below the flow temperature and if the avg daily outside temperature is cold enough (summer heating mode on)
+            if (
+                water_temperature_input_in_celsius < (heating_set_temperature - 1.0)
+                and summer_heating_mode == "on"
+            ):
                 self.controller_heatpumpmode = "heating"
                 return
-            if water_temperature_input_in_celsius > cooling_set_temperature + 0.5:
+
+            # heat pump is only turned on for cooling if the water temperature is above a certain flow temperature and if the avg daily outside temperature is warm enough (summer cooling mode on)
+            if (
+                water_temperature_input_in_celsius > (cooling_set_temperature + 1.0)
+                and summer_cooling_mode == "on"
+            ):
                 self.controller_heatpumpmode = "cooling"
                 return
 
         else:
             raise ValueError("unknown mode")
 
-    def summer_condition(
+    def summer_heating_condition(
         self,
         daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: float,
+        set_heating_threshold_temperature_in_celsius: Optional[float],
     ) -> str:
-        """Set conditions for the valve in heat distribution."""
+        """Set conditions for the heat pump."""
 
-        if (
+        # if no heating threshold is set, the heat pump is always on
+        if set_heating_threshold_temperature_in_celsius is None:
+            heating_mode = "on"
+            return heating_mode
+
+        # it is too hot for heating
+        elif (
             daily_average_outside_temperature_in_celsius
             > set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "off"
-            return summer_mode
+            heating_mode = "off"
+            return heating_mode
+        # it is cold enough for heating
         elif (
             daily_average_outside_temperature_in_celsius
             < set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "on"
-            return summer_mode
+            heating_mode = "on"
+            return heating_mode
 
         else:
             raise ValueError(
                 f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+            )
+
+    def summer_cooling_condition(
+        self,
+        daily_average_outside_temperature_in_celsius: float,
+        set_cooling_threshold_temperature_in_celsius: Optional[float],
+    ) -> str:
+        """Set conditions for the heat pump."""
+
+        # if no cooling threshold is set, cooling is always possible no matter what daily outside temperature
+        if set_cooling_threshold_temperature_in_celsius is None:
+            cooling_mode = "on"
+            return cooling_mode
+
+        # it is hot enough for cooling
+        elif (
+            daily_average_outside_temperature_in_celsius
+            > set_cooling_threshold_temperature_in_celsius
+        ):
+            cooling_mode = "on"
+            return cooling_mode
+
+        # it is too cold for cooling
+        elif (
+            daily_average_outside_temperature_in_celsius
+            < set_cooling_threshold_temperature_in_celsius
+        ):
+            cooling_mode = "off"
+            return cooling_mode
+
+        else:
+            raise ValueError(
+                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or cooling threshold temperature {set_cooling_threshold_temperature_in_celsius}°C is not acceptable."
             )

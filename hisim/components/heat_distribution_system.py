@@ -654,7 +654,7 @@ class HeatDistributionController(cp.Component):
 
     def build(
         self,
-        set_heating_threshold_temperature_in_celsius: float,
+        set_heating_threshold_temperature_in_celsius: Optional[float],
         heating_reference_temperature_in_celsius: float,
         heating_system_type: HeatingSystemType,
         set_cooling_threshold_water_temperature_in_celsius: float,

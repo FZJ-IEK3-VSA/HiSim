@@ -227,6 +227,7 @@ class HeatPumpHplib(Component):
             p_th_set=-30,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
+            cycling_mode=False,
         )
         return config
 

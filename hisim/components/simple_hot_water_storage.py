@@ -405,6 +405,7 @@ class SimpleHotWaterStorage(cp.Component):
                 water_input_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
             )
 
+        # no water coming from hp, hds gets mean water and hp gets still water from hds
         elif state_controller == 0:
             # water_temperature_to_heat_distribution_system_in_celsius = (
             #     self.mean_water_temperature_in_water_storage_in_celsius

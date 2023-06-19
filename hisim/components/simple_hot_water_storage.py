@@ -775,7 +775,7 @@ class SimpleHotWaterStorageController(cp.Component):
         """Doublecheck."""
         pass
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report(self) -> None:
         """Write important variables to report."""
         pass
 

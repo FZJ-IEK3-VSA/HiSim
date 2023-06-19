@@ -269,7 +269,7 @@ class HeatPumpHplib(Component):
         time_off = self.state.time_off
 
         # cycling means periodic turning on and off of the heat pump
-        if self.cycling_mode == True:
+        if self.cycling_mode is True:
 
             # Parameter
             time_on_min = self.minimum_running_time_in_seconds  # [s]
@@ -290,7 +290,7 @@ class HeatPumpHplib(Component):
                 on_off = 0
 
         # heat pump is turned on and off only according to heat pump controller
-        elif self.cycling_mode == False:
+        elif self.cycling_mode is False:
             pass
         else:
             raise ValueError("Cycling mode of the advanced hplib unknown.")

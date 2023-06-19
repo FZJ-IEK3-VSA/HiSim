@@ -81,20 +81,17 @@ def household_with_hds(
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
-    mean_water_temperature_in_storage_in_celsius = 35
-    cool_water_temperature_in_storage_in_celsius = 35
-    hot_water_temperature_in_storage_in_celsius = 35
+
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 35
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
-    set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 22
+    set_temperature_for_building_in_celsius = 20.0
+    set_cooling_temperature_for_building_in_celsius = 17.0
     heating_reference_temperature_in_celsius = -14
 
     # =================================================================================================================================
@@ -121,8 +118,8 @@ def household_with_hds(
         config=heat_distribution_system.HeatDistributionControllerConfig(
             name=hds_controller_name,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            set_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
+            set_cooling_threshold_water_temperature_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_system=heating_system,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         ),
@@ -183,7 +180,6 @@ def household_with_hds(
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
         name=hds_name,
-        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
         heating_system=heating_system,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -218,9 +214,7 @@ def household_with_hds(
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
-        cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
-        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius,
+        temperature_loss_in_celsius_per_hour=0.21,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

@@ -25,6 +25,7 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class GenericHydrogenStorageConfig(cp.ConfigBase):
+    #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
     source_weight: int
@@ -43,15 +44,17 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     #: permanent hydrogen loyy in % per day
     loss_factor_per_day: float
 
-    @classmethod
-    def get_default_config(cls) -> Any:
+    @staticmethod
+    def get_default_config(capacity: float = 200, max_charging_rate: float = 2/3600, max_discharging_rate: float = 2/3600,
+                           source_weight: int = 1, ) -> Any:
+        """Returns default configuration for hydrogen storage"""
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
-            source_weight= 1,
+            source_weight=source_weight,
             min_capacity=0,
-            max_capacity= 200,
-            max_charging_rate_hour= 2,
-            max_discharging_rate_hour= 2,
+            max_capacity=capacity,
+            max_charging_rate=max_charging_rate,
+            max_discharging_rate=max_discharging_rate,
             energy_for_charge=0,
             energy_for_discharge=0,
             loss_factor_per_day=0,
@@ -95,8 +98,14 @@ class GenericHydrogenStorage(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
         )
-
-        self.build(config)
+        self.config = config
+        self.loss_factor = (
+            (config.loss_factor_per_day / 100)
+            * self.my_simulation_parameters.seconds_per_timestep
+            / (24 * 3600)
+        )
+        self.state = GenericHydrogenStorageState()
+        self.previous_state = GenericHydrogenStorageState()
 
         self.HydrogenInputC: cp.ComponentInput = self.add_input(
             self.component_name,

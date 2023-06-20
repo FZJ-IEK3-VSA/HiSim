@@ -1,4 +1,6 @@
-"""Simple Car (LPG connected) and configuration. Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations. """
+"""Simple Car (LPG connected) and configuration.
+
+Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations."""
 
 # -*- coding: utf-8 -*-
 from typing import List, Any
@@ -36,7 +38,7 @@ class CarConfig:
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
-    #: type of fuel, either Electricity or Diesel 
+    #: type of fuel, either Electricity or Diesel
     fuel: lt.LoadTypes
     #: consumption per kilometer driven, either in kWh/km or l/km
     consumption_per_km: float
@@ -106,12 +108,14 @@ class Car(cp.Component):
                 load_type=lt.LoadTypes.ELECTRICITY,
                 unit=lt.Units.WATT,
                 postprocessing_flag=[lt.ComponentType.CAR],
+                output_description="Electricity Consumption of the car while driving. [W]",
             )
             self.car_location_output: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.CarLocation,
                 load_type=lt.LoadTypes.ANY,
                 unit=lt.Units.ANY,
+                output_description="Location of the car as integer.",
             )
         elif self.fuel == lt.LoadTypes.DIESEL:
             self.fuel_consumption: cp.ComponentOutput = self.add_output(
@@ -124,6 +128,7 @@ class Car(cp.Component):
                     lt.LoadTypes.DIESEL,
                     lt.ComponentType.CAR,
                 ],
+                output_description="Diesel Consumption of the car while driving [l].",
             )
 
     def i_save_state(self) -> None:
@@ -238,10 +243,10 @@ class Car(cp.Component):
             # sum / extract most common value from data to match hisim time resolution
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(
-                    sum(meters_driven[i * steps_ratio : (i + 1) * steps_ratio])
+                    sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio])
                 )  # sum
                 location_list = car_location[
-                    i * steps_ratio : (i + 1) * steps_ratio
+                    i * steps_ratio: (i + 1) * steps_ratio
                 ]  # extract list
                 occurence_count = most_frequent(
                     input_list=location_list

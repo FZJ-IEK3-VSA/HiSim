@@ -3,7 +3,7 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from typing import Any, List, Tuple, Union
+from typing import List, Tuple, Union
 
 import pandas as pd
 
@@ -15,11 +15,12 @@ from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
 from hisim.components import generic_hot_water_storage_modular
 from hisim import log
+from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
-    """Reads data for cost from csv."""
-    price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 1, 2])
+    """Reads data for costs and co2 emissions of fuels from csv."""
+    price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 2, 4])
     price_frame.index = price_frame["fuel type"]  # type: ignore
     price_frame.drop(columns=["fuel type"], inplace=True)
     return price_frame
@@ -30,7 +31,7 @@ def get_euro_and_co2(
 ) -> Tuple[float, float]:
     """Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel."""
     column = fuel_costs.iloc[fuel_costs.index == fuel.value]
-    return (float(column["EUR per kWh"]), float(column["kgC02 per kWh"]))
+    return (float(column["Cost"].iloc[0]), float(column["Footprint"].iloc[0]))
 
 
 def compute_consumption_production(
@@ -218,21 +219,20 @@ def compute_cost_of_fuel_type(
                     fuel_consumption = results.iloc[:, index]
                 else:
                     continue
-
-    # convert liters to Wh
     if not fuel_consumption.empty:
-        if fuel == LoadTypes.OIL:
-            liters_to_watt_hours = 1e4 / 1.0526315789474
-        elif fuel == LoadTypes.DIESEL:
-            liters_to_watt_hours = 9.8e3
-        else:
-            liters_to_watt_hours = 1
-        consumption_sum = (
-            compute_energy_from_power(
-                power_timeseries=fuel_consumption, timeresolution=timeresolution
+        # convert from W to kWh
+        if fuel in [LoadTypes.ELECTRICITY]:
+            consumption_sum = (
+                compute_energy_from_power(
+                    power_timeseries=fuel_consumption, timeresolution=timeresolution
+                )
             )
-            * liters_to_watt_hours
-        )
+        # convert from Wh to kWh
+        elif fuel in [LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
+            consumption_sum = sum(fuel_consumption) * 1e-3
+        # stay with liters
+        else:
+            consumption_sum = sum(fuel_consumption)
     else:
         consumption_sum = 0
 
@@ -245,8 +245,20 @@ def compute_kpis(
     results: pd.DataFrame,
     all_outputs: List[ComponentOutput],
     simulation_parameters: SimulationParameters,
-) -> Any:  # noqa: MC0001
-    """Calculation of several KPIs."""
+) -> List[str]:  # noqa: MC0001
+    """Calculation of Kpi's: self consumption rate, autarky rate, injection, annual CO2 emissions and annual cost.
+
+    :param components: List of configured components in the HiSIM example
+    :type components: List[ComponentWrapper]
+    :param results: DataFrame of all results of the HiSIM evaluation
+    :type results: pd.DataFrame
+    :param all_outputs: List of all configured ComponentOutputs in the HiSIM example.
+    :type all_outputs: List[ComponentOutput]
+    :param simulation_parameters: Simulation parameters for HiSIM calculation
+    :type simulation_parameters: SimulationParameters
+    :return: Description for the report.
+    :rtype: List[str]
+    """
     # initialize prices
     price = 0.0
     co2 = 0.0
@@ -260,7 +272,7 @@ def compute_kpis(
         electricity_price_injection,
     ) = search_electricity_prices_in_results(all_outputs=all_outputs, results=results)
 
-    # sum consumption and production over time make it more clear and better
+    # sum consumption and production over time
     consumption_sum = compute_energy_from_power(
         power_timeseries=postprocessing_results["consumption"],
         timeresolution=simulation_parameters.seconds_per_timestep,
@@ -312,7 +324,7 @@ def compute_kpis(
         fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
     )
     electricity_inj_price_constant, _ = get_euro_and_co2(
-        fuel_costs=price_frame, fuel=InandOutputType.ELECTRICITY_INJECTION
+        fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
     )
 
     if production_sum > 0:
@@ -367,6 +379,11 @@ def compute_kpis(
         components=components, all_outputs=all_outputs, results=results, timeresolution=simulation_parameters.seconds_per_timestep,
     )
 
+    # compute cost and co2 for investment/installation:
+    investment_cost, co2_footprint = compute_investment_cost(
+        components=components
+    )
+
     # initilize lines for report
     lines: List = []
     lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
@@ -384,16 +401,18 @@ def compute_kpis(
     lines.append(f"Hydrogen storage content: {0:4.0f} kWh")
     lines.append(f"Autarky Rate: {autarky_rate:3.1f} %")
     lines.append(f"Self Consumption Rate: {self_consumption_rate:3.1f} %")
-    lines.append(f"Price paid for electricity: {price:3.0f} EUR")
-    lines.append(f"CO2 emitted due to electricity use: {co2:3.0f} kg")
+    lines.append(f"Cost for energy use: {price:3.0f} EUR")
+    lines.append(f"CO2 emitted due energy use: {co2:3.0f} kg")
+    lines.append(f"Annual investment cost for equipment: {investment_cost:3.0f} EUR")
+    lines.append(f"Annual CO2 Footprint for equipment: {co2_footprint:3.0f} kg")
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(
         self_consumption_rate=self_consumption_rate,
         autarky_rate=autarky_rate,
         injection=injection_sum,
-        economic_cost=price,
-        co2_cost=co2,
+        economic_cost=price + investment_cost,
+        co2_cost=co2 + co2_footprint,
     )
 
     pathname = os.path.join(simulation_parameters.result_directory, "kpi_config.json")

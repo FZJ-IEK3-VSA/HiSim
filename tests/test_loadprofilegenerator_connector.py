@@ -3,7 +3,7 @@ from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
-
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 @pytest.mark.base
 def test_occupancy():
@@ -11,13 +11,13 @@ def test_occupancy():
     Tests Occupancy profile for profile CH01
     Year heating generated: 1719 kWh
     """
-    
+
     my_occupancy_profile = "CH01"
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     my_simulation_parameters.predictive_control = False
-
     my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1)
     my_occupancy_config.profile_name=my_occupancy_profile
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 

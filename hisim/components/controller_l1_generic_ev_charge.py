@@ -138,6 +138,7 @@ class L1Controller(cp.Component):
             field_name=self.ToOrFromBattery,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
+            output_description="Set power for EV charging in Watt."
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_car())

@@ -18,34 +18,49 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
     def __init__(
         self,
-        module_directory: str,
-        model_name: str,
-        sorting_option: Any,
-        variant_name: Optional[str],
-        time_resolution_in_seconds: int,
-        simulation_duration_in_days: int,
     ):
         """Initialize the class."""
 
-        self.base_path: str = os.path.join(module_directory, "results")
-        self.model_name: str = model_name
         self.datetime_string: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.sorting_option: str = sorting_option
 
+    def set_important_result_path_information(
+        self,
+        module_directory: str,
+        model_name: str,
+        variant_name: Optional[str],
+        sorting_option: Any,
+    ):
+        """Set important result path information."""
+        self.set_base_path(module_directory=module_directory)
+        self.set_model_name(model_name=model_name)
+        self.set_variant_name(variant_name=variant_name)
+        self.set_sorting_option(sorting_option=sorting_option)
+
+    def set_base_path(self, module_directory):
+        """Set base path."""
+        self.base_path: str = os.path.join(module_directory, "results")
+
+    def set_model_name(self, model_name):
+        """Set model name."""
+        self.model_name = model_name
+
+    def set_variant_name(self, variant_name):
+        """Set variant name."""
         if variant_name is None:
             variant_name = ""
-
-        self.time_resolution_in_seconds = str(time_resolution_in_seconds) + "_seconds"
         self.variant_name = variant_name
-        self.simulation_duration_in_days = str(simulation_duration_in_days) + "_days"
-
-    def set_model_name(self, name):
-        """Set model name."""
-        self.model_name = name
 
     def set_sorting_option(self, sorting_option):
         """Set sorting option."""
         self.sorting_option = sorting_option
+
+    def set_time_resolution(self, time_resolution_in_seconds):
+        """Set time resolution."""
+        self.time_resolution_in_seconds = time_resolution_in_seconds
+
+    def set_simulation_duration(self, simulation_duration_in_days):
+        """Set simulation duration."""
+        self.simulation_duration_in_days = simulation_duration_in_days
 
     def get_result_directory_name(self):  # *args
         """Get the result directory path."""
@@ -68,15 +83,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         elif self.sorting_option == SortingOptionEnum.FLAT:
             path = os.path.join(
                 self.base_path,
-                self.model_name
-                + "_"
-                + self.variant_name
-                + "_"
-                + self.time_resolution_in_seconds
-                + "_"
-                + self.simulation_duration_in_days
-                + "_"
-                + self.datetime_string,
+                self.model_name + "_" + self.variant_name + "_" + self.datetime_string,
             )
         return path
 

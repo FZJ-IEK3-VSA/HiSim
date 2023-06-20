@@ -28,9 +28,10 @@ __status__ = "development"
 PATH = "../examples/household_for_pyam_test.py"
 FUNC = "house_for_pyam_test"
 
+
 @pytest.mark.base
 def test_house_with_pyam(
-    my_simulation_parameters: Optional[SimulationParameters] = None
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """Basic household example.
 
@@ -51,7 +52,7 @@ def test_house_with_pyam(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60*60
+    seconds_per_timestep = 60 * 60
 
     # Set Weather
     location = "Aachen"
@@ -76,15 +77,15 @@ def test_house_with_pyam(
 
     # =================================================================================================================================
 
-    
-
     # Build Simulation Parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM)
-    
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+    )
+
     # this part is copied from hisim_main
     # Build Simulator
     normalized_path = os.path.normpath(PATH)
@@ -99,15 +100,18 @@ def test_house_with_pyam(
         module_filename="household_for_pyam_test.py",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    
+
     # Build Results Path
-    #ResultPathProviderSingleton(module_directory=my_sim.module_directory, model_name=my_sim.setup_function, variant_name="pyam_test", sorting_option=SortingOptionEnum.FLAT, time_resolution_in_seconds=my_simulation_parameters.seconds_per_timestep, simulation_duration_in_days=my_simulation_parameters.duration.days)
+    ResultPathProviderSingleton().set_important_result_path_information(
+        module_directory=my_sim.module_directory,
+        model_name=my_sim.setup_function,
+        variant_name="pyam_test",
+        sorting_option=SortingOptionEnum.FLAT,
+    )
 
     # =================================================================================================================================
     # Build Components
-    
-    
-    
+
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
@@ -211,5 +215,5 @@ def test_house_with_pyam(
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
-    
+
     my_sim.run_all_timesteps()

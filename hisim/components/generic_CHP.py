@@ -6,10 +6,10 @@ on or off. When it runs, it outputs a constant thermal and electrical power sign
 and needs a constant input of hydrogen or natural gas."""
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Any
 
 from dataclasses_json import dataclass_json
-
+from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log

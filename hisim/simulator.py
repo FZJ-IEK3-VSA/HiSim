@@ -192,13 +192,11 @@ class Simulator:
                 )
             except:
                 # if not, build a flat result path itself
-                ResultPathProviderSingleton(
+                ResultPathProviderSingleton().set_important_result_path_information(
                     module_directory=self.module_directory,
                     model_name=self.setup_function,
                     variant_name=None,
                     sorting_option=SortingOptionEnum.FLAT,
-                    time_resolution_in_seconds=self._simulation_parameters.seconds_per_timestep,
-                    simulation_duration_in_days=self._simulation_parameters.duration.days,
                 )
                 self._simulation_parameters.result_directory = (
                     ResultPathProviderSingleton().get_result_directory_name()
@@ -206,7 +204,7 @@ class Simulator:
                 log.information(
                     "Using result directory: "
                     + self._simulation_parameters.result_directory
-                    + " which is set by simulator."
+                    + " which is set by the simulator."
                 )
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)

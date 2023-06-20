@@ -606,7 +606,7 @@ class PyAmChartGenerator:
         except:
             pass
 
-    def set_axis_scale(self, ax: Any, x_or_y=Any):
+    def set_axis_scale(self, ax: Any, x_or_y=Any) -> Any:
         """Get axis and unit and scale it properly."""
 
         if x_or_y == "x":

@@ -112,6 +112,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+hisimvenv_cluster/
 
 # Spyder project settings
 .spyderproject
@@ -175,3 +176,7 @@ covert_building_sizer_to_tar_gz.py
 pylint_mass_call.cmd
 counter_test.csv
 hisim/inputs/extract_relevant_climate_data.py
+
+# cluster slurm outputs
+examples/*.out
+

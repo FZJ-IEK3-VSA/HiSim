@@ -17,6 +17,7 @@ from hisim import log, utils
 from hisim.component import (Component, ComponentOutput, ConfigBase,
                              SingleTimeStepValues)
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -438,12 +439,13 @@ class Weather(Component):
     ):
         """Initializes the entire class."""
         super().__init__(
-            name="Weather", my_simulation_parameters=my_simulation_parameters
+            name="Weather", my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         if my_simulation_parameters is None:
             raise Exception("Simparameters was none")
         self.last_timestep_with_update = -1
         self.weather_config = config
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
         self.air_temperature_output: ComponentOutput = self.add_output(

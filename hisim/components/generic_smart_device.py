@@ -1,6 +1,5 @@
-"""Implementation of shiftable household devices like washing machines, dish washers or dryers.
-Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and activates the device when surplus from PV is available.
-The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
+"""Implementation of shiftable household devices like washing machines, dish washers or dryers. Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and
+activates the device when surplus from PV is available. The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
 the configuration is automatically adopted from the information provided by the LPG. """
 
 # Generic/Built-in
@@ -8,7 +7,8 @@ import json
 import math as ma
 from typing import List
 from os import path
-
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -24,7 +24,32 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+@dataclass_json
+@dataclass
+class SmartDeviceConfig(cp.ConfigBase):
 
+    """Configuration of the smart device."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return SmartDevice.get_full_classname()
+
+
+    name: str
+    identifier: str
+    source_weight: int
+    smart_devices_included: bool
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return SmartDeviceConfig(
+            name="Smart Device",
+            identifier="Identifier",
+            source_weight=1,
+            smart_devices_included=True,
+        )
 class SmartDeviceState:
     """State representing smart appliance."""
 
@@ -104,24 +129,23 @@ class SmartDevice(cp.Component):
 
     def __init__(
         self,
-        identifier: str,
-        source_weight: int,
         my_simulation_parameters: SimulationParameters,
-        smart_devices_included: bool,
+        config:SmartDeviceConfig
     ):
         super().__init__(
-            name=identifier.replace("/", "-") + "_w" + str(source_weight),
+            name=config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.build(
-            identifier=identifier,
-            source_weight=source_weight,
+            identifier=config.identifier,
+            source_weight=config.source_weight,
             seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
         )
         self.previous_state: SmartDeviceState
         self.state: SmartDeviceState
-        if my_simulation_parameters.surplus_control and smart_devices_included:
+        if my_simulation_parameters.surplus_control and config.smart_devices_included:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 lt.ComponentType.SMART_DEVICE,
@@ -281,20 +305,19 @@ class SmartDevice(cp.Component):
                 # append first timestep which may not fill  the entire 15 minutes
                 elem_el.append(sum(el[:offset]) / offset)
 
-                i = 0
                 for i in range(z - 2):
                     elem_el.append(
                         sum(
                             el[
                                 offset
-                                + minutes_per_timestep * i: offset
+                                + minutes_per_timestep * i : offset
                                 + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                last = el[offset + (i + 1) * minutes_per_timestep:]
+                last = el[offset + (i + 1) * minutes_per_timestep :]
                 if offset != minutes_per_timestep:
                     elem_el.append(sum(last) / (minutes_per_timestep - offset))
                 electricity_profile.append(elem_el)

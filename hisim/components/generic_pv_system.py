@@ -298,6 +298,7 @@ class PVSystem(cp.Component):
         super().__init__(
             self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.t_outC: cp.ComponentInput = self.add_input(

@@ -72,7 +72,7 @@ class JsonExecutor:
 
         my_simulation_parameters: SimulationParameters = self.my_simulation_parameters
 
-        simulator: Simulator = Simulator("json", "json_func", my_simulation_parameters)
+        simulator: Simulator = Simulator(module_directory="json", setup_function="json_func", my_simulation_parameters=my_simulation_parameters, module_filename="json.py")
         component_dict = {}
         for component_entry in self.my_obj.component_entries:
             component_instance = self.process_one_component_entry(component_entry, class_dict, my_simulation_parameters)

@@ -29,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatPumpConfig:
+class HeatPumpConfig(cp.ConfigBase):
     """ Configuration of a HeatPump. """
     #: name of the device
     name: str
@@ -87,9 +87,8 @@ class ModularHeatPumpState:
 
 
 class ModularHeatPump(cp.Component):
-    """Heat pump implementation.
-
-    The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component but in the related controller.
+    """
+    Heat pump implementation. The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component but in the related controller.
     This implementation does not consider cooling of buildings.
 
     Components to connect to:
@@ -114,6 +113,7 @@ class ModularHeatPump(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.config = config
         self.build()

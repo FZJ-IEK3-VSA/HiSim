@@ -88,6 +88,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
         module_directory=path_to_be_added,
         setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
+        module_filename="household_for_test_building_theoretical_heat_demand.py"
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -114,8 +115,9 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     # Build Fake Heater
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
-        set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius
+        config=idealized_electric_heater.IdealizedHeaterConfig(set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+                                                               set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+                                                               name="IdealizedElectricHeater")
     )
 
     # =========================================================================================================================================================

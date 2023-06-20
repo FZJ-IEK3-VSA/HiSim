@@ -45,6 +45,7 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters:
 
     # Create a Simulator object based on setup function
     my_sim: sim.Simulator = sim.Simulator(module_directory=path_to_be_added,
+                                          module_filename=module_filename,
                                           setup_function=function_in_module,
                                           my_simulation_parameters=my_simulation_parameters)
 

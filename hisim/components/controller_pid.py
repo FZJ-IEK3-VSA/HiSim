@@ -3,6 +3,9 @@
 import numpy as np
 import control
 from typing import Optional
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+
 # Owned
 #from hisim.components.weather import Weather
 from hisim import component as cp
@@ -21,6 +24,28 @@ __version__ = "0.1"
 __maintainer__ = "Marwa Alfouly"
 __email__ = "m.alfouly@fz-juelich.de"
 __status__ = "development"
+
+
+
+@dataclass_json
+@dataclass
+class PIDControllerConfig(cp.ConfigBase):
+
+    """Configuration of the PID Controller."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return PIDController.get_full_classname()
+
+    name: str
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default pid controller."""
+        return PIDControllerConfig(
+            name="PIDController",
+        )
 
 class PIDState:
 
@@ -79,9 +104,9 @@ class PIDController(cp.Component):
     integrator = "integrator"
     FeedForwardSignal="FeedForwardSignal"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, my_simulation_repository: Optional[cp.SimRepository] = None) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, my_simulation_repository: Optional[cp.SimRepository], config: PIDControllerConfig) -> None:
         """Constructs all the neccessary attributes."""
-        super().__init__("PIDController", my_simulation_parameters=my_simulation_parameters)
+        super().__init__(config.name, my_simulation_parameters=my_simulation_parameters, my_config=config)
 
         self.my_simulation_parameters=my_simulation_parameters
         self.build(my_simulation_repository)
@@ -169,7 +194,6 @@ class PIDController(cp.Component):
         pass
 
     def build(self,my_simulation_repository):
-        """ For calculating internal things and preparing the simulation. """
         """ For calculating internal things and preparing the simulation. """
         """ getting building physical properties for state space model """
         self.h_tr_w = my_simulation_repository.get_entry( Building.Thermal_transmission_coefficient_glazing )

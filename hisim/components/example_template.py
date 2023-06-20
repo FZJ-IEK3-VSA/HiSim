@@ -135,6 +135,7 @@ class ComponentName(Component):
         super().__init__(
             self.componentnameconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         # If a component requires states, this can be implemented here.

@@ -5,6 +5,7 @@ import json
 from typing import Any, Tuple
 from os import path, makedirs
 from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 import pandas as pd
 import numpy as np
 
@@ -25,7 +26,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-
+@dataclass_json
 @dataclass
 class OccupancyConfig(cp.ConfigBase):
     @classmethod
@@ -39,7 +40,7 @@ class OccupancyConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
-        config = OccupancyConfig("Occupancy_1", "CH01", "DE")
+        config = OccupancyConfig(name="Occupancy_1", profile_name="CH01", country_name="DE")
         return config
 
     def get_factors_from_country_and_profile(self) -> Tuple[float, float]:
@@ -142,7 +143,7 @@ class Occupancy(cp.Component):
         self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
     ) -> None:
         super().__init__(
-            name="Occupancy", my_simulation_parameters=my_simulation_parameters
+            name="Occupancy", my_simulation_parameters=my_simulation_parameters, my_config=config
         )
         self.profile_name = config.profile_name
         self.occupancyConfig = config

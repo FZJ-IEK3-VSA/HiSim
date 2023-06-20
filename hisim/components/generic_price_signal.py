@@ -67,6 +67,7 @@ class PriceSignal(cp.Component):
         super().__init__(
             name=self.price_signal_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.build_dummy(

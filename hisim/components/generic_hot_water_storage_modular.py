@@ -61,9 +61,21 @@ class StorageConfig(cp.ConfigBase):
     #: power of heat source in kW
     power: float
 
-    @staticmethod
-    def get_default_config_boiler() -> "StorageConfig":
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HotWaterStorage.get_full_classname()
+
+    @classmethod
+    def get_default_config_boiler(cls) -> "StorageConfig":
         """ Returns default configuration for boiler. """
+        # get default number of households
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
+            number_of_households = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
+        else:
+            raise KeyError("Key for number of apartments was not found in the singleton sim repository." +
+                           "This might be because the building was not initialized before the loadprofilegenerator_connector." +
+                           "Please check the order of the initialization of the components in your example.")
         # get default number of households
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
             number_of_households = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
@@ -213,6 +225,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         self.build(config)
@@ -356,12 +369,12 @@ class HotWaterStorage(dycp.DynamicComponent):
         """Sets chp default connections in hot water storage."""
         hisim.log.information("setting chp default connections in hot water storaage")
         connections = []
-        chp_classname = generic_CHP.SimpleCHP.get_classname()
+        chp_classname = generic_CHP.GCHP.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerCHP,
                 chp_classname,
-                generic_CHP.SimpleCHP.ThermalPowerOutputBoiler,
+                generic_heat_source.HeatSource.ThermalPowerDelivered,
             )
         )
         return connections
@@ -400,7 +413,10 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     def write_to_report(self):
         """Writes to report."""
-        return self.config.get_string_dict()
+        lines = []
+        lines.append(f"Name: {self.name + str(self.source_weight)}")
+        lines.append(f"Volume: {self.volume:4.0f} l")
+        return lines
 
     def i_save_state(self):
         """Abstract. Gets called at the beginning of a timestep to save the state."""
@@ -423,7 +439,7 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * self.my_simulation_parameters.seconds_per_timestep
                 * 1e-3
             )  # 1e-3 conversion J to kJ
-        if self.thermal_power_chp_channel.source_output is not None:
+        elif self.thermal_power_chp_channel.source_output is not None:
             thermal_energy_delivered = (
                 thermal_energy_delivered
                 + stsv.get_input_value(self.thermal_power_chp_channel)

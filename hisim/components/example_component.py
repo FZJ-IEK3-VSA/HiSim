@@ -103,6 +103,7 @@ class ExampleComponent(Component):
         super().__init__(
             self.examplecomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         # Initialized variables

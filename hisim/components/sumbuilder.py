@@ -31,7 +31,7 @@ class SumBuilderConfig(cp.ConfigBase):
     def get_sumbuilder_default_config(cls):
         """Gets a default Sumbuilder."""
         return SumBuilderConfig(
-            name="Sumbuilder", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY
+            name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY
         )
 
 class CalculateOperation(cp.Component):

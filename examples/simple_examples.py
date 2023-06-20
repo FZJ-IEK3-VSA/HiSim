@@ -14,7 +14,7 @@ from hisim.components.example_transformer import (
     ExampleTransformer,
     ExampleTransformerConfig,
 )
-from hisim.components.sumbuilder import SumBuilderForTwoInputs
+from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 from hisim import loadtypes
 
 
@@ -52,9 +52,7 @@ def first_example(
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(
-        name="Sum",
-        loadtype=loadtypes.LoadTypes.ANY,
-        unit=loadtypes.Units.ANY,
+        config=SumBuilderConfig.get_sumbuilder_default_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs
@@ -130,9 +128,7 @@ def second_example(
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(
-        name="Sum",
-        loadtype=loadtypes.LoadTypes.ANY,
-        unit=loadtypes.Units.ANY,
+        config=SumBuilderConfig.get_sumbuilder_default_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs

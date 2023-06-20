@@ -5,8 +5,10 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
+from hisim.components import sumbuilder
 from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
+from hisim.components import heat_distribution_system
 from hisim.components import generic_gas_heater
 from hisim.components import simple_hot_water_storage
 
@@ -49,6 +51,24 @@ def household_reference_gas_heater_diesel_car(
     year = 2021
     seconds_per_timestep = 60 * 15
 
+    # Set Heat Distribution System  #Todo copied from advanced example
+    hds_name = "HeatDistributionSystem"
+    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
+
+    # Set Heat Distribution Controller
+    hds_controller_name = "HeatDistributionSystemController"
+    set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
+        None
+    )
+    set_temperature_for_building_in_celsius = 20.0
+    set_cooling_threshold_water_temperature_in_celsius = 17.0
+
+    heating_reference_temperature_in_celsius: float = -7  # t_in #Todo copied from HeatPump Parameters in advanced example
+
+    # Set Simple Heat Water Storage #Todo copied from advanced example
+    hws_name = "SimpleHeatWaterStorage"
+    volume_heating_water_storage_in_liter = 500
+    temperature_loss_in_celsius_per_hour = 0.21
     # =================================================================================================================================
     # Build Components
 
@@ -79,27 +99,65 @@ def household_reference_gas_heater_diesel_car(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Build Base Electricity Load Profile #Todo copied from advanced example
+    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
+        config=sumbuilder.ElectricityGridConfig(
+            name="ElectrcityGrid_BaseLoad",
+            grid=[my_occupancy], #, "Subtract", my_photovoltaic_system],
+            signal=None,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
     # Build Gas Heater
     my_gas_heater = generic_gas_heater.GasHeater(
         config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Storage
-    my_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config(),
+    # Build Heat Water Storage #Todo copied from advanced example
+    my_simple_heat_water_storage_config = (
+        simple_hot_water_storage.SimpleHotWaterStorageConfig(
+            name=hws_name,
+            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+            temperature_loss_in_celsius_per_hour=temperature_loss_in_celsius_per_hour,
+        )
+    )
+    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+        config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_storage_controller = (
+    my_simple_hot_water_storage_controller = (
         simple_hot_water_storage.SimpleHotWaterStorageController(
             my_simulation_parameters=my_simulation_parameters
         )
     )
 
-    # Build HeatDistributionSystem
+    # Build Heat Distribution Controller #Todo copied from advanced example
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=heat_distribution_system.HeatDistributionControllerConfig(
+            name=hds_controller_name,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
+            set_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            heating_system=heating_system,
+            set_cooling_threshold_water_temperature_in_celsius=set_cooling_threshold_water_temperature_in_celsius,
+        ),
+    )
 
-    # Build HeatDistributionSystemController
+    # Build Heat Distribution System #Todo copied from advanced example
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig(
+            name=hds_name,
+            heating_system=heating_system,
+        )
+    )
+    my_heat_distribution_system = heat_distribution_system.HeatDistribution(
+        config=my_heat_distribution_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build DHW
 
@@ -118,9 +176,9 @@ def household_reference_gas_heater_diesel_car(
 
     # my_sim.add_component(my_building_controller)
     # my_sim.add_component(my_controller_heat)
-    my_sim.add_component(my_storage_controller)
+    my_sim.add_component(my_simple_hot_water_storage_controller)
 
-    my_sim.add_component(my_storage)
+    my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_gas_heater)
     my_sim.add_component(my_building)
     my_sim.add_component(my_weather)

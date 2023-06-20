@@ -1,10 +1,3 @@
-"""Simple implementation of combined heat and power plant (CHP).
-
-This can be either a natural gas driven turbine producing both electricity and heat,
-or also a fuel cell. In this implementation the CHP does not modulate: it is either
-on or off. When it runs, it outputs a constant thermal and electrical power signal
-and needs a constant input of hydrogen or natural gas."""
-
 from dataclasses import dataclass
 from typing import List, Any
 
@@ -13,7 +6,9 @@ from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.components import controller_l1_chp
+from hisim import utils
+from hisim.components import controller_l2_generic_heat_simple
+from hisim.components import generic_hydrogen_storage
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
@@ -28,116 +23,88 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class CHPConfig(cp.ConfigBase):
-    """Defininition of configuration of combined heat and power plant (CHP)."""
-    #: name of the CHP
+class GCHPConfig:
+    """
+    GCHP Config
+    """
+
     name: str
-    #: priority of the component in hierachy: the higher the number the lower the priority
     source_weight: int
-    #: type of CHP (fuel cell or gas driven)
-    use: lt.LoadTypes
-    #: electrical power of the CHP, when activated
     p_el: float
-    #: thermal power of the CHP in Watt, when activated
     p_th: float
-    #: demanded power of fuel input in Watt, when activated
     p_fuel: float
 
-    @staticmethod
-    def get_default_config_chp(thermal_power: float) -> "CHPConfig":
-        config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.GAS, p_el=(0.33 / 0.5) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.5) * thermal_power
-        )
-        return config
+    def __init__(
+        self, name: str, source_weight: int, p_el: float, p_th: float, p_fuel: float
+    ):
+        self.name = name
+        self.source_weight = source_weight
+        self.p_el = p_el
+        self.p_th = p_th
+        self.p_fuel = p_fuel
 
     @staticmethod
-    def get_default_config_fuelcell(thermal_power: float) -> "CHPConfig":
-        config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el=(0.48 / 0.43) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.43) * thermal_power
+    def get_default_config() -> Any:
+        config = GCHPConfig(
+            name="CHP", source_weight=1, p_el=2000, p_th=3000, p_fuel=6000
         )
         return config
 
 
 class GenericCHPState:
-    """This data class saves the state of the CHP."""
+    """
+    This data class saves the state of the CHP.
+    """
 
-    def __init__(self, state: int) -> None:
-        self.state = state
+    def __init__(self, state: float = 0) -> None:
+        self.state: float = state
 
-    def clone(self) -> "GenericCHPState":
+    def clone(self) -> Any:
         return GenericCHPState(state=self.state)
 
 
-class SimpleCHP(cp.Component):
-    """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
-
-    Components to connect to:
-    (1) CHP or fuel cell controller (controller_l1_chp)
+class GCHP(cp.Component):
+    """
+    Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
     """
 
     # Inputs
-    CHPControllerOnOffSignal = "CHPControllerOnOffSignal"
-    CHPControllerHeatingModeSignal = "CHPControllerHeatingModeSignal"
+    L1DeviceSignal = "L1DeviceSignal"
 
     # Outputs
-    ThermalPowerOutputBuilding = "ThermalPowerOutputBuilding"
-    ThermalPowerOutputBoiler = "ThermalPowerOutputBoiler"
+    ThermalPowerDelivered = "ThermalPowerDelivered"
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: CHPConfig
+        self, my_simulation_parameters: SimulationParameters, config: GCHPConfig
     ) -> None:
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config
         )
-
-        self.config = config
-        if self.config.use == lt.LoadTypes.HYDROGEN:
-            self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
-        else:
-            self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
-
-        self.state = GenericCHPState(state=0)
-        self.previous_state = self.state.clone()
+        self.build(config)
 
         # Inputs
-        self.chp_onoff_signal_channel: cp.ComponentInput = self.add_input(
+        self.L1DeviceSignalC: cp.ComponentInput = self.add_input(
             self.component_name,
-            self.CHPControllerOnOffSignal,
+            self.L1DeviceSignal,
             lt.LoadTypes.ON_OFF,
             lt.Units.BINARY,
             mandatory=True,
         )
 
-        self.chp_heatingmode_signal_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.CHPControllerHeatingModeSignal,
-            lt.LoadTypes.ANY,
-            lt.Units.BINARY,
-            mandatory=True,
-        )
-
         # Component outputs
-        self.thermal_power_output_building_channel: cp.ComponentOutput = self.add_output(
+        self.ThermalPowerDeliveredC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ThermalPowerOutputBuilding,
+            field_name=self.ThermalPowerDelivered,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
-            output_description="Thermal Power output from CHP to building or buffer in Watt."
+            output_description="Thermal Power Delivered"
         )
-        self.thermal_power_output_dhw_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.ThermalPowerOutputBoiler,
-            load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
-            output_description="Thermal Power output from CHP to drain hot water storage in Watt."
-        )
-        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
+        self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -146,32 +113,29 @@ class SimpleCHP(cp.Component):
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 lt.ComponentType.FUEL_CELL,
             ],
-            output_description="Electrical Power output of CHP in Watt."
+            output_description="Electricity Output"
         )
-        if self.config.use == lt.LoadTypes.HYDROGEN:
-            self.fuel_consumption_channel: cp.ComponentOutput = self.add_output(
-                object_name=self.component_name,
-                field_name=self.FuelDelivered,
-                load_type=lt.LoadTypes.HYDROGEN,
-                unit=lt.Units.KG_PER_SEC,
-                postprocessing_flag=[
-                    lt.LoadTypes.HYDROGEN
-                ],
-                output_description="Hydrogen consumption of CHP in kg / s.",
-            )
-        elif self.config.use == lt.LoadTypes.GAS:
-            self.fuel_consumption_channel = self.add_output(
-                object_name=self.component_name,
-                field_name=self.FuelDelivered,
-                load_type=lt.LoadTypes.GAS,
-                unit=lt.Units.WATT_HOUR,
-                postprocessing_flag=[
-                    lt.InandOutputType.FUEL_CONSUMPTION,
-                    lt.LoadTypes.GAS
-                ],
-                output_description="Gas consumption of CHP in Wh.",
-            )
-        self.add_default_connections(self.get_default_connections_from_chp_controller())
+        self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.FuelDelivered,
+            lt.LoadTypes.HYDROGEN,
+            lt.Units.KG_PER_SEC,
+            output_description="Fuel Delivered"
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_l1_generic_chp_runtime_controller()
+        )
+        self.state: GenericCHPState
+        self.previous_state: GenericCHPState
+
+    def build(self, config: GCHPConfig) -> None:
+        self.state = GenericCHPState()
+        self.previous_state = GenericCHPState()
+        self.name = config.name
+        self.source_weight = config.source_weight
+        self.p_th = config.p_th
+        self.p_el = config.p_el
+        self.p_fuel = config.p_fuel * 1e-8 / 1.41  # converted to kg / s
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -190,30 +154,35 @@ class SimpleCHP(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         # Inputs
-        self.state.state = int(stsv.get_input_value(self.chp_onoff_signal_channel))
-        mode = stsv.get_input_value(self.chp_heatingmode_signal_channel)
+        self.state.state = stsv.get_input_value(self.L1DeviceSignalC)
 
         # Outputs
-        if mode == 0:
-            stsv.set_output_value(self.thermal_power_output_dhw_channel, self.state.state * self.config.p_th)
-            stsv.set_output_value(self.thermal_power_output_building_channel, 0)
-        elif mode == 1:
-            stsv.set_output_value(self.thermal_power_output_dhw_channel, 0)
-            stsv.set_output_value(self.thermal_power_output_building_channel, self.state.state * self.config.p_th)
+        stsv.set_output_value(self.ThermalPowerDeliveredC, self.state.state * self.p_th)
+        stsv.set_output_value(self.ElectricityOutputC, self.state.state * self.p_el)
 
-        stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
-        stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
+        # heat of combustion hydrogen: 141.8 MJ / kg; conversion W = J/s to kg / s
+        stsv.set_output_value(self.FuelDeliveredC, self.state.state * self.p_fuel)
 
-    def get_default_connections_from_chp_controller(self,) -> List[cp.ComponentConnection]:
-        """Sets default connections of the controller in the Fuel Cell / CHP."""
+    def get_default_connections_from_l1_generic_chp_runtime_controller(
+        self,
+    ) -> List[cp.ComponentConnection]:
         log.information("setting l1 default connections in generic CHP")
         connections: List[cp.ComponentConnection] = []
-        controller_classname = controller_l1_chp.L1CHPController.get_classname()
+        controller_classname = L1GenericCHPRuntimeController.get_classname()
         connections.append(
             cp.ComponentConnection(
-                SimpleCHP.CHPControllerOnOffSignal,
+                GCHP.L1DeviceSignal,
                 controller_classname,
-                controller_l1_chp.L1CHPController.CHPControllerOnOffSignal,
+                L1GenericCHPRuntimeController.L1DeviceSignal,
+            )
+        )
+        return connections
+
+    def write_to_report(self):
+        lines = []
+        lines.append(
+            "CHP operation with constant electical and thermal power: {}".format(
+                self.name + str(self.source_weight)
             )
         )
         lines.append("P_el {:4.0f} kW".format(self.p_el))
@@ -380,13 +349,117 @@ class L1GenericCHPRuntimeController(cp.Component):
         )
         connections.append(
             cp.ComponentConnection(
-                SimpleCHP.CHPControllerHeatingModeSignal,
+                L1GenericCHPRuntimeController.l2_DeviceSignal,
                 controller_classname,
-                controller_l1_chp.L1CHPController.CHPControllerHeatingModeSignal,
+                controller_l2_generic_heat_simple.L2GenericHeatController.l2_device_signal,
             )
         )
         return connections
 
-    def write_to_report(self):
-        """Writes the information of the current component to the report."""
-        return self.config.get_string_dict()
+    def get_default_connections_from_generic_hydrogen_storage(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        log.information(
+            "setting generic H2 storage default connections in L1 of generic CHP"
+        )
+        connections: List[cp.ComponentConnection] = []
+        h2storage_classname = (
+            generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
+        )
+        connections.append(
+            cp.ComponentConnection(
+                L1GenericCHPRuntimeController.HydrogenSOC,
+                h2storage_classname,
+                generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
+            )
+        )
+        return connections
+
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
+        pass
+
+    def build(self, config: L1CHPConfig) -> None:
+        self.on_time = int(
+            config.min_operation_time
+            / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.off_time = int(
+            config.min_idle_time / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.SOCmin = config.min_h2_soc
+        self.name = config.name
+        self.source_weight = config.source_weight
+
+        self.state0 = L1GenericCHPControllerState()
+        self.state = L1GenericCHPControllerState()
+        self.previous_state = L1GenericCHPControllerState()
+
+    def i_save_state(self) -> None:
+        self.previous_state = self.state.clone()
+
+    def i_restore_state(self) -> None:
+        self.state = self.previous_state.clone()
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        pass
+
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
+        # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
+        if force_convergence:
+            pass
+
+        l2_devicesignal = stsv.get_input_value(self.l2_DeviceSignalC)
+        electricity_target = stsv.get_input_value(self.ElectricityTargetC)
+        H2_SOC = stsv.get_input_value(self.HydrogenSOCC)
+
+        # save reference state state0 in first iteration
+        if self.state.is_first_iteration(timestep):
+            self.state0 = self.state.clone()
+
+        # return device on if minimum operation time is not fulfilled and device was on in previous state
+        if (
+            self.state0.state == 1
+            and self.state0.timestep_of_last_action + self.on_time >= timestep
+        ):
+            self.state.state = 1
+        # return device off if minimum idle time is not fulfilled and device was off in previous state
+        elif (
+            self.state0.state == 0
+            and self.state0.timestep_of_last_action + self.off_time >= timestep
+        ):
+            self.state.state = 0  # catch cases where hydrogen storage is close to maximum level and signals oscillate -> just turn off electrolyzer
+        elif force_convergence:
+            if self.state0.state == 0:
+                self.state.state = 0
+            else:
+                self.state.deactivation(timestep)
+            electricity_target = 0
+        # check signal from l2 and turn on or off if it is necesary
+        else:
+            if (
+                (l2_devicesignal == 0)
+                or (electricity_target <= 0)
+                or (H2_SOC < self.SOCmin)
+            ) and self.state0.state == 1:
+                self.state.deactivation(timestep)
+            elif (
+                (l2_devicesignal == 1)
+                and (electricity_target > 0)
+                and (H2_SOC >= self.SOCmin)
+            ) and self.state0.state == 0:
+                self.state.activation(timestep)
+
+        stsv.set_output_value(self.L1DeviceSignalC, self.state.state)
+
+    def prin1t_outpu1t(self, t_m: float, state: L1GenericCHPControllerState) -> None:
+        log.information("==========================================")
+        log.information(f"T m: {t_m}")
+        log.information(f"State: {state}")
+
+    def write_to_report(self) -> List[str]:
+        lines: List[str] = []
+        lines.append("Generic CHP L1 Controller: " + self.component_name)
+        return lines

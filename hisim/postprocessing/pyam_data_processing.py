@@ -5,7 +5,7 @@ import glob
 import time
 import datetime
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import numpy as np
 import re
 import pyam
@@ -606,7 +606,7 @@ class PyAmChartGenerator:
         except:
             pass
 
-    def set_axis_scale(self, ax: Any, x_or_y=Any) -> Any:
+    def set_axis_scale(self, ax: Any, x_or_y=Any) -> Tuple[Any, Any, Any]:
         """Get axis and unit and scale it properly."""
 
         if x_or_y == "x":

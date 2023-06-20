@@ -23,7 +23,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class GCHPConfig:
+class GCHPConfig(cp.ConfigBase):
     """
     GCHP Config
     """

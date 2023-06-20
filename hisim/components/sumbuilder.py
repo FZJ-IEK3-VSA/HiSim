@@ -11,6 +11,28 @@ from hisim import utils
 from hisim.component import Component
 from hisim.simulationparameters import SimulationParameters
 
+@dataclass_json
+@dataclass
+class SumBuilderConfig(cp.ConfigBase):
+
+    """Electricity Grid Config."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return SumBuilderForTwoInputs.get_full_classname()
+    
+
+    name: str
+    loadtype: lt.LoadTypes
+    unit: lt.Units
+
+    @classmethod
+    def get_sumbuilder_default_config(cls):
+        """Gets a default Sumbuilder."""
+        return SumBuilderConfig(
+            name="Sumbuilder", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY
+        )
 
 class CalculateOperation(cp.Component):
 
@@ -21,22 +43,20 @@ class CalculateOperation(cp.Component):
 
     def __init__(
         self,
-        name: str,
-        loadtype: lt.LoadTypes,
-        unit: lt.Units,
+        config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=name,
+            name=config.name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=[name, loadtype, unit],
+            my_config=config,
         )
         self.operations: List[str] = []
-        self.loadtype = loadtype
-        self.unit = unit
+        self.loadtype = config.loadtype
+        self.unit = config.unit
         self.output1: cp.ComponentOutput = self.add_output(
-            self.component_name, self.Output, loadtype, unit
+            self.component_name, self.Output, config.loadtype, config.unit
         )
 
     def add_numbered_input(self) -> cp.ComponentInput:
@@ -294,28 +314,26 @@ class SumBuilderForTwoInputs(Component):
 
     def __init__(
         self,
-        name: str,
-        loadtype: lt.LoadTypes,
-        unit: lt.Units,
+        config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=name,
+            name=config.name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=[name, loadtype, unit],
+            my_config=config,
         )
         self.input1: cp.ComponentInput = self.add_input(
-            self.component_name, SumBuilderForTwoInputs.SumInput1, loadtype, unit, True
+            self.component_name, SumBuilderForTwoInputs.SumInput1, config.loadtype, config.unit, True
         )
         self.input2: cp.ComponentInput = self.add_input(
-            self.component_name, SumBuilderForTwoInputs.SumInput2, loadtype, unit, False
+            self.component_name, SumBuilderForTwoInputs.SumInput2, config.loadtype, config.unit, False
         )
         self.output1: cp.ComponentOutput = self.add_output(
             self.component_name,
             SumBuilderForTwoInputs.SumOutput,
-            loadtype,
-            unit,
+            config.loadtype,
+            config.unit,
             output_description="Sum of values",
         )
 
@@ -363,40 +381,38 @@ class SumBuilderForThreeInputs(Component):
 
     def __init__(
         self,
-        name: str,
-        loadtype: lt.LoadTypes,
-        unit: lt.Units,
+        config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=name,
+            name=config.name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=[name, loadtype, unit],
+            my_config=config,
         )
         self.input1: cp.ComponentInput = self.add_input(
             self.component_name,
             SumBuilderForThreeInputs.SumInput1,
-            loadtype,
-            unit,
+            config.loadtype,
+            config.unit,
             True,
         )
         self.input2: cp.ComponentInput = self.add_input(
             self.component_name,
             SumBuilderForThreeInputs.SumInput2,
-            loadtype,
-            unit,
+            config.loadtype,
+            config.unit,
             False,
         )
         self.input3: cp.ComponentInput = self.add_input(
             self.component_name,
             SumBuilderForThreeInputs.SumInput3,
-            loadtype,
-            unit,
+            config.loadtype,
+            config.unit,
             False,
         )
         self.output1: cp.ComponentOutput = self.add_output(
-            self.component_name, SumBuilderForThreeInputs.SumOutput, loadtype, unit
+            self.component_name, SumBuilderForThreeInputs.SumOutput, config.loadtype, config.unit,
         )
 
         self.state = 0

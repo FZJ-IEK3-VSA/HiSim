@@ -29,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatPumpConfig:
+class HeatPumpConfig(cp.ConfigBase):
     """ Configuration of a HeatPump. """
     #: name of the device
     name: str

@@ -19,6 +19,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import postprocessingoptions
 from hisim.loadtypes import Units
+from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago, Maximillian Hillen"
@@ -178,16 +179,38 @@ class Simulator:
             self._simulation_parameters.result_directory is None
             or len(self._simulation_parameters.result_directory) == 0
         ):
-            result_dirname = f"{self.setup_function.lower()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            self._simulation_parameters.result_directory = os.path.join(
-                self.module_directory, "results", result_dirname
-            )
 
+            try:
+                # check if result path is already set somewhere manually
+                self._simulation_parameters.result_directory = (
+                    ResultPathProviderSingleton().get_result_directory_name()
+                )
+                log.information(
+                    "Using result directory: "
+                    + self._simulation_parameters.result_directory
+                    + " which is set manually."
+                )
+            except:
+                # if not, build a flat result path itself
+                ResultPathProviderSingleton(
+                    module_directory=self.module_directory,
+                    model_name=self.setup_function,
+                    variant_name=None,
+                    sorting_option=SortingOptionEnum.FLAT,
+                    time_resolution_in_seconds=self._simulation_parameters.seconds_per_timestep,
+                    simulation_duration_in_days=self._simulation_parameters.duration.days,
+                )
+                self._simulation_parameters.result_directory = (
+                    ResultPathProviderSingleton().get_result_directory_name()
+                )
+                log.information(
+                    "Using result directory: "
+                    + self._simulation_parameters.result_directory
+                    + " which is set by simulator."
+                )
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
-        log.information(
-            "Using result directory: " + self._simulation_parameters.result_directory
-        )
+
         log.LOGGING_LEVEL = self._simulation_parameters.logging_level
         self.iteration_logging_path = os.path.join(
             self._simulation_parameters.result_directory, "Detailed_Iteration_Log.txt"
@@ -399,8 +422,11 @@ class Simulator:
                 columns=[results_data_frame.columns[i_column]],
             )
 
-            if (
-                self.all_outputs[i_column].unit in (Units.CELSIUS, Units.ANY, Units.METER_PER_SECOND, Units.DEGREES)
+            if self.all_outputs[i_column].unit in (
+                Units.CELSIUS,
+                Units.ANY,
+                Units.METER_PER_SECOND,
+                Units.DEGREES,
             ):
                 temp_df_monthly = temp_df.resample("M").interpolate(method="linear")
                 temp_df_cumulative_data = temp_df.mean()
@@ -418,8 +444,11 @@ class Simulator:
             ] = temp_df_cumulative_data.values
 
             if self._simulation_parameters.seconds_per_timestep != 3600:
-                if (
-                self.all_outputs[i_column].unit in (Units.CELSIUS, Units.ANY, Units.METER_PER_SECOND, Units.DEGREES)
+                if self.all_outputs[i_column].unit in (
+                    Units.CELSIUS,
+                    Units.ANY,
+                    Units.METER_PER_SECOND,
+                    Units.DEGREES,
                 ):
                     temp_df_hourly = temp_df.resample("60T").interpolate(
                         method="linear"

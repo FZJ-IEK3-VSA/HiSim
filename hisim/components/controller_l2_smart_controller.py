@@ -18,10 +18,12 @@ from hisim.components.generic_ev_charger import (
 )
 from hisim.simulationparameters import SimulationParameters
 
+
 # TODO: add more arguments to config
 @dataclass_json
 @dataclass
 class SmartControllerConfig(ConfigBase):
+
     """Smart Controller Config."""
 
     name: str

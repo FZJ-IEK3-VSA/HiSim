@@ -2,7 +2,7 @@
 
 # clean
 import os
-from typing import Optional, Any
+from typing import Optional
 
 import pytest
 import hisim.simulator as sim

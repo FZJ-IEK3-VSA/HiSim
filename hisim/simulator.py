@@ -202,8 +202,7 @@ class Simulator:
                     ResultPathProviderSingleton().get_result_directory_name()
                 )
                 log.information(
-                    "Using result directory: "
-                    + self._simulation_parameters.result_directory
+                    f"Using result directory:  {self._simulation_parameters.result_directory}"
                     + " which is set by the simulator."
                 )
         if not os.path.isdir(self._simulation_parameters.result_directory):

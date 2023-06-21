@@ -143,6 +143,7 @@ class BuildingState:
         self.thermal_mass_temperature_in_celsius: float = (
             thermal_mass_temperature_in_celsius
         )
+
         # this is labeled as c_m in the paper [1] (** Check header)
         self.thermal_capacitance_in_joule_per_kelvin: float = (
             thermal_capacitance_in_joule_per_kelvin
@@ -196,8 +197,6 @@ class Building(dynamic_component.DynamicComponent):
     # Inputs -> heating device
     ThermalPowerDelivered = "ThermalPowerDelivered"
     ThermalPowerCHP = "ThermalPowerCHP"
-    SetHeatingTemperature = "SetHeatingTemperature"
-    SetCoolingTemperature = "SetCoolingTemperature"
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
@@ -218,7 +217,6 @@ class Building(dynamic_component.DynamicComponent):
     TemperatureIndoorAir = "TemperatureIndoorAir"
     TotalEnergyToResidence = "TotalEnergyToResidence"
     SolarGainThroughWindows = "SolarGainThroughWindows"
-    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
 
@@ -243,8 +241,8 @@ class Building(dynamic_component.DynamicComponent):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.set_heating_temperature_in_celsius: float = 20
-        self.set_cooling_temperature_in_celsius: float = 23
+        self.set_heating_temperature_in_celsius_default: float = 20
+        self.set_cooling_temperature_in_celsius_default: float = 23
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -356,6 +354,29 @@ class Building(dynamic_component.DynamicComponent):
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=self.number_of_apartments
         )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND,
+            entry=self.max_thermal_building_demand_in_watt,
+        )
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+        ) and SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+        ):
+            self.set_heating_temperature_in_celsius = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+                )
+            )
+            self.set_cooling_temperature_in_celsius = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+                )
+            )
+        else:
+            self.set_heating_temperature_in_celsius = self.set_heating_temperature_in_celsius_default
+            self.set_cooling_temperature_in_celsius = self.set_cooling_temperature_in_celsius_default
+            log.warning("Default temperature thresholds for cooling/heating in building are used.")
 
         # =================================================================================================================================
         # Input channels
@@ -440,21 +461,6 @@ class Building(dynamic_component.DynamicComponent):
             True,
         )
 
-        self.set_heating_temperature_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.SetHeatingTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            False,
-        )
-        self.set_cooling_temperature_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.SetCoolingTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            False,
-        )
-
         # Output channels
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -491,13 +497,7 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.SolarGainThroughWindows} will follow.",
         )
-        self.var_max_thermal_building_demand_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.ReferenceMaxHeatBuildingDemand,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            output_description=f"here a description for {self.ReferenceMaxHeatBuildingDemand} will follow.",
-        )
+
         self.heat_loss_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatLoss,
@@ -624,7 +624,9 @@ class Building(dynamic_component.DynamicComponent):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulate the thermal behaviour of the building."""
-
+        # if force_convergence:
+        #     pass
+        # else:
         # Gets inputs
         if hasattr(self, "solar_gain_through_windows") is False:
             azimuth = stsv.get_input_value(self.azimuth_channel)
@@ -648,13 +650,6 @@ class Building(dynamic_component.DynamicComponent):
 
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
-        )
-
-        self.set_heating_temperature_in_celsius = stsv.get_input_value(
-            self.set_heating_temperature_channel
-        )
-        self.set_cooling_temperature_in_celsius = stsv.get_input_value(
-            self.set_cooling_temperature_channel
         )
 
         thermal_power_delivered_in_watt = 0.0
@@ -726,12 +721,9 @@ class Building(dynamic_component.DynamicComponent):
 
         # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
         stsv.set_output_value(self.total_power_to_residence_channel, heat_loss_in_watt)
+
         stsv.set_output_value(
             self.solar_gain_through_windows_channel, solar_heat_gain_through_windows
-        )
-        stsv.set_output_value(
-            self.var_max_thermal_building_demand_channel,
-            self.max_thermal_building_demand_in_watt,
         )
 
         stsv.set_output_value(
@@ -999,7 +991,9 @@ class Building(dynamic_component.DynamicComponent):
         ].values[0]
 
         for index, windows_direction in enumerate(self.windows_directions):
-            window_area = float(self.buildingdata["A_Window_" + windows_direction].iloc[0])
+            window_area = float(
+                self.buildingdata["A_Window_" + windows_direction].iloc[0]
+            )
             if window_area != 0.0:
                 if windows_direction == "Horizontal":
                     window_tilt_angle = 0
@@ -1414,7 +1408,8 @@ class Building(dynamic_component.DynamicComponent):
         self.thermal_conductance_by_ventilation_in_watt_per_kelvin = (
             heat_capacity_of_air_per_volume_in_watt_hour_per_m3_per_kelvin
             * float(
-                self.buildingdata["n_air_use"].iloc[0] + self.buildingdata["n_air_infiltration"].iloc[0]
+                self.buildingdata["n_air_use"].iloc[0]
+                + self.buildingdata["n_air_infiltration"].iloc[0]
             )
             * self.scaled_conditioned_floor_area_in_m2
             * float(self.buildingdata["h_room"].iloc[0])
@@ -1842,7 +1837,7 @@ class Building(dynamic_component.DynamicComponent):
                 indoor_air_temperature_set_in_celsius=indoor_air_temperature_set_in_celsius,
             )
         else:
-            raise ValueError("value error for theoretical building demand")
+            raise ValueError(f"Value error for theoretical building demand. Indoor_air_temp_zero has uncompatible value {indoor_air_temperature_zero_in_celsius} C.")
 
         return theoretical_thermal_building_demand_in_watt
 

@@ -20,7 +20,12 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self,
     ):
         """Initialize the class."""
-
+        self.base_path: Optional[str] = None
+        self.model_name: Optional[str] = None
+        self.variant_name: Optional[str] = None
+        self.sorting_option: str = SortingOptionEnum.FLAT
+        self.time_resolution_in_seconds: Optional[int] = None
+        self.simulation_duration_in_days: Optional[int] = None
         self.datetime_string: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def set_important_result_path_information(
@@ -64,7 +69,12 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
     def get_result_directory_name(self) -> str:  # *args
         """Get the result directory path."""
-
+        if None in (self.base_path, self.model_name, self.variant_name):
+            raise ValueError(
+                f"At least one of the following variables is None: "
+                f"base_path = {self.base_path}, model_name = {self.model_name}, variant_name = {self.variant_name}. "
+                f"Please make sure that these variables are set, otherwise a result path can not be generated."
+            )
         if self.sorting_option == SortingOptionEnum.DEEP:
             path = os.path.join(
                 self.base_path, self.model_name, self.variant_name, self.datetime_string

@@ -6,7 +6,6 @@ from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim import utils
 from hisim.components import controller_l2_generic_heat_simple
 from hisim.components import generic_hydrogen_storage
 from hisim.simulationparameters import SimulationParameters
@@ -34,14 +33,15 @@ class GCHPConfig(cp.ConfigBase):
     p_th: float
     p_fuel: float
 
-    def __init__(
-        self, name: str, source_weight: int, p_el: float, p_th: float, p_fuel: float
-    ):
-        self.name = name
-        self.source_weight = source_weight
-        self.p_el = p_el
-        self.p_th = p_th
-        self.p_fuel = p_fuel
+    # @Johanna: braucht die Komponente hier eine init Funktion? Denn es ist ja eine Dataclass
+    # def __init__(
+    #     self, name: str, source_weight: int, p_el: float, p_th: float, p_fuel: float
+    # ):
+    #     self.name = name
+    #     self.source_weight = source_weight
+    #     self.p_el = p_el
+    #     self.p_th = p_th
+    #     self.p_fuel = p_fuel
 
     @staticmethod
     def get_default_config() -> Any:

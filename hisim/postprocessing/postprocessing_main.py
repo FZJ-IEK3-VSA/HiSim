@@ -824,8 +824,8 @@ class PostProcessor:
         simple_df_hourly_data.to_csv(
             path_or_buf=file_name_hourly,
             index=None,
-        )
-        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)
+        ) # type: ignore
+        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None) # type: ignore
 
         # Serializing json
         json_object = json.dumps(data_information_dict, indent=4)

@@ -8,7 +8,6 @@ from hisim.components import building
 from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
 from hisim.components import generic_gas_heater
-from hisim import postprocessingoptions
 
 
 __authors__ = "Maximilian Hillen"

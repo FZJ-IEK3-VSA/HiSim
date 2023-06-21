@@ -49,7 +49,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set Weather
     location = "Aachen"
@@ -70,8 +70,8 @@ def household_with_hds_and_advanced_hp(
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
-    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = None
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = None
+    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
 
     # Set Heat Pump
     model: str = "Generic"
@@ -79,9 +79,9 @@ def household_with_hds_and_advanced_hp(
     heating_reference_temperature_in_celsius: float = -7  # t_in
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
-    cycling_mode = False
-    minimum_running_time_in_seconds = 1200
-    minimum_idle_time_in_seconds = 1200
+    cycling_mode = True
+    minimum_running_time_in_seconds = 600
+    minimum_idle_time_in_seconds = 600
 
     # Set Simple Heat Water Storage
     hws_name = "SimpleHeatWaterStorage"
@@ -105,7 +105,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.one_week_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_simulation_parameters.post_processing_options.append(

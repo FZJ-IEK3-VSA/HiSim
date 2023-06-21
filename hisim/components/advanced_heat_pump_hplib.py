@@ -437,7 +437,6 @@ class HeatPumpHplibControllerL1(Component):
     HeatingFlowTemperatureFromHeatDistributionSystem = (
         "HeatingFlowTemperatureFromHeatDistributionSystem"
     )
-    StatefromHeatDistributionSystem = "StatefromHeatDistributionSystem"
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 

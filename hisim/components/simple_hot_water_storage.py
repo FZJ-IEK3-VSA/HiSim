@@ -528,7 +528,7 @@ class SimpleHotWaterStorage(cp.Component):
         (
             self.factor_for_water_storage_portion,
             self.factor_for_water_input_portion,
-        ) = self.calculate_mixing_factor_for_water_temperature_outputs()
+        ) = (1,0) #self.calculate_mixing_factor_for_water_temperature_outputs()
 
     def calculate_masses_of_water_flows(
         self,

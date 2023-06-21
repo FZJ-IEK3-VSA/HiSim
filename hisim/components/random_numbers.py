@@ -10,10 +10,11 @@ from hisim.component import (
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
-    ConfigBase
+    ConfigBase,
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+
 
 @dataclass_json
 @dataclass
@@ -41,15 +42,20 @@ class RandomNumbersConfig(ConfigBase):
             maximum=20,
         )
 
+
 class RandomNumbers(Component):
     RandomOutput: str = "Random Numbers"
 
     def __init__(
         self,
-        config:RandomNumbersConfig,
+        config: RandomNumbersConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
-        super().__init__(name=config.name, my_simulation_parameters=my_simulation_parameters, my_config=config)
+        super().__init__(
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+        )
         self.values: List[float] = []
         self.minimum = config.minimum
         self.maximum = config.maximum
@@ -61,7 +67,8 @@ class RandomNumbers(Component):
             self.component_name,
             RandomNumbers.RandomOutput,
             lt.LoadTypes.ANY,
-            lt.Units.ANY, output_description="Random Number Output"
+            lt.Units.ANY,
+            output_description="Random Number Output",
         )
 
     def i_restore_state(self) -> None:

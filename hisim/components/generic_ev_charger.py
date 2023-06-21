@@ -27,7 +27,6 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-
 class VehiclePureConfig(cp.ConfigBase):
 
     name: str
@@ -35,23 +34,23 @@ class VehiclePureConfig(cp.ConfigBase):
     model: str
     soc: float
     profile: str
-    
+
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
         return VehiclePure.get_full_classname()
-
 
     @classmethod
     def get_default_config(cls):
         """Gets a default config."""
         return VehiclePureConfig(
             name="Electrical Charger",
-            manufacturer= "Tesla",
-            model= "Model 3 v3",
-            soc= 1.0,
-            profile= "CH01",
+            manufacturer="Tesla",
+            model="Model 3 v3",
+            soc=1.0,
+            profile="CH01",
         )
+
 
 @dataclass_json
 @dataclass
@@ -68,10 +67,8 @@ class EVChargerControllerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(cls):
         """Gets a default config."""
-        return EVChargerControllerConfig(
-            name="ElectricalChargerController",
-            mode=1
-        )
+        return EVChargerControllerConfig(name="ElectricalChargerController", mode=1)
+
 
 @dataclass_json
 @dataclass
@@ -92,10 +89,11 @@ class VehicleConfig(cp.ConfigBase):
         """Gets a default config."""
         return VehicleConfig(
             name="ElectricVehicle",
-            manufacturer= "Renault",
-            model= "Zoe v3",
-            soc= 0.8,
-            )
+            manufacturer="Renault",
+            model="Zoe v3",
+            soc=0.8,
+        )
+
 
 @dataclass_json
 @dataclass
@@ -116,10 +114,11 @@ class EVChargerConfig(cp.ConfigBase):
         """Gets a default config."""
         return EVChargerConfig(
             name="EV_Charger",
-            manufacturer= "myenergi",
-            charger_name= "Wallbox ZAPPI 222TW",
-            electric_vehicle = None
-            )
+            manufacturer="myenergi",
+            charger_name="Wallbox ZAPPI 222TW",
+            electric_vehicle=None,
+        )
+
 
 class VehiclePure(cp.Component):
     """
@@ -141,15 +140,15 @@ class VehiclePure(cp.Component):
     """
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: VehiclePureConfig
+        self, my_simulation_parameters: SimulationParameters, config: VehiclePureConfig
     ) -> None:
         super().__init__(
-            name="EV_charger", my_simulation_parameters=my_simulation_parameters, my_config=config
+            name="EV_charger",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.evconfig = config
-        
+
         self.build()
 
     def build(self) -> None:
@@ -356,13 +355,12 @@ class Vehicle(cp.Component):
     Discharge = "Discharge"
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: VehicleConfig
+        self, my_simulation_parameters: SimulationParameters, config: VehicleConfig
     ) -> None:
         super().__init__(
-            name="ElectricVehicle", my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            name="ElectricVehicle",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build(manufacturer=config.manufacturer, model=config.model, soc=config.soc)
@@ -579,12 +577,12 @@ class EVCharger(cp.Component):
     # 2. Some ChargingInput
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: EVChargerConfig
+        self, my_simulation_parameters: SimulationParameters, config: EVChargerConfig
     ) -> None:
         super().__init__(
-            name="EVCharger", my_simulation_parameters=my_simulation_parameters, my_config=config
+            name="EVCharger",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build(
@@ -826,12 +824,14 @@ class EVChargerController(cp.Component):
     # 1. Some ChargingInput
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: EVChargerControllerConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: EVChargerControllerConfig,
     ) -> None:
         super().__init__(
             name="EVChargerController",
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
         self.mode = config.mode
 

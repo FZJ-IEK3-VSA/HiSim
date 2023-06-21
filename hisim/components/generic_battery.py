@@ -2,6 +2,7 @@
 import copy
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -61,6 +62,7 @@ class GenericBatteryState:
         self.stored_energy = discharge + self.stored_energy
         self.chargeWh = discharge
 
+
 @dataclass_json
 @dataclass
 class GenericBatteryConfig(cp.ConfigBase):
@@ -83,11 +85,12 @@ class GenericBatteryConfig(cp.ConfigBase):
         """Gets a default config."""
         return GenericBatteryConfig(
             name="Generic Battery",
-            manufacturer= "sonnen",
-            model= "sonnenBatterie 10 - 11,5 kWh",
-            soc= 10 / 15,
-            base= False,
+            manufacturer="sonnen",
+            model="sonnenBatterie 10 - 11,5 kWh",
+            soc=10 / 15,
+            base=False,
         )
+
 
 @dataclass_json
 @dataclass
@@ -109,6 +112,7 @@ class BatteryControllerConfig(cp.ConfigBase):
             name="Battery Controller",
         )
 
+
 class GenericBattery(cp.Component):
     # Imports
     ElectricityInput = "ElectricityInput"
@@ -122,11 +126,13 @@ class GenericBattery(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericBatteryConfig
+        config: GenericBatteryConfig,
     ) -> None:
         super().__init__("Battery", my_simulation_parameters, my_config=config)
 
-        self.build(manufacturer=config.manufacturer, model=config.model, base=config.base)
+        self.build(
+            manufacturer=config.manufacturer, model=config.model, base=config.base
+        )
 
         self.state = SimpleStorageState(
             max_var_val=self.max_var_stored_energy,
@@ -262,9 +268,15 @@ class BatteryController(cp.Component):
     ElectricityInput = "ElectricityInput"
     State = "State"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: BatteryControllerConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: BatteryControllerConfig,
+    ) -> None:
         super().__init__(
-            name=config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.inputC: cp.ComponentInput = self.add_input(

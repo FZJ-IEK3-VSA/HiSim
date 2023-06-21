@@ -52,7 +52,6 @@ class L2HeatSmartConfig(cp.ConfigBase):
         return L2HeatSmartController.get_full_classname()
 
 
-
 class L2HeatSmartControllerState:
     """
     This data class saves the state of the heat pump.
@@ -157,7 +156,7 @@ class L2HeatSmartController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
         self.build(config)
 

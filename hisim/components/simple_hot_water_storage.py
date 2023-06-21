@@ -90,7 +90,9 @@ class SimpleHotWaterStorage(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.name, my_simulation_parameters=my_simulation_parameters, my_config=config
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         # =================================================================================================================================
         # Initialization of variables

@@ -28,6 +28,7 @@ class CSVLoaderConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return CSVLoader.get_full_classname()
 
+
 class CSVLoader(cp.Component):
     """
     Class component loads CSV file containing some
@@ -70,7 +71,7 @@ class CSVLoader(cp.Component):
         super().__init__(
             name=self.csvconfig.component_name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.output1: cp.ComponentOutput = self.add_output(

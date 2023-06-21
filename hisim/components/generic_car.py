@@ -71,7 +71,7 @@ class CarConfig(cp.ConfigBase):
 
 
 def most_frequent(input_list: List) -> Any:
-    """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower. """
+    """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower."""
     counter = 0
     num = input_list[0]
 
@@ -102,7 +102,7 @@ class Car(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
         self.build(config=config, occupancy_config=occupancy_config)
 
@@ -248,10 +248,10 @@ class Car(cp.Component):
             # sum / extract most common value from data to match hisim time resolution
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(
-                    sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio])
+                    sum(meters_driven[i * steps_ratio : (i + 1) * steps_ratio])
                 )  # sum
                 location_list = car_location[
-                    i * steps_ratio: (i + 1) * steps_ratio
+                    i * steps_ratio : (i + 1) * steps_ratio
                 ]  # extract list
                 occurence_count = most_frequent(
                     input_list=location_list

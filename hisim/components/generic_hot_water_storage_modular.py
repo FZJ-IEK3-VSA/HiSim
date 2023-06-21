@@ -5,6 +5,7 @@ The hot water storage simulates only storage and demand and needs to be connnect
 DHW hot water storage or as buffer storage.
 """
 from dataclasses import dataclass
+
 # clean
 # Generic/Built-in
 from typing import Any, List, Optional
@@ -16,11 +17,14 @@ import hisim.component as cp
 import hisim.dynamic_component as dycp
 import hisim.log
 from hisim import loadtypes as lt
-from hisim.components import (controller_l1_building_heating, generic_CHP,
-                              generic_heat_pump_modular, generic_heat_source)
+from hisim.components import (
+    controller_l1_building_heating,
+    generic_CHP,
+    generic_heat_pump_modular,
+    generic_heat_source,
+)
 from hisim.components.loadprofilegenerator_connector import Occupancy
-from hisim.components.loadprofilegenerator_utsp_connector import \
-    UtspLpgConnector
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
@@ -68,32 +72,55 @@ class StorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_boiler(cls) -> "StorageConfig":
-        """ Returns default configuration for boiler. """
+        """Returns default configuration for boiler."""
         # get default number of households
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
-            number_of_households = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+        ):
+            number_of_households = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+            )
         else:
-            raise KeyError("Key for number of apartments was not found in the singleton sim repository." +
-                           "This might be because the building was not initialized before the loadprofilegenerator_connector." +
-                           "Please check the order of the initialization of the components in your example.")
+            raise KeyError(
+                "Key for number of apartments was not found in the singleton sim repository."
+                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
+                + "Please check the order of the initialization of the components in your example."
+            )
         # get default number of households
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
-            number_of_households = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+        ):
+            number_of_households = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+            )
         else:
-            raise KeyError("Key for number of apartments was not found in the singleton sim repository." +
-                           "This might be because the building was not initialized before the loadprofilegenerator_connector." +
-                           "Please check the order of the initialization of the components in your example.")
+            raise KeyError(
+                "Key for number of apartments was not found in the singleton sim repository."
+                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
+                + "Please check the order of the initialization of the components in your example."
+            )
         volume = 230 * max(number_of_households, 1)
-        radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
+        radius = (volume * 1e-3 / (4 * np.pi)) ** (
+            1 / 3
+        )  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,
-                               surface=surface, u_value=0.36, warm_water_temperature=40, drain_water_temperature=10,
-                               energy_full_cycle=None, power=0)
+        config = StorageConfig(
+            name="DHWBoiler",
+            use=lt.ComponentType.BOILER,
+            source_weight=1,
+            volume=volume,
+            surface=surface,
+            u_value=0.36,
+            warm_water_temperature=40,
+            drain_water_temperature=10,
+            energy_full_cycle=None,
+            power=0,
+        )
         return config
 
     @staticmethod
     def get_default_config_buffer(power: float = 2000, volume: float = 500) -> Any:
-        """ Returns default configuration for buffer (radius:height = 1:4). """
+        """Returns default configuration for buffer (radius:height = 1:4)."""
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (volume * 1e-3 / (4 * np.pi)) ** (
             1 / 3
@@ -101,25 +128,49 @@ class StorageConfig(cp.ConfigBase):
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=0, surface=surface, u_value=0.36,
-            warm_water_temperature=50, drain_water_temperature=10, energy_full_cycle=None, power=power)
+            name="Buffer",
+            use=lt.ComponentType.BUFFER,
+            source_weight=1,
+            volume=0,
+            surface=surface,
+            u_value=0.36,
+            warm_water_temperature=50,
+            drain_water_temperature=10,
+            energy_full_cycle=None,
+            power=power,
+        )
         return config
 
-    def compute_default_volume(self, time_in_seconds: float, temperature_difference_in_kelvin: float, multiplier: float) -> None:
-        """ Computes default volume and surface from power and min idle time of heating system. """
+    def compute_default_volume(
+        self,
+        time_in_seconds: float,
+        temperature_difference_in_kelvin: float,
+        multiplier: float,
+    ) -> None:
+        """Computes default volume and surface from power and min idle time of heating system."""
         if self.use != lt.ComponentType.BUFFER:
-            raise Exception("Default volume can only be computed for buffer storage not for boiler.")
+            raise Exception(
+                "Default volume can only be computed for buffer storage not for boiler."
+            )
 
         energy_in_kilo_joule = self.power * time_in_seconds * 1e-3
-        self.volume = energy_in_kilo_joule * multiplier / (temperature_difference_in_kelvin * 0.977 * 4.182)
+        self.volume = (
+            energy_in_kilo_joule
+            * multiplier
+            / (temperature_difference_in_kelvin * 0.977 * 4.182)
+        )
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
-        radius = (self.volume * 1e-3 / (4 * np.pi))**(1 / 3)  # l to m^3 so that radius is given in m
+        radius = (self.volume * 1e-3 / (4 * np.pi)) ** (
+            1 / 3
+        )  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
 
     def compute_default_cycle(self, temperature_difference_in_kelvin: float) -> None:
-        """ Computes energy needed to heat storage from lower threshold of hysteresis to upper threshold. """
-        self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
+        """Computes energy needed to heat storage from lower threshold of hysteresis to upper threshold."""
+        self.energy_full_cycle = (
+            self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
+        )
 
 
 class StorageState:
@@ -181,7 +232,13 @@ class StorageState:
 
         For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
         """
-        return (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
+        return (
+            (self.temperature_in_kelvin - 273.15 - 25)
+            * self.volume_in_l
+            * 0.977
+            * 4.182
+            * 1e3
+        )
 
 
 class HotWaterStorage(dycp.DynamicComponent):
@@ -225,7 +282,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.build(config)
@@ -252,14 +309,18 @@ class HotWaterStorage(dycp.DynamicComponent):
             self.add_default_connections(self.get_occupancy_default_connections())
             self.add_default_connections(self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
-            self.heat_controller_target_percentage_channel: cp.ComponentInput = self.add_input(
-                self.component_name,
-                self.HeatControllerTargetPercentage,
-                lt.LoadTypes.ON_OFF,
-                lt.Units.BINARY,
-                mandatory=True,
+            self.heat_controller_target_percentage_channel: cp.ComponentInput = (
+                self.add_input(
+                    self.component_name,
+                    self.HeatControllerTargetPercentage,
+                    lt.LoadTypes.ON_OFF,
+                    lt.Units.BINARY,
+                    mandatory=True,
+                )
             )
-            self.add_default_connections(self.get_heating_controller_default_connections())
+            self.add_default_connections(
+                self.get_heating_controller_default_connections()
+            )
         else:
             hisim.log.error("Type of hot water storage is not defined")
 
@@ -285,7 +346,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
-            output_description="Temperature Mean"
+            output_description="Temperature Mean",
         )
         # Outputs
         self.power_from_water_storage_channel: cp.ComponentOutput = self.add_output(
@@ -294,7 +355,7 @@ class HotWaterStorage(dycp.DynamicComponent):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.DISCHARGE, self.use],
-            output_description="Power transfered to Building or Hot Water Pipe."
+            output_description="Power transfered to Building or Hot Water Pipe.",
         )
 
         self.add_default_connections(
@@ -381,9 +442,13 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     def get_heating_controller_default_connections(self):
         """Sets heating controller default connections in hot water storage."""
-        hisim.log.information("setting heating controller default connections in hot water storaage")
+        hisim.log.information(
+            "setting heating controller default connections in hot water storaage"
+        )
         connections = []
-        heating_controller_classname = controller_l1_building_heating.L1BuildingHeatController.get_classname()
+        heating_controller_classname = (
+            controller_l1_building_heating.L1BuildingHeatController.get_classname()
+        )
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.HeatControllerTargetPercentage,
@@ -484,14 +549,25 @@ class HotWaterStorage(dycp.DynamicComponent):
             # heat loss due to hot water consumption -> base on energy balance in kJ
             # 0.977 density of water in kg/l
             # 4.182 specific heat of water in kJ K^(-1) kg^(-1)
-            return stsv.get_input_value(self.water_consumption_channel) \
-                * (self.warm_water_temperature - self.drain_water_temperature) * 0.977 * 4.182
+            return (
+                stsv.get_input_value(self.water_consumption_channel)
+                * (self.warm_water_temperature - self.drain_water_temperature)
+                * 0.977
+                * 4.182
+            )
         if self.use == lt.ComponentType.BUFFER:
-            heatconsumption = stsv.get_input_value(self.heat_controller_target_percentage_channel) \
-                * self.power * self.my_simulation_parameters.seconds_per_timestep * 1e-3  # 1e-3 conversion J to kJ
-            available_energy = self.state.return_available_energy()\
-                + thermal_energy_delivered
+            heatconsumption = (
+                stsv.get_input_value(self.heat_controller_target_percentage_channel)
+                * self.power
+                * self.my_simulation_parameters.seconds_per_timestep
+                * 1e-3
+            )  # 1e-3 conversion J to kJ
+            available_energy = (
+                self.state.return_available_energy() + thermal_energy_delivered
+            )
             if heatconsumption > available_energy:
                 heatconsumption = max(available_energy, 0)
             return heatconsumption
-        raise Exception("Modular storage must be defined either as buffer or as boiler.")
+        raise Exception(
+            "Modular storage must be defined either as buffer or as boiler."
+        )

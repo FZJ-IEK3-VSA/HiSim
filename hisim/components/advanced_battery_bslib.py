@@ -31,7 +31,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
-    """Battery Configuration. """
+    """Battery Configuration."""
+
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
@@ -50,7 +51,7 @@ class BatteryConfig(ConfigBase):
 
     @classmethod
     def get_default_config(cls) -> "BatteryConfig":
-        """ Returns default configuration of battery. """
+        """Returns default configuration of battery."""
         config = BatteryConfig(
             name="Battery",
             p_inv_custom=5,
@@ -91,7 +92,7 @@ class Battery(Component):
             + "_w"
             + str(self.battery_config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.source_weight = self.battery_config.source_weight
@@ -200,5 +201,5 @@ class BatteryState:
     soc: float = 0
 
     def clone(self):
-        "Creates a copy of the Battery State. "
+        "Creates a copy of the Battery State."
         return BatteryState(soc=self.soc)

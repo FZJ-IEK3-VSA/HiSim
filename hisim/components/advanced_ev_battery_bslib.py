@@ -14,7 +14,7 @@ from hisim.component import (
     ComponentOutput,
     SingleTimeStepValues,
     ComponentConnection,
-    ConfigBase
+    ConfigBase,
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
@@ -34,7 +34,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig(ConfigBase):
-    """Configuration of a Car Battery. """
+    """Configuration of a Car Battery."""
+
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -53,13 +54,13 @@ class CarBatteryConfig(ConfigBase):
 
     @classmethod
     def get_default_config(cls) -> Any:
-        """Returns default configuration of a Car Battery. """
+        """Returns default configuration of a Car Battery."""
         config = CarBatteryConfig(
             name="CarBattery",
             system_id="SG1",
-            p_inv_custom= 5,
-            e_bat_custom= 10,
-            source_weight = 1,
+            p_inv_custom=5,
+            e_bat_custom=10,
+            source_weight=1,
         )
         return config
 
@@ -92,7 +93,7 @@ class CarBattery(Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.source_weight = self.battery_config.source_weight
@@ -224,5 +225,5 @@ class EVBatteryState:
     soc: float = 0
 
     def clone(self):
-        "Creates a copy of the Car Battery State. "
+        "Creates a copy of the Car Battery State."
         return EVBatteryState(soc=self.soc)

@@ -52,7 +52,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     def set_variant_name(self, variant_name: Optional[str]) -> None:
         """Set variant name."""
         if variant_name is None:
-            variant_name = "no_variant_name"
+            variant_name = ""
         self.variant_name = variant_name
 
     def set_sorting_option(self, sorting_option: Any) -> None:
@@ -67,18 +67,16 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set simulation duration."""
         self.simulation_duration_in_days = simulation_duration_in_days
 
-    def get_result_directory_name(self) -> str:  # *args
+    def get_result_directory_name(self) -> Any:  # *args
         """Get the result directory path."""
         if None in (
             self.base_path,
             self.model_name,
             self.variant_name,
         ):
-            raise TypeError(
-                "One of these variables is None: "
-                f"base_path = {self.base_path}, model_name = {self.model_name}, variant_name = {self.variant_name}. "
-                "The variables must be given a str-value, otherwise a result path can not be created. "
-            )
+            # The variables must be given a str-value, otherwise a result path can not be created.
+            return None
+
 
         if [
             isinstance(x, str)

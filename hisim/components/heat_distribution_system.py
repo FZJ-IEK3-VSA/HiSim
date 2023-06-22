@@ -94,6 +94,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
 @dataclass
 class HeatDistributionSystemState:
 
+    """HeatDistributionSystemState class."""
+
     water_output_temperature_in_celsius: float = 25
     thermal_power_delivered_in_watt: float = 0
 
@@ -349,19 +351,6 @@ class HeatDistribution(cp.Component):
             self.residence_temperature_input_channel
         )
 
-        # Calculations ----------------------------------------------------------------------------------------------------------
-        # if self.water_temperature_output_in_celsius != 0:
-        #     if abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius)) < 0.05:
-        #         pass
-        #     else:
-        #         print(f"Changes in hds between prev temperature and mean temperature are higher than 5%: {abs(1- (self.state.water_output_temperature_in_celsius / self.water_temperature_output_in_celsius))}")
-
-        # if self.thermal_power_delivered_in_watt != 0:
-        #     if abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt)) < 0.05:
-        #         pass
-        #     else:
-        #         print(f"Changes in hds between prev thermal power and thermal power are higher than 5%: {abs(1- (self.state.thermal_power_delivered_in_watt / self.thermal_power_delivered_in_watt))}")
-
         if state_controller == 1:
 
             (
@@ -527,29 +516,29 @@ class HeatDistributionController(cp.Component):
         config: HeatDistributionControllerConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
-        self.heat_distribution_controller_config = config
+        self.hsd_controller_config = config
         super().__init__(
-            self.heat_distribution_controller_config.name,
+            self.hsd_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state_controller: int = 0
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
-            entry=self.heat_distribution_controller_config.set_temperature_for_building_in_celsius,
+            entry=self.hsd_controller_config.set_temperature_for_building_in_celsius,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.HEATINGSYSTEM,
-            entry=self.heat_distribution_controller_config.heating_system,
+            entry=self.hsd_controller_config.heating_system,
         )
 
         self.build(
-            set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-            heating_reference_temperature_in_celsius=self.heat_distribution_controller_config.heating_reference_temperature_in_celsius,
-            heating_system_type=self.heat_distribution_controller_config.heating_system,
-            set_cooling_threshold_water_temperature_in_celsius=self.heat_distribution_controller_config.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
+            set_heating_threshold_temperature_in_celsius=self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=self.hsd_controller_config.heating_reference_temperature_in_celsius,
+            heating_system_type=self.hsd_controller_config.heating_system,
+            set_cooling_threshold_water_temperature_in_celsius=self.hsd_controller_config.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         )
         self.prepare_calc_heating_dist_temperature(
-            set_room_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_temperature_for_building_in_celsius,
+            set_room_temperature_for_building_in_celsius=self.hsd_controller_config.set_temperature_for_building_in_celsius,
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
@@ -728,7 +717,7 @@ class HeatDistributionController(cp.Component):
 
             # no heating threshold for the heat distribution system
             if (
-                self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius
+                self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius
                 is None
             ):
                 summer_heating_mode = "off"
@@ -737,7 +726,7 @@ class HeatDistributionController(cp.Component):
             else:
                 summer_heating_mode = self.summer_heating_condition(
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                    set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                    set_heating_threshold_temperature_in_celsius=self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius,
                 )
 
             dew_point_protection_mode = self.dew_point_protection_condition(
@@ -801,18 +790,20 @@ class HeatDistributionController(cp.Component):
             > set_heating_threshold_temperature_in_celsius
         ):
             heating_mode = "off"
-            return heating_mode
+
         elif (
             daily_average_outside_temperature_in_celsius
             < set_heating_threshold_temperature_in_celsius
         ):
             heating_mode = "on"
-            return heating_mode
 
         else:
             raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
+                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
             )
+
+        return heating_mode
 
     def dew_point_protection_condition(
         self,
@@ -826,18 +817,20 @@ class HeatDistributionController(cp.Component):
             > set_cooling_threshold_water_temperature_in_celsius_for_dew_protection
         ):
             dew_point_protection_mode = "off"
-            return dew_point_protection_mode
+
         elif (
             water_input_temperature_in_celsius
             < set_cooling_threshold_water_temperature_in_celsius_for_dew_protection
         ):
             dew_point_protection_mode = "on"
-            return dew_point_protection_mode
 
         else:
             raise ValueError(
-                f"daily average temperature {water_input_temperature_in_celsius}°C or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius_for_dew_protection}°C is not acceptable."
+                f"daily average temperature {water_input_temperature_in_celsius}°C"
+                f"or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius_for_dew_protection}°C is not acceptable."
             )
+
+        return dew_point_protection_mode
 
     def prepare_calc_heating_dist_temperature(
         self,

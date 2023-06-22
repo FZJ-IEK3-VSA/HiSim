@@ -78,22 +78,17 @@ def household_with_hds(
     hp_min_operation_time_in_seconds = 60 * 60
     hp_min_idle_time_in_seconds = 15 * 60
 
-    # Set Simple Heat Water Storage
-    hws_name = "SimpleHeatWaterStorage"
-    volume_heating_water_storage_in_liter = 100
-
-
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_temperature = 16.0
     set_temperature_for_building_in_celsius = 20.0
-    set_cooling_temperature_for_building_in_celsius = 17.0
+    set_cooling_temperature_for_building_in_celsius = 25.0
+    set_cooling_water_temperature_for_dew_protection = 17.0
     heating_reference_temperature_in_celsius = -14
-
+    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
     # =================================================================================================================================
     # Build Components
 
@@ -119,7 +114,8 @@ def household_with_hds(
             name=hds_controller_name,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
             set_heating_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
-            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_water_temperature_for_dew_protection,
             heating_system=heating_system,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         ),
@@ -180,7 +176,6 @@ def household_with_hds(
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
         name=hds_name,
-        heating_system=heating_system,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,

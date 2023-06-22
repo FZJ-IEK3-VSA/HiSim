@@ -33,15 +33,6 @@ class GCHPConfig(cp.ConfigBase):
     p_th: float
     p_fuel: float
 
-    # @Johanna: braucht die Komponente hier eine init Funktion? Denn es ist ja eine Dataclass. Pylint beschwert sich auf jeden fall, wenn ich es drin lasse
-    # def __init__(
-    #     self, name: str, source_weight: int, p_el: float, p_th: float, p_fuel: float
-    # ):
-    #     self.name = name
-    #     self.source_weight = source_weight
-    #     self.p_el = p_el
-    #     self.p_th = p_th
-    #     self.p_fuel = p_fuel
 
     @staticmethod
     def get_default_config() -> Any:

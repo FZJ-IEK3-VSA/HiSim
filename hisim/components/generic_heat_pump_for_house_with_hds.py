@@ -86,7 +86,7 @@ class HeatPumpControllerConfigNew(cp.ConfigBase):
             name="HeatPumpController",
             set_water_storage_temperature_for_heating_in_celsius=49,
             set_water_storage_temperature_for_cooling_in_celsius=55,
-            offset=0.0,
+            offset=0.5,
             mode=1,
         )
 

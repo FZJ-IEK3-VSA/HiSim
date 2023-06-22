@@ -51,51 +51,6 @@ def household_with_hds(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Weather
-    location = "Aachen"
-
-    # Set Photovoltaic System
-    time = 2019
-    power = 10e3
-    load_module_data = False
-    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
-    integrate_inverter = True
-    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
-    name = "PVSystem"
-    azimuth = 180
-    tilt = 30
-    source_weight = -1
-
-    # Set Heat Pump Controller
-    set_water_storage_temperature_for_heating_in_celsius = 49
-    set_water_storage_temperature_for_cooling_in_celsius = 52
-    offset = 0.5
-    hp_mode = 1
-
-    # Set Heat Pump
-    hp_manufacturer = "Viessmann Werke GmbH & Co KG"
-    hp_name = "Vitocal 300-A AWO-AC 301.B07"
-    hp_min_operation_time_in_seconds = 60 * 60
-    hp_min_idle_time_in_seconds = 15 * 60
-
-    # Set Simple Heat Water Storage
-    hws_name = "SimpleHeatWaterStorage"
-    volume_heating_water_storage_in_liter = 100
-    mean_water_temperature_in_storage_in_celsius = 50
-    cool_water_temperature_in_storage_in_celsius = 50
-    hot_water_temperature_in_storage_in_celsius = 50
-
-    # Set Heat Distribution System
-    hds_name = "HeatDistributionSystem"
-    water_temperature_in_distribution_system_in_celsius = 50
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
-
-    # Set Heat Distribution Controller
-    hds_controller_name = "HeatDistributionSystemController"
-    set_heating_threshold_temperature = 16.0
-    set_heating_temperature_for_building_in_celsius = 20
-    set_cooling_temperature_for_building_in_celsius = 22
-
     # =================================================================================================================================
     # Build Components
 
@@ -138,19 +93,8 @@ def household_with_hds(
     )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
-        time=time,
-        location=location,
-        power=power,
-        load_module_data=load_module_data,
-        module_name=module_name,
-        integrate_inverter=integrate_inverter,
-        tilt=tilt,
-        azimuth=azimuth,
-        inverter_name=inverter_name,
-        source_weight=source_weight,
-        name=name,
-    )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_PV_system()
+
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -168,47 +112,25 @@ def household_with_hds(
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump_for_house_with_hds.HeatPumpControllerNew(
-        config=generic_heat_pump_for_house_with_hds.HeatPumpControllerConfigNew(
-            name="HeatPumpController",
-            set_water_storage_temperature_for_heating_in_celsius=set_water_storage_temperature_for_heating_in_celsius,
-            set_water_storage_temperature_for_cooling_in_celsius=set_water_storage_temperature_for_cooling_in_celsius,
-            offset=offset,
-            mode=hp_mode,
-        ),
+        config=generic_heat_pump_for_house_with_hds.HeatPumpControllerConfigNew.get_default_generic_heat_pump_controller_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump_for_house_with_hds.GenericHeatPumpNew(
-        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew(
-            name="HeatPump",
-            manufacturer=hp_manufacturer,
-            heat_pump_name=hp_name,
-            min_operation_time_in_seconds=hp_min_operation_time_in_seconds,
-            min_idle_time_in_seconds=hp_min_idle_time_in_seconds,
-        ),
+        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
-        name=hws_name,
-        volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        mean_water_temperature_in_storage_in_celsius=mean_water_temperature_in_storage_in_celsius,
-        cool_water_temperature_in_storage_in_celsius=cool_water_temperature_in_storage_in_celsius,
-        hot_water_temperature_in_storage_in_celsius=hot_water_temperature_in_storage_in_celsius,
-    )
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
-        name=hds_name,
-        water_temperature_in_distribution_system_in_celsius=water_temperature_in_distribution_system_in_celsius,
-        heating_system=heating_system,
-    )
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -217,12 +139,7 @@ def household_with_hds(
     # Build Heat Distribution Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig(
-            name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-        ),
+        config=heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(),
     )
     # =================================================================================================================================
     # Connect Component Inputs with Outputs

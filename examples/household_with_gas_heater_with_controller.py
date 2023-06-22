@@ -111,11 +111,7 @@ def household_gas_heater(
 
     # Build Gas Heater Controller
     my_gasheater_controller = generic_gas_heater_with_controller.GasHeaterController(
-        config=generic_gas_heater_with_controller.GenericGasHeaterControllerConfig(
-            name="GasheaterController",
-            set_heating_temperature_water_boiler_in_celsius=60.0,
-            offset=2.0,
-            mode=1),
+        config=generic_gas_heater_with_controller.GenericGasHeaterControllerConfig.get_default_controller_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

@@ -79,8 +79,8 @@ class GenericGasHeaterControllerConfig(cp.ConfigBase):
         """Get a default gasheater config."""
         config = GenericGasHeaterControllerConfig(
             name="GasheaterController",
-            set_heating_temperature_water_boiler_in_celsius=0.0,
-            offset=0.0,
+            set_heating_temperature_water_boiler_in_celsius=60.0,
+            offset=2.0,
             mode=1,
         )
         return config

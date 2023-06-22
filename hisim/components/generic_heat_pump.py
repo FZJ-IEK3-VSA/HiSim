@@ -93,7 +93,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
             name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
-            offset=0.0,
+            offset=0.5,
             mode=1,
         )
 

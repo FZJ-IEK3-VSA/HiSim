@@ -43,7 +43,7 @@ def basic_household_explicit(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 60
+    seconds_per_timestep = 60
 
     # Set Weather
     location = "Aachen"

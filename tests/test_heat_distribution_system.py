@@ -1,5 +1,5 @@
 """Test for heat distribution system."""
-
+#  clean
 from typing import Tuple
 import pytest
 from hisim import component as cp
@@ -86,14 +86,13 @@ def test_hds():
                         == input_water_temperature_in_celsius
                     )
                     assert effective_thermal_power_delivered_in_watt == 0
-                    
+
             elif theoretical_building_demand_in_watt == 0:
                 assert (
-                        water_output_temperature_after_heat_exchange
-                        == input_water_temperature_in_celsius
-                    )
+                    water_output_temperature_after_heat_exchange
+                    == input_water_temperature_in_celsius
+                )
                 assert effective_thermal_power_delivered_in_watt == 0
-                
 
 
 def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_from_building(
@@ -116,17 +115,21 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND, entry=9000
     )
 
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.HEATINGSYSTEM, entry=heating_system
+    )
+
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
-        name=hds_name,
-        heating_system=heating_system,
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig(
+            name=hds_name,
+        )
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    
 
     water_temperature_input_from_water_storage = cp.ComponentOutput(
         "FakeWaterTemperatureInput",
@@ -205,17 +208,24 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     my_heat_distribution_system.i_restore_state()
     my_heat_distribution_system.i_simulate(timestep, stsv, False)
 
-    # if in hds component the state values are set as output values, then here the water_temp_output and the thermal_power_delivered should be set, not the stsv.values[4] and [5]
-    water_output_temperature_in_celsius_from_simulation = my_heat_distribution_system.water_temperature_output_in_celsius #stsv.values[4]
-    effective_thermal_power_delivered_in_watt = my_heat_distribution_system.thermal_power_delivered_in_watt # stsv.values[5]
+    # if in hds component the state values are set as output values,
+    # then here the water_temp_output and the thermal_power_delivered should be set, not the stsv.values[4] and [5]
+    water_output_temperature_in_celsius_from_simulation = (
+        my_heat_distribution_system.water_temperature_output_in_celsius
+    )  # stsv.values[4]
+    effective_thermal_power_delivered_in_watt = (
+        my_heat_distribution_system.thermal_power_delivered_in_watt
+    )  # stsv.values[5]
 
     # Test if water output of hds is correct for different theoretical thermal demands from building
-    calculated_water_output_temperature_in_celsius = float(stsv.values[
-        water_temperature_input_from_water_storage.global_index
-    ] - stsv.values[theoretical_thermal_building_demand.global_index] / (
-        water_mass_flow_of_hds_in_kg_per_second
-        * my_heat_distribution_system.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-    ))
+    calculated_water_output_temperature_in_celsius = float(
+        stsv.values[water_temperature_input_from_water_storage.global_index]
+        - stsv.values[theoretical_thermal_building_demand.global_index]
+        / (
+            water_mass_flow_of_hds_in_kg_per_second
+            * my_heat_distribution_system.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+        )
+    )
     print(calculated_water_output_temperature_in_celsius)
     log.information(
         "water input temperature in celsius "

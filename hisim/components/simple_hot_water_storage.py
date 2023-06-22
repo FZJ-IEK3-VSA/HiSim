@@ -50,7 +50,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Get a default simplehotwaterstorage config."""
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
-            volume_heating_water_storage_in_liter=300,
+            volume_heating_water_storage_in_liter=500,
             temperature_loss_in_celsius_per_hour=0.21,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
         )
@@ -189,7 +189,8 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         self.state_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, False)
+            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, False
+        )
 
         # Output channels
 
@@ -319,6 +320,9 @@ class SimpleHotWaterStorage(cp.Component):
             )
 
         # Calculations ------------------------------------------------------------------------------------------------------
+
+        # calc water masses
+        # ------------------------------
         (
             water_mass_from_heat_generator_in_kg,
             water_mass_from_heat_distribution_system_in_kg,
@@ -328,15 +332,8 @@ class SimpleHotWaterStorage(cp.Component):
             seconds_per_timestep=self.seconds_per_timestep,
         )
 
-        # mean temperature in storage when all water flows are mixed with previous mean water storage temp
-        self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
-            water_temperature_from_heat_distribution_system_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
-            water_temperature_from_heat_generator_in_celsius=water_temperature_from_heat_generator_in_celsius,
-            water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
-            mass_of_input_water_flows_from_heat_generator_in_kg=water_mass_from_heat_generator_in_kg,
-            mass_of_input_water_flows_from_heat_distribution_system_in_kg=water_mass_from_heat_distribution_system_in_kg,
-            previous_mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
-        )
+        # calc thermal energies
+        # ------------------------------
 
         previous_thermal_energy_in_storage_in_watt_hour = self.calculate_thermal_energy_in_storage(
             mean_water_temperature_in_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
@@ -369,6 +366,16 @@ class SimpleHotWaterStorage(cp.Component):
 
         # calc water temperatures
         # ------------------------------
+
+        # mean temperature in storage when all water flows are mixed with previous mean water storage temp
+        self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
+            water_temperature_from_heat_distribution_system_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
+            water_temperature_from_heat_generator_in_celsius=water_temperature_from_heat_generator_in_celsius,
+            water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
+            mass_of_input_water_flows_from_heat_generator_in_kg=water_mass_from_heat_generator_in_kg,
+            mass_of_input_water_flows_from_heat_distribution_system_in_kg=water_mass_from_heat_distribution_system_in_kg,
+            previous_mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
+        )
 
         # with heat exchanger in water storage perfect heat exchange is possible
         if self.heat_exchanger_is_present is True:

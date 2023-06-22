@@ -720,7 +720,7 @@ class HeatDistributionController(cp.Component):
                 self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius
                 is None
             ):
-                summer_heating_mode = "off"
+                summer_heating_mode = "on"
 
             # turning heat distributon system off when the average daily outside temperature is above a certain threshold
             else:

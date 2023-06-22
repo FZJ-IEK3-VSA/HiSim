@@ -51,21 +51,6 @@ def household_with_hds_and_advanced_hp(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Weather
-    location = "Aachen"
-
-    # Set Photovoltaic System
-    time = 2019
-    power = 10e3
-    load_module_data = False
-    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
-    integrate_inverter = True
-    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
-    name = "PVSystem"
-    azimuth = 180
-    tilt = 30
-    source_weight = -1
-
     # Set Heat Pump Controller
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
@@ -83,16 +68,6 @@ def household_with_hds_and_advanced_hp(
     minimum_running_time_in_seconds = 600
     minimum_idle_time_in_seconds = 600
 
-    # Set Simple Heat Water Storage
-    hws_name = "SimpleHeatWaterStorage"
-    volume_heating_water_storage_in_liter = 500
-    temperature_loss_in_celsius_per_hour = 0.21
-    heat_exchanger_is_present = True
-
-    # Set Heat Distribution System
-    hds_name = "HeatDistributionSystem"
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
-
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
@@ -100,6 +75,7 @@ def household_with_hds_and_advanced_hp(
     )
     set_temperature_for_building_in_celsius = 20.0
     set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
+    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # =================================================================================================================================
     # Build Components
@@ -131,7 +107,6 @@ def household_with_hds_and_advanced_hp(
     my_building_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_building_config.building_code = "DE.N.SFH.05.Gen.ReEx.001.003"
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -154,19 +129,10 @@ def household_with_hds_and_advanced_hp(
     )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
-        time=time,
-        location=location,
-        power=power,
-        load_module_data=load_module_data,
-        module_name=module_name,
-        integrate_inverter=integrate_inverter,
-        tilt=tilt,
-        azimuth=azimuth,
-        inverter_name=inverter_name,
-        source_weight=source_weight,
-        name=name,
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
+
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -211,10 +177,7 @@ def household_with_hds_and_advanced_hp(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig(
-            name=hds_name,
-            heating_system=heating_system,
-        )
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -223,22 +186,11 @@ def household_with_hds_and_advanced_hp(
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig(
-            name=hws_name,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            temperature_loss_in_celsius_per_hour=temperature_loss_in_celsius_per_hour,
-            heat_exchanger_is_present=heat_exchanger_is_present,
-        )
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
-    )
-
-    my_simple_hot_water_storage_controller = (
-        simple_hot_water_storage.SimpleHotWaterStorageController(
-            my_simulation_parameters=my_simulation_parameters
-        )
     )
 
     # =================================================================================================================================
@@ -258,8 +210,6 @@ def household_with_hds_and_advanced_hp(
         my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
         my_simple_hot_water_storage.component_name,
         my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
-        # my_simple_hot_water_storage.WaterTemperatureToHeatDistributionSystem,
-        # my_simple_hot_water_storage.WaterMeanTemperatureInStorage,
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.HeatingFlowTemperatureFromHeatDistributionSystem,
@@ -310,16 +260,6 @@ def household_with_hds_and_advanced_hp(
         my_heat_pump.component_name,
         my_heat_pump.MassFlowOutput,
     )
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.State,
-        my_simple_hot_water_storage_controller.component_name,
-        my_simple_hot_water_storage_controller.State,
-    )
-    my_simple_hot_water_storage_controller.connect_input(
-        my_simple_hot_water_storage_controller.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput,
-    )
 
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_controller.connect_only_predefined_connections(
@@ -340,7 +280,6 @@ def household_with_hds_and_advanced_hp(
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_heat_distribution_system)
-    my_sim.add_component(my_simple_hot_water_storage_controller)
     my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)

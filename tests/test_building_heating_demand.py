@@ -14,6 +14,7 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import idealized_electric_heater
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim import log
 from hisim import utils
 
@@ -94,6 +95,14 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
+
+    # set heating and cooling temperatures for building, because calculation with building temperature default values delivers different result
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING, entry=20.0
+    )
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING, entry=23.0
+    )
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -221,6 +230,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
             energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2
         )
     )
+
     # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 15%
     np.testing.assert_allclose(
         energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,

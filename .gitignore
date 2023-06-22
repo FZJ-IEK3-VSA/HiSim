@@ -137,6 +137,7 @@ inputs/cache
 hisim/inputs/cache
 examples/results
 examples/results_for_scenario_comparison
+examples/mypath
 results/Results
 hisim/results
 

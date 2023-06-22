@@ -76,7 +76,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     heating_reference_temperature_in_celsius: float
     set_temperature_for_building_in_celsius: float
-    set_cooling_threshold_water_temperature_in_celsius: float
+    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection: float
 
     @classmethod
     def get_default_heat_distribution_controller_config(cls):
@@ -87,7 +87,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=-14.0,
             set_temperature_for_building_in_celsius=20,
-            set_cooling_threshold_water_temperature_in_celsius=17.0,
+            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=17.0,
         )
 
 
@@ -546,7 +546,7 @@ class HeatDistributionController(cp.Component):
             set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
             heating_reference_temperature_in_celsius=self.heat_distribution_controller_config.heating_reference_temperature_in_celsius,
             heating_system_type=self.heat_distribution_controller_config.heating_system,
-            set_cooling_threshold_water_temperature_in_celsius=self.heat_distribution_controller_config.set_cooling_threshold_water_temperature_in_celsius,
+            set_cooling_threshold_water_temperature_in_celsius=self.heat_distribution_controller_config.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         )
         self.prepare_calc_heating_dist_temperature(
             set_room_temperature_for_building_in_celsius=self.heat_distribution_controller_config.set_temperature_for_building_in_celsius,
@@ -672,7 +672,7 @@ class HeatDistributionController(cp.Component):
         )
         self.heating_system_type = heating_system_type
 
-        self.set_cooling_threshold_water_temperature_in_celsius = (
+        self.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = (
             set_cooling_threshold_water_temperature_in_celsius
         )
 
@@ -731,28 +731,28 @@ class HeatDistributionController(cp.Component):
                 self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius
                 is None
             ):
-                summer_mode = "off"
+                summer_heating_mode = "off"
 
             # turning heat distributon system off when the average daily outside temperature is above a certain threshold
             else:
-                summer_mode = self.summer_condition(
+                summer_heating_mode = self.summer_heating_condition(
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
                     set_heating_threshold_temperature_in_celsius=self.heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius,
                 )
 
             dew_point_protection_mode = self.dew_point_protection_condition(
                 water_input_temperature_in_celsius=water_input_temperature_in_celsius,
-                set_cooling_threshold_water_temperature_in_celsius=self.set_cooling_threshold_water_temperature_in_celsius,
+                set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=self.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
             )
 
             if (
                 self.controller_heat_distribution_mode == "on"
-                and summer_mode == "off"
+                and summer_heating_mode == "on"
                 and dew_point_protection_mode == "off"
             ):
                 self.state_controller = 1
             elif self.controller_heat_distribution_mode == "on" and (
-                summer_mode == "on" or dew_point_protection_mode == "on"
+                summer_heating_mode == "off" or dew_point_protection_mode == "on"
             ):
                 self.state_controller = 0
             elif self.controller_heat_distribution_mode == "off":
@@ -789,7 +789,7 @@ class HeatDistributionController(cp.Component):
         else:
             raise ValueError("unknown hds controller mode.")
 
-    def summer_condition(
+    def summer_heating_condition(
         self,
         daily_average_outside_temperature_in_celsius: float,
         set_heating_threshold_temperature_in_celsius: float,
@@ -800,14 +800,14 @@ class HeatDistributionController(cp.Component):
             daily_average_outside_temperature_in_celsius
             > set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "on"
-            return summer_mode
+            heating_mode = "off"
+            return heating_mode
         elif (
             daily_average_outside_temperature_in_celsius
             < set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "off"
-            return summer_mode
+            heating_mode = "on"
+            return heating_mode
 
         else:
             raise ValueError(
@@ -817,26 +817,26 @@ class HeatDistributionController(cp.Component):
     def dew_point_protection_condition(
         self,
         water_input_temperature_in_celsius: float,
-        set_cooling_threshold_water_temperature_in_celsius: float,
+        set_cooling_threshold_water_temperature_in_celsius_for_dew_protection: float,
     ) -> str:
         """Set conditions for the valve in heat distribution."""
 
         if (
             water_input_temperature_in_celsius
-            > set_cooling_threshold_water_temperature_in_celsius
+            > set_cooling_threshold_water_temperature_in_celsius_for_dew_protection
         ):
             dew_point_protection_mode = "off"
             return dew_point_protection_mode
         elif (
             water_input_temperature_in_celsius
-            < set_cooling_threshold_water_temperature_in_celsius
+            < set_cooling_threshold_water_temperature_in_celsius_for_dew_protection
         ):
             dew_point_protection_mode = "on"
             return dew_point_protection_mode
 
         else:
             raise ValueError(
-                f"daily average temperature {water_input_temperature_in_celsius}°C or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius}°C is not acceptable."
+                f"daily average temperature {water_input_temperature_in_celsius}°C or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius_for_dew_protection}°C is not acceptable."
             )
 
     def prepare_calc_heating_dist_temperature(

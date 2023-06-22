@@ -87,6 +87,7 @@ def household_with_hds_and_advanced_hp(
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 500
     temperature_loss_in_celsius_per_hour = 0.21
+    heat_exchanger_is_present = True
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
@@ -98,14 +99,14 @@ def household_with_hds_and_advanced_hp(
         None
     )
     set_temperature_for_building_in_celsius = 20.0
-    set_cooling_threshold_water_temperature_in_celsius = 17.0
+    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
 
     # =================================================================================================================================
     # Build Components
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_week_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_simulation_parameters.post_processing_options.append(
@@ -122,7 +123,7 @@ def household_with_hds_and_advanced_hp(
             set_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
-            set_cooling_threshold_water_temperature_in_celsius=set_cooling_threshold_water_temperature_in_celsius,
+            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         ),
     )
     # Build Building
@@ -225,6 +226,7 @@ def household_with_hds_and_advanced_hp(
             name=hws_name,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             temperature_loss_in_celsius_per_hour=temperature_loss_in_celsius_per_hour,
+            heat_exchanger_is_present=heat_exchanger_is_present,
         )
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(

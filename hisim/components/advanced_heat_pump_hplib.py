@@ -60,7 +60,7 @@ class HeatPumpHplibConfig(ConfigBase):
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
         return HeatPumpHplibConfig(
-            name="Advanced HPLib Heat Pump",
+            name="AdvancedHeatPumpHPLib",
             model="Generic",
             group_id=4,
             heating_reference_temperature_in_celsius=-7,

@@ -162,7 +162,7 @@ def household_with_hds_and_advanced_hp(
     # Build Heat Pump
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
-            name="Advanced HPLib Heat Pump",
+            name="HeatPumpHPLib",
             model=model,
             group_id=group_id,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,

@@ -39,7 +39,7 @@ def test_heat_pump_hplib():
                                lt.Units.ANY)
 
     # Initialize component
-    heatpump_config=HeatPumpHplibConfig(model=model, group_id=group_id, heating_reference_temperature_in_celsius=t_in, flow_temperature_in_celsius=t_out, set_thermal_output_power_in_watt=p_th_set, cycling_mode=True, minimum_idle_time_in_seconds=600, minimum_running_time_in_seconds=600)
+    heatpump_config=HeatPumpHplibConfig(name="Heat Pump", model=model, group_id=group_id, heating_reference_temperature_in_celsius=t_in, flow_temperature_in_celsius=t_out, set_thermal_output_power_in_watt=p_th_set, cycling_mode=True, minimum_idle_time_in_seconds=600, minimum_running_time_in_seconds=600)
     heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1)
 

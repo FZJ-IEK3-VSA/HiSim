@@ -46,7 +46,6 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
-    heating_system: HeatingSystemType
 
     @classmethod
     def get_default_heatdistributionsystem_config(
@@ -55,7 +54,6 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            heating_system=HeatingSystemType.FLOORHEATING,
         )
         return config
 
@@ -75,7 +73,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     heating_system: HeatingSystemType
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     heating_reference_temperature_in_celsius: float
-    set_temperature_for_building_in_celsius: float
+    set_heating_temperature_for_building_in_celsius: float
+    set_cooling_temperature_for_building_in_celsius: float
     set_cooling_threshold_water_temperature_in_celsius_for_dew_protection: float
 
     @classmethod
@@ -86,7 +85,8 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             heating_system=HeatingSystemType.FLOORHEATING,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=-14.0,
-            set_temperature_for_building_in_celsius=20,
+            set_heating_temperature_for_building_in_celsius=18,
+            set_cooling_temperature_for_building_in_celsius=25,
             set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=17.0,
         )
 
@@ -138,12 +138,11 @@ class HeatDistribution(cp.Component):
             name=config.name, my_simulation_parameters=my_simulation_parameters
         )
         self.heat_distribution_system_config = config
-        self.heating_system = self.heat_distribution_system_config.heating_system
 
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
         self.delta_temperature_in_celsius: float = 1.0
-        self.build(heating_system=self.heating_system)
+
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
         ):
@@ -155,10 +154,24 @@ class HeatDistribution(cp.Component):
 
         else:
             raise KeyError(
-                "Keys for max thermal building demand was not found in the singleton sim repository."
+                "Key for max thermal building demand was not found in the singleton sim repository."
                 + "This might be because the building was not initialized before the heat distribution system."
                 + "Please check the order of the initialization of the components in your example."
             )
+
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):
+            self.heating_system = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.HEATINGSYSTEM
+            )
+
+        else:
+            raise KeyError(
+                "Key for heating system was not found in the singleton sim repository."
+                + "This might be because the heat distribution system controller was not initialized before the heat distribution system."
+                + "Please check the order of the initialization of the components in your example."
+            )
+
+        self.build(heating_system=self.heating_system)
 
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
             self.calc_heating_distribution_system_water_mass_flow_rate(
@@ -169,10 +182,6 @@ class HeatDistribution(cp.Component):
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM,
             entry=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.HEATINGSYSTEM,
-            entry=self.heat_distribution_system_config.heating_system,
         )
 
         self.state: HeatDistributionSystemState = HeatDistributionSystemState(
@@ -522,10 +531,17 @@ class HeatDistributionController(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state_controller: int = 0
+
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
-            entry=self.hsd_controller_config.set_temperature_for_building_in_celsius,
+            entry=self.hsd_controller_config.set_heating_temperature_for_building_in_celsius,
         )
+
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
+            entry=self.hsd_controller_config.set_cooling_temperature_for_building_in_celsius,
+        )
+
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.HEATINGSYSTEM,
             entry=self.hsd_controller_config.heating_system,
@@ -538,7 +554,7 @@ class HeatDistributionController(cp.Component):
             set_cooling_threshold_water_temperature_in_celsius=self.hsd_controller_config.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         )
         self.prepare_calc_heating_dist_temperature(
-            set_room_temperature_for_building_in_celsius=self.hsd_controller_config.set_temperature_for_building_in_celsius,
+            set_room_temperature_for_building_in_celsius=self.hsd_controller_config.set_heating_temperature_for_building_in_celsius,
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 

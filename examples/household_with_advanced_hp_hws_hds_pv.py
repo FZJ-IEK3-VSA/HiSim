@@ -73,7 +73,8 @@ def household_with_hds_and_advanced_hp(
     set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
         None
     )
-    set_temperature_for_building_in_celsius = 20.0
+    set_heating_temperature_for_building_in_celsius = 19.0
+    set_cooling_temperature_for_building_in_celsius = 25.0
     set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
@@ -96,7 +97,8 @@ def household_with_hds_and_advanced_hp(
         config=heat_distribution_system.HeatDistributionControllerConfig(
             name=hds_controller_name,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
-            set_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
             set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,

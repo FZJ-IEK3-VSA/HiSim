@@ -241,8 +241,8 @@ class Building(dynamic_component.DynamicComponent):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.set_heating_temperature_in_celsius_default: float = 20
-        self.set_cooling_temperature_in_celsius_default: float = 23
+        self.set_heating_temperature_in_celsius_default: float = 18
+        self.set_cooling_temperature_in_celsius_default: float = 25
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -360,23 +360,35 @@ class Building(dynamic_component.DynamicComponent):
         )
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-        ) and SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
         ):
             self.set_heating_temperature_in_celsius = (
                 SingletonSimRepository().get_entry(
                     key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
                 )
             )
+        else:
+            self.set_heating_temperature_in_celsius = (
+                self.set_heating_temperature_in_celsius_default
+            )
+            log.warning(
+                f"Default temperature threshold for heating in building is used, which is {self.set_heating_temperature_in_celsius} °C."
+            )
+
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+        ):
             self.set_cooling_temperature_in_celsius = (
                 SingletonSimRepository().get_entry(
                     key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
                 )
             )
         else:
-            self.set_heating_temperature_in_celsius = self.set_heating_temperature_in_celsius_default
-            self.set_cooling_temperature_in_celsius = self.set_cooling_temperature_in_celsius_default
-            log.warning("Default temperature thresholds for cooling/heating in building are used.")
+            self.set_cooling_temperature_in_celsius = (
+                self.set_cooling_temperature_in_celsius_default
+            )
+            log.warning(
+                f"Default temperature thresholds for cooling in building is used, which is {self.set_cooling_temperature_in_celsius} °C."
+            )
 
         # =================================================================================================================================
         # Input channels
@@ -1837,7 +1849,9 @@ class Building(dynamic_component.DynamicComponent):
                 indoor_air_temperature_set_in_celsius=indoor_air_temperature_set_in_celsius,
             )
         else:
-            raise ValueError(f"Value error for theoretical building demand. Indoor_air_temp_zero has uncompatible value {indoor_air_temperature_zero_in_celsius} C.")
+            raise ValueError(
+                f"Value error for theoretical building demand. Indoor_air_temp_zero has uncompatible value {indoor_air_temperature_zero_in_celsius} C."
+            )
 
         return theoretical_thermal_building_demand_in_watt
 

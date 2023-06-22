@@ -118,7 +118,7 @@ def household_with_hds(
         config=heat_distribution_system.HeatDistributionControllerConfig(
             name=hds_controller_name,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_temperature,
-            set_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
+            set_heating_temperature_for_building_in_celsius=set_temperature_for_building_in_celsius,
             set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_temperature_for_building_in_celsius,
             heating_system=heating_system,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius

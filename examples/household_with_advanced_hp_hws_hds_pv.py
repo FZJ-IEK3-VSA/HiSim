@@ -49,7 +49,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 30
 
     # Set Heat Pump Controller
     hp_controller_mode = (
@@ -149,7 +149,7 @@ def household_with_hds_and_advanced_hp(
     )
 
     # Build Heat Pump Controller
-    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibControllerL1(
+    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
             name="HeatPumpHplibController",
             mode=hp_controller_mode,
@@ -206,43 +206,15 @@ def household_with_hds_and_advanced_hp(
     )
 
     # -----------------------------------------------------------------------------------------------------------------
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.WaterTemperatureInputFromHeatWaterStorage,
-        my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
-    )
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.HeatingFlowTemperatureFromHeatDistributionSystem,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.HeatingFlowTemperature,
-    )
 
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.DailyAverageOutsideTemperature,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
+    my_heat_pump_controller.connect_only_predefined_connections(
+        my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
     )
 
     # -----------------------------------------------------------------------------------------------------------------
-    my_heat_pump.connect_input(
-        my_heat_pump.OnOffSwitch,
-        my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureAmbient,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureInputPrimary,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureInputSecondary,
-        my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
+
+    my_heat_pump.connect_only_predefined_connections(
+        my_heat_pump_controller, my_weather, my_simple_hot_water_storage
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_simple_hot_water_storage.connect_input(

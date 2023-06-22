@@ -14,11 +14,14 @@ from hisim.component import (
     ComponentOutput,
     SingleTimeStepValues,
     ConfigBase,
+    ComponentConnection,
 )
+from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
+from hisim import log
 
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -244,6 +247,70 @@ class HeatPumpHplib(Component):
             output_description="Time turned off",
         )
 
+        self.add_default_connections(
+            self.get_default_connections_from_heat_pump_controller()
+        )
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(
+            self.get_default_connections_from_simple_hot_water_storage()
+        )
+
+    def get_default_connections_from_heat_pump_controller(
+        self,
+    ):
+        """Get default connections."""
+        log.information("setting heat pump controller default connections")
+        connections = []
+        hpc_classname = HeatPumpHplibController.get_classname()
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplib.OnOffSwitch,
+                hpc_classname,
+                HeatPumpHplibController.State,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_weather(
+        self,
+    ):
+        """Get default connections."""
+        log.information("setting weather default connections")
+        connections = []
+        weather_classname = weather.Weather.get_classname()
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplib.TemperatureAmbient,
+                weather_classname,
+                weather.Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplib.TemperatureInputPrimary,
+                weather_classname,
+                weather.Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
+        """Get simple hot water storage default connections."""
+        log.information("setting simple hot water storage default connections")
+        connections = []
+        hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplib.TemperatureInputSecondary,
+                hws_classname,
+                simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+
     def write_to_report(self):
         """Write configuration to the report."""
         lines = []
@@ -410,7 +477,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return HeatPumpHplibControllerL1.get_full_classname()
+        return HeatPumpHplibController.get_full_classname()
 
     name: str
     mode: int
@@ -428,7 +495,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         )
 
 
-class HeatPumpHplibControllerL1(Component):
+class HeatPumpHplibController(Component):
 
     """Heat Pump Controller.
 
@@ -525,6 +592,64 @@ class HeatPumpHplibControllerL1(Component):
 
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
+
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_controller()
+        )
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(
+            self.get_default_connections_from_simple_hot_water_storage()
+        )
+
+    def get_default_connections_from_heat_distribution_controller(
+        self,
+    ):
+        """Get default connections."""
+        log.information("setting heat distribution controller default connections")
+        connections = []
+        hdsc_classname = (
+            heat_distribution_system.HeatDistributionController.get_classname()
+        )
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplibController.HeatingFlowTemperatureFromHeatDistributionSystem,
+                hdsc_classname,
+                heat_distribution_system.HeatDistributionController.HeatingFlowTemperature,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_weather(
+        self,
+    ):
+        """Get default connections."""
+        log.information("setting weather default connections")
+        connections = []
+        weather_classname = weather.Weather.get_classname()
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplibController.DailyAverageOutsideTemperature,
+                weather_classname,
+                weather.Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
+        """Get simple hot water storage default connections."""
+        log.information("setting simple hot water storage default connections")
+        connections = []
+        hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplibController.WaterTemperatureInputFromHeatWaterStorage,
+                hws_classname,
+                simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
 
     def build(
         self,

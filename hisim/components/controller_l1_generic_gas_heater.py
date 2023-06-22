@@ -1,5 +1,7 @@
 # Controller for generic_gas_heater according to advanced_heat_pump-Controller
 
+# Todo: clean code
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -115,7 +117,7 @@ class GenericGasHeaterControllerL1(Component):
             mode=self.gas_heater_controller_config.mode,
         )
 
-        #input channel
+        # input channel
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.WaterTemperatureInputFromHeatWaterStorage,
@@ -141,7 +143,7 @@ class GenericGasHeaterControllerL1(Component):
             )
         )
 
-        #Output channel
+        # Output channel
         self.state_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.State,
@@ -154,8 +156,12 @@ class GenericGasHeaterControllerL1(Component):
         self.previous_gasheater_mode: Any
 
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(
+            self.get_default_connections_from_simple_hot_water_storage()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_controller()
+        )
 
     def get_default_connections_from_simple_hot_water_storage(
         self,
@@ -271,9 +277,7 @@ class GenericGasHeaterControllerL1(Component):
                 )
 
             else:
-                raise ValueError(
-                    "Gas Heater has no cooling. Set mode==1"
-                )
+                raise ValueError("Gas Heater has no cooling. Set mode==1")
 
             # no heating threshold for the gas heater
             if (

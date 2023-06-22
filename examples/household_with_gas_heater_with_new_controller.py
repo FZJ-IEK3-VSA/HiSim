@@ -1,5 +1,6 @@
 """  Household example with gas heater. """
-# clean
+# Todo: clean code
+
 from typing import Optional, Any
 from pathlib import Path
 
@@ -89,7 +90,7 @@ def household_gas_heater_with_new_controller(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
-        name="UTSP Connector"
+        name="UTSP Connector",
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -117,12 +118,16 @@ def household_gas_heater_with_new_controller(
     my_gasheater_controller_config = (
         controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
     )
-    my_gasheater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_gasheater_controller_config,
+    my_gasheater_controller = (
+        controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_gasheater_controller_config,
+        )
     )
 
-    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    hds_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    )
 
     # Build Heat Distribution System
     my_heat_distribution = heat_distribution_system.HeatDistribution(
@@ -130,8 +135,15 @@ def household_gas_heater_with_new_controller(
     )
 
     # Build heat Distribution System Controller
-    hdscontroller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters)
+    hdscontroller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    )
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=hdscontroller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+    )
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
@@ -167,25 +179,19 @@ def household_gas_heater_with_new_controller(
     my_gasheater.connect_input(
         my_gasheater.MassflowInputTemperature,
         my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator
+        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
     )
 
     my_gasheater_controller.connect_only_predefined_connections(
-        my_simple_hot_water_storage,
-        my_weather,
-        my_heat_distribution_controller
+        my_simple_hot_water_storage, my_weather, my_heat_distribution_controller
     )
 
     my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather,
-        my_building,
-        my_simple_hot_water_storage,
+        my_weather, my_building, my_simple_hot_water_storage
     )
 
     my_heat_distribution.connect_only_predefined_connections(
-        my_heat_distribution_controller,
-        my_building,
-        my_simple_hot_water_storage,
+        my_heat_distribution_controller, my_building, my_simple_hot_water_storage
     )
 
     my_simple_hot_water_storage.connect_input(
@@ -217,7 +223,6 @@ def household_gas_heater_with_new_controller(
         my_gasheater.component_name,
         my_gasheater.MassflowOutput,
     )
-
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

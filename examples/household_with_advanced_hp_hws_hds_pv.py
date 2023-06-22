@@ -198,9 +198,9 @@ def household_with_hds_and_advanced_hp(
         config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
             model=model,
             group_id=group_id,
-            t_in=heating_reference_temperature_in_celsius,
-            t_out_val=flow_temperature_in_celsius,
-            p_th_set=set_thermal_output_power_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            flow_temperature_in_celsius=flow_temperature_in_celsius,
+            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=cycling_mode,
             minimum_running_time_in_seconds=minimum_running_time_in_seconds,
             minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,

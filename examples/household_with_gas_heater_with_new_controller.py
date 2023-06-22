@@ -173,7 +173,7 @@ def household_gas_heater_with_new_controller(
     my_gasheater.connect_input(
         my_gasheater.ControlSignal,
         my_gasheater_controller.component_name,
-        my_gasheater_controller.State,
+        my_gasheater_controller.ControlSignalToGasHeater,
     )
 
     my_gasheater.connect_input(

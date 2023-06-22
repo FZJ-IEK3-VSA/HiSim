@@ -54,7 +54,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
         return GenericGasHeaterControllerL1Config(
             name="GenericGasHeaterController",
             mode=1,
-            set_heating_threshold_outside_temperature_in_celsius=None,
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
         )
 
 
@@ -99,7 +99,7 @@ class GenericGasHeaterControllerL1(Component):
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
     # Outputs
-    State = "State"
+    ControlSignalToGasHeater = "ControlSignalToGasHeater"
 
     def __init__(
         self,
@@ -143,13 +143,12 @@ class GenericGasHeaterControllerL1(Component):
             )
         )
 
-        # Output channel
-        self.state_channel: ComponentOutput = self.add_output(
+        self.control_signal_to_gasheater_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.State,
+            self.ControlSignalToGasHeater,
             LoadTypes.ANY,
-            Units.ANY,
-            output_description=f"here a description for {self.State} will follow.",
+            Units.PERCENT,
+            output_description=f"here a description for {self.ControlSignalToGasHeater} will follow.",
         )
 
         self.controller_gasheatermode: Any
@@ -242,7 +241,7 @@ class GenericGasHeaterControllerL1(Component):
         """Doublecheck."""
         pass
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report(self) -> List[str]: #Todo: is this function causing the trouble?
         """Write important variables to report."""
         return self.gas_heater_controller_config.get_string_dict()
 
@@ -296,17 +295,15 @@ class GenericGasHeaterControllerL1(Component):
             # state of heat distribution controller is off when daily avg outside temperature is > 16°C
             # in that case the gas heater should not be heating
             if self.controller_gasheatermode == "heating" and summer_mode == "on":
-                state = 1
+                control_signal = 1
             elif self.controller_gasheatermode == "heating" and summer_mode == "off":
-                state = 0
+                control_signal = 0
             elif self.controller_gasheatermode == "off":
-                state = 0
-            # elif self.controller_gasheatermode == "cooling":
-            #     state = -1
+                control_signal = 0
             else:
-                raise ValueError("Gas Heater Controller State unknown.")
+                raise ValueError("Gas Heater Controller control_signal unknown.")
 
-            stsv.set_output_value(self.state_channel, state)
+            stsv.set_output_value(self.control_signal_to_gasheater_channel, control_signal)
 
     def conditions_on_off(
         self,

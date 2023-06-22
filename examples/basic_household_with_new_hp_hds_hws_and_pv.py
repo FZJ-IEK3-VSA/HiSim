@@ -211,11 +211,7 @@ def household_with_hds(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
-        name=hws_name,
-        volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        temperature_loss_in_celsius_per_hour=0.21,
-    )
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,

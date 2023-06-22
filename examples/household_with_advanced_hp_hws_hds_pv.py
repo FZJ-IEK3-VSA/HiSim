@@ -49,7 +49,7 @@ def household_with_hds_and_advanced_hp(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 30
+    seconds_per_timestep = 60
 
     # Set Heat Pump Controller
     hp_controller_mode = (

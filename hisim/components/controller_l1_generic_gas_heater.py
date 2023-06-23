@@ -241,7 +241,9 @@ class GenericGasHeaterControllerL1(Component):
         """Doublecheck."""
         pass
 
-    def write_to_report(self) -> List[str]: #Todo: is this function causing the trouble?
+    def write_to_report(
+        self,
+    ) -> List[str]:
         """Write important variables to report."""
         return self.gas_heater_controller_config.get_string_dict()
 
@@ -293,7 +295,9 @@ class GenericGasHeaterControllerL1(Component):
             else:
                 raise ValueError("Gas Heater Controller control_signal unknown.")
 
-            stsv.set_output_value(self.control_signal_to_gasheater_channel, control_signal)
+            stsv.set_output_value(
+                self.control_signal_to_gasheater_channel, control_signal
+            )
 
     def conditions_on_off(
         self,
@@ -313,7 +317,6 @@ class GenericGasHeaterControllerL1(Component):
                 return
 
         elif self.controller_gasheatermode == "off":
-
             # gas heater is only turned on if the water temperature is below the flow temperature
             # and if the avg daily outside temperature is cold enough (summer mode on)
             if (

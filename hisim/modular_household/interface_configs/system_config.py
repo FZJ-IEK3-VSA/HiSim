@@ -17,7 +17,7 @@ class SystemConfig:
     #: decision on the consideration of Photovoltaic Panel
     pv_included: bool = False
     #: peak power of the considered Photovoltaic Panel in Wp
-    pv_peak_power: Optional[float] = 1e4
+    pv_peak_power: Optional[float] = 8e3
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
     smart_devices_included: bool = False
     #: decision on the consideration of a buffer storage for heating
@@ -37,11 +37,11 @@ class SystemConfig:
     #: maximal power of the considered fuel cell in kW (heat and electricity combined)
     chp_power: Optional[float] = 12
     #: decision on the consideration of a hydrogen storage
-    h2_storage_included: bool = True
+    h2_storage_included: bool = False
     #: size of the hydrogen storage in kg hydrogen
     h2_storage_size: Optional[float] = 100
     #: decision on the consideration of an electrolyzer
-    electrolyzer_included: bool = True
+    electrolyzer_included: bool = False
     #: maximal power of the electroylzer in Watt
     electrolyzer_power: Optional[float] = 5e3
     #: decision on the consideration of an electriv vehicle

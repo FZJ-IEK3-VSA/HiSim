@@ -20,14 +20,14 @@ class ArcheTypeConfig:
 
     #: modular household template of the LoadProfileGenerator, used to get the electrical- and hot water consumption profile (https://www.loadprofilegenerator.de/)
     # for an interface to the LoadProfileGenerator the UTSP is needed
-    occupancy_profile_utsp: Optional[JsonReference] = None  # field(
+    occupancy_profile_utsp: Optional[JsonReference] = Households.CHR01_Couple_both_at_Work  # field(
     #     default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
     # )
     #: reference to stored electricity consumption and hot water consumption data, no interface to LoadProfileGenerator needed, no obligatory UTSP connection
     # available options: "AVG" - average consumption profile over Europe and "CH01" - example output of the LPG
-    occupancy_profile: Optional[str] = "AVG"
+    occupancy_profile: Optional[str] = None # "AVG"
     #: building code of considered type of building originated from the Tabula data base (https://episcope.eu/building-typology/webtool/)
-    building_code: str = "BE.N.AB.03.Gen.ReEx.001.001"  # "DE.N.SFH.05.Gen.ReEx.001.002"
+    building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"  # "DE.N.SFH.05.Gen.ReEx.001.002"
     #: absolute area considered for heating and cooling
     absolute_conditioned_floor_area: Optional[float] = None
     #: type of water heating system
@@ -36,16 +36,16 @@ class ArcheTypeConfig:
     heating_system_installed: HeatingSystems = HeatingSystems.ELECTRIC_HEATING
     #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
     mobility_set: Optional[JsonReference] = field(
-        default_factory=lambda: TransportationDeviceSets.Bus_and_one_30_km_h_Car  # type: ignore
+        default_factory=lambda: TransportationDeviceSets.Bus_and_one_60_km_h_Car  # type: ignore
         )
     #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
     mobility_distance: Optional[JsonReference] = field(
-        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance  # type: ignore
+        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_25km_Commuting_Distance  # type: ignore
         )
     #: url of the UTSP
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     #: passwort to connect to the UTSP
-    api_key: str = "limited_OXT60O84N9ITLO1CM9CJ1V393QFKOKCN"
+    api_key: str = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 
 
 # def create_archetype_config_file() -> None:

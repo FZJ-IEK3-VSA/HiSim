@@ -42,7 +42,6 @@ def household_gas_heater_with_new_controller(
         - Heat Distribution System
         - Heat Distribution System Controller
         - Simple Hot Water Storage
-        - Simple Hot Water Storage Controller
     """
 
     config_filename = "pv_hp_config.json"
@@ -145,12 +144,12 @@ def household_gas_heater_with_new_controller(
         my_simulation_parameters=my_simulation_parameters, config=hds_config
     )
 
-    # Build Heat Water Storage Controller
-    my_simple_hot_water_storage_controller = (
-        simple_hot_water_storage.SimpleHotWaterStorageController(
-            my_simulation_parameters=my_simulation_parameters
-        )
-    )
+    # # Build Heat Water Storage Controller
+    # my_simple_hot_water_storage_controller = (
+    #     simple_hot_water_storage.SimpleHotWaterStorageController(
+    #         my_simulation_parameters=my_simulation_parameters
+    #     )
+    # )
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
@@ -213,17 +212,17 @@ def household_gas_heater_with_new_controller(
         my_gasheater.MassflowOutput,
     )
 
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.State,
-        my_simple_hot_water_storage_controller.component_name,
-        my_simple_hot_water_storage_controller.State,
-    )
+    # my_simple_hot_water_storage.connect_input(
+    #     my_simple_hot_water_storage.State,
+    #     my_simple_hot_water_storage_controller.component_name,
+    #     my_simple_hot_water_storage_controller.State,
+    # )
 
-    my_simple_hot_water_storage_controller.connect_input(
-        my_simple_hot_water_storage_controller.WaterMassFlowRateFromHeatGenerator,
-        my_gasheater.component_name,
-        my_gasheater.MassflowOutput,
-    )
+    # my_simple_hot_water_storage_controller.connect_input(
+    #     my_simple_hot_water_storage_controller.WaterMassFlowRateFromHeatGenerator,
+    #     my_gasheater.component_name,
+    #     my_gasheater.MassflowOutput,
+    # )
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters
@@ -235,4 +234,4 @@ def household_gas_heater_with_new_controller(
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_simple_hot_water_storage_controller)
+    # my_sim.add_component(my_simple_hot_water_storage_controller)

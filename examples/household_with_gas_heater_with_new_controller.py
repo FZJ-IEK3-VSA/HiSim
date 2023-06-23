@@ -108,12 +108,6 @@ def household_gas_heater_with_new_controller(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Gasheater
-    my_gasheater = generic_gas_heater.GasHeater(
-        config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-
     # Build Gas Heater Controller
     my_gasheater_controller_config = (
         controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
@@ -125,13 +119,10 @@ def household_gas_heater_with_new_controller(
         )
     )
 
-    hds_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
-    )
-
-    # Build Heat Distribution System
-    my_heat_distribution = heat_distribution_system.HeatDistribution(
-        my_simulation_parameters=my_simulation_parameters, config=hds_config
+    # Build Gasheater
+    my_gasheater = generic_gas_heater.GasHeater(
+        config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build heat Distribution System Controller
@@ -145,6 +136,22 @@ def household_gas_heater_with_new_controller(
         )
     )
 
+    # Build Heat Distribution System
+    hds_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    )
+
+    my_heat_distribution = heat_distribution_system.HeatDistribution(
+        my_simulation_parameters=my_simulation_parameters, config=hds_config
+    )
+
+    # Build Heat Water Storage Controller
+    my_simple_hot_water_storage_controller = (
+        simple_hot_water_storage.SimpleHotWaterStorageController(
+            my_simulation_parameters=my_simulation_parameters
+        )
+    )
+
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
         simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
@@ -152,12 +159,6 @@ def household_gas_heater_with_new_controller(
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
-    )
-    # Build Heat Water Storage Controller
-    my_simple_hot_water_storage_controller = (
-        simple_hot_water_storage.SimpleHotWaterStorageController(
-            my_simulation_parameters=my_simulation_parameters
-        )
     )
 
     # =================================================================================================================================

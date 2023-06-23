@@ -3,6 +3,7 @@
 # Todo: clean code
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
+from typing import Any, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -21,7 +22,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionController
-from typing import Any, List, Optional
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

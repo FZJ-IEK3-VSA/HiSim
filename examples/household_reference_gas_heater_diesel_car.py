@@ -167,8 +167,6 @@ def household_reference_gas_heater_diesel_car(
 
     # Build Diesel-Car
 
-    # Build GasHeaterController
-
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
@@ -220,18 +218,6 @@ def household_reference_gas_heater_diesel_car(
         my_gasheater.component_name,
         my_gasheater.MassflowOutput,
     )
-
-    # my_simple_hot_water_storage.connect_input(
-    #     my_simple_hot_water_storage.State,
-    #     my_simple_hot_water_storage_controller.component_name,
-    #     my_simple_hot_water_storage_controller.State,
-    # )
-
-    # my_simple_hot_water_storage_controller.connect_input(
-    #     my_simple_hot_water_storage_controller.WaterMassFlowRateFromHeatGenerator,
-    #     my_gasheater.component_name,
-    #     my_gasheater.MassflowOutput,
-    # )
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

@@ -1,8 +1,18 @@
-"""  Household example with gas heater. """
+"""  Reference Household example with gas heater and diesel car. """
 # Todo: clean code
 
-from typing import Optional, Any
+from typing import List, Optional, Any
+from os import listdir, path
 from pathlib import Path
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+from utspclient.helpers.lpgdata import (
+    ChargingStationSets,
+    Households,
+    TransportationDeviceSets,
+    TravelRouteSets,
+)
+from utspclient.helpers.lpgpythonbindings import JsonReference
 
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -12,8 +22,9 @@ from hisim.components import controller_l1_generic_gas_heater
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_hot_water_storage
+from hisim.components import generic_car
+from hisim import utils
 from hisim import log
-from examples.household_with_heatpump_and_pv import HouseholdPVConfig
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -22,6 +33,49 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Markus Blasberg"
 __status__ = "development"
+
+#Todo: adopt Config-Class according to needs
+@dataclass_json
+@dataclass
+class ReferenceHouseholdConfig:
+
+    """Configuration for ReferenceHosuehold."""
+
+    # pv_size: float
+    building_type: str
+    household_type: JsonReference
+    lpg_url: str
+    result_path: str
+    travel_route_set: JsonReference
+    simulation_parameters: SimulationParameters
+    api_key: str
+    transportation_device_set: JsonReference
+    charging_station_set: JsonReference
+    # pv_azimuth: float
+    # tilt: float
+    # pv_power: float
+    total_base_area_in_m2: float
+
+    @classmethod
+    def get_default(cls):
+        """Get default HouseholdPVConfig."""
+
+        return ReferenceHouseholdConfig(
+            # pv_size=5,
+            building_type="blub",
+            household_type=Households.CHR01_Couple_both_at_Work,
+            lpg_url="http://134.94.131.167:443/api/v1/profilerequest",
+            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+            simulation_parameters=SimulationParameters.one_day_only(2022),
+            result_path="mypath",
+            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
+            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
+            charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+            # pv_azimuth=180,
+            # tilt=30,
+            # pv_power=10000,
+            total_base_area_in_m2=121.2,
+        )
 
 
 def household_reference_gas_heater_diesel_car(
@@ -47,15 +101,15 @@ def household_reference_gas_heater_diesel_car(
         - Car (Diesel)
     """
     # Todo: change config with systemConfigBase.json for all components similar to modular_example
-    config_filename = "pv_hp_config.json"
+    config_filename = "reference_household_config.json"
 
-    my_config: HouseholdPVConfig
+    my_config: ReferenceHouseholdConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = HouseholdPVConfig.from_json(system_config_file.read())  # type: ignore
+            my_config = ReferenceHouseholdConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
-        my_config = HouseholdPVConfig.get_default()
+        my_config = ReferenceHouseholdConfig.get_default()
 
     # =================================================================================================================================
     # Set System Parameters
@@ -147,13 +201,6 @@ def household_reference_gas_heater_diesel_car(
         my_simulation_parameters=my_simulation_parameters, config=hds_config
     )
 
-    # # Build Heat Water Storage Controller
-    # my_simple_hot_water_storage_controller = (
-    #     simple_hot_water_storage.SimpleHotWaterStorageController(
-    #         my_simulation_parameters=my_simulation_parameters
-    #     )
-    # )
-
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
         simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
@@ -166,6 +213,32 @@ def household_reference_gas_heater_diesel_car(
     # Build DHW
 
     # Build Diesel-Car
+    # get names of all available cars
+    filepaths = listdir(utils.HISIMPATH["utsp_results"])
+    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
+    names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+
+    my_car_config = generic_car.CarConfig.get_default_diesel_config()
+    # my_car_config.name = "Diesel Car"
+
+    # create all cars
+    my_cars: List[generic_car.Car] = []
+    for car in names:
+        my_car_config.name = car
+        my_cars.append(
+            generic_car.Car(
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_car_config,
+                occupancy_config=my_occupancy_config,
+            )
+        )
+
+    my_car = my_cars[0]
+    # my_car = generic_car.Car(
+    #     config=my_car_config,
+    #     my_simulation_parameters=my_simulation_parameters,
+    #     occupancy_config=my_occupancy_config,
+    # )
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
@@ -229,4 +302,4 @@ def household_reference_gas_heater_diesel_car(
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_simple_hot_water_storage)
-    # my_sim.add_component(my_simple_hot_water_storage_controller)
+    my_sim.add_component(my_car)

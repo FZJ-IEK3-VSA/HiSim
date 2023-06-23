@@ -269,35 +269,25 @@ class GenericGasHeaterControllerL1(Component):
                 self.daily_avg_outside_temperature_input_channel
             )
 
+            # turning gas_heater off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
+            summer_heating_mode = self.summer_heating_condition(
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=self.gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            )
+
+            # mode 1 is on/off controller
             if self.mode == 1:
                 self.conditions_on_off(
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                    summer_heating_mode=summer_heating_mode,
                 )
 
             else:
                 raise ValueError("Gas Heater has no cooling. Set mode==1")
 
-            # no heating threshold for the gas heater
-            if (
-                self.gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius
-                is None
-            ):
-                summer_mode = "on"
-
-            # turning gas heater off when the average daily outside temperature is above a certain threshold
-            else:
-                summer_mode = self.summer_condition(
-                    daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                    set_heating_threshold_temperature_in_celsius=self.gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-                )
-
-            # state of heat distribution controller is off when daily avg outside temperature is > 16°C
-            # in that case the gas heater should not be heating
-            if self.controller_gasheatermode == "heating" and summer_mode == "on":
+            if self.controller_gasheatermode == "heating":
                 control_signal = 1
-            elif self.controller_gasheatermode == "heating" and summer_mode == "off":
-                control_signal = 0
             elif self.controller_gasheatermode == "off":
                 control_signal = 0
             else:
@@ -309,21 +299,27 @@ class GenericGasHeaterControllerL1(Component):
         self,
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
+        summer_heating_mode: str,
     ) -> None:
         """Set conditions for the gas heater controller mode."""
 
         if self.controller_gasheatermode == "heating":
             if (
                 water_temperature_input_in_celsius
-                > set_heating_flow_temperature_in_celsius + 0.5
+                > (set_heating_flow_temperature_in_celsius + 0.5)
+                or summer_heating_mode == "off"
             ):  # + 1:
                 self.controller_gasheatermode = "off"
                 return
 
         elif self.controller_gasheatermode == "off":
+
+            # gas heater is only turned on if the water temperature is below the flow temperature
+            # and if the avg daily outside temperature is cold enough (summer mode on)
             if (
                 water_temperature_input_in_celsius
-                < set_heating_flow_temperature_in_celsius - 0.5
+                < (set_heating_flow_temperature_in_celsius - 1.0)
+                and summer_heating_mode == "on"
             ):  # - 1:
                 self.controller_gasheatermode = "heating"
                 return
@@ -331,27 +327,34 @@ class GenericGasHeaterControllerL1(Component):
         else:
             raise ValueError("unknown mode")
 
-    def summer_condition(
+    def summer_heating_condition(
         self,
         daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: float,
+        set_heating_threshold_temperature_in_celsius: Optional[float],
     ) -> str:
-        """Set conditions for the valve in heat distribution."""
+        """Set conditions for the gas_heater."""
 
-        if (
+        # if no heating threshold is set, the gas_heater is always on
+        if set_heating_threshold_temperature_in_celsius is None:
+            heating_mode = "on"
+
+        # it is too hot for heating
+        elif (
             daily_average_outside_temperature_in_celsius
             > set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "off"
-            return summer_mode
+            heating_mode = "off"
+
+        # it is cold enough for heating
         elif (
             daily_average_outside_temperature_in_celsius
             < set_heating_threshold_temperature_in_celsius
         ):
-            summer_mode = "on"
-            return summer_mode
+            heating_mode = "on"
 
         else:
             raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
+                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
             )
+        return heating_mode

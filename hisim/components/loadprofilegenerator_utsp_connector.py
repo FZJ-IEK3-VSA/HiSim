@@ -109,6 +109,8 @@ class UtspLpgConnector(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.build()
+        # dummy value as long as there is no way to consider multiple households in one house
+        self.scaling_factor_according_to_number_of_apartments: float = 1.0
 
         # Inputs - Not Mandatory
         self.ww_mass_input: cp.ComponentInput = self.add_input(

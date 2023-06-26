@@ -26,6 +26,7 @@ from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
+from hisim.components import sumbuilder
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import log
@@ -96,13 +97,14 @@ def household_reference_gas_heater_diesel_car(
         - Occupancy (Residents' Demands)
         - Weather
         - Building
+        - Electricity Base Load
         - Gas Heater
         - Gas Heater Controller
         - Heat Distribution System
         - Heat Distribution System Controller
         - Simple Hot Water Storage
 
-        - DHW (extra boiler/Heatpump)
+        - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
     # Todo: change config with systemConfigBase.json for all components similar to modular_example
@@ -215,7 +217,7 @@ def household_reference_gas_heater_diesel_car(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build DHW #todo: copied from modular_example
+    # Build DHW
     dhw_heatpump_config = (
         generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
     )
@@ -280,8 +282,17 @@ def household_reference_gas_heater_diesel_car(
                 occupancy_config=my_occupancy_config,
             )
         )
-
     my_car = my_cars[0]
+
+    # Build Base Electricity Load Profile
+    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
+        config=sumbuilder.ElectricityGridConfig(
+            name="ElectrcityGrid_BaseLoad",
+            grid=[my_occupancy, "Sum", my_domnestic_hot_water_heatpump],
+            signal=None,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
@@ -360,7 +371,8 @@ def household_reference_gas_heater_diesel_car(
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_car)
     my_sim.add_component(my_domnestic_hot_water_storage)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
     my_sim.add_component(my_domnestic_hot_water_heatpump)
+    my_sim.add_component(my_car)
+    my_sim.add_component(my_base_electricity_load_profile)

@@ -1,5 +1,6 @@
 """  Reference Household example with gas heater and diesel car. """
-# Todo: clean code
+
+# clean
 
 from typing import List, Optional, Any
 from os import listdir
@@ -358,8 +359,6 @@ def household_reference_gas_heater_diesel_car(
     my_domnestic_hot_water_heatpump.connect_only_predefined_connections(
         my_weather, my_domnestic_hot_water_heatpump_controller
     )
-
-    # Todo: connect heat pump and electricity consumption
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

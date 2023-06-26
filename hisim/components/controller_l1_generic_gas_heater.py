@@ -1,6 +1,6 @@
-# Controller for generic_gas_heater according to advanced_heat_pump-Controller
+"""Controller for generic_gas_heater according to advanced_heat_pump-Controller."""
 
-# Todo: clean code
+# clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import Any, List, Optional

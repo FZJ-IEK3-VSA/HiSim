@@ -5,8 +5,10 @@ the configuration is automatically adopted from the information provided by the 
 # Generic/Built-in
 import json
 import math as ma
-from typing import List
 from os import path
+from typing import List, Tuple
+
+import pandas as pd
 
 # Owned
 from hisim import component as cp
@@ -237,6 +239,7 @@ class SmartDevice(cp.Component):
 
         # initializing relevant data
         earliest_start, latest_start, electricity_profile = [], [], []
+        self.consumption = 0
 
         minutes_per_timestep = seconds_per_timestep / 60
 
@@ -311,5 +314,14 @@ class SmartDevice(cp.Component):
     def write_to_report(self) -> List[str]:
         """Writes relevant information to report. """
         lines: List[str] = []
-        lines.append("DeviceName: {}".format(self.component_name))
+        lines.append(f"DeviceName: {self.component_name}")
+        lines.append(f"Consumption: {self.consumption:.2f}")
         return lines
+    
+    def get_cost_opex(self, all_outputs: list, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        for index, output in enumerate(all_outputs):
+            if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
+                co2_per_unit = 0.4
+                euro_per_unit = 0.25
+                self.consumption = sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6
+        return self.consumption * euro_per_unit, self.consumption * co2_per_unit

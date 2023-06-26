@@ -262,8 +262,8 @@ def configure_ev_batteries(
         )
 
     for car in my_cars:
-        car_battery_config.source_weight = car.source_weight
-        car_battery_controller_config.source_weight = car.source_weight
+        car_battery_config.source_weight = car.config.source_weight
+        car_battery_controller_config.source_weight = car.config.source_weight
         my_carbattery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=car_battery_config
         )

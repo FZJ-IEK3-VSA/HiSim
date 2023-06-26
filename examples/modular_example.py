@@ -106,6 +106,9 @@ def modular_household_explicit(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.MAKE_NETWORK_CHARTS
         )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_OPEX
+        )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -235,6 +238,7 @@ def modular_household_explicit(
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
+                consumption=0
             )
         )
 

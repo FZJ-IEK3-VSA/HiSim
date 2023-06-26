@@ -46,6 +46,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
+    consumption: float
 
     @classmethod
     def get_default_UTSP_connector_config(cls) -> Any:
@@ -61,6 +62,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
+            consumption=0,
         )
         return config
 
@@ -582,3 +584,13 @@ class UtspLpgConnector(cp.Component):
     def write_to_report(self):
         """Adds a report entry for this component."""
         return self.utsp_config.get_string_dict()
+ 
+    def get_cost_opex(self, all_outputs: list, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        for index, output in enumerate(all_outputs):
+            print(output.component_name, output.load_type)
+            if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
+                co2_per_unit = 0.4
+                euro_per_unit = 0.25
+                self.utsp_config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+        
+        return self.utsp_config.consumption * euro_per_unit, self.utsp_config.consumption * co2_per_unit

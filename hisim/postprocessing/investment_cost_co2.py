@@ -68,9 +68,9 @@ def compute_investment_cost(
             column = price_frame.iloc[price_frame.index == "Lithium iron phosphate battery"]
             component_capacity = component.my_component.e_bat_custom
         elif isinstance(component.my_component, generic_car.Car):
-            if component.my_component.fuel == LoadTypes.ELECTRICITY:
+            if component.my_component.config.fuel == LoadTypes.ELECTRICITY:
                 column = price_frame.iloc[price_frame.index == "Electric vehicle"]
-            elif component.my_component.fuel == LoadTypes.DIESEL:
+            elif component.my_component.config.fuel == LoadTypes.DIESEL:
                 column = price_frame.iloc[price_frame.index == "Diesel vehicle"]
             component_capacity = 1.0
 

@@ -23,6 +23,11 @@ from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_hot_water_storage
 from hisim.components import generic_car
+from hisim.components import advanced_heat_pump_hplib
+from hisim.components import generic_heat_pump_modular
+from hisim.components import controller_l1_heatpump
+from hisim.components import generic_hot_water_storage_modular
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import log
 
@@ -210,7 +215,91 @@ def household_reference_gas_heater_diesel_car(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build DHW
+    # Build DHW #todo: copied from modular_example
+    dhw_heatpump_config = (
+        generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+    )
+
+    dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+        name="DHWHeatpump"
+    )
+
+    dhw_heatpump_config.power_th = (
+        my_occupancy.max_hot_water_demand
+        * (4180 / 3600)
+        * 0.5
+        * (3600 / my_simulation_parameters.seconds_per_timestep)
+        * (
+            HouseholdWarmWaterDemandConfig.ww_temperature_demand
+            - HouseholdWarmWaterDemandConfig.freshwater_temperature
+        )
+    )
+
+    dhw_storage_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+    )
+    dhw_storage_config.name="DHWStorage"
+
+    dhw_storage_config.compute_default_cycle(temperature_difference_in_kelvin=dhw_heatpump_controller_config.t_max_heating_in_celsius - dhw_heatpump_controller_config.t_min_heating_in_celsius)
+
+    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+        my_simulation_parameters=my_simulation_parameters, config=dhw_storage_config
+    )
+
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters, config=dhw_heatpump_controller_config
+    )
+
+    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+        config=dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # # Build DHW Storage
+    # my_domnestic_hot_water_storage_config = (
+    #     simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config() #Todo check config for dhw!
+    # )
+    # my_domnestic_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    #     config=my_simple_heat_water_storage_config,
+    #     my_simulation_parameters=my_simulation_parameters,
+    # )
+    #
+    # # Build DHW Heat Pump Controller #Todo check config for dhw!
+    # my_domnestic_hot_water_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
+    #     config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
+    #         name="DHWHeatPumpHplibController",
+    #         mode=hp_controller_mode,
+    #         set_heating_threshold_outside_temperature_in_celsius=None, #no summer mode
+    #         set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
+    #     ),
+    #     my_simulation_parameters=my_simulation_parameters,
+    # )
+
+    # get_default_config_heat_source_controller_dhw(name: str) -> "L1HeatPumpConfig":
+    #     """Returns default configuration for the controller of a drain hot water storage. """
+    #     config = L1HeatPumpConfig(name="Controller" + name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
+    #                               cooling_considered=False, day_of_heating_season_begin=270, day_of_heating_season_end=150,
+    #                               min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+    #
+    # config from generic_heat_pump_modular used for dhw
+    # config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
+    #                         device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000,
+    #                         water_vs_heating=lt.InandOutputType.WATER_HEATING)
+
+    # # Build DHW Heat Pump
+    # my_domnestic_hot_water_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
+    #     config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
+    #         name="DHWHeatPumpHPLib",
+    #         model=model,
+    #         group_id=group_id,
+    #         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    #         flow_temperature_in_celsius=flow_temperature_in_celsius,
+    #         set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
+    #         cycling_mode=cycling_mode,
+    #         minimum_running_time_in_seconds=minimum_running_time_in_seconds,
+    #         minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
+    #     ),
+    #     my_simulation_parameters=my_simulation_parameters,
+    # )
 
     # Build Diesel-Car
     # get names of all available cars
@@ -292,6 +381,15 @@ def household_reference_gas_heater_diesel_car(
         my_gasheater.MassflowOutput,
     )
 
+    #connect DHW
+    my_domnestic_hot_water_storage.connect_only_predefined_connections(my_occupancy, my_domnestic_hot_water_heatpump)
+
+    my_domnestic_hot_water_heatpump_controller.connect_only_predefined_connections(my_domnestic_hot_water_storage)
+
+    my_domnestic_hot_water_heatpump.connect_only_predefined_connections(my_weather, my_domnestic_hot_water_heatpump_controller)
+
+    #Todo: connect heat pump and electricity consumption
+
     # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
@@ -303,3 +401,6 @@ def household_reference_gas_heater_diesel_car(
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_car)
+    my_sim.add_component(my_domnestic_hot_water_storage)
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
+    my_sim.add_component(my_domnestic_hot_water_heatpump)

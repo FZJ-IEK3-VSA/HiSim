@@ -22,7 +22,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionController
-from hisim.components.generic_gas_heater import GasHeater
+
+# from hisim.components.generic_gas_heater import GasHeater
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -58,8 +59,8 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
             name="GenericGasHeaterController",
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
-            minimal_thermal_power_in_watt = 1_000, # [W] # Todo: get information from GasHeater.gasheater_config.minimal_thermal_power_in_watt
-            maximal_thermal_power_in_watt = 12_000, # [W] # Todo: get information fromGasHeater.gasheater_config.maximal_thermal_power_in_watt
+            minimal_thermal_power_in_watt=1_000,  # [W] # Todo: get information from GasHeater.gasheater_config.minimal_thermal_power_in_watt
+            maximal_thermal_power_in_watt=12_000,  # [W] # Todo: get information fromGasHeater.gasheater_config.maximal_thermal_power_in_watt
         )
 
 
@@ -304,25 +305,40 @@ class GenericGasHeaterControllerL1(Component):
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
     ) -> float:
-        """ modulate linear between minimial_thermal_power and max_thermal_power of Gas Heater.
+        """Modulate linear between minimial_thermal_power and max_thermal_power of Gas Heater.
 
         only used if gasheatermode is "heating".
         """
-        delta_temperature = set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius
-        delta_temperature_limit_full_power = 5.0 # Todo hardcoded so far, should be placed in config
-        minimal_percentage = (self.gas_heater_controller_config.minimal_thermal_power_in_watt / self.gas_heater_controller_config.maximal_thermal_power_in_watt)
-        if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - delta_temperature_limit_full_power):
-            percentage = 1
+        delta_temperature = (
+            set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius
+        )
+        delta_temperature_limit_full_power = (
+            5.0  # Todo hardcoded so far, should be placed in config
+        )
+        minimal_percentage = (
+            self.gas_heater_controller_config.minimal_thermal_power_in_watt
+            / self.gas_heater_controller_config.maximal_thermal_power_in_watt
+        )
+        if water_temperature_input_in_celsius < (
+            set_heating_flow_temperature_in_celsius - delta_temperature_limit_full_power
+        ):
+            percentage = 1.0
             return percentage
         if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
-            linear_fit = 1 - (delta_temperature_limit_full_power - delta_temperature) / delta_temperature_limit_full_power
+            linear_fit = 1 - (
+                (delta_temperature_limit_full_power - delta_temperature)
+                / delta_temperature_limit_full_power
+            )
             percentage = max(minimal_percentage, linear_fit)
             return percentage
-        if water_temperature_input_in_celsius <= (set_heating_flow_temperature_in_celsius + 0.5): # use same hysteresis like in conditions_on_off()
+        if water_temperature_input_in_celsius <= (
+            set_heating_flow_temperature_in_celsius + 0.5
+        ):  # use same hysteresis like in conditions_on_off()
             percentage = minimal_percentage
             return percentage
-        else:
-            raise ValueError("modulation of Gas Heater needs some adjustments")
+
+        # if something went wrong
+        raise ValueError("modulation of Gas Heater needs some adjustments")
 
     def conditions_on_off(
         self,

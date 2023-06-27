@@ -6,6 +6,7 @@ import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 __authors__ = "Katharina Rieck"
@@ -28,8 +29,6 @@ class IdealizedElectricHeater(cp.Component):
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
     HeatingPowerDelivered = "HeatingPowerDelivered"
-    SetHeatingTemperatureForBuilding = "SetHeatingTemperatureForBuilding"
-    SetCoolingTemperatureForBuilding = "SetCoolingTemperatureForBuilding"
 
     # Similar components to connect to:
     # 1. Building
@@ -48,11 +47,14 @@ class IdealizedElectricHeater(cp.Component):
         self.thermal_power_delivered_in_watt: float = 0
         self.theoretical_thermal_building_in_watt: float = 0
         self.heating_in_watt: float = 0
-        self.set_heating_temperature_for_building_in_celsius = (
-            set_heating_temperature_for_building_in_celsius
+
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
+            entry=set_heating_temperature_for_building_in_celsius,
         )
-        self.set_cooling_temperature_for_building_in_celsius = (
-            set_cooling_temperature_for_building_in_celsius
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
+            entry=set_cooling_temperature_for_building_in_celsius,
         )
 
         # Inputs
@@ -80,21 +82,6 @@ class IdealizedElectricHeater(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatingPowerDelivered} will follow.",
-        )
-
-        self.set_heating_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.SetHeatingTemperatureForBuilding,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.SetHeatingTemperatureForBuilding} will follow.",
-        )
-        self.set_cooling_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.SetCoolingTemperatureForBuilding,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.SetCoolingTemperatureForBuilding} will follow.",
         )
 
     def build(
@@ -155,13 +142,3 @@ class IdealizedElectricHeater(cp.Component):
         )
 
         stsv.set_output_value(self.heating_power_delivered_channel, heating_in_watt)
-
-        stsv.set_output_value(
-            self.set_heating_temperature_for_building_channel,
-            self.set_heating_temperature_for_building_in_celsius,
-        )
-
-        stsv.set_output_value(
-            self.set_cooling_temperature_for_building_channel,
-            self.set_cooling_temperature_for_building_in_celsius,
-        )

@@ -1,5 +1,4 @@
 """Simple Car (LPG connected) and configuration.
-
 Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations."""
 
 # -*- coding: utf-8 -*-

@@ -10,6 +10,7 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import sumbuilder
+from hisim.postprocessingoptions import PostProcessingOptions
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -73,6 +74,9 @@ def basic_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building

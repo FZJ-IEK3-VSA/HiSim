@@ -79,11 +79,6 @@ class CarConfig(cp.ConfigBase):
             consumption=0,
         )
         return config
-    
-    @staticmethod
-    def get_cost_capex() -> Tuple[float, float, float]:
-        """Returns investment cost, CO2 emissions and lifetime."""
-        return [self.cost, self.co2_footprint, self.lifetime]
 
 
 def most_frequent(input_list: List) -> Any:
@@ -107,6 +102,11 @@ class Car(cp.Component):
     FuelConsumption = "FuelConsumption"
     ElectricityOutput = "ElectricityOutput"
     CarLocation = "CarLocation"
+
+    @staticmethod
+    def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
 
     def __init__(
         self,
@@ -193,7 +193,7 @@ class Car(cp.Component):
             if output.postprocessing_flag is not None:
                 if lt.ComponentType.CAR in output.postprocessing_flag:
                     if output.unit == lt.Units.LITER:
-                        self.config.consumption = round(sum(postprocessing_results.iloc[:, index]),1)
+                        self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
                         # be careful, this is hard coded and should be placed somewhere else!
                         co2_per_unit = 2.6
                         euro_per_unit = 1.6
@@ -201,9 +201,8 @@ class Car(cp.Component):
                         co2_per_unit = 0.4
                         euro_per_unit = 0.25
                         self.config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
-        
+
         return self.config.consumption * euro_per_unit, self.config.consumption * co2_per_unit
-                
 
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""

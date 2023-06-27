@@ -38,12 +38,14 @@ def cleanup_old_result_folders():
             full_path = os.path.join(base_path, file)
             shutil.rmtree(full_path)
 
+
 def cleanup_old_lpg_requests():
     """ Removes old results of loadprofilegenerator_connector_utsp. """
     files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
     for file in files_in_folder:
         full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)
         os.remove(full_path)
+
 
 def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[float, List[int]]:
     """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.

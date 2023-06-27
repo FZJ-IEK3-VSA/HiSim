@@ -161,16 +161,6 @@ class Component:
     """ Base class for all components. """
 
     @classmethod
-    @staticmethod
-    def get_cost_opex(all_outputs: List, postprocessing_results: pd.DataFrame) -> Tuple[float, float]:
-        """Decorator for the calculation of operational cost and operational co2 footprint during simulation time frame.
-
-        :return: [operational cost in euro, operational co2 footprint in kg]
-        :rtype: Tuple[float,float]
-        """
-        return 0, 0
-
-    @classmethod
     def get_classname(cls):
         """ Gets the class name. Helper function for default connections. """
         return cls.__name__
@@ -294,6 +284,14 @@ class Component:
         if len(self.outputs) == 0:
             raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
+
+    def get_cost_opex(all_outputs: List, postprocessing_results: pd.DataFrame) -> Tuple[float, float]:
+        """Calculates operational cost and operational co2 footprint during simulation time frame.
+
+        :return: [operational cost in euro, operational co2 footprint in kg]
+        :rtype: Tuple[float,float]
+        """
+        return 0, 0
 
     def i_save_state(self) -> None:
         """ Abstract. Gets called at the beginning of a timestep to save the state. """

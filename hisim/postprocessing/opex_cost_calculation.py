@@ -1,7 +1,6 @@
 import pandas as pd
 from typing import List
 from hisim.component_wrapper import ComponentWrapper
-from hisim import log
 
 
 def opex_calculation(components: List[ComponentWrapper], all_outputs: List, postprocessing_results: pd.DataFrame) -> None:

@@ -160,6 +160,7 @@ class Component:
 
     """ Base class for all components. """
 
+    @classmethod
     @staticmethod
     def get_cost_opex(all_outputs: List, postprocessing_results: pd.DataFrame) -> Tuple[float, float]:
         """Decorator for the calculation of operational cost and operational co2 footprint during simulation time frame.

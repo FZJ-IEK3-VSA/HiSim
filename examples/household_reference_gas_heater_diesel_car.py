@@ -224,7 +224,7 @@ def household_reference_gas_heater_diesel_car(
     )
 
     dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpump"
+        name="DHWHeatpumpController"
     )
 
     dhw_heatpump_config.power_th = (

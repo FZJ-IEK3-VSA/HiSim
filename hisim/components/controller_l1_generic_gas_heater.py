@@ -22,6 +22,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionController
+from hisim.components.generic_gas_heater import GasHeater
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -47,6 +48,8 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    minimal_thermal_power_in_watt: float  # [W]
+    maximal_thermal_power_in_watt: float  # [W]
 
     @classmethod
     def get_default_generic_gas_heater_controller_config(cls):
@@ -55,6 +58,8 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
             name="GenericGasHeaterController",
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
+            minimal_thermal_power_in_watt = 1_000, # [W] # Todo: get information from GasHeater.gasheater_config.minimal_thermal_power_in_watt
+            maximal_thermal_power_in_watt = 12_000, # [W] # Todo: get information fromGasHeater.gasheater_config.maximal_thermal_power_in_watt
         )
 
 
@@ -65,24 +70,16 @@ class GenericGasHeaterControllerL1(Component):
     It takes data from other
     components and sends signal to the generic_gas_heater for
     activation or deactivation.
-    On/off Switch with respect to water temperature from storage.
+    Modulating Power with respect to water temperature from storage.
 
     Parameters
     ----------
-    t_air_heating: float
-        Minimum comfortable temperature for residents
-    t_air_cooling: float
-        Maximum comfortable temperature for residents
-    offset: float
-        Temperature offset to compensate the hysteresis
-        correction for the building temperature change
     mode : int
         Mode index for operation type for this heat pump--> should be 1 only for gas_heater
 
 
     Components to connect to:
-    (1) generic_gas_heater (State--> ControlSignal)
-    Todo: For now only State 0 or 1 is available, old controller for gas_heater also has only 0 and 1
+    (1) generic_gas_heater (control_signal)
 
     """
 
@@ -312,27 +309,20 @@ class GenericGasHeaterControllerL1(Component):
         only used if gasheatermode is "heating".
         """
         delta_temperature = set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius
-        delta_temperature_limit_full_power = 5.0 # Todo hardcoded, should be placed somewhere else
+        delta_temperature_limit_full_power = 5.0 # Todo hardcoded so far, should be placed in config
+        minimal_percentage = (self.gas_heater_controller_config.minimal_thermal_power_in_watt / self.gas_heater_controller_config.maximal_thermal_power_in_watt)
         if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - delta_temperature_limit_full_power):
             percentage = 1
             return percentage
-        # if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 2.5):
-        #     percentage = 0.75
-        #     return percentage
-        # if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 1.0):
-        #     percentage = 0.6
-        #     return percentage
         if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
             linear_fit = 1 - (delta_temperature_limit_full_power - delta_temperature) / delta_temperature_limit_full_power
-            # print(f"delta_temparature is: {delta_temperature} and linear_fit is: {linear_fit}")
-            percentage = max(0.1, linear_fit) # check minimal thermal power
+            percentage = max(minimal_percentage, linear_fit)
             return percentage
-        if water_temperature_input_in_celsius <= (set_heating_flow_temperature_in_celsius + 0.5): # use same hysteresis like in conditions_on_off
-            percentage = 0.1 # percentage of minimal_thermal_power
+        if water_temperature_input_in_celsius <= (set_heating_flow_temperature_in_celsius + 0.5): # use same hysteresis like in conditions_on_off()
+            percentage = minimal_percentage
             return percentage
         else:
             raise ValueError("modulation of Gas Heater needs some adjustments")
-        #Todo consider minimal_thermal_power from gasheater component
 
     def conditions_on_off(
         self,

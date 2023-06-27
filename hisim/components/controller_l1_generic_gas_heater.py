@@ -289,7 +289,10 @@ class GenericGasHeaterControllerL1(Component):
                 raise ValueError("Gas Heater has no cooling. Set mode==1")
 
             if self.controller_gasheatermode == "heating":
-                control_signal = 1
+                control_signal = self.modulate_power(
+                    water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
+                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                )
             elif self.controller_gasheatermode == "off":
                 control_signal = 0
             else:
@@ -298,6 +301,38 @@ class GenericGasHeaterControllerL1(Component):
             stsv.set_output_value(
                 self.control_signal_to_gasheater_channel, control_signal
             )
+
+    def modulate_power(
+        self,
+        water_temperature_input_in_celsius: float,
+        set_heating_flow_temperature_in_celsius: float,
+    ) -> float:
+        """ modulate linear between minimial_thermal_power and max_thermal_power of Gas Heater.
+
+        only used if gasheatermode is "heating".
+        """
+        delta_temperature = set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius
+        delta_temperature_limit_full_power = 5.0 # Todo hardcoded, should be placed somewhere else
+        if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - delta_temperature_limit_full_power):
+            percentage = 1
+            return percentage
+        # if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 2.5):
+        #     percentage = 0.75
+        #     return percentage
+        # if water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 1.0):
+        #     percentage = 0.6
+        #     return percentage
+        if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
+            linear_fit = 1 - (delta_temperature_limit_full_power - delta_temperature) / delta_temperature_limit_full_power
+            # print(f"delta_temparature is: {delta_temperature} and linear_fit is: {linear_fit}")
+            percentage = max(0.1, linear_fit) # check minimal thermal power
+            return percentage
+        if water_temperature_input_in_celsius <= (set_heating_flow_temperature_in_celsius + 0.5): # use same hysteresis like in conditions_on_off
+            percentage = 0.1 # percentage of minimal_thermal_power
+            return percentage
+        else:
+            raise ValueError("modulation of Gas Heater needs some adjustments")
+        #Todo consider minimal_thermal_power from gasheater component
 
     def conditions_on_off(
         self,

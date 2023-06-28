@@ -2,6 +2,8 @@
 # clean
 # Owned
 from typing import List
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -16,6 +18,31 @@ __version__ = ""
 __maintainer__ = "Katharina Rieck"
 __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
+
+
+@dataclass_json
+@dataclass
+class IdealizedHeaterConfig(cp.ConfigBase):
+
+    """Configuration of the Idealized Heater."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return IdealizedElectricHeater.get_full_classname()
+
+    name: str
+    set_heating_temperature_for_building_in_celsius: float
+    set_cooling_temperature_for_building_in_celsius: float
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default Idealized Heater."""
+        return IdealizedHeaterConfig(
+            name="IdealizedHeater",
+            set_heating_temperature_for_building_in_celsius=19.5,
+            set_cooling_temperature_for_building_in_celsius=23.5,
+        )
 
 
 class IdealizedElectricHeater(cp.Component):
@@ -37,22 +64,23 @@ class IdealizedElectricHeater(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
+        config: IdealizedHeaterConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "IdealizedElectricHeater", my_simulation_parameters=my_simulation_parameters
+            "IdealizedElectricHeater",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.thermal_power_delivered_in_watt: float = 0
         self.theoretical_thermal_building_in_watt: float = 0
         self.heating_in_watt: float = 0
         self.set_heating_temperature_for_building_in_celsius = (
-            set_heating_temperature_for_building_in_celsius
+            config.set_heating_temperature_for_building_in_celsius
         )
         self.set_cooling_temperature_for_building_in_celsius = (
-            set_cooling_temperature_for_building_in_celsius
+            config.set_cooling_temperature_for_building_in_celsius
         )
 
         # Inputs

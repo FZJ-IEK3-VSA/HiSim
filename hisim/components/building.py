@@ -238,6 +238,7 @@ class Building(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.buildingconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         # =================================================================================================================================
@@ -999,7 +1000,9 @@ class Building(dynamic_component.DynamicComponent):
         ].values[0]
 
         for index, windows_direction in enumerate(self.windows_directions):
-            window_area = float(self.buildingdata["A_Window_" + windows_direction].iloc[0])
+            window_area = float(
+                self.buildingdata["A_Window_" + windows_direction].iloc[0]
+            )
             if window_area != 0.0:
                 if windows_direction == "Horizontal":
                     window_tilt_angle = 0
@@ -1414,7 +1417,8 @@ class Building(dynamic_component.DynamicComponent):
         self.thermal_conductance_by_ventilation_in_watt_per_kelvin = (
             heat_capacity_of_air_per_volume_in_watt_hour_per_m3_per_kelvin
             * float(
-                self.buildingdata["n_air_use"].iloc[0] + self.buildingdata["n_air_infiltration"].iloc[0]
+                self.buildingdata["n_air_use"].iloc[0]
+                + self.buildingdata["n_air_infiltration"].iloc[0]
             )
             * self.scaled_conditioned_floor_area_in_m2
             * float(self.buildingdata["h_room"].iloc[0])

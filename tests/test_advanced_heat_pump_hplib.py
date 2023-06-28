@@ -39,7 +39,7 @@ def test_heat_pump_hplib():
                                lt.Units.ANY)
 
     # Initialize component
-    heatpump_config=HeatPumpHplibConfig(model=model, group_id=group_id, t_in=t_in, t_out_val=t_out, p_th_set=p_th_set)
+    heatpump_config=HeatPumpHplibConfig(model=model, group_id=group_id, t_in=t_in, t_out_val=t_out, p_th_set=p_th_set, name="HeatPump")
     heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
 
     number_of_outputs = fft.get_number_of_outputs([on_off_switch,t_in_primary,t_in_secondary,t_amb,heatpump])

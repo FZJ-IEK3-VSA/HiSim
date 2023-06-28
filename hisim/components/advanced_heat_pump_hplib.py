@@ -10,6 +10,7 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
     SingleTimeStepValues,
+    ConfigBase,
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -27,12 +28,31 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatPumpHplibConfig:
+class HeatPumpHplibConfig(ConfigBase):
+
+    name: str
     model: str
     group_id: int
     t_in: float
     t_out_val: float
     p_th_set: float
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatPumpHplib.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return HeatPumpHplibConfig(
+            name="HeatPumpHPLib",
+            model="Generic",
+            group_id=1,
+            t_in=-7,
+            t_out_val=52,
+            p_th_set=10000,
+        )
 
 
 class HeatPumpHplib(Component):
@@ -85,7 +105,9 @@ class HeatPumpHplib(Component):
             Data frame containing the model parameters.
         """
         super().__init__(
-            name="HeatPump", my_simulation_parameters=my_simulation_parameters
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.model = config.model
@@ -146,7 +168,7 @@ class HeatPumpHplib(Component):
             field_name=self.ThermalOutputPower,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
-            output_description=("Thermal output power in Watt")
+            output_description=("Thermal output power in Watt"),
         )
 
         self.p_el: ComponentOutput = self.add_output(
@@ -154,7 +176,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            output_description="Electricity input power in Watt"
+            output_description="Electricity input power in Watt",
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -162,7 +184,7 @@ class HeatPumpHplib(Component):
             field_name=self.COP,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            output_description="COP"
+            output_description="COP",
         )
 
         self.t_out: ComponentOutput = self.add_output(
@@ -170,7 +192,7 @@ class HeatPumpHplib(Component):
             field_name=self.TemperatureOutput,
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
-            output_description="Temperature Output in °C"
+            output_description="Temperature Output in °C",
         )
 
         self.m_dot: ComponentOutput = self.add_output(
@@ -178,7 +200,7 @@ class HeatPumpHplib(Component):
             field_name=self.MassFlowOutput,
             load_type=LoadTypes.VOLUME,
             unit=Units.KG_PER_SEC,
-            output_description="Mass flow output"
+            output_description="Mass flow output",
         )
 
         self.time_on: ComponentOutput = self.add_output(
@@ -186,7 +208,7 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOn,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
-            output_description="Time turned on"
+            output_description="Time turned on",
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -194,15 +216,8 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOff,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
-            output_description="Time turned off"
+            output_description="Time turned off",
         )
-
-    @staticmethod
-    def get_defaul_config():
-        config = HeatPumpHplibConfig(
-            model="Generic", group_id=-1, t_in=-300, t_out_val=-300, p_th_set=-30
-        )
-        return config
 
     def write_to_report(self):
         """Write configuration to the report."""

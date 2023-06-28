@@ -100,6 +100,7 @@ class GasHeater(Component):
         super().__init__(
             name=self.gasheater_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.control_signal_channel: ComponentInput = self.add_input(
             self.component_name,

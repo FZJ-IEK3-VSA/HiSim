@@ -135,6 +135,7 @@ class ComponentName(Component):
         super().__init__(
             self.componentnameconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         # If a component requires states, this can be implemented here.
@@ -156,7 +157,7 @@ class ComponentName(Component):
             field_name=self.OutputWithState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
-            output_description="Output with State"
+            output_description="Output with State",
         )
 
         self.output_without_state: ComponentOutput = self.add_output(
@@ -164,7 +165,7 @@ class ComponentName(Component):
             field_name=self.OutputWithoutState,
             load_type=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT_HOUR,
-            output_description="Output without State"
+            output_description="Output without State",
         )
 
     def i_save_state(self) -> None:

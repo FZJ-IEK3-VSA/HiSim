@@ -27,26 +27,97 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class EVConfig:
-    parameter_string: str
+class VehiclePureConfig(cp.ConfigBase):
+
+    name: str
     manufacturer: str
     model: str
     soc: float
     profile: str
 
-    def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        manufacturer: str,
-        model: str,
-        soc: float,
-        profile_name: str,
-    ) -> None:
-        self.parameter_string = my_simulation_parameters.get_unique_key()
-        self.profile_name = profile_name
-        self.manufacturer = manufacturer
-        self.model = model
-        self.soc = soc
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return VehiclePure.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return VehiclePureConfig(
+            name="Electrical Charger",
+            manufacturer="Tesla",
+            model="Model 3 v3",
+            soc=1.0,
+            profile="CH01",
+        )
+
+
+@dataclass_json
+@dataclass
+class EVChargerControllerConfig(cp.ConfigBase):
+
+    name: str
+    mode: int
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return EVChargerController.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return EVChargerControllerConfig(name="ElectricalChargerController", mode=1)
+
+
+@dataclass_json
+@dataclass
+class VehicleConfig(cp.ConfigBase):
+
+    name: str
+    manufacturer: str
+    model: str
+    soc: float
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return Vehicle.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return VehicleConfig(
+            name="ElectricVehicle",
+            manufacturer="Renault",
+            model="Zoe v3",
+            soc=0.8,
+        )
+
+
+@dataclass_json
+@dataclass
+class EVChargerConfig(cp.ConfigBase):
+
+    name: str
+    manufacturer: str
+    charger_name: str
+    electric_vehicle: Any
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return EVCharger.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return EVChargerConfig(
+            name="EV_Charger",
+            manufacturer="myenergi",
+            charger_name="Wallbox ZAPPI 222TW",
+            electric_vehicle=None,
+        )
 
 
 class VehiclePure(cp.Component):
@@ -69,23 +140,15 @@ class VehiclePure(cp.Component):
     """
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        manufacturer: str = "Tesla",
-        model: str = "Model 3 v3",
-        soc: float = 1.0,
-        profile: str = "CH01",
+        self, my_simulation_parameters: SimulationParameters, config: VehiclePureConfig
     ) -> None:
         super().__init__(
-            name="EV_charger", my_simulation_parameters=my_simulation_parameters
-        )
-        self.evconfig = EVConfig(
+            name="EV_charger",
             my_simulation_parameters=my_simulation_parameters,
-            manufacturer=manufacturer,
-            model=model,
-            soc=soc,
-            profile_name=profile,
+            my_config=config,
         )
+        self.evconfig = config
+
         self.build()
 
     def build(self) -> None:
@@ -292,17 +355,15 @@ class Vehicle(cp.Component):
     Discharge = "Discharge"
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        manufacturer: str = "Renault",
-        model: str = "Zoe v3",
-        soc: float = 0.8,
+        self, my_simulation_parameters: SimulationParameters, config: VehicleConfig
     ) -> None:
         super().__init__(
-            name="ElectricVehicle", my_simulation_parameters=my_simulation_parameters
+            name="ElectricVehicle",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
-        self.build(manufacturer=manufacturer, model=model, soc=soc)
+        self.build(manufacturer=config.manufacturer, model=config.model, soc=config.soc)
 
         self.before_capacityC: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -516,20 +577,18 @@ class EVCharger(cp.Component):
     # 2. Some ChargingInput
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        manufacturer: str = "myenergi",
-        name: str = "Wallbox ZAPPI 222TW",
-        electric_vehicle: Any = None,
+        self, my_simulation_parameters: SimulationParameters, config: EVChargerConfig
     ) -> None:
         super().__init__(
-            name="EVCharger", my_simulation_parameters=my_simulation_parameters
+            name="EVCharger",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build(
-            manufacturer=manufacturer,
-            name=name,
-            electric_vehicle=electric_vehicle,
+            manufacturer=config.manufacturer,
+            name=config.name,
+            electric_vehicle=config.electric_vehicle,
             sim_params=my_simulation_parameters,
         )
 
@@ -765,43 +824,46 @@ class EVChargerController(cp.Component):
     # 1. Some ChargingInput
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, mode: int = 1
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: EVChargerControllerConfig,
     ) -> None:
         super().__init__(
             name="EVChargerController",
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
-        self.mode = mode
+        self.mode = config.mode
 
-        if mode == 1:
+        if self.mode == 1:
             self.mode_description = "Straight Charging"
             self.mode_extended_description = (
                 "Charge the Electric Vehicle whenever is connected to EV Charger"
             )
-        elif mode == 2:
+        elif self.mode == 2:
             self.mode_description = "Charge only on Electricity Surplus"
             self.mode_extended_description = "Charge the Electric Vehicle whenever the home grid is on electricity surplus"
-        elif mode == 3:
+        elif self.mode == 3:
             self.mode_description = "Operate on Vehicle-to-Grid"
             self.mode_extended_description = (
                 "Charge the Electric Vehicle whenever the home grid is on electricity surplus. "
                 "Discharge the Electric Vehicle whenenver the home grid is running on electricity deficit."
             )
-        elif mode == 4:
+        elif self.mode == 4:
             self.mode_description = "Stepped Prioritized Charging"
             self.mode_extended_description = (
                 "Charge only from the grid for SoC from 0% up to 60%. "
                 "Charge only from the grid only on the electricity surplus for SoC from 60% up to 80%. "
                 "Operate on Vehicle-to-Grid for SoC from 80% up to 100%"
             )
-        elif mode == 5:
+        elif self.mode == 5:
             self.mode_description = "Tight Stepped Prioritized Charging"
             self.mode_extended_description = (
                 "Charge only from the grid for SoC from 0% up to 40%. "
                 "Charge only from the grid only on the electricity surplus for SoC from 40% up to 70%. "
                 "Operate on Vehicle-to-Grid for SoC from 70% up to 100%"
             )
-        elif mode == 6:
+        elif self.mode == 6:
             self.mode_description = "Super Tight Stepped Prioritized Charging"
             self.mode_extended_description = (
                 "Charge only from the grid for SoC from 0% up to 20%. "

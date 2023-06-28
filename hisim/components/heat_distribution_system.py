@@ -143,7 +143,9 @@ class HeatDistribution(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.name, my_simulation_parameters=my_simulation_parameters
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.heat_distribution_system_config = config
         self.heating_system = self.heat_distribution_system_config.heating_system
@@ -482,6 +484,7 @@ class HeatDistributionController(cp.Component):
         super().__init__(
             self.heat_distribution_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.state_controller: int = 0
 

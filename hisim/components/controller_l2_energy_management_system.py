@@ -40,6 +40,7 @@ class EMSConfig(cp.ConfigBase):
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return L2GenericEnergyManagementSystem.get_full_classname()
+
     #: name of the device
     name: str
     # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
@@ -64,28 +65,9 @@ class EMSConfig(cp.ConfigBase):
         return config
 
 
-class EMSState():
-
-    """Saves the state of the Energy Management System."""
-
-    def __init__(self, production: float, consumption_uncontrolled: float, consumption_ems_controlled: float, ) -> None:
-        """Initialize the heat pump controller state."""
-        self.production = production
-        self.consumption_uncontrolled = consumption_uncontrolled
-        self.consumption_ems_controlled = consumption_ems_controlled
-
-    def clone(self) -> "EMSState":
-        """Copy EMSState efficiently."""
-        return EMSState(
-            production=self.production,
-            consumption_uncontrolled=self.consumption_uncontrolled,
-            consumption_ems_controlled=self.consumption_ems_controlled,
-        )
-
-
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
-    """ Surplus electricity controller - time step based.
+    """Surplus electricity controller - time step based.
 
     Iteratively goes through hierachy of devices given by
     source weights of components and passes available surplus
@@ -111,7 +93,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: EMSConfig
     ):
-        """ Initializes. """
+        """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         self.ems_config = config
@@ -120,10 +102,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
-
-        self.state = EMSState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)
-        self.previous_state = self.state.clone()
 
         self.components_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
@@ -170,7 +150,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
-        self.flexible_electricity_channel: cp.ComponentOutput = self.add_output(
+        self.flexible_electricity: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.FlexibleElectricity,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -244,24 +224,24 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
     def write_to_report(self):
-        """Writes relevant information to report. """
+        """Writes relevant information to report."""
         return self.ems_config.get_string_dict()
 
     def i_save_state(self) -> None:
-        """ Saves the state. """
+        """Saves the state."""
         # abändern, siehe Storage
-        self.previous_state = self.state
+        pass  # self.previous_state = self.state
 
     def i_restore_state(self) -> None:
-        """ Restores the state. """
-        self.state = self.previous_state
+        """Restores the state."""
+        pass  # self.state = self.previous_state
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """ Doublechecks values. """
+        """Doublechecks values."""
         pass
 
     def control_electricity_component_iterative(
@@ -271,22 +251,29 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         component_type: lt.ComponentType,
         input_channel: cp.ComponentInput,
         output: cp.ComponentOutput,
-    ) -> float:
-        """ Calculates available surplus electricity.
+    ) -> Any:
+        """Calculates available surplus electricity.
 
         Subtracts the electricity consumption signal of the component from the previous iteration,
         and sends updated signal back.
         """
+        is_battery = None
         # get previous signal and substract from total balance
         previous_signal = stsv.get_input_value(component_input=input_channel)
 
         # control from substracted balance
         if component_type == lt.ComponentType.BATTERY:
             stsv.set_output_value(output=output, value=deltademand)
-            # deltademand = deltademand - previous_signal
+            deltademand = deltademand - previous_signal
 
-        elif component_type == lt.ComponentType.CHP:
-            stsv.set_output_value(output=output, value=deltademand)
+        elif component_type == lt.ComponentType.FUEL_CELL:
+            if deltademand < 0:
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand + previous_signal
+                if deltademand > 0:
+                    is_battery = self.components_sorted.index(lt.ComponentType.BATTERY)
+            else:
+                stsv.set_output_value(output=output, value=0)
 
         elif component_type in [
             lt.ComponentType.ELECTROLYZER,
@@ -294,48 +281,93 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:
+
             if deltademand > 0:
                 stsv.set_output_value(output=output, value=deltademand)
                 deltademand = deltademand - previous_signal
             else:
                 stsv.set_output_value(output=output, value=deltademand)
 
-        return deltademand
+        return deltademand, is_battery
 
-    def optimize_own_consumption_iterative(self, delta_demand: float, stsv: cp.SingleTimeStepValues, ) -> None:
+    def postprocess_battery(
+        self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int
+    ) -> Any:
+        """Updates battery signal and total demand, if behaviour of battery changed in given iteration."""
+        previous_signal = stsv.get_input_value(component_input=self.inputs_sorted[ind])
+        stsv.set_output_value(
+            output=self.outputs_sorted[ind], value=deltademand + previous_signal
+        )
+        return deltademand - previous_signal
+
+    def optimize_own_consumption_iterative(
+        self, delta_demand: float, stsv: cp.SingleTimeStepValues
+    ) -> None:
         """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
+        skip_chp = False
         for ind in range(len(self.inputs_sorted)):  # noqa
             component_type = self.components_sorted[ind]
             single_input = self.inputs_sorted[ind]
             output = self.outputs_sorted[ind]
+            if component_type in [
+                lt.ComponentType.BATTERY,
+                lt.ComponentType.FUEL_CELL,
+                lt.ComponentType.ELECTROLYZER,
+                lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.SMART_DEVICE,
+                lt.ComponentType.CAR_BATTERY,
+            ]:
+                if not skip_chp or component_type in [
+                    lt.ComponentType.BATTERY,
+                    lt.ComponentType.ELECTROLYZER,
+                    lt.ComponentType.HEAT_PUMP,
+                    lt.ComponentType.SMART_DEVICE,
+                    lt.ComponentType.CAR_BATTERY,
+                ]:
+                    (
+                        delta_demand,
+                        is_battery,
+                    ) = self.control_electricity_component_iterative(
+                        deltademand=delta_demand,
+                        stsv=stsv,
+                        component_type=component_type,
+                        input_channel=single_input,
+                        output=output,
+                    )
+                else:
+                    stsv.set_output_value(output=output, value=0)
+                if is_battery is not None:
+                    delta_demand = self.postprocess_battery(
+                        deltademand=delta_demand, stsv=stsv, ind=is_battery
+                    )
+                    skip_chp = True
 
-            delta_demand = self.control_electricity_component_iterative(
-                deltademand=delta_demand,
-                stsv=stsv,
-                component_type=component_type,
-                input_channel=single_input,
-                output=output,
-            )
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
+        """Simulates iteration of surplus controller."""
+        if force_convergence:
+            return
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
-        """ Simulates iteration of surplus controller. """
         if timestep == 0:
             self.sort_source_weights_and_components()
 
+        # ELECTRICITY #
+
         # get production
-        self.state.production = sum(
+        production = sum(
             [
                 stsv.get_input_value(component_input=elem)
                 for elem in self.production_inputs
             ]
         )
-        self.state.consumption_uncontrolled = sum(
+        consumption_uncontrolled = sum(
             [
                 stsv.get_input_value(component_input=elem)
                 for elem in self.consumption_uncontrolled_inputs
             ]
         )
-        self.state.consumption_ems_controlled = sum(
+        consumption_ems_controlled = sum(
             [
                 stsv.get_input_value(component_input=elem)
                 for elem in self.consumption_ems_controlled_inputs
@@ -344,19 +376,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        flexible_electricity = self.state.production - self.state.consumption_uncontrolled
-        if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv, )
-
-        # Set other output values
+        flexible_electricity = production - consumption_uncontrolled
         electricity_to_grid = (
-            self.state.production - self.state.consumption_uncontrolled - self.state.consumption_ems_controlled
+            production - consumption_uncontrolled - consumption_ems_controlled
         )
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
-        stsv.set_output_value(self.flexible_electricity_channel, flexible_electricity)
+        if self.strategy == "optimize_own_consumption":
+            self.optimize_own_consumption_iterative(
+                delta_demand=flexible_electricity, stsv=stsv
+            )
+            stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
+            stsv.set_output_value(self.flexible_electricity, flexible_electricity)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
-            self.state.consumption_uncontrolled + self.state.consumption_ems_controlled,
+            consumption_uncontrolled + consumption_ems_controlled,
         )
         if flexible_electricity > 0:
             stsv.set_output_value(

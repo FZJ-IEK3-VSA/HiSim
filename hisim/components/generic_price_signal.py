@@ -32,7 +32,7 @@ class PriceSignalConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
-        """Default configuration for price signal. """
+        """Default configuration for price signal."""
         config = PriceSignalConfig(
             name="PriceSignal",
         )
@@ -67,6 +67,7 @@ class PriceSignal(cp.Component):
         super().__init__(
             name=self.price_signal_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build_dummy(
@@ -110,7 +111,7 @@ class PriceSignal(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """Outputs price signal of time step. """
+        """Outputs price signal of time step."""
         if (
             self.my_simulation_parameters.predictive_control
             and self.my_simulation_parameters.prediction_horizon
@@ -137,7 +138,7 @@ class PriceSignal(cp.Component):
         stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])
 
     def build_dummy(self, start: int, end: int) -> None:
-        """Initialization of information if step function is used for prices. """
+        """Initialization of information if step function is used for prices."""
         self.start = start
         self.end = end
 
@@ -146,5 +147,5 @@ class PriceSignal(cp.Component):
         pass
 
     def write_to_report(self) -> List[str]:
-        """Writes relevant information to report. """
+        """Writes relevant information to report."""
         return self.price_signal_config.get_string_dict()

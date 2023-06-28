@@ -1,10 +1,31 @@
-class WarmWaterStorageConfig:
-    tank_diameter = 1  # 0.9534        # [m]
-    tank_height = 2  # 3.15              # [m]
-    tank_start_temperature: float = 65  # [°C]
-    temperature_difference = 0.3  # [°C]
-    tank_u_value = 0  # 0.35                 # [W/m^2*K]
-    slice_height_minimum = 0.05  # [m]
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+from hisim.component import ConfigBase
+
+
+@dataclass_json
+@dataclass
+class WarmWaterStorageConfig(ConfigBase):
+    name: str
+    tank_diameter: float  # [m]
+    tank_height: float  # [m]
+    tank_start_temperature: float  # [°C]
+    temperature_difference: float  # [°C]
+    tank_u_value: float  # [W/m^2*K]
+    slice_height_minimum: float  # [m]
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return WarmWaterStorageConfig(
+            name="WarmWaterStorage",
+            tank_diameter=1,  # 0.9534        # [m]
+            tank_height=2,  # 3.15              # [m]
+            tank_start_temperature=65,  # [°C]
+            temperature_difference=0.3,  # [°C]
+            tank_u_value=0,  # 0.35                 # [W/m^2*K]
+            slice_height_minimum=0.05,  # [m]
+        )
 
 
 class CHPControllerConfig:
@@ -142,18 +163,38 @@ class PVConfig:
     peak_power = 20_000  # [W]
 
 
-class ExtendedControllerConfig:
+@dataclass_json
+@dataclass
+class ExtendedControllerConfig(ConfigBase):
+
+    name: str
     # Active Components
-    chp = True
-    gas_heater = True
-    electrolyzer = True
-    # electrolyzer = False
+    chp: bool
+    gas_heater: bool
+    electrolyzer: bool
+    # electrolyzer: bool
 
     # power mode chp
-    # chp_mode = "heat"
-    chp_mode = "power"
-    chp_power_states_possible = 10
-    maximum_autarky = False
+    # chp_mode: str
+    chp_mode: str
+    chp_power_states_possible: int
+    maximum_autarky: bool
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default ExtendedControllerConfig."""
+        return ExtendedControllerConfig(
+            name="Example Component",
+            chp=True,
+            gas_heater=True,
+            electrolyzer=True,
+            # electrolyzer = False,
+            # power mode chp,
+            # chp_mode = "heat",
+            chp_mode="power",
+            chp_power_states_possible=10,
+            maximum_autarky=False,
+        )
 
 
 class PhysicsConfig:

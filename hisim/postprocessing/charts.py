@@ -152,7 +152,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             data = data * 1e-3
             units = f"k{units}"
 
-        plt.plot(x_zero, data, color="green", linewidth=6.0)
+        plt.plot(x_zero, data, color="green", linewidth=1.0)
         plt.ylabel(f"[{units}]", fontsize=self.fontsize_label)
         plt.xlabel("Time", fontsize=self.fontsize_label)
         plt.grid()

@@ -150,7 +150,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             single_day_data.index,
             single_day_data,
             color="green",
-            linewidth=5.0,
+            linewidth=1.0,
             label=self.property,
         )
         plt.grid(True)

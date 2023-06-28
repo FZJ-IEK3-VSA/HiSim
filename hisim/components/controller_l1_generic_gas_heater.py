@@ -51,6 +51,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     minimal_thermal_power_in_watt: float  # [W]
     maximal_thermal_power_in_watt: float  # [W]
+    set_temperature_difference_for_full_power: float
 
     @classmethod
     def get_default_generic_gas_heater_controller_config(cls):
@@ -61,6 +62,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             minimal_thermal_power_in_watt=1_000,  # [W] # Todo: get information from GasHeater.gasheater_config.minimal_thermal_power_in_watt
             maximal_thermal_power_in_watt=12_000,  # [W] # Todo: get information fromGasHeater.gasheater_config.maximal_thermal_power_in_watt
+            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
         )
 
 
@@ -309,30 +311,34 @@ class GenericGasHeaterControllerL1(Component):
 
         only used if gasheatermode is "heating".
         """
-        delta_temperature = (
-            set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius
-        )
-        delta_temperature_limit_full_power = (
-            5.0  # Todo hardcoded so far, should be placed in config
-        )
+
         minimal_percentage = (
             self.gas_heater_controller_config.minimal_thermal_power_in_watt
             / self.gas_heater_controller_config.maximal_thermal_power_in_watt
         )
-        if water_temperature_input_in_celsius < (
-            set_heating_flow_temperature_in_celsius - delta_temperature_limit_full_power
+        if (
+            water_temperature_input_in_celsius
+            < set_heating_flow_temperature_in_celsius
+            - self.gas_heater_controller_config.set_temperature_difference_for_full_power
         ):
             percentage = 1.0
             return percentage
         if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
             linear_fit = 1 - (
-                (delta_temperature_limit_full_power - delta_temperature)
-                / delta_temperature_limit_full_power
+                (
+                    self.gas_heater_controller_config.set_temperature_difference_for_full_power
+                    - (
+                        set_heating_flow_temperature_in_celsius
+                        - water_temperature_input_in_celsius
+                    )
+                )
+                / self.gas_heater_controller_config.set_temperature_difference_for_full_power
             )
             percentage = max(minimal_percentage, linear_fit)
             return percentage
-        if water_temperature_input_in_celsius <= (
-            set_heating_flow_temperature_in_celsius + 0.5
+        if (
+            water_temperature_input_in_celsius
+            <= set_heating_flow_temperature_in_celsius + 0.5
         ):  # use same hysteresis like in conditions_on_off()
             percentage = minimal_percentage
             return percentage

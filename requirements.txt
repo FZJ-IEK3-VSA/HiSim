@@ -16,5 +16,3 @@ pydot
 graphviz
 dataclass_wizard
 utspclient
-control
-casadi

@@ -265,6 +265,7 @@ def household_reference_gas_heater_diesel_car(
 
     # Build Diesel-Car
     # get names of all available cars
+    # Todo: check if multiple cars are necesary
     filepaths = listdir(utils.HISIMPATH["utsp_results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
@@ -283,7 +284,6 @@ def household_reference_gas_heater_diesel_car(
                 occupancy_config=my_occupancy_config,
             )
         )
-    my_car = my_cars[0]
 
     # Build Base Electricity Load Profile
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
@@ -373,5 +373,6 @@ def household_reference_gas_heater_diesel_car(
     my_sim.add_component(my_domnestic_hot_water_storage)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
     my_sim.add_component(my_domnestic_hot_water_heatpump)
-    my_sim.add_component(my_car)
     my_sim.add_component(my_base_electricity_load_profile)
+    for my_car in my_cars:
+        my_sim.add_component(my_car)

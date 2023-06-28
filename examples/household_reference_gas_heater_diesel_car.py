@@ -88,7 +88,7 @@ class ReferenceHouseholdConfig:
 def household_reference_gas_heater_diesel_car(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Reference example
+    """Reference example.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a generic gas heater.

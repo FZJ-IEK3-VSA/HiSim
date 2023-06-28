@@ -5,7 +5,6 @@ import pytest
 
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
 from hisim import utils
 
@@ -17,6 +16,5 @@ def test_basic_household():
     path = "../examples/household_reference_gas_heater_diesel_car.py"
     func = "household_reference_gas_heater_diesel_car"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(year=2019, seconds_per_timestep=60)
-    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())

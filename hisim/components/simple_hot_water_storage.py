@@ -676,6 +676,28 @@ class SimpleHotWaterStorage(cp.Component):
 
         return heat_loss_in_watt_hour_per_timestep
 
+@dataclass_json
+@dataclass
+class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
+
+    """Configuration of the SimpleHotWaterStorageController class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return SimpleHotWaterStorageController.get_full_classname()
+
+    name: str
+
+    @classmethod
+    def get_default_simplehotwaterstoragecontroller_config(
+        cls,
+    ) -> Any:
+        """Get a default simplehotwaterstorage controller config."""
+        config = SimpleHotWaterStorageControllerConfig(
+            name="SimpleHotWaterStorageController",
+        )
+        return config
 
 class SimpleHotWaterStorageController(cp.Component):
 
@@ -690,12 +712,15 @@ class SimpleHotWaterStorageController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
+        config: SimpleHotWaterStorageControllerConfig,
     ) -> None:
         """Construct all the neccessary attributes."""
 
         super().__init__(
             "SimpleHotWaterStorageController",
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
+
         )
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR

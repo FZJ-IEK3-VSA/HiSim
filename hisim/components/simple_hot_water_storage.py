@@ -676,6 +676,7 @@ class SimpleHotWaterStorage(cp.Component):
 
         return heat_loss_in_watt_hour_per_timestep
 
+
 @dataclass_json
 @dataclass
 class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
@@ -699,6 +700,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
         )
         return config
 
+
 class SimpleHotWaterStorageController(cp.Component):
 
     """SimpleHotWaterStorageController Class."""
@@ -719,8 +721,7 @@ class SimpleHotWaterStorageController(cp.Component):
         super().__init__(
             "SimpleHotWaterStorageController",
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
-
+            my_config=config,
         )
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR

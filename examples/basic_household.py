@@ -45,7 +45,6 @@ def basic_household_explicit(
     year = 2021
     seconds_per_timestep = 60
 
-
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
@@ -86,7 +85,9 @@ def basic_household_explicit(
     )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_PV_system()
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_PV_system()
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

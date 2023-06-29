@@ -60,8 +60,12 @@ def household_with_hds(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT)
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS
+    )
+    my_simulation_parameters.post_processing_options.append(
+        postprocessingoptions.PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT
+    )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -89,7 +93,9 @@ def household_with_hds(
     )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_PV_system()
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_PV_system()
+    )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -119,14 +125,18 @@ def household_with_hds(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+    my_simple_heat_water_storage_config = (
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+    )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
         my_simulation_parameters=my_simulation_parameters,

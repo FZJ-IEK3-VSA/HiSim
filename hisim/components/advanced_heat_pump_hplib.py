@@ -75,6 +75,7 @@ class HeatPumpHplibConfig(ConfigBase):
         )
 
 
+
 class HeatPumpHplib(Component):
 
     """Simulate the heat pump.
@@ -199,6 +200,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Electricity input power in Watt",
+            output_description="Electricity input power in Watt",
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -221,6 +223,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
             output_description="Temperature Output in °C",
+            output_description="Temperature Output in °C",
         )
 
         self.m_dot: ComponentOutput = self.add_output(
@@ -229,6 +232,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.VOLUME,
             unit=Units.KG_PER_SEC,
             output_description="Mass flow output",
+            output_description="Mass flow output",
         )
 
         self.time_on: ComponentOutput = self.add_output(
@@ -236,6 +240,7 @@ class HeatPumpHplib(Component):
             field_name=self.TimeOn,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
+            output_description="Time turned on",
             output_description="Time turned on",
         )
 

@@ -29,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class CarConfig:
+class CarConfig(cp.ConfigBase):
 
     """Definition of configuration of Car."""
 
@@ -42,8 +42,13 @@ class CarConfig:
     #: consumption per kilometer driven, either in kWh/km or l/km
     consumption_per_km: float
 
-    @staticmethod
-    def get_default_diesel_config() -> Any:
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return Car.get_full_classname()
+
+    @classmethod
+    def get_default_diesel_config(cls) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
             name="Car",
@@ -53,8 +58,8 @@ class CarConfig:
         )
         return config
 
-    @staticmethod
-    def get_default_ev_config() -> Any:
+    @classmethod
+    def get_default_ev_config(cls) -> Any:
         """Defines default configuration for electric vehicle."""
         config = CarConfig(
             name="Car",
@@ -66,7 +71,7 @@ class CarConfig:
 
 
 def most_frequent(input_list: List) -> Any:
-    """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower. """
+    """Returns most frequent value - needed for down sampling Location information from 1 minute resoultion to lower."""
     counter = 0
     num = input_list[0]
 
@@ -97,6 +102,7 @@ class Car(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.build(config=config, occupancy_config=occupancy_config)
 
@@ -242,10 +248,10 @@ class Car(cp.Component):
             # sum / extract most common value from data to match hisim time resolution
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(
-                    sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio])
+                    sum(meters_driven[i * steps_ratio : (i + 1) * steps_ratio])
                 )  # sum
                 location_list = car_location[
-                    i * steps_ratio: (i + 1) * steps_ratio
+                    i * steps_ratio : (i + 1) * steps_ratio
                 ]  # extract list
                 occurence_count = most_frequent(
                     input_list=location_list

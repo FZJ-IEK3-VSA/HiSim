@@ -139,6 +139,7 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.heatingcomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
 
         # =================================================================================================================================
@@ -330,6 +331,7 @@ class Test_BuildingController(cp.Component):
         super().__init__(
             name="BuildingController",
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config
         )
         self.minimal_building_temperature_in_celsius = (
             config.minimal_building_temperature_in_celsius

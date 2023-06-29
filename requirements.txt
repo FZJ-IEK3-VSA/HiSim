@@ -16,3 +16,7 @@ pydot
 graphviz
 dataclass_wizard
 utspclient
+pyam-iamc
+html2image
+control
+casadi

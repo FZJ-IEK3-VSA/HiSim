@@ -5,10 +5,41 @@
 
 # Owned
 from typing import List, Any, Dict, Optional
-from hisim.component import Component, SingleTimeStepValues
-from hisim.components.generic_heat_pump import GenericHeatPumpController, GenericHeatPumpControllerConfig
-from hisim.components.generic_ev_charger import EVChargerController
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+from hisim.component import Component, SingleTimeStepValues, ConfigBase
+from hisim.components.generic_heat_pump import (
+    GenericHeatPumpController,
+    GenericHeatPumpControllerConfig,
+)
+from hisim.components.generic_ev_charger import (
+    EVChargerController,
+    EVChargerControllerConfig,
+)
 from hisim.simulationparameters import SimulationParameters
+
+
+# TODO: add more arguments to config
+@dataclass_json
+@dataclass
+class SmartControllerConfig(ConfigBase):
+
+    """Smart Controller Config."""
+
+    name: str
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return SmartController.get_full_classname()
+
+    @classmethod
+    def get_default_config_ems(cls) -> Any:
+        """Default Config for Energy Management System."""
+        config = SmartControllerConfig(
+            name=" SmartController",
+        )
+        return config
 
 
 class SmartController(Component):
@@ -19,10 +50,13 @@ class SmartController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         controllers: Optional[Dict[str, List[str]]],
+        config: SmartControllerConfig,
     ) -> None:
         """Construct all necessary attributes."""
         super().__init__(
-            name="SmartController", my_simulation_parameters=my_simulation_parameters
+            name="SmartController",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         if controllers is None:
             controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}
@@ -33,22 +67,25 @@ class SmartController(Component):
         """Build wrapped controllers."""
         for controller_name in controllers:
             if "HeatPump" in controller_name:
-                ghpcc = GenericHeatPumpControllerConfig("generic heat pump controller",
-                                                        temperature_air_heating_in_celsius=15,
-                                                        temperature_air_cooling_in_celsius=25,
-                                                        offset=0,
-                                                        mode=1)
+                ghpcc = GenericHeatPumpControllerConfig(
+                    "generic heat pump controller",
+                    temperature_air_heating_in_celsius=15,
+                    temperature_air_cooling_in_celsius=25,
+                    offset=0,
+                    mode=1,
+                )
                 self.wrapped_controllers.append(
-
                     GenericHeatPumpController(
-                        my_simulation_parameters=self.my_simulation_parameters, config=ghpcc
+                        my_simulation_parameters=self.my_simulation_parameters,
+                        config=ghpcc,
                     )
                 )
 
             elif "EVCharger" in controller_name:
                 self.wrapped_controllers.append(
                     EVChargerController(
-                        my_simulation_parameters=self.my_simulation_parameters
+                        my_simulation_parameters=self.my_simulation_parameters,
+                        config=EVChargerControllerConfig.get_default_config(),
                     )
                 )
 

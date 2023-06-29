@@ -40,6 +40,7 @@ class EMSConfig(cp.ConfigBase):
     def get_main_classname(cls):
         """Return the full class name of the base class."""
         return L2GenericEnergyManagementSystem.get_full_classname()
+
     #: name of the device
     name: str
     # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
@@ -66,7 +67,7 @@ class EMSConfig(cp.ConfigBase):
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
-    """ Surplus electricity controller - time step based.
+    """Surplus electricity controller - time step based.
 
     Iteratively goes through hierachy of devices given by
     source weights of components and passes available surplus
@@ -92,7 +93,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: EMSConfig
     ):
-        """ Initializes. """
+        """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         self.ems_config = config
@@ -101,6 +102,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.components_sorted: List[lt.ComponentType] = []
@@ -198,7 +200,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             getattr(self, inputs[i].source_component_class) for i in sortindex
         ]
         self.outputs_sorted = []
-        for ind in range(len(source_weights)): # noqa
+        for ind in range(len(source_weights)):  # noqa
             output = self.get_dynamic_output(
                 tags=[
                     self.components_sorted[ind],
@@ -222,16 +224,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
     def write_to_report(self):
-        """Writes relevant information to report. """
+        """Writes relevant information to report."""
         return self.ems_config.get_string_dict()
 
     def i_save_state(self) -> None:
-        """ Saves the state. """
+        """Saves the state."""
         # abändern, siehe Storage
         pass  # self.previous_state = self.state
 
     def i_restore_state(self) -> None:
-        """ Restores the state. """
+        """Restores the state."""
         pass  # self.state = self.previous_state
 
     def i_prepare_simulation(self) -> None:
@@ -239,7 +241,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
-        """ Doublechecks values. """
+        """Doublechecks values."""
         pass
 
     def control_electricity_component_iterative(
@@ -250,7 +252,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         input_channel: cp.ComponentInput,
         output: cp.ComponentOutput,
     ) -> Any:
-        """ Calculates available surplus electricity.
+        """Calculates available surplus electricity.
 
         Subtracts the electricity consumption signal of the component from the previous iteration,
         and sends updated signal back.
@@ -291,7 +293,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def postprocess_battery(
         self, deltademand: float, stsv: cp.SingleTimeStepValues, ind: int
     ) -> Any:
-        """ Updates battery signal and total demand, if behaviour of battery changed in given iteration. """
+        """Updates battery signal and total demand, if behaviour of battery changed in given iteration."""
         previous_signal = stsv.get_input_value(component_input=self.inputs_sorted[ind])
         stsv.set_output_value(
             output=self.outputs_sorted[ind], value=deltademand + previous_signal
@@ -343,7 +345,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """ Simulates iteration of surplus controller. """
+        """Simulates iteration of surplus controller."""
         if force_convergence:
             return
 

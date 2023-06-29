@@ -93,6 +93,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         module_directory=path_to_be_added,
         setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
+        module_filename="household_for_test_building_heat_demand.py",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

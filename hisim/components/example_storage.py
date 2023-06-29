@@ -114,6 +114,7 @@ class SimpleStorage(Component):
         super().__init__(
             self.simplestorageconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         # Initialized variables
         self.state = ExampleStorageState(0, self.simplestorageconfig.capacity)
@@ -139,21 +140,21 @@ class SimpleStorage(Component):
             SimpleStorage.ActualStorageDelta,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
-            output_description="Actual Storage Delta"
+            output_description="Actual Storage Delta",
         )
         self.current_fill: ComponentOutput = self.add_output(
             self.simplestorageconfig.name,
             SimpleStorage.CurrentFillLevel,
             self.simplestorageconfig.loadtype,
             self.simplestorageconfig.unit,
-            output_description="Current Fill Level"
+            output_description="Current Fill Level",
         )
         self.current_fill_percent: ComponentOutput = self.add_output(
             self.simplestorageconfig.name,
             SimpleStorage.CurrentFillLevelPercent,
             self.simplestorageconfig.loadtype,
             lt.Units.PERCENT,
-            output_description="Current Fill Level in Percent"
+            output_description="Current Fill Level in Percent",
         )
 
     def i_save_state(self) -> None:

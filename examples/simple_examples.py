@@ -9,13 +9,12 @@ from typing import Optional
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.random_numbers import RandomNumbers
+from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.example_transformer import (
     ExampleTransformer,
     ExampleTransformerConfig,
 )
-from hisim.components.sumbuilder import SumBuilderForTwoInputs
-from hisim import loadtypes
+from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 
 
 def first_example(
@@ -31,36 +30,28 @@ def first_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_plots_only(
             year=2021, seconds_per_timestep=60
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
-        name="Random numbers 100-200",
-        timesteps=my_simulation_parameters.timesteps,
-        minimum=100,
-        maximum=200,
+        config=RandomNumbersConfig(name="Random numbers 100-200", timesteps=my_simulation_parameters.timesteps, minimum=100, maximum=200),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn1)
 
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
-        name="Random numbers 10-20",
-        timesteps=my_simulation_parameters.timesteps,
-        minimum=10,
-        maximum=20,
+        config=RandomNumbersConfig(name="Random numbers 10-20", timesteps=my_simulation_parameters.timesteps, minimum=10, maximum=20),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn2)
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(
-        name="Sum",
-        loadtype=loadtypes.LoadTypes.ANY,
-        unit=loadtypes.Units.ANY,
+        config=SumBuilderConfig.get_sumbuilder_default_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs
@@ -95,26 +86,28 @@ def second_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_plots_only(
             year=2021, seconds_per_timestep=60
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
+        config=RandomNumbersConfig(
         name="Random numbers 100-200",
         timesteps=my_simulation_parameters.timesteps,
         minimum=100,
-        maximum=200,
+        maximum=200),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn1)
 
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
+        config=RandomNumbersConfig(
         name="Random numbers 10-20",
         timesteps=my_simulation_parameters.timesteps,
         minimum=10,
-        maximum=20,
+        maximum=20),
         my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_rn2)
@@ -134,9 +127,7 @@ def second_example(
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(
-        name="Sum",
-        loadtype=loadtypes.LoadTypes.ANY,
-        unit=loadtypes.Units.ANY,
+        config=SumBuilderConfig.get_sumbuilder_default_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs

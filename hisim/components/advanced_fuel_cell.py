@@ -88,10 +88,9 @@ class CHPConfig(ConfigBase):
 
 
 class CHPConfigAdvanced:
-
     def __init__(self) -> None:
         # Remark: moved the whole class body into the __init__ function to avoid errors if the file read below
-        # does not exist. 
+        # does not exist.
 
         # system_name = "BlueGEN15"
         # system_name = "Dachs 0.8"
@@ -100,32 +99,36 @@ class CHPConfigAdvanced:
         # system_name = "HOMER"
         system_name = "BlueGen BG15"
 
-        df = pd.read_excel(os.path.join(utils.HISIMPATH["chp_system"], 'mock_up_efficiencies.xlsx'), index_col=0)
+        df = pd.read_excel(
+            os.path.join(utils.HISIMPATH["chp_system"], "mock_up_efficiencies.xlsx"),
+            index_col=0,
+        )
 
         df_specific = df.loc[str(system_name)]
 
-        if str(df_specific['is_modulating']) == 'Yes':
+        if str(df_specific["is_modulating"]) == "Yes":
             self.is_modulating = True
-            self.P_el_min = df_specific['P_el_min']
-            self.P_th_min = df_specific['P_th_min']
-            self.P_total_min = df_specific['P_total_min']
-            self.eff_el_min = df_specific['eff_el_min']
-            self.eff_th_min = df_specific['eff_th_min']
+            self.P_el_min = df_specific["P_el_min"]
+            self.P_th_min = df_specific["P_th_min"]
+            self.P_total_min = df_specific["P_total_min"]
+            self.eff_el_min = df_specific["eff_el_min"]
+            self.eff_th_min = df_specific["eff_th_min"]
 
-        elif str(df_specific['is_modulating']) == 'No':
+        elif str(df_specific["is_modulating"]) == "No":
             self.is_modulating = False
         else:
             log.error("Modulation is not defined. Modulation must be 'Yes' or 'No'")
             raise ValueError
 
-        self.P_el_max = df_specific['P_el_max']
-        self.P_th_max = df_specific['P_th_max']
-        self.P_total_max = df_specific['P_total_max']        # maximum fuel consumption
-        self.eff_el_max = df_specific['eff_el_max']
-        self.eff_th_max = df_specific['eff_th_max']
-        self.mass_flow_max = df_specific['mass_flow (dT=20°C)']
-        self.temperature_max = df_specific['temperature_max']
-        self.delta_T=10
+        self.P_el_max = df_specific["P_el_max"]
+        self.P_th_max = df_specific["P_th_max"]
+        self.P_total_max = df_specific["P_total_max"]  # maximum fuel consumption
+        self.eff_el_max = df_specific["eff_el_max"]
+        self.eff_th_max = df_specific["eff_th_max"]
+        self.mass_flow_max = df_specific["mass_flow (dT=20°C)"]
+        self.temperature_max = df_specific["temperature_max"]
+        self.delta_T = 10
+
 
 class CHPState:
     def __init__(self, start_timestep=None, electricity_output=0.0, cycle_number=None):
@@ -167,7 +170,9 @@ class CHP(Component):
     ) -> None:
         self.chp_config = config
         super().__init__(
-            name=self.chp_config.name, my_simulation_parameters=my_simulation_parameters
+            name=self.chp_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.min_operation_time = self.chp_config.min_operation_time
         self.min_idle_time = self.chp_config.min_idle_time

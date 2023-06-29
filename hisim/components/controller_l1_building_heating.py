@@ -43,7 +43,7 @@ __status__ = "development"
 @dataclass
 class L1BuildingHeatingConfig(cp.ConfigBase):
 
-    """Configuration of Building Controller. """
+    """Configuration of Building Controller."""
 
     #: name of the device
     name: str
@@ -62,10 +62,16 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
-        """ Default config for the heating controller. """
-        config = L1BuildingHeatingConfig(name='L1BuildingTemperatureController' + name, source_weight=1, t_min_heating_in_celsius=19.5,
-                                         t_max_heating_in_celsius=20.5, t_buffer_activation_threshold_in_celsius=40.0, day_of_heating_season_begin=270,
-                                         day_of_heating_season_end=150)
+        """Default config for the heating controller."""
+        config = L1BuildingHeatingConfig(
+            name="L1BuildingTemperatureController" + name,
+            source_weight=1,
+            t_min_heating_in_celsius=19.5,
+            t_max_heating_in_celsius=20.5,
+            t_buffer_activation_threshold_in_celsius=40.0,
+            day_of_heating_season_begin=270,
+            day_of_heating_season_end=150,
+        )
         return config
 
 
@@ -73,18 +79,13 @@ class L1BuildingHeatControllerState:
 
     """Data class that saves the state of the controller."""
 
-    def __init__(
-        self,
-        state: float = 0
-    ):
+    def __init__(self, state: float = 0):
         """Initializes the class."""
         self.state: float = state
 
     def clone(self) -> "L1BuildingHeatControllerState":
         """Clones itself."""
-        return L1BuildingHeatControllerState(
-            state=self.state
-        )
+        return L1BuildingHeatControllerState(state=self.state)
 
 
 class L1BuildingHeatController(cp.Component):
@@ -123,20 +124,41 @@ class L1BuildingHeatController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.config: L1BuildingHeatingConfig = config
 
         """ Initializes the class. """
         self.source_weight: int = config.source_weight
-        self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-        self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_begin = (
+            config.day_of_heating_season_begin
+            * 24
+            * 3600
+            / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.heating_season_end = (
+            config.day_of_heating_season_end
+            * 24
+            * 3600
+            / self.my_simulation_parameters.seconds_per_timestep
+        )
         self.state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
-        self.previous_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
-        self.processed_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
+        self.previous_state: L1BuildingHeatControllerState = (
+            L1BuildingHeatControllerState()
+        )
+        self.processed_state: L1BuildingHeatControllerState = (
+            L1BuildingHeatControllerState()
+        )
 
         # Component Outputs
-        self.heat_controller_target_percentage_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.HeatControllerTargetPercentage, LoadTypes.ON_OFF, Units.BINARY, output_description="Heating controller of buffer storage."
+        self.heat_controller_target_percentage_channel: cp.ComponentOutput = (
+            self.add_output(
+                self.component_name,
+                self.HeatControllerTargetPercentage,
+                LoadTypes.ON_OFF,
+                Units.BINARY,
+                output_description="Heating controller of buffer storage.",
+            )
         )
 
         # Component Inputs
@@ -224,8 +246,14 @@ class L1BuildingHeatController(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control_heating(self, timestep: int, t_control: float, t_buffer: float, temperature_modifier: float) -> None:
-        """ Controls the heating from buffer to building. """
+    def control_heating(
+        self,
+        timestep: int,
+        t_control: float,
+        t_buffer: float,
+        temperature_modifier: float,
+    ) -> None:
+        """Controls the heating from buffer to building."""
         # prevent heating in summer
         if self.heating_season_begin > timestep > self.heating_season_end:
             self.state.state = 0
@@ -245,12 +273,20 @@ class L1BuildingHeatController(cp.Component):
             self.state.state = 0
             return
         # "surplus heat control" when storage is getting hot
-        if temperature_modifier > 0 and t_buffer > self.config.t_buffer_activation_threshold_in_celsius:
+        if (
+            temperature_modifier > 0
+            and t_buffer > self.config.t_buffer_activation_threshold_in_celsius
+        ):
             # heat with 75 % power and building can still be heated
-            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier / 2:
+            if (
+                t_control
+                < self.config.t_max_heating_in_celsius + temperature_modifier / 2
+            ):
                 self.state.state = 0.75
             # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
-            elif t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
+            elif (
+                t_control < self.config.t_max_heating_in_celsius + temperature_modifier
+            ):
                 self.state.state = 0.5
         return
 
@@ -283,10 +319,15 @@ class L1BuildingHeatController(cp.Component):
                 self.building_temperature_modifier_channel
             )
             self.control_heating(
-                timestep=timestep, t_control=t_control, t_buffer=t_buffer, temperature_modifier=temperature_modifier
+                timestep=timestep,
+                t_control=t_control,
+                t_buffer=t_buffer,
+                temperature_modifier=temperature_modifier,
             )
             self.processed_state = self.state.clone()
-        stsv.set_output_value(self.heat_controller_target_percentage_channel, self.processed_state.state)
+        stsv.set_output_value(
+            self.heat_controller_target_percentage_channel, self.processed_state.state
+        )
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

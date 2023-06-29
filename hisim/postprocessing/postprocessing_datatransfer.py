@@ -20,8 +20,11 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         wrapped_components: List[ComponentWrapper],
         mode: Any,
         setup_function: Any,
+        module_filename: Any,
         execution_time: Any,
         results_monthly: Any,
+        results_hourly: Any,
+        results_cumulative: Any
     ) -> None:
         """Initializes the values."""
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
@@ -32,8 +35,11 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.wrapped_components: List[ComponentWrapper] = wrapped_components
         self.mode = mode
         self.setup_function = setup_function
+        self.module_filename = module_filename
         self.execution_time = execution_time
         self.results_monthly = results_monthly
+        self.results_hourly = results_hourly
+        self.results_cumulative = results_cumulative
         self.post_processing_options = simulation_parameters.post_processing_options
 
         log.information(

@@ -85,9 +85,9 @@ class HeatPumpControllerConfigNew(cp.ConfigBase):
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpControllerConfigNew(
             name="HeatPumpController",
-            set_water_storage_temperature_for_heating_in_celsius=32,
-            set_water_storage_temperature_for_cooling_in_celsius=38,
-            offset=0.0,
+            set_water_storage_temperature_for_heating_in_celsius=49,
+            set_water_storage_temperature_for_cooling_in_celsius=55,
+            offset=0.5,
             mode=1,
         )
 
@@ -197,7 +197,9 @@ class GenericHeatPumpNew(cp.Component):
         """Construct all the necessary attributes."""
         self.heatpump_config = config
         super().__init__(
-            self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters
+            self.heatpump_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name
@@ -655,6 +657,7 @@ class HeatPumpControllerNew(cp.Component):
         super().__init__(
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.water_temperature_input_from_heat_water_storage_in_celsius: float = 35
         self.build(

@@ -2,6 +2,7 @@
 # clean
 import os
 import re
+from dataclasses import dataclass
 
 
 class Chart:  # noqa: too-few-public-methods
@@ -90,7 +91,6 @@ class Chart:  # noqa: too-few-public-methods
 
         self.title = self.title.replace("# ", "\n")
         self.title.strip()
-        # log.information("title " + str(self.title))
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
         self.component_output_folder_path = os.path.join(
@@ -101,17 +101,21 @@ class Chart:  # noqa: too-few-public-methods
         self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}_double.png"
             self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format}"
         else:
-            # self.filename = f"{self.type.lower()}_{self.output.split(' # ', 2)[0]}_{self.output.split(' # ', 2)[1]}.png"
             self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
 
-        self.figsize = (6, 4)
-        self.dpi = 600
-        self.fontsize_title = 14
-        self.fontsize_label = 12
-        self.fontsize_legend = 12
-        self.fontsize_ticks = 10
+
+@dataclass
+class ChartFontsAndSize:
+
+    """Give the font sizes and figure sizes of the figures."""
+
+    figsize = (6, 4)
+    dpi = 600
+    fontsize_title = 14
+    fontsize_label = 12
+    fontsize_legend = 12
+    fontsize_ticks = 10

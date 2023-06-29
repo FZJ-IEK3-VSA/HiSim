@@ -310,7 +310,9 @@ class ExtendedController(Component):
         my_simulation_parameters: SimulationParameters,
     ) -> None:
         super().__init__(
-            name=component_name, my_simulation_parameters=my_simulation_parameters
+            name=component_name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         # Input
         self.electricity_demand_household: ComponentInput = self.add_input(

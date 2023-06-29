@@ -121,7 +121,9 @@ class HeatPumpHplib(Component):
 
         """
         super().__init__(
-            name=config.name, my_simulation_parameters=my_simulation_parameters
+            name=config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.model = config.model
@@ -541,6 +543,7 @@ class HeatPumpHplibController(Component):
         super().__init__(
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):

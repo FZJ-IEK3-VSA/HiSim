@@ -82,6 +82,7 @@ class ExampleTransformer(Component):
         super().__init__(
             self.transformerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,
@@ -102,14 +103,14 @@ class ExampleTransformer(Component):
             ExampleTransformer.TransformerOutput,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description="Output 1"
+            output_description="Output 1",
         )
         self.output2: ComponentOutput = self.add_output(
             self.transformerconfig.name,
             ExampleTransformer.TransformerOutput2,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description="Output 2"
+            output_description="Output 2",
         )
 
     def i_save_state(self) -> None:

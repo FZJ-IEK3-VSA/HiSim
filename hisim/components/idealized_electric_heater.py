@@ -8,7 +8,6 @@ import hisim.component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 __authors__ = "Katharina Rieck"

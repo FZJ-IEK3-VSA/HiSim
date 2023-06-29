@@ -40,7 +40,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class StorageConfig:
+class StorageConfig(cp.ConfigBase):
 
     """Used in the HotWaterStorageClass defining the basics."""
 

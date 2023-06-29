@@ -111,6 +111,7 @@ class GenericGasHeaterControllerL1(Component):
         super().__init__(
             self.gas_heater_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build(

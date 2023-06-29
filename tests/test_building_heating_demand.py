@@ -125,12 +125,16 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
-
+    # Build Fake Heater Config
+    my_idealized_electric_heater_config = idealized_electric_heater.IdealizedHeaterConfig(
+        name="IdealizedElectricHeater",
+        set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+    )
     # Build Fake Heater
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
         my_simulation_parameters=my_simulation_parameters,
-        set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+        config=my_idealized_electric_heater_config,
     )
     # =========================================================================================================================================================
     # Connect Components

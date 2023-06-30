@@ -30,7 +30,7 @@ def first_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_plots_only(
             year=2021, seconds_per_timestep=60
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -86,7 +86,7 @@ def second_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_plots_only(
             year=2021, seconds_per_timestep=60
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)

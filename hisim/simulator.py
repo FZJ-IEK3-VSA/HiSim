@@ -179,9 +179,8 @@ class Simulator:
             self._simulation_parameters.result_directory is None
             or len(self._simulation_parameters.result_directory) == 0
         ):
-
-            try:
-                # check if result path is already set somewhere manually
+            # check if result path is already set somewhere manually
+            if ResultPathProviderSingleton().get_result_directory_name() is not None:
                 self._simulation_parameters.result_directory = (
                     ResultPathProviderSingleton().get_result_directory_name()
                 )
@@ -190,7 +189,7 @@ class Simulator:
                     + self._simulation_parameters.result_directory
                     + " which is set manually."
                 )
-            except:
+            else:
                 # if not, build a flat result path itself
                 ResultPathProviderSingleton().set_important_result_path_information(
                     module_directory=self.module_directory,
@@ -202,10 +201,10 @@ class Simulator:
                     ResultPathProviderSingleton().get_result_directory_name()
                 )
                 log.information(
-                    "Using result directory: "
-                    + self._simulation_parameters.result_directory
+                    f"Using result directory:  {self._simulation_parameters.result_directory}"
                     + " which is set by the simulator."
                 )
+
         if not os.path.isdir(self._simulation_parameters.result_directory):
             os.makedirs(self._simulation_parameters.result_directory, exist_ok=True)
 

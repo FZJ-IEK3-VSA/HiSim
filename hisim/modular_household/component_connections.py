@@ -223,7 +223,7 @@ def configure_ev_batteries(
             advanced_ev_battery_bslib.CarBatteryConfig(
             name="CarBattery",
             system_id="SG1",
-            source_weight = 1,
+            source_weight=1,
             e_bat_custom=30,
             p_inv_custom=5000,
             )
@@ -234,7 +234,7 @@ def configure_ev_batteries(
             advanced_ev_battery_bslib.CarBatteryConfig(
                 name="CarBattery",
                 system_id="SG1",
-                source_weight = 1,
+                source_weight=1,
                 e_bat_custom=50,
                 p_inv_custom=11000,
             )

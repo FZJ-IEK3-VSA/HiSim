@@ -6,7 +6,6 @@ from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim import utils
 from hisim.components import controller_l2_generic_heat_simple
 from hisim.components import generic_hydrogen_storage
 from hisim.simulationparameters import SimulationParameters
@@ -34,14 +33,6 @@ class GCHPConfig(cp.ConfigBase):
     p_th: float
     p_fuel: float
 
-    def __init__(
-        self, name: str, source_weight: int, p_el: float, p_th: float, p_fuel: float
-    ):
-        self.name = name
-        self.source_weight = source_weight
-        self.p_el = p_el
-        self.p_th = p_th
-        self.p_fuel = p_fuel
 
     @staticmethod
     def get_default_config() -> Any:
@@ -82,7 +73,7 @@ class GCHP(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
         self.build(config)
 
@@ -102,7 +93,7 @@ class GCHP(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
-            output_description="Thermal Power Delivered"
+            output_description="Thermal Power Delivered",
         )
         self.ElectricityOutputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -113,14 +104,14 @@ class GCHP(cp.Component):
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 lt.ComponentType.FUEL_CELL,
             ],
-            output_description="Electricity Output"
+            output_description="Electricity Output",
         )
         self.FuelDeliveredC: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.FuelDelivered,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
-            output_description="Fuel Delivered"
+            output_description="Fuel Delivered",
         )
         self.add_default_connections(
             self.get_default_connections_from_l1_generic_chp_runtime_controller()
@@ -291,7 +282,7 @@ class L1GenericCHPRuntimeController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.build(config)
@@ -333,7 +324,7 @@ class L1GenericCHPRuntimeController(cp.Component):
             self.L1DeviceSignal,
             lt.LoadTypes.ON_OFF,
             lt.Units.BINARY,
-            output_description="L1 Device Signal C"
+            output_description="L1 Device Signal C",
         )
         self.state0: L1GenericCHPControllerState
         self.state: L1GenericCHPControllerState

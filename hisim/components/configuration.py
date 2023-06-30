@@ -2,16 +2,30 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase
 
+
 @dataclass_json
 @dataclass
 class WarmWaterStorageConfig(ConfigBase):
     name: str
-    tank_diameter: float      # [m]
-    tank_height: float             # [m]
+    tank_diameter: float  # [m]
+    tank_height: float  # [m]
     tank_start_temperature: float  # [°C]
-    temperature_difference: float # [°C]
-    tank_u_value: float               # [W/m^2*K]
+    temperature_difference: float  # [°C]
+    tank_u_value: float  # [W/m^2*K]
     slice_height_minimum: float  # [m]
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return WarmWaterStorageConfig(
+            name="WarmWaterStorage",
+            tank_diameter=1,  # 0.9534        # [m]
+            tank_height=2,  # 3.15              # [m]
+            tank_start_temperature=65,  # [°C]
+            temperature_difference=0.3,  # [°C]
+            tank_u_value=0,  # 0.35                 # [W/m^2*K]
+            slice_height_minimum=0.05,  # [m]
+        )
 
     @classmethod
     def get_default_config(cls):
@@ -164,7 +178,7 @@ class PVConfig:
 @dataclass_json
 @dataclass
 class ExtendedControllerConfig(ConfigBase):
-    
+
     name: str
     # Active Components
     chp: bool
@@ -183,16 +197,15 @@ class ExtendedControllerConfig(ConfigBase):
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
             name="Example Component",
-            chp = True,
-            gas_heater = True,
-            electrolyzer = True,
+            chp=True,
+            gas_heater=True,
+            electrolyzer=True,
             # electrolyzer = False,
-
             # power mode chp,
             # chp_mode = "heat",
-            chp_mode = "power",
-            chp_power_states_possible = 10,
-            maximum_autarky = False,
+            chp_mode="power",
+            chp_power_states_possible=10,
+            maximum_autarky=False,
         )
 
 

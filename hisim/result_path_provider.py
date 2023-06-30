@@ -20,7 +20,12 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self,
     ):
         """Initialize the class."""
-
+        self.base_path: Optional[str] = None
+        self.model_name: Optional[str] = None
+        self.variant_name: Optional[str] = None
+        self.sorting_option: Any = SortingOptionEnum.FLAT
+        self.time_resolution_in_seconds: Optional[int] = None
+        self.simulation_duration_in_days: Optional[int] = None
         self.datetime_string: str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     def set_important_result_path_information(
@@ -38,7 +43,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
     def set_base_path(self, module_directory: str) -> None:
         """Set base path."""
-        self.base_path: str = os.path.join(module_directory, "results")
+        self.base_path = os.path.join(module_directory, "results")
 
     def set_model_name(self, model_name: str) -> None:
         """Set model name."""
@@ -62,30 +67,59 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set simulation duration."""
         self.simulation_duration_in_days = simulation_duration_in_days
 
-    def get_result_directory_name(self) -> str:  # *args
+    def get_result_directory_name(self) -> Any:  # *args
         """Get the result directory path."""
+        if None in (
+            self.base_path,
+            self.model_name,
+            self.variant_name,
+        ):
+            # The variables must be given a str-value, otherwise a result path can not be created.
+            return None
 
-        if self.sorting_option == SortingOptionEnum.DEEP:
-            path = os.path.join(
-                self.base_path, self.model_name, self.variant_name, self.datetime_string
-            )
-        elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION:
-            # schauen ob verzeichnis schon da und aufsteigende nummer anängen
-            idx = 1
-            path = os.path.join(
-                self.base_path, self.model_name, self.variant_name + "_" + str(idx)
-            )
-            while os.path.exists(path):
-                idx = idx + 1
-                path = os.path.join(
-                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)
-                )
-        elif self.sorting_option == SortingOptionEnum.FLAT:
-            path = os.path.join(
+
+        if [
+            isinstance(x, str)
+            for x in [
                 self.base_path,
-                self.model_name + "_" + self.variant_name + "_" + self.datetime_string,
-            )
-        return path
+                self.model_name,
+                self.variant_name,
+                self.datetime_string,
+            ]
+        ]:
+            if self.sorting_option == SortingOptionEnum.DEEP:
+                path = os.path.join(
+                    self.base_path,  # type: ignore
+                    self.model_name,  # type: ignore
+                    self.variant_name,  # type: ignore
+                    self.datetime_string,  # type: ignore
+                )
+            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION:
+                # schauen ob verzeichnis schon da und aufsteigende nummer anängen
+                idx = 1
+                path = os.path.join(
+                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)  # type: ignore
+                )
+                while os.path.exists(path):
+                    idx = idx + 1
+                    path = os.path.join(
+                        self.base_path,  # type: ignore
+                        self.model_name,  # type: ignore
+                        self.variant_name + "_" + str(idx),  # type: ignore
+                    )
+            elif self.sorting_option == SortingOptionEnum.FLAT:
+                path = os.path.join(
+                    self.base_path,  # type: ignore
+                    self.model_name  # type: ignore
+                    + "_"
+                    + self.variant_name  # type: ignore
+                    + "_"
+                    + self.datetime_string,  # type: ignore
+                )
+
+            return path
+
+        raise TypeError("The types of base_path, model_name, variant_name and datetime_string should be str.")
 
 
 class SortingOptionEnum(enum.Enum):

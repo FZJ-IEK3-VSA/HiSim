@@ -11,6 +11,8 @@ from hisim import utils
 from hisim.component import Component
 from hisim.simulationparameters import SimulationParameters
 
+
+
 @dataclass_json
 @dataclass
 class SumBuilderConfig(cp.ConfigBase):
@@ -21,7 +23,6 @@ class SumBuilderConfig(cp.ConfigBase):
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
         return SumBuilderForTwoInputs.get_full_classname()
-    
 
     name: str
     loadtype: lt.LoadTypes
@@ -33,6 +34,7 @@ class SumBuilderConfig(cp.ConfigBase):
         return SumBuilderConfig(
             name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY
         )
+
 
 class CalculateOperation(cp.Component):
 
@@ -324,10 +326,18 @@ class SumBuilderForTwoInputs(Component):
             my_config=config,
         )
         self.input1: cp.ComponentInput = self.add_input(
-            self.component_name, SumBuilderForTwoInputs.SumInput1, config.loadtype, config.unit, True
+            self.component_name,
+            SumBuilderForTwoInputs.SumInput1,
+            config.loadtype,
+            config.unit,
+            True,
         )
         self.input2: cp.ComponentInput = self.add_input(
-            self.component_name, SumBuilderForTwoInputs.SumInput2, config.loadtype, config.unit, False
+            self.component_name,
+            SumBuilderForTwoInputs.SumInput2,
+            config.loadtype,
+            config.unit,
+            False,
         )
         self.output1: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -412,7 +422,10 @@ class SumBuilderForThreeInputs(Component):
             False,
         )
         self.output1: cp.ComponentOutput = self.add_output(
-            self.component_name, SumBuilderForThreeInputs.SumOutput, config.loadtype, config.unit,
+            self.component_name,
+            SumBuilderForThreeInputs.SumOutput,
+            config.loadtype,
+            config.unit,
         )
 
         self.state = 0

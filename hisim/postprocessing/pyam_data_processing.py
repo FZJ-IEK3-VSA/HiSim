@@ -6,15 +6,14 @@ import time
 import datetime
 import os
 from typing import Dict, Any, Tuple
-import numpy as np
 import re
+import numpy as np
 import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import FuncFormatter, ScalarFormatter, EngFormatter
 import plotly
-from pyam_data_collection import PyamDataCollectorEnum
 from html2image import Html2Image
+from hisim.postprocessing.pyam_data_collection import PyamDataCollectorEnum
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 
 
@@ -495,28 +494,30 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        x = "Weather|Temperature|DailyAverageOutsideTemperatures"
-        y = "Building|Temperature|TemperatureIndoorAir"
+        x_data = "Weather|Temperature|DailyAverageOutsideTemperatures"
+        y_data = "Building|Temperature|TemperatureIndoorAir"
         filtered_data.plot.scatter(
             ax=a_x,
-            x=x,
-            y=y,
+            x=x_data,
+            y=y_data,
         )
         title = "Indoor vs. Outdoor Temperature"
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
-        x_tick_labels, scale_x, x_tick_locations = self.set_axis_scale(a_x, x_or_y="x")
+        # x_tick_labels, scale_x, x_tick_locations = self.set_axis_scale(a_x, x_or_y="x")
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=y.split(sep="|")[-1] + f" [{scale}°C]",
+            # ylabel=y_data.split(sep="|")[-1] + f" [{scale}°C]",
+            ylabel=y_data.rsplit('|', maxsplit=1)[-1] + f" [{scale}°C]",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=x.split(sep="|")[-1] + f" [{scale}°C]",
+            # xlabel=x_data.split(sep="|")[-1] + f" [{scale}°C]",
+            xlabel=x_data.rsplit('|', maxsplit=1)[-1] + f" [{scale}°C]",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
@@ -603,16 +604,16 @@ class PyAmChartGenerator:
                 + self.sub_sub_results_folder
                 + "\\sankey_plot.png",
             )
-        except:
-            pass
+        except Exception as exc:
+            raise Exception("Cannot save current sankey. Try again.") from exc
 
-    def set_axis_scale(self, ax: Any, x_or_y: Any) -> Tuple[float, str, Any]:
+    def set_axis_scale(self, a_x: Any, x_or_y: Any) -> Tuple[float, str, Any]:
         """Get axis and unit and scale it properly."""
 
         if x_or_y == "x":
-            tick_values = ax.get_xticks()
+            tick_values = a_x.get_xticks()
         elif x_or_y == "y":
-            tick_values = ax.get_yticks()
+            tick_values = a_x.get_yticks()
         else:
             raise ValueError("x_or_y must be either 'x' or 'y'")
 

@@ -26,6 +26,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
+
 @dataclass_json
 @dataclass
 class OccupancyConfig(cp.ConfigBase):
@@ -40,7 +41,9 @@ class OccupancyConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
-        config = OccupancyConfig(name="Occupancy_1", profile_name="CH01", country_name="DE")
+        config = OccupancyConfig(
+            name="Occupancy_1", profile_name="CH01", country_name="DE"
+        )
         return config
 
     def get_factors_from_country_and_profile(self) -> Tuple[float, float]:
@@ -49,7 +52,7 @@ class OccupancyConfig(cp.ConfigBase):
         This is especially relevant when european average profile (AVG) is used.
         """
         if self.profile_name != "AVG":
-            return(1, 1)
+            return (1, 1)
         scaling_factors = pd.read_csv(
             utils.HISIMPATH["occupancy_scaling_factors_per_country"],
             encoding="utf-8",
@@ -65,18 +68,12 @@ class OccupancyConfig(cp.ConfigBase):
                 + self.country_name
                 + "is not available, EU average is used per default."
             )
-        factor_electricity_consumption = (
-            float(
-                scaling_factor_line[
-                    "Unit consumption per dwelling for cooking (toe/dw)"
-                ]
-            )
-            * 1.163e4
-            + float(
-                scaling_factor_line[
-                    "Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"
-                ]
-            )
+        factor_electricity_consumption = float(
+            scaling_factor_line["Unit consumption per dwelling for cooking (toe/dw)"]
+        ) * 1.163e4 + float(
+            scaling_factor_line[
+                "Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"
+            ]
         )  # 1 toe = 1.163e4 kWh
         factor_hot_water_consumption = (
             float(
@@ -87,10 +84,7 @@ class OccupancyConfig(cp.ConfigBase):
             * 4.1868e7
             / ((40 - 10) * 0.977 * 4.182)
         )  # 1 toe = 4.1868e7 kJ, than Joule to liter with given temperature difference
-        return (
-            factor_electricity_consumption,
-            factor_hot_water_consumption
-        )
+        return (factor_electricity_consumption, factor_hot_water_consumption)
 
 
 class Occupancy(cp.Component):
@@ -143,18 +137,28 @@ class Occupancy(cp.Component):
         self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
     ) -> None:
         super().__init__(
-            name="Occupancy", my_simulation_parameters=my_simulation_parameters, my_config=config
+            name="Occupancy",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.profile_name = config.profile_name
         self.occupancyConfig = config
         self.build()
 
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS):
-            self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS)
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+        ):
+            self.real_number_of_apartments_from_building = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+                )
+            )
         else:
-            raise KeyError("Key for number of apartments was not found in the singleton sim repository." +
-                           "This might be because the building was not initialized before the loadprofilegenerator_connector." +
-                           "Please check the order of the initialization of the components in your example.")
+            raise KeyError(
+                "Key for number of apartments was not found in the singleton sim repository."
+                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
+                + "Please check the order of the initialization of the components in your example."
+            )
 
         self.scaling_factor_according_to_number_of_apartments = (
             self.get_scaling_factor_according_to_number_of_apartments(
@@ -432,9 +436,9 @@ class Occupancy(cp.Component):
             if steps_original == steps_desired:
                 for mode in range(len(gain_per_person)):
                     for timestep in range(steps_original):
-                        self.number_of_residents[timestep] += (
-                            occupancy_profile[mode]["Values"][timestep]
-                        )
+                        self.number_of_residents[timestep] += occupancy_profile[mode][
+                            "Values"
+                        ][timestep]
                         self.heating_by_residents[timestep] = (
                             self.heating_by_residents[timestep]
                             + gain_per_person[mode]
@@ -449,7 +453,7 @@ class Occupancy(cp.Component):
                             sum(
                                 occupancy_profile[mode]["Values"][
                                     timestep
-                                    * steps_ratio: (timestep + 1)
+                                    * steps_ratio : (timestep + 1)
                                     * steps_ratio
                                 ]
                             )
@@ -464,11 +468,11 @@ class Occupancy(cp.Component):
                         )
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n: n + steps_ratio]) / steps_ratio
+                    sum(self.electricity_consumption[n : n + steps_ratio]) / steps_ratio
                     for n in range(0, steps_original, steps_ratio)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n: n + steps_ratio])
+                    sum(self.water_consumption[n : n + steps_ratio])
                     for n in range(0, steps_original, steps_ratio)
                 ]
 
@@ -511,10 +515,10 @@ class Occupancy(cp.Component):
         """Get scaling factor according to the real number of apartments which is given by the building component."""
 
         if real_number_of_apartments is not None and real_number_of_apartments > 0:
-            scaling_factor = (
-                real_number_of_apartments
+            scaling_factor = real_number_of_apartments
+            log.information(
+                f"Occupancy outputs will be scaled with the factor {scaling_factor} according to the number of apartments"
             )
-            log.information(f"Occupancy outputs will be scaled with the factor {scaling_factor} according to the number of apartments")
 
         else:
             scaling_factor = 1.0

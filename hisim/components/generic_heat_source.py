@@ -50,7 +50,7 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_heating(cls) -> "HeatSourceConfig":
-        """ Returns default configuration of a Heat Source used for heating"""
+        """Returns default configuration of a Heat Source used for heating"""
         config = HeatSourceConfig(
             name="HeatingHeatSource",
             source_weight=1,
@@ -63,7 +63,7 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_waterheating(cls) -> "HeatSourceConfig":
-        """ Returns default configuration of a Heat Source used for water heating (DHW)"""
+        """Returns default configuration of a Heat Source used for water heating (DHW)"""
         config = HeatSourceConfig(
             name="DHWHeatSource",
             source_weight=1,
@@ -79,12 +79,13 @@ class HeatSourceState:
     """
     This data class saves the state of the heat source.
     """
+
     def __init__(self, state: int = 0):
-        """Initializes state. """
+        """Initializes state."""
         self.state = state
 
     def clone(self) -> "HeatSourceState":
-        """Creates copy of a state. """
+        """Creates copy of a state."""
         return HeatSourceState(state=self.state)
 
 
@@ -110,7 +111,7 @@ class HeatSource(cp.Component):
         super().__init__(
             config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         # introduce parameters of district heating
@@ -134,7 +135,7 @@ class HeatSource(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
-            output_description="Thermal Power Delivered"
+            output_description="Thermal Power Delivered",
         )
         self.fuel_delivered_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -146,7 +147,7 @@ class HeatSource(cp.Component):
                 config.fuel,
                 config.water_vs_heating,
             ],
-            output_description="Fuel Delivered"
+            output_description="Fuel Delivered",
         )
 
         if config.fuel == lt.LoadTypes.OIL:
@@ -161,7 +162,7 @@ class HeatSource(cp.Component):
     def get_default_connections_controller_l1_heatpump(
         self,
     ) -> List[cp.ComponentConnection]:
-        """Sets default connections of heat source controller. """
+        """Sets default connections of heat source controller."""
         log.information("setting l1 default connections in Generic Heat Source")
         connections = []
         controller_classname = (
@@ -182,7 +183,9 @@ class HeatSource(cp.Component):
         """
 
         lines = []
-        lines.append("Name: {}".format(self.config.name + str(self.config.source_weight)))
+        lines.append(
+            "Name: {}".format(self.config.name + str(self.config.source_weight))
+        )
         lines.append("Fuel: {}".format(self.config.fuel))
         lines.append("Power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
         lines.append("Efficiency : {:4.0f} %".format((self.config.efficiency) * 100))

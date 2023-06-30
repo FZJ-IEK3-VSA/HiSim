@@ -786,8 +786,12 @@ class PostProcessor:
                     ] = dict_config[key]
                 dict_config = rename_dict_config
                 del rename_dict_config
-            except BaseException as e:
-                raise ValueError("component.my_component.config.to_dict() does probably not work. That might be because the config of the component does not inherit from Configbase. Please change your config class according to the other component config classes with the configbase inheritance.") from e
+            except BaseException as exc:
+                raise ValueError(
+                    "component.my_component.config.to_dict() does probably not work. "
+                    "That might be because the config of the component does not inherit from Configbase. "
+                    "Please change your config class according to the other component config classes with the configbase inheritance."
+                ) from exc
 
             try:
                 # try json dumping and if it works append data information dict
@@ -824,8 +828,8 @@ class PostProcessor:
         simple_df_hourly_data.to_csv(
             path_or_buf=file_name_hourly,
             index=None,
-        )
-        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)
+        )  # type: ignore
+        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
 
         # Serializing json
         json_object = json.dumps(data_information_dict, indent=4)

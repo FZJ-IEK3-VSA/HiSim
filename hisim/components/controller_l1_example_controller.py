@@ -3,13 +3,14 @@ import copy
 from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 # Owned
 from hisim.component import (
     Component,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
-    ConfigBase
+    ConfigBase,
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -41,14 +42,39 @@ class SimpleControllerConfig(ConfigBase):
         return config
 
 
+
+@dataclass_json
+@dataclass
+class SimpleControllerConfig(ConfigBase):
+    """Config class."""
+
+    name: str
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return SimpleController.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls) -> Any:
+        """Returns default config."""
+        config = SimpleControllerConfig(name="SimpleController")
+        return config
+
+
 class SimpleController(Component):
     StorageFillLevel = "Fill Level Percent"
     GasHeaterPowerPercent = "Gas Heater Power Level"
 
     def __init__(
-        self, name: str, my_simulation_parameters: SimulationParameters, config: SimpleControllerConfig
+        self,
+        name: str,
+        my_simulation_parameters: SimulationParameters,
+        config: SimpleControllerConfig,
     ) -> None:
-        super().__init__(name, my_simulation_parameters=my_simulation_parameters, my_config=config)
+        super().__init__(
+            name, my_simulation_parameters=my_simulation_parameters, my_config=config
+        )
         self.input1: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.StorageFillLevel,

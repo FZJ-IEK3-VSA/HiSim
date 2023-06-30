@@ -9,6 +9,7 @@ from typing import List
 from os import path
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 # Owned
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -41,6 +42,22 @@ class SmartDeviceConfig(cp.ConfigBase):
     source_weight: int
     smart_devices_included: bool
 
+@dataclass_json
+@dataclass
+class SmartDeviceConfig(cp.ConfigBase):
+
+    """Configuration of the smart device."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return SmartDevice.get_full_classname()
+
+    name: str
+    identifier: str
+    source_weight: int
+    smart_devices_included: bool
+
     @classmethod
     def get_default_config(cls):
         """Gets a default config."""
@@ -50,6 +67,8 @@ class SmartDeviceConfig(cp.ConfigBase):
             source_weight=1,
             smart_devices_included=True,
         )
+
+
 class SmartDeviceState:
     """State representing smart appliance."""
 
@@ -128,14 +147,12 @@ class SmartDevice(cp.Component):
     ElectricityTarget = "ElectricityTarget"
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config:SmartDeviceConfig
+        self, my_simulation_parameters: SimulationParameters, config: SmartDeviceConfig
     ):
         super().__init__(
             name=config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.build(
@@ -162,7 +179,7 @@ class SmartDevice(cp.Component):
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=postprocessing_flag,
-            output_description="Electricity output"
+            output_description="Electricity output",
         )
 
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(
@@ -334,7 +351,7 @@ class SmartDevice(cp.Component):
         self.previous_state = SmartDeviceState()
 
     def write_to_report(self) -> List[str]:
-        """Writes relevant information to report. """
+        """Writes relevant information to report."""
         lines: List[str] = []
         lines.append("DeviceName: {}".format(self.component_name))
         return lines

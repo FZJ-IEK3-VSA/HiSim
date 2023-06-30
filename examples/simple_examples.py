@@ -15,7 +15,6 @@ from hisim.components.example_transformer import (
     ExampleTransformerConfig,
 )
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
-from hisim import loadtypes
 
 
 def first_example(

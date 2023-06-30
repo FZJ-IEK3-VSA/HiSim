@@ -44,11 +44,11 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     def get_default_config(cls) -> Any:
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
-            source_weight= 1,
+            source_weight=1,
             min_capacity=0,
-            max_capacity= 200,
-            max_charging_rate_hour= 2,
-            max_discharging_rate_hour= 2,
+            max_capacity=200,
+            max_charging_rate_hour=2,
+            max_discharging_rate_hour=2,
             energy_for_charge=0,
             energy_for_discharge=0,
             loss_factor_per_day=0,
@@ -84,7 +84,7 @@ class GenericHydrogenStorage(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         self.build(config)
@@ -110,7 +110,7 @@ class GenericHydrogenStorage(cp.Component):
             load_type=lt.LoadTypes.HYDROGEN,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
-            output_description="Hydrogen SOC"
+            output_description="Hydrogen SOC",
         )
 
         self.add_default_connections(

@@ -55,8 +55,6 @@ class IdealizedElectricHeater(cp.Component):
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
     HeatingPowerDelivered = "HeatingPowerDelivered"
-    SetHeatingTemperatureForBuilding = "SetHeatingTemperatureForBuilding"
-    SetCoolingTemperatureForBuilding = "SetCoolingTemperatureForBuilding"
 
     # Similar components to connect to:
     # 1. Building
@@ -108,21 +106,6 @@ class IdealizedElectricHeater(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatingPowerDelivered} will follow.",
-        )
-
-        self.set_heating_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.SetHeatingTemperatureForBuilding,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.SetHeatingTemperatureForBuilding} will follow.",
-        )
-        self.set_cooling_temperature_for_building_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.SetCoolingTemperatureForBuilding,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            output_description=f"here a description for {self.SetCoolingTemperatureForBuilding} will follow.",
         )
 
     def build(
@@ -183,13 +166,3 @@ class IdealizedElectricHeater(cp.Component):
         )
 
         stsv.set_output_value(self.heating_power_delivered_channel, heating_in_watt)
-
-        stsv.set_output_value(
-            self.set_heating_temperature_for_building_channel,
-            self.set_heating_temperature_for_building_in_celsius,
-        )
-
-        stsv.set_output_value(
-            self.set_cooling_temperature_for_building_channel,
-            self.set_cooling_temperature_for_building_in_celsius,
-        )

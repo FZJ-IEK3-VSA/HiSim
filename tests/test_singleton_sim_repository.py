@@ -19,6 +19,7 @@ from hisim import utils
 PATH = "../examples/household_for_test_sim_repository.py"
 FUNC = "test_house"
 
+
 @utils.measure_execution_time
 @pytest.mark.base
 def test_house(
@@ -60,7 +61,6 @@ def test_house(
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.Aachen
@@ -80,7 +80,6 @@ def test_house(
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
-
 
     # =========================================================================================================================================================
     # Connect Components
@@ -132,19 +131,16 @@ def test_house(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
-    
+
     my_sim.run_all_timesteps()
 
-    log.information(
-        "singelton sim repo" + str(SingletonSimRepository().my_dict)
-    )
+    log.information("singelton sim repo" + str(SingletonSimRepository().my_dict))
 
     # https://medium.com/analytics-vidhya/how-to-create-a-thread-safe-singleton-class-in-python-822e1170a7f6
     first_singelton_sim_repository = SingletonSimRepository()
     second_singleton_sim_repository = SingletonSimRepository()
 
     assert first_singelton_sim_repository is second_singleton_sim_repository
-
 
     # Sanity check - a non-singleton class should create two separate instances
 

@@ -51,7 +51,7 @@ def basic_household_only_heating(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -135,11 +135,11 @@ def basic_household_only_heating(
         my_building.component_name,
         my_building.TemperatureMeanThermalMass,
     )
-    my_storage_controller.connect_input(
-        my_storage_controller.ReferenceMaxHeatBuildingDemand,
-        my_building.component_name,
-        my_building.ReferenceMaxHeatBuildingDemand,
-    )
+    # my_storage_controller.connect_input(
+    #     my_storage_controller.ReferenceMaxHeatBuildingDemand,
+    #     my_building.component_name,
+    #     my_building.ReferenceMaxHeatBuildingDemand,
+    # )
     # my_storage_controller.connect_input(my_storage_controller.RealHeatBuildingDemand, my_building_controller.component_name,
     #                                     my_building_controller.RealHeatBuildingDemand)
 

@@ -42,7 +42,7 @@ def compute_consumption_production(
     Also evaluates battery charge and discharge, because it is relevant for self consumption rates.
     To be recognised as production the connected outputs need a postprocessing flag: InandOutputType.ELECTRICITY_PRODUCTION,
     consumption is flagged with either InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED or InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-    storage charge/discharge is flagged with InandOutputType.CHARGE_DISCHARGE. For batteries to be considered as wished, they additionally need the 
+    storage charge/discharge is flagged with InandOutputType.CHARGE_DISCHARGE. For batteries to be considered as wished, they additionally need the
     Component itself as postprocesessing flag: ComponentType.CAR_BATTERY or ComponentType.BATTERY
     """
 

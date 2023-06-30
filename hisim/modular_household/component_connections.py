@@ -173,15 +173,15 @@ def configure_cars(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    # decide if they are diesel driven or electricity driven
-    if ev_included:
-        my_car_config = generic_car.CarConfig.get_default_ev_config()
-    else:
-        my_car_config = generic_car.CarConfig.get_default_diesel_config()
-
     # create all cars
     my_cars: List[generic_car.Car] = []
     for car in names:
+        # decide if they are diesel driven or electricity driven and initialize config
+        if ev_included:
+            my_car_config = generic_car.CarConfig.get_default_ev_config()
+        else:
+            my_car_config = generic_car.CarConfig.get_default_diesel_config()
+        # reset name and source weight
         my_car_config.name = car
         my_car_config.source_weight = count
         my_cars.append(
@@ -230,23 +230,14 @@ def configure_ev_batteries(
 
     if mobility_set.Name is None:
         raise Exception("For EV configuration mobility set is obligatory.")
-    mobility_speed = (
-        mobility_set.Name.partition("and ")[2].partition(" ")[2].partition(" km/h")[0]
+
+    car_battery_config = (
+        advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
+            e_bat_custom=30, p_inv_custom=5000, name="CarBattery"
+        )
     )
-    if mobility_speed == "30":
-        car_battery_config = (
-            advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
-                e_bat_custom=30, p_inv_custom=5000, name="CarBattery"
-            )
-        )
-        ev_capacities.append(30)
-    elif mobility_speed == "60":
-        car_battery_config = (
-            advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
-                e_bat_custom=50, p_inv_custom=11000, name="CarBattery"
-            )
-        )
-        ev_capacities.append(50)
+    ev_capacities.append(30)
+
     if charging_station_set is None:
         raise Exception("For EV configuration charging station set is obligatory.")
 

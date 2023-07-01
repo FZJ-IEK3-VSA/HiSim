@@ -222,10 +222,10 @@ class CarBattery(Component):
                     output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge = round(
-                        postprocessing_results.iloc[:, index].clip(lower=0).sum(axis=1)
+                        postprocessing_results.iloc[:, index].clip(lower=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
                     self.battery_config.discharge = round(
-                        postprocessing_results.iloc[:, index].clip(upper=0).sum(axis=1)
+                        postprocessing_results.iloc[:, index].clip(upper=0).sum()
                             * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
         return 0, 0
 

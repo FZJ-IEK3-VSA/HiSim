@@ -231,33 +231,31 @@ def configure_ev_batteries(
     if mobility_set.Name is None:
         raise Exception("For EV configuration mobility set is obligatory.")
 
-    car_battery_config = (
-        advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
-            e_bat_custom=30, p_inv_custom=5000, name="CarBattery"
-        )
-    )
-    ev_capacities.append(30)
-
     if charging_station_set is None:
         raise Exception("For EV configuration charging station set is obligatory.")
 
-    car_battery_controller_config = (
-        controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-            charging_station_set=charging_station_set
-        )
-    )
-
-    if clever:
-        car_battery_controller_config.battery_set = (
-            0.4  # lower threshold for soc of car battery in clever case
-        )
-
     for car in my_cars:
+        car_battery_config = (
+            advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
+                e_bat_custom=30, p_inv_custom=1e4, name="CarBattery"
+            )
+        )
         car_battery_config.source_weight = car.config.source_weight
-        car_battery_controller_config.source_weight = car.config.source_weight
         my_carbattery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=car_battery_config
         )
+        ev_capacities.append(car_battery_config.e_bat_custom)
+
+        car_battery_controller_config = (
+            controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
+                charging_station_set=charging_station_set
+            )
+        )
+        car_battery_controller_config.source_weight = car.config.source_weight
+        if clever:
+            car_battery_controller_config.battery_set = (
+                0.4  # lower threshold for soc of car battery in clever case
+            )
         my_controller_carbattery = controller_l1_generic_ev_charge.L1Controller(
             my_simulation_parameters=my_simulation_parameters,
             config=car_battery_controller_config,

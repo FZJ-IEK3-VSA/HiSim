@@ -308,24 +308,28 @@ def generate_csv_for_database(
                     power_timeseries=results.iloc[:, index],
                     seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                 )
-                remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(compute_seasonal(
+                remaining_electricity_seasonal_item = compute_seasonal(
                     csv_frame_seasonal=csv_frame_seasonal, index_in_seasonal_frame=("RemainingLoad", "Electricity [kWh]"),
-                    factor=simulation_parameters.seconds_per_timestep/3.6e6, output=results.iloc[:,index],
-                    day=day, night=night).loc[("RemainingLoad", "Electricity [kWh]")].to_list()
+                    factor=simulation_parameters.seconds_per_timestep/3.6e6, output=results.iloc[:, index],
+                    day=day, night=night).loc[("RemainingLoad", "Electricity [kWh]")]
+                remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(
+                    remaining_electricity_seasonal_item
                 )
             elif (
                 InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
                 in output.postprocessing_flag
             ):
-                if ComponentType.SMART_DEVICE in output.postprocessing_flag:
-                    remaining_electricity_annual = remaining_electricity_annual + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
-                remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(compute_seasonal(
+                remaining_electricity_annual = remaining_electricity_annual + compute_energy_from_power(
+                    power_timeseries=results.iloc[:, index],
+                    seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+                )
+                remaining_electricity_seasonal_item = compute_seasonal(
                     csv_frame_seasonal=csv_frame_seasonal, index_in_seasonal_frame=("RemainingLoad", "Electricity [kWh]"),
-                    factor=simulation_parameters.seconds_per_timestep/3.6e6, output=results.iloc[:,index],
-                    day=day, night=night).loc[("RemainingLoad", "Electricity [kWh]")].to_list())
+                    factor=simulation_parameters.seconds_per_timestep/3.6e6, output=results.iloc[:, index],
+                    day=day, night=night).loc[("RemainingLoad", "Electricity [kWh]")]
+                remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(
+                    remaining_electricity_seasonal_item
+                )
         else:
             continue
 

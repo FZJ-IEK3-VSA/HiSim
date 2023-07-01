@@ -338,8 +338,8 @@ def generate_csv_for_database(
     else:
         factor_cooking = get_factor_cooking(occupancy_config)
 
-    csv_frame_annual.loc[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity_annual * (1 - factor_cooking)
-    csv_frame_annual.loc[("Cooking", "Electricity [kWh]")] = remaining_electricity_annual * factor_cooking
+    csv_frame_annual[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity_annual * (1 - factor_cooking)
+    csv_frame_annual[("Cooking", "Electricity [kWh]")] = remaining_electricity_annual * factor_cooking
     csv_frame_seasonal.loc[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity_seasonal * (1 - factor_cooking)
     csv_frame_seasonal.loc[("Cooking", "Electricity [kWh]")] = remaining_electricity_seasonal * factor_cooking
 

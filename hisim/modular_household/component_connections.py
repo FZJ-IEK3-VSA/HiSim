@@ -34,7 +34,7 @@ from hisim.simulator import SimulationParameters
 
 def get_heating_system_efficiency(
         heating_system_installed: lt.HeatingSystems, water_vs_heating: lt.InandOutputType
-    ) -> float:
+) -> float:
     """Reads in type of heating system and returns related efficiency values.
 
     :param heating_system_installed: type of installed heating system
@@ -48,7 +48,7 @@ def get_heating_system_efficiency(
     efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8")
     efficiency_data.index = pd.Index(efficiency_data["Heater"])
     efficiency = efficiency_data.loc[heating_system_installed.value, water_vs_heating.value]
-    return float(efficiency)
+    return efficiency
 
 
 def configure_pv_system(

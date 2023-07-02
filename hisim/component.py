@@ -285,7 +285,8 @@ class Component:
             raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:  # noqa: W0613
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
         """Calculates operational cost and operational co2 footprint during simulation time frame.
 
         :return: [operational cost in euro, operational co2 footprint in kg]

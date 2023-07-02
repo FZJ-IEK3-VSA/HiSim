@@ -592,5 +592,5 @@ class UtspLpgConnector(cp.Component):
                 co2_per_unit = 0.4
                 euro_per_unit = 0.25
                 self.utsp_config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
-      
+ 
         return self.utsp_config.consumption * euro_per_unit, self.utsp_config.consumption * co2_per_unit

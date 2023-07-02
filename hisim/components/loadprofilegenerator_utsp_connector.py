@@ -523,7 +523,7 @@ class UtspLpgConnector(cp.Component):
                             sum(
                                 occupancy_profile[mode]["Values"][
                                     timestep
-                                    * steps_ratio : (timestep + 1)
+                                    * steps_ratio: (timestep + 1)
                                     * steps_ratio
                                 ]
                             )
@@ -538,11 +538,11 @@ class UtspLpgConnector(cp.Component):
                         )
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + steps_ratio]) / steps_ratio
+                    sum(self.electricity_consumption[n: n + steps_ratio]) / steps_ratio
                     for n in range(0, steps_original, steps_ratio)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n : n + steps_ratio])
+                    sum(self.water_consumption[n: n + steps_ratio])
                     for n in range(0, steps_original, steps_ratio)
                 ]
 
@@ -584,13 +584,13 @@ class UtspLpgConnector(cp.Component):
     def write_to_report(self):
         """Adds a report entry for this component."""
         return self.utsp_config.get_string_dict()
- 
-    def get_cost_opex(self, all_outputs: list, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
             print(output.component_name, output.load_type)
             if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
                 co2_per_unit = 0.4
                 euro_per_unit = 0.25
                 self.utsp_config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
-        
+      
         return self.utsp_config.consumption * euro_per_unit, self.utsp_config.consumption * co2_per_unit

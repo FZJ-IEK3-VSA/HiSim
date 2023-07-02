@@ -318,7 +318,7 @@ class SmartDevice(cp.Component):
         lines.append(f"Consumption: {self.consumption:.2f}")
         return lines
 
-    def get_cost_opex(self, all_outputs: list, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
                 co2_per_unit = 0.4

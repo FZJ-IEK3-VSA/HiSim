@@ -216,7 +216,7 @@ class CarBattery(Component):
         """Writes Car Battery values to report."""
         return self.battery_config.get_string_dict()
 
-    def get_cost_opex(self, all_outputs: list, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None and \
                     output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight):

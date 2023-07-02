@@ -188,7 +188,7 @@ class Car(cp.Component):
             )  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    def get_cost_opex(self, all_outputs: list, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
                 if output.unit == lt.Units.LITER:

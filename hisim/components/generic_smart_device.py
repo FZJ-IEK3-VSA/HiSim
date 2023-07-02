@@ -122,6 +122,7 @@ class SmartDevice(cp.Component):
         )
         self.previous_state: SmartDeviceState
         self.state: SmartDeviceState
+        self.consumption = 0
         if my_simulation_parameters.surplus_control and smart_devices_included:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
@@ -239,7 +240,6 @@ class SmartDevice(cp.Component):
 
         # initializing relevant data
         earliest_start, latest_start, electricity_profile = [], [], []
-        self.consumption = 0
 
         minutes_per_timestep = seconds_per_timestep / 60
 

@@ -97,7 +97,8 @@ class L1Controller(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
         )
         self.state = L1ControllerState(power=0)
-        self.processed_state = L1ControllerState(power=0)
+        self.previous_state = self.state.clone()
+        self.processed_state = self.state.clone()
         self.build(config=config, my_simulation_parameters=my_simulation_parameters)
 
         # add inputs

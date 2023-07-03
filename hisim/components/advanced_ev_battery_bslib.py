@@ -45,15 +45,16 @@ class CarBatteryConfig(ConfigBase):
     #: amount of energy discharged from the battery
     discharge: float
 
-    @staticmethod
-    def get_default_config(
-        name: str = "CarBattery",
-        p_inv_custom: float = 5,
-        e_bat_custom: float = 10,
-        source_weight: int = 1,
-    ) -> Any:
-        """Returns default configuration of a Car Battery. """
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return CarBattery.get_full_classname()
+
+    @classmethod
+    def get_default_config(cls) -> Any:
+        """Returns default configuration of a Car Battery."""
         config = CarBatteryConfig(
+            name="CarBattery",
             system_id="SG1",
             p_inv_custom=p_inv_custom,
             e_bat_custom=e_bat_custom,
@@ -93,6 +94,7 @@ class CarBattery(Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.source_weight = self.battery_config.source_weight
@@ -236,5 +238,5 @@ class EVBatteryState:
     soc: float = 0
 
     def clone(self):
-        "Creates a copy of the Car Battery State. "
+        "Creates a copy of the Car Battery State."
         return EVBatteryState(soc=self.soc)

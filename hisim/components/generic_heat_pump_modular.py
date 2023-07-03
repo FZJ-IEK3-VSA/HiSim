@@ -29,8 +29,9 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HeatPumpConfig:
-    """ Configuration of a HeatPump. """
+class HeatPumpConfig(cp.ConfigBase):
+    """Configuration of a HeatPump."""
+
     #: name of the device
     name: str
     #: priority of the device in energy management system: the higher the number the lower the priority
@@ -81,12 +82,13 @@ class ModularHeatPumpState:
     """
     This data class saves the state of the heat pump.
     """
+
     def __init__(self, state: int = 0):
-        """Initializes state. """
+        """Initializes state."""
         self.state = state
 
     def clone(self) -> "ModularHeatPumpState":
-        """Creates copy of state. """
+        """Creates copy of state."""
         return ModularHeatPumpState(state=self.state)
 
 
@@ -118,6 +120,7 @@ class ModularHeatPump(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.config = config
         self.build()
@@ -167,7 +170,7 @@ class ModularHeatPump(cp.Component):
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=postprocessing_flag,
-            output_description="Electricity Output"
+            output_description="Electricity Output",
         )
 
         self.power_modifier_channel: cp.ComponentOutput = self.add_output(
@@ -176,7 +179,7 @@ class ModularHeatPump(cp.Component):
             load_type=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
             postprocessing_flag=[],
-            output_description="Power Modifier"
+            output_description="Power Modifier",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -185,7 +188,7 @@ class ModularHeatPump(cp.Component):
         )
 
     def get_default_connections_from_weather(self):
-        """ Sets default connections of Weather. """
+        """Sets default connections of Weather."""
         log.information("setting weather default connections in HeatPump")
         connections = []
         weather_classname = Weather.get_classname()
@@ -199,7 +202,7 @@ class ModularHeatPump(cp.Component):
         return connections
 
     def get_default_connections_from_controller_l1_heatpump(self):
-        """ Sets default connections of heat pump controller. """
+        """Sets default connections of heat pump controller."""
         log.information("setting l1 default connections in HeatPump")
         connections = []
         controller_classname = (
@@ -219,7 +222,7 @@ class ModularHeatPump(cp.Component):
         pass
 
     def build(self):
-        """ Initialization function of Modular Heat Pump."""
+        """Initialization function of Modular Heat Pump."""
         # Retrieves heat pump from database - BEGIN
         heat_pumps_database = utils.load_smart_appliance("Heat Pump")
 
@@ -248,7 +251,7 @@ class ModularHeatPump(cp.Component):
         self.write_to_report()
 
     def cal_cop(self, t_out: float) -> float:
-        """ Returns coefficient of performance of selected heat pump. """
+        """Returns coefficient of performance of selected heat pump."""
         val: float = self.cop_coef[0] * t_out + self.cop_coef[1]
         return val
 
@@ -262,9 +265,11 @@ class ModularHeatPump(cp.Component):
         pass
 
     def write_to_report(self) -> List[str]:
-        """ Writes relevant data to report. """
+        """Writes relevant data to report."""
         lines: List[str] = []
-        lines.append("Name: {}".format(self.config.name + str(self.config.source_weight)))
+        lines.append(
+            "Name: {}".format(self.config.name + str(self.config.source_weight))
+        )
         lines.append("Manufacturer: {}".format(self.config.name))
         lines.append("Max power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
         return lines
@@ -272,10 +277,12 @@ class ModularHeatPump(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """ Iteration of heat pump simulation. """
+        """Iteration of heat pump simulation."""
 
         # Inputs
-        target_percentage = stsv.get_input_value(self.heat_controller_power_modifier_channel)
+        target_percentage = stsv.get_input_value(
+            self.heat_controller_power_modifier_channel
+        )
 
         T_outside: float = stsv.get_input_value(self.temperature_outside_channel)
         cop = self.cal_cop(T_outside)
@@ -294,4 +301,6 @@ class ModularHeatPump(cp.Component):
         )
         stsv.set_output_value(self.power_modifier_channel, power_modifier)
 
-        stsv.set_output_value(self.electricity_output_channel, electric_power * power_modifier)
+        stsv.set_output_value(
+            self.electricity_output_channel, electric_power * power_modifier
+        )

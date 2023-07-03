@@ -24,7 +24,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericHydrogenStorageConfig:
+class GenericHydrogenStorageConfig(cp.ConfigBase):
     name: str
     source_weight: int
     min_capacity: float  # [kg_H2]
@@ -35,43 +35,20 @@ class GenericHydrogenStorageConfig:
     energy_for_discharge: float  # [kWh/kg]
     loss_factor_per_day: float  # [lost_%/day]
 
-    # todo: discuss with Johanna
-    def init(
-        self,
-        name: str,
-        source_weight: int,
-        min_capacity: float,
-        max_capacity: float,
-        max_charging_rate_hour: float,
-        max_discharging_rate_hour: float,
-        energy_for_charge: float,
-        energy_for_discharge: float,
-        loss_factor_per_day: float,
-    ) -> None:
-        self.name = name
-        self.source_weight = source_weight
-        self.min_capacity = min_capacity
-        self.max_capacity = max_capacity
-        self.max_charging_rate_hour = max_charging_rate_hour
-        self.max_discharging_rate_hour = max_discharging_rate_hour
-        self.energy_for_charge = energy_for_charge
-        self.energy_for_discharge = energy_for_discharge
-        self.loss_factor_per_day = loss_factor_per_day
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return GenericHydrogenStorage.get_full_classname()
 
-    @staticmethod
-    def get_default_config(
-        capacity: float = 200,
-        max_charging_rate: float = 2,
-        max_discharging_rate: float = 2,
-        source_weight: int = 1,
-    ) -> Any:
+    @classmethod
+    def get_default_config(cls) -> Any:
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
-            source_weight=source_weight,
+            source_weight=1,
             min_capacity=0,
-            max_capacity=capacity,
-            max_charging_rate_hour=max_charging_rate,
-            max_discharging_rate_hour=max_discharging_rate,
+            max_capacity=200,
+            max_charging_rate_hour=2,
+            max_discharging_rate_hour=2,
             energy_for_charge=0,
             energy_for_discharge=0,
             loss_factor_per_day=0,
@@ -107,6 +84,7 @@ class GenericHydrogenStorage(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build(config)
@@ -132,7 +110,7 @@ class GenericHydrogenStorage(cp.Component):
             load_type=lt.LoadTypes.HYDROGEN,
             unit=lt.Units.PERCENT,
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
-            output_description="Hydrogen SOC"
+            output_description="Hydrogen SOC",
         )
 
         self.add_default_connections(

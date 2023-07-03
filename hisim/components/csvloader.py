@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 @dataclass_json
 @dataclass
-class CSVLoaderConfig:
+class CSVLoaderConfig(cp.ConfigBase):
     component_name: str
     csv_filename: str
     column: int
@@ -22,6 +22,11 @@ class CSVLoaderConfig:
     sep: str
     decimal: str
     multiplier: float
+
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return CSVLoader.get_full_classname()
 
 
 class CSVLoader(cp.Component):
@@ -66,6 +71,7 @@ class CSVLoader(cp.Component):
         super().__init__(
             name=self.csvconfig.component_name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.output1: cp.ComponentOutput = self.add_output(

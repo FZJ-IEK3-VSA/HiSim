@@ -29,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L2GenericHeatConfig:
+class L2GenericHeatConfig(cp.ConfigBase):
 
     """L2 Controller Config."""
 
@@ -43,28 +43,10 @@ class L2GenericHeatConfig:
     day_of_heating_season_begin: Optional[int]
     day_of_heating_season_end: Optional[int]
 
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        t_min_heating_in_celsius: float,
-        t_max_heating_in_celsius: float,
-        cooling_considered: bool,
-        t_min_cooling_in_celsius: Optional[float],
-        t_max_cooling_in_celsius: Optional[float],
-        day_of_heating_season_begin: Optional[int],
-        day_of_heating_season_end: Optional[int],
-    ):
-        """Initializes config."""
-        self.name = name
-        self.source_weight = source_weight
-        self.t_min_heating_in_celsius = t_min_heating_in_celsius
-        self.t_max_heating_in_celsius = t_max_heating_in_celsius
-        self.cooling_considered = cooling_considered
-        self.t_min_cooling_in_celsius = t_min_cooling_in_celsius
-        self.t_max_cooling_in_celsius = t_max_cooling_in_celsius
-        self.day_of_heating_season_begin = day_of_heating_season_begin
-        self.day_of_heating_season_end = day_of_heating_season_end
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return L2GenericHeatController.get_full_classname()
 
     @staticmethod
     def get_default_config_heating(name: str) -> Any:
@@ -216,6 +198,7 @@ class L2GenericHeatController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.config: L2GenericHeatConfig = config
 

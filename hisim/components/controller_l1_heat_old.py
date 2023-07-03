@@ -118,6 +118,7 @@ class ControllerHeat(cp.Component):
         super().__init__(
             name=self.controller_heat_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.mode: Any
         self.temperature_storage_target_warm_water = (

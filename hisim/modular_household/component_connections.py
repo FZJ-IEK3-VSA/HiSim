@@ -132,10 +132,8 @@ def configure_smart_devices(
     for device in device_collection:
         my_smart_devices.append(
             generic_smart_device.SmartDevice(
-                identifier=device,
-                source_weight=count,
+                config=generic_smart_device.SmartDeviceConfig(name="SmartDevice", identifier=device, source_weight=count, smart_devices_included=smart_devices_included),
                 my_simulation_parameters=my_simulation_parameters,
-                smart_devices_included=smart_devices_included,
             )
         )
         my_sim.add_component(my_smart_devices[-1])
@@ -1250,19 +1248,23 @@ def configure_elctrolysis_h2storage_chp_system(
 
     if h2_storage_size is not None:
         h2_storage_config = (
-            generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
-                capacity=h2_storage_size,
-                max_charging_rate=h2_storage_size * 1e-2,
-                max_discharging_rate=h2_storage_size * 1e-2,
+            generic_hydrogen_storage.GenericHydrogenStorageConfig(
+                name="HydrogenStorage",
                 source_weight=count,
+                min_capacity=0,
+                max_capacity=h2_storage_size,
+                max_charging_rate_hour=h2_storage_size * 1e-2,
+                max_discharging_rate_hour=h2_storage_size * 1e-2,
+                energy_for_charge=0,
+                energy_for_discharge=0,
+                loss_factor_per_day=0,
             )
         )
     else:
         h2_storage_config = (
-            generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
-                source_weight=count
-            )
-        )
+            generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config())
+        h2_storage_config.source_weigth = count
+
     my_h2storage = generic_hydrogen_storage.GenericHydrogenStorage(
         my_simulation_parameters=my_simulation_parameters, config=h2_storage_config
     )

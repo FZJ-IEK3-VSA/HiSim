@@ -27,7 +27,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class ChargingStationConfig:
+class ChargingStationConfig(cp.ConfigBase):
 
     """Definition of the configuration of Charging Station and the set point for the control."""
 
@@ -95,6 +95,7 @@ class L1Controller(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.state = L1ControllerState(power=0)
         self.previous_state = self.state.clone()
@@ -139,7 +140,7 @@ class L1Controller(cp.Component):
             field_name=self.ToOrFromBattery,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description="Set power for EV charging in Watt."
+            output_description="Set power for EV charging in Watt.",
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_car())

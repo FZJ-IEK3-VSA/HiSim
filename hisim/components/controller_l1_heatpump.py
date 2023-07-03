@@ -62,27 +62,53 @@ class L1HeatPumpConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
-        """ Returns default configuration for the controller of building heating. """
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=19.5, t_max_heating_in_celsius=20.5,
-                                  cooling_considered=True, day_of_heating_season_begin=270, day_of_heating_season_end=150,
-                                  min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+        """Returns default configuration for the controller of building heating."""
+        config = L1HeatPumpConfig(
+            name=name,
+            source_weight=1,
+            t_min_heating_in_celsius=19.5,
+            t_max_heating_in_celsius=20.5,
+            cooling_considered=True,
+            day_of_heating_season_begin=270,
+            day_of_heating_season_end=150,
+            min_operation_time_in_seconds=1800,
+            min_idle_time_in_seconds=1800,
+        )
         return config
 
     @staticmethod
-    def get_default_config_heat_source_controller_buffer(name: str) -> "L1HeatPumpConfig":
+    def get_default_config_heat_source_controller_buffer(
+        name: str,
+    ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=30.0, t_max_heating_in_celsius=40.0,
-                                  cooling_considered=True, day_of_heating_season_begin=270 - 1, day_of_heating_season_end=150,
-                                  min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+        config = L1HeatPumpConfig(
+            name=name,
+            source_weight=1,
+            t_min_heating_in_celsius=30.0,
+            t_max_heating_in_celsius=40.0,
+            cooling_considered=True,
+            day_of_heating_season_begin=270 - 1,
+            day_of_heating_season_end=150,
+            min_operation_time_in_seconds=1800,
+            min_idle_time_in_seconds=1800,
+        )
         return config
 
     @staticmethod
     def get_default_config_heat_source_controller_dhw(name: str) -> "L1HeatPumpConfig":
-        """Returns default configuration for the controller of a drain hot water storage. """
-        config = L1HeatPumpConfig(name=name, source_weight=1, t_min_heating_in_celsius=40.0, t_max_heating_in_celsius=60.0,
-                                  cooling_considered=False, day_of_heating_season_begin=270, day_of_heating_season_end=150,
-                                  min_operation_time_in_seconds=1800, min_idle_time_in_seconds=1800)
+        """Returns default configuration for the controller of a drain hot water storage."""
+        config = L1HeatPumpConfig(
+            name=name,
+            source_weight=1,
+            t_min_heating_in_celsius=40.0,
+            t_max_heating_in_celsius=60.0,
+            cooling_considered=False,
+            day_of_heating_season_begin=270,
+            day_of_heating_season_end=150,
+            min_operation_time_in_seconds=1800,
+            min_idle_time_in_seconds=1800,
+        )
         return config
 
 
@@ -157,6 +183,7 @@ class L1HeatPumpController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.config: L1HeatPumpConfig = config
         self.minimum_runtime_in_timesteps = int(
@@ -197,7 +224,7 @@ class L1HeatPumpController(cp.Component):
             self.HeatControllerTargetPercentage,
             LoadTypes.ANY,
             Units.PERCENT,
-            output_description="Heat Controller Target Percentage"
+            output_description="Heat Controller Target Percentage",
         )
 
         # Component Inputs
@@ -289,15 +316,11 @@ class L1HeatPumpController(cp.Component):
             # full power when temperature is below lower threshold
             self.state.percentage = 1
             return
-        if (
-            t_storage < self.config.t_max_heating_in_celsius
-        ):
+        if t_storage < self.config.t_max_heating_in_celsius:
             # 75 % power when temperature is within threshold
             self.state.percentage = 0.75
             return
-        if (
-            t_storage >= self.config.t_max_heating_in_celsius
-        ):
+        if t_storage >= self.config.t_max_heating_in_celsius:
             # 50 % power when temperature is already in tolerance of surplus
             self.state.percentage = 0.5
             return
@@ -344,7 +367,10 @@ class L1HeatPumpController(cp.Component):
             self.state.deactivate(timestep)
             self.calc_percentage(t_storage)
             return
-        if temperature_modifier > 0 and t_storage < self.config.t_max_heating_in_celsius:
+        if (
+            temperature_modifier > 0
+            and t_storage < self.config.t_max_heating_in_celsius
+        ):
             # activate heating when surplus electricity is available
             self.state.activate(timestep)
             self.calc_percentage(t_storage)

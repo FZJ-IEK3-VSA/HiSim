@@ -29,7 +29,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class L2HeatSmartConfig:
+class L2HeatSmartConfig(cp.ConfigBase):
     """
     L2 Config
     """
@@ -46,31 +46,10 @@ class L2HeatSmartConfig:
     heating_season_begin: Optional[int]
     heating_season_end: Optional[int]
 
-    def __init__(
-        self,
-        name: str,
-        source_weight: int,
-        T_min_heating: float,
-        T_max_heating: float,
-        T_tolerance: float,
-        P_threshold: float,
-        cooling_considered: bool,
-        T_min_cooling: Optional[float],
-        T_max_cooling: Optional[float],
-        heating_season_begin: Optional[int],
-        heating_season_end: Optional[int],
-    ):
-        self.name = name
-        self.source_weight = source_weight
-        self.T_min_heating = T_min_heating
-        self.T_max_heating = T_max_heating
-        self.T_tolerance = T_tolerance
-        self.P_threshold = P_threshold
-        self.cooling_considered = cooling_considered
-        self.T_min_cooling = T_min_cooling
-        self.T_max_cooling = T_max_cooling
-        self.heating_season_begin = heating_season_begin
-        self.heating_season_end = heating_season_end
+    @classmethod
+    def get_main_classname(cls):
+        """Return the full class name of the base class."""
+        return L2HeatSmartController.get_full_classname()
 
 
 class L2HeatSmartControllerState:
@@ -177,6 +156,7 @@ class L2HeatSmartController(cp.Component):
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.build(config)
 

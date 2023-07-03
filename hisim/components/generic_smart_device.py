@@ -9,6 +9,8 @@ from os import path
 from typing import List, Tuple
 
 import pandas as pd
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 
 # Owned
 from hisim import component as cp
@@ -24,6 +26,33 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
+
+
+@dataclass_json
+@dataclass
+class SmartDeviceConfig(cp.ConfigBase):
+
+    """Configuration of the smart device."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return SmartDevice.get_full_classname()
+
+    name: str
+    identifier: str
+    source_weight: int
+    smart_devices_included: bool
+
+    @classmethod
+    def get_default_config(cls):
+        """Gets a default config."""
+        return SmartDeviceConfig(
+            name="Smart Device",
+            identifier="Identifier",
+            source_weight=1,
+            smart_devices_included=True,
+        )
 
 
 class SmartDeviceState:
@@ -104,26 +133,23 @@ class SmartDevice(cp.Component):
     ElectricityTarget = "ElectricityTarget"
 
     def __init__(
-        self,
-        identifier: str,
-        source_weight: int,
-        my_simulation_parameters: SimulationParameters,
-        smart_devices_included: bool,
+        self, my_simulation_parameters: SimulationParameters, config: SmartDeviceConfig
     ):
         super().__init__(
-            name=identifier.replace("/", "-") + "_w" + str(source_weight),
+            name=config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         self.build(
-            identifier=identifier,
-            source_weight=source_weight,
+            identifier=config.identifier,
+            source_weight=config.source_weight,
             seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
         )
         self.previous_state: SmartDeviceState
         self.state: SmartDeviceState
         self.consumption = 0
-        if my_simulation_parameters.surplus_control and smart_devices_included:
+        if my_simulation_parameters.surplus_control and config.smart_devices_included:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 lt.ComponentType.SMART_DEVICE,
@@ -140,7 +166,7 @@ class SmartDevice(cp.Component):
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=postprocessing_flag,
-            output_description="Electricity output"
+            output_description="Electricity output",
         )
 
         self.ElectricityTargetC: cp.ComponentInput = self.add_input(
@@ -312,7 +338,7 @@ class SmartDevice(cp.Component):
         self.previous_state = SmartDeviceState()
 
     def write_to_report(self) -> List[str]:
-        """Writes relevant information to report. """
+        """Writes relevant information to report."""
         lines: List[str] = []
         lines.append(f"DeviceName: {self.component_name}")
         lines.append(f"Consumption: {self.consumption:.2f}")

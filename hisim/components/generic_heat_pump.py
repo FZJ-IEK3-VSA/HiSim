@@ -44,7 +44,7 @@ __status__ = "development"
 @dataclass
 class GenericHeatPumpConfig(cp.ConfigBase):
 
-    """ Config for the generic heat pump. """
+    """Config for the generic heat pump."""
 
     @classmethod
     def get_main_classname(cls):
@@ -73,7 +73,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 @dataclass
 class GenericHeatPumpControllerConfig(cp.ConfigBase):
 
-    """ Controller for the generic heat pump. """
+    """Controller for the generic heat pump."""
 
     @classmethod
     def get_main_classname(cls):
@@ -93,7 +93,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
             name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
-            offset=0.0,
+            offset=0.5,
             mode=1,
         )
 
@@ -205,7 +205,9 @@ class GenericHeatPump(cp.Component):
         """Construct all the necessary attributes."""
         self.heatpump_config = config
         super().__init__(
-            self.heatpump_config.name, my_simulation_parameters=my_simulation_parameters
+            self.heatpump_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name
@@ -643,6 +645,7 @@ class GenericHeatPumpController(cp.Component):
         super().__init__(
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.build(
             temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,

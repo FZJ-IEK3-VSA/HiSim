@@ -1,5 +1,5 @@
 from hisim import component as cp
-from hisim.components.advanced_heat_pump_hplib import  HeatPumpHplib, HeatPumpHplibConfig
+from hisim.components.advanced_heat_pump_hplib import  HeatPumpHplib, HeatPumpHplibConfig, HeatPumpState
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -39,8 +39,9 @@ def test_heat_pump_hplib():
                                lt.Units.ANY)
 
     # Initialize component
-    heatpump_config=HeatPumpHplibConfig(model=model, group_id=group_id, t_in=t_in, t_out_val=t_out, p_th_set=p_th_set)
+    heatpump_config=HeatPumpHplibConfig(name="Heat Pump", model=model, group_id=group_id, heating_reference_temperature_in_celsius=t_in, flow_temperature_in_celsius=t_out, set_thermal_output_power_in_watt=p_th_set, cycling_mode=True, minimum_idle_time_in_seconds=600, minimum_running_time_in_seconds=600)
     heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
+    heatpump.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1)
 
     number_of_outputs = fft.get_number_of_outputs([on_off_switch,t_in_primary,t_in_secondary,t_amb,heatpump])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)

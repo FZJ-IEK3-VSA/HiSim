@@ -5,6 +5,7 @@ from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBa
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import Any, List
@@ -120,6 +121,7 @@ class HeatStorage(Component):
         super().__init__(
             self.heat_storage_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.V_SP_heating_water = self.heat_storage_config.V_SP_heating_water
         self.V_SP_warm_water = self.heat_storage_config.V_SP_warm_water
@@ -406,7 +408,7 @@ class HeatStorageController(cp.Component):
     """
 
     # Inputs
-    ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
+    # ReferenceMaxHeatBuildingDemand = "ReferenceMaxHeatBuildingDemand"
     TemperatureHeatingStorage = "TemperatureHeatingStorage"
     BuildingTemperature = "BuildingTemperature"
     RealHeatBuildingDemand = "RealHeatBuildingDemand"
@@ -422,6 +424,7 @@ class HeatStorageController(cp.Component):
         super().__init__(
             name=self.heatstoragecontroller_config.name,
             my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
         self.initial_temperature_heating_storage = (
             self.heatstoragecontroller_config.initial_temperature_heating_storage
@@ -429,15 +432,20 @@ class HeatStorageController(cp.Component):
         self.initial_temperature_building = (
             self.heatstoragecontroller_config.initial_temperature_building
         )
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
+            self.ref_max_thermal_build_demand_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND)
+        else:
+            raise KeyError("The key max thermal building demand was not found in the singleton sim repository. This might be because the building was not initialized before generic heat water storager controller."
+                           "Please check the order of the initialization in your example.")
         # ===================================================================================================================
         # Inputs
-        self.ref_max_thermal_build_demand: ComponentInput = self.add_input(
-            self.component_name,
-            self.ReferenceMaxHeatBuildingDemand,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT,
-            False,
-        )
+        # self.ref_max_thermal_build_demand: ComponentInput = self.add_input(
+        #     self.component_name,
+        #     self.ReferenceMaxHeatBuildingDemand,
+        #     lt.LoadTypes.HEATING,
+        #     lt.Units.WATT,
+        #     False,
+        # )
         self.heating_storage_temperature: ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureHeatingStorage,
@@ -502,16 +510,14 @@ class HeatStorageController(cp.Component):
             self.heating_storage_temperature
         )  # Start-Temp-Storage
         last_var_hw = stsv.get_input_value(self.real_thermal_demand_building)
-        max_mass_flow_heat_storage = stsv.get_input_value(
-            self.ref_max_thermal_build_demand
-        ) / (
+        max_mass_flow_heat_storage = (self.ref_max_thermal_build_demand_in_watt / (
             4.1851
             * 1000
             * (
                 self.initial_temperature_heating_storage
                 - self.initial_temperature_building
             )
-        )
+        ))
 
         max_last_var_hw = (
             max_mass_flow_heat_storage

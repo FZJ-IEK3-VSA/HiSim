@@ -112,13 +112,13 @@ def household_gas_heater(
 
     # Build Gas Heater Controller
     my_gasheater_controller = generic_gas_heater_with_controller.GasHeaterController(
+        config=generic_gas_heater_with_controller.GenericGasHeaterControllerConfig.get_default_controller_config(),
         my_simulation_parameters=my_simulation_parameters,
-        set_heating_temperature_water_boiler_in_celsius=60.0,
-        offset=2.0,
-        mode=1
     )
 
-    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    hds_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    )
 
     # Build Heat Distribution System
     my_heat_distribution = heat_distribution_system.HeatDistribution(
@@ -126,8 +126,15 @@ def household_gas_heater(
     )
 
     # Build heat Distribution System Controller
-    hdscontroller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters)
+    hdscontroller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    )
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=hdscontroller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+    )
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs

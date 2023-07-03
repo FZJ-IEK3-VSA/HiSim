@@ -24,7 +24,7 @@ class ExampleConfig:
         jcg: JsonConfigurationGenerator = JsonConfigurationGenerator("TestModel")
 
         # basic simulation parameters
-        my_simulation_parameters = SimulationParameters.january_only_with_only_charts(year=2022, seconds_per_timestep=60)
+        my_simulation_parameters = SimulationParameters.january_only_with_only_plots(year=2022, seconds_per_timestep=60)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         jcg.set_simulation_parameters(my_simulation_parameters)
 

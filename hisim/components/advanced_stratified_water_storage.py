@@ -862,7 +862,9 @@ class StratifiedWarmWaterStorage(Component):
         config: WarmWaterStorageConfig,
     ) -> None:
         super().__init__(
-            name=component_name, my_simulation_parameters=my_simulation_parameters
+            name=component_name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
         )
 
         # Input

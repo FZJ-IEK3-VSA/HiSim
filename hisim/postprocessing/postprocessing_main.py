@@ -4,6 +4,8 @@ import os
 import sys
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
+import string
+import json
 import pandas as pd
 
 from hisim.components import building
@@ -24,6 +26,7 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 class PostProcessor:
@@ -251,7 +254,9 @@ class PostProcessor:
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.buildingdata
-                elif isinstance(elem.my_component, loadprofilegenerator_connector.Occupancy):
+                elif isinstance(
+                    elem.my_component, loadprofilegenerator_connector.Occupancy
+                ):
                     occupancy_config = elem.my_component.occupancyConfig
             if len(building_data) == 0:
                 log.warning(
@@ -292,6 +297,14 @@ class PostProcessor:
                 "Making special single day plots for a single day calculation for testing took "
                 + f"{duration:1.2f}s."
             )
+
+        # Write Outputs to pyam.IAMDataframe format for scenario evaluation
+        if (
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+            in ppdt.post_processing_options
+        ):
+            log.information("Prepare results for scenario evaluation with pyam.")
+            self.prepare_results_for_scenario_evaluation_with_pyam(ppdt)
 
         # Open file explorer
         if (
@@ -457,8 +470,7 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a CSV file."""
-        # log.information("ppdt.results " + str(ppdt.results))
-        # ppdt.results.to_excel(os.path.join(ppdt.simulation_parameters.result_directory, "all_results.xlsx"))
+
         for column in ppdt.results:
             ppdt.results[column].to_csv(
                 os.path.join(
@@ -683,3 +695,152 @@ class PostProcessor:
         ToDo: implement
         """
         pass  # noqa: unnecessary-pass
+
+    def prepare_results_for_scenario_evaluation_with_pyam(
+        self, ppdt: PostProcessingDataTransfer
+    ) -> None:
+        """Prepare the results for the scenario evaluation with pyam."""
+
+        simple_dict_hourly_data: Dict = {
+            "model": [],
+            "scenario": [],
+            "region": [],
+            "variable": [],
+            "unit": [],
+            "time": [],
+            "value": [],
+        }
+        simple_dict_cumulative_data: Dict = {
+            "model": [],
+            "scenario": [],
+            "region": [],
+            "variable": [],
+            "unit": [],
+            "year": [],
+            "value": [],
+        }
+        model = "".join(["HiSim_", ppdt.module_filename])
+        scenario = ppdt.setup_function
+        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        year = ppdt.simulation_parameters.year
+        timeseries = (
+            ppdt.results_hourly.index
+        )  # .strftime("%Y-%m-%d %H:%M:%S").to_list()
+
+        for column in ppdt.results_hourly:
+            for index, timestep in enumerate(timeseries):
+                values = ppdt.results_hourly[column].values
+                column_splitted = str(
+                    "".join([x for x in column if x in string.ascii_letters + "'- "])
+                ).split(sep=" ")
+                variable = "".join(
+                    [
+                        column_splitted[0],
+                        "|",
+                        column_splitted[3],
+                        "|",
+                        column_splitted[2],
+                    ]
+                )
+                unit = column_splitted[5]
+                simple_dict_hourly_data["model"].append(model)
+                simple_dict_hourly_data["scenario"].append(scenario)
+                simple_dict_hourly_data["region"].append(region)
+                simple_dict_hourly_data["variable"].append(variable)
+                simple_dict_hourly_data["unit"].append(unit)
+                simple_dict_hourly_data["time"].append(timestep)
+                simple_dict_hourly_data["value"].append(values[index])
+
+        for column in ppdt.results_cumulative:
+            value = ppdt.results_cumulative[column].values[0]
+
+            column_splitted = str(
+                "".join([x for x in column if x in string.ascii_letters + "'- "])
+            ).split(sep=" ")
+            variable = "".join(
+                [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
+            )
+            unit = column_splitted[5]
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(variable)
+            simple_dict_cumulative_data["unit"].append(unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(value)
+
+        # create dataframe
+        simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
+        simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
+        # write dictionary with all import parameters
+        data_information_dict = {
+            "model": model,
+            "scenario": scenario,
+            "region": region,
+            "year": year,
+            "duration in days": ppdt.simulation_parameters.duration.days,
+        }
+        component_counter = 0
+        for component in ppdt.wrapped_components:
+            try:
+                # rename keys because some get overwritten if key name exists several times
+                dict_config = component.my_component.config.to_dict()
+                rename_dict_config = {}
+                for key, value in dict_config.items():
+                    rename_dict_config[
+                        f"component {component_counter} {key}"
+                    ] = dict_config[key]
+                dict_config = rename_dict_config
+                del rename_dict_config
+            except BaseException as exc:
+                raise ValueError(
+                    "component.my_component.config.to_dict() does probably not work. "
+                    "That might be because the config of the component does not inherit from Configbase. "
+                    "Please change your config class according to the other component config classes with the configbase inheritance."
+                ) from exc
+
+            try:
+                # try json dumping and if it works append data information dict
+                component.my_component.config.to_json()
+                data_information_dict.update(dict_config)
+                component_counter = component_counter + 1
+
+            except Exception as ex:
+                # else try to convert data types so that json dumping works out
+                for key, value in dict_config.items():
+                    if not isinstance(value, (int, float, str, bool, type(None))):
+                        if isinstance(value, list):
+                            # transform list to string so it can be json serializable later
+                            dict_config[key] = str(value).strip("[]")
+                            # append data information dict
+                            data_information_dict.update(dict_config)
+                            component_counter = component_counter + 1
+                        else:
+                            raise ValueError(
+                                "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
+                            ) from ex
+
+        pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
+        os.makedirs(pyam_data_folder)
+        file_name = f"{pyam_data_folder}{ppdt.module_filename}_{ppdt.setup_function}"
+        file_name_hourly = (
+            file_name
+            + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+        )
+        file_name_yearly = (
+            file_name
+            + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+        )
+        simple_df_hourly_data.to_csv(
+            path_or_buf=file_name_hourly,
+            index=None,
+        )  # type: ignore
+        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
+
+        # Serializing json
+        json_object = json.dumps(data_information_dict, indent=4)
+        # Writing to sample.json
+        with open(
+            pyam_data_folder + "data_information_for_pyam.json", "w", encoding="utf-8"
+        ) as outfile:
+            outfile.write(json_object)

@@ -121,9 +121,6 @@ def household_pv_hp(
     tilt = my_config.tilt
 
     # Set Heat Pump Controller
-    temperature_air_heating_in_celsius = 16.0
-    temperature_air_cooling_in_celsius = 24.0
-    offset = 0.5
     hp_mode = 2
 
     # =================================================================================================================================
@@ -185,14 +182,12 @@ def household_pv_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Build Heat Pump Controller Config
+    my_heat_pump_controller_config = generic_heat_pump.GenericHeatPumpControllerConfig.get_default_generic_heat_pump_controller_config()
+    my_heat_pump_controller_config.mode = hp_mode
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-        name="GenericHeatPumpController",
-        temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-        temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-        offset=offset,
-        mode=hp_mode),
+        config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 

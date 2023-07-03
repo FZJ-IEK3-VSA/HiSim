@@ -5,11 +5,11 @@ from typing import Any
 import matplotlib.pyplot as plt
 from matplotlib.dates import DateFormatter
 
-from hisim.postprocessing.chartbase import Chart
+from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
 from hisim.postprocessing.report_image_entries import ReportImageEntry
 
 
-class ChartSingleDay(Chart):
+class ChartSingleDay(Chart, ChartFontsAndSize):
 
     """For making visualisations for a single day."""
 
@@ -150,7 +150,7 @@ class ChartSingleDay(Chart):
             single_day_data.index,
             single_day_data,
             color="green",
-            linewidth=5.0,
+            linewidth=1.0,
             label=self.property,
         )
         plt.grid(True)

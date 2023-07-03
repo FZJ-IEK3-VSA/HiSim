@@ -45,8 +45,7 @@ def get_heating_system_efficiency(
     :rtype: float
     """
 
-    efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8", index_col=0)
-    efficiency_data = efficiency_data.astype("float")
+    efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8", index_col=0).astype("float")  # type pd.DataFrame[float]
 
     return efficiency_data.loc[heating_system_installed.value, water_vs_heating.value]
 

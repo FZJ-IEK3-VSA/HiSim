@@ -233,11 +233,7 @@ def configure_ev_batteries(
         raise Exception("For EV configuration charging station set is obligatory.")
 
     for car in my_cars:
-        car_battery_config = (
-            advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(
-                e_bat_custom=30, p_inv_custom=1e4, name="CarBattery"
-            )
-        )
+        car_battery_config = (advanced_ev_battery_bslib.CarBatteryConfig())
         car_battery_config.source_weight = car.config.source_weight
         my_carbattery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=car_battery_config

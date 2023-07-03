@@ -51,15 +51,14 @@ class CarBatteryConfig(ConfigBase):
         return CarBattery.get_full_classname()
 
     @classmethod
-    def get_default_config(cls) -> Any:
+    def get_default_config(cls) -> "CarBatteryConfig":
         """Returns default configuration of a Car Battery."""
         config = CarBatteryConfig(
             name="CarBattery",
             system_id="SG1",
-            p_inv_custom=p_inv_custom,
-            e_bat_custom=e_bat_custom,
-            name=name,
-            source_weight=source_weight,
+            p_inv_custom=1e4,
+            e_bat_custom=50,
+            source_weight=1,
             charge=0,
             discharge=0,
         )
@@ -228,7 +227,7 @@ class CarBattery(Component):
                         * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
                     self.battery_config.discharge = round(
                         postprocessing_results.iloc[:, index].clip(upper=0).sum()
-                            * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+                        * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
         return 0, 0
 
 

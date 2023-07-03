@@ -43,12 +43,13 @@ def get_factor_cooking(
 
 def compute_seasonal(
         csv_frame_seasonal: pd.DataFrame, index_in_seasonal_frame: Tuple[str, str], factor: float, output: pd.Series, day: pd.Series, night: pd.Series
-        ) -> pd.DataFrame:
+) -> pd.DataFrame:
     """Takes annual time series and computes average consumption during day/night in summer, winter and intermediate time.
 
     Summer from daylight 21.06.2019 to daylight 23.09.2019 (total 94 days)
     Winter from 01.01.2019 - daylight 23.03.2019 and daylight 21.12.2019 to 31.12.2019 (total 92 days)
-    Intermediate from daylight 23.03.2029 - daylight 21.06.2019 and daylight 23.09.2019 - daylight 21.12.2019 (total 179)"""
+    Intermediate from daylight 23.03.2029 - daylight 21.06.2019 and daylight 23.09.2019 - daylight 21.12.2019 (total 179)
+    """
 
     output_day = output[day.index]
     output_night = output[night.index]
@@ -182,7 +183,7 @@ def generate_csv_for_database(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("WaterHeating", "Distributed Stream [kWh]"),
                         factor=1e-3, output=results.iloc[:, index], day=day, night=night,
-                        )
+                    )
                 elif LoadTypes.GAS in output.postprocessing_flag:
                     csv_frame_annual[("WaterHeating", "Gas [kWh]")] = (
                         sum(results.iloc[:, index]) * 1e-3
@@ -191,7 +192,7 @@ def generate_csv_for_database(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("WaterHeating", "Gas [kWh]"),
                         output=results.iloc[:, index], factor=1e-3, day=day, night=night,
-                        )
+                    )
                 elif LoadTypes.OIL in output.postprocessing_flag:
                     csv_frame_annual[("WaterHeating", "Oil [l]")] = sum(results.iloc[:, index])
                     csv_frame_seasonal = compute_seasonal(
@@ -310,7 +311,7 @@ def generate_csv_for_database(
                 )
                 remaining_electricity_seasonal_item = compute_seasonal(
                     csv_frame_seasonal=csv_frame_seasonal, index_in_seasonal_frame=("RemainingLoad", "Electricity [kWh]"),
-                    factor=simulation_parameters.seconds_per_timestep/3.6e6, output=results.iloc[:, index],
+                    factor=simulation_parameters.seconds_per_timestep / 3.6e6, output=results.iloc[:, index],
                     day=day, night=night).loc[("RemainingLoad", "Electricity [kWh]")]
                 remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(
                     remaining_electricity_seasonal_item
@@ -325,7 +326,7 @@ def generate_csv_for_database(
                 )
                 remaining_electricity_seasonal_item = compute_seasonal(
                     csv_frame_seasonal=csv_frame_seasonal, index_in_seasonal_frame=("RemainingLoad", "Electricity [kWh]"),
-                    factor=simulation_parameters.seconds_per_timestep/3.6e6, output=results.iloc[:, index],
+                    factor=simulation_parameters.seconds_per_timestep / 3.6e6, output=results.iloc[:, index],
                     day=day, night=night).loc[("RemainingLoad", "Electricity [kWh]")]
                 remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(
                     remaining_electricity_seasonal_item

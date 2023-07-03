@@ -3,7 +3,7 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from typing import List, Tuple, Union, Sequence
+from typing import List, Tuple, Union
 
 import pandas as pd
 
@@ -177,7 +177,7 @@ def compute_self_consumption_and_injection(
 
 def search_electricity_prices_in_results(
         all_outputs: List, results: pd.DataFrame
-        ) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
+) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
     """Extracts electricity price consumption and electricity price production from results."""
     electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]
     electricity_price_injection = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]

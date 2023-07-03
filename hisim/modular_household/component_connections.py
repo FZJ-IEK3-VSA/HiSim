@@ -47,7 +47,7 @@ def get_heating_system_efficiency(
 
     efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8", index_col=0).astype("float")
 
-    return efficiency_data.loc[heating_system_installed.value, water_vs_heating.value]
+    return float(efficiency_data.loc[heating_system_installed.value][water_vs_heating.value])
 
 
 def configure_pv_system(

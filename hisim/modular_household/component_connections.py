@@ -7,7 +7,7 @@ The functions are all called in modular_household.
 
 import json
 from os import listdir, path
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, TypeVar
 
 import pandas as pd
 from utspclient.helpers.lpgpythonbindings import JsonReference
@@ -45,7 +45,7 @@ def get_heating_system_efficiency(
     :rtype: float
     """
 
-    efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8", index_col=0).astype("float")  # type pd.DataFrame[float]
+    efficiency_data = pd.read_csv(utils.HISIMPATH["heater_efficiencies"], encoding="utf-8", index_col=0).astype("float")
 
     return efficiency_data.loc[heating_system_installed.value, water_vs_heating.value]
 

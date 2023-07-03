@@ -7,7 +7,7 @@ The functions are all called in modular_household.
 
 import json
 from os import listdir, path
-from typing import Any, List, Optional, Tuple, TypeVar
+from typing import Any, List, Optional, Tuple
 
 import pandas as pd
 from utspclient.helpers.lpgpythonbindings import JsonReference

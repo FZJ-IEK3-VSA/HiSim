@@ -62,6 +62,7 @@ class ReferenceHouseholdConfig:
     # tilt: float
     # pv_power: float
     total_base_area_in_m2: float
+    consumption: float
 
     @classmethod
     def get_default(cls):
@@ -82,6 +83,7 @@ class ReferenceHouseholdConfig:
             # tilt=30,
             # pv_power=10000,
             total_base_area_in_m2=121.2,
+            consumption=0.0,
         )
 
 
@@ -155,6 +157,7 @@ def household_reference_gas_heater_diesel_car(
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
         name="UTSP Connector",
+        consumption=my_config.consumption,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

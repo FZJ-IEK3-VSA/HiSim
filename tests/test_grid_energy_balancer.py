@@ -9,7 +9,12 @@ import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
-from hisim.components import building, grid_energy_balancer, generic_pv_system, idealized_electric_heater
+from hisim.components import (
+    building,
+    grid_energy_balancer,
+    generic_pv_system,
+    idealized_electric_heater,
+)
 from hisim import utils, loadtypes
 
 
@@ -23,9 +28,7 @@ FUNC = "test_house"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the grid energy balancer implementation.
-
-    """
+    """The test should check if a normal simulation works with the grid energy balancer implementation."""
 
     # =========================================================================================================================================================
     # System Parameters
@@ -54,7 +57,7 @@ def test_house(
         module_directory=path_to_be_added,
         setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename= "household_for_test_grid_energy_balancer.py"
+        module_filename="household_for_test_grid_energy_balancer.py",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -86,12 +89,13 @@ def test_house(
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
-    
+
     # Build Grid Energy Balancer
-    
+
     my_electricity_grid = grid_energy_balancer.GridEnergyBalancer(
-                                            my_simulation_parameters=my_simulation_parameters,
-                                            config=grid_energy_balancer.GridEnergyBalancerConfig.get_GridEnergyBalancer_default_config())
+        my_simulation_parameters=my_simulation_parameters,
+        config=grid_energy_balancer.GridEnergyBalancerConfig.get_grid_energy_balancer_default_config(),
+    )
 
     # Build Fake Heater
     my_idealized_electric_heater = idealized_electric_heater.IdealizedElectricHeater(
@@ -119,18 +123,21 @@ def test_house(
         my_building.component_name,
         my_building.TheoreticalThermalBuildingDemand,
     )
-    
+
     # Electricity Grid
-    
+
     my_electricity_grid.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_tags=[
+            loadtypes.ComponentType.PV,
+            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
         source_weight=999,
     )
-    
+
     my_electricity_grid.add_component_input_and_connect(
         source_component_class=my_occupancy,
         source_component_output=my_occupancy.ElectricityOutput,
@@ -139,7 +146,6 @@ def test_house(
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
-    
 
     # =========================================================================================================================================================
     # Add Components to Simulator and run all timesteps
@@ -148,9 +154,8 @@ def test_house(
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_building)
-    
+
     my_sim.add_component(my_idealized_electric_heater)
     my_sim.add_component(my_electricity_grid)
 
     my_sim.run_all_timesteps()
-

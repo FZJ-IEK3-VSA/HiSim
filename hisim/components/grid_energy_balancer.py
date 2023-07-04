@@ -1,15 +1,18 @@
-"""This module simlates the energy grid and should replace the GridEnergyBalancer and parts of the energy management system. """
+"""Grid energy balancer module simulates the electricity grid and should replace the sumbuilder and parts of the energy management system. """
 # clean
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import List
 
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import utils
-from hisim.component import Component, ConfigBase, ComponentInput, ComponentOutput
-from hisim.dynamic_component import DynamicComponent, DynamicConnectionInput, DynamicConnectionOutput
+from hisim.component import ComponentInput
+from hisim.dynamic_component import (
+    DynamicComponent,
+    DynamicConnectionInput,
+    DynamicConnectionOutput,
+)
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -26,38 +29,44 @@ class GridEnergyBalancerConfig(cp.ConfigBase):
 
     name: str
 
-
     @classmethod
-    def get_GridEnergyBalancer_default_config(cls):
+    def get_grid_energy_balancer_default_config(cls):
         """Gets a default GridEnergyBalancer."""
-        return GridEnergyBalancerConfig(
-            name="GridEnergyBalancer"
-        )
-
+        return GridEnergyBalancerConfig(name="GridEnergyBalancer")
 
 
 class GridEnergyBalancer(DynamicComponent):
-    
+
     """Dynamic electricity grid module.
-    
+
     It calculates the electricity production and consumption dynamically for all components.
     """
-    
+
     # Outputs
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
-    
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: GridEnergyBalancerConfig):
+
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: GridEnergyBalancerConfig,
+    ):
         """Initialize the component."""
         self.grid_energy_balancer_config = config
         self.name = self.grid_energy_balancer_config.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
-        super().__init__(self.my_component_inputs, self.my_component_outputs, self.name, my_simulation_parameters, my_config=config)
-        
+        super().__init__(
+            self.my_component_inputs,
+            self.my_component_outputs,
+            self.name,
+            my_simulation_parameters,
+            my_config=config,
+        )
+
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
-        
+
         # Outputs
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -77,7 +86,6 @@ class GridEnergyBalancer(DynamicComponent):
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
-        
     def write_to_report(self):
         """Writes relevant information to report."""
         return self.grid_energy_balancer_config.get_string_dict()
@@ -97,7 +105,7 @@ class GridEnergyBalancer(DynamicComponent):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         """Doublechecks values."""
         pass
-    
+
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
@@ -106,7 +114,7 @@ class GridEnergyBalancer(DynamicComponent):
         if timestep == 0:
 
             self.production_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
+                tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
             )
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
                 tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
@@ -130,11 +138,11 @@ class GridEnergyBalancer(DynamicComponent):
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        electricity_to_or_from_grid = (
-            production - consumption_uncontrolled
-        )
+        electricity_to_or_from_grid = production - consumption_uncontrolled
 
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid)
+        stsv.set_output_value(
+            self.electricity_to_or_from_grid, electricity_to_or_from_grid
+        )
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
             consumption_uncontrolled,

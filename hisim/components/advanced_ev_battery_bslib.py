@@ -1,25 +1,20 @@
 """ Car Battery implementation built upon the bslib library. It contains a CarBattery Class together with its Configuration and State. """
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Any
 from dataclasses import dataclass
+from typing import Any, List, Tuple
+
+import pandas as pd
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim import log
-from hisim.component import (
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-    ComponentConnection,
-    ConfigBase,
-)
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
-from hisim.simulationparameters import SimulationParameters
-from typing import Optional
+from hisim.component import (Component, ComponentConnection, ComponentInput,
+                             ComponentOutput, ConfigBase, SingleTimeStepValues)
 from hisim.components import controller_l1_generic_ev_charge
+from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -34,8 +29,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig(ConfigBase):
-    """Configuration of a Car Battery."""
-
+    """Configuration of a Car Battery. """
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -46,6 +40,10 @@ class CarBatteryConfig(ConfigBase):
     p_inv_custom: float
     #: battery capacity in in kWh
     e_bat_custom: float
+    #: amount of energy used to charge the car battery
+    charge: float
+    #: amount of energy discharged from the battery
+    discharge: float
 
     @classmethod
     def get_main_classname(cls):
@@ -53,14 +51,16 @@ class CarBatteryConfig(ConfigBase):
         return CarBattery.get_full_classname()
 
     @classmethod
-    def get_default_config(cls) -> Any:
+    def get_default_config(cls) -> "CarBatteryConfig":
         """Returns default configuration of a Car Battery."""
         config = CarBatteryConfig(
             name="CarBattery",
             system_id="SG1",
-            p_inv_custom=5,
-            e_bat_custom=10,
+            p_inv_custom=1e4,
+            e_bat_custom=30,
             source_weight=1,
+            charge=0,
+            discharge=0,
         )
         return config
 
@@ -214,9 +214,21 @@ class CarBattery(Component):
         self.state.soc = soc
 
     def write_to_report(self) -> List[str]:
-        lines = []
-        lines.append("Advanced Battery bslib: " + self.component_name)
-        return lines
+        """Writes Car Battery values to report."""
+        return self.battery_config.get_string_dict()
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        for index, output in enumerate(all_outputs):
+            if output.postprocessing_flag is not None and \
+                    output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight):
+                if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
+                    self.battery_config.charge = round(
+                        postprocessing_results.iloc[:, index].clip(lower=0).sum()
+                        * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+                    self.battery_config.discharge = round(
+                        postprocessing_results.iloc[:, index].clip(upper=0).sum()
+                        * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+        return 0, 0
 
 
 @dataclass

@@ -62,9 +62,6 @@ class HouseholdAdvancedHPDieselCarConfig:
     # pv_power: float
     # total_base_area_in_m2: float
     consumption: float
-    # hp_controller_mode: int  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
-    # set_heating_threshold_outside_temperature_for_heat_pump_in_celsius: float
-    # set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius: float
     building_config: building.BuildingConfig.get_config_classname
     hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig.get_config_classname
     hds_config: heat_distribution_system.HeatDistributionConfig.get_config_classname
@@ -74,7 +71,6 @@ class HouseholdAdvancedHPDieselCarConfig:
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig.get_config_classname
-
 
     @classmethod
     def get_default(cls):
@@ -96,9 +92,6 @@ class HouseholdAdvancedHPDieselCarConfig:
             # pv_power=10000,
             # total_base_area_in_m2=121.2,
             consumption=0.0,
-            # hp_controller_mode=2,
-            # set_heating_threshold_outside_temperature_for_heat_pump_in_celsius=16.0,
-            # set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius=22.0,
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
             hdscontroller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
@@ -126,7 +119,7 @@ class HouseholdAdvancedHPDieselCarConfig:
 def household_advanced_hp_diesel_car(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """ example with advanced hp and diesel car.
+    """example with advanced hp and diesel car.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.
@@ -185,7 +178,7 @@ def household_advanced_hp_diesel_car(
         household=my_config.household_type,
         result_path=my_config.result_path,
         travel_route_set=my_config.travel_route_set,
-        transportation_device_set= my_config.transportation_device_set,
+        transportation_device_set=my_config.transportation_device_set,
         charging_station_set=my_config.charging_station_set,
         name="UTSP Connector",
         consumption=my_config.consumption,
@@ -207,9 +200,6 @@ def household_advanced_hp_diesel_car(
     )
 
     # Build heat Distribution System Controller
-    # hdscontroller_config = (
-    #     heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    # )
     my_heat_distribution_controller = (
         heat_distribution_system.HeatDistributionController(
             config=my_config.hdscontroller_config,
@@ -218,10 +208,6 @@ def household_advanced_hp_diesel_car(
     )
 
     # Build Heat Distribution System
-    # hds_config = (
-    #     heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
-    # )
-
     my_heat_distribution = heat_distribution_system.HeatDistribution(
         my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
     )
@@ -232,17 +218,10 @@ def household_advanced_hp_diesel_car(
 
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=my_heat_pump_controller_config,
-        # config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
-        #     name="HeatPumpHplibController",
-        #     mode=my_config.hp_controller_mode,
-        #     set_heating_threshold_outside_temperature_in_celsius=my_config.set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
-        #     set_cooling_threshold_outside_temperature_in_celsius=my_config.set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-        # ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
-    # my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib()
     my_heat_pump_config = my_config.hp_config
     my_heat_pump_config.name = "HeatPumpHPLib"
 
@@ -252,24 +231,13 @@ def household_advanced_hp_diesel_car(
     )
 
     # Build Heat Water Storage
-    # my_simple_heat_water_storage_config = (
-    #     simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
-    # )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_config.simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
-    # dhw_heatpump_config = (
-    #     generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
-    # )
     my_dhw_heatpump_config = my_config.dhw_heatpump_config
-
-    # dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-    #     name="DHWHeatpumpController"
-    # )
-
     my_dhw_heatpump_config.power_th = (
         my_occupancy.max_hot_water_demand
         * (4180 / 3600)
@@ -334,7 +302,13 @@ def household_advanced_hp_diesel_car(
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         config=sumbuilder.ElectricityGridConfig(
             name="ElectrcityGrid_BaseLoad",
-            grid=[my_occupancy, "Sum", my_domnestic_hot_water_heatpump, "Sum", my_heat_pump],
+            grid=[
+                my_occupancy,
+                "Sum",
+                my_domnestic_hot_water_heatpump,
+                "Sum",
+                my_heat_pump,
+            ],
             signal=None,
         ),
         my_simulation_parameters=my_simulation_parameters,

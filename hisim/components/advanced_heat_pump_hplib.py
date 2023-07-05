@@ -17,7 +17,7 @@ from hisim.component import (
     ComponentConnection,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
@@ -141,6 +141,8 @@ class HeatPumpHplib(Component):
         self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
 
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
+        
+        postprocessing_flag = InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
 
         # Component has states
         self.state = HeatPumpState(
@@ -200,6 +202,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
+            postprocessing_flag=postprocessing_flag,
             output_description="Electricity input power in Watt",
         )
 

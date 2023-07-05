@@ -65,7 +65,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     hp_controller_mode: int  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius: float
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius: float
-    # hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
+    hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig.get_config_classname
 
     @classmethod
     def get_default(cls):
@@ -90,7 +90,7 @@ class HouseholdAdvancedHPDieselCarConfig:
             hp_controller_mode=2,
             set_heating_threshold_outside_temperature_for_heat_pump_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius=22.0,
-            # hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
+            hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
         )
 
 
@@ -128,21 +128,16 @@ def household_advanced_hp_diesel_car(
     else:
         my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
 
+        my_config_json = my_config.to_json()
+        with open(config_filename, "w", encoding="utf8") as system_config_file:
+            system_config_file.write(my_config_json)
+
     # =================================================================================================================================
     # Set System Parameters
 
     # Set Simulation Parameters
     year = 2021
     seconds_per_timestep = 60
-
-    # # Set Occupancy
-    # url = my_config.lpg_url
-    # api_key = my_config.api_key
-    # household = my_config.household_type
-    # result_path = my_config.result_path
-    # travel_route_set = my_config.travel_route_set
-    # transportation_device_set = my_config.transportation_device_set
-    # charging_station_set = my_config.charging_station_set
 
     # =================================================================================================================================
     # Build Components
@@ -214,7 +209,8 @@ def household_advanced_hp_diesel_car(
     )
 
     # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib()
+    # my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib()
+    my_heat_pump_config = my_config.hp_config
     my_heat_pump_config.name = "HeatPumpHPLib"
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(

@@ -60,12 +60,21 @@ class HouseholdAdvancedHPDieselCarConfig:
     # pv_azimuth: float
     # tilt: float
     # pv_power: float
-    total_base_area_in_m2: float
+    # total_base_area_in_m2: float
     consumption: float
-    hp_controller_mode: int  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
-    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius: float
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius: float
+    # hp_controller_mode: int  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
+    # set_heating_threshold_outside_temperature_for_heat_pump_in_celsius: float
+    # set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius: float
+    building_config: building.BuildingConfig.get_config_classname
+    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig.get_config_classname
+    hds_config: heat_distribution_system.HeatDistributionConfig.get_config_classname
+    hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_config_classname
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig.get_config_classname
+    simple_heat_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig.get_config_classname
+    # dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
+    # dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
+    # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig.get_config_classname
+
 
     @classmethod
     def get_default(cls):
@@ -85,12 +94,32 @@ class HouseholdAdvancedHPDieselCarConfig:
             # pv_azimuth=180,
             # tilt=30,
             # pv_power=10000,
-            total_base_area_in_m2=121.2,
+            # total_base_area_in_m2=121.2,
             consumption=0.0,
-            hp_controller_mode=2,
-            set_heating_threshold_outside_temperature_for_heat_pump_in_celsius=16.0,
-            set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius=22.0,
+            # hp_controller_mode=2,
+            # set_heating_threshold_outside_temperature_for_heat_pump_in_celsius=16.0,
+            # set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius=22.0,
+            building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            hdscontroller_config=(
+                heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+            ),
+            hds_config=(
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+            ),
+            hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
+            simple_heat_water_storage_config=(
+                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+            ),
+            # dhw_heatpump_config=(
+            #     generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+            # ),
+            # dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+            #     name="DHWHeatpumpController"
+            # ),
+            # dhw_storage_config=(
+            #     generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+            # ),
         )
 
 
@@ -173,38 +202,42 @@ def household_advanced_hp_diesel_car(
 
     # Build Building
     my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
+        config=my_config.building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build heat Distribution System Controller
-    hdscontroller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    )
+    # hdscontroller_config = (
+    #     heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    # )
     my_heat_distribution_controller = (
         heat_distribution_system.HeatDistributionController(
-            config=hdscontroller_config,
+            config=my_config.hdscontroller_config,
             my_simulation_parameters=my_simulation_parameters,
         )
     )
 
     # Build Heat Distribution System
-    hds_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
-    )
+    # hds_config = (
+    #     heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    # )
 
     my_heat_distribution = heat_distribution_system.HeatDistribution(
-        my_simulation_parameters=my_simulation_parameters, config=hds_config
+        my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
     )
 
     # Build Heat Pump Controller
+    my_heat_pump_controller_config = my_config.hp_controller_config
+    my_heat_pump_controller_config.name = "HeatPumpHplibController"
+
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
-            name="HeatPumpHplibController",
-            mode=my_config.hp_controller_mode,
-            set_heating_threshold_outside_temperature_in_celsius=my_config.set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
-            set_cooling_threshold_outside_temperature_in_celsius=my_config.set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-        ),
+        config=my_heat_pump_controller_config,
+        # config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
+        #     name="HeatPumpHplibController",
+        #     mode=my_config.hp_controller_mode,
+        #     set_heating_threshold_outside_temperature_in_celsius=my_config.set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
+        #     set_cooling_threshold_outside_temperature_in_celsius=my_config.set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
+        # ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -219,11 +252,11 @@ def household_advanced_hp_diesel_car(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
-    )
+    # my_simple_heat_water_storage_config = (
+    #     simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+    # )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
+        config=my_config.simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 

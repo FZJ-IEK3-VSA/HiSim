@@ -237,6 +237,7 @@ def household_advanced_hp_diesel_car(
 
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
+    #Todo dhw_storage_config leads to an error when it is put into the ExampleConfigClass like the other configs
     dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )

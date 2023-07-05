@@ -71,7 +71,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_config_classname
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig.get_config_classname
     simple_heat_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig.get_config_classname
-    # dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
+    dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
     # dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig.get_config_classname
 
@@ -111,9 +111,9 @@ class HouseholdAdvancedHPDieselCarConfig:
             simple_heat_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
             ),
-            # dhw_heatpump_config=(
-            #     generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
-            # ),
+            dhw_heatpump_config=(
+                generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+            ),
             # dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
             #     name="DHWHeatpumpController"
             # ),
@@ -261,15 +261,16 @@ def household_advanced_hp_diesel_car(
     )
 
     # Build DHW
-    dhw_heatpump_config = (
-        generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
-    )
+    # dhw_heatpump_config = (
+    #     generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+    # )
+    my_dhw_heatpump_config = my_config.dhw_heatpump_config
 
     dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         name="DHWHeatpumpController"
     )
 
-    dhw_heatpump_config.power_th = (
+    my_dhw_heatpump_config.power_th = (
         my_occupancy.max_hot_water_demand
         * (4180 / 3600)
         * 0.5
@@ -302,7 +303,7 @@ def household_advanced_hp_diesel_car(
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Diesel-Car

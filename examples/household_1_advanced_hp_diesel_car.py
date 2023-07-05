@@ -64,6 +64,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig.get_config_classname
+    car_config: generic_car.CarConfig.get_config_classname
 
     @classmethod
     def get_default(cls):
@@ -109,6 +110,7 @@ class HouseholdAdvancedHPDieselCarConfig:
             # dhw_storage_config=(
             #     generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
             # ),
+            car_config=generic_car.CarConfig.get_default_diesel_config(),
         )
 
 
@@ -270,7 +272,7 @@ def household_advanced_hp_diesel_car(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = generic_car.CarConfig.get_default_diesel_config()
+    my_car_config = my_config.car_config
     my_car_config.name = "DieselCar"
 
     # create all cars

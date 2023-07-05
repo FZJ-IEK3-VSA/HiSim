@@ -8,10 +8,13 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import advanced_heat_pump_hplib, advanced_battery_bslib, controller_l2_energy_management_system
+from hisim.components import (
+    advanced_heat_pump_hplib,
+    advanced_battery_bslib,
+    controller_l2_energy_management_system,
+)
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 
 __authors__ = "Katharina Rieck"
@@ -201,24 +204,23 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Build EMS
     my_electricity_controller_config = (
-            controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-        )
+        controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+    )
     my_electricity_controller = (
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters,
-                config=my_electricity_controller_config,
-            )
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
         )
+    )
 
     # Build Battery
     my_advanced_battery_config = (
-            advanced_battery_bslib.BatteryConfig.get_default_config()
-        )
+        advanced_battery_bslib.BatteryConfig.get_default_config()
+    )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config,
     )
-
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
@@ -272,21 +274,21 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     # -----------------------------------------------------------------------------------------------------------------
     # Connect EMS
     my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_occupancy,
-            source_component_output="ElectricityOutput",
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-            source_weight=999,
-        )
+        source_component_class=my_occupancy,
+        source_component_output="ElectricityOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
     my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_photovoltaic_system,
-            source_component_output="ElectricityOutput",
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-            source_weight=999,
-        )
+        source_component_class=my_photovoltaic_system,
+        source_component_output="ElectricityOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=999,
+    )
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_heat_pump,
         source_component_output=my_heat_pump.ElectricalInputPower,
@@ -296,16 +298,16 @@ def household_with_hplib_hws_hds_pv_battery_ems(
         source_weight=1,
     )
     my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=1,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heat Pump. ",
-        )
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Heat Pump. ",
+    )
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_advanced_battery,
         source_component_output=my_advanced_battery.AcBatteryPower,
@@ -334,7 +336,6 @@ def household_with_hplib_hws_hds_pv_battery_ems(
         input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
         src_object=electricity_to_or_from_battery_target,
     )
-    
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters

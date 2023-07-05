@@ -1,6 +1,7 @@
 """ Tests for the basic household example. """
 # clean
 import os
+from pathlib import Path
 import pytest
 
 from hisim import hisim_main
@@ -10,11 +11,15 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
-
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household():
     """ Single day. """
+
+    config_filename = "household_advanced_hp_diesel_car_config.json"
+    if Path(config_filename).is_file():
+        os.remove(config_filename)
+
     path = "../examples/household_1_advanced_hp_diesel_car.py"
     func = "household_advanced_hp_diesel_car"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)

@@ -13,7 +13,6 @@ from utspclient.helpers.lpgdata import (
     TransportationDeviceSets,
     TravelRouteSets,
 )
-from utspclient.helpers.lpgpythonbindings import JsonReference
 
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -47,24 +46,20 @@ class HouseholdAdvancedHPDieselCarConfig:
 
     """Configuration for with advanced heat pump and diesel car."""
 
-    # pv_size: float
     building_type: str
     simulation_parameters: SimulationParameters
-    # pv_azimuth: float
-    # tilt: float
-    # pv_power: float
     # total_base_area_in_m2: float
-    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_config_classname
-    building_config: building.BuildingConfig.get_config_classname
-    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig.get_config_classname
-    hds_config: heat_distribution_system.HeatDistributionConfig.get_config_classname
-    hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_config_classname
-    hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig.get_config_classname
-    simple_heat_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig.get_config_classname
-    dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
-    dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
-    # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig.get_config_classname
-    car_config: generic_car.CarConfig.get_config_classname
+    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
+    building_config: building.BuildingConfig
+    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
+    hds_config: heat_distribution_system.HeatDistributionConfig
+    hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
+    hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
+    simple_heat_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
+    dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
+    dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
+    # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
+    car_config: generic_car.CarConfig
 
     @classmethod
     def get_default(cls):
@@ -117,7 +112,7 @@ class HouseholdAdvancedHPDieselCarConfig:
 def household_advanced_hp_diesel_car(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """example with advanced hp and diesel car.
+    """Example with advanced hp and diesel car.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.
@@ -137,8 +132,7 @@ def household_advanced_hp_diesel_car(
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
-    # Todo: change config with systemConfigBase.json for all components similar to modular_example
-    config_filename = "reference_household_config.json"
+    config_filename = "household_advanced_hp_diesel_car_config.json"
 
     my_config: HouseholdAdvancedHPDieselCarConfig
     if Path(config_filename).is_file():
@@ -148,9 +142,10 @@ def household_advanced_hp_diesel_car(
     else:
         my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
 
-        my_config_json = my_config.to_json()
-        with open(config_filename, "w", encoding="utf8") as system_config_file:
-            system_config_file.write(my_config_json)
+        # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
+        # my_config_json = my_config.to_json()
+        # with open(config_filename, "w", encoding="utf8") as system_config_file:
+        #     system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters
@@ -164,7 +159,7 @@ def household_advanced_hp_diesel_car(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -239,7 +234,7 @@ def household_advanced_hp_diesel_car(
 
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
-    #Todo dhw_storage_config leads to an error when it is put into the ExampleConfigClass like the other configs
+    # Todo dhw_storage_config leads to an error when it is put into the ExampleConfigClass like the other configs
     dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )

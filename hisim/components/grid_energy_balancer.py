@@ -44,7 +44,10 @@ class GridEnergyBalancer(DynamicComponent):
 
     # Outputs
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
-    TotalElectricityConsumption = "TotalElectricityConsumption"
+    ElectricityConsumption = "ElectricityConsumption"
+    ElectricityProduction = "ElectricityProduction"
+    CumulativeConsumption = "CumulativeConsumption"
+    CumulativeProduction = "CumulativeProduction"
 
     def __init__(
         self,
@@ -67,6 +70,13 @@ class GridEnergyBalancer(DynamicComponent):
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
 
+        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        # Component has states
+        self.state = GridEnergyBalancerState(
+            cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0
+        )
+        self.previous_state = self.state.self_copy()
+
         # Outputs
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -77,13 +87,40 @@ class GridEnergyBalancer(DynamicComponent):
             output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.",
         )
 
-        self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
+        self.electricity_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.TotalElectricityConsumption,
+            field_name=self.ElectricityConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
+            output_description=f"here a description for {self.ElectricityConsumption} will follow.",
+        )
+
+        self.electricity_production_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityProduction,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityProduction} will follow.",
+        )
+
+        self.cumulative_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeConsumption,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.CumulativeConsumption} will follow.",
+        )
+
+        self.cumulative_electricity_production_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeProduction,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
 
     def write_to_report(self):
@@ -92,11 +129,11 @@ class GridEnergyBalancer(DynamicComponent):
 
     def i_save_state(self) -> None:
         """Saves the state."""
-        pass
+        self.previous_state = self.state.self_copy()
 
     def i_restore_state(self) -> None:
         """Restores the state."""
-        pass
+        self.state = self.previous_state.self_copy()
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -123,27 +160,84 @@ class GridEnergyBalancer(DynamicComponent):
         # ELECTRICITY #
 
         # get sum of production and consumption for all inputs for each iteration
-        production = sum(
+        production_in_watt = sum(
             [
                 stsv.get_input_value(component_input=elem)
                 for elem in self.production_inputs
             ]
         )
-        consumption_uncontrolled = sum(
+        consumption_uncontrolled_in_watt = sum(
             [
                 stsv.get_input_value(component_input=elem)
                 for elem in self.consumption_uncontrolled_inputs
             ]
         )
 
+        # transform watt to watthour
+        production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
+        consumption_uncontrolled_in_watt_hour = (
+            consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
+        )
+
+        # calculate cumulative production and consumption
+        cumulative_production_in_watt_hour = (
+            self.state.cumulative_production_in_watt_hour + production_in_watt_hour
+        )
+        cumulative_consumption_in_watt_hour = (
+            self.state.cumulative_consumption_in_watt_hour
+            + consumption_uncontrolled_in_watt_hour
+        )
+
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        electricity_to_or_from_grid = production - consumption_uncontrolled
+        electricity_to_or_from_grid = (
+            production_in_watt - consumption_uncontrolled_in_watt
+        )
 
         stsv.set_output_value(
             self.electricity_to_or_from_grid, electricity_to_or_from_grid
         )
         stsv.set_output_value(
-            self.total_electricity_consumption_channel,
-            consumption_uncontrolled,
+            self.electricity_consumption_channel,
+            consumption_uncontrolled_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.electricity_production_channel,
+            production_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.cumulative_electricity_consumption_channel,
+            cumulative_consumption_in_watt_hour,
+        )
+
+        stsv.set_output_value(
+            self.cumulative_electricity_production_channel,
+            cumulative_production_in_watt_hour,
+        )
+
+        self.state.cumulative_production_in_watt_hour = (
+            cumulative_production_in_watt_hour
+        )
+        self.state.cumulative_consumption_in_watt_hour = (
+            cumulative_consumption_in_watt_hour
+        )
+
+
+@dataclass
+class GridEnergyBalancerState:
+
+    """GridEnergyBalancerState class."""
+
+    cumulative_production_in_watt_hour: float
+    cumulative_consumption_in_watt_hour: float
+
+    def self_copy(
+        self,
+    ):
+        """Copy the GridEnergyBalancerState."""
+        return GridEnergyBalancerState(
+            self.cumulative_production_in_watt_hour,
+            self.cumulative_consumption_in_watt_hour,
         )

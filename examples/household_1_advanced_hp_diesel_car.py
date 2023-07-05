@@ -39,7 +39,6 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-# Todo: adopt Config-Class according to needs
 @dataclass_json
 @dataclass
 class HouseholdAdvancedHPDieselCarConfig:
@@ -47,7 +46,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     """Configuration for with advanced heat pump and diesel car."""
 
     building_type: str
-    simulation_parameters: SimulationParameters
+    # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     building_config: building.BuildingConfig
@@ -66,12 +65,8 @@ class HouseholdAdvancedHPDieselCarConfig:
         """Get default HouseholdAdvancedHPDieselCarConfig."""
 
         return HouseholdAdvancedHPDieselCarConfig(
-            # pv_size=5,
             building_type="blub",
-            simulation_parameters=SimulationParameters.one_day_only(2022),
-            # pv_azimuth=180,
-            # tilt=30,
-            # pv_power=10000,
+            # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 url="http://134.94.131.167:443/api/v1/profilerequest",

@@ -49,19 +49,12 @@ class HouseholdAdvancedHPDieselCarConfig:
 
     # pv_size: float
     building_type: str
-    household_type: JsonReference
-    lpg_url: str
-    result_path: str
-    travel_route_set: JsonReference
     simulation_parameters: SimulationParameters
-    api_key: str
-    transportation_device_set: JsonReference
-    charging_station_set: JsonReference
     # pv_azimuth: float
     # tilt: float
     # pv_power: float
     # total_base_area_in_m2: float
-    consumption: float
+    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_config_classname
     building_config: building.BuildingConfig.get_config_classname
     hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig.get_config_classname
     hds_config: heat_distribution_system.HeatDistributionConfig.get_config_classname
@@ -79,19 +72,22 @@ class HouseholdAdvancedHPDieselCarConfig:
         return HouseholdAdvancedHPDieselCarConfig(
             # pv_size=5,
             building_type="blub",
-            household_type=Households.CHR01_Couple_both_at_Work,
-            lpg_url="http://134.94.131.167:443/api/v1/profilerequest",
-            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
             simulation_parameters=SimulationParameters.one_day_only(2022),
-            result_path="mypath",
-            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
             # pv_azimuth=180,
             # tilt=30,
             # pv_power=10000,
             # total_base_area_in_m2=121.2,
-            consumption=0.0,
+            occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                url="http://134.94.131.167:443/api/v1/profilerequest",
+                api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+                household=Households.CHR01_Couple_both_at_Work,
+                result_path="mypath",
+                travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
+                transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
+                charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+                name="UTSP Connector",
+                consumption=0.0,
+            ),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
             hdscontroller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
@@ -172,17 +168,7 @@ def household_advanced_hp_diesel_car(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=my_config.lpg_url,
-        api_key=my_config.api_key,
-        household=my_config.household_type,
-        result_path=my_config.result_path,
-        travel_route_set=my_config.travel_route_set,
-        transportation_device_set=my_config.transportation_device_set,
-        charging_station_set=my_config.charging_station_set,
-        name="UTSP Connector",
-        consumption=my_config.consumption,
-    )
+    my_occupancy_config = my_config.occupancy_config
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

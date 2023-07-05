@@ -109,7 +109,7 @@ class GridEnergyBalancer(DynamicComponent):
             object_name=self.component_name,
             field_name=self.CumulativeConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
+            unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
@@ -118,7 +118,7 @@ class GridEnergyBalancer(DynamicComponent):
             object_name=self.component_name,
             field_name=self.CumulativeProduction,
             load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
+            unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )

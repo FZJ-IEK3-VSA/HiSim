@@ -72,7 +72,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig.get_config_classname
     simple_heat_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig.get_config_classname
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig.get_config_classname
-    # dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
+    dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig.get_config_classname
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig.get_config_classname
 
 
@@ -114,9 +114,9 @@ class HouseholdAdvancedHPDieselCarConfig:
             dhw_heatpump_config=(
                 generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
             ),
-            # dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            #     name="DHWHeatpumpController"
-            # ),
+            dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+                name="DHWHeatpumpController"
+            ),
             # dhw_storage_config=(
             #     generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
             # ),
@@ -266,9 +266,9 @@ def household_advanced_hp_diesel_car(
     # )
     my_dhw_heatpump_config = my_config.dhw_heatpump_config
 
-    dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
-    )
+    # dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+    #     name="DHWHeatpumpController"
+    # )
 
     my_dhw_heatpump_config.power_th = (
         my_occupancy.max_hot_water_demand
@@ -281,14 +281,16 @@ def household_advanced_hp_diesel_car(
         )
     )
 
+    my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
+
     dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
     dhw_storage_config.name = "DHWStorage"
 
     dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=dhw_heatpump_controller_config.t_max_heating_in_celsius
-        - dhw_heatpump_controller_config.t_min_heating_in_celsius
+        temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
+        - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
     my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
@@ -298,7 +300,7 @@ def household_advanced_hp_diesel_car(
     my_domnestic_hot_water_heatpump_controller = (
         controller_l1_heatpump.L1HeatPumpController(
             my_simulation_parameters=my_simulation_parameters,
-            config=dhw_heatpump_controller_config,
+            config=my_dhw_heatpump_controller_config,
         )
     )
 

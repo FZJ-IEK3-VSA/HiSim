@@ -54,7 +54,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     hds_config: heat_distribution_system.HeatDistributionConfig
     hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
-    simple_heat_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
+    simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
@@ -88,7 +88,7 @@ class HouseholdAdvancedHPDieselCarConfig:
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
-            simple_heat_water_storage_config=(
+            simple_hot_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
             ),
             dhw_heatpump_config=(
@@ -154,7 +154,7 @@ def household_advanced_hp_diesel_car(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -210,7 +210,7 @@ def household_advanced_hp_diesel_car(
 
     # Build Heat Water Storage
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_config.simple_heat_water_storage_config,
+        config=my_config.simple_hot_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 

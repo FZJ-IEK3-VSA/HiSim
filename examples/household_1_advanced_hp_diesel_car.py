@@ -1,4 +1,4 @@
-"""  Reference Household example with gas heater and diesel car. """
+"""  Household example with advanced heat pump and diesel car. """
 
 # clean
 
@@ -17,8 +17,7 @@ from utspclient.helpers.lpgdata import (
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from hisim.components import generic_gas_heater
-from hisim.components import controller_l1_generic_gas_heater
+from hisim.components import advanced_heat_pump_hplib
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_hot_water_storage
@@ -40,12 +39,11 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-# Todo: adopt Config-Class according to needs
 @dataclass_json
 @dataclass
-class ReferenceHouseholdConfig:
+class HouseholdAdvancedHPDieselCarConfig:
 
-    """Configuration for ReferenceHosuehold."""
+    """Configuration for with advanced heat pump and diesel car."""
 
     building_type: str
     # simulation_parameters: SimulationParameters
@@ -54,8 +52,8 @@ class ReferenceHouseholdConfig:
     building_config: building.BuildingConfig
     hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    gasheater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
-    gasheater_config: generic_gas_heater.GenericGasHeaterConfig
+    hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
+    hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
     simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
@@ -64,9 +62,9 @@ class ReferenceHouseholdConfig:
 
     @classmethod
     def get_default(cls):
-        """Get default HouseholdPVConfig."""
+        """Get default HouseholdAdvancedHPDieselCarConfig."""
 
-        return ReferenceHouseholdConfig(
+        return HouseholdAdvancedHPDieselCarConfig(
             building_type="blub",
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
@@ -88,10 +86,8 @@ class ReferenceHouseholdConfig:
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
             ),
-            gasheater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
-            ),
-            gasheater_config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+            hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
+            hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
             simple_hot_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
             ),
@@ -108,13 +104,13 @@ class ReferenceHouseholdConfig:
         )
 
 
-def household_reference_gas_heater_diesel_car(
+def household_advanced_hp_diesel_car(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Reference example.
+    """Example with advanced hp and diesel car.
 
     This setup function emulates a household with some basic components. Here the residents have their
-    electricity and heating needs covered by a generic gas heater.
+    electricity and heating needs covered by a the advanced heat pump.
 
     - Simulation Parameters
     - Components
@@ -122,8 +118,8 @@ def household_reference_gas_heater_diesel_car(
         - Weather
         - Building
         - Electricity Base Load
-        - Gas Heater
-        - Gas Heater Controller
+        - Advanced Heat Pump HPlib
+        - Advanced Heat Pump HPlib Controller
         - Heat Distribution System
         - Heat Distribution System Controller
         - Simple Hot Water Storage
@@ -131,15 +127,15 @@ def household_reference_gas_heater_diesel_car(
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
-    config_filename = "reference_household_config.json"
+    config_filename = "household_advanced_hp_diesel_car_config.json"
 
-    my_config: ReferenceHouseholdConfig
+    my_config: HouseholdAdvancedHPDieselCarConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = ReferenceHouseholdConfig.from_json(system_config_file.read())  # type: ignore
+            my_config = HouseholdAdvancedHPDieselCarConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
-        my_config = ReferenceHouseholdConfig.get_default()
+        my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
         # my_config_json = my_config.to_json()
@@ -181,20 +177,6 @@ def household_reference_gas_heater_diesel_car(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Gas Heater Controller
-    my_gasheater_controller = (
-        controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.gasheater_controller_config,
-        )
-    )
-
-    # Build Gasheater
-    my_gasheater = generic_gas_heater.GasHeater(
-        config=my_config.gasheater_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-
     # Build heat Distribution System Controller
     my_heat_distribution_controller = (
         heat_distribution_system.HeatDistributionController(
@@ -206,6 +188,24 @@ def household_reference_gas_heater_diesel_car(
     # Build Heat Distribution System
     my_heat_distribution = heat_distribution_system.HeatDistribution(
         my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
+    )
+
+    # Build Heat Pump Controller
+    my_heat_pump_controller_config = my_config.hp_controller_config
+    my_heat_pump_controller_config.name = "HeatPumpHplibController"
+
+    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
+        config=my_heat_pump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
+    # Build Heat Pump
+    my_heat_pump_config = my_config.hp_config
+    my_heat_pump_config.name = "HeatPumpHPLib"
+
+    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
+        config=my_heat_pump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
@@ -281,7 +281,13 @@ def household_reference_gas_heater_diesel_car(
     my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
         config=sumbuilder.ElectricityGridConfig(
             name="ElectrcityGrid_BaseLoad",
-            grid=[my_occupancy, "Sum", my_domnestic_hot_water_heatpump],
+            grid=[
+                my_occupancy,
+                "Sum",
+                my_domnestic_hot_water_heatpump,
+                "Sum",
+                my_heat_pump,
+            ],
             signal=None,
         ),
         my_simulation_parameters=my_simulation_parameters,
@@ -297,20 +303,12 @@ def household_reference_gas_heater_diesel_car(
         my_heat_distribution.ThermalPowerDelivered,
     )
 
-    my_gasheater.connect_input(
-        my_gasheater.ControlSignal,
-        my_gasheater_controller.component_name,
-        my_gasheater_controller.ControlSignalToGasHeater,
+    my_heat_pump_controller.connect_only_predefined_connections(
+        my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
     )
 
-    my_gasheater.connect_input(
-        my_gasheater.MassflowInputTemperature,
-        my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
-    )
-
-    my_gasheater_controller.connect_only_predefined_connections(
-        my_simple_hot_water_storage, my_weather, my_heat_distribution_controller
+    my_heat_pump.connect_only_predefined_connections(
+        my_heat_pump_controller, my_weather, my_simple_hot_water_storage
     )
 
     my_heat_distribution_controller.connect_only_predefined_connections(
@@ -329,14 +327,14 @@ def household_reference_gas_heater_diesel_car(
 
     my_simple_hot_water_storage.connect_input(
         my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_gasheater.component_name,
-        my_gasheater.MassflowOutputTemperature,
+        my_heat_pump.component_name,
+        my_heat_pump.TemperatureOutput,
     )
 
     my_simple_hot_water_storage.connect_input(
         my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_gasheater.component_name,
-        my_gasheater.MassflowOutput,
+        my_heat_pump.component_name,
+        my_heat_pump.MassFlowOutput,
     )
 
     # connect DHW
@@ -357,8 +355,8 @@ def household_reference_gas_heater_diesel_car(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_building)
-    my_sim.add_component(my_gasheater)
-    my_sim.add_component(my_gasheater_controller)
+    my_sim.add_component(my_heat_pump)
+    my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_simple_hot_water_storage)

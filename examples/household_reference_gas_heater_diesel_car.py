@@ -13,7 +13,6 @@ from utspclient.helpers.lpgdata import (
     TransportationDeviceSets,
     TravelRouteSets,
 )
-from utspclient.helpers.lpgpythonbindings import JsonReference
 
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -48,42 +47,64 @@ class ReferenceHouseholdConfig:
 
     """Configuration for ReferenceHosuehold."""
 
-    # pv_size: float
     building_type: str
-    household_type: JsonReference
-    lpg_url: str
-    result_path: str
-    travel_route_set: JsonReference
-    simulation_parameters: SimulationParameters
-    api_key: str
-    transportation_device_set: JsonReference
-    charging_station_set: JsonReference
-    # pv_azimuth: float
-    # tilt: float
-    # pv_power: float
-    total_base_area_in_m2: float
-    consumption: float
+    # simulation_parameters: SimulationParameters
+    # total_base_area_in_m2: float
+    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
+    building_config: building.BuildingConfig
+    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
+    hds_config: heat_distribution_system.HeatDistributionConfig
+    gasheater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
+    gasheater_config: generic_gas_heater.GenericGasHeaterConfig
+    simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
+    dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
+    dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
+    # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
+    car_config: generic_car.CarConfig
 
     @classmethod
     def get_default(cls):
         """Get default HouseholdPVConfig."""
 
         return ReferenceHouseholdConfig(
-            # pv_size=5,
             building_type="blub",
-            household_type=Households.CHR01_Couple_both_at_Work,
-            lpg_url="http://134.94.131.167:443/api/v1/profilerequest",
-            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
-            simulation_parameters=SimulationParameters.one_day_only(2022),
-            result_path="mypath",
-            travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-            # pv_azimuth=180,
-            # tilt=30,
-            # pv_power=10000,
-            total_base_area_in_m2=121.2,
-            consumption=0.0,
+            # simulation_parameters=SimulationParameters.one_day_only(2022),
+            # total_base_area_in_m2=121.2,
+            occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                url="http://134.94.131.167:443/api/v1/profilerequest",
+                api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+                household=Households.CHR01_Couple_both_at_Work,
+                result_path="mypath",
+                travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
+                transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
+                charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+                name="UTSP Connector",
+                consumption=0.0,
+            ),
+            building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            hdscontroller_config=(
+                heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+            ),
+            hds_config=(
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+            ),
+            gasheater_controller_config=(
+                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
+            ),
+            gasheater_config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+            simple_hot_water_storage_config=(
+                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+            ),
+            dhw_heatpump_config=(
+                generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+            ),
+            dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+                name="DHWHeatpumpController"
+            ),
+            # dhw_storage_config=(
+            #     generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+            # ),
+            car_config=generic_car.CarConfig.get_default_diesel_config(),
         )
 
 
@@ -110,7 +131,6 @@ def household_reference_gas_heater_diesel_car(
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
-    # Todo: change config with systemConfigBase.json for all components similar to modular_example
     config_filename = "reference_household_config.json"
 
     my_config: ReferenceHouseholdConfig
@@ -121,21 +141,17 @@ def household_reference_gas_heater_diesel_car(
     else:
         my_config = ReferenceHouseholdConfig.get_default()
 
+        # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
+        # my_config_json = my_config.to_json()
+        # with open(config_filename, "w", encoding="utf8") as system_config_file:
+        #     system_config_file.write(my_config_json)
+
     # =================================================================================================================================
     # Set System Parameters
 
     # Set Simulation Parameters
     year = 2021
     seconds_per_timestep = 60
-
-    # Set Occupancy
-    url = my_config.lpg_url
-    api_key = my_config.api_key
-    household = my_config.household_type
-    result_path = my_config.result_path
-    travel_route_set = my_config.travel_route_set
-    transportation_device_set = my_config.transportation_device_set
-    charging_station_set = my_config.charging_station_set
 
     # =================================================================================================================================
     # Build Components
@@ -148,17 +164,7 @@ def household_reference_gas_heater_diesel_car(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=url,
-        api_key=api_key,
-        household=household,
-        result_path=result_path,
-        travel_route_set=travel_route_set,
-        transportation_device_set=transportation_device_set,
-        charging_station_set=charging_station_set,
-        name="UTSP Connector",
-        consumption=my_config.consumption,
-    )
+    my_occupancy_config = my_config.occupancy_config
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -171,66 +177,46 @@ def household_reference_gas_heater_diesel_car(
 
     # Build Building
     my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
+        config=my_config.building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Gas Heater Controller
-    my_gasheater_controller_config = (
-        controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
-    )
     my_gasheater_controller = (
         controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
             my_simulation_parameters=my_simulation_parameters,
-            config=my_gasheater_controller_config,
+            config=my_config.gasheater_controller_config,
         )
     )
 
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(
-        config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+        config=my_config.gasheater_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build heat Distribution System Controller
-    hdscontroller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    )
     my_heat_distribution_controller = (
         heat_distribution_system.HeatDistributionController(
-            config=hdscontroller_config,
+            config=my_config.hdscontroller_config,
             my_simulation_parameters=my_simulation_parameters,
         )
     )
 
     # Build Heat Distribution System
-    hds_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
-    )
-
     my_heat_distribution = heat_distribution_system.HeatDistribution(
-        my_simulation_parameters=my_simulation_parameters, config=hds_config
+        my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
-    )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
+        config=my_config.simple_hot_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
-    dhw_heatpump_config = (
-        generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
-    )
-
-    dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
-    )
-
-    dhw_heatpump_config.power_th = (
+    my_dhw_heatpump_config = my_config.dhw_heatpump_config
+    my_dhw_heatpump_config.power_th = (
         my_occupancy.max_hot_water_demand
         * (4180 / 3600)
         * 0.5
@@ -241,14 +227,17 @@ def household_reference_gas_heater_diesel_car(
         )
     )
 
+    my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
+
+    # Todo dhw_storage_config leads to an error when it is put into the ExampleConfigClass like the other configs
     dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
     dhw_storage_config.name = "DHWStorage"
 
     dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=dhw_heatpump_controller_config.t_max_heating_in_celsius
-        - dhw_heatpump_controller_config.t_min_heating_in_celsius
+        temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
+        - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
     my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
@@ -258,12 +247,12 @@ def household_reference_gas_heater_diesel_car(
     my_domnestic_hot_water_heatpump_controller = (
         controller_l1_heatpump.L1HeatPumpController(
             my_simulation_parameters=my_simulation_parameters,
-            config=dhw_heatpump_controller_config,
+            config=my_dhw_heatpump_controller_config,
         )
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Diesel-Car
@@ -273,7 +262,7 @@ def household_reference_gas_heater_diesel_car(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = generic_car.CarConfig.get_default_diesel_config()
+    my_car_config = my_config.car_config
     my_car_config.name = "DieselCar"
 
     # create all cars

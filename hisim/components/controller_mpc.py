@@ -94,7 +94,7 @@ class MPC_Controller(cp.Component):
             phi_st_forecast: list = None,
             phi_ia_forecast: list = None,
         #getting pv forecast
-            self.pv_forecast_yearly: list = None,
+            pv_forecast_yearly: list = None,
             #self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
         #getting battery specifications
             #self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)

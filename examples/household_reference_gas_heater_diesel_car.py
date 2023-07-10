@@ -26,7 +26,6 @@ from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
-from hisim.components import sumbuilder
 from hisim.components import grid_energy_balancer
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
@@ -281,7 +280,7 @@ def household_reference_gas_heater_diesel_car(
             )
         )
 
-    # Build Eleectricity Grid Balancer
+    # Build Electricity Grid Balancer
     my_electricity_grid = grid_energy_balancer.GridEnergyBalancer(
         my_simulation_parameters=my_simulation_parameters,
         config=my_config.grid_energy_balancer_config,

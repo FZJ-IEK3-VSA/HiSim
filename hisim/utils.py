@@ -62,6 +62,12 @@ HISIMPATH: Dict[str, Any] = {
         "data_processed",
         "heating_reference_temperature_per_location.csv",
     ),
+    "heater_efficiencies": os.path.join(
+        hisim_inputs,
+        "housing",
+        "data_processed",
+        "heater_efficiencies.csv",
+    ),
     "fuel_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_fuels.csv"),
     "component_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"),
     "occupancy_scaling_factors_per_country": os.path.join(hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"),

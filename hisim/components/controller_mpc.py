@@ -113,7 +113,7 @@ class MPC_Controller(cp.Component):
         revenues: list = None,
         air_conditioning_electricity: list = None,
         cost_optimal_temperature_set_point: list = None,
-        pv2load: float: list = None,
+        pv2load: list = None,
         electricity_from_grid: list = None,
         electricity_to_grid: list = None,
         battery_to_load: list = None,

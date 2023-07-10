@@ -102,7 +102,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.setup_function,
-        variant_name="hisim_example_for_mass_simulation",
+        variant_name=f"{my_simulation_parameters.duration.days}_days_{my_simulation_parameters.seconds_per_timestep}_sec_per_timestep",
         sorting_option=SortingOptionEnum.MASS_SIMULATION,
     )
 

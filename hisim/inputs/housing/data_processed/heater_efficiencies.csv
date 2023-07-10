@@ -1,0 +1,4 @@
+﻿Heater,Heating,WaterHeating
+OilHeating, 0.885,0.885
+GasHeating, 0.91, 0.91
+DistrictHeating,1.0,0.9

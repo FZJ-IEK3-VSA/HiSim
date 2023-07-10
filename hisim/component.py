@@ -4,19 +4,21 @@ The component class is the base class for all other components.
 """
 # clean
 from __future__ import annotations
-from typing import List, Optional, Dict, Any, Type
 
-import typing
 import dataclasses as dc
+import typing
 from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Tuple, Type
+
+import pandas as pd
 from dataclass_wizard import JSONWizard
 
-# Package
-
-from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
+from hisim.simulationparameters import SimulationParameters
+
+# Package
 
 
 @dataclass
@@ -286,6 +288,15 @@ class Component:
         if len(self.outputs) == 0:
             raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculates operational cost and operational co2 footprint during simulation time frame.
+
+        :return: [operational cost in euro, operational co2 footprint in kg]
+        :rtype: Tuple[float,float]
+        """
+        return 0, 0
 
     def i_save_state(self) -> None:
         """ Abstract. Gets called at the beginning of a timestep to save the state. """

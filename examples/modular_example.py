@@ -39,6 +39,14 @@ def cleanup_old_result_folders():
             shutil.rmtree(full_path)
 
 
+def cleanup_old_lpg_requests():
+    """ Removes old results of loadprofilegenerator_connector_utsp. """
+    files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
+    for file in files_in_folder:
+        full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)
+        os.remove(full_path)
+
+
 def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[float, List[int]]:
     """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.
 
@@ -66,7 +74,7 @@ def modular_household_explicit(
     The configuration of the household is read in via the json input file "system_config.json".
     """
     # TODO: does not work in docker --> commented out for now
-    # cleanup_old_result_folders()
+    cleanup_old_lpg_requests()
 
     # Set simulation parameters
     year = 2019
@@ -88,7 +96,7 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
@@ -97,9 +105,12 @@ def modular_household_explicit(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.MAKE_NETWORK_CHARTS
-        # )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.MAKE_NETWORK_CHARTS
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_OPEX
+        )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -229,6 +240,7 @@ def modular_household_explicit(
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
+                consumption=0
             )
         )
 

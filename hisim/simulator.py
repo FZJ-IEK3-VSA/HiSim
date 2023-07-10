@@ -399,7 +399,7 @@ class Simulator:
 
     def get_std_results(
         self, results_data_frame: pd.DataFrame
-    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
         pd_timeline = pd.date_range(
             start=self._simulation_parameters.start_date,

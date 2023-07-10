@@ -390,7 +390,7 @@ class MPC_Controller(cp.Component):
     
     @utils.measure_execution_time
     
-    def Optimizer(self,temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon,t_m_old):
+    def Optimizer(self,temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon):
         """MPC Implementation."""
         sampling_rate=int(self.prediction_horizon/scaled_horizon)
         N=scaled_horizon  # scaled prediction horizon
@@ -476,7 +476,7 @@ class MPC_Controller(cp.Component):
             #flow=opti.variable(1,N)
 
         x_init=opti.parameter(1,1)
-        u_init=opti.parameter(1,1)
+        #u_init=opti.parameter(1,1)
         disturbance_forecast=opti.parameter(n_disturbances,N)
         cop_values=opti.parameter(1,N)      #coefiiecient of performance: heating air conditioner efficiency
         eer_values=opti.parameter(1,N)      #energy efficiency ratio: cooling air conditioner efficiency
@@ -603,7 +603,7 @@ class MPC_Controller(cp.Component):
         sol=opti.solve()
 
         # solution Optimizer resolution
-        t_m_opt=sol.value(x)
+        #t_m_opt=sol.value(x)
         p_th_opt=sol.value(u)
         grid_import=sol.value(Pbuy)
 

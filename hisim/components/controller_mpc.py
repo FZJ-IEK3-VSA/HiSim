@@ -732,7 +732,7 @@ class MPC_Controller(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """start simulation of the MPC here."""
-        t_m_old = stsv.get_input_value(self.t_mC)
+        #t_m_old = stsv.get_input_value(self.t_mC)
         if self.my_simulation_parameters.system_config.predictive:
             if (self.mpc_scheme=='optimization_once_aday_only' and timestep % self.prediction_horizon == 0) or (self.mpc_scheme=='moving_horizon_control' and timestep <= self.my_simulation_parameters.timesteps - self.prediction_horizon):
                 if self.my_simulation_parameters.seconds_per_timestep >= 15*60:

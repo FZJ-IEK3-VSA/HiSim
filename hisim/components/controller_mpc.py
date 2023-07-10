@@ -165,12 +165,12 @@ class MPC_Controller(cp.Component):
         self.costsC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.ElectricityCost,
                                                             LoadTypes.PRICE,
-                                                            Units.EUR_PER_KWH)
+                                                            Units.CENTS_PER_KWH)
 
         self.revenuesC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.GenerationRevenue,
                                                             LoadTypes.PRICE,
-                                                            Units.EUR_PER_KWH)
+                                                            Units.CENTS_PER_KWH)
 
 
 
@@ -425,7 +425,7 @@ class MPC_Controller(cp.Component):
             opti.minimize(sum(ca.horzsplit((p_el*Pbuy - 0.5*FIT*Psell))))
 
         if self.flexibility_element == 'PV_and_Battery':
-                opti.minimize(sum(ca.horzsplit((p_el*Pbuy - 0.5*FIT*Psell))))
+            opti.minimize(sum(ca.horzsplit((p_el*Pbuy - 0.5*FIT*Psell))))
 
         # Constraints
         for k in range(N):
@@ -552,7 +552,7 @@ class MPC_Controller(cp.Component):
             if abs(p_th_opt_timstep[i]) < 0.1:
                 p_th_opt_timstep[i] = 0
             if abs(grid_import_timestep[i]) < 0.1:
-                    grid_import_timestep[i] = 0
+                grid_import_timestep[i] = 0
             if abs(airconditioning_electrcitiy_consumption[i]) < 0.1:
                 airconditioning_electrcitiy_consumption[i] = 0
 
@@ -821,18 +821,7 @@ Remark: After sucessfully performing the steps 1 to 13, I needed to wait for few
 For further assistance you may write to: marwa.alfouly@tum.de
 If you intend to wrok with casadi, it is helpful to check the group https://groups.google.com/g/casadi-users.
 
-
 """
-
-
-
-
-
-
-
-
-
-
 
 
 """Future Wrok.
@@ -855,6 +844,3 @@ For future work, it is suggested to investigate techniques for autoscaling that 
 It is also interesting to investigate solutions to reach 100% self-sufficiency of the air conditioning load.
 
 """
-
-
-

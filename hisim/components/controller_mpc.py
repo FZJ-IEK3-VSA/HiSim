@@ -234,7 +234,7 @@ class MPC_Controller(cp.Component):
         
         self.temperature_Forecast_24h_1min=temperature_Forecast_24h_1min
         self.phi_m_Forecast_24h_1min=phi_m_Forecast_24h_1min
-        self.phi_self.ia_Forecast_24h_1min=ia_Forecast_24h_1min
+        self.phi_ia_Forecast_24h_1min=phi_ia_Forecast_24h_1min
         self.phi_st_Forecast_24h_1min=phi_st_Forecast_24h_1min
         self.pv_forecast_24h_1min=pv_forecast_24h_1min
         self.PricePurchase_Forecast_24h_1min=PricePurchase_Forecast_24h_1min

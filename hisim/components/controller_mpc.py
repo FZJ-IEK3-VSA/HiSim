@@ -391,7 +391,7 @@ class MPC_Controller(cp.Component):
         dist=opti.variable(n_disturbances,N)            # disturbances: 1. ambient temperature 2. supply temperature = ambient temperature 3. heat flux to the node Ti (indoor air) 4. heat flux to the node s (internal surfaces) 5. heat flux to thermal mass node
         Pbuy=opti.variable(1,N)
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             Ppv=opti.variable(1,N)
             Psell=opti.variable(1,N)
             PV=opti.variable(1,N)
@@ -410,7 +410,7 @@ class MPC_Controller(cp.Component):
         cop_values=opti.parameter(1,N)      #coefiiecient of performance: heating air conditioner efficiency
         eer_values=opti.parameter(1,N)      #energy efficiency ratio: cooling air conditioner efficiency
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             pv_production=opti.parameter(1,N)
 
         if self.flexibility_element == 'PV_and_Battery':
@@ -471,7 +471,7 @@ class MPC_Controller(cp.Component):
             opti.subject_to(Psell  == pv_production - battery_charging_power - Ppv )
 
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.subject_to(opti.bounded(0,Psell,pv_production))
             opti.subject_to(Pbuy >= 0)
             opti.subject_to(Pbuy <= ca.if_else(u>0,ca.fabs(u)/cop_values,ca.fabs(u)/eer_values))
@@ -480,7 +480,7 @@ class MPC_Controller(cp.Component):
         opti.subject_to(x[:,0]==x_init)                       # controlled temperature temperature
         opti.subject_to(dist==disturbance_forecast)           # building disturbances (solar gains / internal gains / ambient temperature)
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.subject_to(PV==pv_production)                # forecasted PV generation by the generic_pv_component
 
         if self.flexibility_element == 'PV_and_Battery':
@@ -521,7 +521,7 @@ class MPC_Controller(cp.Component):
         opti.set_value(cop_values,cop_sampled)
         opti.set_value(eer_values,eer_sampled)
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.set_value(pv_production,pv_forecast_24h)
 
 
@@ -558,7 +558,7 @@ class MPC_Controller(cp.Component):
             if abs(airconditioning_electrcitiy_consumption[i]) < 0.1:
                 airconditioning_electrcitiy_consumption[i] = 0
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
 
             # solution Optimizer resolution
             pv_consumption=sol.value(Ppv)
@@ -751,7 +751,7 @@ class MPC_Controller(cp.Component):
         if self.flexibility_element == 'basic_buidling_configuration':
             stsv.set_output_value(self.grid_importC,self.air_conditioning_electricity[applied_optimal_solution_index])
 
-        if self.flexibility_element == 'PV_only' or self.flexibility_element == 'PV_and_Battery':
+        if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             stsv.set_output_value(self.pv_consumptionC,self.pv2load[applied_optimal_solution_index])
             stsv.set_output_value(self.grid_importC,self.electricity_from_grid[applied_optimal_solution_index])
             stsv.set_output_value(self.grid_exportC,self.electricity_to_grid[applied_optimal_solution_index])

@@ -706,7 +706,8 @@ class MPC_Controller(cp.Component):
 
         if self.flexibility_element == 'PV_and_Battery':
             return p_th_opt_timstep, airconditioning_electrcitiy_consumption,pv_consumption_timestep, grid_import_timestep,grid_export_timestep, battery_to_load_timstep, pv_to_battery_timestep,battery_power_flow_timestep,batt_soc_actual_timestep, batt_soc_normalized_timestep, t_m_opt_timestep
-
+    
+        return None
 
     def cost_calculation(self,grid_export_timestep,grid_import_timestep):
         """calculate cost of cooling consumption and revenue for buildings with renewables."""

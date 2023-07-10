@@ -95,8 +95,15 @@ class MPC_Controller(cp.Component):
             phi_ia_forecast: list = None,
         #getting pv forecast
             pv_forecast_yearly: list = None,
-            #self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
         #getting battery specifications
+        
+            maximum_storage_capacity: float = 0.0,
+            minimum_storage_capacity: float = 0.0,
+            maximum_charging_power: float = 0.0,
+            maximum_discharging_power: float = 0.0,
+            battery_efficiency: float = 0.0,
+            inverter_efficiency: float = 0.0,
+        
             #self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)
             #self.minimum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MinimumBatteryCapacity)
             #self.maximum_charging_power= self.simulation_repository.get_entry(GenericBattery.MaximalChargingPower)
@@ -204,6 +211,12 @@ class MPC_Controller(cp.Component):
         self.phi_ia_forecast=phi_ia_forecast
         self.temp_forecast=temp_forecast
         self.pv_forecast_yearly=pv_forecast_yearly
+        self.maximum_storage_capacity=maximum_storage_capacity
+        self.minimum_storage_capacity=minimum_storage_capacity
+        self.maximum_charging_power=maximum_charging_power
+        self.maximum_discharging_power=maximum_discharging_power
+        self.battery_efficiency=battery_efficiency
+        self.inverter_efficiency=inverter_efficiency
 
     def get_weather_default_connections(self):
         """get default inputs from the building component."""

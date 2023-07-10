@@ -89,7 +89,7 @@ def household_gas_heater_with_new_controller(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
-        name="UTSP Connector",
+        name="UTSPConnector",
         consumption=0,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

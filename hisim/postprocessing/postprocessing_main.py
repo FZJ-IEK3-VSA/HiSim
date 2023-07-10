@@ -814,16 +814,19 @@ class PostProcessor:
                                 "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
                             ) from ex
 
-        pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
-        os.makedirs(pyam_data_folder)
-        file_name = f"{pyam_data_folder}{ppdt.module_filename}_{ppdt.setup_function}"
-        file_name_hourly = (
-            file_name
-            + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+        # pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
+        pyam_data_folder = os.path.join(ppdt.simulation_parameters.result_directory, "pyam_data")
+        if os.path.exists(pyam_data_folder) is False:
+            os.makedirs(pyam_data_folder)
+        else:
+            log.information("This pyam_data path exists already: " + pyam_data_folder)
+        file_name_hourly = os.path.join(
+            pyam_data_folder,
+            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
         )
-        file_name_yearly = (
-            file_name
-            + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+        file_name_yearly = os.path.join(
+            pyam_data_folder,
+            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
         )
         simple_df_hourly_data.to_csv(
             path_or_buf=file_name_hourly,
@@ -835,6 +838,6 @@ class PostProcessor:
         json_object = json.dumps(data_information_dict, indent=4)
         # Writing to sample.json
         with open(
-            pyam_data_folder + "data_information_for_pyam.json", "w", encoding="utf-8"
+            os.path.join(pyam_data_folder,"data_information_for_pyam.json"), "w", encoding="utf-8"
         ) as outfile:
             outfile.write(json_object)

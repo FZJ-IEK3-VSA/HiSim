@@ -88,14 +88,14 @@ class MPC_Controller(cp.Component):
         flexibility_element: str = 'basic_buidling_configuration',
         initial_state_of_charge: float = 10/15,
         my_simulation_repository : Optional[ cp.SimRepository ] = None,
-        """ getting forecasted disturbance (weather)"""
+        #getting forecasted disturbance (weather)
             #self.temp_forecast = self.simulation_repository.get_entry(Weather.Weather_TemperatureOutside_yearly_forecast)[:self.my_simulation_parameters.timesteps]
             phi_m_forecast : list = [],
             #self.phi_st_forecast = self.simulation_repository.get_entry( Building.Heat_flux_surface_node_forecast)
             #self.phi_ia_forecast = self.simulation_repository.get_entry( Building.Heat_flux_indoor_air_node_forecast)
-        """"getting pv forecast"""
+        #getting pv forecast
             #self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
-        """ getting battery specifications """
+        #getting battery specifications
             #self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)
             #self.minimum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MinimumBatteryCapacity)
             #self.maximum_charging_power= self.simulation_repository.get_entry(GenericBattery.MaximalChargingPower)

@@ -79,7 +79,7 @@ class ReferenceHouseholdConfig:
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
                 name="UTSP Connector",
-                # consumption=0.0,  # Todo: this line will be neccessary, to work with changes from branch adopt_outputs_for_esm
+                consumption=0.0,
             ),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
             hdscontroller_config=(

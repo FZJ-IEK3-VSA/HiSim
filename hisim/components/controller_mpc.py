@@ -165,12 +165,12 @@ class MPC_Controller(cp.Component):
         self.costsC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.ElectricityCost,
                                                             LoadTypes.PRICE,
-                                                            Units.CENTS_PER_KWH)
+                                                            Units.EUR_PER_KWH)
 
         self.revenuesC: cp.ComponentOutput = self.add_output(self.component_name,
                                                             self.GenerationRevenue,
                                                             LoadTypes.PRICE,
-                                                            Units.CENTS_PER_KWH)
+                                                            Units.EUR_PER_KWH)
 
 
 

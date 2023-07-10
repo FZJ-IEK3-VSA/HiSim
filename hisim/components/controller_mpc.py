@@ -90,7 +90,7 @@ class MPC_Controller(cp.Component):
         my_simulation_repository : Optional[ cp.SimRepository ] = None,
         #getting forecasted disturbance (weather)
             #self.temp_forecast = self.simulation_repository.get_entry(Weather.Weather_TemperatureOutside_yearly_forecast)[:self.my_simulation_parameters.timesteps]
-            phi_m_forecast : list = [],
+            phi_m_forecast : list = None,
             #self.phi_st_forecast = self.simulation_repository.get_entry( Building.Heat_flux_surface_node_forecast)
             #self.phi_ia_forecast = self.simulation_repository.get_entry( Building.Heat_flux_indoor_air_node_forecast)
         #getting pv forecast

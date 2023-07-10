@@ -89,12 +89,12 @@ class MPC_Controller(cp.Component):
         initial_state_of_charge: float = 10/15,
         my_simulation_repository : Optional[ cp.SimRepository ] = None,
         #getting forecasted disturbance (weather)
-            #self.temp_forecast = self.simulation_repository.get_entry(Weather.Weather_TemperatureOutside_yearly_forecast)[:self.my_simulation_parameters.timesteps]
             temp_forecast: list[float] = None,
             phi_m_forecast: list = None,
             phi_st_forecast: list = None,
             phi_ia_forecast: list = None,
         #getting pv forecast
+            self.pv_forecast_yearly: list = None,
             #self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
         #getting battery specifications
             #self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)
@@ -203,6 +203,7 @@ class MPC_Controller(cp.Component):
         self.phi_st_forecast=phi_st_forecast
         self.phi_ia_forecast=phi_ia_forecast
         self.temp_forecast=temp_forecast
+        self.pv_forecast_yearly=pv_forecast_yearly
 
     def get_weather_default_connections(self):
         """get default inputs from the building component."""

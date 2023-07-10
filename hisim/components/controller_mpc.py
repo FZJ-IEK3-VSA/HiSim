@@ -96,20 +96,34 @@ class MPC_Controller(cp.Component):
         #getting pv forecast
             pv_forecast_yearly: list = None,
         #getting battery specifications
-        
             maximum_storage_capacity: float = 0.0,
             minimum_storage_capacity: float = 0.0,
             maximum_charging_power: float = 0.0,
             maximum_discharging_power: float = 0.0,
             battery_efficiency: float = 0.0,
             inverter_efficiency: float = 0.0,
+        temperature_Forecast_24h_1min: list = None,
+        phi_m_Forecast_24h_1min: list = None,
+        phi_ia_Forecast_24h_1min: list = None,
+        phi_st_Forecast_24h_1min: list = None,
+        pv_forecast_24h_1min: list = None,
+        PricePurchase_Forecast_24h_1min: list = None,
+        PriceInjection_Forecast_24h_1min: list = None,
+        optimal_cost: list = None,
+        revenues: list = None,
+        air_conditioning_electricity: list = None,
+        cost_optimal_temperature_set_point: list = None,
+        pv2load: float: list = None,
+        electricity_from_grid: list = None,
+        electricity_to_grid: list = None,
+        battery_to_load: list = None,
+        pv_to_battery_timestep: list = None,
+        battery_power_flow_timestep: list = None,
+        battery_control_state: list = None,
+        batt_soc_actual_timestep: list = None,
+        batt_soc_normalized_timestep: list = None,
+
         
-            #self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)
-            #self.minimum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MinimumBatteryCapacity)
-            #self.maximum_charging_power= self.simulation_repository.get_entry(GenericBattery.MaximalChargingPower)
-            #self.maximum_discharging_power= self.simulation_repository.get_entry(GenericBattery.MaximalDischargingPower)
-            #self.battery_efficiency= self.simulation_repository.get_entry(GenericBattery.BatteryEfficiency)
-            #self.inverter_efficiency= self.simulation_repository.get_entry(GenericBattery.InverterEfficiency)
     ) -> None:
         """Constructs all the neccessary attributes."""
         super().__init__(name="MPC_Controller",
@@ -217,6 +231,27 @@ class MPC_Controller(cp.Component):
         self.maximum_discharging_power=maximum_discharging_power
         self.battery_efficiency=battery_efficiency
         self.inverter_efficiency=inverter_efficiency
+        
+        self.temperature_Forecast_24h_1min=temperature_Forecast_24h_1min
+        self.phi_m_Forecast_24h_1min=phi_m_Forecast_24h_1min
+        self.phi_self.ia_Forecast_24h_1min=ia_Forecast_24h_1min
+        self.phi_st_Forecast_24h_1min=phi_st_Forecast_24h_1min
+        self.pv_forecast_24h_1min=pv_forecast_24h_1min
+        self.PricePurchase_Forecast_24h_1min=PricePurchase_Forecast_24h_1min
+        self.PriceInjection_Forecast_24h_1min=PriceInjection_Forecast_24h_1min
+        self.optimal_cost=optimal_cost
+        self.revenues=revenues
+        self.air_conditioning_electricity=air_conditioning_electricity
+        self.cost_optimal_temperature_set_point=cost_optimal_temperature_set_point
+        self.pv2load=pv2load
+        self.electricity_from_grid=electricity_from_grid
+        self.electricity_to_grid=electricity_to_grid
+        self.battery_to_load=battery_to_load
+        self.pv_to_battery_timestep=pv_to_battery_timestep
+        self.battery_power_flow_timestep=battery_power_flow_timestep
+        self.battery_control_state=battery_control_state
+        self.batt_soc_actual_timestep=batt_soc_actual_timestep
+        self.batt_soc_normalized_timestep=batt_soc_normalized_timestep
 
     def get_weather_default_connections(self):
         """get default inputs from the building component."""

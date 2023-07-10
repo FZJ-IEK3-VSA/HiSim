@@ -89,7 +89,7 @@ class MPC_Controller(cp.Component):
         initial_state_of_charge: float = 10/15,
         my_simulation_repository : Optional[ cp.SimRepository ] = None,
         #getting forecasted disturbance (weather)
-            temp_forecast: list[float] = None,
+            temp_forecast: Optional[list] = None,
             phi_m_forecast: list = None,
             phi_st_forecast: list = None,
             phi_ia_forecast: list = None,

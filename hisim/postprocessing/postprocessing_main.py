@@ -815,22 +815,23 @@ class PostProcessor:
                             ) from ex
 
         # pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
-        pyam_data_folder = os.path.join(ppdt.simulation_parameters.result_directory, "pyam_data")
+        pyam_data_folder = os.path.join(
+            ppdt.simulation_parameters.result_directory, "pyam_data"
+        )
         if os.path.exists(pyam_data_folder) is False:
             os.makedirs(pyam_data_folder)
         else:
             log.information("This pyam_data path exists already: " + pyam_data_folder)
         file_name_hourly = os.path.join(
             pyam_data_folder,
-            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
         )
         file_name_yearly = os.path.join(
             pyam_data_folder,
-            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
         )
         simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly,
-            index=None,
+            path_or_buf=file_name_hourly, index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
 
@@ -838,6 +839,8 @@ class PostProcessor:
         json_object = json.dumps(data_information_dict, indent=4)
         # Writing to sample.json
         with open(
-            os.path.join(pyam_data_folder,"data_information_for_pyam.json"), "w", encoding="utf-8"
+            os.path.join(pyam_data_folder, "data_information_for_pyam.json"),
+            "w",
+            encoding="utf-8",
         ) as outfile:
             outfile.write(json_object)

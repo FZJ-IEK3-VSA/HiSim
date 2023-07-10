@@ -745,7 +745,7 @@ class MPC_Controller(cp.Component):
 
                 if self.flexibility_element == 'basic_buidling_configuration':
 
-                    p_th_opt_timstep ,airconditioning_electrcitiy_consumption, t_m_opt_timestep = self.Optimizer(temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon,t_m_old)
+                    p_th_opt_timstep ,airconditioning_electrcitiy_consumption, t_m_opt_timestep = self.Optimizer(temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon)
                     self.optimal_cost=self.cost_calculation_no_flexibility_element(airconditioning_electrcitiy_consumption)
                     self.revenues=[0] * self.prediction_horizon
 
@@ -755,7 +755,7 @@ class MPC_Controller(cp.Component):
 
                 if self.flexibility_element == 'PV_only':
 
-                    p_th_opt_timstep ,airconditioning_electrcitiy_consumption,pv_consumption_timestep, grid_import_timestep,grid_export_timestep, t_m_opt_timestep = self.Optimizer(temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon,t_m_old)
+                    p_th_opt_timstep ,airconditioning_electrcitiy_consumption,pv_consumption_timestep, grid_import_timestep,grid_export_timestep, t_m_opt_timestep = self.Optimizer(temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon)
                     self.optimal_cost, self.revenues=self.cost_calculation(grid_export_timestep,grid_import_timestep)
 
                     self.state.cost_optimal_thermal_power=p_th_opt_timstep
@@ -767,7 +767,7 @@ class MPC_Controller(cp.Component):
 
 
                 if self.flexibility_element == 'PV_and_Battery':
-                    p_th_opt_timstep ,airconditioning_electrcitiy_consumption,pv_consumption_timestep, grid_import_timestep,grid_export_timestep, battery_to_load_timstep, pv_to_battery_timestep,battery_power_flow_timestep,batt_soc_actual_timestep, batt_soc_normalized_timestep, t_m_opt_timestep = self.Optimizer(temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon,t_m_old)
+                    p_th_opt_timstep ,airconditioning_electrcitiy_consumption,pv_consumption_timestep, grid_import_timestep,grid_export_timestep, battery_to_load_timstep, pv_to_battery_timestep,battery_power_flow_timestep,batt_soc_actual_timestep, batt_soc_normalized_timestep, t_m_opt_timestep = self.Optimizer(temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon)
                     self.optimal_cost, self.revenues=self.cost_calculation(grid_export_timestep,grid_import_timestep)
 
                     self.state.cost_optimal_thermal_power=p_th_opt_timstep

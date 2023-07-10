@@ -90,9 +90,10 @@ class MPC_Controller(cp.Component):
         my_simulation_repository : Optional[ cp.SimRepository ] = None,
         #getting forecasted disturbance (weather)
             #self.temp_forecast = self.simulation_repository.get_entry(Weather.Weather_TemperatureOutside_yearly_forecast)[:self.my_simulation_parameters.timesteps]
-            phi_m_forecast : list = None,
-            #self.phi_st_forecast = self.simulation_repository.get_entry( Building.Heat_flux_surface_node_forecast)
-            #self.phi_ia_forecast = self.simulation_repository.get_entry( Building.Heat_flux_indoor_air_node_forecast)
+            temp_forecast: list[float] = None,
+            phi_m_forecast: list = None,
+            phi_st_forecast: list = None,
+            phi_ia_forecast: list = None,
         #getting pv forecast
             #self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
         #getting battery specifications
@@ -199,6 +200,9 @@ class MPC_Controller(cp.Component):
         self.previous_state = self.state.clone()
         
         self.phi_m_forecast=phi_m_forecast
+        self.phi_st_forecast=phi_st_forecast
+        self.phi_ia_forecast=phi_ia_forecast
+        self.temp_forecast=temp_forecast
 
     def get_weather_default_connections(self):
         """get default inputs from the building component."""

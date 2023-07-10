@@ -800,7 +800,7 @@ Depending on what is available in you machine, you may need to install other pac
 8. Run the command: git clone https://github.com/coin-or-tools/ThirdParty-HSL.git
 
 9. Move the folder coinhsl to the folder ThirdParty-HSL
-   - You should have a path similar to 'C:----------\ThirdParty-HSL\coinhsl\metis-5.1.0'
+   - You should have a path similar to "C:----------/ThirdParty-HSL/coinhsl/metis-5.1.0"
 
 10. Excute the following commands:
     - cd ThirdParty-HSL
@@ -814,7 +814,7 @@ Depending on what is available in you machine, you may need to install other pac
     - ln -s .libs/libcoinhsl-0.dll      .libs/libhsl.dll
 
 13. Last to be able to use HSL with HiSim
-    copy the content of the file .libs and place in  '------\.conda\envs\hisimvenv\Lib\site-packages\casadi'
+    copy the content of the file .libs and place in  "------/.conda/envs/hisimvenv/Lib/site-packages/casadi"
 
 Remark: After sucessfully performing the steps 1 to 13, I needed to wait for few hours until it was possible for ipopt to see solvers. If you run into some issues after following the above step, you may need to wait for sometime as well.
 

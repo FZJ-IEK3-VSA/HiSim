@@ -183,19 +183,19 @@ class MPC_Controller(cp.Component):
         self.previous_state = self.state.clone()
 
         """ getting forecasted disturbance (weather)"""
-            self.temp_forecast = self.simulation_repository.get_entry(Weather.Weather_TemperatureOutside_yearly_forecast)[:self.my_simulation_parameters.timesteps]
-            self.phi_m_forecast = self.simulation_repository.get_entry( Building.Heat_flux_thermal_mass_node_forecast)
-            self.phi_st_forecast = self.simulation_repository.get_entry( Building.Heat_flux_surface_node_forecast)
-            self.phi_ia_forecast = self.simulation_repository.get_entry( Building.Heat_flux_indoor_air_node_forecast)
+            #self.temp_forecast = self.simulation_repository.get_entry(Weather.Weather_TemperatureOutside_yearly_forecast)[:self.my_simulation_parameters.timesteps]
+            self.phi_m_forecast : list = []
+            #self.phi_st_forecast = self.simulation_repository.get_entry( Building.Heat_flux_surface_node_forecast)
+            #self.phi_ia_forecast = self.simulation_repository.get_entry( Building.Heat_flux_indoor_air_node_forecast)
         """"getting pv forecast"""
-            self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
+            #self.pv_forecast_yearly = self.simulation_repository.get_entry( PVSystem.pv_forecast_yearly)
         """ getting battery specifications """
-            self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)
-            self.minimum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MinimumBatteryCapacity)
-            self.maximum_charging_power= self.simulation_repository.get_entry(GenericBattery.MaximalChargingPower)
-            self.maximum_discharging_power= self.simulation_repository.get_entry(GenericBattery.MaximalDischargingPower)
-            self.battery_efficiency= self.simulation_repository.get_entry(GenericBattery.BatteryEfficiency)
-            self.inverter_efficiency= self.simulation_repository.get_entry(GenericBattery.InverterEfficiency)
+            #self.maximum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MaximumBatteryCapacity)
+            #self.minimum_storage_capacity= self.simulation_repository.get_entry(GenericBattery.MinimumBatteryCapacity)
+            #self.maximum_charging_power= self.simulation_repository.get_entry(GenericBattery.MaximalChargingPower)
+            #self.maximum_discharging_power= self.simulation_repository.get_entry(GenericBattery.MaximalDischargingPower)
+            #self.battery_efficiency= self.simulation_repository.get_entry(GenericBattery.BatteryEfficiency)
+            #self.inverter_efficiency= self.simulation_repository.get_entry(GenericBattery.InverterEfficiency)
 
     def get_weather_default_connections(self):
         """get default inputs from the building component."""

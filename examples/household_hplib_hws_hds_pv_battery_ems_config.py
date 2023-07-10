@@ -3,6 +3,9 @@
 # clean
 
 from typing import Optional, Any
+from dataclasses_json import dataclass_json
+from dataclasses import dataclass
+from pathlib import Path
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -15,6 +18,7 @@ from hisim.components import (
 )
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
+from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes as lt
 
 __authors__ = "Katharina Rieck"
@@ -51,7 +55,7 @@ class BuildingPVWeatherConfig:
             building_type="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
             location = weather.LocationEnum.Aachen,
-            simulation_parameters=SimulationParameters.full_year_all_options(year=2022, seconds_per_timestep=60),
+            simulation_parameters=SimulationParameters.one_day_only_with_all_options(year=2022, seconds_per_timestep=60*60),
         )
 def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
@@ -93,15 +97,24 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # Set simulation parameters
     my_simulation_parameters = my_config.simulation_parameters
     my_sim.set_simulation_parameters(my_simulation_parameters)
+    
+    # Set Results Path
+    ResultPathProviderSingleton().set_important_result_path_information(
+        module_directory=my_sim.module_directory,
+        model_name=my_sim.setup_function,
+        variant_name="hisim_example_for_mass_simulation",
+        sorting_option=SortingOptionEnum.MASS_SIMULATION,
+    )
 
     # Set Photovoltaic System
     power = my_config.pv_power
     azimuth = my_config.pv_azimuth
     tilt = my_config.tilt
     
-    # Set Building
+    # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_type
     total_base_area_in_m2 = my_config.total_base_area_in_m2
+    absolute_conditioned_floor_area_in_m2 = None
     
     # Set Weather
     location_entry = my_config.location
@@ -119,7 +132,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # Set Heat Pump
     model: str = "Generic"
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -14.0  # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = -7 # t_in #TODO: get real heating ref temps according to location
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
     cycling_mode = True
@@ -138,28 +151,6 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # =================================================================================================================================
     # Build Components
-
-    # Build Simulation Parameters
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
-    # my_simulation_parameters.post_processing_options.append(
-    #     PostProcessingOptions.EXPORT_TO_CSV
-    # )
-    # my_simulation_parameters.post_processing_options.append(
-    #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-    # )
-    # my_simulation_parameters.post_processing_options.append(
-    #     PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
-    # )
-    # my_simulation_parameters.post_processing_options.append(
-    #     PostProcessingOptions.PLOT_CARPET
-    # )
-    # my_simulation_parameters.post_processing_options.append(
-    #     PostProcessingOptions.PLOT_LINE
-    # )
-    my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
@@ -181,6 +172,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
+    my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -195,9 +187,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-    )
-    my_weather_config.location_entry = location_entry
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=location_entry)
 
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters

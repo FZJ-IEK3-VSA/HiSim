@@ -6,7 +6,7 @@ from scipy.ndimage import interpolation
 import casadi as ca
 from statistics import mean
 # Owned
-import hisim.utils as utils
+from hisim import utils
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -289,7 +289,7 @@ class MPC_Controller(cp.Component):
         lines.append("tbd")
         return lines
 
-    def get_Forecast_24h(self,start_horizon,scaled_horizon,sampling_rate):
+    def get_Forecast_24h(self,start_horizon,sampling_rate):
         """get yearly weather forecast."""
         # slicing yearly forecast to extract data points for the prediction horizon (24 hours)
         # number of data points extracted equals= self.prediction_horizon = 3600 * 24 h / seconds_per_timestep
@@ -316,7 +316,9 @@ class MPC_Controller(cp.Component):
 
 
         return temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h, PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h
+    
     @utils.measure_execution_time
+    
     def Optimizer(self,temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h,scaled_horizon,t_m_old):
         """MPC Implementation."""
         sampling_rate=int(self.prediction_horizon/scaled_horizon)

@@ -78,7 +78,7 @@ class ReferenceHouseholdConfig:
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-                name="UTSP Connector",
+                name="UTSPConnector",
                 consumption=0.0,
             ),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),

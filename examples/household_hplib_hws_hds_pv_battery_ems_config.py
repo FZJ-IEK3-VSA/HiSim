@@ -3,9 +3,12 @@
 # clean
 
 from typing import Optional, Any
-from dataclasses_json import dataclass_json
-from dataclasses import dataclass
 from pathlib import Path
+import json
+import os
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -15,11 +18,13 @@ from hisim.components import (
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
+    simple_hot_water_storage,
+    heat_distribution_system
 )
-from hisim.components import simple_hot_water_storage
-from hisim.components import heat_distribution_system
+from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes as lt
+from hisim import log
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -29,17 +34,19 @@ __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
+
 @dataclass_json
 @dataclass
-class BuildingPVWeatherConfig:
+class BuildingPVWeatherConfig(ConfigBase):
 
     """Configuration for BuildingPv."""
-    simulation_parameters: SimulationParameters
+
+    name: str
     pv_size: float
-    building_type: str
     pv_azimuth: float
     tilt: float
     pv_power: float
+    building_type: str
     total_base_area_in_m2: float
     location: Any
 
@@ -48,15 +55,17 @@ class BuildingPVWeatherConfig:
         """Get default BuildingPVConfig."""
 
         return BuildingPVWeatherConfig(
+            name="BuildingPVWeatherConfig",
             pv_size=5,
             pv_azimuth=180,
             tilt=30,
             pv_power=10000,
             building_type="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
-            location = weather.LocationEnum.Aachen,
-            simulation_parameters=SimulationParameters.one_day_only_with_all_options(year=2022, seconds_per_timestep=60*60),
+            location=weather.LocationEnum.Aachen,
         )
+
+
 def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
@@ -82,11 +91,11 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # =================================================================================================================================
     # Set System Parameters from Config
-    
+
     # household-pv-config
     config_filename = "building_pv_config.json"
 
-    my_config: HouseholdPVConfig
+    my_config: BuildingPVWeatherConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
             my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
@@ -94,15 +103,21 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     else:
         my_config = BuildingPVWeatherConfig.get_default()
 
-    # Set simulation parameters
-    my_simulation_parameters = my_config.simulation_parameters
+    # Set Simulation Parameters
+    year = 2021
+    seconds_per_timestep = 60 * 60
+
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    
+
     # Set Results Path
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.setup_function,
-        variant_name=f"{my_simulation_parameters.duration.days}_days_{my_simulation_parameters.seconds_per_timestep}_sec_per_timestep",
+        variant_name=f"duration_{my_simulation_parameters.duration.days}d_resolution_{my_simulation_parameters.seconds_per_timestep}s",
         sorting_option=SortingOptionEnum.MASS_SIMULATION,
     )
 
@@ -110,12 +125,12 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     power = my_config.pv_power
     azimuth = my_config.pv_azimuth
     tilt = my_config.tilt
-    
+
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_type
     total_base_area_in_m2 = my_config.total_base_area_in_m2
     absolute_conditioned_floor_area_in_m2 = None
-    
+
     # Set Weather
     location_entry = my_config.location
 
@@ -132,7 +147,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # Set Heat Pump
     model: str = "Generic"
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7 # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
     cycling_mode = True
@@ -172,7 +187,9 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
-    my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
+    my_building_config.absolute_conditioned_floor_area_in_m2 = (
+        absolute_conditioned_floor_area_in_m2
+    )
 
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -255,11 +272,9 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_electricity_controller_config,
     )
 
     # Build Battery
@@ -366,18 +381,13 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=2,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
@@ -400,3 +410,16 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_heat_pump)
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
+
+    # Writing to config to json
+    # Write location to str, otherwise not transformable to json (can also use Singletonrepo.get_entry(location))
+    my_config.location = my_weather_config.location
+    with open(
+        os.path.join(
+            "/storage_cluster/internal/home/k-rieck/jobs_hisim/job_array_for_hisim_mass_simu_one/",
+            "building_pv_config.json",
+        ),
+        "w",
+        encoding="utf-8",
+    ) as outfile:
+        json.dump(my_config.to_dict(), outfile)

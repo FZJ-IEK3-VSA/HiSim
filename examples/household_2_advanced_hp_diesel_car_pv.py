@@ -139,7 +139,7 @@ def household_advanced_hp_diesel_car_pv(
     my_config: HouseholdAdvancedHPDieselCarPVConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = HouseholdAdvancedHPDieselCarConfig.from_json(system_config_file.read())  # type: ignore
+            my_config = HouseholdAdvancedHPDieselCarPVConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
         my_config = HouseholdAdvancedHPDieselCarPVConfig.get_default()

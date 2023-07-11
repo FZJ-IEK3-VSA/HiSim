@@ -1,4 +1,4 @@
-"""  Household example with advanced heat pump and diesel car. """
+"""  Household example with advanced heat pump and diesel car and PV. """
 
 # clean
 
@@ -26,6 +26,7 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import grid_energy_balancer
+from hisim.components import generic_pv_system
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
@@ -42,9 +43,9 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HouseholdAdvancedHPDieselCarConfig:
+class HouseholdAdvancedHPDieselCarPVConfig:
 
-    """Configuration for with advanced heat pump and diesel car."""
+    """Configuration for with advanced heat pump and diesel car and PV."""
 
     building_type: str
     # simulation_parameters: SimulationParameters
@@ -64,9 +65,9 @@ class HouseholdAdvancedHPDieselCarConfig:
 
     @classmethod
     def get_default(cls):
-        """Get default HouseholdAdvancedHPDieselCarConfig."""
+        """Get default HouseholdAdvancedHPDieselCarPVConfig."""
 
-        return HouseholdAdvancedHPDieselCarConfig(
+        return HouseholdAdvancedHPDieselCarPVConfig(
             building_type="blub",
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
@@ -107,10 +108,10 @@ class HouseholdAdvancedHPDieselCarConfig:
         )
 
 
-def household_advanced_hp_diesel_car(
+def household_advanced_hp_diesel_car_pv(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Example with advanced hp and diesel car.
+    """Example with advanced hp and diesel car and PV.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.
@@ -120,7 +121,8 @@ def household_advanced_hp_diesel_car(
         - Occupancy (Residents' Demands)
         - Weather
         - Building
-        - Electricity Base Load
+        - PV
+        - Grid Energy Balancer
         - Advanced Heat Pump HPlib
         - Advanced Heat Pump HPlib Controller
         - Heat Distribution System
@@ -130,15 +132,15 @@ def household_advanced_hp_diesel_car(
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
-    config_filename = "household_advanced_hp_diesel_car_config.json"
+    config_filename = "household_advanced_hp_diesel_car_pv_config.json"
 
-    my_config: HouseholdAdvancedHPDieselCarConfig
+    my_config: HouseholdAdvancedHPDieselCarPVConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
             my_config = HouseholdAdvancedHPDieselCarConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
-        my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
+        my_config = HouseholdAdvancedHPDieselCarPVConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
         # my_config_json = my_config.to_json()
@@ -171,6 +173,16 @@ def household_advanced_hp_diesel_car(
     # Build Weather
     my_weather = weather.Weather(
         config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
+    # Build PV
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_PV_system()
+    )
+
+    my_photovoltaic_system = generic_pv_system.PVSystem(
+        config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -289,6 +301,8 @@ def household_advanced_hp_diesel_car(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
+    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
+
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
@@ -371,10 +385,20 @@ def household_advanced_hp_diesel_car(
         source_weight=999,
     )
 
+    my_electricity_grid.add_component_input_and_connect(
+        source_component_class=my_photovoltaic_system,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=999,
+    )
+
     # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
+    my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_pump)
     my_sim.add_component(my_heat_pump_controller)

@@ -120,7 +120,7 @@ def household_advanced_hp_diesel_car(
         - Occupancy (Residents' Demands)
         - Weather
         - Building
-        - Electricity Base Load
+        - Grid Energy Balancer
         - Advanced Heat Pump HPlib
         - Advanced Heat Pump HPlib Controller
         - Heat Distribution System

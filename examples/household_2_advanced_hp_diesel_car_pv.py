@@ -51,6 +51,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
+    pv_config = generic_pv_system.PVSystemConfig
     building_config: building.BuildingConfig
     hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
@@ -82,6 +83,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
                 name="UTSPConnector",
                 consumption=0.0,
             ),
+            pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
             hdscontroller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
@@ -177,12 +179,8 @@ def household_advanced_hp_diesel_car_pv(
     )
 
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_PV_system()
-    )
-
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config,
+        config=my_config.pv_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 

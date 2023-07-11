@@ -51,7 +51,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
-    pv_config = generic_pv_system.PVSystemConfig
+    pv_config: generic_pv_system.PVSystemConfig
     building_config: building.BuildingConfig
     hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig

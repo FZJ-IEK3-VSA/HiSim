@@ -79,6 +79,9 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
+from hisim.components.heat_distribution_system import (
+    HeatDistribution,
+)
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -626,6 +629,22 @@ class Building(dynamic_component.DynamicComponent):
                 Building.HeatingByResidents,
                 utsp_classname,
                 UtspLpgConnector.HeatingByResidents,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_heat_distribution_system(
+        self,
+    ):
+        """Get Heat Distribution System default connections."""
+        log.information("setting Heat Distribution System default connections")
+        connections = []
+        hds_classname = HeatDistribution.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.ThermalPowerDelivered,
+                hds_classname,
+                HeatDistribution.ThermalPowerDelivered,
             )
         )
         return connections

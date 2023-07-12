@@ -41,6 +41,7 @@ class Simulator:
         module_filename: str,
         setup_function: str,
         my_simulation_parameters: Optional[SimulationParameters],
+        my_module_config: Optional[str],
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
 
@@ -55,6 +56,7 @@ class Simulator:
         self.setup_function = setup_function
         self.module_filename = module_filename
         self.module_directory = module_directory
+        self.module_config = my_module_config
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""

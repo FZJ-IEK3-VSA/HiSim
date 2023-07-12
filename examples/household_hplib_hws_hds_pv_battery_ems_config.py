@@ -3,8 +3,6 @@
 # clean
 
 from typing import Optional, Any
-from pathlib import Path
-import json
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -19,10 +17,11 @@ from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
     simple_hot_water_storage,
-    heat_distribution_system
+    heat_distribution_system,
 )
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 
@@ -48,7 +47,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     pv_power: float
     building_type: str
     total_base_area_in_m2: float
-    location: Any
+    # location: Any
 
     @classmethod
     def get_default(cls):
@@ -62,7 +61,7 @@ class BuildingPVWeatherConfig(ConfigBase):
             pv_power=10000,
             building_type="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
-            location=weather.LocationEnum.Aachen,
+            # location=weather.LocationEnum.Aachen,
         )
 
 
@@ -93,36 +92,35 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # Set System Parameters from Config
 
     # household-pv-config
-    config_filename = "building_pv_config.json"
+    config_filename = my_sim.module_config
 
     my_config: BuildingPVWeatherConfig
-    if Path(config_filename).is_file():
+    if isinstance(config_filename, str) and os.path.exists(config_filename):
         with open(config_filename, encoding="utf8") as system_config_file:
             my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
+        log.information("Config values: " + f"{my_config.to_dict}" + "\n")
     else:
         my_config = BuildingPVWeatherConfig.get_default()
+        log.information(
+            "No module config path from the simulator was given. Use default config."
+        )
 
     # Set Simulation Parameters
     year = 2021
     seconds_per_timestep = 60 * 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
+        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Set Results Path
-    ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
-        variant_name=f"duration_{my_simulation_parameters.duration.days}d_resolution_{my_simulation_parameters.seconds_per_timestep}s",
-        sorting_option=SortingOptionEnum.MASS_SIMULATION,
-    )
-
     # Set Photovoltaic System
-    power = my_config.pv_power
+    pv_power = my_config.pv_power
     azimuth = my_config.pv_azimuth
     tilt = my_config.tilt
 
@@ -131,8 +129,8 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     total_base_area_in_m2 = my_config.total_base_area_in_m2
     absolute_conditioned_floor_area_in_m2 = None
 
-    # Set Weather
-    location_entry = my_config.location
+    # # Set Weather
+    # location_entry = my_config.location
 
     # =================================================================================================================================
     # Set Fix System Parameters
@@ -204,7 +202,9 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=location_entry)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.Aachen
+    )
 
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
@@ -214,7 +214,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_photovoltaic_system_config = (
         generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
-    my_photovoltaic_system_config.power = power
+    my_photovoltaic_system_config.power = pv_power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
 
@@ -411,15 +411,10 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
 
-    # Writing to config to json
-    # Write location to str, otherwise not transformable to json (can also use Singletonrepo.get_entry(location))
-    my_config.location = my_weather_config.location
-    with open(
-        os.path.join(
-            "/storage_cluster/internal/home/k-rieck/jobs_hisim/job_array_for_hisim_mass_simu_one/",
-            "building_pv_config.json",
-        ),
-        "w",
-        encoding="utf-8",
-    ) as outfile:
-        json.dump(my_config.to_dict(), outfile)
+    # Set Results Path
+    ResultPathProviderSingleton().set_important_result_path_information(
+        module_directory=my_sim.module_directory,
+        model_name=my_sim.setup_function,
+        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_pv_power_{pv_power}",
+        sorting_option=SortingOptionEnum.MASS_SIMULATION,
+    )

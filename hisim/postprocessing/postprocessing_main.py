@@ -257,7 +257,7 @@ class PostProcessor:
                 elif isinstance(
                     elem.my_component, loadprofilegenerator_connector.Occupancy
                 ):
-                    occupancy_config = elem.my_component.occupancyConfig
+                    occupancy_config = elem.my_component.occupancy_config
             if len(building_data) == 0:
                 log.warning(
                     "Building needs to be defined to generate csv for housing data base."

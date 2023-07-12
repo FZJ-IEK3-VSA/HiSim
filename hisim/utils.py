@@ -72,38 +72,6 @@ HISIMPATH: Dict[str, Any] = {
     "component_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"),
     "occupancy_scaling_factors_per_country": os.path.join(hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"),
     "occupancy": {
-        "CH01": {
-            "number_of_residents": [
-                os.path.join(
-                    hisim_inputs,
-                    "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
-                    "BodilyActivityLevel.High.HH1.json",
-                ),
-                os.path.join(
-                    hisim_inputs,
-                    "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
-                    "BodilyActivityLevel.Low.HH1.json",
-                ),
-            ],
-            "electricity_consumption": os.path.join(
-                hisim_inputs,
-                "loadprofiles",
-                "electrical-warmwater-presence-load_1-family",
-                "data_processed",
-                "SumProfiles.HH1.Electricity.csv",
-            ),
-            "water_consumption": os.path.join(
-                hisim_inputs,
-                "loadprofiles",
-                "electrical-warmwater-presence-load_1-family",
-                "data_processed",
-                "SumProfiles.HH1.Warm Water.csv",
-            ),
-        },
         "CHR01 Couple both at Work": {
             "number_of_residents": [
                 os.path.join(
@@ -127,6 +95,20 @@ HISIMPATH: Dict[str, Any] = {
                 "electrical-warmwater-presence-load_1-family",
                 "data_processed",
                 "SumProfiles.HH1.Electricity.csv",
+            ),
+            "electricity_consumption_without_washing_machine_and_dishwasher": os.path.join(
+                hisim_inputs,
+                "loadprofiles",
+                "electrical-warmwater-presence-load_1-family",
+                "data_processed",
+                "SumProfiles.NoFlex.HH1.Electricity.csv",
+            ),
+            "heating_by_devices": os.path.join(
+                hisim_inputs,
+                "loadprofiles",
+                "electrical-warmwater-presence-load_1-family",
+                "data_processed",
+                "SumProfiles.HH1.Inner Device Heat Gains.csv",
             ),
             "water_consumption": os.path.join(
                 hisim_inputs,

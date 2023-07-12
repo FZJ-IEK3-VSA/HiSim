@@ -25,7 +25,7 @@ from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
-from hisim.components import grid_energy_balancer
+from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
@@ -60,7 +60,7 @@ class HouseholdAdvancedHPDieselCarConfig:
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
-    grid_energy_balancer_config: grid_energy_balancer.GridEnergyBalancerConfig
+    electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
     @classmethod
     def get_default(cls):
@@ -103,7 +103,7 @@ class HouseholdAdvancedHPDieselCarConfig:
             #     generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
             # ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
-            grid_energy_balancer_config=grid_energy_balancer.GridEnergyBalancerConfig.get_grid_energy_balancer_default_config(),
+            electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
 
 
@@ -120,7 +120,7 @@ def household_advanced_hp_diesel_car(
         - Occupancy (Residents' Demands)
         - Weather
         - Building
-        - Grid Energy Balancer
+        - Electricity Meter
         - Advanced Heat Pump HPlib
         - Advanced Heat Pump HPlib Controller
         - Heat Distribution System
@@ -281,9 +281,9 @@ def household_advanced_hp_diesel_car(
         )
 
     # Build Electricity Grid Balancer
-    my_electricity_grid = grid_energy_balancer.GridEnergyBalancer(
+    my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_config.grid_energy_balancer_config,
+        config=my_config.electricity_meter_config,
     )
 
     # =================================================================================================================================
@@ -344,7 +344,7 @@ def household_advanced_hp_diesel_car(
     )
 
     # connect electricity grid
-    my_electricity_grid.add_component_input_and_connect(
+    my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_occupancy,
         source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -353,7 +353,7 @@ def household_advanced_hp_diesel_car(
         source_weight=999,
     )
 
-    my_electricity_grid.add_component_input_and_connect(
+    my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_domnestic_hot_water_heatpump,
         source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -362,7 +362,7 @@ def household_advanced_hp_diesel_car(
         source_weight=999,
     )
 
-    my_electricity_grid.add_component_input_and_connect(
+    my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_heat_pump,
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -384,6 +384,6 @@ def household_advanced_hp_diesel_car(
     my_sim.add_component(my_domnestic_hot_water_storage)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
     my_sim.add_component(my_domnestic_hot_water_heatpump)
-    my_sim.add_component(my_electricity_grid)
+    my_sim.add_component(my_electricity_meter)
     for my_car in my_cars:
         my_sim.add_component(my_car)

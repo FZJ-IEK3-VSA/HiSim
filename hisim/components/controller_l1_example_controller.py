@@ -43,25 +43,6 @@ class SimpleControllerConfig(ConfigBase):
 
 
 
-@dataclass_json
-@dataclass
-class SimpleControllerConfig(ConfigBase):
-    """Config class."""
-
-    name: str
-
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return SimpleController.get_full_classname()
-
-    @classmethod
-    def get_default_config(cls) -> Any:
-        """Returns default config."""
-        config = SimpleControllerConfig(name="SimpleController")
-        return config
-
-
 class SimpleController(Component):
     StorageFillLevel = "Fill Level Percent"
     GasHeaterPowerPercent = "Gas Heater Power Level"

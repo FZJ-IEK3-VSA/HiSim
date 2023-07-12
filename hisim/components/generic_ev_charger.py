@@ -120,38 +120,6 @@ class EVChargerConfig(cp.ConfigBase):
         )
 
 
-    @classmethod
-    def get_default_config(cls):
-        """Gets a default config."""
-        return VehiclePureConfig(
-            name="Electrical Charger",
-            manufacturer= "Tesla",
-            model= "Model 3 v3",
-            soc= 1.0,
-            profile= "CH01",
-        )
-
-@dataclass_json
-@dataclass
-class EVChargerControllerConfig(cp.ConfigBase):
-
-    name: str
-    mode: int
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return EVChargerController.get_full_classname()
-
-    @classmethod
-    def get_default_config(cls):
-        """Gets a default config."""
-        return EVChargerControllerConfig(
-            name="ElectricalChargerController",
-            mode=1
-        )
-
-
 
 class VehiclePure(cp.Component):
     """

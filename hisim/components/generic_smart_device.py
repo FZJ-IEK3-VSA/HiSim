@@ -27,22 +27,6 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-@dataclass_json
-@dataclass
-class SmartDeviceConfig(cp.ConfigBase):
-
-    """Configuration of the smart device."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return SmartDevice.get_full_classname()
-
-
-    name: str
-    identifier: str
-    source_weight: int
-    smart_devices_included: bool
 
 @dataclass_json
 @dataclass

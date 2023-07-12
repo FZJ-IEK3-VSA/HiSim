@@ -8,7 +8,6 @@ from hisim.components import building
 from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
 from hisim.components import generic_gas_heater
-from hisim import postprocessingoptions
 
 
 __authors__ = "Maximilian Hillen"
@@ -53,7 +52,7 @@ def basic_household_only_heating(
     # Build Simulation Parameters
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)

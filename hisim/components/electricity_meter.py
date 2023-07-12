@@ -1,4 +1,4 @@
-"""Grid energy balancer module simulates the electricity grid and should replace the sumbuilder and parts of the energy management system. """
+"""Electricity meter module should replace the sumbuilder. """
 # clean
 from dataclasses import dataclass
 from typing import List
@@ -18,26 +18,26 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class GridEnergyBalancerConfig(cp.ConfigBase):
+class ElectricityMeterConfig(cp.ConfigBase):
 
-    """Electricity Grid Config."""
+    """Electricity Meter Config."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return GridEnergyBalancer.get_full_classname()
+        return ElectricityMeter.get_full_classname()
 
     name: str
 
     @classmethod
-    def get_grid_energy_balancer_default_config(cls):
-        """Gets a default GridEnergyBalancer."""
-        return GridEnergyBalancerConfig(name="GridEnergyBalancer")
+    def get_electricity_meter_default_config(cls):
+        """Gets a default ElectricityMeter."""
+        return ElectricityMeterConfig(name="ElectricityMeter")
 
 
-class GridEnergyBalancer(DynamicComponent):
+class ElectricityMeter(DynamicComponent):
 
-    """Dynamic electricity grid module.
+    """Electricity meter class.
 
     It calculates the electricity production and consumption dynamically for all components.
     """
@@ -52,7 +52,7 @@ class GridEnergyBalancer(DynamicComponent):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GridEnergyBalancerConfig,
+        config: ElectricityMeterConfig,
     ):
         """Initialize the component."""
         self.grid_energy_balancer_config = config
@@ -72,7 +72,7 @@ class GridEnergyBalancer(DynamicComponent):
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
-        self.state = GridEnergyBalancerState(
+        self.state = ElectricityMeterState(
             cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0
         )
         self.previous_state = self.state.self_copy()
@@ -226,9 +226,9 @@ class GridEnergyBalancer(DynamicComponent):
 
 
 @dataclass
-class GridEnergyBalancerState:
+class ElectricityMeterState:
 
-    """GridEnergyBalancerState class."""
+    """ElectricityMeterState class."""
 
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
@@ -236,8 +236,8 @@ class GridEnergyBalancerState:
     def self_copy(
         self,
     ):
-        """Copy the GridEnergyBalancerState."""
-        return GridEnergyBalancerState(
+        """Copy the ElectricityMeterState."""
+        return ElectricityMeterState(
             self.cumulative_production_in_watt_hour,
             self.cumulative_consumption_in_watt_hour,
         )

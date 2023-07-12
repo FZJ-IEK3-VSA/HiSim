@@ -1,4 +1,4 @@
-"""Test for grid energy balancer."""
+"""Test for electricity meter."""
 
 # clean
 
@@ -12,7 +12,7 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import (
     building,
-    grid_energy_balancer,
+    electricity_meter,
     generic_pv_system,
     idealized_electric_heater,
 )
@@ -26,7 +26,7 @@ from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_test_grid_energy_balancer.py"
+PATH = "../examples/household_for_test_electricity_meter.py"
 FUNC = "test_house"
 
 
@@ -35,7 +35,7 @@ FUNC = "test_house"
 def test_house(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """The test should check if a normal simulation works with the grid energy balancer implementation."""
+    """The test should check if a normal simulation works with the electricity grid implementation."""
 
     # =========================================================================================================================================================
     # System Parameters
@@ -71,7 +71,7 @@ def test_house(
         module_directory=path_to_be_added,
         setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_test_grid_energy_balancer.py",
+        module_filename="household_for_test_electricity_meter.py",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -104,11 +104,10 @@ def test_house(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Grid Energy Balancer
-
-    my_electricity_grid = grid_energy_balancer.GridEnergyBalancer(
+    # Build Electricity Meter
+    my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=grid_energy_balancer.GridEnergyBalancerConfig.get_grid_energy_balancer_default_config(),
+        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
     # Build Fake Heater
@@ -140,7 +139,7 @@ def test_house(
 
     # Electricity Grid
 
-    my_electricity_grid.add_component_input_and_connect(
+    my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
@@ -152,7 +151,7 @@ def test_house(
         source_weight=999,
     )
 
-    my_electricity_grid.add_component_input_and_connect(
+    my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_occupancy,
         source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
@@ -170,7 +169,7 @@ def test_house(
     my_sim.add_component(my_building)
 
     my_sim.add_component(my_idealized_electric_heater)
-    my_sim.add_component(my_electricity_grid)
+    my_sim.add_component(my_electricity_meter)
 
     my_sim.run_all_timesteps()
 
@@ -193,14 +192,14 @@ def test_house(
     )
 
     # simualtion results from grid energy balancer (last entry)
-    simulation_results_grid_energy_balancer_cumulative_production_in_watt_hour = (
+    simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
         my_sim.results_data_frame[
-            "GridEnergyBalancer - CumulativeProduction [Electricity - Wh]"
+            "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
         ][-1]
     )
-    simulation_results_grid_energy_balancer_cumulative_consumption_in_watt_hour = (
+    simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
         my_sim.results_data_frame[
-            "GridEnergyBalancer - CumulativeConsumption [Electricity - Wh]"
+            "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
         ][-1]
     )
 
@@ -213,16 +212,16 @@ def test_house(
         + str(cumulative_consumption_kpi_in_kilowatt_hour)
     )
     log.information(
-        "grid energy balancer cumulative production [kWh] "
+        "ElectricityMeter cumulative production [kWh] "
         + str(
-            simulation_results_grid_energy_balancer_cumulative_production_in_watt_hour
+            simulation_results_electricity_meter_cumulative_production_in_watt_hour
             * 1e-3
         )
     )
     log.information(
-        "grid energy balancer cumulative consumption [kWh] "
+        "ElectricityMeter cumulative consumption [kWh] "
         + str(
-            simulation_results_grid_energy_balancer_cumulative_consumption_in_watt_hour
+            simulation_results_electricity_meter_cumulative_consumption_in_watt_hour
             * 1e-3
         )
     )
@@ -230,14 +229,14 @@ def test_house(
     # test and compare with relative error of 10%
     np.testing.assert_allclose(
         cumulative_production_kpi_in_kilowatt_hour,
-        simulation_results_grid_energy_balancer_cumulative_production_in_watt_hour
+        simulation_results_electricity_meter_cumulative_production_in_watt_hour
         * 1e-3,
         rtol=0.1,
     )
 
     np.testing.assert_allclose(
         cumulative_consumption_kpi_in_kilowatt_hour,
-        simulation_results_grid_energy_balancer_cumulative_consumption_in_watt_hour
+        simulation_results_electricity_meter_cumulative_consumption_in_watt_hour
         * 1e-3,
         rtol=0.1,
     )

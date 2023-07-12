@@ -81,7 +81,7 @@ from hisim.components.loadprofilegenerator_connector import (
 )
 from hisim.components.heat_distribution_system import (
     HeatDistribution,
-)
+) # Todo: import leads to an error
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"

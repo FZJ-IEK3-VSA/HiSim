@@ -65,6 +65,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
     # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
+    advanced_battery_config: advanced_battery_bslib.BatteryConfig
 
     @classmethod
     def get_default(cls):
@@ -109,6 +110,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
             # ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+            advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_default_config()
         )
 
 
@@ -312,12 +314,9 @@ def household_advanced_hp_diesel_car_pv_battery(
     )
 
     # Build Battery
-    my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
-    )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_advanced_battery_config,
+        config=my_config.advanced_battery_config,
     )
 
     # =================================================================================================================================
@@ -382,7 +381,7 @@ def household_advanced_hp_diesel_car_pv_battery(
     # connect EMS  # Todo: copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_occupancy,
-        source_component_output="ElectricityOutput",
+        source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -419,7 +418,7 @@ def household_advanced_hp_diesel_car_pv_battery(
     )
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
-        source_component_output="ElectricityOutput",
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

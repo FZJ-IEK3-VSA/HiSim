@@ -35,13 +35,15 @@ class ArcheTypeConfig:
     #: type of heating system
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
-    mobility_set: Optional[JsonReference] = None  # field(
-        # default_factory=lambda: TransportationDeviceSets.Bus_and_one_60_km_h_Car  # type: ignore
-        # )
+    mobility_set: Optional[JsonReference] = None  
+    # field(
+    #     default_factory=lambda: TransportationDeviceSets.Bus_and_one_60_km_h_Car  # type: ignore
+    #     )
     #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
-    mobility_distance: Optional[JsonReference] = field(
-        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance  # type: ignore
-        )
+    mobility_distance: Optional[JsonReference] = None
+    # field(
+    #     default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance  # type: ignore
+    #     )
     #: url of the UTSP
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     #: passwort to connect to the UTSP

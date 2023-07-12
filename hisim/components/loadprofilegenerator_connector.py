@@ -399,7 +399,6 @@ class Occupancy(cp.Component):
                 scaling_electricity_consumption,
                 scaling_water_consumption,
             ) = self.occupancy_config.get_factors_from_country_and_profile()
-            print(scaling_electricity_consumption, scaling_water_consumption)
             # load occupancy profile
             occupancy_profile = []
             filepaths = utils.HISIMPATH["occupancy"][self.profile_name][
@@ -450,13 +449,13 @@ class Occupancy(cp.Component):
             )
 
             # convert electricity consumption and water consumption to desired format and unit
-            self.electricity_consumption = (pre_electricity_consumption * 1000 * 60 * scaling_electricity_consumption).values.tolist()
+            self.electricity_consumption = (pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption).tolist()
             # 1 kWh/min == 60 000 W / min
 
-            self.heating_by_devices = (pre_heating_by_devices * 1000 * 60 * scaling_electricity_consumption).values.tolist()  
+            self.heating_by_devices = (pre_heating_by_devices.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption).tolist()
             # 1 kWh/min == 60 000 W / min
 
-            self.water_consumption = (pre_water_consumption * scaling_water_consumption).values.tolist()
+            self.water_consumption = (pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption).tolist()
 
             # process data when time resolution of inputs matches timeresolution of simulation
             if steps_original == steps_desired:

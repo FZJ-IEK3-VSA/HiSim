@@ -41,7 +41,7 @@ class Simulator:
         module_filename: str,
         setup_function: str,
         my_simulation_parameters: Optional[SimulationParameters],
-        my_module_config: Optional[str],
+        my_module_config: Optional[str]=None,
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
 

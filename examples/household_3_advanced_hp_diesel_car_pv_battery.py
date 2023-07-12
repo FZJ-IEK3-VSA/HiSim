@@ -66,6 +66,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
     advanced_battery_config: advanced_battery_bslib.BatteryConfig
+    electricity_controller_config: controller_l2_energy_management_system.EMSConfig
 
     @classmethod
     def get_default(cls):
@@ -110,7 +111,10 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
             # ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
-            advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_default_config()
+            advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_default_config(),
+            electricity_controller_config=(
+                controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+            ),
         )
 
 
@@ -303,13 +307,10 @@ def household_advanced_hp_diesel_car_pv_battery(
     )
 
     # Build EMS
-    my_electricity_controller_config = (
-        controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-    )
     my_electricity_controller = (
         controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
             my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
+            config=my_config.electricity_controller_config,
         )
     )
 

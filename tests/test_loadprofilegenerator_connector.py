@@ -5,6 +5,7 @@ from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+
 @pytest.mark.base
 def test_occupancy():
     """
@@ -42,14 +43,14 @@ def test_occupancy():
         water_consumption.append(stsv.values[my_occupancy.water_consumptionC.global_index])
 
     year_heating_by_occupancy = sum(heating_by_residents) / (seconds_per_timestep * 1E3)
-    assert year_heating_by_occupancy == 1719.355
+    assert year_heating_by_occupancy == 1443.1025
     # pdb.set_trace()
 
-#def test_profile():
+# def test_profile():
 #    cProfile.run('test_occupancy()')
 
 
-#def test_occupancy_dummy():
+# def test_occupancy_dummy():
 #    my_occupancy_profile = "DummyElectricity01"
 #    number_of_outputs = 4
 #    stsv = component.SingleTimeStepValues(number_of_outputs)

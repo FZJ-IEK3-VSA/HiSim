@@ -20,14 +20,14 @@ class ArcheTypeConfig:
 
     #: modular household template of the LoadProfileGenerator, used to get the electrical- and hot water consumption profile (https://www.loadprofilegenerator.de/)
     # for an interface to the LoadProfileGenerator the UTSP is needed
-    occupancy_profile_utsp: Optional[JsonReference] = None  # field(
-    #     default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
-    # )
+    occupancy_profile_utsp: Optional[JsonReference] = field(
+        default_factory=lambda: Households.CHR01_Couple_both_at_Work  # type: ignore
+    )
     #: reference to stored electricity consumption and hot water consumption data, no interface to LoadProfileGenerator needed, no obligatory UTSP connection
     # available options: "AVG" - average consumption profile over Europe and "CHR01 Couple both at Work" - example output of the LPG
-    occupancy_profile: Optional[str] = "CHR01 Couple both at Work"  # None
+    occupancy_profile: Optional[str] = None  # "CHR01 Couple both at Work"
     #: building code of considered type of building originated from the Tabula data base (https://episcope.eu/building-typology/webtool/)
-    building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"  # "DE.N.SFH.05.Gen.ReEx.001.002"
+    building_code: str = "ES.ME.AB.01.Gen.ReEx.001.001"  # "DE.N.SFH.05.Gen.ReEx.001.002"
     #: absolute area considered for heating and cooling
     absolute_conditioned_floor_area: Optional[float] = None
     #: type of water heating system
@@ -47,7 +47,7 @@ class ArcheTypeConfig:
     #: url of the UTSP
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     #: passwort to connect to the UTSP
-    api_key: str = "limited_OXT60O84N9ITLO1CM9CJ1V393QFKOKCN"
+    api_key: str = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 
 
 # def create_archetype_config_file() -> None:

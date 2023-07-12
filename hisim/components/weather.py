@@ -968,7 +968,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD:
         data = read_dwd_data(filepath, year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15min:
-        data = read_nsrdb_15min_data(filepath, year)
+        data = read_nsrdb_15min_data(filepath, year, weatherconfig.location)
 
     return data
 
@@ -1037,13 +1037,35 @@ def read_nsrdb_data(filepath, year):
     return data
 
 
-def read_nsrdb_15min_data(filepath, year):
+def read_nsrdb_15min_data(filepath: str, year: int, location: str):
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    # get data
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/Berlin"
-    )
+    if location in ["GB", "IE"]:  # UTC
+       data.index = pd.date_range(
+           f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/London"
+           )
+    elif location in ["GR", "CY", "BG"]:  # UTC + 2
+        # get data and set UTC time column with CET time values
+        data.index = pd.date_range(
+            f"{year}-01-01 02:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/Berlin"
+        )
+        # insert first hour (CET) and drop last hour (UTC)
+        new_data = data.iloc[0:8]
+        new_data.index = pd.date_range(
+            f"{year}-01-01 00:00:00", periods=8, freq="900S", tz="Europe/Istanbul"
+        )
+        data = pd.concat([new_data, data.iloc[0: 24 * 4 * 365 - 4]])
+    else:  # UTC + 1
+        # get data and set UTC time column with CET time values
+        data.index = pd.date_range(
+            f"{year}-01-01 01:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/Berlin"
+        )
+        # insert first hour (CET) and drop last hour (UTC)
+        new_data = data.iloc[0:4]
+        new_data.index = pd.date_range(
+            f"{year}-01-01 00:00:00", periods=4, freq="900S", tz="Europe/Berlin"
+        )
+        data = pd.concat([new_data, data.iloc[0: 24 * 4 * 365 - 4]])
     data = data.rename(
         columns={
             "Temperature": "T",

@@ -78,12 +78,13 @@ def configure_pv_system(
     """
     if pv_peak_power is not None:
         my_pv_system_config = generic_pv_system.PVSystem.get_default_config(
-            power=pv_peak_power, source_weight=count
+            power=pv_peak_power, source_weight=count,
         )
     else:
         my_pv_system_config = generic_pv_system.PVSystem.get_default_config(
-            source_weight=count
+            source_weight=count,
         )
+    my_pv_system_config.location=my_weather.weather_config.location, 
     count += 1
     my_pv_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,

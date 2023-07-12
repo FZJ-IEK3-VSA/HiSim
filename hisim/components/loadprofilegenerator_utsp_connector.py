@@ -46,6 +46,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
+    consumption: float
 
     @classmethod
     def get_default_UTSP_connector_config(cls) -> Any:
@@ -61,6 +62,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
+            consumption=0,
         )
         return config
 
@@ -110,6 +112,8 @@ class UtspLpgConnector(cp.Component):
             my_config=config,
         )
         self.build()
+        # dummy value as long as there is no way to consider multiple households in one house
+        self.scaling_factor_according_to_number_of_apartments: float = 1.0
 
         # Inputs - Not Mandatory
         self.ww_mass_input: cp.ComponentInput = self.add_input(
@@ -520,7 +524,7 @@ class UtspLpgConnector(cp.Component):
                             sum(
                                 occupancy_profile[mode]["Values"][
                                     timestep
-                                    * steps_ratio : (timestep + 1)
+                                    * steps_ratio: (timestep + 1)
                                     * steps_ratio
                                 ]
                             )
@@ -535,11 +539,11 @@ class UtspLpgConnector(cp.Component):
                         )
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + steps_ratio]) / steps_ratio
+                    sum(self.electricity_consumption[n: n + steps_ratio]) / steps_ratio
                     for n in range(0, steps_original, steps_ratio)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n : n + steps_ratio])
+                    sum(self.water_consumption[n: n + steps_ratio])
                     for n in range(0, steps_original, steps_ratio)
                 ]
 
@@ -581,3 +585,13 @@ class UtspLpgConnector(cp.Component):
     def write_to_report(self):
         """Adds a report entry for this component."""
         return self.utsp_config.get_string_dict()
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        for index, output in enumerate(all_outputs):
+            print(output.component_name, output.load_type)
+            if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
+                co2_per_unit = 0.4
+                euro_per_unit = 0.25
+                self.utsp_config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+ 
+        return self.utsp_config.consumption * euro_per_unit, self.utsp_config.consumption * co2_per_unit

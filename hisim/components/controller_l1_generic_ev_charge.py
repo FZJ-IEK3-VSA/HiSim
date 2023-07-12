@@ -98,7 +98,8 @@ class L1Controller(cp.Component):
             my_config=config,
         )
         self.state = L1ControllerState(power=0)
-        self.previous_state = L1ControllerState(power=0)
+        self.previous_state = self.state.clone()
+        self.processed_state = self.state.clone()
         self.build(config=config, my_simulation_parameters=my_simulation_parameters)
 
         # add inputs
@@ -194,29 +195,34 @@ class L1Controller(cp.Component):
         """Prepares the simulation."""
         pass
 
+    def control(self, car_consumption: float, car_location: int, soc: float, electricity_target: float) -> float:
+        if car_consumption > 0:
+            return car_consumption * (-1)
+        if car_location != self.charging_location:
+            return 0
+        if soc < self.battery_set:
+            return self.power
+        if electricity_target > 0:
+            return min(electricity_target, self.power)
+        return 0
+
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""
         if force_convergence:
-            pass
+            self.state = self.processed_state.clone()
         else:
-            car_location = stsv.get_input_value(self.car_location)
+            car_location = int(stsv.get_input_value(self.car_location))
             car_consumption = stsv.get_input_value(self.car_consumption)
             soc = stsv.get_input_value(self.state_of_charge)
-
-            if car_consumption > 0:
-                self.state.power = -car_consumption
-            elif soc < self.battery_set and car_location == self.charging_location:
-                self.state.power = self.power
+            if self.clever:
+                electricity_target = stsv.get_input_value(self.electricity_target)
             else:
-                self.state.power = 0
-                if self.clever:
-                    electricity_target = stsv.get_input_value(self.electricity_target)
-                    if electricity_target > 0:
-                        self.state.power = electricity_target
-
-            stsv.set_output_value(self.p_set, self.state.power)
+                electricity_target = 0
+            self.state.power = self.control(car_consumption, car_location=car_location, soc=soc, electricity_target=electricity_target)
+            self.processed_state = self.state.clone()
+        stsv.set_output_value(self.p_set, self.state.power)
 
     def build(
         self,

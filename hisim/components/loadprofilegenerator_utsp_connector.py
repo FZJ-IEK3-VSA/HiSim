@@ -91,6 +91,7 @@ class UtspLpgConnector(cp.Component):
 
     NumberByResidents = "NumberByResidents"
     HeatingByResidents = "HeatingByResidents"
+    HeatingByDevices = "HeatingByDevices"
     ElectricityOutput = "ElectricityOutput"
     WaterConsumption = "WaterConsumption"
 
@@ -144,6 +145,13 @@ class UtspLpgConnector(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for LPG UTSP {self.HeatingByResidents} will follow.",
+        )
+        self.heating_by_devices_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatingByDevices,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Inner device heat gains, which heat the building (not intentionally)",
         )
         self.electricity_output_c: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -243,6 +251,9 @@ class UtspLpgConnector(cp.Component):
         )
         stsv.set_output_value(
             self.heating_by_residents_c, self.heating_by_residents[timestep]
+        )
+        stsv.set_output_value(
+            self.heating_by_devices_channel, 0
         )
         stsv.set_output_value(
             self.electricity_output_c, self.electricity_consumption[timestep]

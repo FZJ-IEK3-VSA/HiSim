@@ -180,6 +180,11 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         my_occupancy.HeatingByResidents,
     )
     my_building.connect_input(
+        my_building.HeatingByDevices,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByDevices,
+    )
+    my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_idealized_electric_heater.component_name,
         my_idealized_electric_heater.ThermalPowerDelivered,

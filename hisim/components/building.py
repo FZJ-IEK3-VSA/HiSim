@@ -645,6 +645,13 @@ class Building(dynamic_component.DynamicComponent):
                 UtspLpgConnector.HeatingByResidents,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByDevices,
+                utsp_classname,
+                UtspLpgConnector.HeatingByDevices,
+            )
+        )
         return connections
 
     # =================================================================================================================================

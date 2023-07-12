@@ -215,7 +215,7 @@ class Occupancy(cp.Component):
             self.HeatingByDevices,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"Inner device heat gains, which heat the building (not intentionally)",
+            output_description="Inner device heat gains, which heat the building (not intentionally)",
         )
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -384,6 +384,7 @@ class Occupancy(cp.Component):
             )
             self.number_of_residents = dataframe["number_of_residents"].tolist()
             self.heating_by_residents = dataframe["heating_by_residents"].tolist()
+            self.heating_by_devices = dataframe["heating_by_devices"].tolist()
             self.electricity_consumption = dataframe["electricity_consumption"].tolist()
             self.water_consumption = dataframe["water_consumption"].tolist()
 
@@ -515,6 +516,7 @@ class Occupancy(cp.Component):
                 [
                     self.number_of_residents,
                     self.heating_by_residents,
+                    self.heating_by_devices,
                     self.electricity_consumption,
                     self.water_consumption,
                 ]
@@ -524,6 +526,7 @@ class Occupancy(cp.Component):
                 columns=[
                     "number_of_residents",
                     "heating_by_residents",
+                    "heating_by_devices",
                     "electricity_consumption",
                     "water_consumption",
                 ],

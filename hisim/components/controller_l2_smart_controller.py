@@ -42,28 +42,6 @@ class SmartControllerConfig(ConfigBase):
         return config
 
 
-# TODO: add more arguments to config
-@dataclass_json
-@dataclass
-class SmartControllerConfig(ConfigBase):
-
-    """Smart Controller Config."""
-
-    name: str
-
-    @classmethod
-    def get_main_classname(cls):
-        """Return the full class name of the base class."""
-        return SmartController.get_full_classname()
-
-    @classmethod
-    def get_default_config_ems(cls) -> Any:
-        """Default Config for Energy Management System."""
-        config = SmartControllerConfig(
-            name=" SmartController",
-        )
-        return config
-
 
 class SmartController(Component):
 

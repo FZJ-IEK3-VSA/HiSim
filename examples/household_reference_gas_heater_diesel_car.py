@@ -296,11 +296,12 @@ def household_reference_gas_heater_diesel_car(
         my_heat_distribution.ThermalPowerDelivered,
     )
 
-    my_gasheater.connect_input(
-        my_gasheater.ControlSignal,
-        my_gasheater_controller.component_name,
-        my_gasheater_controller.ControlSignalToGasHeater,
-    )
+    # my_gasheater.connect_input(
+    #     my_gasheater.ControlSignal,
+    #     my_gasheater_controller.component_name,
+    #     my_gasheater_controller.ControlSignalToGasHeater,
+    # )
+    my_gasheater.connect_only_predefined_connections(my_gasheater_controller)
 
     my_gasheater.connect_input(
         my_gasheater.MassflowInputTemperature,

@@ -43,9 +43,10 @@ class MpcControllerConfig(ConfigBase):
     flexibility_element: str
     initial_state_of_charge: float
     my_simulation_repository: Optional[ cp.SimRepository ]
-    temp_forecast: List[int]
-    phi_m_forecast: list
-        phi_st_forecast: list
+    #getting forecasted disturbance (weather)
+    temp_forecast: List[float]
+        phi_m_forecast: List[float]
+    phi_st_forecast: list
         phi_ia_forecast: list
     #getting pv forecast
         pv_forecast_yearly: list

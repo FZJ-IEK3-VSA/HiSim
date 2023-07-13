@@ -68,6 +68,8 @@ class HouseholdAdvancedHPEvPvConfig:
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
+    car_battery_config: advanced_ev_battery_bslib.CarBatteryConfig
+    car_battery_controller_config: controller_l1_generic_ev_charge.ChargingStationConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
     # advanced_battery_config: advanced_battery_bslib.BatteryConfig
     electricity_controller_config: controller_l2_energy_management_system.EMSConfig
@@ -79,6 +81,7 @@ class HouseholdAdvancedHPEvPvConfig:
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
         SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+        charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
 
         return HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
@@ -92,7 +95,7 @@ class HouseholdAdvancedHPEvPvConfig:
                 result_path="mypath",
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-                charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+                charging_station_set=charging_station_set,
                 name="UTSPConnector",
                 consumption=0.0,
             ),
@@ -119,6 +122,12 @@ class HouseholdAdvancedHPEvPvConfig:
                 generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
             ),
             car_config=generic_car.CarConfig.get_default_ev_config(),
+            car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
+            car_battery_controller_config = (
+                controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
+                    charging_station_set=charging_station_set
+                )
+            ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
             # advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_default_config(),
             electricity_controller_config=(
@@ -290,7 +299,7 @@ def household_advanced_hp_ev_pv(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = my_config.car_config
+    my_car_config = my_config.car_config  # Todo: check source weight in case of 2 vehicles
     my_car_config.name = "ElectricCar"
 
     # create all cars
@@ -306,33 +315,27 @@ def household_advanced_hp_ev_pv(
         )
 
     # Build Electric Vehicle Battery
-    my_ev_capacities = []
     my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
     for car in my_cars:
-        car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
-        car_battery_config.source_weight = car.config.source_weight
-        car_battery = advanced_ev_battery_bslib.CarBattery(
-            my_simulation_parameters=my_simulation_parameters, config=car_battery_config
+        my_car_battery_config = my_config.car_battery_config
+        my_car_battery_config.source_weight = car.config.source_weight
+        my_car_battery = advanced_ev_battery_bslib.CarBattery(
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config
         )
-        my_ev_capacities.append(car_battery_config.e_bat_custom)
-        my_car_batteries.append(car_battery)
+        my_car_batteries.append(my_car_battery)
 
-        car_battery_controller_config = (
-            controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-                charging_station_set=my_occupancy_config.charging_station_set             
-            )
-        )
-        car_battery_controller_config.source_weight = car.config.source_weight
-        car_battery_controller_config.battery_set = (
+        my_car_battery_controller_config = my_config.car_battery_controller_config
+        my_car_battery_controller_config.source_weight = car.config.source_weight
+        my_car_battery_controller_config.battery_set = (
             0.4  # lower threshold for soc of car battery in clever case
         )
 
-        car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
+        my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
             my_simulation_parameters=my_simulation_parameters,
-            config=car_battery_controller_config,
+            config=my_car_battery_controller_config,
         )
-        my_car_battery_controllers.append(car_battery_controller)
+        my_car_battery_controllers.append(my_car_battery_controller)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

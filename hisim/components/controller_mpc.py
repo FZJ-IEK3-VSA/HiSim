@@ -29,8 +29,7 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-@dataclass_json
-@dataclass
+
 class MpcControllerConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls):

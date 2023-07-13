@@ -45,18 +45,19 @@ class MpcControllerConfig(ConfigBase):
     my_simulation_repository: Optional[ cp.SimRepository ]
     #getting forecasted disturbance (weather)
     temp_forecast: List[float]
-        phi_m_forecast: List[float]
+    phi_m_forecast: List[float]
     phi_st_forecast: list
-        phi_ia_forecast: list
+    phi_ia_forecast: list
     #getting pv forecast
-        pv_forecast_yearly: list
+    pv_forecast_yearly: list
     #getting battery specifications
-        maximum_storage_capacity: float
-        minimum_storage_capacity: float
-        maximum_charging_power: float
-        maximum_discharging_power: float
-        battery_efficiency: float
-        inverter_efficiency: float
+    maximum_storage_capacity: float
+    minimum_storage_capacity: float
+    maximum_charging_power: float
+    maximum_discharging_power: float
+    battery_efficiency: float
+    inverter_efficiency: float
+    #forecasts
     temperature_Forecast_24h_1min: list
     phi_m_Forecast_24h_1min: list
     phi_ia_Forecast_24h_1min: list

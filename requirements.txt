@@ -20,3 +20,4 @@ pyam-iamc
 html2image
 control
 casadi
+plotly

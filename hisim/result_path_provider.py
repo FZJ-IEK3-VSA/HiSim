@@ -23,6 +23,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.base_path: Optional[str] = None
         self.model_name: Optional[str] = None
         self.variant_name: Optional[str] = None
+        self.hash_number: Optional[str] = None
         self.sorting_option: Any = SortingOptionEnum.FLAT
         self.time_resolution_in_seconds: Optional[int] = None
         self.simulation_duration_in_days: Optional[int] = None
@@ -33,6 +34,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         module_directory: str,
         model_name: str,
         variant_name: Optional[str],
+        hash_number: Optional[int],
         sorting_option: Any,
     ) -> None:
         """Set important result path information."""
@@ -40,6 +42,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_model_name(model_name=model_name)
         self.set_variant_name(variant_name=variant_name)
         self.set_sorting_option(sorting_option=sorting_option)
+        self.set_hash_number(hash_number=hash_number)
 
     def set_base_path(self, module_directory: str) -> None:
         """Set base path."""
@@ -54,6 +57,12 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         if variant_name is None:
             variant_name = ""
         self.variant_name = variant_name
+        
+    def set_hash_number(self, hash_number: Optional[int]) -> None:
+        """Set variant name."""
+        if hash_number is None:
+            hash_number = ""
+        self.hash_number = str(hash_number)
 
     def set_sorting_option(self, sorting_option: Any) -> None:
         """Set sorting option."""
@@ -73,6 +82,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             self.base_path,
             self.model_name,
             self.variant_name,
+            self.hash_number,
         ):
             # The variables must be given a str-value, otherwise a result path can not be created.
             return None
@@ -85,6 +95,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                 self.model_name,
                 self.variant_name,
                 self.datetime_string,
+                self.hash_number,
             ]
         ]:
             if self.sorting_option == SortingOptionEnum.DEEP:
@@ -94,7 +105,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                     self.variant_name,  # type: ignore
                     self.datetime_string,  # type: ignore
                 )
-            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION:
+            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION:
                 # schauen ob verzeichnis schon da und aufsteigende nummer anängen
                 idx = 1
                 path = os.path.join(
@@ -127,5 +138,6 @@ class SortingOptionEnum(enum.Enum):
     """A SortingOptionEnum class."""
 
     DEEP = 1
-    MASS_SIMULATION = 2
+    MASS_SIMULATION_WITH_INDEX_ENUMERATION = 2
     FLAT = 3
+    MASS_SIMULATION_WITH_HASH_ENUMERATION = 4

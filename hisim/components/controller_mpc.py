@@ -320,9 +320,9 @@ class MPC_Controller(cp.Component):
             mpc_scheme = 'optimization_once_aday_only',
             min_comfort_temp = 21.0,
             max_comfort_temp = 23.0,
-            optimizer_sampling_rate 15,
+            optimizer_sampling_rate = 15,
             initial_temeperature = 22.0,
-            flexibility_element 'basic_buidling_configuration',
+            flexibility_element = 'basic_buidling_configuration',
             initial_state_of_charge = 10/15,
             my_simulation_repository = None,
             #getting forecasted disturbance (weather)

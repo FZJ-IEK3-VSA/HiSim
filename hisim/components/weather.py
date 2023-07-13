@@ -973,7 +973,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
     return data
 
 
-def read_dwd_data(filepath: str, year: int) -> Any:
+def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD data."""
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
@@ -1012,7 +1012,7 @@ def read_dwd_data(filepath: str, year: int) -> Any:
     return data
 
 
-def read_nsrdb_data(filepath, year):
+def read_nsrdb_data(filepath, year) -> pd.DataFrame:
     """Reads a set of NSRDB data."""
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
@@ -1037,11 +1037,11 @@ def read_nsrdb_data(filepath, year):
     return data
 
 
-def read_nsrdb_15min_data(filepath: str, year: int, location: str):
+def read_nsrdb_15min_data(filepath: str, year: int, location: str) -> pd.DataFrame:
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     if location in ["GB", "IE"]:  # UTC
-       data.index = pd.date_range(
+        data.index = pd.date_range(
            f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/London"
            )
     elif location in ["GR", "CY", "BG"]:  # UTC + 2

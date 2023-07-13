@@ -1106,6 +1106,6 @@ def calculate_direct_normal_radiation(
     DNI = direct_horizontal_irradation.div(
         solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
     )
-    if DNI.isnull().values.any():
+    if sum(DNI.isnull()) > 0:
         raise ValueError("Something went wrong...")
     return DNI

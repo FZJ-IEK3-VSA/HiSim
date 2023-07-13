@@ -93,7 +93,7 @@ class MpcControllerConfig(ConfigBase):
             initial_temeperature = 22.0,
             flexibility_element = 'basic_buidling_configuration',
             initial_state_of_charge = 10/15,
-            my_simulation_repository = None,
+            my_simulation_repository = [],
             #getting forecasted disturbance (weather)
             temp_forecast = None,
             phi_m_forecast = None,

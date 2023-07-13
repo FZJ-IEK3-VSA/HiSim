@@ -289,47 +289,47 @@ class MPC_Controller(cp.Component):
         self.add_default_connections(self.get_weather_default_connections())
 
         self.prediction_horizon= int (self.my_simulation_parameters.system_config.prediction_horizon/self.my_simulation_parameters.seconds_per_timestep)
-        self.state: MPCcontrollerState = MPCcontrollerState(t_m=initial_temeperature,soc=initial_state_of_charge, cost_optimal_thermal_power = self.prediction_horizon * [0])
+        self.state: MPCcontrollerState = MPCcontrollerState(t_m=self.mpcconfig.initial_temeperature,soc=self.mpcconfig.initial_state_of_charge, cost_optimal_thermal_power = self.prediction_horizon * [0])
         self.previous_state = self.state.clone()
         
-        self.mpc_scheme=mpc_scheme
-        self.min_comfort_temp = min_comfort_temp
-        self.max_comfort_temp = max_comfort_temp
-        self.sampling_rate=optimizer_sampling_rate
-        self.flexibility_element = flexibility_element
+        self.mpc_scheme = self.mpcconfig.mpc_scheme
+        self.min_comfort_temp = self.mpcconfig.min_comfort_temp
+        self.max_comfort_temp = self.mpcconfig.max_comfort_temp
+        self.sampling_rate = self.mpcconfig.optimizer_sampling_rate
+        self.flexibility_element = self.mpcconfig.flexibility_element
         
-        self.temp_forecast=temp_forecast
-        self.phi_m_forecast=phi_m_forecast
-        self.phi_st_forecast=phi_st_forecast
-        self.phi_ia_forecast=phi_ia_forecast
-        self.pv_forecast_yearly=pv_forecast_yearly
-        self.maximum_storage_capacity=maximum_storage_capacity
-        self.minimum_storage_capacity=minimum_storage_capacity
-        self.maximum_charging_power=maximum_charging_power
-        self.maximum_discharging_power=maximum_discharging_power
-        self.battery_efficiency=battery_efficiency
-        self.inverter_efficiency=inverter_efficiency
+        self.temp_forecast = self.mpcconfig.temp_forecast
+        self.phi_m_forecast = self.mpcconfig.phi_m_forecast
+        self.phi_st_forecast = self.mpcconfig.phi_st_forecast
+        self.phi_ia_forecast = self.mpcconfig.phi_ia_forecast
+        self.pv_forecast_yearly = self.mpcconfig.pv_forecast_yearly
+        self.maximum_storage_capacity = self.mpcconfig.maximum_storage_capacity
+        self.minimum_storage_capacity = self.mpcconfig.minimum_storage_capacity
+        self.maximum_charging_power = self.mpcconfig.maximum_charging_power
+        self.maximum_discharging_power = self.mpcconfig.maximum_discharging_power
+        self.battery_efficiency = self.mpcconfig.battery_efficiency
+        self.inverter_efficiency = self.mpcconfig.inverter_efficiency
         
-        self.temperature_Forecast_24h_1min=temperature_Forecast_24h_1min
-        self.phi_m_Forecast_24h_1min=phi_m_Forecast_24h_1min
-        self.phi_ia_Forecast_24h_1min=phi_ia_Forecast_24h_1min
-        self.phi_st_Forecast_24h_1min=phi_st_Forecast_24h_1min
-        self.pv_forecast_24h_1min=pv_forecast_24h_1min
-        self.PricePurchase_Forecast_24h_1min=PricePurchase_Forecast_24h_1min
-        self.PriceInjection_Forecast_24h_1min=PriceInjection_Forecast_24h_1min
-        self.optimal_cost=optimal_cost
-        self.revenues=revenues
-        self.air_conditioning_electricity=air_conditioning_electricity
-        self.cost_optimal_temperature_set_point=cost_optimal_temperature_set_point
-        self.pv2load=pv2load
-        self.electricity_from_grid=electricity_from_grid
-        self.electricity_to_grid=electricity_to_grid
-        self.battery_to_load=battery_to_load
-        self.pv_to_battery_timestep=pv_to_battery_timestep
-        self.battery_power_flow_timestep=battery_power_flow_timestep
-        self.battery_control_state=battery_control_state
-        self.batt_soc_actual_timestep=batt_soc_actual_timestep
-        self.batt_soc_normalized_timestep=batt_soc_normalized_timestep
+        self.temperature_Forecast_24h_1min = self.mpcconfig.temperature_Forecast_24h_1min
+        self.phi_m_Forecast_24h_1min = self.mpcconfig.phi_m_Forecast_24h_1min
+        self.phi_ia_Forecast_24h_1min = self.mpcconfig.phi_ia_Forecast_24h_1min
+        self.phi_st_Forecast_24h_1min = self.mpcconfig.phi_st_Forecast_24h_1min
+        self.pv_forecast_24h_1min = self.mpcconfig.pv_forecast_24h_1min
+        self.PricePurchase_Forecast_24h_1min = self.mpcconfig.PricePurchase_Forecast_24h_1min
+        self.PriceInjection_Forecast_24h_1min = self.mpcconfig.PriceInjection_Forecast_24h_1min
+        self.optimal_cost = self.mpcconfig.optimal_cost
+        self.revenues = self.mpcconfig.revenues
+        self.air_conditioning_electricity = self.mpcconfig.air_conditioning_electricity
+        self.cost_optimal_temperature_set_point = self.mpcconfig.cost_optimal_temperature_set_point
+        self.pv2load = self.mpcconfig.pv2load
+        self.electricity_from_grid = self.mpcconfig.electricity_from_grid
+        self.electricity_to_grid = self.mpcconfig.electricity_to_grid
+        self.battery_to_load = self.mpcconfig.battery_to_load
+        self.pv_to_battery_timestep = self.mpcconfig.pv_to_battery_timestep
+        self.battery_power_flow_timestep = self.mpcconfig.battery_power_flow_timestep
+        self.battery_control_state = self.mpcconfig.battery_control_state
+        self.batt_soc_actual_timestep = self.mpcconfig.batt_soc_actual_timestep
+        self.batt_soc_normalized_timestep = self.mpcconfig.batt_soc_normalized_timestep
 
 
     @staticmethod

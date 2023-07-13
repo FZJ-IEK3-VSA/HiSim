@@ -281,10 +281,10 @@ class Car(cp.Component):
             # sum / extract most common value from data to match hisim time resolution
             for i in range(int(len(meters_driven) / steps_ratio)):
                 self.meters_driven.append(
-                    sum(meters_driven[i * steps_ratio : (i + 1) * steps_ratio])
+                    sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio])
                 )  # sum
                 location_list = car_location[
-                    i * steps_ratio : (i + 1) * steps_ratio
+                    i * steps_ratio: (i + 1) * steps_ratio
                 ]  # extract list
                 occurence_count = most_frequent(
                     input_list=location_list

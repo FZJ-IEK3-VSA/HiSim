@@ -13,7 +13,8 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 class SystemConfig:
 
     """Defines the configuration and sizing of all components considered in a modular household."""
-
+    #: decision on the consideration of smart control for EV charging and heat pump
+    surplus_control_considered: bool = False
     #: decision on the consideration of Photovoltaic Panel
     pv_included: bool = True
     #: peak power of the considered Photovoltaic Panel in Wp
@@ -45,7 +46,7 @@ class SystemConfig:
     #: maximal power of the electroylzer in Watt
     electrolyzer_power: Optional[float] = 5e3
     #: decision on the consideration of an electriv vehicle
-    ev_included: bool = False
+    ev_included: bool = True
     #: choice of charging station related to the options available in LoadProfileGenerator
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore

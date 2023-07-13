@@ -29,6 +29,104 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
+class MpcControllerConfig(ConfigBase):
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return MPC_Controller.get_full_classname()
+
+    mpc_scheme: str
+    min_comfort_temp: float
+    max_comfort_temp: float
+    optimizer_sampling_rate: int
+    initial_temeperature: float
+    flexibility_element: str
+    initial_state_of_charge: float
+    my_simulation_repository : Optional[ cp.SimRepository ]
+    #getting forecasted disturbance (weather)
+        temp_forecast: list
+        phi_m_forecast: list
+        phi_st_forecast: list
+        phi_ia_forecast: list
+    #getting pv forecast
+        pv_forecast_yearly: list
+    #getting battery specifications
+        maximum_storage_capacity: float
+        minimum_storage_capacity: float
+        maximum_charging_power: float
+        maximum_discharging_power: float
+        battery_efficiency: float
+        inverter_efficiency: float
+    temperature_Forecast_24h_1min: list
+    phi_m_Forecast_24h_1min: list
+    phi_ia_Forecast_24h_1min: list
+    phi_st_Forecast_24h_1min: list
+    pv_forecast_24h_1min: list
+    PricePurchase_Forecast_24h_1min: list
+    PriceInjection_Forecast_24h_1min: list
+    optimal_cost: list
+    revenues: list
+    air_conditioning_electricity: list
+    cost_optimal_temperature_set_point: list
+    pv2load: list
+    electricity_from_grid: list
+    electricity_to_grid: list
+    battery_to_load: list
+    pv_to_battery_timestep: list
+    battery_power_flow_timestep: list
+    battery_control_state: list
+    batt_soc_actual_timestep: list
+    batt_soc_normalized_timestep: list
+
+    @classmethod
+    def get_default_MPC_controller(cls):
+        """Gets a default MPC controller."""
+        return MpcControllerConfig(
+            mpc_scheme = 'optimization_once_aday_only',
+            min_comfort_temp = 21.0,
+            max_comfort_temp = 23.0,
+            optimizer_sampling_rate 15,
+            initial_temeperature = 22.0,
+            flexibility_element 'basic_buidling_configuration',
+            initial_state_of_charge = 10/15,
+            my_simulation_repository = None,
+            #getting forecasted disturbance (weather)
+                temp_forecast = None,
+                phi_m_forecast = None,
+                phi_st_forecast = None,
+                phi_ia_forecast = None,
+            #getting pv forecast
+                pv_forecast_yearly = None,
+            #getting battery specifications
+                maximum_storage_capacity = 0.0,
+                minimum_storage_capacity = 0.0,
+                maximum_charging_power = 0.0,
+                maximum_discharging_power = 0.0,
+                battery_efficiency = 0.0,
+                inverter_efficiency = 0.0,
+            temperature_Forecast_24h_1min = None,
+            phi_m_Forecast_24h_1min = None,
+            phi_ia_Forecast_24h_1min = None,
+            phi_st_Forecast_24h_1min = None,
+            pv_forecast_24h_1min = None,
+            PricePurchase_Forecast_24h_1min = None,
+            PriceInjection_Forecast_24h_1min = None,
+            optimal_cost = None,
+            revenues = None,
+            air_conditioning_electricity = None,
+            cost_optimal_temperature_set_point = None,
+            pv2load = None,
+            electricity_from_grid = None,
+            electricity_to_grid = None,
+            battery_to_load = None,
+            pv_to_battery_timestep = None,
+            battery_power_flow_timestep = None,
+            battery_control_state = None,
+            batt_soc_actual_timestep = None,
+            batt_soc_normalized_timestep = None,
+        )
+
+
 class MPCcontrollerState:
     """Controller state."""
 
@@ -78,64 +176,23 @@ class MPC_Controller(cp.Component):
 
 
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        mpc_scheme: str = 'optimization_once_aday_only',
-        min_comfort_temp: float = 21.0,
-        max_comfort_temp: float = 23.0,
-        optimizer_sampling_rate: int = 15,
-        initial_temeperature: float = 22.0,
-        flexibility_element: str = 'basic_buidling_configuration',
-        initial_state_of_charge: float = 10/15,
-        my_simulation_repository : Optional[ cp.SimRepository ] = None,
-        #getting forecasted disturbance (weather)
-            temp_forecast: Optional[List[Any]] = None,
-            phi_m_forecast: Optional[List[Any]] = None,
-            phi_st_forecast: Optional[List[Any]] = None,
-            phi_ia_forecast: Optional[List[Any]] = None,
-        #getting pv forecast
-            pv_forecast_yearly: Optional[List[Any]] = None,
-        #getting battery specifications
-            maximum_storage_capacity: float = 0.0,
-            minimum_storage_capacity: float = 0.0,
-            maximum_charging_power: float = 0.0,
-            maximum_discharging_power: float = 0.0,
-            battery_efficiency: float = 0.0,
-            inverter_efficiency: float = 0.0,
-        temperature_Forecast_24h_1min: Optional[List[Any]] = None,
-        phi_m_Forecast_24h_1min: Optional[List[Any]] = None,
-        phi_ia_Forecast_24h_1min: Optional[List[Any]] = None,
-        phi_st_Forecast_24h_1min: Optional[List[Any]] = None,
-        pv_forecast_24h_1min: Optional[List[Any]] = None,
-        PricePurchase_Forecast_24h_1min: Optional[List[Any]] = None,
-        PriceInjection_Forecast_24h_1min: Optional[List[Any]] = None,
-        optimal_cost: Optional[List[Any]] = None,
-        revenues: Optional[List[Any]] = None,
-        air_conditioning_electricity: Optional[List[Any]] = None,
-        cost_optimal_temperature_set_point: Optional[List[Any]] = None,
-        pv2load: Optional[List[Any]] = None,
-        electricity_from_grid: Optional[List[Any]] = None,
-        electricity_to_grid: Optional[List[Any]] = None,
-        battery_to_load: Optional[List[Any]] = None,
-        pv_to_battery_timestep: Optional[List[Any]] = None,
-        battery_power_flow_timestep: Optional[List[Any]] = None,
-        battery_control_state: Optional[List[Any]] = None,
-        batt_soc_actual_timestep: Optional[List[Any]] = None,
-        batt_soc_normalized_timestep: Optional[List[Any]] = None,
-
-        
+        self, my_simulation_parameters: SimulationParameters, config: MpcControllerConfig
     ) -> None:
+        
+       
         """Constructs all the neccessary attributes."""
-        super().__init__(name="MPC_Controller",
-                         my_simulation_parameters=my_simulation_parameters)
-        self.mpc_scheme=mpc_scheme
-        self.min_comfort_temp = min_comfort_temp
-        self.max_comfort_temp = max_comfort_temp
-        self.sampling_rate=optimizer_sampling_rate
-        self.flexibility_element = flexibility_element
+        
+        super().__init__(
+            name="MPC_Controller",
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+        )
+                         
+        self.my_simulation_parameters=my_simulation_parameters
         self.build(my_simulation_repository)
         self.statespace()
-        self.my_simulation_parameters=my_simulation_parameters
+        
+        self.mpcconfig = config
 
         self.t_mC: cp.ComponentInput = self.add_input(self.component_name,
                                                       self.TemperatureMean,
@@ -210,20 +267,22 @@ class MPC_Controller(cp.Component):
                                                             LoadTypes.PRICE,
                                                             Units.EUR_PER_KWH)
 
-
-
-
-
         self.add_default_connections(self.get_weather_default_connections())
 
         self.prediction_horizon= int (self.my_simulation_parameters.system_config.prediction_horizon/self.my_simulation_parameters.seconds_per_timestep)
         self.state: MPCcontrollerState = MPCcontrollerState(t_m=initial_temeperature,soc=initial_state_of_charge, cost_optimal_thermal_power = self.prediction_horizon * [0])
         self.previous_state = self.state.clone()
         
+        self.mpc_scheme=mpc_scheme
+        self.min_comfort_temp = min_comfort_temp
+        self.max_comfort_temp = max_comfort_temp
+        self.sampling_rate=optimizer_sampling_rate
+        self.flexibility_element = flexibility_element
+        
+        self.temp_forecast=temp_forecast
         self.phi_m_forecast=phi_m_forecast
         self.phi_st_forecast=phi_st_forecast
         self.phi_ia_forecast=phi_ia_forecast
-        self.temp_forecast=temp_forecast
         self.pv_forecast_yearly=pv_forecast_yearly
         self.maximum_storage_capacity=maximum_storage_capacity
         self.minimum_storage_capacity=minimum_storage_capacity
@@ -252,6 +311,56 @@ class MPC_Controller(cp.Component):
         self.battery_control_state=battery_control_state
         self.batt_soc_actual_timestep=batt_soc_actual_timestep
         self.batt_soc_normalized_timestep=batt_soc_normalized_timestep
+
+
+    @staticmethod
+    def get_default_config() -> Any:
+        config = PVSystemConfig(
+            mpc_scheme = 'optimization_once_aday_only',
+            min_comfort_temp = 21.0,
+            max_comfort_temp = 23.0,
+            optimizer_sampling_rate 15,
+            initial_temeperature = 22.0,
+            flexibility_element 'basic_buidling_configuration',
+            initial_state_of_charge = 10/15,
+            my_simulation_repository = None,
+            #getting forecasted disturbance (weather)
+                temp_forecast = None,
+                phi_m_forecast = None,
+                phi_st_forecast = None,
+                phi_ia_forecast = None,
+            #getting pv forecast
+                pv_forecast_yearly = None,
+            #getting battery specifications
+                maximum_storage_capacity = 0.0,
+                minimum_storage_capacity = 0.0,
+                maximum_charging_power = 0.0,
+                maximum_discharging_power = 0.0,
+                battery_efficiency = 0.0,
+                inverter_efficiency = 0.0,
+            temperature_Forecast_24h_1min = None,
+            phi_m_Forecast_24h_1min = None,
+            phi_ia_Forecast_24h_1min = None,
+            phi_st_Forecast_24h_1min = None,
+            pv_forecast_24h_1min = None,
+            PricePurchase_Forecast_24h_1min = None,
+            PriceInjection_Forecast_24h_1min = None,
+            optimal_cost = None,
+            revenues = None,
+            air_conditioning_electricity = None,
+            cost_optimal_temperature_set_point = None,
+            pv2load = None,
+            electricity_from_grid = None,
+            electricity_to_grid = None,
+            battery_to_load = None,
+            pv_to_battery_timestep = None,
+            battery_power_flow_timestep = None,
+            battery_control_state = None,
+            batt_soc_actual_timestep = None,
+            batt_soc_normalized_timestep = None,
+        )
+        return config
+
 
     def get_weather_default_connections(self):
         """get default inputs from the building component."""

@@ -29,13 +29,16 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-
+@dataclass_json
+@dataclass
 class MpcControllerConfig(ConfigBase):
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
         return MPC_Controller.get_full_classname()
 
+    # parameter_string: str
+    # my_simulation_parameters: SimulationParameters
     mpc_scheme: str
     min_comfort_temp: float
     max_comfort_temp: float

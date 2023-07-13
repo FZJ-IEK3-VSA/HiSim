@@ -45,7 +45,7 @@ class MpcControllerConfig(ConfigBase):
     initial_temeperature: float
     flexibility_element: str
     initial_state_of_charge: float
-    my_simulation_repository: Optional[ cp.SimRepository ]
+    my_simulation_repository: cp.SimRepository
     #getting forecasted disturbance (weather)
     temp_forecast: List[float]
     phi_m_forecast: List[float]
@@ -95,19 +95,20 @@ class MpcControllerConfig(ConfigBase):
             initial_state_of_charge = 10/15,
             my_simulation_repository = None,
             #getting forecasted disturbance (weather)
-                temp_forecast = None,
-                phi_m_forecast = None,
-                phi_st_forecast = None,
-                phi_ia_forecast = None,
+            temp_forecast = None,
+            phi_m_forecast = None,
+            phi_st_forecast = None,
+            phi_ia_forecast = None,
             #getting pv forecast
-                pv_forecast_yearly = None,
+            pv_forecast_yearly = None,
             #getting battery specifications
-                maximum_storage_capacity = 0.0,
-                minimum_storage_capacity = 0.0,
-                maximum_charging_power = 0.0,
-                maximum_discharging_power = 0.0,
-                battery_efficiency = 0.0,
-                inverter_efficiency = 0.0,
+            maximum_storage_capacity = 0.0,
+            minimum_storage_capacity = 0.0,
+            maximum_charging_power = 0.0,
+            maximum_discharging_power = 0.0,
+            battery_efficiency = 0.0,
+            inverter_efficiency = 0.0,
+            #forecasts
             temperature_Forecast_24h_1min = None,
             phi_m_Forecast_24h_1min = None,
             phi_ia_Forecast_24h_1min = None,
@@ -153,13 +154,13 @@ class MPC_Controller(cp.Component):
 
     """MPC Controller class."""
 
-    #Input
-    # #weather
+    # Inputs
+    # weather
     TemperatureOutside = "TemperatureOutside"
     # building
     TemperatureMean = "Residence Temperature"
 
-    #output
+    # Outputs
     TemperatureMeanStateSpace="TemperatureMeanStateSpace"
     TemperatureSurfaceStateSpace="TemperatureSurfaceStateSpace"
     TemperatureAirStateSpace="TemperatureAirStateSpace"

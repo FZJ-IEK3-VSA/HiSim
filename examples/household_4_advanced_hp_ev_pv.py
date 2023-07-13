@@ -27,7 +27,7 @@ from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components import generic_pv_system
-from hisim.components import advanced_battery_bslib
+# from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
@@ -80,7 +80,9 @@ class HouseholdAdvancedHPEvPvConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
+        )
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
 
         return HouseholdAdvancedHPEvPvConfig(
@@ -123,7 +125,7 @@ class HouseholdAdvancedHPEvPvConfig:
             ),
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
-            car_battery_controller_config = (
+            car_battery_controller_config=(
                 controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
                     charging_station_set=charging_station_set
                 )
@@ -167,7 +169,7 @@ def household_advanced_hp_ev_pv(
     my_config: HouseholdAdvancedHPEvPvConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = HouseholdAdvancedHPDieselCarPVBatteryConfig.from_json(system_config_file.read())  # type: ignore
+            my_config = HouseholdAdvancedHPEvPvConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
         my_config = HouseholdAdvancedHPEvPvConfig.get_default()
@@ -299,7 +301,9 @@ def household_advanced_hp_ev_pv(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = my_config.car_config  # Todo: check source weight in case of 2 vehicles
+    my_car_config = (
+        my_config.car_config
+    )  # Todo: check source weight in case of 2 vehicles
     my_car_config.name = "ElectricCar"
 
     # create all cars
@@ -321,7 +325,8 @@ def household_advanced_hp_ev_pv(
         my_car_battery_config = my_config.car_battery_config
         my_car_battery_config.source_weight = car.config.source_weight
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
-            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_battery_config,
         )
         my_car_batteries.append(my_car_battery)
 
@@ -417,7 +422,9 @@ def household_advanced_hp_ev_pv(
     )
 
     # connect Electric Vehicle # Todo: copied and adopted from modular_example
-    for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
+    for car, car_battery, car_battery_controller in zip(
+        my_cars, my_car_batteries, my_car_battery_controllers
+    ):
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
@@ -450,7 +457,7 @@ def household_advanced_hp_ev_pv(
             input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
             src_object=electricity_target,
         )
-    
+
     # connect EMS  # Todo: copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_occupancy,
@@ -507,19 +514,19 @@ def household_advanced_hp_ev_pv(
     #     source_weight=2,
     # )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
-    )
+    # electricity_to_or_from_battery_target = (
+    #     my_electricity_controller.add_component_output(
+    #         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+    #         source_tags=[
+    #             lt.ComponentType.BATTERY,
+    #             lt.InandOutputType.ELECTRICITY_TARGET,
+    #         ],
+    #         source_weight=2,
+    #         source_load_type=lt.LoadTypes.ELECTRICITY,
+    #         source_unit=lt.Units.WATT,
+    #         output_description="Target electricity for Battery Control. ",
+    #     )
+    # )
     # -----------------------------------------------------------------------------------------------------------------
     # # Connect Battery
     # my_advanced_battery.connect_dynamic_input(

@@ -917,7 +917,7 @@ class Weather(Component):
         start_index = 0
         for index in range(0, total_number_of_timesteps_temperature_list):
             daily_average_temperature = float(
-                np.mean(temperaturelist[start_index : start_index + timestep_24h])
+                np.mean(temperaturelist[start_index: start_index + timestep_24h])
             )
             if index == start_index + timestep_24h:
                 start_index = index
@@ -1012,7 +1012,7 @@ def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_nsrdb_data(filepath, year) -> pd.DataFrame:
+def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data."""
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
@@ -1076,8 +1076,8 @@ def read_nsrdb_15min_data(filepath: str, year: int, location: str) -> pd.DataFra
 
 
 def calculate_direct_normal_radiation(
-    direct_horizontal_irradation, lon, lat, zenith_tol=87.0
-):
+    direct_horizontal_irradation: pd.Series, lon: float, lat: float, zenith_tol: float = 87.0
+) -> pd.Series:
     """Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
 
     Based on the tsib project @[tsib-kotzur] (Check header)

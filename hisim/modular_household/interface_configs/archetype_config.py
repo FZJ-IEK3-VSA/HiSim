@@ -35,7 +35,7 @@ class ArcheTypeConfig:
     #: type of heating system
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
-    mobility_set: Optional[JsonReference] = None  
+    mobility_set: Optional[JsonReference] = None
     # field(
     #     default_factory=lambda: TransportationDeviceSets.Bus_and_one_60_km_h_Car  # type: ignore
     #     )

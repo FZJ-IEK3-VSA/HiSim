@@ -1,10 +1,14 @@
 """Model Predictive Controller."""
+
 from numpy.linalg import inv
 import numpy as np
 from typing import List, Optional, Any
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from scipy.ndimage import interpolation
 import casadi as ca
 from statistics import mean
+
 # Owned
 from hisim import utils
 from hisim import component as cp
@@ -30,14 +34,21 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
+
+@dataclass_json
+@dataclass
 class MpcControllerConfig(ConfigBase):
+
+    """Configuration of the MPC Controller."""
+
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
         return MPC_Controller.get_full_classname()
-
+    
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
+    name: str
     mpc_scheme: str
     min_comfort_temp: float
     max_comfort_temp: float
@@ -45,7 +56,7 @@ class MpcControllerConfig(ConfigBase):
     initial_temeperature: float
     flexibility_element: str
     initial_state_of_charge: float
-    my_simulation_repository: Optional[ cp.SimRepository ]
+    #my_simulation_repository: Optional[ cp.SimRepository ]
     #getting forecasted disturbance (weather)
     temp_forecast: List[float]
     phi_m_forecast: List[float]
@@ -83,9 +94,10 @@ class MpcControllerConfig(ConfigBase):
     batt_soc_normalized_timestep: list
 
     @classmethod
-    def get_default_MPC_controller(cls):
+    def get_default_config(cls):
         """Gets a default MPC controller."""
         return MpcControllerConfig(
+            name="MpcController", 
             mpc_scheme = 'optimization_once_aday_only',
             min_comfort_temp = 21.0,
             max_comfort_temp = 23.0,
@@ -93,7 +105,7 @@ class MpcControllerConfig(ConfigBase):
             initial_temeperature = 22.0,
             flexibility_element = 'basic_buidling_configuration',
             initial_state_of_charge = 10/15,
-            my_simulation_repository = [],
+            #my_simulation_repository = [],
             #getting forecasted disturbance (weather)
             temp_forecast = None,
             phi_m_forecast = None,
@@ -181,14 +193,16 @@ class MPC_Controller(cp.Component):
 
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: MpcControllerConfig
+        self, 
+        my_simulation_parameters: SimulationParameters,
+        my_simulation_repository: Optional[cp.SimRepository],
+        config: MpcControllerConfig
     ) -> None:
-        
        
         """Constructs all the neccessary attributes."""
         
         super().__init__(
-            name="MPC_Controller",
+            config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
@@ -328,7 +342,7 @@ class MPC_Controller(cp.Component):
             initial_temeperature = 22.0,
             flexibility_element = 'basic_buidling_configuration',
             initial_state_of_charge = 10/15,
-            my_simulation_repository = None,
+            #my_simulation_repository = None,
             #getting forecasted disturbance (weather)
                 temp_forecast = None,
                 phi_m_forecast = None,

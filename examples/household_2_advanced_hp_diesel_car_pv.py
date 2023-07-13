@@ -28,6 +28,7 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components import generic_pv_system
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
@@ -48,6 +49,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     """Configuration for with advanced heat pump and diesel car and PV."""
 
     building_type: str
+    number_of_apartments: int
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -60,7 +62,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
-    # dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
+    dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
@@ -68,8 +70,13 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     def get_default(cls):
         """Get default HouseholdAdvancedHPDieselCarPVConfig."""
 
+        # set number of apartments (mandatory for dhw storage config)
+        number_of_apartments = 1
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+
         return HouseholdAdvancedHPDieselCarPVConfig(
             building_type="blub",
+            number_of_apartments=number_of_apartments,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -102,9 +109,9 @@ class HouseholdAdvancedHPDieselCarPVConfig:
             dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
                 name="DHWHeatpumpController"
             ),
-            # dhw_storage_config=(
-            #     generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
-            # ),
+            dhw_storage_config=(
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+            ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
@@ -242,19 +249,15 @@ def household_advanced_hp_diesel_car_pv(
 
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
-    # Todo dhw_storage_config leads to an error when it is put into the ExampleConfigClass like the other configs
-    dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
-    )
-    dhw_storage_config.name = "DHWStorage"
-
-    dhw_storage_config.compute_default_cycle(
+    my_dhw_storage_config = my_config.dhw_storage_config
+    my_dhw_storage_config.name = "DHWStorage"
+    my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
     my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=dhw_storage_config
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
     my_domnestic_hot_water_heatpump_controller = (

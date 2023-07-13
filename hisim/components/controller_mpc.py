@@ -332,55 +332,6 @@ class MPC_Controller(cp.Component):
         self.batt_soc_normalized_timestep = self.mpcconfig.batt_soc_normalized_timestep
 
 
-    @staticmethod
-    def get_default_config() -> Any:
-        config = PVSystemConfig(
-            mpc_scheme = 'optimization_once_aday_only',
-            min_comfort_temp = 21.0,
-            max_comfort_temp = 23.0,
-            optimizer_sampling_rate = 15,
-            initial_temeperature = 22.0,
-            flexibility_element = 'basic_buidling_configuration',
-            initial_state_of_charge = 10/15,
-            #my_simulation_repository = None,
-            #getting forecasted disturbance (weather)
-                temp_forecast = None,
-                phi_m_forecast = None,
-                phi_st_forecast = None,
-                phi_ia_forecast = None,
-            #getting pv forecast
-                pv_forecast_yearly = None,
-            #getting battery specifications
-                maximum_storage_capacity = 0.0,
-                minimum_storage_capacity = 0.0,
-                maximum_charging_power = 0.0,
-                maximum_discharging_power = 0.0,
-                battery_efficiency = 0.0,
-                inverter_efficiency = 0.0,
-            temperature_Forecast_24h_1min = None,
-            phi_m_Forecast_24h_1min = None,
-            phi_ia_Forecast_24h_1min = None,
-            phi_st_Forecast_24h_1min = None,
-            pv_forecast_24h_1min = None,
-            PricePurchase_Forecast_24h_1min = None,
-            PriceInjection_Forecast_24h_1min = None,
-            optimal_cost = None,
-            revenues = None,
-            air_conditioning_electricity = None,
-            cost_optimal_temperature_set_point = None,
-            pv2load = None,
-            electricity_from_grid = None,
-            electricity_to_grid = None,
-            battery_to_load = None,
-            pv_to_battery_timestep = None,
-            battery_power_flow_timestep = None,
-            battery_control_state = None,
-            batt_soc_actual_timestep = None,
-            batt_soc_normalized_timestep = None,
-        )
-        return config
-
-
     def get_weather_default_connections(self):
         """get default inputs from the building component."""
         log.information("setting weather default connections")

@@ -8,6 +8,7 @@ from statistics import mean
 # Owned
 from hisim import utils
 from hisim import component as cp
+from hisim.component import ConfigBase
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building, BuildingConfig

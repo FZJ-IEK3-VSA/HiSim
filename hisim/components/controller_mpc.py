@@ -214,7 +214,7 @@ class MPC_Controller(cp.Component):
 
 
 
-        self.add_default_connections(Weather, self.get_weather_default_connections())
+        self.add_default_connections(self.get_weather_default_connections())
 
         self.prediction_horizon= int (self.my_simulation_parameters.system_config.prediction_horizon/self.my_simulation_parameters.seconds_per_timestep)
         self.state: MPCcontrollerState = MPCcontrollerState(t_m=initial_temeperature,soc=initial_state_of_charge, cost_optimal_thermal_power = self.prediction_horizon * [0])
@@ -742,7 +742,7 @@ class MPC_Controller(cp.Component):
                 scaled_horizon =int(self.prediction_horizon/sampling_rate) #number of points are reduced from 1440 to this value
 
 
-                temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h= self.get_Forecast_24h(timestep,scaled_horizon,sampling_rate)
+                temperature_Forecast_24h, phi_ia_Forecast_24h, phi_st_Forecast_24h, phi_m_Forecast_24h,PricePurchase_Forecast_24h,PriceInjection_Forecast_24h,pv_forecast_24h= self.get_Forecast_24h(timestep,sampling_rate)
 
                 if self.flexibility_element == 'basic_buidling_configuration':
 

@@ -107,7 +107,7 @@ class MpcControllerConfig(ConfigBase):
             initial_state_of_charge = 10/15,
             #my_simulation_repository = [],
             #getting forecasted disturbance (weather)
-            temp_forecast = None,
+            temp_forecast = [],
             phi_m_forecast = None,
             phi_st_forecast = None,
             phi_ia_forecast = None,

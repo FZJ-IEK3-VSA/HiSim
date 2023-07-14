@@ -714,7 +714,10 @@ class PostProcessor:
             "value": [],
         }
         model = "".join(["HiSim_", ppdt.module_filename])
-        scenario = ppdt.setup_function
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_FILE_HASH):
+            scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_FILE_HASH)
+        else:
+            scenario = ppdt.setup_function
         region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
         year = ppdt.simulation_parameters.year
         timeseries = (

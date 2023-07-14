@@ -197,6 +197,7 @@ class Simulator:
                     module_directory=self.module_directory,
                     model_name=self.setup_function,
                     variant_name=None,
+                    hash_number=None,
                     sorting_option=SortingOptionEnum.FLAT,
                 )
                 self._simulation_parameters.result_directory = (

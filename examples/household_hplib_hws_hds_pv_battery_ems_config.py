@@ -4,6 +4,7 @@
 
 from typing import Optional, Any
 import os
+import re
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -21,6 +22,7 @@ from hisim.components import (
 )
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
@@ -93,6 +95,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # household-pv-config
     config_filename = my_sim.module_config
+    print(type(config_filename))
 
     my_config: BuildingPVWeatherConfig
     if isinstance(config_filename, str) and os.path.exists(config_filename):
@@ -412,9 +415,13 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_electricity_controller)
 
     # Set Results Path
+    hash_number = re.findall(r'\-?\d+', config_filename)[0]
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.setup_function,
-        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_pv_power_{pv_power}",
-        sorting_option=SortingOptionEnum.MASS_SIMULATION,
+        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
+        hash_number=hash_number,
+        sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION,
     )
+    
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.RESULT_FILE_HASH, entry=hash_number)

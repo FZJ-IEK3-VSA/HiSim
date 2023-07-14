@@ -61,8 +61,10 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     def set_hash_number(self, hash_number: Optional[int]) -> None:
         """Set variant name."""
         if hash_number is None:
-            hash_number = ""
-        self.hash_number = str(hash_number)
+            hash_number_str = ""
+        else:
+            hash_number_str = str(hash_number)
+        self.hash_number = hash_number_str
 
     def set_sorting_option(self, sorting_option: Any) -> None:
         """Set sorting option."""
@@ -118,6 +120,11 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                         self.model_name,  # type: ignore
                         self.variant_name + "_" + str(idx),  # type: ignore
                     )
+            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION:
+                # schauen ob verzeichnis schon da und hash nummer anängen
+                path = os.path.join(
+                    self.base_path, self.model_name, self.variant_name + "_" + self.hash_number  # type: ignore
+                )
             elif self.sorting_option == SortingOptionEnum.FLAT:
                 path = os.path.join(
                     self.base_path,  # type: ignore
@@ -138,6 +145,6 @@ class SortingOptionEnum(enum.Enum):
     """A SortingOptionEnum class."""
 
     DEEP = 1
-    MASS_SIMULATION_WITH_INDEX_ENUMERATION = 2
-    FLAT = 3
-    MASS_SIMULATION_WITH_HASH_ENUMERATION = 4
+    MASS_SIMULATION_WITH_INDEX_ENUMERATION = 2  
+    MASS_SIMULATION_WITH_HASH_ENUMERATION = 3
+    FLAT = 4

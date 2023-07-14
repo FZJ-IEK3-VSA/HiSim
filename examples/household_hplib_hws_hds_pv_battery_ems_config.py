@@ -148,7 +148,9 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # Set Heat Pump
     model: str = "Generic"
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = (
+        -7
+    )  # t_in #TODO: get real heating ref temps according to location
     set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
     cycling_mode = True
@@ -275,9 +277,11 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_electricity_controller_config,
+    my_electricity_controller = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
+        )
     )
 
     # Build Battery
@@ -384,13 +388,18 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Battery Control. ",
+    electricity_to_or_from_battery_target = (
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.BATTERY,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
     )
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
@@ -415,7 +424,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_electricity_controller)
 
     # Set Results Path
-    hash_number = re.findall(r'\-?\d+', config_filename)[0]
+    hash_number = re.findall(r"\-?\d+", config_filename)[0]
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.setup_function,
@@ -423,5 +432,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         hash_number=hash_number,
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION,
     )
-    
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.RESULT_FILE_HASH, entry=hash_number)
+
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.RESULT_FILE_HASH, entry=hash_number
+    )

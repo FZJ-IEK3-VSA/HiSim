@@ -46,21 +46,21 @@ class PyamDataCollector:
         path_to_check = [folder for folder in glob.glob(os.path.join(folder_path,"**", "pyam_data"))]
         # if in these paths no pyam data folder can be found check in subfolders for it
         if len(path_to_check) == 0:
-            path_to_check = os.path.join(folder_path,"**", "**", "pyam_data")
+            path_to_check = os.path.join(folder_path,"**", "**", "pyam_data")  # type: ignore
 
-        for folder in glob.glob(path_to_check):
+        for folder in glob.glob(path_to_check):  # type: ignore
             
-            for file in os.listdir(folder):
+            for file in os.listdir(folder):  # type: ignore
                 # get yearly data
                 if "yearly_results" in file and file.endswith(".csv"):
 
-                    yearly_data.append(os.path.join(folder, file))
+                    yearly_data.append(os.path.join(folder, file))  # type: ignore
                 if "hourly_results" in file and file.endswith(".csv"):
-                    hourly_data.append(os.path.join(folder, file))
+                    hourly_data.append(os.path.join(folder, file))  # type: ignore
 
                 # get simulation durations
                 if ".json" in file:
-                    with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:
+                    with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                         json_file = json.load(openfile)
                         simulation_duration = json_file["duration in days"]
                         simulation_durations.append(simulation_duration)
@@ -96,7 +96,7 @@ class PyamDataCollector:
         # order files according to their simualtion durations
         for file in yearly_data_set:
 
-            parent_folder = os.path.abspath(os.path.join(file, os.pardir))
+            parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
                     with open(os.path.join(parent_folder,file1), "r", encoding="utf-8") as openfile:
@@ -108,7 +108,7 @@ class PyamDataCollector:
                             ].append(file)
 
         for file in hourly_data_set:
-            parent_folder = os.path.abspath(os.path.join(file, os.pardir))
+            parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
                     with open(os.path.join(parent_folder,file1), "r", encoding="utf-8") as openfile:

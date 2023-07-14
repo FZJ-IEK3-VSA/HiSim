@@ -750,14 +750,14 @@ class PostProcessor:
 
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
-            print(column)
-            print(column_splitted)
+            
             column_splitted = str(
-                "".join([x for x in column if x in string.ascii_letters + "'- "])
+                "".join([x for x in column if x in string.ascii_letters + "'- " + string.digits])
             ).split(sep=" ")
             variable = "".join(
                 [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
             )
+
             unit = column_splitted[5]
             simple_dict_cumulative_data["model"].append(model)
             simple_dict_cumulative_data["scenario"].append(scenario)

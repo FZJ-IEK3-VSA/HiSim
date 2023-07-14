@@ -138,6 +138,7 @@ class PyamDataCollector:
             appended_dataframe = pd.DataFrame()
             for csv_file in csv_data_list:
                 dataframe = pd.read_csv(csv_file)
+                print(dataframe["variable"])
                 appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
             df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)

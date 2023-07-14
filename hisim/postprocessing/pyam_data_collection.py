@@ -43,9 +43,10 @@ class PyamDataCollector:
         simulation_durations = []
 
         # choose which path to check
-        path_to_check = [folder for folder in glob.glob(os.path.join(folder_path,"**", "pyam_data"))]
+        path_to_check = os.path.join(folder_path,"**", "pyam_data")
+        list_of_paths = [folder for folder in glob.glob(path_to_check)]
         # if in these paths no pyam data folder can be found check in subfolders for it
-        if len(path_to_check) == 0:
+        if len(list_of_paths) == 0:
             path_to_check = os.path.join(folder_path,"**", "**", "pyam_data")  # type: ignore
 
         for folder in glob.glob(path_to_check):  # type: ignore
@@ -108,6 +109,7 @@ class PyamDataCollector:
                             ].append(file)
 
         for file in hourly_data_set:
+
             parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
@@ -150,30 +152,17 @@ class PyamDataCollector:
                 )
 
             if os.path.exists(
-                self.pyam_data_folder
-                + f"simulation_duration_of_{simulation_duration_key}_days"
-            ):
-                log.information("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
-                df_pyam_for_one_simulation_duration.to_csv(os.path.join(self.pyam_data_folder, 
-                    f"simulation_duration_of_{simulation_duration_key}_days",
-                    f"\\pyam_dataframe_for_{simulation_duration_key}_days_",
-                    kind_of_data_set,
-                    "_data.csv",)
-                )
-            else:
+                os.path.join(self.pyam_data_folder,
+                f"simulation_duration_of_{simulation_duration_key}_days")
+            ) is False:
                 os.makedirs(
                     os.path.join(self.pyam_data_folder,
-                    f"simulation_duration_of_{simulation_duration_key}_days"
-                ))
-                log.information("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
-                df_pyam_for_one_simulation_duration.to_csv(
-                    os.path.join(
-                    self.pyam_data_folder,
-                    f"simulation_duration_of_{simulation_duration_key}_days",
-                    f"\\pyam_dataframe_for_{simulation_duration_key}_days_",
-                    kind_of_data_set,
-                    "_data.csv")
-                )
+                    f"simulation_duration_of_{simulation_duration_key}_days"))
+            log.information("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
+            df_pyam_for_one_simulation_duration.to_csv(os.path.join(self.pyam_data_folder, 
+                f"simulation_duration_of_{simulation_duration_key}_days",
+                f"pyam_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv")
+            )
 
 
 class PyamDataCollectorEnum(enum.Enum):

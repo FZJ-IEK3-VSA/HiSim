@@ -714,8 +714,8 @@ class PostProcessor:
             "value": [],
         }
         model = "".join(["HiSim_", ppdt.module_filename])
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_FILE_HASH):
-            scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_FILE_HASH)
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
+            scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
         else:
             scenario = ppdt.setup_function
         region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
@@ -750,7 +750,8 @@ class PostProcessor:
 
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
-
+            print(column)
+            print(column_splitted)
             column_splitted = str(
                 "".join([x for x in column if x in string.ascii_letters + "'- "])
             ).split(sep=" ")

@@ -95,7 +95,6 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # household-pv-config
     config_filename = my_sim.module_config
-    print(type(config_filename))
 
     my_config: BuildingPVWeatherConfig
     if isinstance(config_filename, str) and os.path.exists(config_filename):
@@ -424,15 +423,23 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_electricity_controller)
 
     # Set Results Path
-    hash_number = re.findall(r"\-?\d+", config_filename)[0]
+    if config_filename is not None:
+        hash_number = re.findall(r"\-?\d+", config_filename)[0]
+        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
+
+        SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=hash_number
+    )
+    else:
+        hash_number = None
+        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
+
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.setup_function,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
         hash_number=hash_number,
-        sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION,
+        sorting_option=sorting_option,
     )
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_FILE_HASH, entry=hash_number
-    )
+    

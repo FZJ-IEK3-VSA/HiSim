@@ -293,7 +293,7 @@ def household_advanced_hp_diesel_car_pv(
             )
         )
 
-    # Build Electricity Grid Balancer
+    # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_config.electricity_meter_config,
@@ -358,7 +358,8 @@ def household_advanced_hp_diesel_car_pv(
         my_weather, my_domnestic_hot_water_heatpump_controller
     )
 
-    # connect electricity grid
+    # -----------------------------------------------------------------------------------------------------------------
+    # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_occupancy,
         source_component_output=my_occupancy.ElectricityOutput,

@@ -421,6 +421,7 @@ def household_advanced_hp_ev_pv_battery(
         my_weather, my_domnestic_hot_water_heatpump_controller
     )
 
+    # -----------------------------------------------------------------------------------------------------------------
     # connect Electric Vehicle
     # copied and adopted from modular_example
     for car, car_battery, car_battery_controller in zip(
@@ -459,6 +460,7 @@ def household_advanced_hp_ev_pv_battery(
             src_object=electricity_target,
         )
 
+    # -----------------------------------------------------------------------------------------------------------------
     # connect EMS
     # copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
     my_electricity_controller.add_component_input_and_connect(

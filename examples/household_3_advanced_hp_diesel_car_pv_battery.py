@@ -382,7 +382,9 @@ def household_advanced_hp_diesel_car_pv_battery(
         my_weather, my_domnestic_hot_water_heatpump_controller
     )
 
-    # connect EMS  # Todo: copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
+    # -----------------------------------------------------------------------------------------------------------------
+    # connect EMS
+    # copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_occupancy,
         source_component_output=my_occupancy.ElectricityOutput,
@@ -451,6 +453,7 @@ def household_advanced_hp_diesel_car_pv_battery(
             output_description="Target electricity for Battery Control. ",
         )
     )
+
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
     my_advanced_battery.connect_dynamic_input(
@@ -458,6 +461,7 @@ def household_advanced_hp_diesel_car_pv_battery(
         src_object=electricity_to_or_from_battery_target,
     )
 
+    # -----------------------------------------------------------------------------------------------------------------
     # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_electricity_controller,

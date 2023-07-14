@@ -76,9 +76,11 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
+        )
 
-        return HouseholdAdvancedHPDieselCarPVBatteryConfig(
+        household_config = HouseholdAdvancedHPDieselCarPVBatteryConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
@@ -123,6 +125,11 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
                 controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             ),
         )
+        household_config.hp_config.group_id = 1  # use modulating heatpump as default
+        household_config.hp_controller_config.mode = (
+            2  # use heating and cooling as default
+        )
+        return household_config
 
 
 def household_advanced_hp_diesel_car_pv_battery(

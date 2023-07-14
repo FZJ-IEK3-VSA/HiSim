@@ -85,7 +85,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
         )
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
 
-        return HouseholdAdvancedHpEvPvBatteryConfig(
+        household_config = HouseholdAdvancedHpEvPvBatteryConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
@@ -136,6 +136,9 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             ),
         )
+        household_config.hp_config.group_id = 1  # use modulating heatpump as default
+        household_config.hp_controller_config.mode = 2  # use heating and cooling as default
+        return household_config
 
 
 def household_advanced_hp_ev_pv_battery(

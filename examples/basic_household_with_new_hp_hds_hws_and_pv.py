@@ -123,30 +123,32 @@ def household_with_hds(
         config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
-
-    # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
-    )
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
+        config=heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(),
     )
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
         heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
     )
+
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Distribution Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(),
+    # Build Heat Water Storage
+    my_simple_heat_water_storage_config = (
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
     )
+
+    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+        config=my_simple_heat_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 

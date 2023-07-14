@@ -728,7 +728,7 @@ class PostProcessor:
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(
-                    "".join([x for x in column if x in string.ascii_letters + "'- "])
+                    "".join([x for x in column if x in string.ascii_letters + "'- " + string.digits])
                 ).split(sep=" ")
                 variable = "".join(
                     [

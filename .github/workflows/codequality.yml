@@ -42,6 +42,7 @@ jobs:
         prospector examples/household_with_gas_heater_with_controller.py
         prospector examples/household_with_heatpump_and_pv.py
         prospector examples/simple_examples.py
+        prospector examples/air_conditioned_house.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
@@ -77,6 +78,9 @@ jobs:
         prospector hisim/components/idealized_electric_heater.py
         prospector hisim/components/simple_hot_water_storage.py
         prospector hisim/components/sumbuilder.py
+        prospector hisim/components/controller_pid.py
+        prospector hisim/components/controller_mpc.py
+        prospector hisim/components/air_conditioner.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
@@ -105,6 +109,7 @@ jobs:
         prospector tests/test_gas_heater.py
         prospector tests/test_generic_gas_heater.py
         prospector tests/test_simple_hot_water_storage.py
+        prospector tests/test_example_air_conditioned_house.py
 
 
 

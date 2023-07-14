@@ -15,7 +15,6 @@ from hisim.component import (
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
-
 @dataclass_json
 @dataclass
 class RandomNumbersConfig(ConfigBase):
@@ -41,7 +40,6 @@ class RandomNumbersConfig(ConfigBase):
             minimum=1,
             maximum=20,
         )
-
 
 class RandomNumbers(Component):
     RandomOutput: str = "Random Numbers"

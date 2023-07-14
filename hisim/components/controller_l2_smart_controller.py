@@ -42,6 +42,7 @@ class SmartControllerConfig(ConfigBase):
         return config
 
 
+
 class SmartController(Component):
 
     """Smart Controller class."""

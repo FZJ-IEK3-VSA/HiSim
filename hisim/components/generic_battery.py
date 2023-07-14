@@ -62,7 +62,6 @@ class GenericBatteryState:
         self.stored_energy = discharge + self.stored_energy
         self.chargeWh = discharge
 
-
 @dataclass_json
 @dataclass
 class GenericBatteryConfig(cp.ConfigBase):
@@ -85,12 +84,11 @@ class GenericBatteryConfig(cp.ConfigBase):
         """Gets a default config."""
         return GenericBatteryConfig(
             name="Generic Battery",
-            manufacturer="sonnen",
-            model="sonnenBatterie 10 - 11,5 kWh",
-            soc=10 / 15,
-            base=False,
+            manufacturer= "sonnen",
+            model= "sonnenBatterie 10 - 11,5 kWh",
+            soc= 10 / 15,
+            base= False,
         )
-
 
 @dataclass_json
 @dataclass
@@ -111,6 +109,7 @@ class BatteryControllerConfig(cp.ConfigBase):
         return BatteryControllerConfig(
             name="Battery Controller",
         )
+
 
 
 class GenericBattery(cp.Component):

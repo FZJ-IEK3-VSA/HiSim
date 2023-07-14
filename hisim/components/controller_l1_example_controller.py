@@ -24,12 +24,10 @@ __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
-
 @dataclass_json
 @dataclass
 class SimpleControllerConfig(ConfigBase):
     """Config class."""
-
     name: str
 
     @classmethod
@@ -42,6 +40,7 @@ class SimpleControllerConfig(ConfigBase):
         """Returns default config."""
         config = SimpleControllerConfig(name="SimpleController")
         return config
+
 
 
 class SimpleController(Component):

@@ -47,7 +47,6 @@ class PIDControllerConfig(cp.ConfigBase):
             name="PIDController",
         )
 
-
 class PIDState:
 
     """Represents the current internal state of the PID."""

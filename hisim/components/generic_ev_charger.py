@@ -120,6 +120,7 @@ class EVChargerConfig(cp.ConfigBase):
         )
 
 
+
 class VehiclePure(cp.Component):
     """
     Vehicle component class

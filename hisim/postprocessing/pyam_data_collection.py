@@ -8,7 +8,7 @@ import json
 import enum
 import pyam
 import pandas as pd
-
+from hisim import log
 
 class PyamDataCollector:
 
@@ -17,10 +17,9 @@ class PyamDataCollector:
     def __init__(self) -> None:
         """Initialize the class."""
 
-        self.result_folder = "..\\..\\examples\\results\\"
-        self.pyam_data_folder = (
-            "..\\..\\examples\\results_for_scenario_comparison\\data\\"
-        )
+        self.result_folder = os.path.join(os.pardir, os.pardir,"examples", "results")
+        self.pyam_data_folder = os.path.join(os.pardir, os.pardir,"examples", "results_for_scenario_comparison", "data")
+        log.information(f"Getting results from folder: {self.result_folder}")
         dict_of_yearly_csv_data, dict_of_hourly_csv_data = self.import_data_from_file(
             folder_path=self.result_folder
         )
@@ -35,6 +34,7 @@ class PyamDataCollector:
 
     def import_data_from_file(self, folder_path: str) -> tuple[Dict, Dict]:
         """Import data from result files."""
+        log.information("Importing pyam_data from csv files.")
         # get csv files
         dict_of_yearly_csv_data_for_different_simulation_duration: Dict = {}
         dict_of_hourly_csv_data_for_different_simulation_duration: Dict = {}
@@ -42,19 +42,25 @@ class PyamDataCollector:
         hourly_data = []
         simulation_durations = []
 
-        for folder in glob.glob(folder_path + "**\\pyam_data\\"):
+        # choose which path to check
+        path_to_check = [folder for folder in glob.glob(os.path.join(folder_path,"**", "pyam_data"))]
+        # if in these paths no pyam data folder can be found check in subfolders for it
+        if len(path_to_check) == 0:
+            path_to_check = os.path.join(folder_path,"**", "**", "pyam_data")
 
+        for folder in glob.glob(path_to_check):
+            
             for file in os.listdir(folder):
                 # get yearly data
                 if "yearly_results" in file and file.endswith(".csv"):
 
-                    yearly_data.append(folder + file)
+                    yearly_data.append(os.path.join(folder, file))
                 if "hourly_results" in file and file.endswith(".csv"):
-                    hourly_data.append(folder + file)
+                    hourly_data.append(os.path.join(folder, file))
 
                 # get simulation durations
                 if ".json" in file:
-                    with open(folder + "\\" + file, "r", encoding="utf-8") as openfile:
+                    with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:
                         json_file = json.load(openfile)
                         simulation_duration = json_file["duration in days"]
                         simulation_durations.append(simulation_duration)
@@ -81,10 +87,11 @@ class PyamDataCollector:
         hourly_data_csv_data = []
         hourly_data_set = []
         for path in hourly_data:
-
+            print("path", path)
             if path.split("\\")[-1] not in hourly_data_csv_data:
                 hourly_data_csv_data.append(path.split("\\")[-1])
                 hourly_data_set.append(path)
+                
 
         # order files according to their simualtion durations
         for file in yearly_data_set:
@@ -92,7 +99,7 @@ class PyamDataCollector:
             parent_folder = os.path.abspath(os.path.join(file, os.pardir))
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
-                    with open(parent_folder + "\\" + file1, "r", encoding="utf-8") as openfile:
+                    with open(os.path.join(parent_folder,file1), "r", encoding="utf-8") as openfile:
                         json_file = json.load(openfile)
                         simulation_duration = json_file["duration in days"]
                         if simulation_duration in simulation_durations:
@@ -104,7 +111,7 @@ class PyamDataCollector:
             parent_folder = os.path.abspath(os.path.join(file, os.pardir))
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
-                    with open(parent_folder + "\\" + file1, "r", encoding="utf-8") as openfile:
+                    with open(os.path.join(parent_folder,file1), "r", encoding="utf-8") as openfile:
                         json_file = json.load(openfile)
                         simulation_duration = json_file["duration in days"]
                         if simulation_duration in simulation_durations:
@@ -121,6 +128,9 @@ class PyamDataCollector:
         self, dict_of_csv_to_read: Dict[str, list[str]], kind_of_data: Any
     ) -> None:
         """Read the csv files and generate the pyam dataframe for different simulation durations."""
+        log.information("Read csv files and generate pyam dataframes.")
+        if bool(dict_of_csv_to_read) == False:
+            raise ValueError("The passed dictionary is empty.")
 
         for simulation_duration_key, csv_data_list in dict_of_csv_to_read.items():
             appended_dataframe = pd.DataFrame()
@@ -143,26 +153,26 @@ class PyamDataCollector:
                 self.pyam_data_folder
                 + f"simulation_duration_of_{simulation_duration_key}_days"
             ):
-                print("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
-                df_pyam_for_one_simulation_duration.to_csv(
-                    self.pyam_data_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\pyam_dataframe_for_{simulation_duration_key}_days_"
-                    + kind_of_data_set
-                    + "_data.csv"
+                log.information("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
+                df_pyam_for_one_simulation_duration.to_csv(os.path.join(self.pyam_data_folder, 
+                    f"simulation_duration_of_{simulation_duration_key}_days",
+                    f"\\pyam_dataframe_for_{simulation_duration_key}_days_",
+                    kind_of_data_set,
+                    "_data.csv",)
                 )
             else:
                 os.makedirs(
-                    self.pyam_data_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                )
-                print("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
+                    os.path.join(self.pyam_data_folder,
+                    f"simulation_duration_of_{simulation_duration_key}_days"
+                ))
+                log.information("Saving pyam dataframe in Hisim/examples/results_for_scenario_comparison/data folder")
                 df_pyam_for_one_simulation_duration.to_csv(
-                    self.pyam_data_folder
-                    + f"simulation_duration_of_{simulation_duration_key}_days"
-                    + f"\\pyam_dataframe_for_{simulation_duration_key}_days_"
-                    + kind_of_data_set
-                    + "_data.csv"
+                    os.path.join(
+                    self.pyam_data_folder,
+                    f"simulation_duration_of_{simulation_duration_key}_days",
+                    f"\\pyam_dataframe_for_{simulation_duration_key}_days_",
+                    kind_of_data_set,
+                    "_data.csv")
                 )
 
 

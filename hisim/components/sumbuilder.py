@@ -12,6 +12,7 @@ from hisim.component import Component
 from hisim.simulationparameters import SimulationParameters
 
 
+
 @dataclass_json
 @dataclass
 class SumBuilderConfig(cp.ConfigBase):

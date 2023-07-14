@@ -10,7 +10,7 @@ import hisim.simulator as sim
 from hisim.simulationparameters import SimulationParameters
 
 
-def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None, my_module_config: Optional[str] = None) -> None:
     """ Core function. """
     log.information("#################################")
     log.information("starting simulation of " + path_to_module + " " + function_in_module)
@@ -47,7 +47,8 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters:
     my_sim: sim.Simulator = sim.Simulator(module_directory=path_to_be_added,
                                           module_filename=module_filename,
                                           setup_function=function_in_module,
-                                          my_simulation_parameters=my_simulation_parameters)
+                                          my_simulation_parameters=my_simulation_parameters,
+                                          my_module_config=my_module_config)
 
     # Build method
     model_init_method = getattr(targetmodule, function_in_module)
@@ -69,9 +70,14 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters:
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:
-        log.information("HiSim needs two arguments")
+        log.information("HiSim needs at least two arguments")
         sys.exit(1)
     FILE_NAME = sys.argv[1]
     FUNCTION_NAME = sys.argv[2]
-    log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME)
-    main(FILE_NAME, FUNCTION_NAME)
+    if len(sys.argv) == 3:
+        log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME)
+        main(path_to_module=FILE_NAME, function_in_module=FUNCTION_NAME)
+    if len(sys.argv) == 4:
+        MODULE_CONFIG = sys.argv[3]
+        log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME + " with module config " + MODULE_CONFIG)
+        main(path_to_module=FILE_NAME, function_in_module=FUNCTION_NAME, my_module_config=MODULE_CONFIG)

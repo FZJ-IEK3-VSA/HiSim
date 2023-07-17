@@ -21,7 +21,6 @@ from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
-from hisim.postprocessing.opex_cost_calculation import opex_calculation
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -191,11 +190,6 @@ class PostProcessor:
                 "Making PDF report and writing simulation parameters to report took "
                 + f"{duration:1.2f}s."
             )
-        if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
-            log.information(
-                "Computing operational costs and C02 emissions produced in operation."
-            )
-            opex_calculation(components=ppdt.wrapped_components, all_outputs=ppdt.all_outputs, postprocessing_results=ppdt.results)
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
             in ppdt.post_processing_options

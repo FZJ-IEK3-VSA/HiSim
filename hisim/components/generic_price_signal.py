@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
-
+from hisim import utils
 from hisim import loadtypes as lt
 
 __authors__ = "Johanna Ganglbauer"
@@ -29,12 +29,18 @@ class PriceSignalConfig(cp.ConfigBase):
 
     #: name of the price signal
     name: str
+    country: str
+    pricing_scheme: str
+    installed_capcity: float
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
         """Default configuration for price signal."""
         config = PriceSignalConfig(
-            name="PriceSignal",
+            name = "PriceSignal",
+            country = 'Germany',
+            pricing_scheme = 'fixed',
+            installed_capcity = 10E3,
         )
         return config
 
@@ -124,6 +130,33 @@ class PriceSignal(cp.Component):
                 self.my_simulation_parameters.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
+        elif (
+            self.price_signal_type =='Prices at second half of 2021'
+        ):
+            priceinjectionforecast= [self.price_injection ] * int( 
+                self.my_simulation_parameters.system_config.prediction_horizon 
+                / self.my_simulation_parameters.seconds_per_timestep 
+            )
+        elif self.pricing_scheme=='dynamic':
+            pricepurchaseforecast=self.static_tou_price
+        elif self.pricing_scheme=='fixed':
+            pricepurchaseforecast=self.fixed_price
+        elif self.price_signal_type =='dummy':
+            priceinjectionforecast = [ 10  ] * int( 
+                self.my_simulation_parameters.system_config.prediction_horizon 
+                / self.my_simulation_parameters.seconds_per_timestep 
+            )
+            pricepurchaseforecast = [ 50  ] * int( 
+                self.my_simulation_parameters.system_config.prediction_horizon 
+                / self.my_simulation_parameters.seconds_per_timestep 
+            )
+            # pricepurchaseforecast = [ ]
+            # for step in range( self.day ):
+            #     x = timestep % self.day
+            #     if x > self.start and x < self.end:
+            #         pricepurchaseforecast.append( 20 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
+            #     else:
+            #         pricepurchaseforecast.append( 50 * self.my_simulation_parameters.seconds_per_timestep / 3.6e6 )
         else:
             priceinjectionforecast = [0.1]
             pricepurchaseforecast = [0.5]
@@ -144,6 +177,26 @@ class PriceSignal(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
+        PricePurchase = pd.read_csv(os.path.join(utils.HISIMPATH["price_signal"]["PricePurchase"]), index_col=0, )
+        FeedInTarrif = pd.read_csv(os.path.join(utils.HISIMPATH["price_signal"]["FeedInTarrif"]), index_col=0, )
+        
+        if "Fixed_Price_" + self.country in PricePurchase:
+            self.price_signal_type='Prices at second half of 2021'
+            fixed_price=PricePurchase["Fixed_Price_" + self.country].tolist()
+            # convert euro/kWh to cent/kW-timestep
+            p_conversion= 100 / (1000 * 3600/self.my_simulation_parameters.seconds_per_timestep)
+            fixed_price = [element * p_conversion for element in fixed_price]
+            self.fixed_price=np.repeat(fixed_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
+            
+            static_tou_price=PricePurchase["Static_TOU_Price_" + self.country].tolist()
+            static_tou_price = [element * p_conversion for element in static_tou_price]
+            self.static_tou_price=np.repeat(static_tou_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
+            
+            FITdata=FeedInTarrif.loc[self.country]
+            for i in range(len(FITdata)):
+                if FITdata['min_capacity (kW)'].values[i] < self.installed_capcity and FITdata['max_capacity (kW)'].values[i] >= self.installed_capcity:
+                    price_injection=FITdata['FIT'].values[i]
+            self.price_injection=price_injection * p_conversion
         pass
 
     def write_to_report(self) -> List[str]:

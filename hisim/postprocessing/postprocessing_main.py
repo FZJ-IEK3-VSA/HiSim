@@ -714,10 +714,16 @@ class PostProcessor:
             "value": [],
         }
         model = "".join(["HiSim_", ppdt.module_filename])
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
-            scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
+        ):
+            scenario = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
+            )
+            log.information("scenario " + str(scenario) + str(type(scenario)))
         else:
             scenario = ppdt.setup_function
+            log.information("scenario " + str(scenario) + str(type(scenario)))
         region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
         year = ppdt.simulation_parameters.year
         timeseries = (
@@ -728,7 +734,13 @@ class PostProcessor:
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(
-                    "".join([x for x in column if x in string.ascii_letters + "'- " + string.digits])
+                    "".join(
+                        [
+                            x
+                            for x in column
+                            if x in string.ascii_letters + "'- " + string.digits
+                        ]
+                    )
                 ).split(sep=" ")
                 variable = "".join(
                     [
@@ -750,9 +762,15 @@ class PostProcessor:
 
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
-            
+
             column_splitted = str(
-                "".join([x for x in column if x in string.ascii_letters + "'- " + string.digits])
+                "".join(
+                    [
+                        x
+                        for x in column
+                        if x in string.ascii_letters + "'- " + string.digits
+                    ]
+                )
             ).split(sep=" ")
             variable = "".join(
                 [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]

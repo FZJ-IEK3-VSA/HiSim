@@ -113,7 +113,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     seconds_per_timestep = 60 * 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -428,7 +428,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
         SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=hash_number
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=str(hash_number)
     )
     else:
         hash_number = None

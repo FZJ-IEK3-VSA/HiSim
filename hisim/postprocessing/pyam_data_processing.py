@@ -21,7 +21,7 @@ class PyAmChartGenerator:
 
     """PyamChartGenerator class."""
 
-    def __init__(self, simulation_duration_to_check: str(int)) -> None:
+    def __init__(self, simulation_duration_to_check: str) -> None:
         """Initialize the class."""
 
         self.folder_path = os.path.join(os.pardir, os.pardir,"examples", "results_for_scenario_comparison", "data")
@@ -65,7 +65,7 @@ class PyAmChartGenerator:
             )
         log.information(f"Read csv files and create one big pyam dataframe for {kind_of_data_set} data.")
         dict_of_different_pyam_dataframes_of_different_simulation_parameters = {}
-        # make dictionary with different simulation durations as keys
+
         
         for file in glob.glob(os.path.join(folder_path,"**", f"*{kind_of_data_set}*.csv")):
             file_df = pd.read_csv(filepath_or_buffer=file)
@@ -78,14 +78,21 @@ class PyAmChartGenerator:
         return dict_of_different_pyam_dataframes_of_different_simulation_parameters
 
     def make_plots_with_specific_kind_of_data(
-        self, kind_of_data: Any, dict_of_data: Dict[str, pyam.IamDataFrame], simulation_duration_key: str(int)
+        self, kind_of_data: Any, dict_of_data: Dict[str, pyam.IamDataFrame], simulation_duration_key: str
     ) -> None:
         """Make plots for different kind of data."""
 
-        if bool(dict_of_data) is False:
-            raise ValueError("The passed dictionary is empty.")
-        #for simulation_duration_key, pyam_dataframe in dict_of_data.items():
         pyam_dataframe = dict_of_data[simulation_duration_key]
+        if pyam_dataframe.empty:
+            raise ValueError("Pyam dataframe is empty.")
+
+        log.information("Pyam dataframe columns " + str(pyam_dataframe.dimensions))
+        # log.information("Pyam dataframe models " + str(pyam_dataframe.model))
+        log.information("Pyam dataframe scenarios " + str(pyam_dataframe.scenario))
+        # log.information("Pyam dataframe variables " + str(pyam_dataframe.variable))
+        # log.information("Pyam dataframe region " + str(pyam_dataframe.region))
+        # log.information("Pyam dataframe time domain " + str(pyam_dataframe.time_domain))
+
         sub_results_folder = (
             f"simulation_duration_of_{simulation_duration_key}_days"
         )
@@ -100,20 +107,20 @@ class PyAmChartGenerator:
                 f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
             )
             self.make_line_plot_for_pyam_dataframe(
-                pyam_dataframe=pyam_dataframe, filter_variables="Building1|Heating|TheoreticalThermalBuildingDemand", title="Building Theoretical Thermal Building Demand"
+                pyam_dataframe=pyam_dataframe, filter_variables="Building1|Heating|TheoreticalThermalBuildingDemand", title="Building Theoretical Thermal Building Demand", filter_model=None, filter_scenario="-8286317551923135974", filter_region=None, filter_unit=None, filter_year=None
             )
             self.make_line_plot_with_filling_for_pyam_dataframe(
-                pyam_dataframe=pyam_dataframe,filter_model="HiSim_household_hplib_hws_hds_pv_battery_ems_config", filter_scenario="household_hplib_hws_hds_pv_battery_ems_config", filter_variables="Building1|Heating|*", title="Heating"
+                pyam_dataframe=pyam_dataframe,filter_model=None, filter_scenario="-8286317551923135974", filter_variables="PVSystemw0|Electricity|ElectricityOutput", title="PV", filter_region=None, filter_unit=None, filter_year=None
             )
         elif kind_of_data == PyamDataCollectorEnum.YEARLY:
             log.information(
                 f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
             )
             self.make_bar_plot_for_pyam_dataframe(
-                pyam_dataframe=pyam_dataframe,filter_model="HiSim_household_hplib_hws_hds_pv_battery_ems_config", filter_scenario="household_hplib_hws_hds_pv_battery_ems_config", filter_variables="Building1|Heating|*", title="Heating")
+                pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="-8286317551923135974", filter_variables="Building1|Heating|*", filter_region=None, filter_unit=None, filter_year=None, title="Heating")
 
             # self.make_box_plot_for_pyam_dataframe(
-            #     pyam_dataframe=pyam_dataframe,
+            #     pyam_dataframe=pyam_dataframe,filter_variables="Building1|Heating|TheoreticalThermalBuildingDemand", title="Theoretical Building Demand [W]"
             # )
             # self.make_pie_plot_for_pyam_dataframe(
             #     pyam_dataframe=pyam_dataframe,
@@ -131,16 +138,14 @@ class PyAmChartGenerator:
             )
 
     def make_line_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame, filter_variables: str, title: str,
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, filter_region: str, filter_unit: str, filter_year: str, title: str
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with hourly data.")
 
         data = pyam_dataframe
 
-        filtered_data = data.filter(
-            variable=filter_variables
-        )
+        filtered_data = self.filter_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=filter_model, filter_scenario=filter_scenario, filter_region=filter_region, filter_variables=filter_variables, filter_unit=filter_unit, filter_year=filter_year)
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
@@ -148,7 +153,7 @@ class PyAmChartGenerator:
         title = title
         filtered_data.plot.line(
             ax=a_x,
-            color="scenario",
+            #color="scenario",
             title=title,
         )
 
@@ -179,24 +184,19 @@ class PyAmChartGenerator:
 
 
     def make_line_plot_with_filling_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame, filter_model:str, filter_scenario: str, filter_variables: str, title:str
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, filter_region: str, filter_unit: str, filter_year: str, title: str
     ) -> None:
         """Make line plot with filling."""
         log.information("Make line plot with filling.")
 
-        data = pyam_dataframe
-        model = filter_model
-        scenario = filter_scenario
-        filtered_data = data.filter(
-            model=model, scenario=scenario, variable=filter_variables
-        )
+        filtered_data = self.filter_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=filter_model, filter_scenario=filter_scenario, filter_region=filter_region, filter_variables=filter_variables, filter_unit=filter_unit, filter_year=filter_year)
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         title = title
         filtered_data.plot(
             ax=a_x,
-            color="variable",
+            color="scenario",
             title=title,
             fill_between=True,
         )
@@ -227,22 +227,18 @@ class PyAmChartGenerator:
         fig.savefig(os.path.join(self.path_for_plots, "line_plot_with_filling.png"))
 
     def make_bar_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, title: str
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, filter_region: str, filter_unit: str, filter_year: str, title: str
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
 
-        data = pyam_dataframe
-        model = filter_model
-        scenario = filter_scenario
-        filtered_data = data.filter(
-            model=model, scenario=scenario, variable=filter_variables)
+        filtered_data = self.filter_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=filter_model, filter_scenario=filter_scenario, filter_region=filter_region, filter_variables=filter_variables, filter_unit=filter_unit, filter_year=filter_year)
 
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         title = title
-        filtered_data.plot.bar(ax=a_x, stacked=True)
+        filtered_data.plot.bar(ax=a_x, stacked=True, bars="variable")
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
         plt.yticks(
@@ -272,55 +268,9 @@ class PyAmChartGenerator:
             )
         fig.savefig(os.path.join(self.path_for_plots, "bar_plot.png"))
 
-    def make_stack_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame
-    ) -> None:
-        """Make stack plot."""
-        log.information("Make stack plot.")
-        data = pyam_dataframe
-        model = "HiSim_basic_household"
-        scenario = "basic_household_explicit"
-        filtered_data = data.filter(
-            model=model,
-            scenario=scenario,
-            variable="Building|Heating|*",
-            region="Aachen",
-        )
-
-        fig, a_x = plt.subplots(
-            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
-        )
-        title = str(scenario.capitalize())
-        filtered_data.plot.stack(titel=scenario)
-
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
-        plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
-        )
-        plt.ylabel(
-            ylabel=f"{scale}{filtered_data.unit[0]}",
-            fontsize=self.hisim_chartbase.fontsize_label,
-        )
-        plt.xlabel(
-            xlabel=filtered_data.time_col.capitalize(),
-            fontsize=self.hisim_chartbase.fontsize_label,
-        )
-        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
-        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
-
-        fig.subplots_adjust(right=0.55)
-        if os.path.exists(
-            self.path_for_plots
-        ) is False:
-            os.makedirs(
-                self.path_for_plots
-            )
-        fig.savefig(os.path.join(self.path_for_plots, "stack_plot.png"))
-
+    
     def make_box_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, title: str
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -329,12 +279,12 @@ class PyAmChartGenerator:
         # model = "HiSim_basic_household"
         # scenario="basic_household_explicit"
         filtered_data = data.filter(
-            variable="Building|Heating|TheoreticalThermalBuildingDemand"
+            variable=filter_variables
         )
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        title = "Theoretical Building Demand for all scenarios"
+        title = title
         filtered_data.plot.box(
             ax=a_x,
             by="variable",
@@ -370,7 +320,7 @@ class PyAmChartGenerator:
         fig.savefig(os.path.join(self.path_for_plots, "box_plot.png"))
 
     def make_pie_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, title: str
     ) -> None:
         """Make pie plot."""
         log.information("Make pie plot.")
@@ -403,7 +353,7 @@ class PyAmChartGenerator:
         fig.savefig(os.path.join(self.path_for_plots, "pie_plot.png"))
 
     def make_scatter_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, title: str
     ) -> None:
         """Make scatter plot."""
         log.information("Make scatter plot.")
@@ -451,7 +401,7 @@ class PyAmChartGenerator:
         fig.savefig(os.path.join(self.path_for_plots, "scatter_plot.png"))
 
     def make_sankey_plot_for_pyam_dataframe(
-        self, pyam_dataframe: pyam.IamDataFrame
+        self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, title: str
     ) -> None:
         """Make sankey plot."""
         log.information("Make sankey plot.")
@@ -506,6 +456,53 @@ class PyAmChartGenerator:
         except Exception as exc:
             raise Exception("Cannot save current sankey. Try again.") from exc
 
+    def make_stack_plot_for_pyam_dataframe(
+            self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, title: str
+        ) -> None:
+            """Make stack plot."""
+            log.information("Make stack plot.")
+            data = pyam_dataframe
+            model = "HiSim_basic_household"
+            scenario = "basic_household_explicit"
+            filtered_data = data.filter(
+                model=model,
+                scenario=scenario,
+                variable="Building|Heating|*",
+                region="Aachen",
+            )
+
+            fig, a_x = plt.subplots(
+                figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+            )
+            title = str(scenario.capitalize())
+            filtered_data.plot.stack(titel=scenario)
+
+            y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+            plt.yticks(
+                ticks=y_tick_locations,
+                labels=y_tick_labels,
+                fontsize=self.hisim_chartbase.fontsize_ticks,
+            )
+            plt.ylabel(
+                ylabel=f"{scale}{filtered_data.unit[0]}",
+                fontsize=self.hisim_chartbase.fontsize_label,
+            )
+            plt.xlabel(
+                xlabel=filtered_data.time_col.capitalize(),
+                fontsize=self.hisim_chartbase.fontsize_label,
+            )
+            plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+            plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
+            fig.subplots_adjust(right=0.55)
+            if os.path.exists(
+                self.path_for_plots
+            ) is False:
+                os.makedirs(
+                    self.path_for_plots
+                )
+            fig.savefig(os.path.join(self.path_for_plots, "stack_plot.png"))
+
     def set_axis_scale(self, a_x: Any, x_or_y: Any) -> Tuple[float, str, Any]:
         """Get axis and unit and scale it properly."""
 
@@ -541,11 +538,60 @@ class PyAmChartGenerator:
         tick_labels = np.round(new_tick_values, 1)
 
         return tick_labels, scale, tick_locations
+    
+    
+    def filter_pyam_dataframe(self, pyam_dataframe: pyam.IamDataFrame, filter_model: str, filter_scenario: str, filter_variables: str, filter_region: str, filter_unit: str, filter_year: str):
+        """Filter the pyam dataframe for the plots.
+        If the value is None, it will be ignored.
+        """
+        
+        filtered_data = pyam_dataframe
+
+        if filter_model is not None:
+            if filter_model not in filtered_data.model:
+                raise ValueError(f"Model {filter_model} not found in the pyam dataframe.")
+            filtered_data = filtered_data.filter(
+                model=filter_model
+            )
+
+        if filter_scenario is not None:
+            if filter_scenario not in filtered_data.scenario:
+                print([type(x) for x in filtered_data.scenario])
+                raise ValueError(f"Scenario {filter_scenario} not found in the pyam dataframe.")
+            filtered_data = filtered_data.filter(
+                scenario=filter_scenario
+            )
+        if filter_variables is not None:
+            # if filter_variables not in filtered_data.variable:
+            #     raise ValueError(f"Variable {filter_variables} not found in the pyam dataframe.")
+            filtered_data = filtered_data.filter(
+                variable=filter_variables
+            )
+        if filter_region is not None:
+            if filter_region not in filtered_data.region:
+                raise ValueError(f"Region {filter_region} not found in the pyam dataframe.")
+            filtered_data = filtered_data.filter(
+                region=filter_region
+            )
+        if filter_unit is not None:
+            if filter_unit not in filtered_data.unit:
+                raise ValueError(f"Unit {filter_unit} not found in the pyam dataframe.")
+            filtered_data = filtered_data.filter(
+                unit=filter_unit
+            )
+        if filter_year is not None:
+            if filtered_data.time_domain == "year" and filter_year not in filtered_data["year"]:
+                raise ValueError(f"Year {filter_year} not found in the pyam dataframe.")
+            filtered_data = filtered_data.filter(
+                year=filter_year
+            )
+ 
+        return filtered_data
 
 
 def main():
     """Main function to execute the pyam data processing."""
-    PyAmChartGenerator(simulation_duration_to_check=str(1))
+    PyAmChartGenerator(simulation_duration_to_check=str(365))
 
 
 if __name__ == "__main__":

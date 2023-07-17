@@ -206,7 +206,7 @@ class PhysicsConfig:
     # density H2:       0.08989 kg/m³   (S. 23) -> standard conditions
     hydrogen_density = 0.08989  # [kg/m³]
     hydrogen_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10**6  # [J/m³]
+    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10 ** 6  # [J/m³]
     hydrogen_specific_fuel_value_per_kg = (
         hydrogen_specific_fuel_value_per_m_3 / hydrogen_density
     )  # [J/kg]
@@ -216,7 +216,7 @@ class PhysicsConfig:
     # density Methan:       0.71750 kg/m³   (S. 23) -> standard conditions
     natural_gas_density = 0.71750  # [kg/m³]
     natural_gas_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
+    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10 ** 6  # [J/m³]
     natural_gas_specific_fuel_value_per_kg = (
         natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
     )  # [J/kg]

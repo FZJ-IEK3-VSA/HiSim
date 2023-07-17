@@ -198,13 +198,11 @@ class ElectricityMeter(DynamicComponent):
             self.electricity_to_or_from_grid, electricity_to_or_from_grid
         )
         stsv.set_output_value(
-            self.electricity_consumption_channel,
-            consumption_uncontrolled_in_watt,
+            self.electricity_consumption_channel, consumption_uncontrolled_in_watt,
         )
 
         stsv.set_output_value(
-            self.electricity_production_channel,
-            production_in_watt,
+            self.electricity_production_channel, production_in_watt,
         )
 
         stsv.set_output_value(
@@ -233,9 +231,7 @@ class ElectricityMeterState:
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the ElectricityMeterState."""
         return ElectricityMeterState(
             self.cumulative_production_in_watt_hour,

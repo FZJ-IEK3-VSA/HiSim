@@ -135,7 +135,7 @@ class PyAmChartGenerator:
             self.make_box_plot_for_pyam_dataframe(
                 pyam_dataframe=pyam_dataframe,
                 filter_variables="Building1|Heating|TheoreticalThermalBuildingDemand",
-                title="Building Theoretical Thermal Building Demand",
+                title="Building Theoretical Thermal Building Demand of All Scenarios",
                 filter_model=None,
                 filter_scenario=None,
                 filter_region=None,
@@ -223,11 +223,16 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+
+        comparion_mode = self.decide_for_scenario_or_variable_comparison(
+            filtered_data=filtered_data
+        )
+
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.line(
-            ax=a_x, color="scenario", title=title,
+            ax=a_x, color=comparion_mode, title=title,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -273,12 +278,16 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+        comparion_mode = self.decide_for_scenario_or_variable_comparison(
+            filtered_data=filtered_data
+        )
+
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         title = title
         filtered_data.plot(
-            ax=a_x, color="scenario", title=title, fill_between=True,
+            ax=a_x, color=comparion_mode, title=title, fill_between=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -324,11 +333,14 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+        comparion_mode = self.decide_for_scenario_or_variable_comparison(
+            filtered_data=filtered_data
+        )
 
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        filtered_data.plot.bar(ax=a_x, stacked=True, bars="variable")
+        filtered_data.plot.bar(ax=a_x, stacked=True, bars=comparion_mode)
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
         plt.yticks(
@@ -377,12 +389,14 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+        # comparion_mode = self.decide_for_scenario_or_variable_comparison(filtered_data=filtered_data)
+        # print("comparison mode", comparion_mode)
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
 
         filtered_data.plot.box(
-            ax=a_x, by="variable", legend=True, x="year", title=title,
+            ax=a_x, by="variable", x="year", title=title, legend=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -430,11 +444,14 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+        comparion_mode = self.decide_for_scenario_or_variable_comparison(
+            filtered_data=filtered_data
+        )
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.pie(
-            ax=a_x, value="value", category="scenario", title=title,
+            ax=a_x, value="value", category=comparion_mode, title=title,
         )
 
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
@@ -698,6 +715,22 @@ class PyAmChartGenerator:
             filtered_data = filtered_data.filter(year=filter_year)
 
         return filtered_data
+
+    def decide_for_scenario_or_variable_comparison(
+        self, filtered_data: pyam.IamDataFrame
+    ) -> str:
+        """Decide for each plot what will be compared, different scenarios or different variales."""
+
+        if len(filtered_data.scenario) == 1 and len(filtered_data.variable) > 1:
+            comparison_mode = "variable"
+        elif len(filtered_data.scenario) > 1 and len(filtered_data.variable) == 1:
+            comparison_mode = "scenario"
+        else:
+            raise ValueError(
+                f"No comparison mode could be determined. There are {len(filtered_data.scenario)} scenarios and {len(filtered_data.variable)} variables filtered."
+            )
+
+        return comparison_mode
 
 
 def main():

@@ -12,7 +12,6 @@ from hisim.component import Component
 from hisim.simulationparameters import SimulationParameters
 
 
-
 @dataclass_json
 @dataclass
 class SumBuilderConfig(cp.ConfigBase):
@@ -44,9 +43,7 @@ class CalculateOperation(cp.Component):
     Output = "Output"
 
     def __init__(
-        self,
-        config: SumBuilderConfig,
-        my_simulation_parameters: SimulationParameters,
+        self, config: SumBuilderConfig, my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
@@ -315,9 +312,7 @@ class SumBuilderForTwoInputs(Component):
     SumOutput = "Sum"
 
     def __init__(
-        self,
-        config: SumBuilderConfig,
-        my_simulation_parameters: SimulationParameters,
+        self, config: SumBuilderConfig, my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
@@ -390,9 +385,7 @@ class SumBuilderForThreeInputs(Component):
     SumOutput = "Sum"
 
     def __init__(
-        self,
-        config: SumBuilderConfig,
-        my_simulation_parameters: SimulationParameters,
+        self, config: SumBuilderConfig, my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(

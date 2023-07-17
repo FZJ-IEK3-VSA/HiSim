@@ -43,9 +43,8 @@ class PIDControllerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(cls):
         """Gets a default pid controller."""
-        return PIDControllerConfig(
-            name="PIDController",
-        )
+        return PIDControllerConfig(name="PIDController",)
+
 
 class PIDState:
 
@@ -354,7 +353,7 @@ class PIDController(cp.Component):
             self.h_ve_adj * self.h_tr_is
         )
         A11 = (
-            ((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / X)
+            ((self.h_tr_ms ** 2) * (self.h_tr_is + self.h_ve_adj) / X)
             - self.h_tr_ms
             - self.h_tr_em
         ) / (
@@ -483,7 +482,7 @@ class PIDController(cp.Component):
         over_shooting = 20
 
         damping_ratio = -np.log(over_shooting / 100) / (
-            np.pi**2 + (np.log(over_shooting / 100)) ** 2
+            np.pi ** 2 + (np.log(over_shooting / 100)) ** 2
         ) ** (1 / 2)
         natural_frequency = 4 / (settling_time * damping_ratio)
         # damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
@@ -491,7 +490,7 @@ class PIDController(cp.Component):
         m = 1 / B[0, 0]
         b = -A[0, 0] / B[0, 0]
 
-        integral_gain = natural_frequency**2 * m
+        integral_gain = natural_frequency ** 2 * m
         proportional_gain = (natural_frequency * damping_ratio * 2 * m) - b
         derivative_gain = 0
 

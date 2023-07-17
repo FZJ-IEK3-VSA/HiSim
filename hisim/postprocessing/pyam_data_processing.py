@@ -226,7 +226,6 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        title = title
         filtered_data.plot.line(
             ax=a_x, color="scenario", title=title,
         )
@@ -329,7 +328,6 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        title = title
         filtered_data.plot.bar(ax=a_x, stacked=True, bars="variable")
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -370,7 +368,6 @@ class PyAmChartGenerator:
         """Make box plot."""
         log.information("Make box plot.")
 
-        data = pyam_dataframe
         filtered_data = self.filter_pyam_dataframe(
             pyam_dataframe=pyam_dataframe,
             filter_model=filter_model,
@@ -383,7 +380,7 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        title = title
+
         filtered_data.plot.box(
             ax=a_x, by="variable", legend=True, x="year", title=title,
         )
@@ -424,7 +421,6 @@ class PyAmChartGenerator:
         """Make pie plot."""
         log.information("Make pie plot.")
 
-        data = pyam_dataframe
         filtered_data = self.filter_pyam_dataframe(
             pyam_dataframe=pyam_dataframe,
             filter_model=filter_model,
@@ -437,7 +433,6 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        title = title
         filtered_data.plot.pie(
             ax=a_x, value="value", category="scenario", title=title,
         )
@@ -464,7 +459,6 @@ class PyAmChartGenerator:
         """Make scatter plot."""
         log.information("Make scatter plot.")
 
-        data = pyam_dataframe
         filtered_data = self.filter_pyam_dataframe(
             pyam_dataframe=pyam_dataframe,
             filter_model=filter_model,
@@ -482,7 +476,6 @@ class PyAmChartGenerator:
         filtered_data.plot.scatter(
             ax=a_x, x=x_data, y=y_data,
         )
-        title = title
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
         # x_tick_labels, scale_x, x_tick_locations = self.set_axis_scale(a_x, x_or_y="x")
@@ -514,15 +507,13 @@ class PyAmChartGenerator:
         filter_model: Optional[str],
         filter_scenario: Optional[str],
         filter_variables: Optional[str],
-        filter_region:  Optional[str],
+        filter_region: Optional[str],
         filter_unit: Optional[str],
         filter_year: Optional[str],
         title: str,
     ) -> None:
         """Make sankey plot."""
         log.information("Make sankey plot.")
-
-        data = pyam_dataframe
 
         filtered_data = self.filter_pyam_dataframe(
             pyam_dataframe=pyam_dataframe,
@@ -581,7 +572,7 @@ class PyAmChartGenerator:
     ) -> None:
         """Make stack plot."""
         log.information("Make stack plot.")
-        data = pyam_dataframe
+
         filtered_data = self.filter_pyam_dataframe(
             pyam_dataframe=pyam_dataframe,
             filter_model=filter_model,

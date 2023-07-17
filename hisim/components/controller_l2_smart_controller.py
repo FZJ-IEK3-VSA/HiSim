@@ -36,11 +36,8 @@ class SmartControllerConfig(ConfigBase):
     @classmethod
     def get_default_config_ems(cls) -> Any:
         """Default Config for Energy Management System."""
-        config = SmartControllerConfig(
-            name=" SmartController",
-        )
+        config = SmartControllerConfig(name=" SmartController",)
         return config
-
 
 
 class SmartController(Component):

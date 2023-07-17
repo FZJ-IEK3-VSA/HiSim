@@ -1,5 +1,8 @@
 """Dummy class and configuration returning electricity prices (from grid) and returns (injection) in each time step. """
 
+import numpy as np
+import pandas as pd
+import os  
 # Owned
 from typing import List, Any
 from dataclasses import dataclass
@@ -31,7 +34,7 @@ class PriceSignalConfig(cp.ConfigBase):
     name: str
     country: str
     pricing_scheme: str
-    installed_capcity: float
+    installed_capacity: float
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
@@ -40,7 +43,7 @@ class PriceSignalConfig(cp.ConfigBase):
             name = "PriceSignal",
             country = 'Germany',
             pricing_scheme = 'fixed',
-            installed_capcity = 10E3,
+            installed_capacity = 10E3,
         )
         return config
 
@@ -137,9 +140,9 @@ class PriceSignal(cp.Component):
                 self.my_simulation_parameters.system_config.prediction_horizon 
                 / self.my_simulation_parameters.seconds_per_timestep 
             )
-        elif self.pricing_scheme=='dynamic':
+        elif self.price_signal_config.pricing_scheme=='dynamic':
             pricepurchaseforecast=self.static_tou_price
-        elif self.pricing_scheme=='fixed':
+        elif self.price_signal_config.pricing_scheme=='fixed':
             pricepurchaseforecast=self.fixed_price
         elif self.price_signal_type =='dummy':
             priceinjectionforecast = [ 10  ] * int( 
@@ -180,21 +183,21 @@ class PriceSignal(cp.Component):
         PricePurchase = pd.read_csv(os.path.join(utils.HISIMPATH["price_signal"]["PricePurchase"]), index_col=0, )
         FeedInTarrif = pd.read_csv(os.path.join(utils.HISIMPATH["price_signal"]["FeedInTarrif"]), index_col=0, )
         
-        if "Fixed_Price_" + self.country in PricePurchase:
+        if "Fixed_Price_" + self.price_signal_config.country in PricePurchase:
             self.price_signal_type='Prices at second half of 2021'
-            fixed_price=PricePurchase["Fixed_Price_" + self.country].tolist()
+            fixed_price=PricePurchase["Fixed_Price_" + self.price_signal_config.country].tolist()
             # convert euro/kWh to cent/kW-timestep
             p_conversion= 100 / (1000 * 3600/self.my_simulation_parameters.seconds_per_timestep)
             fixed_price = [element * p_conversion for element in fixed_price]
             self.fixed_price=np.repeat(fixed_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
             
-            static_tou_price=PricePurchase["Static_TOU_Price_" + self.country].tolist()
+            static_tou_price=PricePurchase["Static_TOU_Price_" + self.price_signal_config.country].tolist()
             static_tou_price = [element * p_conversion for element in static_tou_price]
             self.static_tou_price=np.repeat(static_tou_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
             
-            FITdata=FeedInTarrif.loc[self.country]
+            FITdata=FeedInTarrif.loc[self.price_signal_config.country]
             for i in range(len(FITdata)):
-                if FITdata['min_capacity (kW)'].values[i] < self.installed_capcity and FITdata['max_capacity (kW)'].values[i] >= self.installed_capcity:
+                if FITdata['min_capacity (kW)'].values[i] < self.price_signal_config.installed_capacity and FITdata['max_capacity (kW)'].values[i] >= self.price_signal_config.installed_capacity:
                     price_injection=FITdata['FIT'].values[i]
             self.price_injection=price_injection * p_conversion
         pass

@@ -79,10 +79,6 @@ from hisim.components.weather import (
 from hisim.components.loadprofilegenerator_connector import (
     Occupancy,
 )
-
-# from hisim.components.heat_distribution_system import (
-#     HeatDistribution,
-# ) # Todo: import leads to an error
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -249,10 +245,7 @@ class Building(dynamic_component.DynamicComponent):
         self.set_heating_temperature_in_celsius_default: float = 18
         self.set_cooling_temperature_in_celsius_default: float = 25
 
-        (
-            self.is_in_cache,
-            self.cache_file_path,
-        ) = utils.get_cache_file(
+        (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
             self.buildingconfig,
             self.my_simulation_parameters,
@@ -637,22 +630,6 @@ class Building(dynamic_component.DynamicComponent):
         )
         return connections
 
-    # def get_default_connections_from_heat_distribution_system(
-    #     self,
-    # ):
-    #     """Get Heat Distribution System default connections."""
-    #     log.information("setting Heat Distribution System default connections")
-    #     connections = []
-    #     hds_classname = HeatDistribution.get_classname()
-    #     connections.append(
-    #         cp.ComponentConnection(
-    #             Building.ThermalPowerDelivered,
-    #             hds_classname,
-    #             HeatDistribution.ThermalPowerDelivered,
-    #         )
-    #     )
-    #     return connections
-
     # =================================================================================================================================
     # Simulation of the building class
 
@@ -974,6 +951,7 @@ class Building(dynamic_component.DynamicComponent):
                 raise ValueError("Number of apartments can not be negative.")
 
         elif self.buildingconfig.number_of_apartments is None:
+
             number_of_apartments_origin = self.buildingdata["n_Apartment"].values[0]
 
             # if no value given or if the area given in the config is bigger than the tabula ref area
@@ -1095,6 +1073,7 @@ class Building(dynamic_component.DynamicComponent):
             )
 
         if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
+
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
             if self.conditioned_floor_area_in_m2 == 0:
                 self.scaled_conditioned_floor_area_in_m2 = (
@@ -1484,6 +1463,7 @@ class Building(dynamic_component.DynamicComponent):
             or direct_horizontal_irradiance != 0
             or global_horizontal_irradiance != 0
         ):
+
             for window in self.windows:
                 solar_heat_gain = Window.calc_solar_heat_gains(
                     self,

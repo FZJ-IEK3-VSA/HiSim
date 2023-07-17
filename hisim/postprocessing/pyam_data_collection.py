@@ -47,7 +47,7 @@ class PyamDataCollector:
 
         # choose which path to check
         path_to_check = os.path.join(folder_path, "**", "pyam_data")
-        list_of_paths = [folder for folder in glob.glob(path_to_check)]
+        list_of_paths = list(glob.glob(path_to_check))
         # if in these paths no pyam data folder can be found check in subfolders for it
         if len(list_of_paths) == 0:
             path_to_check = os.path.join(folder_path, "**", "**", "pyam_data")  # type: ignore
@@ -138,7 +138,7 @@ class PyamDataCollector:
         log.information(
             f"Read csv files and generate pyam dataframes for {kind_of_data}."
         )
-        if bool(dict_of_csv_to_read) == False:
+        if bool(dict_of_csv_to_read) is False:
             raise ValueError("The passed dictionary is empty.")
 
         for simulation_duration_key, csv_data_list in dict_of_csv_to_read.items():

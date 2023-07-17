@@ -426,9 +426,13 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=str(hash_number)
+            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
         )
-        log.information("Singleton Scenario is set " + str(hash_number))
+        log.information(
+            "Singleton Scenario is set "
+            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
+        )
     else:
         hash_number = None
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION

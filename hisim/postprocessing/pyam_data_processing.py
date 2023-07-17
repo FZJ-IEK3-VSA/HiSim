@@ -167,7 +167,7 @@ class PyAmChartGenerator:
 
             # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None, filter_variables="EMS|ElectricityToOrFromGrid|-", title="Electricity to or from Grid", filter_region=None, filter_unit=None, filter_year=None)
             # self.make_sankey_plot_for_pyam_dataframe(
-            #     pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="2227458627882477145", filter_variables="*|*|ElectricityOutput", title="Electricity Outputs", filter_region=None, filter_unit=None, filter_year=None
+            #     pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="2227458627882477145", filter_variables="*|*|ElectricityOutput", filter_region=None, filter_unit=None, filter_year=None
             # )
         elif kind_of_data == PyamDataCollectorEnum.HOURLY:
             log.information(
@@ -211,8 +211,6 @@ class PyAmChartGenerator:
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with hourly data.")
-
-        data = pyam_dataframe
 
         filtered_data = self.filter_pyam_dataframe(
             pyam_dataframe=pyam_dataframe,
@@ -285,7 +283,7 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        title = title
+
         filtered_data.plot(
             ax=a_x, color=comparion_mode, title=title, fill_between=True,
         )
@@ -527,7 +525,6 @@ class PyAmChartGenerator:
         filter_region: Optional[str],
         filter_unit: Optional[str],
         filter_year: Optional[str],
-        title: str,
     ) -> None:
         """Make sankey plot."""
         log.information("Make sankey plot.")

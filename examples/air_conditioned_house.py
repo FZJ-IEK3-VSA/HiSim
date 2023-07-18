@@ -192,13 +192,25 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
 
     """ Occupancy Profile """
-    my_occupancy_config= loadprofilegenerator_connector.OccupancyConfig(profile_name="CH01", name="Occupancy")
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,my_simulation_repository = my_sim.simulation_repository)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
+        profile_name="CH01", 
+        name="Occupancy",
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config, 
+        my_simulation_parameters=my_simulation_parameters,
+        my_simulation_repository = my_sim.simulation_repository
+    )
     my_sim.add_component(my_occupancy)
 
     """Weather """
-    my_weather_config = weather.WeatherConfig.get_default(location_entry= weather.LocationEnum.Cyprus)
-    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters= my_simulation_parameters)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry = weather.LocationEnum.Cyprus
+    )
+    my_weather = weather.Weather(
+        config = my_weather_config, 
+        my_simulation_parameters = my_simulation_parameters,
+    )
     my_sim.add_component(my_weather)
 
     """Photovoltaic System"""
@@ -282,6 +294,8 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         )
         my_sim.add_component(my_battery)
 
+
+
     """Model Predictive Controller"""
     if control == "MPC":
         my_mpc_controller_config = controller_mpc.MPC_Controller(
@@ -315,10 +329,15 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                   my_mpc_controller.component_name,
                                   my_mpc_controller.Battery2Load)
 
-    """PID controller """
-    if control=="PID":
 
-        pid_controller=controller_pid.PIDController(my_simulation_parameters=my_simulation_parameters,my_simulation_repository = my_sim.simulation_repository)
+    """PID controller"""
+    if control=="PID":
+        my_pid_controller_config = controller_pid.PIDControllerConfig.get_default_config()        
+        pid_controller=controller_pid.PIDController(
+            config = my_pid_controller_config,
+            my_simulation_parameters = my_simulation_parameters,
+            #my_simulation_repository = my_sim.simulation_repository,
+        )
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                      my_building.component_name,
                                      my_building.TemperatureMean)
@@ -337,24 +356,26 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_sim.add_component(pid_controller)
 
 
-
     """Air conditioner on-off controller"""
 
     if control=="on_off":
-        my_air_conditioner_controller=air_conditioner.AirConditionercontroller(t_air_heating=t_air_heating,
-                                                                               t_air_cooling=t_air_cooling,
-                                                                               offset=offset,
-                                                                               my_simulation_parameters=my_simulation_parameters)
-        my_air_conditioner_controller.connect_input(my_air_conditioner_controller.TemperatureMean,
-                                                    my_building.component_name,
-                                                    my_building.TemperatureMean)
+        my_air_conditioner_controller=air_conditioner.AirConditionercontroller(
+            t_air_heating=t_air_heating,
+            t_air_cooling=t_air_cooling,
+            offset=offset,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        my_air_conditioner_controller.connect_input(
+            my_air_conditioner_controller.TemperatureMean,
+            my_building.component_name,
+            my_building.TemperatureMean,
+        )
 
         my_sim.add_component(my_air_conditioner_controller)
 
         my_air_conditioner.connect_input(my_air_conditioner.State,
                                          my_air_conditioner_controller.component_name,
                                          my_air_conditioner_controller.State)
-
 
     if control == "MPC":
         my_air_conditioner.connect_input(my_air_conditioner.OperatingMode,
@@ -373,6 +394,4 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_building.connect_input(my_building.ThermalEnergyDelivered,
                               my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
-
-
-
+                              

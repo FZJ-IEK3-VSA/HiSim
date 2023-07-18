@@ -185,8 +185,9 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name="CH01", 
-        name="Occupancy",
+        profile_name = occupancy_profile, 
+        name = "Occupancy",
+        country_name = location,
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, 

@@ -92,23 +92,20 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
         Future work: improving the implemtation with automatic scaling of the optimal control problem formulation. This (could)
         make a moving horizon scheme possible in reasonable time
-
-
-
     """
+
 
     ##### delete all files in cache:
     dir_cache = '..//hisim//inputs//cache'
     for file in os.listdir( dir_cache ):
         os.remove( os.path.join( dir_cache, file ) )
 
+
     ##### System Parameters #####
 
     year = 2021
 
-
     # temperature comfort ramge
-
     min_comfort_temp = 21.0
     max_comfort_temp = 24.0
 
@@ -127,7 +124,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     tilt  = 30
     source_weight  = -1
 
-
     # Set occupancy
     occupancy_profile = "CH01"
 
@@ -136,7 +132,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     building_class = "medium"
     initial_temperature = 21
     heating_reference_temperature = -14
-
 
     # Set Air Conditioner  on/off controller
     t_air_heating = min_comfort_temp
@@ -156,7 +151,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     hp_min_idle_time = 300                                  #Unit: seconds
     control="MPC"                                        #Avialable options are: PID or on_off or MPC
 
-
     # set Battery
     batt_manufacturer = "sonnen"
     batt_model = "sonnenBatterie 10 - 5,5 kWh"
@@ -168,7 +162,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         seconds_per_timestep = 60*20    # multiply seconds_per_timestep with factor (e.g. 20) to run MPC with bigger sampling time
     else:
         seconds_per_timestep = 60
-
 
 
     ##### Build Components #####
@@ -188,7 +181,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                 battery_included=True, battery_capacity=5e3)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
-
 
 
     """ Occupancy Profile """
@@ -280,7 +272,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                      my_building.TemperatureMean)
     my_sim.add_component(my_air_conditioner)
 
-
     """Generic Battery """
     if control == "MPC":
         my_battery_config = generic_battery.GenericBatteryConfig(
@@ -293,8 +284,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
             my_simulation_parameters = my_simulation_parameters,
         )
         my_sim.add_component(my_battery)
-
-
 
     """Model Predictive Controller"""
     if control == "MPC":
@@ -329,7 +318,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                   my_mpc_controller.component_name,
                                   my_mpc_controller.Battery2Load)
 
-
     """PID controller"""
     if control=="PID":
         my_pid_controller_config = controller_pid.PIDControllerConfig.get_default_config()        
@@ -355,9 +343,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                          pid_controller.ThermalPowerPID)
         my_sim.add_component(pid_controller)
 
-
     """Air conditioner on-off controller"""
-
     if control=="on_off":
         my_air_conditioner_controller=air_conditioner.AirConditionercontroller(
             t_air_heating=t_air_heating,

@@ -720,10 +720,8 @@ class PostProcessor:
             scenario = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
             )
-            log.information("scenario " + str(scenario) + str(type(scenario)))
         else:
             scenario = ppdt.setup_function
-            log.information("scenario " + str(scenario) + str(type(scenario)))
         region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
         year = ppdt.simulation_parameters.year
         timeseries = (
@@ -731,6 +729,7 @@ class PostProcessor:
         )  # .strftime("%Y-%m-%d %H:%M:%S").to_list()
 
         for column in ppdt.results_hourly:
+
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(
@@ -742,6 +741,7 @@ class PostProcessor:
                         ]
                     )
                 ).split(sep=" ")
+
                 variable = "".join(
                     [
                         column_splitted[0],
@@ -751,7 +751,9 @@ class PostProcessor:
                         column_splitted[2],
                     ]
                 )
+                
                 unit = column_splitted[5]
+
                 simple_dict_hourly_data["model"].append(model)
                 simple_dict_hourly_data["scenario"].append(scenario)
                 simple_dict_hourly_data["region"].append(region)

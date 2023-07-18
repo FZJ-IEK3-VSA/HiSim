@@ -265,6 +265,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Air Conditioner"""
     my_air_conditioner_config = air_conditioner.AirConditionerConfig(
+        name="AirConditioner",
         model_name=Model,
         manufacturer=ac_manufacturer,
         min_operation_time=hp_min_operation_time,
@@ -302,7 +303,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Model Predictive Controller"""
     if control == "MPC":
-        my_mpc_controller_config = controller_mpc.MpcControllerConfig(
+        my_mpc_controller_config = controller_mpc.MpcControllerConfig.get_default_config(
             mpc_scheme=mpc_scheme,
             min_comfort_temp=min_comfort_temp,
             max_comfort_temp=max_comfort_temp,

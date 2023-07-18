@@ -133,9 +133,9 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     initial_temperature = 21
     heating_reference_temperature = -14
     #
-    absolute_conditioned_floor_area_in_m2=None,
-    total_base_area_in_m2=None,
-    number_of_apartments=None,
+    absolute_conditioned_floor_area_in_m2=None
+    total_base_area_in_m2=None
+    number_of_apartments=None
 
     # Set Air Conditioner  on/off controller
     t_air_heating = min_comfort_temp

@@ -258,7 +258,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_air_conditioner=air_conditioner.AirConditioner(
         config = my_air_conditioner_config,
         my_simulation_parameters = my_simulation_parameters,
-        my_simulation_repository = my_sim.simulation_repository,
+        #my_simulation_repository = my_sim.simulation_repository,
     )
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureOutside,
                                      my_weather.component_name,
@@ -272,8 +272,15 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     """Generic Battery """
     if control == "MPC":
 
-        my_battery=generic_battery.GenericBattery(manufacturer=batt_manufacturer,model=batt_model, soc=batt_soc,my_simulation_parameters=my_simulation_parameters)
-
+        my_battery_config = generic_battery.GenericBatteryConfig(
+            manufacturer=batt_manufacturer,
+            model=batt_model,
+            soc=batt_soc,
+        )
+        my_battery=generic_battery.GenericBattery(
+            config = my_battery_config,
+            my_simulation_parameters = my_simulation_parameters,
+        )
         my_sim.add_component(my_battery)
 
     """Model Predictive Controller"""

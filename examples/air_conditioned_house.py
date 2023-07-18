@@ -182,7 +182,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
         profile_name = occupancy_profile, 
@@ -229,15 +228,18 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_sim.add_component(my_photovoltaic_system)
 
     """Building"""
-    my_building_config=building.BuildingConfig(building_code = building_code,
-                                            bClass = building_class,
-                                            initial_temperature = initial_temperature,
-                                            heating_reference_temperature = heating_reference_temperature,
-                                            name="Building1")
-
-    my_building = building.Building(config=my_building_config,
-                                    my_simulation_parameters=my_simulation_parameters,
-                                    my_simulation_repository = my_sim.simulation_repository)
+    my_building_config=building.BuildingConfig(
+        name="Building1",
+        building_code = building_code,
+        building_heat_capacity_class = building_class,
+        initial_internal_temperature_in_celsius = initial_temperature,
+        heating_reference_temperature_in_celsius = heating_reference_temperature,
+    )
+    my_building = building.Building(
+        config=my_building_config,
+        my_simulation_parameters=my_simulation_parameters,
+        my_simulation_repository = my_sim.simulation_repository,
+    )
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 

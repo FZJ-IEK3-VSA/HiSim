@@ -202,19 +202,23 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_sim.add_component(my_weather)
 
     """Photovoltaic System"""
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(time=time,
-                                          location=location,
-                                          power=power,
-                                          load_module_data=load_module_data,
-                                          module_name=module_name,
-                                          integrate_inverter=integrateInverter,
-                                          tilt=tilt,
-                                          azimuth = azimuth,
-                                          inverter_name = inverter_name,
-                                          source_weight = source_weight,
-                                          name=name)
-    my_photovoltaic_system=generic_pv_system.PVSystem(config=my_photovoltaic_system_config,
-                                                      my_simulation_parameters=my_simulation_parameters)
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
+        time = time,
+        location = location,
+        power = power,
+        load_module_data = load_module_data,
+        module_name = module_name,
+        integrate_inverter = integrateInverter,
+        tilt = tilt,
+        azimuth = azimuth,
+        inverter_name = inverter_name,
+        source_weight = source_weight,
+        name = name,
+    )
+    my_photovoltaic_system=generic_pv_system.PVSystem(
+        config = my_photovoltaic_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_photovoltaic_system)
@@ -244,13 +248,18 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_sim.add_component(my_price_signal)
 
     """Air Conditioner"""
-    my_air_conditioner = air_conditioner.AirConditioner(manufacturer=ac_manufacturer,
-                                          name=Model,
-                                          min_operation_time=hp_min_operation_time,
-                                          min_idle_time=hp_min_idle_time,
-                                          control=control,
-                                          my_simulation_parameters=my_simulation_parameters,
-                                          my_simulation_repository = my_sim.simulation_repository)
+    my_air_conditioner_config = air_conditioner.AirConditionerConfig(
+        name=Model,
+        manufacturer=ac_manufacturer,
+        min_operation_time=hp_min_operation_time,
+        min_idle_time=hp_min_idle_time,
+        control=control,
+    )
+    my_air_conditioner=air_conditioner.AirConditioner(
+        config = my_air_conditioner_config,
+        my_simulation_parameters = my_simulation_parameters,
+        my_simulation_repository = my_sim.simulation_repository,
+    )
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureOutside,
                                      my_weather.component_name,
                                      my_weather.TemperatureOutside)

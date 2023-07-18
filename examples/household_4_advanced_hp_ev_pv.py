@@ -35,6 +35,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
+from examples.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -92,7 +93,7 @@ class HouseholdAdvancedHPEvPvConfig:
                 url="http://134.94.131.167:443/api/v1/profilerequest",
                 api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
                 household=Households.CHR01_Couple_both_at_Work,
-                result_path="mypath",
+                result_path=utils.HISIMPATH["results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=charging_station_set,
@@ -163,6 +164,12 @@ def household_advanced_hp_ev_pv(
         - Car (Electric Vehicle, Electric Vehicle Battery, Electric Vehicle Battery Controller)
         - EMS (necessary for Electric Vehicle)
     """
+
+    # cleanup old lpg requests, mandatory to change number of cars
+    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
+    if Path(utils.HISIMPATH["utsp_results"]).exists():
+        cleanup_old_lpg_requests()
+
     config_filename = "household_advanced_hp_ev_pv_config.json"
 
     my_config: HouseholdAdvancedHPEvPvConfig
@@ -293,9 +300,8 @@ def household_advanced_hp_ev_pv(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Electric Vehicle
+    # Build Electric Vehicle(s)
     # get names of all available cars
-    # Todo: check if multiple cars are necesary
     filepaths = listdir(utils.HISIMPATH["utsp_results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
@@ -308,6 +314,7 @@ def household_advanced_hp_ev_pv(
     # create all cars
     my_cars: List[generic_car.Car] = []
     for car in names:
+        # Todo: check car name in case of 1 vehicle
         my_car_config.name = car
         my_cars.append(
             generic_car.Car(
@@ -320,9 +327,11 @@ def household_advanced_hp_ev_pv(
     # Build Electric Vehicle Battery
     my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    car_number = 1
     for car in my_cars:
         my_car_battery_config = my_config.car_battery_config
         my_car_battery_config.source_weight = car.config.source_weight
+        my_car_battery_config.name = f"CarBattery_{car_number}"
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_battery_config,
@@ -331,6 +340,7 @@ def household_advanced_hp_ev_pv(
 
         my_car_battery_controller_config = my_config.car_battery_controller_config
         my_car_battery_controller_config.source_weight = car.config.source_weight
+        my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
         my_car_battery_controller_config.battery_set = (
             0.4  # lower threshold for soc of car battery in clever case
         )
@@ -340,6 +350,8 @@ def household_advanced_hp_ev_pv(
             config=my_car_battery_controller_config,
         )
         my_car_battery_controllers.append(my_car_battery_controller)
+
+        car_number += 1
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(

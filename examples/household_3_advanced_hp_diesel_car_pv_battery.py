@@ -34,6 +34,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
+from examples.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -89,7 +90,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
                 url="http://134.94.131.167:443/api/v1/profilerequest",
                 api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
                 household=Households.CHR01_Couple_both_at_Work,
-                result_path="mypath",
+                result_path=utils.HISIMPATH["results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
@@ -158,6 +159,12 @@ def household_advanced_hp_diesel_car_pv_battery(
         - Battery
         - EMS (necessary for Battery)
     """
+
+    # cleanup old lpg requests, mandatory to change number of cars
+    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
+    if Path(utils.HISIMPATH["utsp_results"]).exists():
+        cleanup_old_lpg_requests()
+
     config_filename = "household_advanced_hp_diesel_car_pv_battery_config.json"
 
     my_config: HouseholdAdvancedHPDieselCarPVBatteryConfig
@@ -288,9 +295,8 @@ def household_advanced_hp_diesel_car_pv_battery(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Diesel-Car
+    # Build Diesel-Car(s)
     # get names of all available cars
-    # Todo: check if multiple cars are necesary
     filepaths = listdir(utils.HISIMPATH["utsp_results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]

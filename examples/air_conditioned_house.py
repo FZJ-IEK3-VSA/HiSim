@@ -254,6 +254,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     """Price signal"""
     my_price_signal = generic_price_signal.PriceSignal(
         config=generic_price_signal.PriceSignalConfig(
+            name = "PriceSignal",
             country = "Spain",
             pricing_scheme = pricing_scheme,
             installed_capacity = power,
@@ -264,7 +265,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Air Conditioner"""
     my_air_conditioner_config = air_conditioner.AirConditionerConfig(
-        name=Model,
+        model_name=Model,
         manufacturer=ac_manufacturer,
         min_operation_time=hp_min_operation_time,
         min_idle_time=hp_min_idle_time,
@@ -289,6 +290,9 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
             manufacturer=batt_manufacturer,
             model=batt_model,
             soc=batt_soc,
+            #
+            name="Generic Battery",
+            base=False,
         )
         my_battery=generic_battery.GenericBattery(
             config = my_battery_config,

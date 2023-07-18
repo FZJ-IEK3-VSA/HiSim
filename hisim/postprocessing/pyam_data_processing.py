@@ -124,7 +124,7 @@ class PyAmChartGenerator:
             self.make_bar_plot_for_pyam_dataframe(
                 pyam_dataframe=pyam_dataframe,
                 filter_model=None,
-                filter_scenario="2227458627882477145",
+                filter_scenario="365d_60s_2227458627882477145",
                 filter_variables="Building1|Heating|*",
                 filter_region=None,
                 filter_unit=None,

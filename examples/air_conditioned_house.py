@@ -271,7 +271,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Generic Battery """
     if control == "MPC":
-
         my_battery_config = generic_battery.GenericBatteryConfig(
             manufacturer=batt_manufacturer,
             model=batt_model,
@@ -285,16 +284,21 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Model Predictive Controller"""
     if control == "MPC":
-        my_mpc_controller=controller_mpc.MPC_Controller(mpc_scheme=mpc_scheme,
-                                                        min_comfort_temp=min_comfort_temp,
-                                                        max_comfort_temp=max_comfort_temp,
-                                                        initial_temeperature = initial_temperature,
-                                                        flexibility_element = flexibility_element,
-                                                        optimizer_sampling_rate=optimizer_sampling_rate,
-                                                        initial_state_of_charge = batt_soc,
-                                                        my_simulation_parameters=my_simulation_parameters,
-                                                        my_simulation_repository = my_sim.simulation_repository)
-
+        my_mpc_controller_config = controller_mpc.MPC_Controller(
+            mpc_scheme=mpc_scheme,
+            min_comfort_temp=min_comfort_temp,
+            max_comfort_temp=max_comfort_temp,
+            optimizer_sampling_rate=optimizer_sampling_rate,
+            initial_temeperature = initial_temperature,
+            flexibility_element = flexibility_element,
+            initial_state_of_charge = batt_soc,
+        )
+        my_mpc_controller=controller_mpc.MPC_Controller(
+            config = my_mpc_controller_config,
+            my_simulation_parameters = my_simulation_parameters,
+            #my_simulation_repository = my_sim.simulation_repository,
+        )
+        
         my_mpc_controller.connect_input(my_mpc_controller.TemperatureMean,
                                           my_building.component_name,
                                           my_building.TemperatureMean)

@@ -394,12 +394,17 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Air conditioner on-off controller"""
     if control=="on_off":
-        my_air_conditioner_controller=air_conditioner.AirConditionercontroller(
+        my_air_conditioner_controller_config = air_conditioner.AirConditionerControllerConfig(
             t_air_heating=t_air_heating,
             t_air_cooling=t_air_cooling,
             offset=offset,
-            my_simulation_parameters=my_simulation_parameters,
+            name="AirConditioner",
         )
+        my_air_conditioner_controller=air_conditioner.AirConditionercontroller(
+            config = my_air_conditioner_controller_config,
+            my_simulation_parameters = my_simulation_parameters,
+        )
+
         my_air_conditioner_controller.connect_input(
             my_air_conditioner_controller.TemperatureMean,
             my_building.component_name,

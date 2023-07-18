@@ -310,7 +310,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_mpc_controller=controller_mpc.MPC_Controller(
             config = my_mpc_controller_config,
             my_simulation_parameters = my_simulation_parameters,
-            #my_simulation_repository = my_sim.simulation_repository,
+            my_simulation_repository = my_sim.simulation_repository,
         )
         
         my_mpc_controller.connect_input(my_mpc_controller.TemperatureMean,
@@ -336,7 +336,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         pid_controller=controller_pid.PIDController(
             config = my_pid_controller_config,
             my_simulation_parameters = my_simulation_parameters,
-            #my_simulation_repository = my_sim.simulation_repository,
+            my_simulation_repository = my_sim.simulation_repository,
         )
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                      my_building.component_name,

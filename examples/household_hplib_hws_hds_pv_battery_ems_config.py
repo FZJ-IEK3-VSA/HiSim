@@ -115,7 +115,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 30
 
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(

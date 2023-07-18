@@ -238,6 +238,10 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         building_heat_capacity_class = building_class,
         initial_internal_temperature_in_celsius = initial_temperature,
         heating_reference_temperature_in_celsius = heating_reference_temperature,
+        #
+        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
+        total_base_area_in_m2=total_base_area_in_m2,
+        number_of_apartments=number_of_apartments,
     )
     my_building = building.Building(
         config=my_building_config,

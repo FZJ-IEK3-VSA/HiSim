@@ -304,15 +304,22 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     """Model Predictive Controller"""
     if control == "MPC":
         my_mpc_controller_config = controller_mpc.MpcControllerConfig.get_default_config()
-        my_mpc_controller_config = controller_mpc.MpcControllerConfig(
-            mpc_scheme=mpc_scheme,
-            min_comfort_temp=min_comfort_temp,
-            max_comfort_temp=max_comfort_temp,
-            optimizer_sampling_rate=optimizer_sampling_rate,
-            initial_temeperature = initial_temperature,
-            flexibility_element = flexibility_element,
-            initial_state_of_charge = batt_soc,
-        )
+            my_mpc_controller_config.mpc_scheme=mpc_scheme,
+            my_mpc_controller_config.min_comfort_temp=min_comfort_temp,
+            my_mpc_controller_config.max_comfort_temp=max_comfort_temp,
+            my_mpc_controller_config.optimizer_sampling_rate=optimizer_sampling_rate,
+            my_mpc_controller_config.initial_temeperature = initial_temperature,
+            my_mpc_controller_config.flexibility_element = flexibility_element,
+            my_mpc_controller_config.initial_state_of_charge = batt_soc,
+        #my_mpc_controller_config = controller_mpc.MpcControllerConfig(
+        #    mpc_scheme=mpc_scheme,
+        #    min_comfort_temp=min_comfort_temp,
+        #    max_comfort_temp=max_comfort_temp,
+        #    optimizer_sampling_rate=optimizer_sampling_rate,
+        #    initial_temeperature = initial_temperature,
+        #    flexibility_element = flexibility_element,
+        #    initial_state_of_charge = batt_soc,
+        #)
         my_mpc_controller=controller_mpc.MPC_Controller(
             config = my_mpc_controller_config,
             my_simulation_parameters = my_simulation_parameters,

@@ -298,7 +298,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Model Predictive Controller"""
     if control == "MPC":
-        my_mpc_controller_config = controller_mpc.MPC_Controller(
+        my_mpc_controller_config = controller_mpc.MpcControllerConfig(
             mpc_scheme=mpc_scheme,
             min_comfort_temp=min_comfort_temp,
             max_comfort_temp=max_comfort_temp,

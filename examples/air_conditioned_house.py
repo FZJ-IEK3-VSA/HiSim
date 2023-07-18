@@ -143,10 +143,43 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     offset = 0.5
 
     # MPC controller settings
-    mpc_scheme= 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
+     mpc_scheme= 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
     flexibility_element= 'PV_and_Battery'             # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
     pricing_scheme = 'dynamic'                          # The two options are: 'dynamic' or 'fixed'
     optimizer_sampling_rate = 1
+        #
+        name="MpcController", 
+        temp_forecast = [],
+        phi_m_forecast = [],
+        phi_st_forecast = [],
+        phi_ia_forecast = [],
+        pv_forecast_yearly = [],
+        maximum_storage_capacity = 0.0,
+        minimum_storage_capacity = 0.0,
+        maximum_charging_power = 0.0,
+        maximum_discharging_power = 0.0,
+        battery_efficiency = 0.0,
+        inverter_efficiency = 0.0,
+        temperature_Forecast_24h_1min = [],
+        phi_m_Forecast_24h_1min = [],
+        phi_ia_Forecast_24h_1min = [],
+        phi_st_Forecast_24h_1min = [],
+        pv_forecast_24h_1min = [],
+        PricePurchase_Forecast_24h_1min = [],
+        PriceInjection_Forecast_24h_1min = [],
+        optimal_cost = [],
+        revenues = [],
+        air_conditioning_electricity = [],
+        cost_optimal_temperature_set_point = [],
+        pv2load = [],
+        electricity_from_grid = [],
+        electricity_to_grid = [],
+        battery_to_load = [],
+        pv_to_battery_timestep = [],
+        battery_power_flow_timestep = [],
+        battery_control_state = [],
+        batt_soc_actual_timestep = [],
+        batt_soc_normalized_timestep = [], 
 
     # Set Air Conditioner
     ac_manufacturer = "Samsung"                             # Other option: "Panasonic" , Further options are avilable in the smart_devices file
@@ -303,23 +336,15 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Model Predictive Controller"""
     if control == "MPC":
-        my_mpc_controller_config = controller_mpc.MpcControllerConfig.get_default_config()
-            my_mpc_controller_config.mpc_scheme=mpc_scheme,
-            my_mpc_controller_config.min_comfort_temp=min_comfort_temp,
-            my_mpc_controller_config.max_comfort_temp=max_comfort_temp,
-            my_mpc_controller_config.optimizer_sampling_rate=optimizer_sampling_rate,
-            my_mpc_controller_config.initial_temeperature = initial_temperature,
-            my_mpc_controller_config.flexibility_element = flexibility_element,
-            my_mpc_controller_config.initial_state_of_charge = batt_soc,
-        #my_mpc_controller_config = controller_mpc.MpcControllerConfig(
-        #    mpc_scheme=mpc_scheme,
-        #    min_comfort_temp=min_comfort_temp,
-        #    max_comfort_temp=max_comfort_temp,
-        #    optimizer_sampling_rate=optimizer_sampling_rate,
-        #    initial_temeperature = initial_temperature,
-        #    flexibility_element = flexibility_element,
-        #    initial_state_of_charge = batt_soc,
-        #)
+        my_mpc_controller_config = controller_mpc.MpcControllerConfig(
+            mpc_scheme=mpc_scheme,
+            min_comfort_temp=min_comfort_temp,
+            max_comfort_temp=max_comfort_temp,
+            optimizer_sampling_rate=optimizer_sampling_rate,
+            initial_temeperature = initial_temperature,
+            flexibility_element = flexibility_element,
+            initial_state_of_charge = batt_soc,
+        )
         my_mpc_controller=controller_mpc.MPC_Controller(
             config = my_mpc_controller_config,
             my_simulation_parameters = my_simulation_parameters,

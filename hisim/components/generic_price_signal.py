@@ -38,7 +38,7 @@ class PriceSignalConfig(cp.ConfigBase):
     price_signal_type: str
     fixed_price: list
     static_tou_price: list
-    price_injection: list
+    price_injection: List[float]
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:

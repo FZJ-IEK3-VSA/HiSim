@@ -10,7 +10,7 @@ import hisim.simulator as sim
 from hisim.simulationparameters import SimulationParameters
 
 
-def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None, my_module_config: Optional[str] = None) -> None:
+def main(path_to_module: str, function_in_module: str, my_simulation_parameters: Optional[SimulationParameters] = None, my_module_config_path: Optional[str] = None) -> None:
     """ Core function. """
     log.information("#################################")
     log.information("starting simulation of " + path_to_module + " " + function_in_module)
@@ -48,7 +48,7 @@ def main(path_to_module: str, function_in_module: str, my_simulation_parameters:
                                           module_filename=module_filename,
                                           setup_function=function_in_module,
                                           my_simulation_parameters=my_simulation_parameters,
-                                          my_module_config=my_module_config)
+                                          my_module_config_path=my_module_config_path)
 
     # Build method
     model_init_method = getattr(targetmodule, function_in_module)
@@ -80,4 +80,4 @@ if __name__ == "__main__":
     if len(sys.argv) == 4:
         MODULE_CONFIG = sys.argv[3]
         log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME + " with module config " + MODULE_CONFIG)
-        main(path_to_module=FILE_NAME, function_in_module=FUNCTION_NAME, my_module_config=MODULE_CONFIG)
+        main(path_to_module=FILE_NAME, function_in_module=FUNCTION_NAME, my_module_config_path=MODULE_CONFIG)

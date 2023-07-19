@@ -62,10 +62,10 @@ class PriceSignal(cp.Component):
     PricePurchase = "PricePurchase"
     PriceInjection = "PriceInjection"
     #
-    price_signal_type = "price_signal_type"
-    fixed_price = "fixed_price"
-    static_tou_price = "static_tou_price"
-    price_injection = "price_injection"
+    # price_signal_type = "price_signal_type"
+    # fixed_price = "fixed_price"
+    # static_tou_price = "static_tou_price"
+    # price_injection = "price_injection"
 
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig

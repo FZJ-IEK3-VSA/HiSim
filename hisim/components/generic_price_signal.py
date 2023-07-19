@@ -149,7 +149,7 @@ class PriceSignal(cp.Component):
                 / self.my_simulation_parameters.seconds_per_timestep
             )
         elif (
-            self.price_signal_type =='Prices at second half of 2021'
+            self.price_signal_config.price_signal_type =='Prices at second half of 2021'
         ):
             priceinjectionforecast= [self.price_injection ] * int( 
                 self.my_simulation_parameters.system_config.prediction_horizon 
@@ -159,7 +159,7 @@ class PriceSignal(cp.Component):
             pricepurchaseforecast=self.static_tou_price
         elif self.price_signal_config.pricing_scheme=='fixed':
             pricepurchaseforecast=self.fixed_price
-        elif self.price_signal_type =='dummy':
+        elif self.price_signal_config.price_signal_type =='dummy':
             priceinjectionforecast = [ 10  ] * int( 
                 self.my_simulation_parameters.system_config.prediction_horizon 
                 / self.my_simulation_parameters.seconds_per_timestep 
@@ -199,7 +199,7 @@ class PriceSignal(cp.Component):
         FeedInTarrif = pd.read_csv(os.path.join(utils.HISIMPATH["price_signal"]["FeedInTarrif"]), index_col=0, )
         
         if "Fixed_Price_" + self.price_signal_config.country in PricePurchase:
-            self.price_signal_type='Prices at second half of 2021'
+            self.price_signal_config.price_signal_type='Prices at second half of 2021'
             fixed_price=PricePurchase["Fixed_Price_" + self.price_signal_config.country].tolist()
             # convert euro/kWh to cent/kW-timestep
             p_conversion= 100 / (1000 * 3600/self.my_simulation_parameters.seconds_per_timestep)

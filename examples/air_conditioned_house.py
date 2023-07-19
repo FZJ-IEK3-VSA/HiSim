@@ -258,6 +258,8 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
             country = "Spain",
             pricing_scheme = pricing_scheme,
             installed_capacity = power,
+            #
+            price_signal_type = 'dummy',
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

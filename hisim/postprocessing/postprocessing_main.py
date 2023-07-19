@@ -804,7 +804,9 @@ class PostProcessor:
         json_generator_config.set_simulation_parameters(
             my_simulation_parameters=ppdt.simulation_parameters
         )
-        json_generator_config.set_module_config(my_module_config=None)
+        json_generator_config.set_module_config(
+            my_module_config_path=ppdt.my_module_config_path
+        )
         for component in ppdt.wrapped_components:
 
             json_generator_config.add_component(config=component.my_component.config)
@@ -868,7 +870,8 @@ class PostProcessor:
             f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
         )
         simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly, index=None,
+            path_or_buf=file_name_hourly,
+            index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
 

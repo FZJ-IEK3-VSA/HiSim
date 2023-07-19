@@ -39,11 +39,15 @@ class PyAmChartGenerator:
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 8)
 
-        dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            folder_path=self.folder_path, kind_of_data=PyamDataCollectorEnum.YEARLY
+        dict_of_yearly_pyam_dataframes_for_different_simulation_durations = (
+            self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+                folder_path=self.folder_path, kind_of_data=PyamDataCollectorEnum.YEARLY
+            )
         )
-        dict_of_hourly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            folder_path=self.folder_path, kind_of_data=PyamDataCollectorEnum.HOURLY
+        dict_of_hourly_pyam_dataframes_for_different_simulation_durations = (
+            self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+                folder_path=self.folder_path, kind_of_data=PyamDataCollectorEnum.HOURLY
+            )
         )
 
         self.make_plots_with_specific_kind_of_data(
@@ -230,7 +234,9 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.line(
-            ax=a_x, color=comparion_mode, title=title,
+            ax=a_x,
+            color=comparion_mode,
+            title=title,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -244,7 +250,8 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time",
+            fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -285,7 +292,10 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot(
-            ax=a_x, color=comparion_mode, title=title, fill_between=True,
+            ax=a_x,
+            color=comparion_mode,
+            title=title,
+            fill_between=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -299,7 +309,8 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time",
+            fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -396,7 +407,11 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot.box(
-            ax=a_x, by="variable", x="year", title=title, legend=True,
+            ax=a_x,
+            by="variable",
+            x="year",
+            title=title,
+            legend=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -451,7 +466,10 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.pie(
-            ax=a_x, value="value", category=comparion_mode, title=title,
+            ax=a_x,
+            value="value",
+            category=comparion_mode,
+            title=title,
         )
 
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
@@ -491,7 +509,9 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.scatter(
-            ax=a_x, x=x_data, y=y_data,
+            ax=a_x,
+            x=x_data,
+            y=y_data,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -561,16 +581,19 @@ class PyAmChartGenerator:
         # convert html file to png
         hti = Html2Image()
         with open(
-            os.path.join(self.path_for_plots, "sankey_plot.html"), encoding="utf8",
+            os.path.join(self.path_for_plots, "sankey_plot.html"),
+            encoding="utf8",
         ) as file:
             hti.screenshot(
-                file.read(), save_as="sankey_plot.png",
+                file.read(),
+                save_as="sankey_plot.png",
             )
 
         # change directory of sankey output file
         try:
             os.rename(
-                "sankey_plot.png", os.path.join(self.path_for_plots, "sankey_plot.png"),
+                "sankey_plot.png",
+                os.path.join(self.path_for_plots, "sankey_plot.png"),
             )
         except Exception as exc:
             raise Exception("Cannot save current sankey. Try again.") from exc

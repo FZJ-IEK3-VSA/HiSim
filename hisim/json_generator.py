@@ -3,7 +3,7 @@
 from typing import Any, Optional, List, Type, Dict
 from dataclasses import dataclass, field
 from dataclass_wizard import JSONWizard
-
+import json
 from hisim import log
 from hisim.component import ConfigBase
 from hisim.simulationparameters import SimulationParameters
@@ -12,7 +12,7 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass
 class ConnectionEntry(JSONWizard):
 
-    """ Represents a connection between two components. """
+    """Represents a connection between two components."""
 
     src_component_name: str
     src_output_name: str
@@ -22,7 +22,7 @@ class ConnectionEntry(JSONWizard):
 @dataclass
 class ComponentEntry(JSONWizard):
 
-    """ Entry for a single component. """
+    """Entry for a single component."""
 
     component_full_classname: str
     component_name: str
@@ -35,34 +35,36 @@ class ComponentEntry(JSONWizard):
 @dataclass
 class ConfigFile(JSONWizard):
 
-    """ Contains all the data that goes into the json config file. """
+    """Contains all the data that goes into the json config file."""
 
     system_name: str
     component_entries: List[ComponentEntry] = field(default_factory=list)
     my_simulation_parameters: Optional[SimulationParameters] = None
-    my_module_config: Optional[ConfigBase] = None
+    my_module_config: Optional[Dict[str, Any]] = None
 
 
 class JsonConfigurationGenerator:
 
-    """ Class to generate Json config files that can be used to start calculations without Python. """
+    """Class to generate Json config files that can be used to start calculations without Python."""
 
     def __init__(self, name: str) -> None:
-        """ Initializes the configuration generator. """
+        """Initializes the configuration generator."""
         self.config_file: ConfigFile = ConfigFile(system_name=name)
 
     def set_simulation_parameters(
-        self, my_simulation_parameter: SimulationParameters
+        self, my_simulation_parameters: SimulationParameters
     ) -> None:
-        """ Sets the simulation parameters. """
-        self.config_file.my_simulation_parameters = my_simulation_parameter
+        """Sets the simulation parameters."""
+        self.config_file.my_simulation_parameters = my_simulation_parameters
 
-    def set_module_config(self, my_module_config: ConfigBase) -> None:
-        """ Sets the module config which is was used to configure the example module. """
-        self.config_file.my_module_config = my_module_config
+    def set_module_config(self, my_module_config_path: str) -> None:
+        """Sets the module config which is was used to configure the example module."""
+        with open(my_module_config_path, "r", encoding="utf-8") as openfile:  # type: ignore
+            config_dict = json.load(openfile)
+        self.config_file.my_module_config = config_dict
 
     def add_component(self, config: Type[ConfigBase]) -> ComponentEntry:
-        """ Adds a component and returns a component entry. """
+        """Adds a component and returns a component entry."""
         config_json_str = config.to_dict()
         component_entry = ComponentEntry(
             component_full_classname=config.get_main_classname(),
@@ -79,7 +81,7 @@ class JsonConfigurationGenerator:
     def add_default_connection(
         self, from_entry: ComponentEntry, to_entry: ComponentEntry
     ) -> None:
-        """ Adds a default connection to another component. """
+        """Adds a default connection to another component."""
         to_entry.default_connections.append(from_entry.component_name)
 
     def add_manual_connection(
@@ -89,14 +91,14 @@ class JsonConfigurationGenerator:
         to_entry: ComponentEntry,
         input_name: str,
     ) -> None:
-        """ Adds a manual connection entry for connecting a single input. """
+        """Adds a manual connection entry for connecting a single input."""
         my_connection = ConnectionEntry(
             from_entry.component_name, output_name, input_name
         )
         to_entry.manual_connections.append(my_connection)
 
     def save_to_json(self, filename: str) -> None:
-        """ Saves a configuration to a json file. """
+        """Saves a configuration to a json file."""
         with open(filename, "w", encoding="utf-8") as filestream:
             mystr = self.config_file.to_json(indent=4)
             filestream.write(mystr)

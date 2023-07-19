@@ -209,8 +209,10 @@ class PyamDataCollector:
 
             df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
             # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s
-            df_pyam_for_one_simulation_duration = df_pyam_for_one_simulation_duration.convert_unit(
-                current="W", to="Wh", factor=1 / 3600, inplace=False
+            df_pyam_for_one_simulation_duration = (
+                df_pyam_for_one_simulation_duration.convert_unit(
+                    current="W", to="Wh", factor=1 / 3600, inplace=False
+                )
             )
 
             if kind_of_data == PyamDataCollectorEnum.HOURLY:

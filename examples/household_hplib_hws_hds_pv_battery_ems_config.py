@@ -96,7 +96,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # Set System Parameters from Config
 
     # household-pv-config
-    config_filename = my_sim.module_config
+    config_filename = my_sim.my_module_config_path
 
     my_config: BuildingPVWeatherConfig
     # if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
@@ -281,9 +281,11 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_electricity_controller_config,
+    my_electricity_controller = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
+        )
     )
 
     # Build Battery
@@ -390,13 +392,18 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Battery Control. ",
+    electricity_to_or_from_battery_target = (
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.BATTERY,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
     )
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
@@ -420,22 +427,22 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
 
-    # Set Results Path
-    if config_filename is not None:
-        hash_number = re.findall(r"\-?\d+", config_filename)[0]
-        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
+    # # Set Results Path
+    # if config_filename is not None:
+    #     hash_number = re.findall(r"\-?\d+", config_filename)[0]
+    #     sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
-        )
-        log.information(
-            "Singleton Scenario is set "
-            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
-        )
-    else:
-        hash_number = None
-        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
+    #     SingletonSimRepository().set_entry(
+    #         key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+    #         entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
+    #     )
+    #     log.information(
+    #         "Singleton Scenario is set "
+    #         + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
+    #     )
+    # else:
+    hash_number = None
+    sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,

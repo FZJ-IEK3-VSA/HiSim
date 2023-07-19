@@ -40,6 +40,7 @@ class ConfigFile(JSONWizard):
     system_name: str
     component_entries: List[ComponentEntry] = field(default_factory=list)
     my_simulation_parameters: Optional[SimulationParameters] = None
+    my_module_config: Optional[ConfigBase] = None
 
 
 class JsonConfigurationGenerator:
@@ -50,30 +51,48 @@ class JsonConfigurationGenerator:
         """ Initializes the configuration generator. """
         self.config_file: ConfigFile = ConfigFile(system_name=name)
 
-    def set_simulation_parameters(self, my_simulation_parameter: SimulationParameters) -> None:
+    def set_simulation_parameters(
+        self, my_simulation_parameter: SimulationParameters
+    ) -> None:
         """ Sets the simulation parameters. """
         self.config_file.my_simulation_parameters = my_simulation_parameter
+
+    def set_module_config(self, my_module_config: ConfigBase) -> None:
+        """ Sets the module config which is was used to configure the example module. """
+        self.config_file.my_module_config = my_module_config
 
     def add_component(self, config: Type[ConfigBase]) -> ComponentEntry:
         """ Adds a component and returns a component entry. """
         config_json_str = config.to_dict()
-        component_entry = ComponentEntry(component_full_classname=config.get_main_classname(),
-                                         component_name=config.name,
-                                         configuration=config_json_str,
-                                         config_full_classname=config.get_config_classname(),
-                                         default_connections=[],
-                                         manual_connections=[])
+        component_entry = ComponentEntry(
+            component_full_classname=config.get_main_classname(),
+            component_name=config.name,
+            configuration=config_json_str,
+            config_full_classname=config.get_config_classname(),
+            default_connections=[],
+            manual_connections=[],
+        )
         self.config_file.component_entries.append(component_entry)
         log.information("Added component " + config.name)
         return component_entry
 
-    def add_default_connection(self, from_entry: ComponentEntry, to_entry: ComponentEntry) -> None:
+    def add_default_connection(
+        self, from_entry: ComponentEntry, to_entry: ComponentEntry
+    ) -> None:
         """ Adds a default connection to another component. """
         to_entry.default_connections.append(from_entry.component_name)
 
-    def add_manual_connection(self, from_entry: ComponentEntry, output_name: str, to_entry: ComponentEntry, input_name: str) -> None:
+    def add_manual_connection(
+        self,
+        from_entry: ComponentEntry,
+        output_name: str,
+        to_entry: ComponentEntry,
+        input_name: str,
+    ) -> None:
         """ Adds a manual connection entry for connecting a single input. """
-        my_connection = ConnectionEntry(from_entry.component_name, output_name, input_name)
+        my_connection = ConnectionEntry(
+            from_entry.component_name, output_name, input_name
+        )
         to_entry.manual_connections.append(my_connection)
 
     def save_to_json(self, filename: str) -> None:

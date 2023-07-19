@@ -26,6 +26,7 @@ from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.json_generator import JsonConfigurationGenerator
 
 
 class PostProcessor:
@@ -751,7 +752,7 @@ class PostProcessor:
                         column_splitted[2],
                     ]
                 )
-                
+
                 unit = column_splitted[5]
 
                 simple_dict_hourly_data["model"].append(model)
@@ -799,44 +800,51 @@ class PostProcessor:
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
         component_counter = 0
+        json_generator_config = JsonConfigurationGenerator(name=f"{scenario}")
+        json_generator_config.set_simulation_parameters(
+            my_simulation_parameters=ppdt.simulation_parameters
+        )
+        json_generator_config.set_module_config(my_module_config=None)
         for component in ppdt.wrapped_components:
-            try:
-                # rename keys because some get overwritten if key name exists several times
-                dict_config = component.my_component.config.to_dict()
-                rename_dict_config = {}
-                for key, value in dict_config.items():
-                    rename_dict_config[
-                        f"component {component_counter} {key}"
-                    ] = dict_config[key]
-                dict_config = rename_dict_config
-                del rename_dict_config
-            except BaseException as exc:
-                raise ValueError(
-                    "component.my_component.config.to_dict() does probably not work. "
-                    "That might be because the config of the component does not inherit from Configbase. "
-                    "Please change your config class according to the other component config classes with the configbase inheritance."
-                ) from exc
 
-            try:
-                # try json dumping and if it works append data information dict
-                component.my_component.config.to_json()
-                data_information_dict.update(dict_config)
-                component_counter = component_counter + 1
+            json_generator_config.add_component(config=component.my_component.config)
+            # try:
+            #     # rename keys because some get overwritten if key name exists several times
+            #     dict_config = component.my_component.config.to_dict()
+            #     # rename_dict_config = {}
+            #     # for key, value in dict_config.items():
+            #     #     rename_dict_config[
+            #     #         f"component {component_counter} {key}"
+            #     #     ] = dict_config[key]
+            #     # dict_config = rename_dict_config
+            #     # del rename_dict_config
+            # except BaseException as exc:
+            #     raise ValueError(
+            #         "component.my_component.config.to_dict() does probably not work. "
+            #         "That might be because the config of the component does not inherit from Configbase. "
+            #         "Please change your config class according to the other component config classes with the configbase inheritance."
+            #     ) from exc
 
-            except Exception as ex:
-                # else try to convert data types so that json dumping works out
-                for key, value in dict_config.items():
-                    if not isinstance(value, (int, float, str, bool, type(None))):
-                        if isinstance(value, list):
-                            # transform list to string so it can be json serializable later
-                            dict_config[key] = str(value).strip("[]")
-                            # append data information dict
-                            data_information_dict.update(dict_config)
-                            component_counter = component_counter + 1
-                        else:
-                            raise ValueError(
-                                "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
-                            ) from ex
+            # try:
+            #     # try json dumping and if it works append data information dict
+            #     component.my_component.config.to_json()
+            #     data_information_dict.update(dict_config)
+            #     component_counter = component_counter + 1
+
+            # except Exception as ex:
+            #     # else try to convert data types so that json dumping works out
+            #     for key, value in dict_config.items():
+            #         if not isinstance(value, (int, float, str, bool, type(None))):
+            #             if isinstance(value, list):
+            #                 # transform list to string so it can be json serializable later
+            #                 dict_config[key] = str(value).strip("[]")
+            #                 # append data information dict
+            #                 data_information_dict.update(dict_config)
+            #                 component_counter = component_counter + 1
+            #             else:
+            #                 raise ValueError(
+            #                     "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
+            #                 ) from ex
 
         # pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
         pyam_data_folder = os.path.join(
@@ -846,6 +854,11 @@ class PostProcessor:
             os.makedirs(pyam_data_folder)
         else:
             log.information("This pyam_data path exists already: " + pyam_data_folder)
+
+        json_generator_config.save_to_json(
+            filename=os.path.join(pyam_data_folder, "data_information_for_pyam.json")
+        )
+
         file_name_hourly = os.path.join(
             pyam_data_folder,
             f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
@@ -859,12 +872,12 @@ class PostProcessor:
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
 
-        # Serializing json
-        json_object = json.dumps(data_information_dict, indent=4)
-        # Writing to sample.json
-        with open(
-            os.path.join(pyam_data_folder, "data_information_for_pyam.json"),
-            "w",
-            encoding="utf-8",
-        ) as outfile:
-            outfile.write(json_object)
+        # # Serializing json
+        # json_object = json.dumps(data_information_dict, indent=4)
+        # # Writing to sample.json
+        # with open(
+        #     os.path.join(pyam_data_folder, "data_information_for_pyam.json"),
+        #     "w",
+        #     encoding="utf-8",
+        # ) as outfile:
+        #     outfile.write(json_object)

@@ -146,7 +146,7 @@ class PyAmChartGenerator:
                 pyam_dataframe=pyam_dataframe,
                 filter_model=None,
                 filter_scenario=None,
-                filter_variables="EMS|ElectricityToOrFromGrid|-",
+                filter_variables="EMS|ElectricityToOrFromGrid|Wh",
                 title="Electricity to or from Grid",
                 filter_region=None,
                 filter_unit=None,
@@ -187,7 +187,7 @@ class PyAmChartGenerator:
                 pyam_dataframe=pyam_dataframe,
                 filter_model=None,
                 filter_scenario=None,
-                filter_variables="EMS|ElectricityToOrFromGrid|-",
+                filter_variables="EMS|ElectricityToOrFromGrid|Wh",
                 title="Electricity to or from Grid",
                 filter_region=None,
                 filter_unit=None,
@@ -331,6 +331,8 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+        print(filtered_data.data)
+        print(self.get_statistics_of_data(filtered_data=filtered_data.data))
         comparion_mode = self.decide_for_scenario_or_variable_comparison(
             filtered_data=filtered_data
         )
@@ -728,6 +730,11 @@ class PyAmChartGenerator:
             )
 
         return comparison_mode
+
+    def get_statistics_of_data(self, filtered_data: pyam.IamDataFrame):
+        """Use pandas describe method to get statistical values of certain data."""
+
+        return filtered_data.describe()
 
 
 def main():

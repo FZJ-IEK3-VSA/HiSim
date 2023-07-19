@@ -24,7 +24,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         execution_time: Any,
         results_monthly: Any,
         results_hourly: Any,
-        results_cumulative: Any
+        results_cumulative: Any,
     ) -> None:
         """Initializes the values."""
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy

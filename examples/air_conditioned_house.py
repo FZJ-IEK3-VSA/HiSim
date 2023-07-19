@@ -260,6 +260,9 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
             installed_capacity = power,
             #
             price_signal_type = 'dummy',
+            fixed_price = [],
+            static_tou_price = [],
+            price_injection = [],
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

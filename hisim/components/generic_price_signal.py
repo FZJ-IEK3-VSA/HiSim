@@ -204,17 +204,17 @@ class PriceSignal(cp.Component):
             # convert euro/kWh to cent/kW-timestep
             p_conversion= 100 / (1000 * 3600/self.my_simulation_parameters.seconds_per_timestep)
             fixed_price = [element * p_conversion for element in fixed_price]
-            self.fixed_price=np.repeat(fixed_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
+            self.price_signal_config.fixed_price=np.repeat(fixed_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
             
             static_tou_price=PricePurchase["Static_TOU_Price_" + self.price_signal_config.country].tolist()
             static_tou_price = [element * p_conversion for element in static_tou_price]
-            self.static_tou_price=np.repeat(static_tou_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
+            self.price_signal_config.static_tou_price=np.repeat(static_tou_price, int(3600/self.my_simulation_parameters.seconds_per_timestep)).tolist()
             
             FITdata=FeedInTarrif.loc[self.price_signal_config.country]
             for i in range(len(FITdata)):
                 if FITdata['min_capacity (kW)'].values[i] < self.price_signal_config.installed_capacity and FITdata['max_capacity (kW)'].values[i] >= self.price_signal_config.installed_capacity:
                     price_injection=FITdata['FIT'].values[i]
-            self.price_injection=price_injection * p_conversion
+            self.price_signal_config.price_injection=price_injection * p_conversion
         pass
 
     def write_to_report(self) -> List[str]:

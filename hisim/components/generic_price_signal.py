@@ -35,6 +35,10 @@ class PriceSignalConfig(cp.ConfigBase):
     country: str
     pricing_scheme: str
     installed_capacity: float
+    price_signal_type: str
+    fixed_price: list
+    static_tou_price: list
+    price_injection: list
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
@@ -44,6 +48,10 @@ class PriceSignalConfig(cp.ConfigBase):
             country = 'Germany',
             pricing_scheme = 'fixed',
             installed_capacity = 10E3,
+            price_signal_type = 'dummy',
+            fixed_price = [],
+            static_tou_price = [],
+            price_injection = [],
         )
         return config
 
@@ -68,7 +76,9 @@ class PriceSignal(cp.Component):
     # price_injection = "price_injection"
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig
+        self, 
+        my_simulation_parameters: SimulationParameters, 
+        config: PriceSignalConfig
     ) -> None:
         """Initialization of Price Signal class
 

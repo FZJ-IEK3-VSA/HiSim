@@ -151,14 +151,14 @@ class PriceSignal(cp.Component):
         elif (
             self.price_signal_config.price_signal_type =='Prices at second half of 2021'
         ):
-            priceinjectionforecast= [self.price_injection ] * int( 
+            priceinjectionforecast= [ self.price_signal_config.price_injection ] * int( 
                 self.my_simulation_parameters.system_config.prediction_horizon 
                 / self.my_simulation_parameters.seconds_per_timestep 
             )
         elif self.price_signal_config.pricing_scheme=='dynamic':
-            pricepurchaseforecast=self.static_tou_price
+            pricepurchaseforecast=self.price_signal_config.static_tou_price
         elif self.price_signal_config.pricing_scheme=='fixed':
-            pricepurchaseforecast=self.fixed_price
+            pricepurchaseforecast=self.price_signal_config.fixed_price
         elif self.price_signal_config.price_signal_type =='dummy':
             priceinjectionforecast = [ 10  ] * int( 
                 self.my_simulation_parameters.system_config.prediction_horizon 

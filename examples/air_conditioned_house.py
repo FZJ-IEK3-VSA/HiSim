@@ -97,10 +97,9 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     ##### delete all files in cache:
     dir_cache = '..//hisim//inputs//cache'
-    if os.path.isdir(dir_cache) (
+    if os.path.isdir( dir_cache ):
         for file in os.listdir( dir_cache ):
             os.remove( os.path.join( dir_cache, file ) )
-    )
 
     ##### System Parameters #####
 

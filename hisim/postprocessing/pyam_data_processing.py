@@ -13,7 +13,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plotly
 from html2image import Html2Image
-from hisim.postprocessing.pyam_data_collection import PyamDataCollectorEnum
+from hisim.postprocessing.pyam_data_collection import PyamDataTypeEnum
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
@@ -41,22 +41,22 @@ class PyAmChartGenerator:
 
         dict_of_yearly_pyam_dataframes_for_different_simulation_durations = (
             self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataCollectorEnum.YEARLY
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY
             )
         )
         dict_of_hourly_pyam_dataframes_for_different_simulation_durations = (
             self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataCollectorEnum.HOURLY
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
             )
         )
 
         self.make_plots_with_specific_kind_of_data(
-            kind_of_data=PyamDataCollectorEnum.YEARLY,
+            kind_of_data=PyamDataTypeEnum.YEARLY,
             dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
             simulation_duration_key=simulation_duration_to_check,
         )
         self.make_plots_with_specific_kind_of_data(
-            kind_of_data=PyamDataCollectorEnum.HOURLY,
+            kind_of_data=PyamDataTypeEnum.HOURLY,
             dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
             simulation_duration_key=simulation_duration_to_check,
         )
@@ -66,9 +66,9 @@ class PyAmChartGenerator:
     ) -> Dict:
         """Get csv data and create pyam dataframes."""
 
-        if kind_of_data == PyamDataCollectorEnum.YEARLY:
+        if kind_of_data == PyamDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
-        elif kind_of_data == PyamDataCollectorEnum.HOURLY:
+        elif kind_of_data == PyamDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
         else:
             raise ValueError(
@@ -121,7 +121,7 @@ class PyAmChartGenerator:
         self.path_for_plots = os.path.join(
             self.result_folder, sub_results_folder, sub_sub_results_folder
         )
-        if kind_of_data == PyamDataCollectorEnum.YEARLY:
+        if kind_of_data == PyamDataTypeEnum.YEARLY:
             log.information(
                 f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
             )
@@ -173,7 +173,7 @@ class PyAmChartGenerator:
             # self.make_sankey_plot_for_pyam_dataframe(
             #     pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="2227458627882477145", filter_variables="*|*|ElectricityOutput", filter_region=None, filter_unit=None, filter_year=None
             # )
-        elif kind_of_data == PyamDataCollectorEnum.HOURLY:
+        elif kind_of_data == PyamDataTypeEnum.HOURLY:
             log.information(
                 f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
             )

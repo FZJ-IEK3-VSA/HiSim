@@ -451,3 +451,5 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         hash_number=hash_number,
         sorting_option=sorting_option,
     )
+    
+    print(ResultPathProviderSingleton().get_result_directory_name())

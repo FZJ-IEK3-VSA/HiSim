@@ -21,7 +21,7 @@ class PyamDataAnalysis:
 
         pyam_data_collection.PyamDataCollector(
             analysis_mode=pyam_data_collection.PyamDataAnalysisEnum.SENSITIVITY_ANALYSIS,
-            path_to_default_config="/storage_cluster/internal/home/k-rieck/jobs_hisim/job_array_for_hisim_mass_simu_one/default_building_pv_config.json",
+            path_to_default_config=r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json",
         )
         # pyam_data_processing.PyAmChartGenerator(simulation_duration_to_check=str(365))
 

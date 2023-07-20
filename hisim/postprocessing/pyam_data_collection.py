@@ -7,9 +7,10 @@ from typing import Dict, Any, Optional, List
 import json
 import enum
 from collections import defaultdict
+import shutil
 import pyam
 import pandas as pd
-import shutil
+
 
 from hisim import log
 
@@ -31,128 +32,130 @@ class PyamDataCollector:
         self.path_of_pyam_results_executed_with_default_config: str
 
         log.information(f"Checking results from folder: {result_folder}")
-        
+
         self.clean_result_directory_from_unfinished_results(result_path=result_folder)
-        
-        # list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(result_path=result_folder)
 
-        # if data_collection_mode == PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS:
-            
-        #     log.information(f"Data Collection Mode is {data_collection_mode}")
+        list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
+            result_path=result_folder
+        )
 
-        #     default_config_dict = self.get_default_config(
-        #         path_to_default_config=path_to_default_config
-        #     )
+        if (
+            data_collection_mode
+            == PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS
+        ):
 
-        #     (
-        #         dict_with_csv_files_for_each_parameter,
-        #         dict_with_parameter_key_values,
-        #     ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
-        #         list_with_pyam_data_folders=list_with_pyam_data_folders, default_config_dict=default_config_dict
-        #     )
+            log.information(f"Data Collection Mode is {data_collection_mode}")
 
-        #     for key in dict_with_csv_files_for_each_parameter.keys():
-        #         print("parameter key ", key)
-        #         print("##################")
-        #         list_with_pyam_data_paths_for_one_parameter = (
-        #             dict_with_csv_files_for_each_parameter[key]
-        #         )
+            default_config_dict = self.get_default_config(
+                path_to_default_config=path_to_default_config
+            )
 
-        #         (
-        #             all_simulation_durations,
-        #             all_hourly_csv_files,
-        #             all_yearly_csv_files,
-        #         ) = self.import_data_from_file(
-        #             paths_to_check=list_with_pyam_data_paths_for_one_parameter
-        #         )
+            (
+                dict_with_csv_files_for_each_parameter,
+                dict_with_parameter_key_values,
+            ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
+                list_with_pyam_data_folders=list_with_pyam_data_folders,
+                default_config_dict=default_config_dict,
+            )
 
-        #         (
-        #             dict_of_yearly_csv_data,
-        #             dict_of_hourly_csv_data,
-        #         ) = self.make_dictionaries_with_simulation_duration_keys(
-        #             simulation_durations=all_simulation_durations,
-        #             hourly_data=all_hourly_csv_files,
-        #             yearly_data=all_yearly_csv_files,
-        #         )
+            for key in dict_with_csv_files_for_each_parameter.keys():
+                print("parameter key ", key)
+                print("##################")
+                list_with_pyam_data_paths_for_one_parameter = (
+                    dict_with_csv_files_for_each_parameter[key]
+                )
 
-        #         self.read_csv_and_generate_pyam_dataframe(
-        #             dict_of_csv_to_read=dict_of_yearly_csv_data,
-        #             kind_of_data=PyamDataTypeEnum.YEARLY,
-        #             parameter_key=key,
-        #             list_with_parameter_key_values=dict_with_parameter_key_values[key],
-        #             rename_scenario=True,
-        #         )
-        #         self.read_csv_and_generate_pyam_dataframe(
-        #             dict_of_csv_to_read=dict_of_hourly_csv_data,
-        #             kind_of_data=PyamDataTypeEnum.HOURLY,
-        #             parameter_key=key,
-        #             list_with_parameter_key_values=dict_with_parameter_key_values[key],
-        #             rename_scenario=True,
-        #         )
-        #         print("\n")
+                (
+                    all_simulation_durations,
+                    all_hourly_csv_files,
+                    all_yearly_csv_files,
+                ) = self.import_data_from_file(
+                    paths_to_check=list_with_pyam_data_paths_for_one_parameter
+                )
 
-        # elif data_collection_mode == PyamDataCollectionModeEnum.COLLECT_ALL_DATA_WITHOUT_SORTING:
-            
-        #     log.information(f"Data Collection Mode is {data_collection_mode}")
+                (
+                    dict_of_yearly_csv_data,
+                    dict_of_hourly_csv_data,
+                ) = self.make_dictionaries_with_simulation_duration_keys(
+                    simulation_durations=all_simulation_durations,
+                    hourly_data=all_hourly_csv_files,
+                    yearly_data=all_yearly_csv_files,
+                )
 
+                self.read_csv_and_generate_pyam_dataframe(
+                    dict_of_csv_to_read=dict_of_yearly_csv_data,
+                    kind_of_data=PyamDataTypeEnum.YEARLY,
+                    parameter_key=key,
+                    list_with_parameter_key_values=dict_with_parameter_key_values[key],
+                    rename_scenario=True,
+                )
+                self.read_csv_and_generate_pyam_dataframe(
+                    dict_of_csv_to_read=dict_of_hourly_csv_data,
+                    kind_of_data=PyamDataTypeEnum.HOURLY,
+                    parameter_key=key,
+                    list_with_parameter_key_values=dict_with_parameter_key_values[key],
+                    rename_scenario=True,
+                )
+                print("\n")
 
-        #     (
-        #         all_simulation_durations,
-        #         all_hourly_csv_files,
-        #         all_yearly_csv_files,
-        #     ) = self.import_data_from_file(paths_to_check=list_with_pyam_data_folders)
-        #     (
-        #         dict_of_yearly_csv_data,
-        #         dict_of_hourly_csv_data,
-        #     ) = self.make_dictionaries_with_simulation_duration_keys(
-        #         simulation_durations=all_simulation_durations,
-        #         hourly_data=all_hourly_csv_files,
-        #         yearly_data=all_yearly_csv_files,
-        #     )
-        #     self.read_csv_and_generate_pyam_dataframe(
-        #         dict_of_csv_to_read=dict_of_yearly_csv_data,
-        #         kind_of_data=PyamDataTypeEnum.YEARLY,
-        #         rename_scenario=True,
+        elif (
+            data_collection_mode
+            == PyamDataCollectionModeEnum.COLLECT_ALL_DATA_WITHOUT_SORTING
+        ):
 
-        #     )
-        #     self.read_csv_and_generate_pyam_dataframe(
-        #         dict_of_csv_to_read=dict_of_hourly_csv_data,
-        #         kind_of_data=PyamDataTypeEnum.HOURLY,
-        #         rename_scenario=True,
+            log.information(f"Data Collection Mode is {data_collection_mode}")
 
-        #     )
+            (
+                all_simulation_durations,
+                all_hourly_csv_files,
+                all_yearly_csv_files,
+            ) = self.import_data_from_file(paths_to_check=list_with_pyam_data_folders)
+            (
+                dict_of_yearly_csv_data,
+                dict_of_hourly_csv_data,
+            ) = self.make_dictionaries_with_simulation_duration_keys(
+                simulation_durations=all_simulation_durations,
+                hourly_data=all_hourly_csv_files,
+                yearly_data=all_yearly_csv_files,
+            )
+            self.read_csv_and_generate_pyam_dataframe(
+                dict_of_csv_to_read=dict_of_yearly_csv_data,
+                kind_of_data=PyamDataTypeEnum.YEARLY,
+                rename_scenario=True,
+            )
+            self.read_csv_and_generate_pyam_dataframe(
+                dict_of_csv_to_read=dict_of_hourly_csv_data,
+                kind_of_data=PyamDataTypeEnum.HOURLY,
+                rename_scenario=True,
+            )
 
-        # else:
-        #     raise ValueError(
-        #         "Analysis mode is not part of the PyamDataCollectionModeEnum class."
-        #     )
-    
-    def clean_result_directory_from_unfinished_results(self, result_path: str):
+        else:
+            raise ValueError(
+                "Analysis mode is not part of the PyamDataCollectionModeEnum class."
+            )
+
+    def clean_result_directory_from_unfinished_results(
+        self, result_path: str
+    ) -> None:  # TODO: add functionality
         """When a result folder does not contain the finished_flag, it will be removed from the examples/result folder."""
+        pass
+
+    def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
+        """Get a list of all pyam data folders which you want to analyze."""
+
         # choose which path to check
-        path_to_check = os.path.join(result_path, "**", "finished.flag")
+        path_to_check = os.path.join(result_path, "**", "pyam_data")
         list_of_paths = list(glob.glob(path_to_check))
         # if in these paths no pyam data folder can be found check in subfolders for it
         if len(list_of_paths) == 0:
-            path_to_check = os.path.join(result_path, "**", "**", "finished.flag")  # type: ignore
-        for folder in glob.glob(path_to_check):
-            print(folder)
+            path_to_check = os.path.join(result_path, "**", "**", "pyam_data")  # type: ignore
 
-                
-    def get_list_of_all_relevant_pyam_data_folders(self, result_path: str):
-            """Get a list of all pyam data folders which you want to analyze."""
+        list_with_all_paths_to_check = glob.glob(path_to_check)
+        list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check
+        )
 
-            # choose which path to check
-            path_to_check = os.path.join(result_path, "**", "pyam_data")
-            list_of_paths = list(glob.glob(path_to_check))
-            # if in these paths no pyam data folder can be found check in subfolders for it
-            if len(list_of_paths) == 0:
-                path_to_check = os.path.join(result_path, "**", "**", "pyam_data")  # type: ignore
-
-            list_with_all_paths_to_check = glob.glob(path_to_check)
-            list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check)
-            
-            return list_with_no_duplicates
+        return list_with_no_duplicates
 
     def import_data_from_file(
         self, paths_to_check: List[str]
@@ -207,7 +210,6 @@ class PyamDataCollector:
                 f"{simulation_duration}"
             ] = []
 
-
         yearly_data_set = yearly_data
         hourly_data_set = hourly_data
 
@@ -255,11 +257,13 @@ class PyamDataCollector:
         dataframe: pd.DataFrame,
         parameter_key: str = None,
         list_with_parameter_values: List[Any] = None,
-        index = int
-    ) -> pd.Series:
+        index=int,
+    ) -> Any:
         """Rename the scenario of the given dataframe."""
         if None not in (parameter_key, list_with_parameter_values):
-            dataframe["scenario"] = f"{parameter_key}_{list_with_parameter_values[index]}"
+            dataframe[
+                "scenario"
+            ] = f"{parameter_key}_{list_with_parameter_values[index]}"
         else:
             dataframe["scenario"] = dataframe["scenario"] + f"_{index}"
         return dataframe["scenario"]
@@ -285,25 +289,25 @@ class PyamDataCollector:
             for csv_file in csv_data_list:
 
                 dataframe = pd.read_csv(csv_file)
-                
+
                 if rename_scenario is True:
                     # rename scenario according to parameter or add an index in the scenario name so that the names do not duplicate
                     dataframe["scenario"] = self.rename_scenario_name_of_dataframe(
                         dataframe=dataframe,
                         parameter_key=parameter_key,
                         list_with_parameter_values=list_with_parameter_key_values,
-                        index=index
+                        index=index,
                     )
 
                 appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
                 index = index + 1
-            
+
             # if scenario values are not a string type, transform to strings
             if appended_dataframe["scenario"].dtype != str:
-                appended_dataframe["scenario"] = appended_dataframe["scenario"].transform(
-                    lambda x: str(x)
-                )
+                appended_dataframe["scenario"] = appended_dataframe[
+                    "scenario"
+                ].transform(lambda x: str(x))
 
             df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
             # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s
@@ -311,13 +315,23 @@ class PyamDataCollector:
             #     current="W", to="Wh", factor=1 / 3600, inplace=False
             # )
 
-            filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(pyam_data_folder=self.pyam_data_folder, simulation_duration_key=simulation_duration_key, kind_of_data=kind_of_data, parameter_key=parameter_key)
-            df_pyam_for_one_simulation_duration.to_csv(filename
+            filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
+                pyam_data_folder=self.pyam_data_folder,
+                simulation_duration_key=simulation_duration_key,
+                kind_of_data=kind_of_data,
+                parameter_key=parameter_key,
             )
+            df_pyam_for_one_simulation_duration.to_csv(filename)
 
-    def store_pyam_data_with_the_right_name_and_in_the_right_path(self, pyam_data_folder: str, simulation_duration_key: str, kind_of_data: Any, parameter_key: Optional[str]= None) -> str:
+    def store_pyam_data_with_the_right_name_and_in_the_right_path(
+        self,
+        pyam_data_folder: str,
+        simulation_duration_key: str,
+        kind_of_data: Any,
+        parameter_key: Optional[str] = None,
+    ) -> str:
         """Store csv files in the pyam data folder with the right filename and path."""
-        
+
         if kind_of_data == PyamDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
         elif kind_of_data == PyamDataTypeEnum.YEARLY:
@@ -329,32 +343,25 @@ class PyamDataCollector:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                    pyam_data_folder,
-                    f"data_with_different_{parameter_key}s",
-                    f"simulation_duration_of_{simulation_duration_key}_days",
-                )
+                pyam_data_folder,
+                f"data_with_different_{parameter_key}s",
+                f"simulation_duration_of_{simulation_duration_key}_days",
+            )
         else:
             path_for_file = os.path.join(
-                    pyam_data_folder,
-                    f"data_with_all_parameters",
-                    f"simulation_duration_of_{simulation_duration_key}_days",
-                )
-        if (
-            os.path.exists(path_for_file)
-            is False
-        ):
-            os.makedirs(
-                path_for_file
+                pyam_data_folder,
+                "data_with_all_parameters",
+                f"simulation_duration_of_{simulation_duration_key}_days",
             )
-        log.information(
-            f"Saving pyam dataframe in {path_for_file} folder"
-        )
-        
+        if os.path.exists(path_for_file) is False:
+            os.makedirs(path_for_file)
+        log.information(f"Saving pyam dataframe in {path_for_file} folder")
+
         filename = os.path.join(
-                    path_for_file,
-                    f"pyam_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
-                )
-        
+            path_for_file,
+            f"pyam_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
+        )
+
         return filename
 
     def get_default_config(self, path_to_default_config: Optional[str]) -> Any:
@@ -416,15 +423,15 @@ class PyamDataCollector:
         return dict_with_csv_files_for_each_parameter, dict_with_parameter_key_values
 
     def go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
-        self, list_with_pyam_data_folders: str, default_config_dict: Dict[str, Any]
+        self, list_with_pyam_data_folders: List[str], default_config_dict: Dict[str, Any]
     ) -> tuple[Dict, Dict]:
         """Order result files according to different parameters."""
-      
+
         dict_with_csv_files_for_each_parameter: Dict = defaultdict(list)
         dict_with_parameter_key_values: Dict = defaultdict(list)
-        
+
         for folder in list_with_pyam_data_folders:  # type: ignore
- 
+
             (
                 dict_with_csv_files_for_each_parameter,
                 dict_with_parameter_key_values,
@@ -441,21 +448,27 @@ class PyamDataCollector:
                 self.path_of_pyam_results_executed_with_default_config
             )
             dict_with_parameter_key_values[key].append(default_config_dict[key])
-            
 
         return dict_with_csv_files_for_each_parameter, dict_with_parameter_key_values
 
-    def check_for_duplicates_in_dict(self, dictionary_to_check: Dict[str, Any], key: str) -> List:
+    def check_for_duplicates_in_dict(
+        self, dictionary_to_check: Dict[str, Any], key: str
+    ) -> List:
         """Check for duplicates and return index of where the duplicates are found."""
-        
-        indices_of_duplicates = [index for index, value in enumerate(dictionary_to_check[key]) if value in dictionary_to_check[key][:index]]
-        
+
+        indices_of_duplicates = [
+            index
+            for index, value in enumerate(dictionary_to_check[key])
+            if value in dictionary_to_check[key][:index]
+        ]
+
         return indices_of_duplicates
-    
-    
-    def go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(self, list_of_pyam_folder_paths_to_check: List[str]):
+
+    def go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
+        self, list_of_pyam_folder_paths_to_check: List[str]
+    ) -> List[Any]:
         """Go through all pyam folders and remove the examples that are duplicated."""
-        
+
         list_of_all_module_configs = []
         list_of_pyam_folders_which_have_only_unique_configs = []
         for folder in list_of_pyam_folder_paths_to_check:
@@ -464,24 +477,32 @@ class PyamDataCollector:
                     with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                         config_dict = json.load(openfile)
                         my_module_config_dict = config_dict["myModuleConfig"]
-                        my_module_config_dict.update({"duration in days": config_dict["pyamDataInformation"].get(
-                            "duration in days"
-                        )})
-                        
+                        my_module_config_dict.update(
+                            {
+                                "duration in days": config_dict[
+                                    "pyamDataInformation"
+                                ].get("duration in days")
+                            }
+                        )
+
                         # prevent to add modules with same module config and same simulation duration twice
                         if my_module_config_dict not in list_of_all_module_configs:
                             list_of_all_module_configs.append(my_module_config_dict)
-                            list_of_pyam_folders_which_have_only_unique_configs.append(os.path.join(folder))
-                            
+                            list_of_pyam_folders_which_have_only_unique_configs.append(
+                                os.path.join(folder)
+                            )
+
             # delete folders which have doubled results from examples/results directory
             if folder not in list_of_pyam_folders_which_have_only_unique_configs:
                 # remove whole result folder from result directory
                 whole_parent_folder = os.path.abspath(os.path.join(folder, os.pardir))
-                log.information(f"The result folder {whole_parent_folder} will be removed because these results are already existing.")
+                log.information(
+                    f"The result folder {whole_parent_folder} will be removed because these results are already existing."
+                )
                 shutil.rmtree(whole_parent_folder, ignore_errors=True)
 
         return list_of_pyam_folders_which_have_only_unique_configs
-                
+
 
 class PyamDataTypeEnum(enum.Enum):
 
@@ -507,7 +528,10 @@ class PyamDataCollectionModeEnum(enum.Enum):
 
 def main():
     """Main function to execute the pyam data collection."""
-    PyamDataCollector(data_collection_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS, path_to_default_config="please insert path to your default module config")
+    PyamDataCollector(
+        data_collection_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
+        path_to_default_config="please insert path to your default module config",
+    )
 
 
 if __name__ == "__main__":

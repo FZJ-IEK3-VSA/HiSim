@@ -193,9 +193,15 @@ class PostProcessor:
             )
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
-                "Computing operational costs and C02 emissions produced in operation."
+                "Computing and writing operational costs and C02 emissions produced in operation to report."
             )
-            opex_calculation(components=ppdt.wrapped_components, all_outputs=ppdt.all_outputs, postprocessing_results=ppdt.results)
+            start = timer()
+            self.compute_and_write_opex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing operational costs and C02 emissions produced in operation to report took " + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
             in ppdt.post_processing_options
@@ -674,6 +680,26 @@ class PostProcessor:
         )
         report.write_with_normal_alignment(lines)
         self.chapter_counter = self.chapter_counter + 1
+        report.close()
+
+    def compute_and_write_opex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
+        opex_compute_return = opex_calculation(
+            components=ppdt.wrapped_components,
+            all_outputs=ppdt.all_outputs,
+            postprocessing_results=ppdt.results,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        lines = opex_compute_return
+        report.open()
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + ". Costs and Emissions"]
+        )
+        report.write_with_normal_alignment(lines)
+        self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:

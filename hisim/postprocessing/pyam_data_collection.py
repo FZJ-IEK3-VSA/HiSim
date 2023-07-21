@@ -257,7 +257,7 @@ class PyamDataCollector:
         dataframe: pd.DataFrame,
         parameter_key: str = None,
         list_with_parameter_values: List[Any] = None,
-        index=int,
+        index: int = 0,
     ) -> Any:
         """Rename the scenario of the given dataframe."""
         if None not in (parameter_key, list_with_parameter_values):
@@ -302,7 +302,6 @@ class PyamDataCollector:
                 appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
                 index = index + 1
-
 
             df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
             # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s
@@ -418,7 +417,9 @@ class PyamDataCollector:
         return dict_with_csv_files_for_each_parameter, dict_with_parameter_key_values
 
     def go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
-        self, list_with_pyam_data_folders: List[str], default_config_dict: Dict[str, Any]
+        self,
+        list_with_pyam_data_folders: List[str],
+        default_config_dict: Dict[str, Any],
     ) -> tuple[Dict, Dict]:
         """Order result files according to different parameters."""
 

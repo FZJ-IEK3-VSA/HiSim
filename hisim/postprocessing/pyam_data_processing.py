@@ -200,18 +200,17 @@ class PyAmChartGenerator:
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
+
         """Make plots for different kind of data."""
         log.information(f"Simulation duration: {simulation_duration_key} days.")
         pyam_dataframe = dict_of_data[simulation_duration_key]
+
         if pyam_dataframe.empty:
             raise ValueError("Pyam dataframe is empty.")
 
         log.information("Pyam dataframe columns " + str(pyam_dataframe.dimensions))
         log.information("Pyam dataframe scenarios " + str(pyam_dataframe.scenario))
-        # log.information("Pyam dataframe models " + str(pyam_dataframe.model))
-        # log.information("Pyam dataframe variables " + str(pyam_dataframe.variable))
-        # log.information("Pyam dataframe region " + str(pyam_dataframe.region))
-        # log.information("Pyam dataframe time domain " + str(pyam_dataframe.time_domain))
+        # log.information("Pyam Variables " + str(pyam_dataframe.variable))
 
         sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
         sub_sub_results_folder = f"pyam_results_{self.datetime_string}"
@@ -246,15 +245,19 @@ class PyAmChartGenerator:
             comparion_mode = self.decide_for_scenario_or_variable_comparison(
                 filtered_data=filtered_data
             )
-            statistics = self.get_statistics_of_data_and_write_to_excel(
-                filtered_data=filtered_data, path_to_save=self.plot_path_complete
-            )
-            print("statistics", variable_to_check, statistics)
 
             if kind_of_data == PyamDataTypeEnum.YEARLY:
+                kind_of_data_set = "yearly"
                 log.information(
                     f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
                 )
+                # get statistical data
+                self.get_statistics_of_data_and_write_to_excel(
+                    filtered_data=filtered_data,
+                    path_to_save=self.plot_path_complete,
+                    kind_of_data_set=kind_of_data_set,
+                )
+
                 self.make_bar_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
                     comparison_mode=comparion_mode,
@@ -271,29 +274,26 @@ class PyAmChartGenerator:
                     comparison_mode=comparion_mode,
                     title=self.path_addition,
                 )
-                # self.make_scatter_plot_for_pyam_dataframe(
-                #     pyam_dataframe=pyam_dataframe,
-                #     filter_model=None,
-                #     filter_scenario=None,
-                #     filter_variables=None,
-                #     title="Temperatures",
-                #     filter_region=None,
-                #     filter_unit=None,
-                #     filter_year=None,
-                #     x_data_variable="Building1|Temperature|TemperatureIndoorAir",
-                #     y_data_variable="Building1|Temperature|TemperatureMeanThermalMass",
-                # )
 
-                # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None, filter_variables="EMS|ElectricityToOrFromGrid|-",
+                # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None, 
+                # filter_variables="EMS|ElectricityToOrFromGrid|-",
                 # title="Electricity to or from Grid", filter_region=None, filter_unit=None, filter_year=None)
                 # self.make_sankey_plot_for_pyam_dataframe(
                 #     pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="2227458627882477145", filter_variables="*|*|ElectricityOutput",
                 # filter_region=None, filter_unit=None, filter_year=None
                 # )
             elif kind_of_data == PyamDataTypeEnum.HOURLY:
+                kind_of_data_set = "hourly"
                 log.information(
                     f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
                 )
+                # get statistical data
+                self.get_statistics_of_data_and_write_to_excel(
+                    filtered_data=filtered_data,
+                    path_to_save=self.plot_path_complete,
+                    kind_of_data_set=kind_of_data_set,
+                )
+
                 self.make_line_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
                     comparison_mode=comparion_mode,
@@ -304,6 +304,20 @@ class PyAmChartGenerator:
                     comparison_mode=comparion_mode,
                     title=self.path_addition,
                 )
+
+                self.make_scatter_plot_for_pyam_dataframe(
+                    pyam_dataframe=pyam_dataframe,
+                    filter_model=None,
+                    filter_scenario=None,
+                    filter_variables=None,
+                    title="HP vs Outside Temperatures",
+                    filter_region=None,
+                    filter_unit=None,
+                    filter_year=None,
+                    x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
+                    y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
+                )
+
             else:
                 raise ValueError(
                     "This kind of data was not found in the pyamdatacollectorenum class."
@@ -436,7 +450,7 @@ class PyAmChartGenerator:
 
         filtered_data.plot.box(
             ax=a_x,
-            by=comparison_mode,
+            by="variable",
             x="year",
             title=title,
             legend=True,
@@ -530,13 +544,11 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            # ylabel=y_data.split(sep="|")[-1] + f" [{scale}°C]",
-            ylabel=y_data.rsplit("|", maxsplit=1)[-1] + f" [{scale}°C]",
+            ylabel=y_data.rsplit("|", maxsplit=1)[-1],  # + f" [{scale}°C]",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            # xlabel=x_data.split(sep="|")[-1] + f" [{scale}°C]",
-            xlabel=x_data.rsplit("|", maxsplit=1)[-1] + f" [{scale}°C]",
+            xlabel=x_data.rsplit("|", maxsplit=1)[-1],  # + f" [{scale}°C]",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
@@ -745,14 +757,14 @@ class PyAmChartGenerator:
         return comparison_mode
 
     def get_statistics_of_data_and_write_to_excel(
-        self, filtered_data: pyam.IamDataFrame, path_to_save: str
-    ) -> Any:
+        self, filtered_data: pyam.IamDataFrame, path_to_save: str, kind_of_data_set: str
+    ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
 
         statistical_data = filtered_data.data.describe()
-        statistical_data.to_excel(os.path.join(path_to_save, "statistics.xlsx"))
-
-        return statistical_data
+        statistical_data.to_excel(
+            os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx")
+        )
 
 
 class PyamDataProcessingModeEnum(enum.Enum):

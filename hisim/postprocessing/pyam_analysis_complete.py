@@ -19,11 +19,11 @@ class PyamDataAnalysis:
     def __init__(self) -> None:
         """Initialize the class."""
 
-        pyam_data_collection.PyamDataCollector(
-            data_collection_mode=pyam_data_collection.PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
-            path_to_default_config=r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json",
-        )
-        # pyam_data_processing.PyAmChartGenerator(simulation_duration_to_check=str(365))
+        # pyam_data_collection.PyamDataCollector(
+        #     data_collection_mode=pyam_data_collection.PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
+        #     path_to_default_config=r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json",
+        # )
+        pyam_data_processing.PyAmChartGenerator(simulation_duration_to_check=str(1), data_processing_mode=pyam_data_processing.PyamDataProcessingModeEnum.PROCESS_ALL_DATA)
 
 
 def main():

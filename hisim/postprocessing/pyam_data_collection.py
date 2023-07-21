@@ -303,11 +303,6 @@ class PyamDataCollector:
 
                 index = index + 1
 
-            # if scenario values are not a string type, transform to strings
-            if appended_dataframe["scenario"].dtype != str:
-                appended_dataframe["scenario"] = appended_dataframe[
-                    "scenario"
-                ].transform(lambda x: str(x))
 
             df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
             # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s

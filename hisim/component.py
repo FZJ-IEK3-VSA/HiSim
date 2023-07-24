@@ -298,6 +298,15 @@ class Component:
         """
         return 0, 0
 
+    def get_cost_capex(self) -> Tuple[float, float, float]:
+        # pylint: disable=unused-argument
+        """Calculates lifetime, annualised capital expenditure cost and annualised co2 footprint of production of device.
+
+        :return: [capex per year in euro, annualised co2 footprint in kg, lifetime]
+        :rtype: Tuple[float,float, float]
+        """
+        return 0, 0, 0
+
     def i_save_state(self) -> None:
         """ Abstract. Gets called at the beginning of a timestep to save the state. """
         raise NotImplementedError()

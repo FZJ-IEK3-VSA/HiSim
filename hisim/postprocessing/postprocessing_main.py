@@ -21,7 +21,10 @@ from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
-from hisim.postprocessing.opex_cost_calculation import opex_calculation
+from hisim.postprocessing.opex_cost_calculation import (
+    opex_calculation,
+    capex_calculation,
+)
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -200,7 +203,8 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information(
-                "Computing and writing operational costs and C02 emissions produced in operation to report took " + f"{duration:1.2f}s."
+                "Computing and writing operational costs and C02 emissions produced in operation to report took "
+                + f"{duration:1.2f}s."
             )
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
@@ -250,6 +254,18 @@ class PostProcessor:
             duration = end - start
             log.information(
                 "Computing and writing KPIs to report took " + f"{duration:1.2f}s."
+            )
+        if PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
+            log.information(
+                "Computing and writing investment costs and C02 emissions from production of devices to report."
+            )
+            start = timer()
+            self.compute_and_write_capex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writinginvestment costs and C02 emissions from production of devices to report took "
+                + f"{duration:1.2f}s."
             )
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
@@ -673,14 +689,11 @@ class PostProcessor:
             all_outputs=ppdt.all_outputs,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        lines = kpi_compute_return
-        report.open()
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". KPIs"]
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=kpi_compute_return,
+            headline=". KPIs"
         )
-        report.write_with_normal_alignment(lines)
-        self.chapter_counter = self.chapter_counter + 1
-        report.close()
 
     def compute_and_write_opex_costs_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
@@ -692,10 +705,33 @@ class PostProcessor:
             postprocessing_results=ppdt.results,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        lines = opex_compute_return
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=opex_compute_return,
+            headline=". Costs and Emissions"
+        )
+
+    def compute_and_write_capex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
+        capex_compute_return = capex_calculation(
+            components=ppdt.wrapped_components,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=capex_compute_return,
+            headline=". Investment Cost and CO2-Emissions of devices",
+        )
+
+    def write_new_chapter_with_text_content_to_report(
+        self, report: reportgenerator.ReportGenerator, lines: List, headline: str
+    ) -> None:
+        """write new chapter with headline and some general information e.g. KPIs to report"""
         report.open()
         report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". Costs and Emissions"]
+            [str(self.chapter_counter) + headline]
         )
         report.write_with_normal_alignment(lines)
         self.chapter_counter = self.chapter_counter + 1
@@ -863,7 +899,8 @@ class PostProcessor:
             f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
         )
         simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly, index=None,
+            path_or_buf=file_name_hourly,
+            index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
 

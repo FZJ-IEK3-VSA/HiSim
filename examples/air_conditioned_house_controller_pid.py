@@ -106,8 +106,8 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     year = 2021
 
     # temperature comfort ramge
-    min_comfort_temp = 21.0
-    max_comfort_temp = 24.0
+    # min_comfort_temp = 21.0
+    # max_comfort_temp = 24.0
 
     # Set weather
     location = "Cyprus"

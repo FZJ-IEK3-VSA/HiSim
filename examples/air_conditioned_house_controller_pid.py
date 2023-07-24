@@ -138,15 +138,15 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     number_of_apartments=None
 
     # Set Air Conditioner  on/off controller
-    t_air_heating = min_comfort_temp
-    t_air_cooling = max_comfort_temp
-    offset = 0.5
+    # t_air_heating = min_comfort_temp
+    # t_air_cooling = max_comfort_temp
+    # offset = 0.5
 
     # MPC controller settings
-    mpc_scheme = 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
-    flexibility_element = 'PV_and_Battery'             # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
+    # mpc_scheme = 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
+    # flexibility_element = 'PV_and_Battery'             # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
     pricing_scheme = 'dynamic'                          # The two options are: 'dynamic' or 'fixed'
-    optimizer_sampling_rate = 1
+    # optimizer_sampling_rate = 1
 
     # Set Air Conditioner
     ac_manufacturer = "Samsung"                             # Other option: "Panasonic" , Further options are avilable in the smart_devices file
@@ -156,9 +156,9 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     control="PID"                                        #Avialable options are: PID or on_off or MPC
 
     # set Battery
-    batt_manufacturer = "sonnen"
-    batt_model = "sonnenBatterie 10 - 5,5 kWh"
-    batt_soc = 0.5 *5000
+    # batt_manufacturer = "sonnen"
+    # batt_model = "sonnenBatterie 10 - 5,5 kWh"
+    # batt_soc = 0.5 *5000
 
 
     # Set simulation parameters

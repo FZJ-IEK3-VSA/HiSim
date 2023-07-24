@@ -230,10 +230,10 @@ def configure_ev_batteries(
     if mobility_set.Name is None:
         raise Exception("For EV configuration mobility set is obligatory.")
 
-    if charging_station_set is None:
-        raise Exception("For EV configuration charging station set is obligatory.")
-    else:
+    if charging_station_set is not None:
         charging_power = float(charging_station_set.Name.split("with ")[1].split(" kW")[0])
+    else:
+        raise Exception("For EV configuration charging station set is obligatory.")
 
     for car in my_cars:
         car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()

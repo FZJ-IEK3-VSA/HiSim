@@ -47,6 +47,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
     consumption: float
+    profile_with_washing_machine_and_dishwasher: bool
 
     @classmethod
     def get_default_UTSP_connector_config(cls) -> Any:
@@ -63,6 +64,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
             consumption=0,
+            profile_with_washing_machine_and_dishwasher=True,
         )
         return config
 
@@ -253,7 +255,7 @@ class UtspLpgConnector(cp.Component):
             self.heating_by_residents_c, self.heating_by_residents[timestep]
         )
         stsv.set_output_value(
-            self.heating_by_devices_channel, 0
+            self.heating_by_devices_channel, self.inner_device_heat_gains[timestep]
         )
         stsv.set_output_value(
             self.electricity_output_c, self.electricity_consumption[timestep]
@@ -308,6 +310,7 @@ class UtspLpgConnector(cp.Component):
             transportation_device_set=self.utsp_config.transportation_device_set,
             charging_station_set=self.utsp_config.charging_station_set,
             calc_options=[
+                CalcOption.HouseholdSumProfilesFromDetailedDats,
                 CalcOption.HouseholdSumProfilesCsvNoFlex,
                 CalcOption.BodilyActivityStatistics,
                 CalcOption.TansportationDeviceJsons,
@@ -322,10 +325,13 @@ class UtspLpgConnector(cp.Component):
 
         # Define required result files
         electricity = result_file_filters.LPGFilters.sum_hh1(
-            LoadTypes.Electricity, no_flex=True
+            LoadTypes.Electricity, no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher
         )
         warm_water = result_file_filters.LPGFilters.sum_hh1(
-            LoadTypes.Warm_Water, no_flex=True
+            LoadTypes.Warm_Water, no_flex=False
+        )
+        inner_device_heat_gains = result_file_filters.LPGFilters.sum_hh1(
+            LoadTypes.Inner_Device_Heat_Gains, no_flex=False
         )
         high_activity = result_file_filters.LPGFilters.BodilyActivity.HIGH
         low_activity = result_file_filters.LPGFilters.BodilyActivity.LOW
@@ -335,6 +341,7 @@ class UtspLpgConnector(cp.Component):
             for f in [
                 electricity,
                 warm_water,
+                inner_device_heat_gains,
                 high_activity,
                 low_activity,
                 flexibility,
@@ -366,6 +373,7 @@ class UtspLpgConnector(cp.Component):
 
         electricity_file = result.data[electricity].decode()
         warm_water_file = result.data[warm_water].decode()
+        inner_device_heat_gains_file = result.data[inner_device_heat_gains].decode()
         high_activity_file = result.data[high_activity].decode()
         low_activity_file = result.data[low_activity].decode()
         flexibility_file = result.data[flexibility].decode()
@@ -384,6 +392,7 @@ class UtspLpgConnector(cp.Component):
         return (
             electricity_file,
             warm_water_file,
+            inner_device_heat_gains_file,
             high_activity_file,
             low_activity_file,
         ), saved_files
@@ -449,12 +458,14 @@ class UtspLpgConnector(cp.Component):
                     "electricity_consumption"
                 ].tolist()
                 self.water_consumption = dataframe["water_consumption"].tolist()
+                self.inner_device_heat_gains = dataframe["inner_device_heat_gains"].to_list()
 
         if not cache_complete:
             result_data, saved_files = self.get_profiles_from_utsp()
             (
                 electricity,
                 warm_water,
+                inner_device_heat_gains,
                 high_activity,
                 low_activity,
             ) = result_data
@@ -506,6 +517,13 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="cp1252",
             )
+            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
+            pre_inner_device_heat_gains = pd.read_csv(
+                inner_device_heat_gain_data,
+                sep=";",
+                decimal=".",
+                encoding="cp1252",
+            )
 
             # convert electricity consumption and water consumption to desired format and unit
             self.electricity_consumption = pd.to_numeric(
@@ -514,6 +532,9 @@ class UtspLpgConnector(cp.Component):
             self.water_consumption = pd.to_numeric(
                 pre_water_consumption["Sum [L]"]
             ).tolist()
+            self.inner_device_heat_gains = pd.to_numeric(
+                pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
+            ).tolist()  # 1 kWh/min == 60W / min
 
             # process data when time resolution of inputs matches timeresolution of simulation
             if steps_original == steps_desired:
@@ -553,6 +574,10 @@ class UtspLpgConnector(cp.Component):
                     sum(self.electricity_consumption[n: n + steps_ratio]) / steps_ratio
                     for n in range(0, steps_original, steps_ratio)
                 ]
+                self.inner_device_heat_gains = [
+                    sum(self.inner_device_heat_gains[n: n + steps_ratio]) / steps_ratio
+                    for n in range(0, steps_original, steps_ratio)
+                ]
                 self.water_consumption = [
                     sum(self.water_consumption[n: n + steps_ratio])
                     for n in range(0, steps_original, steps_ratio)
@@ -570,6 +595,7 @@ class UtspLpgConnector(cp.Component):
                     self.heating_by_residents,
                     self.electricity_consumption,
                     self.water_consumption,
+                    self.inner_device_heat_gains,
                 ]
             )
             database = pd.DataFrame(
@@ -579,6 +605,7 @@ class UtspLpgConnector(cp.Component):
                     "heating_by_residents",
                     "electricity_consumption",
                     "water_consumption",
+                    "inner_device_heat_gains",
                 ],
             )
             # dump the dataframe to str

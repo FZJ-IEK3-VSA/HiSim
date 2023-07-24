@@ -232,10 +232,13 @@ def configure_ev_batteries(
 
     if charging_station_set is None:
         raise Exception("For EV configuration charging station set is obligatory.")
+    else:
+        charging_power = float(charging_station_set.Name.split("with ")[1].split(" kW")[0])
 
     for car in my_cars:
         car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
         car_battery_config.source_weight = car.config.source_weight
+        car_battery_config.p_inv_custom = charging_power * 1e3
         my_carbattery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=car_battery_config
         )
@@ -247,6 +250,7 @@ def configure_ev_batteries(
             )
         )
         car_battery_controller_config.source_weight = car.config.source_weight
+        car_battery_controller_config.lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
         if clever:
             car_battery_controller_config.battery_set = (
                 0.4  # lower threshold for soc of car battery in clever case

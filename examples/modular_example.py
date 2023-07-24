@@ -21,7 +21,7 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs
+    read_in_configs, write_config
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
@@ -86,6 +86,8 @@ def modular_household_explicit(
     assert household_config.system_config_ is not None
     arche_type_config_ = household_config.archetype_config_
     system_config_ = household_config.system_config_
+
+    # write_config(household_config)
 
     count = 1  # initialize source_weight with one
     production: List = []  # initialize list of components involved in production

@@ -14,7 +14,7 @@ class SystemConfig:
 
     """Defines the configuration and sizing of all components considered in a modular household."""
     #: decision on the consideration of smart control for EV charging and heat pump
-    surplus_control_considered: bool = False
+    surplus_control_considered: bool = True
     #: decision on the consideration of Photovoltaic Panel
     pv_included: bool = True
     #: peak power of the considered Photovoltaic Panel in Wp

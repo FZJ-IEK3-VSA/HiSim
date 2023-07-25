@@ -54,8 +54,8 @@ class BatteryConfig(ConfigBase):
         """Returns default configuration of battery."""
         config = BatteryConfig(
             name="Battery",
-            p_inv_custom=5,
-            e_bat_custom=10,
+            e_bat_custom=10,  # size/capacity of battery should be approx. the same as default pv power
+            p_inv_custom=10 * 0.5 * 1e3,  # c-rate is 0.5C (0.5/h) here
             source_weight=1,
             system_id="SG1",
         )

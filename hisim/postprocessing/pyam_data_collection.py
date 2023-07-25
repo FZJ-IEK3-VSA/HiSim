@@ -255,7 +255,7 @@ class PyamDataCollector:
     def rename_scenario_name_of_dataframe(
         self,
         dataframe: pd.DataFrame,
-        parameter_key: str = None,
+        parameter_key: Optional[str] = None,
         list_with_parameter_values: List[Any] = None,
         index: int = 0,
     ) -> Any:

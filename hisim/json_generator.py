@@ -60,7 +60,7 @@ class JsonConfigurationGenerator:
 
     def set_module_config(self, my_module_config_path: str) -> None:
         """Sets the module config which is was used to configure the example module."""
-        with open(my_module_config_path, "r", encoding="utf-8") as openfile:  # type: ignore
+        with open(my_module_config_path.rstrip("\r"), encoding="unicode_escape") as openfile:  # type: ignore
             config_dict = json.load(openfile)
         self.config_file.my_module_config = config_dict
 

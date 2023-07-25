@@ -47,9 +47,9 @@ class BuildingPVWeatherConfig(ConfigBase):
     name: str
     pv_size: float
     pv_azimuth: float
-    tilt: float
+    pv_tilt: float
     pv_power: float
-    building_type: str
+    building_code: str
     total_base_area_in_m2: float
     # location: Any
 
@@ -61,9 +61,9 @@ class BuildingPVWeatherConfig(ConfigBase):
             name="BuildingPVWeatherConfig",
             pv_size=5,
             pv_azimuth=180,
-            tilt=30,
+            pv_tilt=30,
             pv_power=10000,
-            building_type="DE.N.SFH.05.Gen.ReEx.001.002",
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
             # location=weather.LocationEnum.Aachen,
         )
@@ -115,24 +115,24 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 60
+    seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        # )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Photovoltaic System
     pv_power = my_config.pv_power
     azimuth = my_config.pv_azimuth
-    tilt = my_config.tilt
+    tilt = my_config.pv_tilt
 
     # Set Building (scale building according to total base area and not absolute floor area)
-    building_code = my_config.building_type
+    building_code = my_config.building_code
     total_base_area_in_m2 = my_config.total_base_area_in_m2
     absolute_conditioned_floor_area_in_m2 = None
 
@@ -427,22 +427,22 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
 
-    # # Set Results Path
-    # if config_filename is not None:
-    #     hash_number = re.findall(r"\-?\d+", config_filename)[0]
-    #     sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
+    # Set Results Path
+    if config_filename is not None:
+        hash_number = re.findall(r"\-?\d+", config_filename)[0]
+        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
-    #     SingletonSimRepository().set_entry(
-    #         key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-    #         entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
-    #     )
-    #     log.information(
-    #         "Singleton Scenario is set "
-    #         + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
-    #     )
-    # else:
-    hash_number = None
-    sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
+        )
+        log.information(
+            "Singleton Scenario is set "
+            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
+        )
+    else:
+        hash_number = None
+        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
@@ -451,5 +451,4 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         hash_number=hash_number,
         sorting_option=sorting_option,
     )
-    
-    print(ResultPathProviderSingleton().get_result_directory_name())
+

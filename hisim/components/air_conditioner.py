@@ -235,6 +235,7 @@ class AirConditioner(cp.Component):
             self.pidManipulatedVariable,
             LoadTypes.HEATING,
             Units.WATT,
+            output_description=f"here a description for {self.pidManipulatedVariable} will follow.",
         )
         self.thermal_energy_deliveredC: cp.ComponentOutput = self.add_output(
             self.component_name,

@@ -306,7 +306,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                      my_weather.TemperatureOutside)
     my_air_conditioner.connect_input(my_air_conditioner.TemperatureMean,
                                      my_building.component_name,
-                                     my_building.TemperatureMean)
+                                     my_building.TemperatureMeanThermalMass)
     my_sim.add_component(my_air_conditioner)
 
     """Generic Battery """
@@ -377,7 +377,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         
         # my_mpc_controller.connect_input(my_mpc_controller.TemperatureMean,
                                           # my_building.component_name,
-                                          # my_building.TemperatureMean)
+                                          # my_building.TemperatureMeanThermalMass)
 
         # my_sim.add_component(my_mpc_controller)
 
@@ -401,7 +401,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         )
         pid_controller.connect_input(pid_controller.TemperatureMean,
                                      my_building.component_name,
-                                     my_building.TemperatureMean)
+                                     my_building.TemperatureMeanThermalMass)
         pid_controller.connect_input(pid_controller.HeatFluxThermalMassNode,
                                       my_building.component_name,
                                       my_building.HeatFluxThermalMassNode)
@@ -432,7 +432,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         # my_air_conditioner_controller.connect_input(
             # my_air_conditioner_controller.TemperatureMean,
             # my_building.component_name,
-            # my_building.TemperatureMean,
+            # my_building.TemperatureMeanThermalMass,
         # )
 
         # my_sim.add_component(my_air_conditioner_controller)

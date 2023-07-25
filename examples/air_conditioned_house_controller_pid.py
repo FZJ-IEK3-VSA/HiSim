@@ -205,8 +205,6 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
         my_simulation_parameters=my_simulation_parameters,
         my_simulation_repository = my_sim.simulation_repository,
     )
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_sim.add_component(my_building)
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
@@ -251,6 +249,26 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_photovoltaic_system)
+
+    """Building"""
+    # my_building_config=building.BuildingConfig(
+        # name="Building1",
+        # building_code = building_code,
+        # building_heat_capacity_class = building_class,
+        # initial_internal_temperature_in_celsius = initial_temperature,
+        # heating_reference_temperature_in_celsius = heating_reference_temperature,
+        
+        # absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
+        # total_base_area_in_m2=total_base_area_in_m2,
+        # number_of_apartments=number_of_apartments,
+    # )
+    # my_building = building.Building(
+        # config=my_building_config,
+        # my_simulation_parameters=my_simulation_parameters,
+        # my_simulation_repository = my_sim.simulation_repository,
+    # )
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+    my_sim.add_component(my_building)
 
     """Price signal"""
     my_price_signal = generic_price_signal.PriceSignal(

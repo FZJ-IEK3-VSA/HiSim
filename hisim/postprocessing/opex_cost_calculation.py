@@ -15,7 +15,8 @@ def opex_calculation(
     for component in components:
         component_unwrapped = component.my_component
         cost, co2_footprint = component_unwrapped.get_cost_opex(
-            all_outputs=all_outputs, postprocessing_results=postprocessing_results,
+            all_outputs=all_outputs,
+            postprocessing_results=postprocessing_results,
         )
         total_operational_cost += cost
         total_operational_co2_footprint += co2_footprint

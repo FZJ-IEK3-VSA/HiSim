@@ -252,20 +252,22 @@ class PyamDataCollector:
             dict_of_hourly_csv_data_for_different_simulation_duration,
         )
 
-    def rename_scenario_name_of_dataframe(
+    def rename_scenario_name_of_dataframe_with_parameter_key_and_value(
         self,
         dataframe: pd.DataFrame,
-        parameter_key: Optional[str] = None,
-        list_with_parameter_values: List[Any] = None,
-        index: int = 0,
+        parameter_key: str,
+        list_with_parameter_values: List[Any],
+        index: int,
     ) -> Any:
-        """Rename the scenario of the given dataframe."""
-        if None not in (parameter_key, list_with_parameter_values):
-            dataframe[
-                "scenario"
-            ] = f"{parameter_key}_{list_with_parameter_values[index]}"
-        else:
-            dataframe["scenario"] = dataframe["scenario"] + f"_{index}"
+        """Rename the scenario of the given dataframe adding parameter key and value."""
+        dataframe["scenario"] = f"{parameter_key}_{list_with_parameter_values[index]}"
+        return dataframe["scenario"]
+
+    def rename_scenario_name_of_dataframe_with_index(
+        self, dataframe: pd.DataFrame, index: int
+    ) -> Any:
+        """Rename the scenario of the given dataframe adding an index."""
+        dataframe["scenario"] = dataframe["scenario"] + f"_{index}"
         return dataframe["scenario"]
 
     def read_csv_and_generate_pyam_dataframe(
@@ -291,13 +293,23 @@ class PyamDataCollector:
                 dataframe = pd.read_csv(csv_file)
 
                 if rename_scenario is True:
-                    # rename scenario according to parameter or add an index in the scenario name so that the names do not duplicate
-                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe(
-                        dataframe=dataframe,
-                        parameter_key=parameter_key,
-                        list_with_parameter_values=list_with_parameter_key_values,
-                        index=index,
-                    )
+                    if None not in (parameter_key, list_with_parameter_key_values):
+                        # rename scenario adding paramter key, value pair
+                        dataframe[
+                            "scenario"
+                        ] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
+                            dataframe=dataframe,
+                            parameter_key=parameter_key,  # type: ignore
+                            list_with_parameter_values=list_with_parameter_key_values,  # type: ignore
+                            index=index,
+                        )
+                    else:
+                        # rename scenario adding an index
+                        dataframe[
+                            "scenario"
+                        ] = self.rename_scenario_name_of_dataframe_with_index(
+                            dataframe=dataframe, index=index
+                        )
 
                 appended_dataframe = pd.concat([appended_dataframe, dataframe])
 

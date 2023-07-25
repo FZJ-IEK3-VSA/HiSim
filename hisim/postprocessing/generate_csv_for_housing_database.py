@@ -25,7 +25,7 @@ def compute_energy_from_power(
 
 
 def get_factor_cooking(occupancy_config: OccupancyConfig) -> float:
-    """Reads in portion of electricity consumption which is assigned to cooking. """
+    """Reads in portion of electricity consumption which is assigned to cooking."""
 
     if occupancy_config.profile_name != "AVG":
         return 0

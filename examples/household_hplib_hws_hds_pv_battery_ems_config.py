@@ -3,12 +3,9 @@
 # clean
 
 from typing import Optional, Any
-import os
-from pathlib import Path
 import re
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import json
 
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
@@ -25,7 +22,7 @@ from hisim.components import (
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.postprocessingoptions import PostProcessingOptions
+# from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 
@@ -451,4 +448,3 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         hash_number=hash_number,
         sorting_option=sorting_option,
     )
-

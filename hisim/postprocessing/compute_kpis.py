@@ -100,7 +100,7 @@ def compute_hot_water_storage_losses_and_cycles(
     results: pd.DataFrame,
     timeresolution: int,
 ) -> Tuple[float, float, float, float, float, float]:
-    """Computes hot water storage losses and cycles. """
+    """Computes hot water storage losses and cycles."""
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
     charge_sum_dhw = 0.0

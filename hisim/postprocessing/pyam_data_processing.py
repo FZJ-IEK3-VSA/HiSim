@@ -181,7 +181,7 @@ class PyAmChartGenerator:
             file_df = pd.read_csv(filepath_or_buffer=file)
 
             # if scenario values are no strings, transform them
-            file_df["Scenario"] = file_df["Scenario"].transform(lambda x: str(x))
+            file_df["Scenario"] = file_df["Scenario"].transform(str)
 
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
@@ -200,8 +200,8 @@ class PyAmChartGenerator:
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
-
         """Make plots for different kind of data."""
+
         log.information(f"Simulation duration: {simulation_duration_key} days.")
         pyam_dataframe = dict_of_data[simulation_duration_key]
 
@@ -266,7 +266,7 @@ class PyAmChartGenerator:
 
                 self.make_box_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
+                    # comparison_mode=comparion_mode,
                     title=self.path_addition,
                 )
                 self.make_pie_plot_for_pyam_dataframe(
@@ -275,7 +275,7 @@ class PyAmChartGenerator:
                     title=self.path_addition,
                 )
 
-                # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None, 
+                # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None,
                 # filter_variables="EMS|ElectricityToOrFromGrid|-",
                 # title="Electricity to or from Grid", filter_region=None, filter_unit=None, filter_year=None)
                 # self.make_sankey_plot_for_pyam_dataframe(
@@ -438,7 +438,7 @@ class PyAmChartGenerator:
     def make_box_plot_for_pyam_dataframe(
         self,
         filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
+        # comparison_mode: str,
         title: str,
     ) -> None:
         """Make box plot."""
@@ -536,7 +536,7 @@ class PyAmChartGenerator:
             y=y_data,
         )
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")  # pylint: disable=unused-variable
         # x_tick_labels, scale_x, x_tick_locations = self.set_axis_scale(a_x, x_or_y="x")
         plt.yticks(
             ticks=y_tick_locations,
@@ -619,7 +619,7 @@ class PyAmChartGenerator:
     def make_stack_plot_for_pyam_dataframe(
         self,
         filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
+        # comparison_mode: str,
         title: str,
     ) -> None:
         """Make stack plot."""

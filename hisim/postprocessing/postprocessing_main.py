@@ -5,7 +5,6 @@ import sys
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 import string
-import json
 import pandas as pd
 
 from hisim.components import building

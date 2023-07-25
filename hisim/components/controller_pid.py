@@ -426,9 +426,9 @@ class PIDController(cp.Component):
         u = np.zeros(ns + 1)
         for i in range(ns):
             if i == 0:
-                u = 0
+                u = 0*np.ones(ns + 1)
             else:
-                u = 22
+                u = 22*np.ones(ns + 1)
 
         """ Converting the state space model into transfer function.
         We have one state variable wich is the thermal mass temperature and 6 inputs...

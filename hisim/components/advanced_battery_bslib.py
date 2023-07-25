@@ -58,16 +58,16 @@ class BatteryConfig(ConfigBase):
     @classmethod
     def get_default_config(cls) -> "BatteryConfig":
         """Returns default configuration of battery."""
-        p_inv_custom: float = 5
+        e_bat_custom = 10  # kWh
         config = BatteryConfig(
             name="Battery",
-            p_inv_custom=p_inv_custom,
-            e_bat_custom=10,
+            p_inv_custom=5,
+            e_bat_custom=e_bat_custom,
             source_weight=1,
             system_id="SG1",
-            co2_footprint=p_inv_custom * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=p_inv_custom * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10  # todo set correct values
+            co2_footprint=e_bat_custom * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=e_bat_custom * 535.81,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # todo set correct values
         )
         return config
 

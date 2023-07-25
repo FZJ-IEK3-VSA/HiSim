@@ -2,7 +2,7 @@
 
 # clean
 # Owned
-from typing import List, Any
+from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
@@ -42,17 +42,27 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     temperature_loss_in_celsius_per_hour: float
     heat_exchanger_is_present: bool
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime of car in years
+    lifetime: float
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
         cls,
     ) -> Any:
         """Get a default simplehotwaterstorage config."""
+        volume_heating_water_storage_in_liter: float = 500
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
-            volume_heating_water_storage_in_liter=500,
+            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             temperature_loss_in_celsius_per_hour=0.21,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
+            co2_footprint=100,  # Todo: check value
+            cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime=100,  # value from emission_factros_and_costs_devices.csv
         )
         return config
 
@@ -675,6 +685,11 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         return heat_loss_in_watt_hour_per_timestep
+
+    @staticmethod
+    def get_cost_capex(config: SimpleHotWaterStorageConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
 
 
 @dataclass_json

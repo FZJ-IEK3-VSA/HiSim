@@ -29,7 +29,7 @@ def opex_calculation(
         total_operational_cost += cost
         total_operational_co2_footprint += co2_footprint
 
-        lines.append(f"{component_unwrapped.component_name}, {cost}, {co2_footprint}")
+        lines.append(f"{component_unwrapped.component_name}, {cost:.2f}, {co2_footprint:.2f}")
 
     pathname = os.path.join(
         simulation_parameters.result_directory, "costs_co2_footprint.csv"
@@ -83,7 +83,7 @@ def capex_calculation(
             )
 
             lines.append(
-                f"{component_unwrapped.component_name}, {capex_per_simulated_period}, {device_co2_footprint_per_simulated_period}, {lifetime}"
+                f"{component_unwrapped.component_name}, {capex_per_simulated_period:.2f}, {device_co2_footprint_per_simulated_period:.2f}, {lifetime}"
             )
         else:
             log.warning(

@@ -1,7 +1,7 @@
 """ Modular Heat Pump Class together with Configuration and State. """
 # Generic/Built-in
 from dataclasses import dataclass
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Tuple
 
 import numpy as np
 from dataclasses_json import dataclass_json
@@ -40,41 +40,89 @@ class HeatPumpConfig(cp.ConfigBase):
     manufacturer: str
     #: device name to search heat pump in data base
     device_name: str
-    #: maximal thermal power of heat pump in kW
+    #: maximal thermal power of heat pump in W
     power_th: float
     #: usage of the heatpump: either for heating or for water heating
     water_vs_heating: lt.InandOutputType
     #: category of the heat pump: either heat pump or heating rod
     device_category: lt.HeatingSystems
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime of car in years
+    lifetime: float
 
     @staticmethod
     def get_default_config_heating() -> "HeatPumpConfig":
-        """ Returns default configuration of a heat pump used for heating. """
-        config = HeatPumpConfig(name='HeatingHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=6200, water_vs_heating=lt.InandOutputType.HEATING,
-                                device_category=lt.HeatingSystems.HEAT_PUMP)
+        """Returns default configuration of a heat pump used for heating."""
+        power_th: float = 6200  # W
+        config = HeatPumpConfig(
+            name="HeatingHeatPump",
+            source_weight=1,
+            manufacturer="Viessmann Werke GmbH & Co KG",
+            device_name="Vitocal 300-A AWO-AC 301.B07",
+            power_th=power_th,
+            water_vs_heating=lt.InandOutputType.HEATING,
+            device_category=lt.HeatingSystems.HEAT_PUMP,
+            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+        )
         return config
 
     @staticmethod
     def get_default_config_waterheating() -> "HeatPumpConfig":
-        """ Returns default configuration of a heat pump used for water heating."""
-        config = HeatPumpConfig(name='DHWHeatPump', source_weight=1, manufacturer="Viessmann Werke GmbH & Co KG",
-                                device_name="Vitocal 300-A AWO-AC 301.B07", power_th=3000, water_vs_heating=lt.InandOutputType.WATER_HEATING,
-                                device_category=lt.HeatingSystems.HEAT_PUMP)
+        """Returns default configuration of a heat pump used for water heating."""
+        power_th: float = 3000  # W
+        config = HeatPumpConfig(
+            name="DHWHeatPump",
+            source_weight=1,
+            manufacturer="Viessmann Werke GmbH & Co KG",
+            device_name="Vitocal 300-A AWO-AC 301.B07",
+            power_th=power_th,
+            water_vs_heating=lt.InandOutputType.WATER_HEATING,
+            device_category=lt.HeatingSystems.HEAT_PUMP,
+            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+        )
         return config
 
     @staticmethod
     def get_default_config_heating_electric() -> "HeatPumpConfig":
-        """ Returns default configuartion of simple electrical heating system with a COP of one. """
-        config = HeatPumpConfig(name='HeatingHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=6200,
-                                water_vs_heating=lt.InandOutputType.HEATING, device_category=lt.HeatingSystems.ELECTRIC_HEATING)
+        """Returns default configuartion of simple electrical heating system with a COP of one."""
+        power_th: float = 6200  # W
+        config = HeatPumpConfig(
+            name="HeatingHeatingRod",
+            source_weight=1,
+            manufacturer="dummy",
+            device_name="HeatingRod",
+            power_th=power_th,
+            water_vs_heating=lt.InandOutputType.HEATING,
+            device_category=lt.HeatingSystems.ELECTRIC_HEATING,
+            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
+            cost=4635,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+        )
         return config
 
     @staticmethod
     def get_default_config_waterheating_electric() -> "HeatPumpConfig":
-        """ Returns default configuration of electrical heating rod for boiler. """
-        config = HeatPumpConfig(name='DHWHeatingRod', source_weight=1, manufacturer="dummy", device_name="HeatingRod", power_th=3000,
-                                water_vs_heating=lt.InandOutputType.WATER_HEATING, device_category=lt.HeatingSystems.ELECTRIC_HEATING)
+        """Returns default configuration of electrical heating rod for boiler."""
+        power_th: float = 3000  # W
+        config = HeatPumpConfig(
+            name="DHWHeatingRod",
+            source_weight=1,
+            manufacturer="dummy",
+            device_name="HeatingRod",
+            power_th=power_th,
+            water_vs_heating=lt.InandOutputType.WATER_HEATING,
+            device_category=lt.HeatingSystems.ELECTRIC_HEATING,
+            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
+            cost=4635,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+        )
         return config
 
 
@@ -116,7 +164,6 @@ class ModularHeatPump(cp.Component):
     def __init__(
         self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters
     ):
-
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
@@ -130,12 +177,14 @@ class ModularHeatPump(cp.Component):
         if my_simulation_parameters.surplus_control:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-                self.config.water_vs_heating, self.config.device_category,
+                self.config.water_vs_heating,
+                self.config.device_category,
             ]
         else:
             postprocessing_flag = [
                 lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                self.config.water_vs_heating, self.config.device_category,
+                self.config.water_vs_heating,
+                self.config.device_category,
             ]
 
         # Inputs - Mandatories
@@ -162,7 +211,7 @@ class ModularHeatPump(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[self.config.water_vs_heating],
-            output_description="Thermal Power Delivered"
+            output_description="Thermal Power Delivered",
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -304,3 +353,8 @@ class ModularHeatPump(cp.Component):
         stsv.set_output_value(
             self.electricity_output_channel, electric_power * power_modifier
         )
+
+    @staticmethod
+    def get_cost_capex(config: HeatPumpConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime

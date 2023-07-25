@@ -4,7 +4,7 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import Any, Tuple
 
 import numpy as np
 import pandas as pd
@@ -211,13 +211,20 @@ class PVSystemConfig(ConfigBase):
     tilt: float
     load_module_data: bool
     source_weight: int
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime of car in years
+    lifetime: float
 
     @classmethod
     def get_default_PV_system(cls):
         """Gets a default PV system."""
+        power = 10e3  # W
         return PVSystemConfig(
             time=2019,
-            power=10e3,
+            power=power,
             load_module_data=False,
             module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
             integrate_inverter=True,
@@ -227,6 +234,9 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             source_weight=0,
             location="Aachen",
+            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
 
 
@@ -385,8 +395,16 @@ class PVSystem(cp.Component):
             tilt=30,
             load_module_data=False,
             source_weight=source_weight,
+            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
         return config
+
+    @staticmethod
+    def get_cost_capex(config: PVSystemConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
 
     def get_default_connections_from_weather(self):
         log.information("setting weather default connections")

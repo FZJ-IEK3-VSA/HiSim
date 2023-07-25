@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 # clean
 # Generic/Built-in
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 import numpy as np
 from dataclasses_json import dataclass_json
 
@@ -57,6 +57,12 @@ class StorageConfig(cp.ConfigBase):
     energy_full_cycle: Optional[float]
     #: power of heat source in kW
     power: float
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime of car in years
+    lifetime: float
 
     @classmethod
     def get_main_classname(cls):
@@ -97,8 +103,19 @@ class StorageConfig(cp.ConfigBase):
             1 / 3
         )  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,
-                               surface=surface, u_value=0.36, energy_full_cycle=None, power=0)
+        config = StorageConfig(
+            name='DHWBoiler',
+            use=lt.ComponentType.BOILER,
+            source_weight=1,
+            volume=volume,
+            surface=surface,
+            u_value=0.36,
+            energy_full_cycle=None,
+            power=0,
+            co2_footprint=100,  # Todo: check value
+            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+        )
         return config
 
     @staticmethod
@@ -111,8 +128,18 @@ class StorageConfig(cp.ConfigBase):
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=0, surface=surface, u_value=0.36,
-            energy_full_cycle=None, power=power)
+            name='Buffer',
+            use=lt.ComponentType.BUFFER,
+            source_weight=1,
+            volume=0,
+            surface=surface,
+            u_value=0.36,
+            energy_full_cycle=None,
+            power=power,
+            co2_footprint=100,  # Todo: check value
+            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+        )
         return config
 
     def compute_default_volume(
@@ -546,3 +573,8 @@ class HotWaterStorage(dycp.DynamicComponent):
         raise Exception(
             "Modular storage must be defined either as buffer or as boiler."
         )
+
+    @staticmethod
+    def get_cost_capex(config: StorageConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime

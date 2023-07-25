@@ -264,7 +264,7 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information(
-                "Computing and writinginvestment costs and C02 emissions from production of devices to report took "
+                "Computing and writing investment costs and C02 emissions from production of devices to report took "
                 + f"{duration:1.2f}s."
             )
         if (
@@ -518,21 +518,16 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write simulation parameters to report."""
-        report.open()
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". Simulation Parameters"]
+        lines = [
+            "The following information was used to configure the HiSim Building Simulation."
+        ]
+        simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
+        lines += simulation_parameters_list
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=lines,
+            headline=". Simulation Parameters",
         )
-        report.write_with_normal_alignment(
-            [
-                "The following information was used to configure the HiSim Building Simulation."
-            ]
-        )
-        report.write_with_normal_alignment(
-            ppdt.simulation_parameters.get_unique_key_as_list()
-        )
-        self.chapter_counter = self.chapter_counter + 1
-        report.page_break()
-        report.close()
 
     def write_components_to_report(
         self,
@@ -642,19 +637,16 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write all outputs to report."""
-        report.open()
         all_output_names: List[Optional[str]]
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". All Outputs"]
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=all_output_names,
+            headline=". All Outputs",
         )
-        self.chapter_counter = self.chapter_counter + 1
-        report.write_with_normal_alignment(all_output_names)
-        report.page_break()
-        report.close()
 
     def write_network_charts_to_report(
         self,

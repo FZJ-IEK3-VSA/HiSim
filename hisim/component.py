@@ -299,7 +299,7 @@ class Component:
         return 0, 0
 
     @staticmethod
-    def get_cost_capex(config) -> Tuple[float, float, float]:
+    def get_cost_capex(config: ConfigBase) -> Tuple[float, float, float]:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device.
 

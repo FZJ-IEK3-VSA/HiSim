@@ -256,6 +256,7 @@ class AirConditioner(cp.Component):
             self.EER,
             LoadTypes.ANY,
             Units.ANY,
+            output_description=f"here a description for {self.EER} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())

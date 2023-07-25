@@ -7,8 +7,6 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
 
-# Todo: rename python file!!!
-
 
 def opex_calculation(
     components: List[ComponentWrapper],

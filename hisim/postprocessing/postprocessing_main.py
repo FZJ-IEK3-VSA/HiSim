@@ -21,7 +21,7 @@ from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
-from hisim.postprocessing.opex_cost_calculation import (
+from hisim.postprocessing.opex_and_capex_cost_calculation import (
     opex_calculation,
     capex_calculation,
 )

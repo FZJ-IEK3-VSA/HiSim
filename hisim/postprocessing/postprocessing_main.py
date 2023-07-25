@@ -728,7 +728,7 @@ class PostProcessor:
     def write_new_chapter_with_text_content_to_report(
         self, report: reportgenerator.ReportGenerator, lines: List, headline: str
     ) -> None:
-        """write new chapter with headline and some general information e.g. KPIs to report"""
+        """Write new chapter with headline and some general information e.g. KPIs to report."""
         report.open()
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + headline]

@@ -57,7 +57,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         if variant_name is None:
             variant_name = ""
         self.variant_name = variant_name
-        
+
     def set_hash_number(self, hash_number: Optional[int]) -> None:
         """Set variant name."""
         if hash_number is None:
@@ -89,7 +89,6 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             # The variables must be given a str-value, otherwise a result path can not be created.
             return None
 
-
         if [
             isinstance(x, str)
             for x in [
@@ -107,7 +106,10 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                     self.variant_name,  # type: ignore
                     self.datetime_string,  # type: ignore
                 )
-            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION:
+            elif (
+                self.sorting_option
+                == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
+            ):
                 # schauen ob verzeichnis schon da und aufsteigende nummer anängen
                 idx = 1
                 path = os.path.join(
@@ -120,7 +122,10 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                         self.model_name,  # type: ignore
                         self.variant_name + "_" + str(idx),  # type: ignore
                     )
-            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION:
+            elif (
+                self.sorting_option
+                == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
+            ):
                 # schauen ob verzeichnis schon da und hash nummer anängen
                 path = os.path.join(
                     self.base_path, self.model_name, self.variant_name + "_" + self.hash_number  # type: ignore
@@ -137,7 +142,9 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
             return path
 
-        raise TypeError("The types of base_path, model_name, variant_name and datetime_string should be str.")
+        raise TypeError(
+            "The types of base_path, model_name, variant_name and datetime_string should be str."
+        )
 
 
 class SortingOptionEnum(enum.Enum):
@@ -145,6 +152,6 @@ class SortingOptionEnum(enum.Enum):
     """A SortingOptionEnum class."""
 
     DEEP = 1
-    MASS_SIMULATION_WITH_INDEX_ENUMERATION = 2  
+    MASS_SIMULATION_WITH_INDEX_ENUMERATION = 2
     MASS_SIMULATION_WITH_HASH_ENUMERATION = 3
     FLAT = 4

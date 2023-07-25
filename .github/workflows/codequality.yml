@@ -42,7 +42,7 @@ jobs:
         prospector examples/household_with_gas_heater_with_controller.py
         prospector examples/household_with_heatpump_and_pv.py
         prospector examples/simple_examples.py
-        prospector examples/air_conditioned_house.py
+        prospector examples/air_conditioned_house_controller_pid.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py

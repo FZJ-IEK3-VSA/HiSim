@@ -203,7 +203,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
-        my_simulation_repository = my_sim.simulation_repository,
+        # my_simulation_repository = my_sim.simulation_repository,
     )
 
     """ Occupancy Profile """

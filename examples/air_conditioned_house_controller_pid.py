@@ -110,7 +110,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     # max_comfort_temp = 24.0
 
     # Set weather
-    location = "Cyprus"
+    location = "Seville"
 
     # Set photovoltaic system
     time = 2019
@@ -220,7 +220,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
 
     """Weather """
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry = weather.LocationEnum.Cyprus
+        location_entry = weather.LocationEnum.Seville
     )
     my_weather = weather.Weather(
         config = my_weather_config, 

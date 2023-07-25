@@ -22,6 +22,7 @@ from hisim.components.weather import Weather
 from hisim.components.building import Building
 from hisim.components.controller_pid import PIDController
 import hisim.utils as utils
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 @dataclass_json

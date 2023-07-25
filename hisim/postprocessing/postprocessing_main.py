@@ -819,9 +819,10 @@ class PostProcessor:
         json_generator_config.set_simulation_parameters(
             my_simulation_parameters=ppdt.simulation_parameters
         )
-        json_generator_config.set_module_config(
-            my_module_config_path=ppdt.my_module_config_path
-        )
+        if ppdt.my_module_config_path is not None:
+            json_generator_config.set_module_config(
+                my_module_config_path=ppdt.my_module_config_path
+            )
         json_generator_config.set_pyam_data_information_dict(
             pyam_data_information_dict=data_information_dict
         )

@@ -209,13 +209,6 @@ class Car(cp.Component):
 
         return self.config.consumption * euro_per_unit, self.config.consumption * co2_per_unit
 
-    def get_cost_capex(self) -> Tuple[float, float, float]:
-        lifetime = self.config.lifetime
-        annual_investment = self.config.cost / lifetime
-        annual_co2_footprint = self.config.co2_footprint / lifetime
-
-        return annual_investment, annual_co2_footprint, lifetime
-
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""
         self.config = config

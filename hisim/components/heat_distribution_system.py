@@ -2,7 +2,7 @@
 # clean
 
 from enum import IntEnum
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
@@ -46,6 +46,12 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
 
     @classmethod
     def get_default_heatdistributionsystem_config(
@@ -54,6 +60,9 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
+            co2_footprint=1,  # Todo: check value
+            cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in examples instead
+            lifetime=50,  # Todo: check value
         )
         return config
 
@@ -497,6 +506,10 @@ class HeatDistribution(cp.Component):
             thermal_power_delivered_effective_in_watt,
         )
 
+    @staticmethod
+    def get_cost_capex(config: HeatDistributionConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
 
 class HeatDistributionController(cp.Component):
 

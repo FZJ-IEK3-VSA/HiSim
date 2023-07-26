@@ -55,7 +55,7 @@ class GenericGasHeaterConfig(ConfigBase):
     co2_footprint: float
     #: cost for investment in Euro
     cost: float
-    #: lifetime of car in years
+    #: lifetime in years
     lifetime: float
 
     @classmethod

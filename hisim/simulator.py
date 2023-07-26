@@ -424,6 +424,7 @@ class Simulator:
                 Units.ANY,
                 Units.METER_PER_SECOND,
                 Units.DEGREES,
+                Units.WATT,
             ):
                 temp_df_monthly = temp_df.resample("M").interpolate(method="linear")
                 temp_df_cumulative_data = temp_df.mean()

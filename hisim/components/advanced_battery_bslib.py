@@ -1,7 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Any, Tuple
+from typing import List, Any
 from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
@@ -48,26 +48,16 @@ class BatteryConfig(ConfigBase):
     p_inv_custom: float
     #: battery capacity in in kWh
     e_bat_custom: float
-    #: CO2 footprint of investment in kg
-    co2_footprint: float
-    #: cost for investment in Euro
-    cost: float
-    #: lifetime of battery in years
-    lifetime: float
 
     @classmethod
     def get_default_config(cls) -> "BatteryConfig":
         """Returns default configuration of battery."""
-        e_bat_custom = 10  # kWh
         config = BatteryConfig(
             name="Battery",
-            p_inv_custom=5,
-            e_bat_custom=e_bat_custom,
+            e_bat_custom=10,  # size/capacity of battery should be approx. the same as default pv power
+            p_inv_custom=10 * 0.5 * 1e3,  # c-rate is 0.5C (0.5/h) here
             source_weight=1,
             system_id="SG1",
-            co2_footprint=e_bat_custom * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=e_bat_custom * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # todo set correct values
         )
         return config
 
@@ -89,12 +79,6 @@ class Battery(Component):
     AcBatteryPower = "AcBatteryPower"  # W
     DcBatteryPower = "DcBatteryPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
-
-    @staticmethod
-    def get_cost_capex(config: BatteryConfig) -> Tuple[float, float, float]:
-        """Returns investment cost, CO2 emissions and lifetime."""
-        # Todo: think about livetime in cycles not in years
-        return config.cost, config.co2_footprint, config.lifetime
 
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: BatteryConfig

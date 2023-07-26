@@ -389,7 +389,7 @@ def household_advanced_hp_diesel_car_pv(
 
     my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_heat_pump,
-        source_component_output=my_heat_pump.ElectricityOutput,
+        source_component_output=my_heat_pump.ElectricalInputPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

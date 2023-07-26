@@ -219,6 +219,14 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    
+    # Building parameters 5R1C --> controller_mpc
+    Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"
+    Thermal_transmission_coefficient_opaque_ms="Thermal_transmission_coefficient_opaque_ms"
+    Thermal_transmission_coefficient_opaque_em="Thermal_transmission_coefficient_opaque_em"
+    Thermal_transmission_coefficient_ventillation="Thermal_transmission_coefficient_ventillation"
+    Thermal_transmission_Surface_IndoorAir="Thermal_transmission_Surface_IndoorAir"
+    Thermal_capacity_envelope="Thermal_capacity_envelope"
 
     @utils.measure_execution_time
     def __init__(
@@ -841,6 +849,28 @@ class Building(dynamic_component.DynamicComponent):
         self.get_physical_param()
         # Gets conductances
         self.get_conductances()
+        
+        # if self.my_simulation_parameters.system_config.predictive:
+        # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
+        # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
+        my_simulation_repository.set_entry(
+            self.Thermal_transmission_coefficient_glazing, self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
+        )
+        my_simulation_repository.set_entry(
+            self.Thermal_transmission_Surface_IndoorAir, self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin
+        )
+        my_simulation_repository.set_entry(
+            self.Thermal_transmission_coefficient_opaque_em, self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+        )
+        my_simulation_repository.set_entry(
+            self.Thermal_transmission_coefficient_opaque_ms, self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+        )
+        my_simulation_repository.set_entry(
+            self.Thermal_transmission_coefficient_ventillation, self.thermal_conductance_by_ventilation_in_watt_per_kelvin
+        )
+        my_simulation_repository.set_entry(
+            self.Thermal_capacity_envelope, self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
+        )
 
     def get_physical_param(
         self,

@@ -67,11 +67,8 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set simulation duration."""
         self.simulation_duration_in_days = simulation_duration_in_days
 
-    def get_result_directory_name(self) -> Any:  # *args
+    def get_result_directory_name(self) -> Any:
         """Get the result directory path."""
-
-        if None in (self.base_path, self.model_name, self.variant_name):
-            return None
 
         if (
             self.base_path is not None
@@ -108,9 +105,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             check_path_length(path=path)
             return path
 
-        # raise TypeError(
-        #     "base_path, model_name, variant_name and datetime_string should be str-type, not None-type."
-        # )
+        return None
 
 
 def check_path_length(path: str) -> None:

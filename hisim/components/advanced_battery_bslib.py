@@ -1,7 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Any, Tuple
+from typing import List, Any
 from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
@@ -45,29 +45,22 @@ class BatteryConfig(ConfigBase):
     #: name of battery to search in database (bslib)
     system_id: str
     #: charging and discharging power in Watt
-    p_inv_custom: float
+    custom_pv_inverter_power_generic_in_watt: float
     #: battery capacity in in kWh
-    e_bat_custom: float
-    #: CO2 footprint of investment in kg
-    co2_footprint: float
-    #: cost for investment in Euro
-    cost: float
-    #: lifetime of battery in years
-    lifetime: float
+    custom_battery_capacity_generic_in_kilowatt_hour: float
 
     @classmethod
     def get_default_config(cls) -> "BatteryConfig":
         """Returns default configuration of battery."""
-        e_bat_custom = 10  # size/capacity of battery should be approx. the same as default pv power
         config = BatteryConfig(
             name="Battery",
-            e_bat_custom=e_bat_custom,  # size/capacity of battery should be approx. the same as default pv power
-            p_inv_custom=10 * 0.5 * 1e3,  # c-rate is 0.5C (0.5/h) here
+            # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
+            custom_battery_capacity_generic_in_kilowatt_hour=10,  # size/capacity of battery should be approx. the same as default pv power
+            custom_pv_inverter_power_generic_in_watt=10
+            * 0.5
+            * 1e3,  # c-rate is 0.5C (0.5/h) here
             source_weight=1,
             system_id="SG1",
-            co2_footprint=e_bat_custom * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=e_bat_custom * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # todo set correct values
         )
         return config
 
@@ -90,12 +83,6 @@ class Battery(Component):
     DcBatteryPower = "DcBatteryPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
 
-    @staticmethod
-    def get_cost_capex(config: BatteryConfig) -> Tuple[float, float, float]:
-        """Returns investment cost, CO2 emissions and lifetime."""
-        # Todo: think about livetime in cycles not in years
-        return config.cost, config.co2_footprint, config.lifetime
-
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: BatteryConfig
     ):
@@ -115,23 +102,27 @@ class Battery(Component):
 
         self.system_id = self.battery_config.system_id
 
-        self.p_inv_custom = self.battery_config.p_inv_custom
+        self.custom_pv_inverter_power_generic_in_watt = (
+            self.battery_config.custom_pv_inverter_power_generic_in_watt
+        )
 
-        self.e_bat_custom = self.battery_config.e_bat_custom
+        self.custom_battery_capacity_generic_in_kilowatt_hour = (
+            self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+        )
 
         # Component has states
         self.state = BatteryState()
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
-        self.BAT = bsl.ACBatMod(
+        self.ac_coupled_battery_object = bsl.ACBatMod(
             system_id=self.system_id,
-            p_inv_custom=self.p_inv_custom,
-            e_bat_custom=self.e_bat_custom,
+            p_inv_custom=self.custom_pv_inverter_power_generic_in_watt,
+            e_bat_custom=self.custom_battery_capacity_generic_in_kilowatt_hour,
         )
 
         # Define component inputs
-        self.p_set: ComponentInput = self.add_input(
+        self.loading_power_input_channel: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.LoadingPowerInput,
             load_type=LoadTypes.ELECTRICITY,
@@ -140,7 +131,7 @@ class Battery(Component):
         )
 
         # Define component outputs
-        self.p_bs: ComponentOutput = self.add_output(
+        self.ac_battery_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.AcBatteryPower,
             load_type=LoadTypes.ELECTRICITY,
@@ -152,7 +143,7 @@ class Battery(Component):
             output_description=f"here a description for {self.AcBatteryPower} will follow.",
         )
 
-        self.p_bat: ComponentOutput = self.add_output(
+        self.dc_battery_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.DcBatteryPower,
             load_type=LoadTypes.ELECTRICITY,
@@ -160,7 +151,7 @@ class Battery(Component):
             output_description=f"here a description for {self.DcBatteryPower} will follow.",
         )
 
-        self.soc: ComponentOutput = self.add_output(
+        self.state_of_charge_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.StateOfCharge,
             load_type=LoadTypes.ANY,
@@ -187,25 +178,31 @@ class Battery(Component):
     ) -> None:
 
         # Parameters
-        dt = self.my_simulation_parameters.seconds_per_timestep
+        time_increment_in_seconds = self.my_simulation_parameters.seconds_per_timestep
 
         # Load input values
-        p_set = stsv.get_input_value(self.p_set)
-        soc = self.state.soc
+        set_point_for_ac_battery_power_in_watt = stsv.get_input_value(
+            self.loading_power_input_channel
+        )
+        state_of_charge = self.state.state_of_charge
 
         # Simulate on timestep
-        results = self.BAT.simulate(p_load=p_set, soc=soc, dt=dt)
-        p_bs = results[0]
-        p_bat = results[1]
-        soc = results[2]
+        results = self.ac_coupled_battery_object.simulate(
+            p_load=set_point_for_ac_battery_power_in_watt,
+            soc=state_of_charge,
+            dt=time_increment_in_seconds,
+        )
+        ac_battery_power_in_watt = results[0]
+        dc_battery_power_in_watt = results[1]
+        state_of_charge = results[2]
 
         # write values for output time series
-        stsv.set_output_value(self.p_bs, p_bs)
-        stsv.set_output_value(self.p_bat, p_bat)
-        stsv.set_output_value(self.soc, soc)
+        stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_in_watt)
+        stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_in_watt)
+        stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
 
         # write values to state
-        self.state.soc = soc
+        self.state.state_of_charge = state_of_charge
 
     def write_to_report(self) -> List[str]:
         return self.battery_config.get_string_dict()
@@ -214,8 +211,8 @@ class Battery(Component):
 @dataclass
 class BatteryState:
     #: state of charge of the battery
-    soc: float = 0
+    state_of_charge: float = 0
 
     def clone(self):
         "Creates a copy of the Battery State."
-        return BatteryState(soc=self.soc)
+        return BatteryState(state_of_charge=self.state_of_charge)

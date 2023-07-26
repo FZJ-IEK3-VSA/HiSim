@@ -1,7 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Any
+from typing import List, Any, Tuple
 from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
@@ -48,19 +48,29 @@ class BatteryConfig(ConfigBase):
     custom_pv_inverter_power_generic_in_watt: float
     #: battery capacity in in kWh
     custom_battery_capacity_generic_in_kilowatt_hour: float
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime of battery in years
+    lifetime: float
 
     @classmethod
     def get_default_config(cls) -> "BatteryConfig":
         """Returns default configuration of battery."""
+        custom_battery_capacity_generic_in_kilowatt_hour = 10  # size/capacity of battery should be approx. the same as default pv power
         config = BatteryConfig(
             name="Battery",
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
-            custom_battery_capacity_generic_in_kilowatt_hour=10,  # size/capacity of battery should be approx. the same as default pv power
+            custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
             custom_pv_inverter_power_generic_in_watt=10
             * 0.5
             * 1e3,  # c-rate is 0.5C (0.5/h) here
             source_weight=1,
             system_id="SG1",
+            co2_footprint=custom_battery_capacity_generic_in_kilowatt_hour * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=custom_battery_capacity_generic_in_kilowatt_hour * 535.81,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # todo set correct values
         )
         return config
 
@@ -82,6 +92,12 @@ class Battery(Component):
     AcBatteryPower = "AcBatteryPower"  # W
     DcBatteryPower = "DcBatteryPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
+
+    @staticmethod
+    def get_cost_capex(config: BatteryConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        # Todo: think about livetime in cycles not in years
+        return config.cost, config.co2_footprint, config.lifetime
 
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: BatteryConfig

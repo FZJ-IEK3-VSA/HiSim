@@ -54,7 +54,7 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set Heat Pump Controller
     hp_controller_mode = (

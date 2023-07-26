@@ -3,7 +3,7 @@
 import os
 import re
 from dataclasses import dataclass
-
+from hisim import result_path_provider
 
 class Chart:  # noqa: too-few-public-methods
 
@@ -106,6 +106,8 @@ class Chart:  # noqa: too-few-public-methods
             self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
+        result_path_provider.check_path_length(path=self.filepath)
+        result_path_provider.check_path_length(path=self.filepath2)
 
 
 @dataclass

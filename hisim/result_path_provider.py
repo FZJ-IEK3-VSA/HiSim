@@ -69,57 +69,56 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
 
     def get_result_directory_name(self) -> Any:  # *args
         """Get the result directory path."""
-        if None in (
-            self.base_path,
-            self.model_name,
-            self.variant_name,
+
+        if (
+            self.base_path is not None
+            and self.model_name is not None
+            and self.variant_name is not None
+            and self.datetime_string is not None
         ):
-            # The variables must be given a str-value, otherwise a result path can not be created.
-            return None
-
-
-        if [
-            isinstance(x, str)
-            for x in [
-                self.base_path,
-                self.model_name,
-                self.variant_name,
-                self.datetime_string,
-            ]
-        ]:
             if self.sorting_option == SortingOptionEnum.DEEP:
                 path = os.path.join(
-                    self.base_path,  # type: ignore
-                    self.model_name,  # type: ignore
-                    self.variant_name,  # type: ignore
-                    self.datetime_string,  # type: ignore
+                    self.base_path,
+                    self.model_name,
+                    self.variant_name,
+                    self.datetime_string,
                 )
             elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION:
                 # schauen ob verzeichnis schon da und aufsteigende nummer anängen
                 idx = 1
                 path = os.path.join(
-                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)  # type: ignore
+                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)
                 )
                 while os.path.exists(path):
                     idx = idx + 1
                     path = os.path.join(
-                        self.base_path,  # type: ignore
-                        self.model_name,  # type: ignore
-                        self.variant_name + "_" + str(idx),  # type: ignore
+                        self.base_path,
+                        self.model_name,
+                        self.variant_name + "_" + str(idx),
                     )
             elif self.sorting_option == SortingOptionEnum.FLAT:
                 path = os.path.join(
-                    self.base_path,  # type: ignore
-                    self.model_name  # type: ignore
-                    + "_"
-                    + self.variant_name  # type: ignore
-                    + "_"
-                    + self.datetime_string,  # type: ignore
+                    self.base_path,
+                    self.model_name + "_" + self.variant_name + self.datetime_string,
                 )
 
+            check_path_length(path=path)
             return path
 
-        raise TypeError("The types of base_path, model_name, variant_name and datetime_string should be str.")
+        raise TypeError(
+            "base_path, model_name, variant_name and datetime_string should be str-type, not None-type."
+        )
+
+
+def check_path_length(path: str) -> None:
+    """Make sure that path name does not get too long for Windows."""
+
+    character_limit_according_to_windows = 256
+
+    if len(path) >= character_limit_according_to_windows:
+        raise NameError(
+            f"The path {path} exceeds the limit of 256 characters which is the limit for Windows. Please make your path shorter."
+        )
 
 
 class SortingOptionEnum(enum.Enum):

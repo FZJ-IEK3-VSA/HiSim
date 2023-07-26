@@ -858,7 +858,7 @@ class Building(dynamic_component.DynamicComponent):
             entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum..Thermal_transmission_Surface_IndoorAir, 
+            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir, 
             entry=self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(

@@ -296,7 +296,7 @@ class HeatDistribution(cp.Component):
             cp.ComponentConnection(
                 HeatDistribution.WaterTemperatureInput,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections
@@ -655,7 +655,7 @@ class HeatDistributionController(cp.Component):
             cp.ComponentConnection(
                 HeatDistributionController.WaterTemperatureInputFromHeatWaterStorage,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections

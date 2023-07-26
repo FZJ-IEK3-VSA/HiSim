@@ -185,7 +185,7 @@ def household_with_hds(
 
     # -----------------------------------------------------------------------------------------------------------------
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )

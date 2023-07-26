@@ -1,5 +1,6 @@
 """ Contains a component that uses the UTSP to provide LoadProfileGenerator data. """
 import datetime
+import pytz
 import errno
 import io
 import itertools
@@ -288,7 +289,7 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(self) -> Tuple[Tuple[str, str, str, str], List[str]]:
+    def get_profiles_from_utsp(self) -> Tuple[Tuple[str, str, str, str, str], List[str]]:
         """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
         :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
@@ -499,8 +500,46 @@ class UtspLpgConnector(cp.Component):
             steps_ratio = int(steps_original / steps_desired)
 
             # initialize number of residence and heating by residents
-            self.heating_by_residents = [0] * steps_desired
-            self.number_of_residents = [0] * steps_desired
+            heating_by_residents = [0] * steps_desired * steps_ratio
+            number_of_residents = [0] * steps_desired * steps_ratio
+
+            # compute heat gains and number of persons
+            for mode, gain in enumerate(gain_per_person):
+                for timestep in range(steps_original):
+                    number_of_residents[timestep] += occupancy_profile[mode][
+                        "Values"
+                    ][timestep]
+                    heating_by_residents[timestep] = (
+                        heating_by_residents[timestep]
+                        + gain * occupancy_profile[mode]["Values"][timestep]
+                    )
+
+            # convert heat gains and number of persons to data frame and evaluate
+            number_of_residents_df = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    datetime.timedelta(days=simulation_time_span.days) - datetime.timedelta(seconds=60),
+                    freq="T"
+                    ),
+                "Average": number_of_residents
+                })
+            number_of_residents_df = utils.convert_lpg_data_to_utc(
+                data=number_of_residents_df, year=self.my_simulation_parameters.year
+                )
+
+            heating_by_residents_df = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    datetime.timedelta(days=simulation_time_span.days) - datetime.timedelta(seconds=60),
+                    freq="T"
+                    ),
+                "Average [W]": heating_by_residents
+                })
+            heating_by_residents_df = utils.convert_lpg_data_to_utc(
+                data=heating_by_residents_df, year=self.my_simulation_parameters.year
+                )
 
             # load electricity consumption and water consumption
             electricity_data = io.StringIO(electricity)
@@ -510,6 +549,10 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="cp1252",
             )
+            pre_electricity_consumption = utils.convert_lpg_data_to_utc(
+                data=pre_electricity_consumption, year=self.my_simulation_parameters.year,
+            )
+
             water_data = io.StringIO(warm_water)
             pre_water_consumption = pd.read_csv(
                 water_data,
@@ -517,12 +560,18 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="cp1252",
             )
+            pre_water_consumption = utils.convert_lpg_data_to_utc(
+                data=pre_water_consumption, year=self.my_simulation_parameters.year,
+            )
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
             pre_inner_device_heat_gains = pd.read_csv(
                 inner_device_heat_gain_data,
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
+            )
+            pre_inner_device_heat_gains = utils.convert_lpg_data_to_utc(
+                data=pre_inner_device_heat_gains, year=self.my_simulation_parameters.year,
             )
 
             # convert electricity consumption and water consumption to desired format and unit
@@ -535,40 +584,15 @@ class UtspLpgConnector(cp.Component):
             self.inner_device_heat_gains = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
-
-            # process data when time resolution of inputs matches timeresolution of simulation
-            if steps_original == steps_desired:
-                for mode, gain in enumerate(gain_per_person):
-                    for timestep in range(steps_original):
-                        self.number_of_residents[timestep] += occupancy_profile[mode][
-                            "Values"
-                        ][timestep]
-                        self.heating_by_residents[timestep] = (
-                            self.heating_by_residents[timestep]
-                            + gain * occupancy_profile[mode]["Values"][timestep]
-                        )
+            self.heating_by_residents = pd.to_numeric(
+                heating_by_residents_df["Average [W]"]
+            ).tolist()
+            self.number_of_residents = pd.to_numeric(
+                number_of_residents_df["Average"]
+            ).tolist()
 
             # average data, when time resolution of inputs is coarser than time resolution of simulation
-            elif steps_original > steps_desired:
-                for mode, gain in enumerate(gain_per_person):
-                    for timestep in range(steps_desired):
-                        number_of_residents_av = (
-                            sum(
-                                occupancy_profile[mode]["Values"][
-                                    timestep
-                                    * steps_ratio: (timestep + 1)
-                                    * steps_ratio
-                                ]
-                            )
-                            / steps_ratio
-                        )
-                        self.number_of_residents[timestep] += np.round(
-                            number_of_residents_av
-                        )
-                        self.heating_by_residents[timestep] = (
-                            self.heating_by_residents[timestep]
-                            + gain * number_of_residents_av
-                        )
+            if steps_original > steps_desired:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
                     sum(self.electricity_consumption[n: n + steps_ratio]) / steps_ratio
@@ -576,6 +600,14 @@ class UtspLpgConnector(cp.Component):
                 ]
                 self.inner_device_heat_gains = [
                     sum(self.inner_device_heat_gains[n: n + steps_ratio]) / steps_ratio
+                    for n in range(0, steps_original, steps_ratio)
+                ]
+                self.heating_by_residents = [
+                    sum(self.heating_by_residents[n: n + steps_ratio]) / steps_ratio
+                    for n in range(0, steps_original, steps_ratio)
+                ]
+                self.number_of_residents = [
+                    sum(self.number_of_residents[n: n + steps_ratio]) / steps_ratio
                     for n in range(0, steps_original, steps_ratio)
                 ]
                 self.water_consumption = [
@@ -588,26 +620,14 @@ class UtspLpgConnector(cp.Component):
                     "input from LPG is given in wrong time resolution - or at least cannot be interpolated correctly"
                 )
 
-            # Saves data in cache
-            data = np.transpose(
-                [
-                    self.number_of_residents,
-                    self.heating_by_residents,
-                    self.electricity_consumption,
-                    self.water_consumption,
-                    self.inner_device_heat_gains,
-                ]
-            )
-            database = pd.DataFrame(
-                data,
-                columns=[
-                    "number_of_residents",
-                    "heating_by_residents",
-                    "electricity_consumption",
-                    "water_consumption",
-                    "inner_device_heat_gains",
-                ],
-            )
+            # Saves data in cache 
+            database = pd.DataFrame({
+                "number_of_residents": self.number_of_residents,
+                "heating_by_residents": self.heating_by_residents,
+                "electricity_consumption": self.electricity_consumption,
+                "water_consumption": self.water_consumption,
+                "inner_device_heat_gains": self.inner_device_heat_gains,
+                })
             # dump the dataframe to str
             cache_file = io.StringIO()
             database.to_csv(cache_file)
@@ -616,7 +636,6 @@ class UtspLpgConnector(cp.Component):
             cache_content = {"saved_files": saved_files, "data": database_str}
             with open(cache_filepath, "w", encoding="utf-8") as file:
                 json.dump(cache_content, file)
-            del data
             del database
         self.max_hot_water_demand = max(self.water_consumption)
 

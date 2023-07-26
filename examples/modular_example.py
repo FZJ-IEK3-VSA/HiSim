@@ -77,7 +77,7 @@ def modular_household_explicit(
     cleanup_old_lpg_requests()
 
     # Set simulation parameters
-    year = 2019
+    year = 2021
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
@@ -100,6 +100,7 @@ def modular_household_explicit(
         )
         my_simulation_parameters.surplus_control = system_config_.surplus_control_considered
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)

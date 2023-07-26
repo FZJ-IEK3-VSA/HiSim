@@ -1,19 +1,21 @@
 """ Contains various utility functions and utility classes. """
 # clean
+import datetime as dt
 import gc
-import os
-import inspect
 import hashlib
+import inspect
 import json
-
+import os
+from functools import wraps
 from timeit import default_timer as timer
 from typing import Any, Dict, Tuple
-from functools import wraps
 
+import pandas as pd
 import psutil
+import pytz
 
-from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3 "
@@ -197,6 +199,51 @@ def load_smart_appliance(name):  # noqa
     with open(HISIMPATH["smart_appliances"], encoding="utf-8") as filestream:
         data = json.load(filestream)
     return data[name]
+
+
+def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
+    """Transform LPG data from local time (not having explicit time shifts)
+    to UTC. """
+    # convert Time information to pandas datetime and make it to index
+    data.index = pd.to_datetime(data["Time"])
+    lastday = data.index[-1].day
+    lastmonth = data.index[-1].month
+
+    # find out time shifts of selected year
+    timeshifts = [
+        elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
+        ]
+
+    # delete hour in spring
+    indices_of_additional_hour_in_spring = data.loc[
+        timeshifts[0] + dt.timedelta(seconds=3600): timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
+        ].index
+
+    data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
+
+    # add hour in autumn
+    additional_hours_in_autumn = data.loc[
+        timeshifts[1] + dt.timedelta(seconds=3600): timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
+        ]
+    data = pd.concat([data, additional_hours_in_autumn])
+    data.sort_index(inplace=True)
+
+    # delete hour at beginning
+    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1):]
+
+    # add hour at end
+    last_hour = data.loc[dt.datetime(year=year, month=lastmonth, day=lastday, hour=23):]
+    data = pd.concat([data, last_hour])
+
+    # make integer index again, paste new timestamp (UTC) and format
+    data.index = [i for i in range(len(data))]
+    data["Time"] = pd.date_range(
+        start=dt.datetime(year=year, month=1, day=1, hour=0),
+        end=dt.datetime(year=year, month=lastmonth, day=lastday, hour=23, minute=59),
+        freq="T", tz="UTC",
+    )
+    data["Time"] = data["Time"].dt.strftime("%m/%d/%Y %H:%M")
+    return data
 
 
 def get_cache_file(

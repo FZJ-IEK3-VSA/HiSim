@@ -12,7 +12,6 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
-from hisim.components import sumbuilder
 from hisim import postprocessingoptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
@@ -153,15 +152,6 @@ def test_house_with_pyam(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Base Electricity Load Profile
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig(
-            name="ElectrcityGrid_BaseLoad",
-            grid=[my_occupancy, "Subtract", my_photovoltaic_system],
-            signal=None,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
-    )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
@@ -196,11 +186,6 @@ def test_house_with_pyam(
 
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
 
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.ElectricityInput,
-        my_base_electricity_load_profile.component_name,
-        my_base_electricity_load_profile.ElectricityOutput,
-    )
     my_heat_pump.connect_only_predefined_connections(
         my_weather, my_heat_pump_controller
     )
@@ -211,7 +196,6 @@ def test_house_with_pyam(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_base_electricity_load_profile)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)

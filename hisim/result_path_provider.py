@@ -70,6 +70,9 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     def get_result_directory_name(self) -> Any:  # *args
         """Get the result directory path."""
 
+        if None in (self.base_path, self.model_name, self.variant_name):
+            return None
+
         if (
             self.base_path is not None
             and self.model_name is not None
@@ -105,9 +108,9 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             check_path_length(path=path)
             return path
 
-        raise TypeError(
-            "base_path, model_name, variant_name and datetime_string should be str-type, not None-type."
-        )
+        # raise TypeError(
+        #     "base_path, model_name, variant_name and datetime_string should be str-type, not None-type."
+        # )
 
 
 def check_path_length(path: str) -> None:

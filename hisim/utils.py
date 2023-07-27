@@ -227,12 +227,11 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     lastdate = data.index[-1]
 
     # find out time shifts of selected year
-    timeshifts = [
-        elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
-        ]  # pylint: disable=W0212
+    timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # pylint: disable=W0212
+    timeshifts = [elem for elem in timshifts if elem.year == year]
 
     # delete hour in spring if neceary:
-    if data.index[-1] > timeshifts[0]:
+    if lastdate > timeshifts[0]:
         indices_of_additional_hour_in_spring = data.loc[
             timeshifts[0] + dt.timedelta(seconds=3600): timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
             ].index
@@ -240,7 +239,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
 
     # add hour in autumn if necesary
-    if data.index[-1] > timeshifts[1]:
+    if lastdate > timeshifts[1]:
         additional_hours_in_autumn = data.loc[
             timeshifts[1] + dt.timedelta(seconds=3600): timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
             ]
@@ -248,7 +247,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         data.sort_index(inplace=True)
 
     # delete hour at beginning
-    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1)]
+    data = data.loc[:dt.datetime(year=year, month=1, day=1, hour=1)]
 
     # add hour at end
     last_hour = data.loc[dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23):]

@@ -538,14 +538,14 @@ class UtspLpgConnector(cp.Component):
             ).tolist()  
 
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
-            inner_device_heat_gains = pd.read_csv(
+            pre_inner_device_heat_gains = pd.read_csv(
                 inner_device_heat_gain_data,
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
             ).loc[: (steps_desired_in_minutes - 1)]
             inner_device_heat_gains = pd.to_numeric(
-                pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
+                pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
             # put everything in a data frame and convert to utc

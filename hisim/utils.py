@@ -205,7 +205,7 @@ def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep
     """Tranform LPG timesteps (list of integers) from local time to UTC."""
     timeshifts = [
         elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
-        ]
+        ]  # pylint: disable=W0212
     steps_per_hour = int(3600 / seconds_per_timestep)
     timeshift1_as_step = int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
     timeshift2_as_step = int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
@@ -224,13 +224,12 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     to UTC. """
     # convert Time information to pandas datetime and make it to index
     data.index = pd.to_datetime(data["Time"])
-    lastday = data.index[-1].day
-    lastmonth = data.index[-1].month
+    lastdate = data.index[-1]
 
     # find out time shifts of selected year
     timeshifts = [
         elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
-        ]
+        ]  # pylint: disable=W0212
 
     # delete hour in spring if neceary:
     if data.index[-1] > timeshifts[0]:
@@ -249,17 +248,17 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         data.sort_index(inplace=True)
 
     # delete hour at beginning
-    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1):]
+    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1)]
 
     # add hour at end
-    last_hour = data.loc[dt.datetime(year=year, month=lastmonth, day=lastday, hour=23):]
+    last_hour = data.loc[dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23):]
     data = pd.concat([data, last_hour])
 
     # make integer index again, paste new timestamp (UTC) and format
-    data.index = [i for i in range(len(data))]
+    data.index = list(range(len(data)))
     data["Time"] = pd.date_range(
         start=dt.datetime(year=year, month=1, day=1, hour=0),
-        end=dt.datetime(year=year, month=lastmonth, day=lastday, hour=23, minute=59),
+        end=dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59),
         freq="T", tz="UTC",
     )
     data["Time"] = data["Time"].dt.strftime("%m/%d/%Y %H:%M")

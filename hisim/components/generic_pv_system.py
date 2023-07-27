@@ -234,8 +234,8 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             source_weight=0,
             location="Aachen",
-            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
 

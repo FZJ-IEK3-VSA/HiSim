@@ -6,13 +6,17 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import (
     Component,
+    ComponentConnection,
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
     ConfigBase,
 )
+from hisim.components.controller_l1_generic_gas_heater import GenericGasHeaterControllerL1
+from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
+from hisim import log
 
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -158,6 +162,45 @@ class GasHeater(Component):
         self.temperature_delta_in_celsius = (
             self.gasheater_config.temperature_delta_in_celsius
         )
+
+        self.add_default_connections(
+            self.get_default_connections_from_controller_l1_generic_gas_heater()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_simple_hot_water_storage()
+        )
+
+    def get_default_connections_from_controller_l1_generic_gas_heater(
+        self,
+    ):
+        """Get Controller L1 Gas Heater default connections."""
+        log.information("setting Controller L1 Gas Heater default connections")
+        connections = []
+        l1_controller_classname = GenericGasHeaterControllerL1.get_classname()
+        connections.append(
+            ComponentConnection(
+                GasHeater.ControlSignal,
+                l1_controller_classname,
+                GenericGasHeaterControllerL1.ControlSignalToGasHeater,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
+        """Get Simple hot water storage default connections."""
+        log.information("setting Simple Hot Water Storage default connections")
+        connections = []
+        hws_classname = SimpleHotWaterStorage.get_classname()
+        connections.append(
+            ComponentConnection(
+                GasHeater.MassflowInputTemperature,
+                hws_classname,
+                SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

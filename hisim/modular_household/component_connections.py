@@ -365,8 +365,8 @@ def configure_battery(
     if battery_capacity is not None:
         my_advanced_battery_config = (
             advanced_battery_bslib.BatteryConfig(
-                e_bat_custom=battery_capacity,
-                p_inv_custom=battery_capacity * 0.5 * 1e3,
+                custom_battery_capacity_generic_in_kilowatt_hour=battery_capacity,
+                custom_pv_inverter_power_generic_in_watt=battery_capacity * 0.5 * 1e3,
                 source_weight=count,
                 system_id='SG1',
                 name='Battery',

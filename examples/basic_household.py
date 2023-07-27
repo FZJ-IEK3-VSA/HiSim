@@ -122,7 +122,7 @@ def basic_household_explicit(
     # Connect Component Inputs with Outputs
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-    
+
     # Electricity Grid
     my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
@@ -145,6 +145,18 @@ def basic_household_explicit(
         source_weight=999,
     )
 
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_heat_pump,
+        source_component_output=my_heat_pump.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.HEAT_PUMP,
+            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 
     my_building.connect_input(
@@ -158,7 +170,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityToOrFromGrid
+        my_electricity_meter.ElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(
         my_weather, my_heat_pump_controller

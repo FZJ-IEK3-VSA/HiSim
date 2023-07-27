@@ -181,7 +181,9 @@ def household_pv_hp(
     )
 
     # Build Heat Pump Controller Config
-    my_heat_pump_controller_config = generic_heat_pump.GenericHeatPumpControllerConfig.get_default_generic_heat_pump_controller_config()
+    my_heat_pump_controller_config = (
+        generic_heat_pump.GenericHeatPumpControllerConfig.get_default_generic_heat_pump_controller_config()
+    )
     my_heat_pump_controller_config.mode = hp_mode
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
@@ -198,7 +200,7 @@ def household_pv_hp(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-    
+
     # Electricity Grid
     my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
@@ -218,6 +220,18 @@ def household_pv_hp(
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_heat_pump,
+        source_component_output=my_heat_pump.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.HEAT_PUMP,
+            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
         source_weight=999,
     )
 

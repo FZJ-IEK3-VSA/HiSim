@@ -95,7 +95,6 @@ def basic_household_with_default_connections(
     )
     my_sim.add_component(my_weather)
 
-
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 
@@ -119,12 +118,43 @@ def basic_household_with_default_connections(
     )
     my_sim.add_component(my_photovoltaic_system)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-    
+
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
+
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(
+            name="GenericHeatPumpController",
+            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+            offset=offset,
+            mode=hp_mode,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_heat_pump_controller.connect_only_predefined_connections(my_building)
+
+    # depending on previous loads, hard to define default connections
+    my_heat_pump_controller.connect_input(
+        my_heat_pump_controller.ElectricityInput,
+        my_electricity_meter.component_name,
+        my_electricity_meter.ElectricityToOrFromGrid,
+    )
+    my_sim.add_component(my_heat_pump_controller)
+
+    my_heat_pump = generic_heat_pump.GenericHeatPump(
+        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_heat_pump.connect_only_predefined_connections(
+        my_weather, my_heat_pump_controller
+    )
+
+    my_sim.add_component(my_heat_pump)
+
     # Electricity Grid
     my_electricity_meter.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
@@ -146,37 +176,19 @@ def basic_household_with_default_connections(
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_heat_pump,
+        source_component_output=my_heat_pump.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.HEAT_PUMP,
+            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
     my_sim.add_component(my_electricity_meter)
-
-    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
-        config=generic_heat_pump.GenericHeatPumpControllerConfig(
-            name="GenericHeatPumpController",
-            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-            offset=offset,
-            mode=hp_mode,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_heat_pump_controller.connect_only_predefined_connections(my_building)
-
-    # depending on previous loads, hard to define default connections
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.ElectricityInput,
-        my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityToOrFromGrid
-    )
-    my_sim.add_component(my_heat_pump_controller)
-
-    my_heat_pump = generic_heat_pump.GenericHeatPump(
-        config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_heat_pump.connect_only_predefined_connections(
-        my_weather, my_heat_pump_controller
-    )
-
-    my_sim.add_component(my_heat_pump)
 
     # depending on type of heating device, hard to define default connections
     my_building.connect_input(

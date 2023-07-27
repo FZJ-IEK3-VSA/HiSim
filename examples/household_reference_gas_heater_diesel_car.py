@@ -73,7 +73,9 @@ class ReferenceHouseholdConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
+        )
 
         return ReferenceHouseholdConfig(
             building_type="blub",
@@ -305,7 +307,9 @@ def household_reference_gas_heater_diesel_car(
         my_heat_distribution.ThermalPowerDelivered,
     )
 
-    my_gasheater.connect_only_predefined_connections(my_gasheater_controller, my_simple_hot_water_storage)
+    my_gasheater.connect_only_predefined_connections(
+        my_gasheater_controller, my_simple_hot_water_storage
+    )
 
     my_gasheater_controller.connect_only_predefined_connections(
         my_simple_hot_water_storage, my_weather, my_heat_distribution_controller

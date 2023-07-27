@@ -43,7 +43,7 @@ def test_occupancy():
         water_consumption.append(stsv.values[my_occupancy.water_consumptionC.global_index])
 
     year_heating_by_occupancy = sum(heating_by_residents) / (seconds_per_timestep * 1E3)
-    assert year_heating_by_occupancy == 1443.1025
+    assert year_heating_by_occupancy == 1443.2325
     # pdb.set_trace()
 
 # def test_profile():

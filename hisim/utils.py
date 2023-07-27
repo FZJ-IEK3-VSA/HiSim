@@ -207,8 +207,8 @@ def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep
         elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
         ]
     steps_per_hour = int(3600 / seconds_per_timestep)
-    timeshift1_as_step = int(dt.timedelta(timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
-    timeshift2_as_step = int(dt.timedelta(timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+    timeshift1_as_step = int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+    timeshift2_as_step = int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
 
     data_utc = []
     for elem in data:
@@ -232,19 +232,21 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
         ]
 
-    # delete hour in spring
-    indices_of_additional_hour_in_spring = data.loc[
-        timeshifts[0] + dt.timedelta(seconds=3600): timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
-        ].index
+    # delete hour in spring if neceary:
+    if data.index[-1] > timeshifts[0]:
+        indices_of_additional_hour_in_spring = data.loc[
+            timeshifts[0] + dt.timedelta(seconds=3600): timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
+            ].index
 
-    data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
+        data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
 
-    # add hour in autumn
-    additional_hours_in_autumn = data.loc[
-        timeshifts[1] + dt.timedelta(seconds=3600): timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
-        ]
-    data = pd.concat([data, additional_hours_in_autumn])
-    data.sort_index(inplace=True)
+    # add hour in autumn if necesary
+    if data.index[-1] > timeshifts[1]:
+        additional_hours_in_autumn = data.loc[
+            timeshifts[1] + dt.timedelta(seconds=3600): timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
+            ]
+        data = pd.concat([data, additional_hours_in_autumn])
+        data.sort_index(inplace=True)
 
     # delete hour at beginning
     data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1):]

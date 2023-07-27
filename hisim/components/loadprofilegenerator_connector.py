@@ -413,25 +413,25 @@ class Occupancy(cp.Component):
                 occupancy_profile.append(json_filex)
 
             # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
-            steps_original = len(occupancy_profile[0]["Values"])
             simulation_time_span = (
                 self.my_simulation_parameters.end_date
                 - self.my_simulation_parameters.start_date
             )
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
             steps_desired = int(
                 simulation_time_span.days
                 * 24
                 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
             )
-            steps_ratio = int(steps_original / steps_desired)
+            steps_desired_in_minutes = steps_desired * minutes_per_timestep
 
             # initialize number of residence and heating by residents
-            heating_by_residents = [0] * steps_desired * steps_ratio
-            number_of_residents = [0] * steps_desired * steps_ratio
+            heating_by_residents = [0] * steps_desired_in_minutes
+            number_of_residents = [0] * steps_desired_in_minutes
 
             # compute heat gains and number of persons
             for mode, gain in enumerate(gain_per_person):
-                for timestep in range(steps_original):
+                for timestep in range(steps_desired_in_minutes):
                     number_of_residents[timestep] += occupancy_profile[mode][
                         "Values"
                     ][timestep]
@@ -479,7 +479,7 @@ class Occupancy(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
-            )
+            ).loc[: (steps_desired_in_minutes - 1)]
             pre_electricity_consumption = utils.convert_lpg_data_to_utc(
                 data=pre_electricity_consumption, year=self.my_simulation_parameters.year,
             )
@@ -490,7 +490,7 @@ class Occupancy(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [L]"],
-            )
+            ).loc[:(steps_desired_in_minutes - 1)]
             pre_water_consumption = utils.convert_lpg_data_to_utc(
                 data=pre_water_consumption, year=self.my_simulation_parameters.year,
             )
@@ -501,7 +501,7 @@ class Occupancy(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
-            )
+            ).loc[:(steps_desired_in_minutes - 1)]
             pre_heating_by_devices = utils.convert_lpg_data_to_utc(
                 data=pre_heating_by_devices, year=self.my_simulation_parameters.year,
             )
@@ -528,35 +528,28 @@ class Occupancy(cp.Component):
             ).tolist()
 
             # average data, when time resolution of inputs is coarser than time resolution of simulation
-            if steps_original > steps_desired:
+            if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n: n + steps_ratio]) / steps_ratio
-                    for n in range(0, steps_original, steps_ratio)
+                    sum(self.electricity_consumption[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n: n + steps_ratio]) / steps_ratio
-                    for n in range(0, steps_original, steps_ratio)
+                    sum(self.heating_by_devices[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n: n + steps_ratio])
-                    for n in range(0, steps_original, steps_ratio)
+                    sum(self.water_consumption[n: n + minutes_per_timestep])
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n: n + steps_ratio]) / steps_ratio
-                    for n in range(0, steps_original, steps_ratio)
+                    sum(self.heating_by_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n: n + steps_ratio]) / steps_ratio
-                    for n in range(0, steps_original, steps_ratio)
+                    sum(self.number_of_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
-
-            elif steps_original == steps_desired:
-                pass
-            else:
-                raise Exception(
-                    "input from LPG is given in wrong time resolution - or at least cannot be interpolated correctly"
-                )
 
             # Saves data in cache
             database = pd.DataFrame({

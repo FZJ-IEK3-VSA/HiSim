@@ -15,7 +15,7 @@ def test_occupancy():
 
     my_occupancy_profile = "CHR01 Couple both at Work"
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
     my_simulation_parameters.predictive_control = False
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1)

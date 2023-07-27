@@ -266,59 +266,62 @@ class Car(cp.Component):
                 + time_resolution_original.minute * 60
                 + time_resolution_original.second
             )
-            steps_ratio = int(
+            minutes_per_timestep = int(
                 self.my_simulation_parameters.seconds_per_timestep
                 / seconds_per_timestep_original
             )
 
+            simulation_time_span = (
+                self.my_simulation_parameters.end_date
+                - self.my_simulation_parameters.start_date
+            )
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
+            steps_desired = int(
+                simulation_time_span.days
+                * 24
+                * (3600 / self.my_simulation_parameters.seconds_per_timestep)
+            )
+            steps_desired_in_minutes = steps_desired * minutes_per_timestep
+
             # extract values for location and distance of car,
-            # include time information and 
+            # include time information and
             # translate car location to integers (according to location_translator)
-            meters_driven_df = pd.DataFrame({
+            initial_data = pd.DataFrame({
                 "Time": pd.date_range(
-                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
-                    dt.timedelta(seconds=(len(car_location) - 1) * seconds_per_timestep_original),
-                    freq=str(seconds_per_timestep_original) + "S"
-                    ),
-                "Values": meters_driven["Values"]
+            start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
+                freq="T"
+                ),
+                "meters_driven": meters_driven["Values"][:steps_desired_in_minutes],
+                "car_location": [
+                    location_translator[elem] for elem in car_location["Values"]
+                    ][:steps_desired_in_minutes],
                 })
-            meters_driven_df = utils.convert_lpg_data_to_utc(
-                data=meters_driven_df, year=self.my_simulation_parameters.year
+            initial_data = utils.convert_lpg_data_to_utc(
+                data=initial_data, year=self.my_simulation_parameters.year
                 )
             meters_driven = pd.to_numeric(
-                meters_driven_df["Values"]
+                initial_data["meters_driven"]
             ).tolist()
-
-            car_location_df = pd.DataFrame({
-                "Time": pd.date_range(
-                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
-                    dt.timedelta(seconds=(len(car_location) - 1) * seconds_per_timestep_original),
-                    freq=str(seconds_per_timestep_original) + "S"
-                    ),
-                "Values": [location_translator[elem] for elem in car_location]
-                })
-            car_location_df = utils.convert_lpg_data_to_utc(
-                data=car_location_df, year=self.my_simulation_parameters.year
-                )
             car_location = pd.to_numeric(
-                car_location_df["Values"]
+                initial_data["car_location"]
             ).tolist()
 
 
             # sum / extract most common value from data to match hisim time resolution
-            for i in range(int(len(meters_driven) / steps_ratio)):
-                self.meters_driven.append(
-                    sum(meters_driven[i * steps_ratio: (i + 1) * steps_ratio])
-                )  # sum
-                location_list = car_location[
-                    i * steps_ratio: (i + 1) * steps_ratio
-                ]  # extract list
-                occurence_count = most_frequent(
-                    input_list=location_list
-                )  # extract most common
-                self.car_location.append(occurence_count)
+            if minutes_per_timestep > 1:
+                for i in range(steps_desired):
+                    self.meters_driven.append(
+                        sum(meters_driven[i * minutes_per_timestep: (i + 1) * minutes_per_timestep])
+                    )  # sum
+                    location_list = car_location[
+                        i * minutes_per_timestep: (i + 1) * minutes_per_timestep
+                    ]  # extract list
+                    occurence_count = most_frequent(
+                        input_list=location_list
+                    )  # extract most common
+                    self.car_location.append(occurence_count)
 
             # save data in cache
             database = pd.DataFrame({

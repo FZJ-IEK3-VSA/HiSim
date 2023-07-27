@@ -20,7 +20,7 @@ class SystemConfig:
     #: peak power of the considered Photovoltaic Panel in Wp
     pv_peak_power: Optional[float] = 8e3
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
-    smart_devices_included: bool = False
+    smart_devices_included: bool = True
     #: decision on the consideration of a buffer storage for heating
     buffer_included: bool = False
     #: volume of the considered buffer storage in multiples of the default size

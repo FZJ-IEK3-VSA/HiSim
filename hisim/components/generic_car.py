@@ -271,12 +271,41 @@ class Car(cp.Component):
                 / seconds_per_timestep_original
             )
 
-            # extract values for location and distance of car
-            car_location = car_location["Values"]
-            meters_driven = meters_driven["Values"]
-
+            # extract values for location and distance of car,
+            # include time information and 
             # translate car location to integers (according to location_translator)
-            car_location = [location_translator[elem] for elem in car_location]
+            meters_driven_df = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    dt.timedelta(seconds=(len(car_location) - 1) * seconds_per_timestep_original),
+                    freq=str(seconds_per_timestep_original) + "S"
+                    ),
+                "Values": meters_driven["Values"]
+                })
+            meters_driven_df = utils.convert_lpg_data_to_utc(
+                data=meters_driven_df, year=self.my_simulation_parameters.year
+                )
+            meters_driven = pd.to_numeric(
+                meters_driven_df["Values"]
+            ).tolist()
+
+            car_location_df = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    dt.timedelta(seconds=(len(car_location) - 1) * seconds_per_timestep_original),
+                    freq=str(seconds_per_timestep_original) + "S"
+                    ),
+                "Values": [location_translator[elem] for elem in car_location]
+                })
+            car_location_df = utils.convert_lpg_data_to_utc(
+                data=car_location_df, year=self.my_simulation_parameters.year
+                )
+            car_location = pd.to_numeric(
+                car_location_df["Values"]
+            ).tolist()
+
 
             # sum / extract most common value from data to match hisim time resolution
             for i in range(int(len(meters_driven) / steps_ratio)):
@@ -292,11 +321,11 @@ class Car(cp.Component):
                 self.car_location.append(occurence_count)
 
             # save data in cache
-            data = np.transpose([self.car_location, self.meters_driven])
-            database = pd.DataFrame(data, columns=["car_location", "meters_driven"])
-
+            database = pd.DataFrame({
+                "car_location": self.car_location,
+                "meters_driven": self.meters_driven,
+                })
             database.to_csv(cache_filepath)
-            del data
             del database
 
     def write_to_report(self) -> List[str]:

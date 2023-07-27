@@ -8,7 +8,7 @@ import json
 import os
 from functools import wraps
 from timeit import default_timer as timer
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, List
 
 import pandas as pd
 import psutil
@@ -199,6 +199,24 @@ def load_smart_appliance(name):  # noqa
     with open(HISIMPATH["smart_appliances"], encoding="utf-8") as filestream:
         data = json.load(filestream)
     return data[name]
+
+
+def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
+    """Tranform LPG timesteps (list of integers) from local time to UTC."""
+    timeshifts = [
+        elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
+        ]
+    steps_per_hour = int(3600 / seconds_per_timestep)
+    timeshift1_as_step = int(dt.timedelta(timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+    timeshift2_as_step = int(dt.timedelta(timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+
+    data_utc = []
+    for elem in data:
+        if elem < timeshift1_as_step or elem > timeshift2_as_step:
+            data_utc.append(elem - steps_per_hour)
+        else:
+            data_utc.append(elem - 2 * steps_per_hour)
+    return data
 
 
 def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:

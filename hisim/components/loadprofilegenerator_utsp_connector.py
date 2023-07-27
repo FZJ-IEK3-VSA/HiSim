@@ -615,6 +615,8 @@ class UtspLpgConnector(cp.Component):
                     for n in range(0, steps_original, steps_ratio)
                 ]
 
+            elif steps_original == steps_desired:
+                pass
             else:
                 raise Exception(
                     "input from LPG is given in wrong time resolution - or at least cannot be interpolated correctly"

@@ -551,6 +551,8 @@ class Occupancy(cp.Component):
                     for n in range(0, steps_original, steps_ratio)
                 ]
 
+            elif steps_original == steps_desired:
+                pass
             else:
                 raise Exception(
                     "input from LPG is given in wrong time resolution - or at least cannot be interpolated correctly"
@@ -562,7 +564,7 @@ class Occupancy(cp.Component):
                 "heating_by_residents": self.heating_by_residents,
                 "electricity_consumption": self.electricity_consumption,
                 "water_consumption": self.water_consumption,
-                "inner_device_heat_gains": self.heating_by_devices,
+                "heating_by_devices": self.heating_by_devices,
                 })
 
             database.to_csv(cache_filepath)

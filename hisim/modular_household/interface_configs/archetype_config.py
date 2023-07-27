@@ -36,10 +36,9 @@ class ArcheTypeConfig:
     #: type of heating system
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
-    mobility_set: Optional[JsonReference] = None
-    # field(
-    #     default_factory=lambda: TransportationDeviceSets.Bus_and_two_60_km_h_Cars  # type: ignore
-    #     )
+    mobility_set: Optional[JsonReference] = field(
+        default_factory=lambda: TransportationDeviceSets.Bus_and_two_60_km_h_Cars  # type: ignore
+        )
     #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
     mobility_distance: Optional[JsonReference] = field(
         default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance  # type: ignore

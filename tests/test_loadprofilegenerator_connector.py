@@ -15,7 +15,7 @@ def test_occupancy():
 
     my_occupancy_profile = "CHR01 Couple both at Work"
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.full_year(2021, seconds_per_timestep)
     my_simulation_parameters.predictive_control = False
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1)
@@ -78,4 +78,4 @@ def test_occupancy():
 #
 #    #assert False
 #    # year_heating_by_occupancy = sum(heating_by_residents)/(60*1E3)
-#    assert year_heating_by_occupancy == 1443.1025
+#    assert year_heating_by_occupancy == 1443.2324

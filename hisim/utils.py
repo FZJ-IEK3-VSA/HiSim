@@ -203,9 +203,8 @@ def load_smart_appliance(name):  # noqa
 
 def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
     """Tranform LPG timesteps (list of integers) from local time to UTC."""
-    timeshifts = [
-        elem for elem in pytz.timezone("Europe/Berlin")._utc_transition_times if elem.year == year
-        ]  # pylint: disable=W0212
+    timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # pylint: disable=W0212
+    timeshifts = [elem for elem in timeshifts if elem.year == year]
     steps_per_hour = int(3600 / seconds_per_timestep)
     timeshift1_as_step = int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
     timeshift2_as_step = int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
@@ -228,7 +227,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
 
     # find out time shifts of selected year
     timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # pylint: disable=W0212
-    timeshifts = [elem for elem in timshifts if elem.year == year]
+    timeshifts = [elem for elem in timeshifts if elem.year == year]
 
     # delete hour in spring if neceary:
     if lastdate > timeshifts[0]:
@@ -247,7 +246,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         data.sort_index(inplace=True)
 
     # delete hour at beginning
-    data = data.loc[:dt.datetime(year=year, month=1, day=1, hour=1)]
+    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1):]
 
     # add hour at end
     last_hour = data.loc[dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23):]

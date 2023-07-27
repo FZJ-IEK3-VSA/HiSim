@@ -518,7 +518,7 @@ class Occupancy(cp.Component):
             self.water_consumption = pd.to_numeric(
                 pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption
                 ).tolist()
-            
+       
             self.heating_by_residents = pd.to_numeric(
                 heating_by_residents_df["Average [W]"]
             ).tolist()

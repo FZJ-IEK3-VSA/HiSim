@@ -78,4 +78,4 @@ def test_occupancy():
 #
 #    #assert False
 #    # year_heating_by_occupancy = sum(heating_by_residents)/(60*1E3)
-#    assert year_heating_by_occupancy == 1443.2324
+#    assert year_heating_by_occupancy == 1443.2325

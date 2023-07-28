@@ -220,3 +220,18 @@ class PhysicsConfig:
     natural_gas_specific_fuel_value_per_kg = (
         natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
     )  # [J/kg]
+
+@dataclass
+class EmissionFactorsAndCostsForFuelsConfig:
+    # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
+    # Todo: check Literature for values
+    electricity_costs_in_euro_per_kwh = 0.2525  # EUR/kWh
+    electricity_footprint_in_kg_per_kwh = 0.44  # kgCO2eq/kWh
+    district_heating_costs_in_euro_per_kwh = 0.0033  # EUR/kWh
+    district_heating_footprint_in_kg_per_kwh = 0.02  # kgCO2eq/kWh
+    gas_costs_in_euro_per_kwh = 0.0861  # EUR/kWh
+    gas_footprint_in_kg_per_kwh = 0.24  # kgCO2eq/kWh
+    oil_costs_in_euro_per_l = 1.159835766  # EUR/l
+    oil_footprint_in_kg_per_l = 3.2  # kgCO2eq/l
+    diesel_costs_in_euro_per_l = 1.617572993  # EUR/l
+    diesel_footprint_in_kg_per_l = 2.6649  # kgCO2eq/l

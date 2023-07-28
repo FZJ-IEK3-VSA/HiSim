@@ -15,8 +15,11 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
 )
-from hisim.components.controller_l1_generic_gas_heater import GenericGasHeaterControllerL1
+from hisim.components.controller_l1_generic_gas_heater import (
+    GenericGasHeaterControllerL1,
+)
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import log
@@ -84,7 +87,9 @@ class GenericGasHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=12_000
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_power_in_watt
+            * 1e-3
+            * 49.47,  # value from emission_factros_and_costs_devices.csv
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
@@ -308,13 +313,15 @@ class GasHeater(Component):
     ) -> Tuple[float, float]:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
+            if (
+                output.component_name == self.config.name
+                and output.load_type == lt.LoadTypes.GAS
+            ):
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index]), 1
                 )
-                # be careful, this is hard coded and should be placed somewhere else!
-                co2_per_unit = 0.24
-                euro_per_unit = 0.0861
+        co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.gas_footprint_in_kg_per_kwh
+        euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.gas_costs_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
         co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit

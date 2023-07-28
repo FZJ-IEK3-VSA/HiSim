@@ -17,6 +17,7 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import utils
 
 __authors__ = "Johanna Ganglbauer"
@@ -214,12 +215,11 @@ class Car(cp.Component):
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index]), 1
                     )
-                    # be careful, this is hard coded and should be placed somewhere else!
-                    co2_per_unit = 2.6
-                    euro_per_unit = 1.6
+                    co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_footprint_in_kg_per_l
+                    euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_costs_in_euro_per_l
                 elif output.unit == lt.Units.WATT:
-                    co2_per_unit = 0.4
-                    euro_per_unit = 0.25
+                    co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
+                    euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index])
                         * self.my_simulation_parameters.seconds_per_timestep

@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 import datetime as dt
-import pytz as pytz
 import numpy as np
 
 # Owned

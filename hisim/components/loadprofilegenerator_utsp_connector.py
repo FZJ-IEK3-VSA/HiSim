@@ -459,7 +459,7 @@ class UtspLpgConnector(cp.Component):
                     "electricity_consumption"
                 ].tolist()
                 self.water_consumption = dataframe["water_consumption"].tolist()
-                self.inner_device_heat_gains = dataframe["inner_device_heat_gains"].to_list()
+                self.heating_by_devices = dataframe["heating_by_devices"].to_list()
 
         if not cache_complete:
             result_data, saved_files = self.get_profiles_from_utsp()

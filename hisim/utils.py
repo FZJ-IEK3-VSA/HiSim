@@ -246,10 +246,10 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
         data.sort_index(inplace=True)
 
     # delete hour at beginning
-    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1):]
+    data = data.loc[dt.datetime(year=year, month=1, day=1, hour=1):lastdate]
 
     # add hour at end
-    last_hour = data.loc[dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23):]
+    last_hour = data.loc[dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23):lastdate]
     data = pd.concat([data, last_hour])
 
     # make integer index again, paste new timestamp (UTC) and format

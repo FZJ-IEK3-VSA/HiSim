@@ -233,7 +233,7 @@ def configure_ev_batteries(
     if charging_station_set is not None:
         charging_power = float(
             (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
-            )
+        )
     else:
         raise Exception("For EV configuration charging station set is obligatory.")
 

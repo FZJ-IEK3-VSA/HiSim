@@ -207,7 +207,24 @@ class Car(cp.Component):
                     euro_per_unit = 0.25
                     self.config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
 
-        return self.config.consumption * euro_per_unit, self.config.consumption * co2_per_unit
+        opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
+        co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+        if self.config.fuel ==  lt.LoadTypes.DIESEL:
+            share_maintenance = 0.01 # anual costs of maintenance as share of capex # Todo: write into config
+        elif self.config.fuel == lt.LoadTypes.ELECTRICITY:
+            pass
+
+        seconds_per_year = 365 * 24 * 60 * 60
+        investment, co2_device, lifetime = self.get_cost_capex(self.config)
+        # add maintenance costs per simulated period
+        opex_cost_per_simulated_period_in_euro += share_maintenance * investment * (
+                self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+
+        # Todo: Are co2-emissions from device redundant with calc_capex in postprocessing? Commented out for now, seperate co2 fpr devices and energy use
+        # co2_per_simulated_period_in_kg +=  (co2_device / lifetime) * (
+        #         self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
 
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""

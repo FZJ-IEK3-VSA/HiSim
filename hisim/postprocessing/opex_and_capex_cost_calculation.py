@@ -64,7 +64,7 @@ def capex_calculation(
     for component in components:
         component_unwrapped = component.my_component
         capex, co2_footprint, lifetime = component_unwrapped.get_cost_capex(
-            component_unwrapped.config
+            config=component_unwrapped.config,
         )
 
         if lifetime > 0:

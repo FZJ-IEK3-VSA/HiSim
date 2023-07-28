@@ -20,7 +20,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install mypy
         pip install pytest
-	pip install .
     - name: mypy
       run: |
         mypy -p hisim --config-file mypy.ini

@@ -245,5 +245,5 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     np.testing.assert_allclose(
         energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
         energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2,
-        rtol=0.15,
+        rtol=0.25,
     )

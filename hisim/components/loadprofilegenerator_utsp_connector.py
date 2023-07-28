@@ -1,6 +1,5 @@
 """ Contains a component that uses the UTSP to provide LoadProfileGenerator data. """
 import datetime
-import pytz
 import errno
 import io
 import itertools

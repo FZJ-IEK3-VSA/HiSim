@@ -1,5 +1,7 @@
 """Simple Car (LPG connected) and configuration.
-Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations."""
+
+Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
+"""
 
 # -*- coding: utf-8 -*-
 from typing import List, Any, Tuple
@@ -198,18 +200,32 @@ class Car(cp.Component):
             )  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        """calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
+            if output.component_name == self.config.name + "_w" + str(
+                self.config.source_weight
+            ):
                 if output.unit == lt.Units.LITER:
-                    self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
+                    self.config.consumption = round(
+                        sum(postprocessing_results.iloc[:, index]), 1
+                    )
                     # be careful, this is hard coded and should be placed somewhere else!
                     co2_per_unit = 2.6
                     euro_per_unit = 1.6
                 elif output.unit == lt.Units.WATT:
                     co2_per_unit = 0.4
                     euro_per_unit = 0.25
-                    self.config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+                    self.config.consumption = round(
+                        sum(postprocessing_results.iloc[:, index])
+                        * self.my_simulation_parameters.seconds_per_timestep
+                        / 3.6e6,
+                        1,
+                    )
 
         opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
         co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
@@ -217,8 +233,14 @@ class Car(cp.Component):
         seconds_per_year = 365 * 24 * 60 * 60
         investment, co2_device, lifetime = self.get_cost_capex(self.config)
         # add maintenance costs per simulated period
-        opex_cost_per_simulated_period_in_euro += self.config.maintenance_cost_as_percentage_of_investment * investment * (
-                self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+        opex_cost_per_simulated_period_in_euro += (
+            self.config.maintenance_cost_as_percentage_of_investment
+            * investment
+            * (
+                self.my_simulation_parameters.duration.total_seconds()
+                / seconds_per_year
+            )
+        )
 
         # Todo: Are co2-emissions from device redundant with calc_capex in postprocessing? Commented out for now, seperate co2 for devices and energy use
         # co2_per_simulated_period_in_kg +=  (co2_device / lifetime) * (
@@ -261,7 +283,9 @@ class Car(cp.Component):
                 elem for elem in filepaths if "CarLocation." + self.config.name in elem
             ][0]
             filepath_meters_driven = [
-                elem for elem in filepaths if "DrivingDistance." + self.config.name in elem
+                elem
+                for elem in filepaths
+                if "DrivingDistance." + self.config.name in elem
             ][0]
             with open(
                 path.join(utils.HISIMPATH["utsp_results"], filepath_location),

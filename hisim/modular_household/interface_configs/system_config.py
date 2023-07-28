@@ -11,8 +11,8 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 @dataclass_json
 @dataclass
 class SystemConfig:
-
     """Defines the configuration and sizing of all components considered in a modular household."""
+
     #: decision on the consideration of smart control for EV charging and heat pump
     surplus_control_considered: bool = False
     #: decision on the consideration of Photovoltaic Panel

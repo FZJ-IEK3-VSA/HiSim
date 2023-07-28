@@ -219,8 +219,7 @@ def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep
 
 
 def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
-    """Transform LPG data from local time (not having explicit time shifts)
-    to UTC. """
+    """Transform LPG data from local time (not having explicit time shifts) to UTC. """
     # convert Time information to pandas datetime and make it to index
     data.index = pd.DatetimeIndex(pd.to_datetime(data["Time"]))
     lastdate = data.index[-1]
@@ -232,28 +231,28 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     # delete hour in spring if neceary:
     if lastdate > timeshifts[0]:
         indices_of_additional_hour_in_spring = data.loc[
-            timeshifts[0] + dt.timedelta(seconds=3600): timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
-            ].index
+            timeshifts[0] + dt.timedelta(seconds=3600):
+            timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
+        ].index
 
         data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
 
     # add hour in autumn if necesary
     if lastdate > timeshifts[1]:
         additional_hours_in_autumn = data.loc[
-            timeshifts[1] + dt.timedelta(seconds=3600): timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
-            ]
+            timeshifts[1] + dt.timedelta(seconds=3600):
+            timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
+        ]
         data = pd.concat([data, additional_hours_in_autumn])
         data.sort_index(inplace=True)
 
     # delete hour at beginning
-    data = data[
-        data.index >= dt.datetime(year=year, month=1, day=1, hour=1)
-        ]
+    data = data[data.index >= dt.datetime(year=year, month=1, day=1, hour=1)]
 
     # add hour at end
     last_hour = data[
         data.index >= dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23)
-        ]
+    ]
     data = pd.concat([data, last_hour])
 
     # make integer index again, paste new timestamp (UTC) and format

@@ -214,8 +214,8 @@ class CarBattery(Component):
                     "Car cannot drive, because battery is empty." +
                     "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
                 )
-            p_bs = p_set
-            p_bat = p_set
+            p_bs = 0
+            p_bat = 0
 
         # write values for output time series
         stsv.set_output_value(self.p_bs, p_bs)

@@ -1,4 +1,5 @@
 """ For setting the configuration of the household. """
+
 # clean
 from dataclasses import dataclass, field
 from typing import Optional

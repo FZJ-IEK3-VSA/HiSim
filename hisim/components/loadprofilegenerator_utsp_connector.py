@@ -566,11 +566,11 @@ class UtspLpgConnector(cp.Component):
                 data=initial_data, year=self.my_simulation_parameters.year)
             
             # extract everything from data frame
-            self.electricity_consumption = initial_data["electricity_consumption"]
-            self.heating_by_residents = initial_data["heating_by_residents"]
-            self.number_of_residents = initial_data["number_of_residents"]
-            self.water_consumption = initial_data["water_consumption"]
-            self.heating_by_devices = initial_data["inner_device_heat_gains"]
+            self.electricity_consumption = initial_data["electricity_consumption"].tolist()
+            self.heating_by_residents = initial_data["heating_by_residents"].tolist()
+            self.number_of_residents = initial_data["number_of_residents"].tolist()
+            self.water_consumption = initial_data["water_consumption"].tolist()
+            self.heating_by_devices = initial_data["inner_device_heat_gains"].tolist()
 
             # average data, when time resolution of inputs is coarser than time resolution of simulation
             if minutes_per_timestep > 1:

@@ -439,33 +439,6 @@ class Occupancy(cp.Component):
                         + gain * occupancy_profile[mode]["Values"][timestep]
                     )
 
-            # convert heat gains and number of persons to data frame and evaluate
-            number_of_residents_df = pd.DataFrame({
-                "Time": pd.date_range(
-                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
-                    dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
-                    freq="T"
-                    ),
-                "Average": number_of_residents
-                })
-            number_of_residents_df = utils.convert_lpg_data_to_utc(
-                data=number_of_residents_df, year=self.my_simulation_parameters.year
-                )
-
-            heating_by_residents_df = pd.DataFrame({
-                "Time": pd.date_range(
-                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
-                    dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
-                    freq="T"
-                    ),
-                "Average [W]": heating_by_residents
-                })
-            heating_by_residents_df = utils.convert_lpg_data_to_utc(
-                data=heating_by_residents_df, year=self.my_simulation_parameters.year
-                )
-
             if self.occupancy_config.profile_with_washing_machine_and_dishwasher:
                 profile_path = utils.HISIMPATH["occupancy"][self.profile_name]["electricity_consumption"]
             else:
@@ -477,22 +450,22 @@ class Occupancy(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Time", "Sum [kWh]"],
+                usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
-            pre_electricity_consumption = utils.convert_lpg_data_to_utc(
-                data=pre_electricity_consumption, year=self.my_simulation_parameters.year,
-            )
-
+            electricity_consumption = pd.to_numeric(
+                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption
+                ).tolist() # 1 kWh/min == 60 000 W / min
+            
             pre_water_consumption = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["water_consumption"],
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Time", "Sum [L]"],
+                usecols=["Sum [L]"],
             ).loc[:(steps_desired_in_minutes - 1)]
-            pre_water_consumption = utils.convert_lpg_data_to_utc(
-                data=pre_water_consumption, year=self.my_simulation_parameters.year,
-            )
+            water_consumption = pd.to_numeric(
+                pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption
+                ).tolist()
 
             pre_heating_by_devices = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["heating_by_devices"],
@@ -501,30 +474,34 @@ class Occupancy(cp.Component):
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
             ).loc[:(steps_desired_in_minutes - 1)]
-            pre_heating_by_devices = utils.convert_lpg_data_to_utc(
-                data=pre_heating_by_devices, year=self.my_simulation_parameters.year,
-            )
-
-            # convert electricity consumption and water consumption to desired format and unit
-            self.electricity_consumption = pd.to_numeric(
-                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption
-                ).tolist() # 1 kWh/min == 60 000 W / min
-
-            self.heating_by_devices = pd.to_numeric(
+            heating_by_devices = pd.to_numeric(
                 pre_heating_by_devices.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
-            self.water_consumption = pd.to_numeric(
-                pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption
-                ).tolist()
-       
-            self.heating_by_residents = pd.to_numeric(
-                heating_by_residents_df["Average [W]"]
-            ).tolist()
+            # convert heat gains and number of persons to data frame and evaluate
+            initial_data = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
+                    freq="T"
+                    ),
+                "number_of_residents": number_of_residents,
+                "heating_by_residents": heating_by_residents,
+                "electricity_consumption": electricity_consumption,
+                "water_consumption": water_consumption,
+                "heating_by_devices": heating_by_devices,
+                })
+            initial_data = utils.convert_lpg_data_to_utc(
+                data=initial_data, year=self.my_simulation_parameters.year
+                )
 
-            self.number_of_residents = pd.to_numeric(
-                number_of_residents_df["Average"]
-            ).tolist()
+            # extract everything from data frame
+            self.electricity_consumption = initial_data["electricity_consumption"].tolist()
+            self.heating_by_residents = initial_data["heating_by_residents"].tolist()
+            self.number_of_residents = initial_data["number_of_residents"].tolist()
+            self.water_consumption = initial_data["water_consumption"].tolist()
+            self.heating_by_devices = initial_data["heating_by_devices"].tolist()
 
             # average data, when time resolution of inputs is coarser than time resolution of simulation
             if minutes_per_timestep > 1:

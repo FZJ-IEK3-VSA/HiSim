@@ -465,7 +465,7 @@ class UtspLpgConnector(cp.Component):
             (
                 electricity,
                 warm_water,
-                inner_device_heat_gains_list,
+                inner_device_heat_gains,
                 high_activity,
                 low_activity,
             ) = result_data
@@ -534,9 +534,9 @@ class UtspLpgConnector(cp.Component):
             ).loc[: (steps_desired_in_minutes - 1)]
             water_consumption_list = pd.to_numeric(
                 pre_water_consumption["Sum [L]"]
-            ).tolist()  
+            ).tolist()
 
-            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains_list)
+            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
             pre_inner_device_heat_gains = pd.read_csv(
                 inner_device_heat_gain_data,
                 sep=";",

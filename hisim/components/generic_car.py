@@ -49,7 +49,7 @@ class CarConfig(cp.ConfigBase):
     cost: float
     #: lifetime of car in years
     lifetime: float
-    # maintencnnce cost as share of investment [0..1]
+    # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the car in kWh or l
     consumption: float
@@ -205,7 +205,7 @@ class Car(cp.Component):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> Tuple[float, float]:
-        """calculate OPEX costs, consisting of energy and maintenance costs."""
+        """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(
                 self.config.source_weight

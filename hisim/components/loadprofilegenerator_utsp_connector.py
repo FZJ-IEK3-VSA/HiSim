@@ -465,7 +465,7 @@ class UtspLpgConnector(cp.Component):
             (
                 electricity,
                 warm_water,
-                inner_device_heat_gains,
+                inner_device_heat_gains_list,
                 high_activity,
                 low_activity,
             ) = result_data
@@ -521,7 +521,7 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="cp1252",
             ).loc[: (steps_desired_in_minutes - 1)]
-            electricity_consumption = pd.to_numeric(
+            electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
@@ -532,18 +532,18 @@ class UtspLpgConnector(cp.Component):
                 decimal=".",
                 encoding="cp1252",
             ).loc[: (steps_desired_in_minutes - 1)]
-            water_consumption = pd.to_numeric(
+            water_consumption_list = pd.to_numeric(
                 pre_water_consumption["Sum [L]"]
             ).tolist()  
 
-            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
+            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains_list)
             pre_inner_device_heat_gains = pd.read_csv(
                 inner_device_heat_gain_data,
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
             ).loc[: (steps_desired_in_minutes - 1)]
-            inner_device_heat_gains = pd.to_numeric(
+            inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
@@ -558,9 +558,9 @@ class UtspLpgConnector(cp.Component):
             
             initial_data["number_of_residents"] = number_of_residents
             initial_data["heating_by_residents"] = heating_by_residents
-            initial_data["electricity_consumption"] = electricity_consumption
-            initial_data["water_consumption"] = water_consumption
-            initial_data["inner_device_heat_gains"] = inner_device_heat_gains
+            initial_data["electricity_consumption"] = electricity_consumption_list
+            initial_data["water_consumption"] = water_consumption_list
+            initial_data["inner_device_heat_gains"] = inner_device_heat_gains_list
 
             initial_data = utils.convert_lpg_data_to_utc(
                 data=initial_data, year=self.my_simulation_parameters.year)

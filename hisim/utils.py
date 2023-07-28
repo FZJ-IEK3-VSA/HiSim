@@ -222,7 +222,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     """Transform LPG data from local time (not having explicit time shifts)
     to UTC. """
     # convert Time information to pandas datetime and make it to index
-    data.index = pd.DateTimeIndex(pd.to_datetime(data["Time"]))
+    data.index = pd.DatetimeIndex(pd.to_datetime(data["Time"]))
     lastdate = data.index[-1]
 
     # find out time shifts of selected year

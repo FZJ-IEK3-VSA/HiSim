@@ -320,7 +320,7 @@ class GasHeater(Component):
         co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
 
         seconds_per_year = 365 * 24 * 60 * 60
-        investment, co2_device, lifetime = self.get_cost_capex(self.config)
+        investment, co2_device, lifetime = self.get_cost_capex(self.config)  # noqa
 
         # add maintenance costs per simulated period
         opex_cost_per_simulated_period_in_euro += (

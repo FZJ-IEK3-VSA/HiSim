@@ -231,7 +231,9 @@ def configure_ev_batteries(
         raise Exception("For EV configuration mobility set is obligatory.")
 
     if charging_station_set is not None:
-        charging_power = float(charging_station_set.Name.split("with ")[1].split(" kW")[0])
+        charging_power = float(
+            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
+            )
     else:
         raise Exception("For EV configuration charging station set is obligatory.")
 

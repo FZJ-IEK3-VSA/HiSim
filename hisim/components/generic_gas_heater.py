@@ -4,6 +4,9 @@
 from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -57,6 +60,10 @@ class GenericGasHeaterConfig(ConfigBase):
     cost: float
     #: lifetime in years
     lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
+    #: consumption of the car in kWh or l
+    consumption: float
 
     @classmethod
     def get_default_gasheater_config(
@@ -80,6 +87,8 @@ class GenericGasHeaterConfig(ConfigBase):
             co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption=0,
         )
         return config
 
@@ -291,3 +300,36 @@ class GasHeater(Component):
     def get_cost_capex(config: GenericGasHeaterConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        """Calculate OPEX costs, consisting of energy and maintenance costs."""
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
+                self.config.consumption = round(
+                    sum(postprocessing_results.iloc[:, index]), 1
+                )
+                # be careful, this is hard coded and should be placed somewhere else!
+                co2_per_unit = 0.24
+                euro_per_unit = 0.0861
+
+        opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
+        co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+
+        seconds_per_year = 365 * 24 * 60 * 60
+        investment, co2_device, lifetime = self.get_cost_capex(self.config)
+
+        # add maintenance costs per simulated period
+        opex_cost_per_simulated_period_in_euro += (
+            self.config.maintenance_cost_as_percentage_of_investment
+            * investment
+            * (
+                self.my_simulation_parameters.duration.total_seconds()
+                / seconds_per_year
+            )
+        )
+
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg

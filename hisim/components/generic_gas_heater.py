@@ -1,7 +1,7 @@
 """Gas Heater Module."""
 # clean
 # Owned
-from typing import List, Any, Tuple
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import (
@@ -12,7 +12,9 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
 )
-from hisim.components.controller_l1_generic_gas_heater import GenericGasHeaterControllerL1
+from hisim.components.controller_l1_generic_gas_heater import (
+    GenericGasHeaterControllerL1,
+)
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -51,35 +53,25 @@ class GenericGasHeaterConfig(ConfigBase):
     maximal_temperature_in_celsius: float  # [°C]
     temperature_delta_in_celsius: float  # [°C]
     maximal_power_in_watt: float  # [W]
-    #: CO2 footprint of investment in kg
-    co2_footprint: float
-    #: cost for investment in Euro
-    cost: float
-    #: lifetime in years
-    lifetime: float
 
     @classmethod
     def get_default_gasheater_config(
         cls,
     ) -> Any:
         """Get a default Building."""
-        maximal_power_in_watt: float = 12_000  # W
         config = GenericGasHeaterConfig(
             name="GenericGasHeater",
             temperature_delta_in_celsius=10,
-            maximal_power_in_watt=maximal_power_in_watt,
+            maximal_power_in_watt=12_000,
             is_modulating=True,
             minimal_thermal_power_in_watt=1_000,  # [W]
-            maximal_thermal_power_in_watt=maximal_power_in_watt,  # [W]
+            maximal_thermal_power_in_watt=12_000,  # [W]
             eff_th_min=0.60,  # [-]
             eff_th_max=0.90,  # [-]
             delta_temperature_in_celsius=25,
             maximal_mass_flow_in_kilogram_per_second=12_000
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
         )
         return config
 
@@ -255,26 +247,34 @@ class GasHeater(Component):
             maximum_power = control_signal * self.maximal_thermal_power_in_watt
             eff_th_real = self.eff_th_min + d_eff_th * control_signal
 
-        gas_power = maximum_power * eff_th_real * control_signal
+        gas_power_in_watt = maximum_power * eff_th_real * control_signal
         c_w = 4182
-        mass_out_temp = self.temperature_delta_in_celsius + stsv.get_input_value(
-            self.mass_flow_input_tempertaure_channel
+        mass_flow_out_temperature_in_celsius = (
+            self.temperature_delta_in_celsius
+            + stsv.get_input_value(self.mass_flow_input_tempertaure_channel)
         )
-        mass_out = gas_power / (c_w * self.temperature_delta_in_celsius)
+        mass_flow_out_in_kg_per_s = gas_power_in_watt / (
+            c_w * self.temperature_delta_in_celsius
+        )
         # p_th = (
-        #     c_w * mass_out * (mass_out_temp - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
+        #     c_w * mass_flow_out_in_kg_per_s * (mass_flow_out_temperature_in_celsius - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
         # )
+        gas_demand_in_kwh = (
+            gas_power_in_watt
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e6
+        )
 
         stsv.set_output_value(
-            self.thermal_output_power_channel, gas_power
+            self.thermal_output_power_channel, gas_power_in_watt
         )  # efficiency
         stsv.set_output_value(
-            self.mass_flow_output_temperature_channel, mass_out_temp
+            self.mass_flow_output_temperature_channel,
+            mass_flow_out_temperature_in_celsius,
         )  # efficiency
-        stsv.set_output_value(self.mass_flow_output_channel, mass_out)  # efficiency
-        stsv.set_output_value(self.gas_demand_channel, gas_power)  # gas consumption
-
-    @staticmethod
-    def get_cost_capex(config: GenericGasHeaterConfig) -> Tuple[float, float, float]:
-        """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        stsv.set_output_value(
+            self.mass_flow_output_channel, mass_flow_out_in_kg_per_s
+        )  # efficiency
+        stsv.set_output_value(
+            self.gas_demand_channel, gas_demand_in_kwh
+        )  # gas consumption

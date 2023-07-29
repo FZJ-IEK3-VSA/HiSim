@@ -5,6 +5,9 @@ See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 from typing import Any, List, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 from hplib import hplib as hpl
 
 # Import modules from HiSim
@@ -21,6 +24,7 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import log
 
 
@@ -60,6 +64,10 @@ class HeatPumpHplibConfig(ConfigBase):
     cost: float
     #: lifetime in years
     lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
+    #: consumption of the heatpump in kWh
+    consumption: float
 
     @classmethod
     def get_default_generic_advanced_hp_lib(cls):
@@ -82,6 +90,8 @@ class HeatPumpHplibConfig(ConfigBase):
             co2_footprint=set_thermal_output_power_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
             cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            consumption=0,
         )
 
 
@@ -466,6 +476,35 @@ class HeatPumpHplib(Component):
     def get_cost_capex(config: HeatPumpHplibConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        """Calculate OPEX costs, consisting of energy and maintenance costs."""
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == "HeatPumpHPLib"
+                and output.load_type == LoadTypes.ELECTRICITY
+            ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
+                self.config.consumption = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+
+        co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
+
+        opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
+        co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+
+        opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
+
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
+
 
 @dataclass
 class HeatPumpState:

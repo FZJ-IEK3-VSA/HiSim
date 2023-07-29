@@ -4,7 +4,7 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -215,6 +215,8 @@ class PVSystemConfig(ConfigBase):
     co2_footprint: float
     #: cost for investment in Euro
     cost: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
     #: lifetime in years
     lifetime: float
 
@@ -236,6 +238,7 @@ class PVSystemConfig(ConfigBase):
             location="Aachen",
             co2_footprint=power * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
             cost=power * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
 
@@ -397,6 +400,7 @@ class PVSystem(cp.Component):
             source_weight=source_weight,
             co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
             cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
         return config
@@ -405,6 +409,16 @@ class PVSystem(cp.Component):
     def get_cost_capex(config: PVSystemConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for PV."""
+
+        return self.calc_maintenance_cost(), 0
 
     def get_default_connections_from_weather(self):
         log.information("setting weather default connections")

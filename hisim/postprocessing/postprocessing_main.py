@@ -700,7 +700,7 @@ class PostProcessor:
         self.write_new_chapter_with_text_content_to_report(
             report=report,
             lines=opex_compute_return,
-            headline=". Costs and Emissions"
+            headline=". Operational Costs and Emissions"
         )
 
     def compute_and_write_capex_costs_to_report(

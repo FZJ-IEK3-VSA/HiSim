@@ -18,7 +18,7 @@ def opex_calculation(
     total_operational_co2_footprint = 0.0
     total_operational_cost = 0.0
     lines = []
-    lines.append("component_name, costs, co2_footprint")
+    lines.append("Component, Costs, C02 footprint")
 
     for component in components:
         component_unwrapped = component.my_component
@@ -58,7 +58,7 @@ def capex_calculation(
 
     lines = []
     lines.append(
-        "component_name, investment_costs_per_simulated_period, device_co2_footprint_per_simulated_period, lifetime"
+        "Component, Investment for simulated period, Devices CO2 footprint for simulated period, Lifetime"
     )
 
     for component in components:
@@ -98,10 +98,10 @@ def capex_calculation(
     my_cost_df.to_csv(pathname, index=False, header=False, encoding="utf8")
 
     lines.append(
-        f"investment cost per simulated periond: {total_investment_cost_per_simulated_period:3.0f} EUR"
+        f"investment cost for simulated periond: {total_investment_cost_per_simulated_period:3.0f} EUR"
     )
     lines.append(
-        f"CO2-emissions for production of all devices per simulated periond: {total_device_co2_footprint_per_simulated_period:3.0f} kg"
+        f"CO2-emissions for production of all devices for simulated periond: {total_device_co2_footprint_per_simulated_period:3.0f} kg"
     )
 
     lines.append(f"total investment cost: {total_investment_cost:3.0f} EUR")

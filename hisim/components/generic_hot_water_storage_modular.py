@@ -9,6 +9,7 @@ from dataclasses import dataclass
 # clean
 # Generic/Built-in
 from typing import Any, List, Optional, Tuple
+import pandas as pd
 import numpy as np
 from dataclasses_json import dataclass_json
 
@@ -63,6 +64,8 @@ class StorageConfig(cp.ConfigBase):
     cost: float
     #: lifetime in years
     lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_main_classname(cls):
@@ -112,9 +115,10 @@ class StorageConfig(cp.ConfigBase):
             u_value=0.36,
             energy_full_cycle=None,
             power=0,
-            co2_footprint=100,  # Todo: check value
+            co2_footprint=0,  # Todo: check value
             cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # SOURCE: VDI2067-1
+            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
         )
         return config
 
@@ -139,6 +143,7 @@ class StorageConfig(cp.ConfigBase):
             co2_footprint=100,  # Todo: check value
             cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
         )
         return config
 
@@ -578,3 +583,13 @@ class HotWaterStorage(dycp.DynamicComponent):
     def get_cost_capex(config: StorageConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for DHW Storage."""
+
+        return self.calc_maintenance_cost(), 0

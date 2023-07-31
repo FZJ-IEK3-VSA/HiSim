@@ -228,9 +228,9 @@ class PIDController(cp.Component):
     def build(self, my_simulation_repository):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
-        self.h_tr_w = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_glazing
-        )
+        self.h_tr_w = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
+        )#Thermal_transmission_coefficient_glazing
         self.h_tr_ms = my_simulation_repository.get_entry(
             Building.Thermal_transmission_coefficient_opaque_ms
         )

@@ -5,6 +5,9 @@
 from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 import hisim.component as cp
 from hisim.component import (
     SingleTimeStepValues,
@@ -48,6 +51,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     cost: float
     #: lifetime in years
     lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
@@ -63,6 +68,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
         )
         return config
 
@@ -691,6 +697,15 @@ class SimpleHotWaterStorage(cp.Component):
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
 
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+
+        return self.calc_maintenance_cost(), 0
 
 @dataclass_json
 @dataclass

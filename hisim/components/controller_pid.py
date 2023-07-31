@@ -16,6 +16,7 @@ from hisim.components.building import Building
 # from hisim.components.weather import Weather
 # from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim import log
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

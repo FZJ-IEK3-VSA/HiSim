@@ -227,6 +227,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
     # Todo: check Literature for values
     electricity_costs_in_euro_per_kwh = 0.2525  # EUR/kWh
     electricity_footprint_in_kg_per_kwh = 0.44  # kgCO2eq/kWh
+    electricity_to_grid_revenue_in_euro_per_kwh = 0.2525  # EUR/kWh  # Todo: Change Value!!!
     district_heating_costs_in_euro_per_kwh = 0.0033  # EUR/kWh
     district_heating_footprint_in_kg_per_kwh = 0.02  # kgCO2eq/kWh
     gas_costs_in_euro_per_kwh = 0.0861  # EUR/kWh

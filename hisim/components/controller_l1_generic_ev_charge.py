@@ -5,6 +5,8 @@ from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
+import pandas as pd
+
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from utspclient.helpers.lpgdata import ChargingStationSets
 
@@ -45,6 +47,8 @@ class ChargingStationConfig(cp.ConfigBase):
     cost: float
     #: lifetime of charging station in years
     lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @staticmethod
     def get_default_config(
@@ -59,6 +63,7 @@ class ChargingStationConfig(cp.ConfigBase):
             co2_footprint=100,  # Todo: check value
             cost=1000,  # Todo: check value
             lifetime=18, # value similar to car # Todo: check value
+            maintenance_cost_as_percentage_of_investment=0.05,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
         )
         return config
 
@@ -280,3 +285,16 @@ class L1Controller(cp.Component):
     def get_cost_capex(config: ChargingStationConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for Wallbox.
+
+        Electricity costs are added on car -> no electricity costs for Wallbox.
+        """
+
+        return self.calc_maintenance_cost(), 0

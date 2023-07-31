@@ -221,12 +221,12 @@ class Building(dynamic_component.DynamicComponent):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     
     # Building parameters 5R1C --> controller_mpc
-    Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"
-    Thermal_transmission_coefficient_opaque_ms="Thermal_transmission_coefficient_opaque_ms"
-    Thermal_transmission_coefficient_opaque_em="Thermal_transmission_coefficient_opaque_em"
-    Thermal_transmission_coefficient_ventillation="Thermal_transmission_coefficient_ventillation"
-    Thermal_transmission_Surface_IndoorAir="Thermal_transmission_Surface_IndoorAir"
-    Thermal_capacity_envelope="Thermal_capacity_envelope"
+    # Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"
+    # Thermal_transmission_coefficient_opaque_ms="Thermal_transmission_coefficient_opaque_ms"
+    # Thermal_transmission_coefficient_opaque_em="Thermal_transmission_coefficient_opaque_em"
+    # Thermal_transmission_coefficient_ventillation="Thermal_transmission_coefficient_ventillation"
+    # Thermal_transmission_Surface_IndoorAir="Thermal_transmission_Surface_IndoorAir"
+    # Thermal_capacity_envelope="Thermal_capacity_envelope"
 
     @utils.measure_execution_time
     def __init__(
@@ -854,8 +854,8 @@ class Building(dynamic_component.DynamicComponent):
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing, entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
-        )
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING, entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
+        ) #Thermal_transmission_coefficient_glazing
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir, 
             entry=self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin

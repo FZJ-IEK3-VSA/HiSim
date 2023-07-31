@@ -114,7 +114,7 @@ class SingletonDictKeyEnum(enum.Enum):
     SETCOOLINGTEMPERATUREFORWATERSTORAGE = 8
     HEATINGSYSTEM = 9
     LOCATION = 10
-    Thermal_transmission_coefficient_glazing = 11
+    THERMALTRANSMISSIONCOEFFICIENTGLAZING = 11
     Thermal_transmission_Surface_IndoorAir = 12
     Thermal_transmission_coefficient_opaque_em = 13
     Thermal_transmission_coefficient_opaque_ms = 14

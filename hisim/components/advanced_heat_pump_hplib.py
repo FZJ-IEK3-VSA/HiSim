@@ -113,8 +113,7 @@ class HeatPumpHplib(Component):
 
     # Outputs
     ThermalOutputPower = "ThermalOutputPower"  # W
-    # ElectricalInputPower = "ElectricalInputPower"  # W  # changed to "ElectricalOutput" that it can be used in sumbuilder
-    ElectricityOutput = "ElectricityOutput"  # W
+    ElectricalInputPower = "ElectricalInputPower"  # W
     COP = "COP"  # -
     EER = "EER"  # -
     TemperatureOutput = "TemperatureOutput"  # °C
@@ -220,7 +219,7 @@ class HeatPumpHplib(Component):
 
         self.p_el: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityOutput,
+            field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=postprocessing_flag,

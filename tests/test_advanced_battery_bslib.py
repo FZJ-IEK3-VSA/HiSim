@@ -24,8 +24,8 @@ def test_advanced_battery_bslib():
     e_bat_custom = 10  # kWh
     name = "Battery"
     source_weight = 1
-    charge_in_kwh = 0,
-    discharge_in_kwh = 0,
+    charge_in_kwh = 0
+    discharge_in_kwh = 0
     co2_footprint = e_bat_custom *130.7
     cost = e_bat_custom *535.81
     lifetime = 10

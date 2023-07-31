@@ -60,10 +60,10 @@ def compute_consumption_production(
                 production_ids.append(index)
 
             elif (
-                    InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
-                    in output.postprocessing_flag
-                    or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-                    in output.postprocessing_flag
+                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+                in output.postprocessing_flag
+                or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                in output.postprocessing_flag
             ):
                 consumption_ids.append(index)
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
@@ -75,21 +75,32 @@ def compute_consumption_production(
             continue
 
     postprocessing_results = pd.DataFrame()
-    postprocessing_results["consumption"] = pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
-    postprocessing_results["production"] = pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["consumption"] = (
+        pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
+    )
+    postprocessing_results["production"] = (
+        pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
+    )
 
-    postprocessing_results["battery_charge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
-    postprocessing_results["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(upper=0).sum(axis=1) * (-1)
+    postprocessing_results["battery_charge"] = (
+        pd.DataFrame(results.iloc[:, battery_charge_discharge_ids])
+        .clip(lower=0)
+        .sum(axis=1)
+    )
+    postprocessing_results["battery_discharge"] = pd.DataFrame(
+        results.iloc[:, battery_charge_discharge_ids]
+    ).clip(upper=0).sum(axis=1) * (-1)
 
     return postprocessing_results
 
 
 def compute_hot_water_storage_losses_and_cycles(
     components: List[ComponentWrapper],
-    all_outputs: List, results: pd.DataFrame,
+    all_outputs: List,
+    results: pd.DataFrame,
     timeresolution: int,
 ) -> Tuple[float, float, float, float, float, float]:
-    """Computes hot water storage losses and cycles. """
+    """Computes hot water storage losses and cycles."""
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
     charge_sum_dhw = 0.0
@@ -101,7 +112,9 @@ def compute_hot_water_storage_losses_and_cycles(
 
     # get cycle of water storages
     for elem in components:
-        if isinstance(elem.my_component, generic_hot_water_storage_modular.HotWaterStorage):
+        if isinstance(
+            elem.my_component, generic_hot_water_storage_modular.HotWaterStorage
+        ):
             use = elem.my_component.use
             if use == ComponentType.BUFFER:
                 cycle_buffer = elem.my_component.config.energy_full_cycle
@@ -112,34 +125,60 @@ def compute_hot_water_storage_losses_and_cycles(
         if output.postprocessing_flag is not None:
             if InandOutputType.CHARGE in output.postprocessing_flag:
                 if InandOutputType.WATER_HEATING in output.postprocessing_flag:
-                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(
+                        power_timeseries=results.iloc[:, index],
+                        timeresolution=timeresolution,
+                    )
                 elif InandOutputType.HEATING in output.postprocessing_flag:
-                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(
+                        power_timeseries=results.iloc[:, index],
+                        timeresolution=timeresolution,
+                    )
             elif InandOutputType.DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BOILER in output.postprocessing_flag:
-                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(
+                        power_timeseries=results.iloc[:, index],
+                        timeresolution=timeresolution,
+                    )
                 elif ComponentType.BUFFER in output.postprocessing_flag:
-                    discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    discharge_sum_buffer = (
+                        discharge_sum_buffer
+                        + compute_energy_from_power(
+                            power_timeseries=results.iloc[:, index],
+                            timeresolution=timeresolution,
+                        )
+                    )
         else:
             continue
         if cycle_dhw is not None:
             cycles_dhw = charge_sum_dhw / cycle_dhw
         else:
             cycles_dhw = 0
-            log.error("Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. ")
+            log.error(
+                "Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. "
+            )
         storage_loss_dhw = charge_sum_dhw - discharge_sum_dhw
         if cycle_buffer is not None:
             cycles_buffer = charge_sum_buffer / cycle_buffer
         else:
             cycles_buffer = 0
-            log.error("Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. ")
+            log.error(
+                "Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. "
+            )
         storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
     if cycle_buffer == 0:
         building_heating = charge_sum_buffer
     else:
         building_heating = discharge_sum_buffer
 
-    return cycles_dhw, storage_loss_dhw, discharge_sum_dhw, cycles_buffer, storage_loss_buffer, building_heating
+    return (
+        cycles_dhw,
+        storage_loss_dhw,
+        discharge_sum_dhw,
+        cycles_buffer,
+        storage_loss_buffer,
+        building_heating,
+    )
 
 
 def compute_self_consumption_and_injection(
@@ -147,8 +186,13 @@ def compute_self_consumption_and_injection(
 ) -> Tuple[pd.Series, pd.Series]:
     """Computes the self consumption and the grid injection."""
     # account for battery
-    production_with_battery = postprocessing_results["production"] + postprocessing_results["battery_discharge"]
-    consumption_with_battery = postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
+    production_with_battery = (
+        postprocessing_results["production"]
+        + postprocessing_results["battery_discharge"]
+    )
+    consumption_with_battery = (
+        postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
+    )
 
     # evaluate injection and sum over time
     injection = production_with_battery - consumption_with_battery
@@ -176,11 +220,15 @@ def compute_self_consumption_and_injection(
 
 
 def search_electricity_prices_in_results(
-        all_outputs: List, results: pd.DataFrame
+    all_outputs: List, results: pd.DataFrame
 ) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
     """Extracts electricity price consumption and electricity price production from results."""
-    electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]
-    electricity_price_injection = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]
+    electricity_price_consumption = pd.Series(
+        dtype=pd.Float64Dtype
+    )  # type: pd.Series[float]
+    electricity_price_injection = pd.Series(
+        dtype=pd.Float64Dtype
+    )  # type: pd.Series[float]
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
             if LoadTypes.PRICE in output.postprocessing_flag:
@@ -225,10 +273,8 @@ def compute_cost_of_fuel_type(
                     continue
     if not fuel_consumption.empty:
         if fuel in [LoadTypes.ELECTRICITY, LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
-            consumption_sum = (
-                compute_energy_from_power(
-                    power_timeseries=fuel_consumption, timeresolution=timeresolution
-                )
+            consumption_sum = compute_energy_from_power(
+                power_timeseries=fuel_consumption, timeresolution=timeresolution
             )
         else:
             consumption_sum = sum(fuel_consumption)
@@ -265,7 +311,9 @@ def compute_kpis(
     price_frame = read_in_fuel_costs()
 
     # compute consumption and production and extract price signals
-    postprocessing_results = compute_consumption_production(all_outputs=all_outputs, results=results)
+    postprocessing_results = compute_consumption_production(
+        all_outputs=all_outputs, results=results
+    )
     (
         electricity_price_consumption,
         electricity_price_injection,
@@ -335,7 +383,8 @@ def compute_kpis(
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
             price = price + compute_energy_from_power(
-                power_timeseries=postprocessing_results["consumption"] - self_consumption,
+                power_timeseries=postprocessing_results["consumption"]
+                - self_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
         else:
@@ -349,7 +398,8 @@ def compute_kpis(
         if not electricity_price_consumption.empty:
             # substract self consumption from consumption for bill calculation
             price = price + compute_energy_from_power(
-                power_timeseries=postprocessing_results["consumption"] * electricity_price_consumption,
+                power_timeseries=postprocessing_results["consumption"]
+                * electricity_price_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
         else:
@@ -374,14 +424,22 @@ def compute_kpis(
         co2 = co2 + fuel_co2
         price = price + fuel_price
 
-    cycles_dhw, loss_dhw, use_dhw, cycles_buffer, loss_buffer, use_heating = compute_hot_water_storage_losses_and_cycles(
-        components=components, all_outputs=all_outputs, results=results, timeresolution=simulation_parameters.seconds_per_timestep,
+    (
+        cycles_dhw,
+        loss_dhw,
+        use_dhw,
+        cycles_buffer,
+        loss_buffer,
+        use_heating,
+    ) = compute_hot_water_storage_losses_and_cycles(
+        components=components,
+        all_outputs=all_outputs,
+        results=results,
+        timeresolution=simulation_parameters.seconds_per_timestep,
     )
 
     # compute cost and co2 for investment/installation:
-    investment_cost, co2_footprint = compute_investment_cost(
-        components=components
-    )
+    investment_cost, co2_footprint = compute_investment_cost(components=components)
 
     # initilize lines for report
     lines: List = []

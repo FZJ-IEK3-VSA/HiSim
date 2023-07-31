@@ -647,13 +647,11 @@ class PVSystem(cp.Component):
                 self.data_length = self.my_simulation_parameters.timesteps
 
         self.modules = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
-            index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]), index_col=0,
         )
 
         self.inverters = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]),
-            index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]), index_col=0,
         )
 
         self.temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
@@ -789,11 +787,7 @@ class PVSystem(cp.Component):
             aoi=aoi,
         )
         # calculate pv performance
-        sapm_out = pvlib.pvsystem.sapm(
-            sapm_irr,
-            module=self.module,
-            temp_cell=pvtemps,
-        )
+        sapm_out = pvlib.pvsystem.sapm(sapm_irr, module=self.module, temp_cell=pvtemps,)
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()

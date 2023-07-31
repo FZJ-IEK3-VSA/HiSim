@@ -217,24 +217,20 @@ class Car(cp.Component):
                     )
                     co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_footprint_in_kg_per_l
                     euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_costs_in_euro_per_l
+
+                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost() + self.config.consumption * euro_per_unit
+                    co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+
                 elif output.unit == lt.Units.WATT:
-                    co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
-                    euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index])
                         * self.my_simulation_parameters.seconds_per_timestep
                         / 3.6e6,
                         1,
                     )
-
-        opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
-        co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
-
-        opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
-
-        # Todo: Are co2-emissions from device redundant with calc_capex in postprocessing? Commented out for now, seperate co2 for devices and energy use
-        # co2_per_simulated_period_in_kg +=  (co2_device / lifetime) * (
-        #         self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+                    # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
+                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
+                    co2_per_simulated_period_in_kg = 0.0
 
         return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
 

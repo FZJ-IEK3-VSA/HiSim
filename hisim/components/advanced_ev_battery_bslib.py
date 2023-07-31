@@ -218,6 +218,11 @@ class CarBattery(Component):
         return self.battery_config.get_string_dict()
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+        """Calculate OPEX costs.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None and \
                     output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight):
@@ -228,6 +233,8 @@ class CarBattery(Component):
                     self.battery_config.discharge = round(
                         postprocessing_results.iloc[:, index].clip(upper=0).sum()
                         * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+        # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
+
         return 0, 0
 
 

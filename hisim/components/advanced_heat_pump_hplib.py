@@ -481,7 +481,11 @@ class HeatPumpHplib(Component):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> Tuple[float, float]:
-        """Calculate OPEX costs, consisting of energy and maintenance costs."""
+        """Calculate OPEX costs, consisting of maintenance costs.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == "HeatPumpHPLib"
@@ -494,15 +498,7 @@ class HeatPumpHplib(Component):
                     1,
                 )
 
-        co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
-        euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
-
-        opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
-        co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
-
-        opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
-
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
+        return self.calc_maintenance_cost(), 0.0
 
 
 @dataclass

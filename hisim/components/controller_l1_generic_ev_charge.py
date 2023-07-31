@@ -292,9 +292,10 @@ class L1Controller(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> Tuple[float, float]:
         # pylint: disable=unused-argument
-        """Calculate OPEX costs, consisting of maintenance costs for Wallbox.
+        """Calculate OPEX costs, consisting of maintenance costs snd write total energy consumption to component-config.
 
-        Electricity costs are added on car -> no electricity costs for Wallbox.
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
         """
 
         return self.calc_maintenance_cost(), 0

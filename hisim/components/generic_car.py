@@ -304,7 +304,7 @@ class Car(cp.Component):
             # translate car location to integers (according to location_translator)
             initial_data = pd.DataFrame({
                 "Time": pd.date_range(
-            start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
                 end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
                 dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
                 freq="T"
@@ -338,6 +338,9 @@ class Car(cp.Component):
                         input_list=location_list
                     )  # extract most common
                     self.car_location.append(occurence_count)
+            else:
+                self.meters_driven = meters_driven
+                self.car_location = car_location
 
             # save data in cache
             database = pd.DataFrame({

@@ -41,16 +41,10 @@ The module contains the following classes:
 
 # Generic/Built-in
 from typing import List, Any, Optional
-from functools import (
-    lru_cache,
-)
+from functools import lru_cache
 import math
-from dataclasses import (
-    dataclass,
-)
-from dataclasses_json import (
-    dataclass_json,
-)
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 import pvlib
 import pandas as pd
 
@@ -58,27 +52,13 @@ from hisim import (
     dynamic_component,
     utils,
 )
-from hisim import (
-    component as cp,
-)
-from hisim import (
-    loadtypes as lt,
-)
-from hisim import (
-    log,
-)
-from hisim.components.loadprofilegenerator_utsp_connector import (
-    UtspLpgConnector,
-)
-from hisim.simulationparameters import (
-    SimulationParameters,
-)
-from hisim.components.weather import (
-    Weather,
-)
-from hisim.components.loadprofilegenerator_connector import (
-    Occupancy,
-)
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim import log
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
+from hisim.simulationparameters import SimulationParameters
+from hisim.components.weather import Weather
+from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -112,9 +92,7 @@ class BuildingConfig(cp.ConfigBase):
     number_of_apartments: Optional[float]
 
     @classmethod
-    def get_default_german_single_family_home(
-        cls,
-    ) -> Any:
+    def get_default_german_single_family_home(cls,) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
             name="Building_1",
@@ -149,18 +127,14 @@ class BuildingState:
             thermal_capacitance_in_joule_per_kelvin
         )
 
-    def calc_stored_thermal_power_in_watt(
-        self,
-    ) -> float:
+    def calc_stored_thermal_power_in_watt(self,) -> float:
         """Calculate the thermal power stored by the thermal mass per second."""
         return (
             self.thermal_mass_temperature_in_celsius
             * self.thermal_capacitance_in_joule_per_kelvin
         ) / 3600
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the Building State."""
         return BuildingState(
             self.thermal_mass_temperature_in_celsius,
@@ -219,20 +193,10 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
-    
-    # Building parameters 5R1C --> controller_mpc
-    # Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"
-    # Thermal_transmission_coefficient_opaque_ms="Thermal_transmission_coefficient_opaque_ms"
-    # Thermal_transmission_coefficient_opaque_em="Thermal_transmission_coefficient_opaque_em"
-    # Thermal_transmission_coefficient_ventillation="Thermal_transmission_coefficient_ventillation"
-    # Thermal_transmission_Surface_IndoorAir="Thermal_transmission_Surface_IndoorAir"
-    # Thermal_capacity_envelope="Thermal_capacity_envelope"
 
     @utils.measure_execution_time
     def __init__(
-        self,
-        my_simulation_parameters: SimulationParameters,
-        config: BuildingConfig,
+        self, my_simulation_parameters: SimulationParameters, config: BuildingConfig,
     ):
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
@@ -254,9 +218,7 @@ class Building(dynamic_component.DynamicComponent):
         self.set_cooling_temperature_in_celsius_default: float = 25
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
-            self.component_name,
-            self.buildingconfig,
-            self.my_simulation_parameters,
+            self.component_name, self.buildingconfig, self.my_simulation_parameters,
         )
         # labeled as C_m in the paper [1] (** Check header), before c_m
         self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin: float = 0
@@ -370,10 +332,8 @@ class Building(dynamic_component.DynamicComponent):
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
         ):
-            self.set_heating_temperature_in_celsius = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-                )
+            self.set_heating_temperature_in_celsius = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
             )
         else:
             self.set_heating_temperature_in_celsius = (
@@ -386,10 +346,8 @@ class Building(dynamic_component.DynamicComponent):
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
         ):
-            self.set_cooling_temperature_in_celsius = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-                )
+            self.set_cooling_temperature_in_celsius = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
             )
         else:
             self.set_cooling_temperature_in_celsius = (
@@ -424,11 +382,7 @@ class Building(dynamic_component.DynamicComponent):
             True,
         )
         self.azimuth_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.Azimuth,
-            lt.LoadTypes.ANY,
-            lt.Units.DEGREES,
-            True,
+            self.component_name, self.Azimuth, lt.LoadTypes.ANY, lt.Units.DEGREES, True,
         )
         self.apparent_zenith_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -541,32 +495,24 @@ class Building(dynamic_component.DynamicComponent):
         self.add_default_connections(self.get_default_connections_from_occupancy())
         self.add_default_connections(self.get_default_connections_from_utsp())
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get weather default connnections."""
         log.information("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
             cp.ComponentConnection(
-                Building.Altitude,
-                weather_classname,
-                Weather.Altitude,
+                Building.Altitude, weather_classname, Weather.Altitude,
             )
         )
         connections.append(
             cp.ComponentConnection(
-                Building.Azimuth,
-                weather_classname,
-                Weather.Azimuth,
+                Building.Azimuth, weather_classname, Weather.Azimuth,
             )
         )
         connections.append(
             cp.ComponentConnection(
-                Building.ApparentZenith,
-                weather_classname,
-                Weather.ApparentZenith,
+                Building.ApparentZenith, weather_classname, Weather.ApparentZenith,
             )
         )
         connections.append(
@@ -606,9 +552,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         return connections
 
-    def get_default_connections_from_occupancy(
-        self,
-    ):
+    def get_default_connections_from_occupancy(self,):
         """Get occupancy default connections."""
         log.information("setting occupancy default connections")
         connections = []
@@ -622,9 +566,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         return connections
 
-    def get_default_connections_from_utsp(
-        self,
-    ):
+    def get_default_connections_from_utsp(self,):
         """Get UTSP default connections."""
         log.information("setting utsp default connections")
         connections = []
@@ -736,8 +678,7 @@ class Building(dynamic_component.DynamicComponent):
             internal_surface_temperature_in_celsius,
         )
         stsv.set_output_value(
-            self.indoor_air_temperature_channel,
-            indoor_air_temperature_in_celsius,
+            self.indoor_air_temperature_channel, indoor_air_temperature_in_celsius,
         )
 
         # phi_loss is already given in W, time correction factor applied to thermal transmittance h_tr
@@ -748,8 +689,7 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         stsv.set_output_value(
-            self.heat_loss_channel,
-            self.heat_loss_in_watt,
+            self.heat_loss_channel, self.heat_loss_in_watt,
         )
 
         stsv.set_output_value(
@@ -762,47 +702,31 @@ class Building(dynamic_component.DynamicComponent):
             self.cache[timestep] = solar_heat_gain_through_windows
             if timestep + 1 == self.my_simulation_parameters.timesteps:
                 database = pd.DataFrame(
-                    self.cache,
-                    columns=["solar_gain_through_windows"],
+                    self.cache, columns=["solar_gain_through_windows"],
                 )
                 database.to_csv(
-                    self.cache_file_path,
-                    sep=",",
-                    decimal=".",
-                    index=False,
+                    self.cache_file_path, sep=",", decimal=".", index=False,
                 )
 
     # =================================================================================================================================
 
-    def i_save_state(
-        self,
-    ) -> None:
+    def i_save_state(self,) -> None:
         """Save the current state."""
         self.previous_state = self.state.self_copy()
 
-    def i_prepare_simulation(
-        self,
-    ) -> None:
+    def i_prepare_simulation(self,) -> None:
         """Prepare the simulation."""
         pass
 
-    def i_restore_state(
-        self,
-    ) -> None:
+    def i_restore_state(self,) -> None:
         """Restore the previous state."""
         self.state = self.previous_state.self_copy()
 
-    def i_doublecheck(
-        self,
-        timestep: int,
-        stsv: cp.SingleTimeStepValues,
-    ) -> None:
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues,) -> None:
         """Doublecheck."""
         pass
 
-    def build(
-        self,
-    ):
+    def build(self,):
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -877,9 +801,7 @@ class Building(dynamic_component.DynamicComponent):
             entry=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
         )
 
-    def get_physical_param(
-        self,
-    ):
+    def get_physical_param(self,):
         """Get the physical parameters from the building data."""
 
         # Reference area [m^2] (TABULA: Reference floor area )Ref: ISO standard 7.2.2.2
@@ -938,9 +860,7 @@ class Building(dynamic_component.DynamicComponent):
             * self.scaled_conditioned_floor_area_in_m2
         )
 
-    def get_building(
-        self,
-    ):
+    def get_building(self,):
         """Get the building code from a TABULA building."""
         d_f = pd.read_csv(
             utils.HISIMPATH["housing"],
@@ -1005,9 +925,7 @@ class Building(dynamic_component.DynamicComponent):
 
         self.number_of_apartments = number_of_apartments
 
-    def get_windows(
-        self,
-    ):
+    def get_windows(self,):
         """Retrieve data about windows sizes.
 
         :return:
@@ -1068,9 +986,7 @@ class Building(dynamic_component.DynamicComponent):
             self.cache = [0] * self.my_simulation_parameters.timesteps
         else:
             self.solar_heat_gain_through_windows = pd.read_csv(
-                self.cache_file_path,
-                sep=",",
-                decimal=".",
+                self.cache_file_path, sep=",", decimal=".",
             )["solar_gain_through_windows"].tolist()
 
     def scaling_over_conditioned_floor_area(self):
@@ -1210,25 +1126,18 @@ class Building(dynamic_component.DynamicComponent):
 
     # =====================================================================================================================================
 
-    def __str__(
-        self,
-    ):
+    def __str__(self,):
         """Return lines from report as string format."""
         entire = str()
         lines = self.write_to_report()
-        for (
-            index,
-            line,
-        ) in enumerate(lines):
+        for (index, line,) in enumerate(lines):
             if index == 0:
                 entire = line
             else:
                 entire = f"{entire}\n{line}"
         return entire
 
-    def write_to_report(
-        self,
-    ):
+    def write_to_report(self,):
         """Write important variables to report."""
         lines = []
 
@@ -1319,9 +1228,7 @@ class Building(dynamic_component.DynamicComponent):
     # (**/*** Check header)
 
     @property
-    def transmission_heat_transfer_coefficient_1_in_watt_per_kelvin(
-        self,
-    ):
+    def transmission_heat_transfer_coefficient_1_in_watt_per_kelvin(self,):
         """Definition to simplify calc_phi_m_tot. Long form for H_tr_1.
 
         # (C.6) in [C.3 ISO 13790]
@@ -1334,9 +1241,7 @@ class Building(dynamic_component.DynamicComponent):
         )
 
     @property
-    def transmission_heat_transfer_coefficient_2_in_watt_per_kelvin(
-        self,
-    ):
+    def transmission_heat_transfer_coefficient_2_in_watt_per_kelvin(self,):
         """Definition to simplify calc_phi_m_tot. Long form for H_tr_2.
 
         # (C.7) in [C.3 ISO 13790]
@@ -1348,9 +1253,7 @@ class Building(dynamic_component.DynamicComponent):
         )
 
     @property
-    def transmission_heat_transfer_coefficient_3_in_watt_per_kelvin(
-        self,
-    ):
+    def transmission_heat_transfer_coefficient_3_in_watt_per_kelvin(self,):
         """Definition to simplify calc_phi_m_tot. Long form for H_tr_3.
 
         # (C.8) in [C.3 ISO 13790]
@@ -1396,9 +1299,7 @@ class Building(dynamic_component.DynamicComponent):
             * self.heat_transfer_coefficient_between_thermal_mass_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
         )
 
-    def get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin(
-        self,
-    ):
+    def get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin(self,):
         """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
         # Long from for H_tr_op: H_tr_op = 1/ (1/H_tr_ms + 1/H_tr_em) with
         # H_tr_ms: Conductance of opaque surfaces to interior [W/K] and H_tr_em: Conductance of opaque surfaces to exterior [W/K]
@@ -1424,14 +1325,17 @@ class Building(dynamic_component.DynamicComponent):
             and self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
             != 0
         ):
-            self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin = 1 / (
-                (
-                    1
-                    / self.transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
-                )
-                - (
-                    1
-                    / self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+            self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin = (
+                1
+                / (
+                    (
+                        1
+                        / self.transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+                    )
+                    - (
+                        1
+                        / self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+                    )
                 )
             )
 
@@ -1445,9 +1349,7 @@ class Building(dynamic_component.DynamicComponent):
             * self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_with_fixed_value_in_watt_per_m2_per_kelvin
         )
 
-    def get_thermal_conductance_ventilation_in_watt_per_kelvin(
-        self,
-    ):
+    def get_thermal_conductance_ventilation_in_watt_per_kelvin(self,):
         """Based on the EPISCOPE TABULA (* Check header)."""
         # Long from for H_ve_adj: Ventilation
         # Determine the ventilation conductance
@@ -1463,9 +1365,7 @@ class Building(dynamic_component.DynamicComponent):
             * float(self.buildingdata["h_room"].iloc[0])
         )
 
-    def get_conductances(
-        self,
-    ):
+    def get_conductances(self,):
         """Get the thermal conductances based on the norm EN ISO 13970.
 
         :key
@@ -1577,8 +1477,7 @@ class Building(dynamic_component.DynamicComponent):
     # (**/*** Check header)
 
     def calc_next_thermal_mass_temperature_in_celsius(
-        self,
-        previous_thermal_mass_temperature_in_celsius,
+        self, previous_thermal_mass_temperature_in_celsius,
     ):
         """Primary Equation, calculates the temperature of the next time step: T_m,t.
 
@@ -1652,8 +1551,7 @@ class Building(dynamic_component.DynamicComponent):
         )
 
     def calc_thermal_mass_averag_bulk_temperature_in_celsius_used_for_calculations(
-        self,
-        previous_thermal_mass_temperature_in_celsius,
+        self, previous_thermal_mass_temperature_in_celsius,
     ):
         """Temperature used for the calculations, average between newly calculated and previous bulk temperature: T_m.
 
@@ -1744,8 +1642,7 @@ class Building(dynamic_component.DynamicComponent):
 
         # Updates flows
         heat_loss_in_watt = self.calc_heat_flow(
-            internal_heat_gains_in_watt,
-            solar_heat_gains_in_watt,
+            internal_heat_gains_in_watt, solar_heat_gains_in_watt,
         )
 
         # Updates total flow
@@ -1765,21 +1662,17 @@ class Building(dynamic_component.DynamicComponent):
 
         # keep these calculations if later you are interested in the indoor surface or air temperature
         # Updates internal surface temperature (t_s)
-        internal_room_surface_temperature_in_celsius = (
-            self.calc_temperature_of_internal_room_surfaces_in_celsius(
-                outside_temperature_in_celsius,
-                thermal_mass_average_bulk_temperature_in_celsius,
-                thermal_power_delivered_in_watt,
-            )
+        internal_room_surface_temperature_in_celsius = self.calc_temperature_of_internal_room_surfaces_in_celsius(
+            outside_temperature_in_celsius,
+            thermal_mass_average_bulk_temperature_in_celsius,
+            thermal_power_delivered_in_watt,
         )
 
         # Updates indoor air temperature (t_air)
-        indoor_air_temperature_in_celsius = (
-            self.calc_temperature_of_the_inside_air_in_celsius(
-                outside_temperature_in_celsius,
-                internal_room_surface_temperature_in_celsius,
-                thermal_power_delivered_in_watt,
-            )
+        indoor_air_temperature_in_celsius = self.calc_temperature_of_the_inside_air_in_celsius(
+            outside_temperature_in_celsius,
+            internal_room_surface_temperature_in_celsius,
+            thermal_power_delivered_in_watt,
         )
 
         return (
@@ -2024,10 +1917,7 @@ class Window:
         self.reduction_factor_with_area = self.reduction_factor * self.area
 
     def calc_direct_solar_factor(
-        self,
-        sun_altitude,
-        sun_azimuth,
-        apparent_zenith,
+        self, sun_altitude, sun_azimuth, apparent_zenith,
     ):
         """Calculate the cosine of the angle of incidence on the window.
 
@@ -2052,9 +1942,7 @@ class Window:
 
         return direct_factor
 
-    def calc_diffuse_solar_factor(
-        self,
-    ):
+    def calc_diffuse_solar_factor(self,):
         """Calculate the proportion of diffuse radiation.
 
         Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)

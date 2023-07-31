@@ -226,26 +226,26 @@ class PIDController(cp.Component):
         """Prepare the simulation."""
         pass
 
-    def build(self, my_simulation_repository):
+    def build(self):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
         self.h_tr_w = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
-        )#Thermal_transmission_coefficient_glazing
-        self.h_tr_ms = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_opaque_ms
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing
         )
-        self.h_tr_em = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_opaque_em
+        self.h_tr_ms = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms
         )
-        self.h_ve_adj = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_ventillation
+        self.h_tr_em = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em
         )
-        self.h_tr_is = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_Surface_IndoorAir
+        self.h_ve_adj = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation
         )
-        self.c_m = my_simulation_repository.get_entry(
-            Building.Thermal_capacity_envelope
+        self.h_tr_is = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir
+        )
+        self.c_m = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_capacity_envelope
         )
 
     def i_save_state(self):

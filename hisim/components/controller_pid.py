@@ -165,31 +165,60 @@ class PIDController(cp.Component):
         )
 
         self.thermal_power: cp.ComponentOutput = self.add_output(
-            self.component_name, self.ThermalPowerPID, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.ThermalPowerPID,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.ThermalPowerPID} will follow.",
         )
         self.error_pvalue_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error_pvalue, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.error_pvalue,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.error_pvalue} will follow.",
         )
-
         self.error_ivalue_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error_ivalue, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.error_ivalue,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.error_ivalue} will follow.",
         )
         self.error_dvalue_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error_dvalue, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.error_dvalue,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.error_dvalue} will follow.",
         )
         self.error_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error, LoadTypes.ANY, Units.CELSIUS
+            self.component_name,
+            self.error,
+            LoadTypes.ANY,
+            Units.CELSIUS,
+            output_description=f"here a description for PV {self.error} will follow.",
         )
-
         self.derivator_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.derivator, LoadTypes.ANY, Units.CELSIUS
+            self.component_name,
+            self.derivator,
+            LoadTypes.ANY,
+            Units.CELSIUS,
+            output_description=f"here a description for PV {self.derivator} will follow.",
         )
-
         self.integrator_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.integrator, LoadTypes.ANY, Units.CELSIUS
+            self.component_name,
+            self.integrator,
+            LoadTypes.ANY,
+            Units.CELSIUS,
+            output_description=f"here a description for PV {self.integrator} will follow.",
         )
         self.feed_forward_signalC: cp.ComponentOutput = self.add_output(
-            self.component_name, self.FeedForwardSignal, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.FeedForwardSignal,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.FeedForwardSignal} will follow.",
         )
 
     def get_building_default_connections(self):

@@ -432,11 +432,17 @@ class HeatStorageController(cp.Component):
         self.initial_temperature_building = (
             self.heatstoragecontroller_config.initial_temperature_building
         )
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
-            self.ref_max_thermal_build_demand_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND)
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+        ):
+            self.ref_max_thermal_build_demand_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+            )
         else:
-            raise KeyError("The key max thermal building demand was not found in the singleton sim repository. This might be because the building was not initialized before generic heat water storager controller."
-                           "Please check the order of the initialization in your example.")
+            raise KeyError(
+                "The key max thermal building demand was not found in the singleton sim repository. This might be because the building was not initialized before generic heat water storager controller."
+                "Please check the order of the initialization in your example."
+            )
         # ===================================================================================================================
         # Inputs
         # self.ref_max_thermal_build_demand: ComponentInput = self.add_input(
@@ -510,14 +516,14 @@ class HeatStorageController(cp.Component):
             self.heating_storage_temperature
         )  # Start-Temp-Storage
         last_var_hw = stsv.get_input_value(self.real_thermal_demand_building)
-        max_mass_flow_heat_storage = (self.ref_max_thermal_build_demand_in_watt / (
+        max_mass_flow_heat_storage = self.ref_max_thermal_build_demand_in_watt / (
             4.1851
             * 1000
             * (
                 self.initial_temperature_heating_storage
                 - self.initial_temperature_building
             )
-        ))
+        )
 
         max_last_var_hw = (
             max_mass_flow_heat_storage

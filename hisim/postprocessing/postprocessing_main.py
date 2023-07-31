@@ -5,7 +5,6 @@ import sys
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 import string
-import json
 import pandas as pd
 
 from hisim.components import building
@@ -27,6 +26,7 @@ from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.json_generator import JsonConfigurationGenerator
 
 
 class PostProcessor:
@@ -701,6 +701,16 @@ class PostProcessor:
     ) -> None:
         """Prepare the results for the scenario evaluation with pyam."""
 
+        # create pyam data foler
+        pyam_data_folder = os.path.join(
+            ppdt.simulation_parameters.result_directory, "pyam_data"
+        )
+        if os.path.exists(pyam_data_folder) is False:
+            os.makedirs(pyam_data_folder)
+        else:
+            log.information("This pyam_data path exists already: " + pyam_data_folder)
+
+        # make dictionaries with pyam data structure for hourly and yearly data
         simple_dict_hourly_data: Dict = {
             "model": [],
             "scenario": [],
@@ -719,20 +729,39 @@ class PostProcessor:
             "year": [],
             "value": [],
         }
+        # set pyam model name
         model = "".join(["HiSim_", ppdt.module_filename])
-        scenario = ppdt.setup_function
-        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
-        year = ppdt.simulation_parameters.year
-        timeseries = (
-            ppdt.results_hourly.index
-        )  # .strftime("%Y-%m-%d %H:%M:%S").to_list()
 
+        # set pyam scenario name
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
+        ):
+            scenario = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
+            )
+        else:
+            scenario = ppdt.setup_function
+        # set pyam region
+        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        # set pyam year or timeseries
+        year = ppdt.simulation_parameters.year
+        timeseries = ppdt.results_hourly.index
+
+        # got through all components and read values, variables and units
         for column in ppdt.results_hourly:
+
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(
-                    "".join([x for x in column if x in string.ascii_letters + "'- "])
+                    "".join(
+                        [
+                            x
+                            for x in column
+                            if x in string.ascii_letters + "'- " + string.digits
+                        ]
+                    )
                 ).split(sep=" ")
+
                 variable = "".join(
                     [
                         column_splitted[0],
@@ -742,7 +771,9 @@ class PostProcessor:
                         column_splitted[2],
                     ]
                 )
+
                 unit = column_splitted[5]
+
                 simple_dict_hourly_data["model"].append(model)
                 simple_dict_hourly_data["scenario"].append(scenario)
                 simple_dict_hourly_data["region"].append(region)
@@ -755,11 +786,18 @@ class PostProcessor:
             value = ppdt.results_cumulative[column].values[0]
 
             column_splitted = str(
-                "".join([x for x in column if x in string.ascii_letters + "'- "])
+                "".join(
+                    [
+                        x
+                        for x in column
+                        if x in string.ascii_letters + "'- " + string.digits
+                    ]
+                )
             ).split(sep=" ")
             variable = "".join(
                 [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
             )
+
             unit = column_splitted[5]
             simple_dict_cumulative_data["model"].append(model)
             simple_dict_cumulative_data["scenario"].append(scenario)
@@ -772,7 +810,8 @@ class PostProcessor:
         # create dataframe
         simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
-        # write dictionary with all import parameters
+
+        # create dictionary with all import pyam information
         data_information_dict = {
             "model": model,
             "scenario": scenario,
@@ -780,67 +819,38 @@ class PostProcessor:
             "year": year,
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
-        component_counter = 0
-        for component in ppdt.wrapped_components:
-            try:
-                # rename keys because some get overwritten if key name exists several times
-                dict_config = component.my_component.config.to_dict()
-                rename_dict_config = {}
-                for key, value in dict_config.items():
-                    rename_dict_config[
-                        f"component {component_counter} {key}"
-                    ] = dict_config[key]
-                dict_config = rename_dict_config
-                del rename_dict_config
-            except BaseException as exc:
-                raise ValueError(
-                    "component.my_component.config.to_dict() does probably not work. "
-                    "That might be because the config of the component does not inherit from Configbase. "
-                    "Please change your config class according to the other component config classes with the configbase inheritance."
-                ) from exc
 
-            try:
-                # try json dumping and if it works append data information dict
-                component.my_component.config.to_json()
-                data_information_dict.update(dict_config)
-                component_counter = component_counter + 1
-
-            except Exception as ex:
-                # else try to convert data types so that json dumping works out
-                for key, value in dict_config.items():
-                    if not isinstance(value, (int, float, str, bool, type(None))):
-                        if isinstance(value, list):
-                            # transform list to string so it can be json serializable later
-                            dict_config[key] = str(value).strip("[]")
-                            # append data information dict
-                            data_information_dict.update(dict_config)
-                            component_counter = component_counter + 1
-                        else:
-                            raise ValueError(
-                                "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
-                            ) from ex
-
-        pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
-        os.makedirs(pyam_data_folder)
-        file_name = f"{pyam_data_folder}{ppdt.module_filename}_{ppdt.setup_function}"
-        file_name_hourly = (
-            file_name
-            + f"_hourly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+        # write json config with all component configs, module config, pyam information dict and simulation parameters
+        json_generator_config = JsonConfigurationGenerator(name=f"{scenario}")
+        json_generator_config.set_simulation_parameters(
+            my_simulation_parameters=ppdt.simulation_parameters
         )
-        file_name_yearly = (
-            file_name
-            + f"_yearly_results_for{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv"
+        if ppdt.my_module_config_path is not None:
+            json_generator_config.set_module_config(
+                my_module_config_path=ppdt.my_module_config_path
+            )
+        json_generator_config.set_pyam_data_information_dict(
+            pyam_data_information_dict=data_information_dict
+        )
+        for component in ppdt.wrapped_components:
+            json_generator_config.add_component(config=component.my_component.config)
+
+        # save the json config
+        json_generator_config.save_to_json(
+            filename=os.path.join(pyam_data_folder, "data_information_for_pyam.json")
+        )
+
+        # write csv files with all hourly and yearly data in the pyam data folder
+        file_name_hourly = os.path.join(
+            pyam_data_folder,
+            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
+        )
+        file_name_yearly = os.path.join(
+            pyam_data_folder,
+            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
         )
         simple_df_hourly_data.to_csv(
             path_or_buf=file_name_hourly,
             index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
-
-        # Serializing json
-        json_object = json.dumps(data_information_dict, indent=4)
-        # Writing to sample.json
-        with open(
-            pyam_data_folder + "data_information_for_pyam.json", "w", encoding="utf-8"
-        ) as outfile:
-            outfile.write(json_object)

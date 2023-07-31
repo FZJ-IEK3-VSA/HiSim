@@ -198,7 +198,13 @@ class L1Controller(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def control(self, car_consumption: float, car_location: int, soc: float, electricity_target: float) -> float:
+    def control(
+        self,
+        car_consumption: float,
+        car_location: int,
+        soc: float,
+        electricity_target: float,
+    ) -> float:
         if car_consumption > 0:
             return car_consumption * (-1)
         if car_location != self.charging_location:
@@ -223,7 +229,12 @@ class L1Controller(cp.Component):
                 electricity_target = stsv.get_input_value(self.electricity_target)
             else:
                 electricity_target = 0
-            self.state.power = self.control(car_consumption, car_location=car_location, soc=soc, electricity_target=electricity_target)
+            self.state.power = self.control(
+                car_consumption,
+                car_location=car_location,
+                soc=soc,
+                electricity_target=electricity_target,
+            )
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.p_set, self.state.power)
 

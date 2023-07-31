@@ -1044,12 +1044,7 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     data.index = pd.date_range(
         f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC"
     )
-    data = data.rename(
-        columns={
-            "Temperature": "T",
-            "Wind Speed": "Wspd",
-        }
-    )
+    data = data.rename(columns={"Temperature": "T", "Wind Speed": "Wspd",})
     return data
 
 

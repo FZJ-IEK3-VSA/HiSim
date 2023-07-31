@@ -85,7 +85,7 @@ def household_gas_heater(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
-        name="UTSP Connector",
+        name="UTSPConnector",
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
     )

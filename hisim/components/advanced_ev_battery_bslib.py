@@ -10,8 +10,14 @@ from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
 from hisim import log
-from hisim.component import (Component, ComponentConnection, ComponentInput,
-                             ComponentOutput, ConfigBase, SingleTimeStepValues)
+from hisim.component import (
+    Component,
+    ComponentConnection,
+    ComponentInput,
+    ComponentOutput,
+    ConfigBase,
+    SingleTimeStepValues,
+)
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -30,6 +36,7 @@ __status__ = "development"
 @dataclass
 class CarBatteryConfig(ConfigBase):
     """Configuration of a Car Battery. """
+
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -229,17 +236,30 @@ class CarBattery(Component):
         """Writes Car Battery values to report."""
         return self.battery_config.get_string_dict()
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
-            if output.postprocessing_flag is not None and \
-                    output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight):
+            if (
+                output.postprocessing_flag is not None
+                and output.component_name
+                == self.battery_config.name
+                + "_w"
+                + str(self.battery_config.source_weight)
+            ):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge = round(
                         postprocessing_results.iloc[:, index].clip(lower=0).sum()
-                        * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+                        * self.my_simulation_parameters.seconds_per_timestep
+                        / 3.6e6,
+                        1,
+                    )
                     self.battery_config.discharge = round(
                         postprocessing_results.iloc[:, index].clip(upper=0).sum()
-                        * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+                        * self.my_simulation_parameters.seconds_per_timestep
+                        / 3.6e6,
+                        1,
+                    )
         return 0, 0
 
 

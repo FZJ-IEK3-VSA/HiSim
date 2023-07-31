@@ -314,14 +314,14 @@ class SmartDevice(cp.Component):
                         sum(
                             el[
                                 offset
-                                + minutes_per_timestep * i: offset
+                                + minutes_per_timestep * i : offset
                                 + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                last = el[offset + (i + 1) * minutes_per_timestep:]
+                last = el[offset + (i + 1) * minutes_per_timestep :]
                 if offset != minutes_per_timestep:
                     elem_el.append(sum(last) / (minutes_per_timestep - offset))
                 electricity_profile.append(elem_el)
@@ -348,10 +348,19 @@ class SmartDevice(cp.Component):
         lines.append(f"Consumption: {self.consumption:.2f}")
         return lines
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
+            if (
+                output.component_name == self.component_name
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+            ):
                 co2_per_unit = 0.4
                 euro_per_unit = 0.25
-                self.consumption = sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6
+                self.consumption = (
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6
+                )
         return self.consumption * euro_per_unit, self.consumption * co2_per_unit

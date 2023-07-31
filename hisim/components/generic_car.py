@@ -194,20 +194,34 @@ class Car(cp.Component):
             )  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float]:
+    def get_cost_opex(
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
+            if output.component_name == self.config.name + "_w" + str(
+                self.config.source_weight
+            ):
                 if output.unit == lt.Units.LITER:
-                    self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
+                    self.config.consumption = round(
+                        sum(postprocessing_results.iloc[:, index]), 1
+                    )
                     # be careful, this is hard coded and should be placed somewhere else!
                     co2_per_unit = 2.6
                     euro_per_unit = 1.6
                 elif output.unit == lt.Units.WATT:
                     co2_per_unit = 0.4
                     euro_per_unit = 0.25
-                    self.config.consumption = round(sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6, 1)
+                    self.config.consumption = round(
+                        sum(postprocessing_results.iloc[:, index])
+                        * self.my_simulation_parameters.seconds_per_timestep
+                        / 3.6e6,
+                        1,
+                    )
 
-        return self.config.consumption * euro_per_unit, self.config.consumption * co2_per_unit
+        return (
+            self.config.consumption * euro_per_unit,
+            self.config.consumption * co2_per_unit,
+        )
 
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""
@@ -244,7 +258,9 @@ class Car(cp.Component):
                 elem for elem in filepaths if "CarLocation." + self.config.name in elem
             ][0]
             filepath_meters_driven = [
-                elem for elem in filepaths if "DrivingDistance." + self.config.name in elem
+                elem
+                for elem in filepaths
+                if "DrivingDistance." + self.config.name in elem
             ][0]
             with open(
                 path.join(utils.HISIMPATH["utsp_results"], filepath_location),

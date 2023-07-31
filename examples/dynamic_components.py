@@ -64,15 +64,15 @@ def dynamic_components_demonstration(
 
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig(
         system_id="SG1",
-        p_inv_custom=5.0,
-        e_bat_custom=10.0,
+        custom_pv_inverter_power_generic_in_watt=5.0,
+        custom_battery_capacity_generic_in_kilowatt_hour=10.0,
         name="Battery",
         source_weight=1,
     )
     my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig(
         system_id="SG1",
-        p_inv_custom=2.5,
-        e_bat_custom=5.0,
+        custom_pv_inverter_power_generic_in_watt=2.5,
+        custom_battery_capacity_generic_in_kilowatt_hour=5.0,
         name="Battery",
         source_weight=2,
     )

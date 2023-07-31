@@ -1,13 +1,14 @@
 """Postprocessing: computes investment cost and CO2 footprint of technical equipment.
 
 Functions from this file are called in Postprocessing option compute_kpis."""
-from hisim.components import (generic_hot_water_storage_modular,
-                              generic_pv_system,
-                              generic_smart_device,
-                              generic_heat_source,
-                              advanced_battery_bslib,
-                              generic_car
-                              )
+from hisim.components import (
+    generic_hot_water_storage_modular,
+    generic_pv_system,
+    generic_smart_device,
+    generic_heat_source,
+    advanced_battery_bslib,
+    generic_car,
+)
 
 from hisim.utils import HISIMPATH
 import pandas as pd
@@ -29,8 +30,8 @@ def read_in_component_costs() -> pd.DataFrame:
 
 
 def compute_investment_cost(
-        components: List[ComponentWrapper],
-        ) -> Tuple[float, float]:
+    components: List[ComponentWrapper],
+) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
     :param components: List of all configured components in the HiSIM example.
@@ -45,14 +46,19 @@ def compute_investment_cost(
 
     for component in components:
         if isinstance(component.my_component, generic_smart_device.SmartDevice):
-            column = price_frame.iloc[price_frame.index == "Washing machine (or domestic appliances in general)"]
+            column = price_frame.iloc[
+                price_frame.index
+                == "Washing machine (or domestic appliances in general)"
+            ]
             component_capacity = 1.0
         elif isinstance(component.my_component, generic_pv_system.PVSystem):
             column = price_frame.iloc[price_frame.index == "Photovoltaic panel"]
             component_capacity = component.my_component.pvconfig.power * 1e-3
         elif isinstance(component.my_component, generic_heat_source.HeatSource):
             if component.my_component.config.fuel == LoadTypes.DISTRICTHEATING:
-                column = price_frame.iloc[price_frame.index == "Biomass district heating system"]
+                column = price_frame.iloc[
+                    price_frame.index == "Biomass district heating system"
+                ]
             elif component.my_component.config.fuel == LoadTypes.GAS:
                 column = price_frame.iloc[price_frame.index == "Gas boiler"]
             elif component.my_component.config.fuel == LoadTypes.OIL:
@@ -60,12 +66,14 @@ def compute_investment_cost(
             elif component.my_component.config.fuel == LoadTypes.ELECTRICITY:
                 column = price_frame.iloc[price_frame.index == "Electric heating"]
             component_capacity = component.my_component.config.power_th * 1e-3
-        elif isinstance(component.my_component, generic_hot_water_storage_modular.HotWaterStorage):
+        elif isinstance(
+            component.my_component, generic_hot_water_storage_modular.HotWaterStorage
+        ):
             column = price_frame.iloc[price_frame.index == "Hot Water tank"]
             component_capacity = component.my_component.volume
         elif isinstance(component.my_component, advanced_battery_bslib.Battery):
             column = price_frame.iloc[price_frame.index == "Lithium iron phosphate battery"]
-            component_capacity = component.my_component.e_bat_custom
+            component_capacity = component.my_component.custom_battery_capacity_generic_in_kilowatt_hour
         elif isinstance(component.my_component, generic_car.Car):
             if component.my_component.config.fuel == LoadTypes.ELECTRICITY:
                 column = price_frame.iloc[price_frame.index == "Electric vehicle"]
@@ -75,7 +83,12 @@ def compute_investment_cost(
 
         else:
             continue
-        co2_emissions = co2_emissions + float(column["annual Footprint"].iloc[0]) * component_capacity
-        investment_cost = investment_cost + float(column["annual cost"].iloc[0]) * component_capacity
+        co2_emissions = (
+            co2_emissions
+            + float(column["annual Footprint"].iloc[0]) * component_capacity
+        )
+        investment_cost = (
+            investment_cost + float(column["annual cost"].iloc[0]) * component_capacity
+        )
 
     return investment_cost, co2_emissions

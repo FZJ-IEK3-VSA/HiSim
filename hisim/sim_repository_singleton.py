@@ -120,3 +120,4 @@ class SingletonDictKeyEnum(enum.Enum):
     Thermal_transmission_coefficient_opaque_ms = 14
     Thermal_transmission_coefficient_ventillation = 15
     Thermal_capacity_envelope = 16
+    

@@ -88,6 +88,7 @@ class HouseholdAdvancedHPDieselCarConfig:
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
                 name="UTSPConnector",
                 consumption=0.0,
+                profile_with_washing_machine_and_dishwasher=True,
             ),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
             hdscontroller_config=(

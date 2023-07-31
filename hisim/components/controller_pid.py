@@ -122,7 +122,7 @@ class PIDController(cp.Component):
         )
 
         self.my_simulation_parameters = my_simulation_parameters
-        self.build(my_simulation_repository)
+        self.build()
         proportional_gain, integral_gain, derivative_gain = self.PIDtuning()
         # --------------------------------------------------
         # control saturation

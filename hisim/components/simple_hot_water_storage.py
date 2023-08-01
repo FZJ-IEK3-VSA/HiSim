@@ -701,6 +701,7 @@ class SimpleHotWaterStorage(cp.Component):
 
         return self.calc_maintenance_cost(), 0
 
+
 @dataclass_json
 @dataclass
 class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):

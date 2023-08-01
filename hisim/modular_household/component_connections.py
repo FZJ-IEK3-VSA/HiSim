@@ -181,7 +181,6 @@ def configure_cars(
         else:
             my_car_config = generic_car.CarConfig.get_default_diesel_config()
         # reset name and source weight
-        my_car_config.name = car
         my_car_config.source_weight = count
         my_cars.append(
             generic_car.Car(

@@ -33,7 +33,6 @@ class GCHPConfig(cp.ConfigBase):
     p_th: float
     p_fuel: float
 
-
     @staticmethod
     def get_default_config() -> Any:
         config = GCHPConfig(

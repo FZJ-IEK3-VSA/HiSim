@@ -21,10 +21,11 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         mode: Any,
         setup_function: Any,
         module_filename: Any,
+        my_module_config_path: Any,
         execution_time: Any,
         results_monthly: Any,
         results_hourly: Any,
-        results_cumulative: Any
+        results_cumulative: Any,
     ) -> None:
         """Initializes the values."""
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
@@ -36,6 +37,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.mode = mode
         self.setup_function = setup_function
         self.module_filename = module_filename
+        self.my_module_config_path = my_module_config_path
         self.execution_time = execution_time
         self.results_monthly = results_monthly
         self.results_hourly = results_hourly

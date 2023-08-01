@@ -55,9 +55,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
-    def get_default_simplehotwaterstorage_config(
-        cls,
-    ) -> Any:
+    def get_default_simplehotwaterstorage_config(cls,) -> Any:
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         config = SimpleHotWaterStorageConfig(
@@ -303,10 +301,8 @@ class SimpleHotWaterStorage(cp.Component):
 
         state_controller = stsv.get_input_value(self.state_channel)
 
-        water_temperature_from_heat_distribution_system_in_celsius = (
-            stsv.get_input_value(
-                self.water_temperature_heat_distribution_system_input_channel
-            )
+        water_temperature_from_heat_distribution_system_in_celsius = stsv.get_input_value(
+            self.water_temperature_heat_distribution_system_input_channel
         )
         water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
             self.water_temperature_heat_generator_input_channel
@@ -321,10 +317,8 @@ class SimpleHotWaterStorage(cp.Component):
                 self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
             )
         else:
-            water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
             )
 
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
@@ -721,9 +715,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
     name: str
 
     @classmethod
-    def get_default_simplehotwaterstoragecontroller_config(
-        cls,
-    ) -> Any:
+    def get_default_simplehotwaterstoragecontroller_config(cls,) -> Any:
         """Get a default simplehotwaterstorage controller config."""
         config = SimpleHotWaterStorageControllerConfig(
             name="SimpleHotWaterStorageController",
@@ -830,10 +822,8 @@ class SimpleHotWaterStorageController(cp.Component):
                     self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
                 )
             else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    stsv.get_input_value(
-                        self.water_mass_flow_rate_heat_generator_input_channel
-                    )
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                    self.water_mass_flow_rate_heat_generator_input_channel
                 )
 
             self.conditions_on_off(
@@ -851,8 +841,7 @@ class SimpleHotWaterStorageController(cp.Component):
             stsv.set_output_value(self.state_channel, state)
 
     def conditions_on_off(
-        self,
-        water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
+        self, water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
     ) -> None:
         """Set conditions for the simple hot water storage controller mode."""
 

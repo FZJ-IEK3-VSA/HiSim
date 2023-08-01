@@ -111,6 +111,7 @@ def test_house_with_pyam(
         model_name=my_sim.setup_function,
         variant_name="pyam_test",
         sorting_option=SortingOptionEnum.FLAT,
+        hash_number=None,
     )
 
     # =================================================================================================================================

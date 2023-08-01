@@ -174,7 +174,7 @@ def configure_cars(
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car in names:
+    for _ in names:
         # decide if they are diesel driven or electricity driven and initialize config
         if ev_included:
             my_car_config = generic_car.CarConfig.get_default_ev_config()

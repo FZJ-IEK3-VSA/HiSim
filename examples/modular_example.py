@@ -41,6 +41,9 @@ def cleanup_old_result_folders():
 
 def cleanup_old_lpg_requests():
     """ Removes old results of loadprofilegenerator_connector_utsp. """
+    if not os.path.exists(hisim.utils.HISIMPATH["utsp_results"]):
+        # no old data exists, nothing to remove
+        return
     files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
     for file in files_in_folder:
         full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)

@@ -1,7 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List, Any, Tuple
+from typing import List, Tuple
 from dataclasses import dataclass
 from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
@@ -277,7 +277,7 @@ class Battery(Component):
         )
         # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
 
-        investment, co2_device, lifetime = self.get_cost_capex(self.battery_config)  # noqa
+        investment = self.get_cost_capex(self.battery_config)[0]
         battery_aging_costs_in_euro = (
             investment
             * virtual_number_of_full_charge_cycles

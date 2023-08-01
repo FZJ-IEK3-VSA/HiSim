@@ -527,6 +527,7 @@ class HeatDistribution(cp.Component):
 
         return self.calc_maintenance_cost(), 0
 
+
 class HeatDistributionController(cp.Component):
 
     """Heat Distribution Controller.

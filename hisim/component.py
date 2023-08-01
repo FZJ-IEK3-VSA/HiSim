@@ -311,7 +311,7 @@ class Component:
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60
-        investment, co2_device, lifetime = self.get_cost_capex(self.config)  # noqa
+        investment = self.get_cost_capex(self.config)[0]
 
         # add maintenance costs per simulated period
         maintenance_cost_per_simulated_period_in_euro: float = (

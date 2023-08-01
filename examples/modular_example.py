@@ -247,7 +247,7 @@ def modular_household_explicit(
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
                 consumption=0,
-                profile_with_washing_machine_and_dishwasher=False,
+                profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             )
         )
 
@@ -304,16 +304,13 @@ def modular_household_explicit(
                 consumption.append(car)
 
     # """SMART DEVICES"""
-    if utsp_connected:
+    if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             count=count,
             smart_devices_included=smart_devices_included,
         )
-        if not smart_devices_included or clever is False:
-            for device in my_smart_devices:
-                consumption.append(device)
 
     # """SURPLUS CONTROLLER"""
     if needs_ems(

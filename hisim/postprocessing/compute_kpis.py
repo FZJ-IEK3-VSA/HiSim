@@ -386,7 +386,7 @@ def compute_kpis(
                 power_timeseries=postprocessing_results["consumption"]
                 - self_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
-            )
+            )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
         else:
             price = (
                 price
@@ -441,6 +441,23 @@ def compute_kpis(
     # compute cost and co2 for investment/installation:
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
+    capex_results_path = os.path.join(
+        simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
+    )
+    opex_results_path = os.path.join(
+        simulation_parameters.result_directory, "costs_co2_footprint.csv"
+    )
+    opex_df = pd.read_csv(opex_results_path, index_col=0)
+    capex_df = pd.read_csv(capex_results_path, index_col=0)
+    total_investment_cost_per_simulated_period = capex_df[
+        "Investment for simulated period in EUR"
+    ].iloc[-1]
+    total_device_co2_footprint_per_simulated_period = capex_df[
+        "Devices CO2 footprint for simulated period in kg"
+    ].iloc[-1]
+    total_operational_cost = opex_df["Operational Costs in EUR"].iloc[-1]
+    total_operational_emisions = opex_df["Operational C02 footprint in kg"].iloc[-1]
+
     # initilize lines for report
     lines: List = []
     lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
@@ -460,8 +477,26 @@ def compute_kpis(
     lines.append(f"Self Consumption Rate: {self_consumption_rate:3.1f} %")
     lines.append(f"Cost for energy use: {price:3.0f} EUR")
     lines.append(f"CO2 emitted due energy use: {co2:3.0f} kg")
-    lines.append(f"Annual investment cost for equipment: {investment_cost:3.0f} EUR")
-    lines.append(f"Annual CO2 Footprint for equipment: {co2_footprint:3.0f} kg")
+    # lines.append(f"Annual investment cost for equipment: {investment_cost:3.0f} EUR")
+    # lines.append(f"Annual CO2 Footprint for equipment: {co2_footprint:3.0f} kg")
+    lines.append(
+        f"Investment cost for equipment per simulated period: {total_investment_cost_per_simulated_period:3.0f} EUR"
+    )
+    lines.append(
+        f"CO2 Footprint for equipment per simulated period: {total_device_co2_footprint_per_simulated_period:3.0f} kg"
+    )
+    lines.append(
+        f"Total Operational Cost for simulated period: {total_operational_cost:3.0f} EUR"
+    )
+    lines.append(
+        f"Total Operiational Emissions for simulated period: {total_operational_emisions:3.0f} kg"
+    )
+    lines.append(
+        f"Total costs for simulated period: {(total_investment_cost_per_simulated_period + total_operational_cost):3.0f} EUR"
+    )
+    lines.append(
+        f"Total Emissions for simulated period: {(total_device_co2_footprint_per_simulated_period + total_operational_emisions):3.0f} kg"
+    )
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(

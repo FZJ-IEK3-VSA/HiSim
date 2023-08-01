@@ -243,18 +243,6 @@ class PostProcessor:
             log.information(
                 "Writing network charts toreport took " + f"{duration:1.2f}s."
             )
-        if (
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-            in ppdt.post_processing_options
-        ):
-            log.information("Computing and writing KPIs to report.")
-            start = timer()
-            self.compute_and_write_kpis_to_report(ppdt, report)
-            end = timer()
-            duration = end - start
-            log.information(
-                "Computing and writing KPIs to report took " + f"{duration:1.2f}s."
-            )
         if PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing investment costs and C02 emissions from production of devices to report."
@@ -266,6 +254,18 @@ class PostProcessor:
             log.information(
                 "Computing and writing investment costs and C02 emissions from production of devices to report took "
                 + f"{duration:1.2f}s."
+            )
+        if (
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
+            log.information("Computing and writing KPIs to report.")
+            start = timer()
+            self.compute_and_write_kpis_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing KPIs to report took " + f"{duration:1.2f}s."
             )
         if (
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE

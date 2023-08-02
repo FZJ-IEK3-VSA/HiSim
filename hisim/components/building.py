@@ -221,6 +221,7 @@ class Building(dynamic_component.DynamicComponent):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     #
     HeatFluxThermalMassNode="HeatFluxThermalMassNode"
+    HeatFluxWallNode="HeatFluxWallNode"
     
     # Building parameters 5R1C --> controller_mpc
     # Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"

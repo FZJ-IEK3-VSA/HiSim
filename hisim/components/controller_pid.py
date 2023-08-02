@@ -2,7 +2,7 @@
 
 import numpy as np
 import control
-from typing import Optional
+# from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -148,7 +148,7 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.phi_st_c: cp.ComponentInput = self.add_input(
+        self.heat_flow_rate_to_internal_surface_node_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatFluxWallNode,
             LoadTypes.HEATING,
@@ -156,7 +156,7 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.phi_m_c: cp.ComponentInput = self.add_input(
+        self.heat_flow_rate_to_internal_mass_node_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatFluxThermalMassNode,
             LoadTypes.HEATING,
@@ -304,8 +304,8 @@ class PIDController(cp.Component):
         if force_convergence:
             return
         # Retrieve Disturbance forecast
-        phi_m = stsv.get_input_value(self.phi_m_c)
-        phi_st = stsv.get_input_value(self.phi_st_c)
+        phi_m = stsv.get_input_value(self.heat_flow_rate_to_internal_mass_node_channel)
+        phi_st = stsv.get_input_value(self.heat_flow_rate_to_internal_surface_node_channel)
 
         # Retrieve building temperature
         building_temperature_t_mc = stsv.get_input_value(self.t_mC)
@@ -343,7 +343,8 @@ class PIDController(cp.Component):
         # if timestep >= 304*24*3600/self.my_simulation_parameters.seconds_per_timestep:
         #     if manipulated_variable + feed_forward_signal < 0:
         #         manipulated_variable=0
-        # if timestep > (151-20)*24*3600/self.my_simulation_parameters.seconds_per_timestep and timestep <= 243*24*3600/self.my_simulation_parameters.seconds_per_timestep:
+        # if (timestep > (151-20)*24*3600/self.my_simulation_parameters.seconds_per_timestep and
+        # timestep <= 243*24*3600/self.my_simulation_parameters.seconds_per_timestep):
         #     if manipulated_variable + feed_forward_signal > 0:
         #         manipulated_variable = 0
 
@@ -468,8 +469,11 @@ class PIDController(cp.Component):
         tf_tm = control.TransferFunction([B[0, 0]], [1, -(A[0, 0])])
 
         # open loop step response:
-        timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
-        dummy1 = timestep_tm_o  # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable) since function 'control.forced_response' can only be used with a return value with a tuple of length 2
+        # timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
+        _, tm_o = control.forced_response(tf_tm, t, u)
+        # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable) 
+        # since function 'control.forced_response' can only be used with a return value with a tuple of length 2
+        # dummy1 = timestep_tm_o
 
         # steady state value:
         tm_steady_state = tm_o[ns]
@@ -500,7 +504,8 @@ class PIDController(cp.Component):
 
         desired pole = (- natural frequency * damping ratio) +/-  j (natural frequency * sqrt(1-damping ratio^2))
 
-        Closed loop transfer function = (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
+        Closed loop transfer function = 
+            (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
 
         simplified Closed loop transfer function of a first order system 1/ms+b= (Kp s + Ki) / ms^2+(b+Kp)s+Ki
 
@@ -525,8 +530,8 @@ class PIDController(cp.Component):
         proportional_gain = (natural_frequency * damping_ratio * 2 * m) - b
         derivative_gain = 0
 
-        log.information("gain Ki= {}".format(integral_gain))
-        log.information("gain Kp= {}".format(proportional_gain))
+        log.information(f"gain Ki= {integral_gain}")
+        log.information(f"gain Kp= {proportional_gain}")
         return proportional_gain, integral_gain, derivative_gain
 
     def determine_conditions(self, current_temperature: float, set_point: float) -> str:

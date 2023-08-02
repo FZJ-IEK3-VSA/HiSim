@@ -220,9 +220,9 @@ class Building(dynamic_component.DynamicComponent):
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     #
-    HeatFluxThermalMassNode="HeatFluxThermalMassNode"
-    HeatFluxWallNode="HeatFluxWallNode"
-    
+    HeatFluxThermalMassNode = "HeatFluxThermalMassNode"
+    HeatFluxWallNode = "HeatFluxWallNode"
+
     # Building parameters 5R1C --> controller_mpc
     # Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"
     # Thermal_transmission_coefficient_opaque_ms="Thermal_transmission_coefficient_opaque_ms"
@@ -867,7 +867,7 @@ class Building(dynamic_component.DynamicComponent):
         self.get_physical_param()
         # Gets conductances
         self.get_conductances()
-        
+
         # if self.my_simulation_parameters.system_config.predictive:
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
@@ -875,23 +875,23 @@ class Building(dynamic_component.DynamicComponent):
             key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing, entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir, 
+            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir,
             entry=self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em, 
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em,
             entry=self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms, 
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms,
             entry=self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation, 
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation,
             entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_capacity_envelope, 
+            key=SingletonDictKeyEnum.Thermal_capacity_envelope,
             entry=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
         )
 

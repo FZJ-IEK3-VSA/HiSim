@@ -102,7 +102,6 @@ def household_ac_explicit(
         for file in os.listdir(dir_cache):
             os.remove(os.path.join(dir_cache, file))
 
-
     # System Parameters
 
     year = 2021
@@ -168,7 +167,6 @@ def household_ac_explicit(
     # seconds_per_timestep = 60*20    # multiply seconds_per_timestep with factor (e.g. 20) to run MPC with bigger sampling time
     # else:
     # seconds_per_timestep = 60
-
 
     # Build components
 

@@ -219,6 +219,8 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    #
+    HeatFluxThermalMassNode="HeatFluxThermalMassNode"
     
     # Building parameters 5R1C --> controller_mpc
     # Thermal_transmission_coefficient_glazing="Thermal_transmission_coefficient_glazing"

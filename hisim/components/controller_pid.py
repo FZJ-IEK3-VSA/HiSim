@@ -425,8 +425,8 @@ class PIDController(cp.Component):
         d_d25=0
         """
 
-        A = np.matrix([[A11]])  # transition matrix
-        B = np.matrix([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
+        A = np.ndarray([[A11]])  # transition matrix
+        B = np.ndarray([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
         # C=np.matrix([[c11],[c21]]) #design matrix #comment out due to pylint warning W0612 (unused-variable)
         # D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]]) #comment out due to pylint warning W0612 (unused-variable)
 

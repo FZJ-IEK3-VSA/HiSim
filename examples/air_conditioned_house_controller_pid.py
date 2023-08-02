@@ -145,7 +145,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     # MPC controller settings
     # mpc_scheme = 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
     # flexibility_element = 'PV_and_Battery'             # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
-    pricing_scheme = 'dynamic'                          # The two options are: 'dynamic' or 'fixed'
+    # pricing_scheme = 'dynamic'                          # The two options are: 'dynamic' or 'fixed'
     # optimizer_sampling_rate = 1
 
     # Set Air Conditioner

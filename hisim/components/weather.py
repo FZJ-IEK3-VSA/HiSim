@@ -935,7 +935,17 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     # get the correct file path
     # filepath = os.path.join(utils.HISIMPATH["weather"][location])
 
-    if source_enum == WeatherDataSourceEnum.NSRDB_15min or source_enum == WeatherDataSourceEnum.NSRDB:
+    if source_enum == WeatherDataSourceEnum.NSRDB_15min:
+        with open(filepath, encoding="utf-8") as csvfile:
+            spamreader = csv.reader(csvfile)
+            for (i, row) in enumerate(spamreader):
+                if i == 1:
+                    location_name = row[1]
+                    lat = float(row[5])
+                    lon = float(row[6])
+                elif i > 1:
+                    break
+    elif source_enum == WeatherDataSourceEnum.NSRDB:
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
             for (i, row) in enumerate(spamreader):

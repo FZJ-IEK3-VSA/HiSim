@@ -166,14 +166,14 @@ class LocationEnum(Enum):
         "Madrid",
         "NSRDB",
         "Madrid",
-        "232500_40.45_-3.70_2019.csv",
+        #"232500_40.45_-3.70_2019.csv",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Seville = (
         "Seville",
         "NSRDB",
         "Seville",
-        "172617_37.37_-5.98_2019.csv",
+        #"172617_37.37_-5.98_2019.csv",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Athens = (

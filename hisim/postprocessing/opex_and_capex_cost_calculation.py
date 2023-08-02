@@ -2,19 +2,11 @@
 
 import os
 from typing import List
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
+
 import pandas as pd
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
-
-
-@dataclass_json
-@dataclass
-class OPEXConfig:
-    total_operational_cost: float
-    total_operational_co2_footprint: float
 
 
 def opex_calculation(
@@ -22,11 +14,11 @@ def opex_calculation(
     all_outputs: List,
     postprocessing_results: pd.DataFrame,
     simulation_parameters: SimulationParameters,
-) -> List[List]:
+) -> List:
     """Loops over all components and calls opex cost calculation."""
     total_operational_co2_footprint = 0.0
     total_operational_cost = 0.0
-    headline = [
+    headline: List[object] = [
         "Component",
         "Operational Costs in EUR",
         "Operational C02 footprint in kg",
@@ -72,7 +64,7 @@ def opex_calculation(
 def capex_calculation(
     components: List[ComponentWrapper],
     simulation_parameters: SimulationParameters,
-) -> List[List]:
+) -> List:
     """Loops over all components and calls capex cost calculation."""
     seconds_per_year = 365 * 24 * 60 * 60
     total_investment_cost = 0.0
@@ -80,7 +72,7 @@ def capex_calculation(
     total_investment_cost_per_simulated_period = 0.0
     total_device_co2_footprint_per_simulated_period = 0.0
 
-    headline = [
+    headline: List[object] = [
         "Component",
         "Investment in EUR",
         "Device CO2-footprint in kg",

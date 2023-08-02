@@ -11,7 +11,6 @@ from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm, mm
-from reportlab.platypus import Table
 from reportlab.platypus.tableofcontents import TableOfContents
 from hisim import utils
 

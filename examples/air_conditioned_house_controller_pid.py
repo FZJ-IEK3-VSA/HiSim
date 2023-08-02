@@ -1,18 +1,17 @@
 """Air-conditioned household."""
 from typing import Optional
+import os
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import generic_battery
 from hisim.components import controller_pid
 from hisim.components import air_conditioner
-from hisim.components import controller_mpc
-
-# from hisim.components import generic_price_signal
-import os
+# from hisim.components import controller_mpc #mpc
+# from hisim.components import generic_battery #mpc
+# from hisim.components import generic_price_signal #mpc
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -97,13 +96,14 @@ def household_ac_explicit(
         make a moving horizon scheme possible in reasonable time
     """
 
-    ##### delete all files in cache:
+    # delete all files in cache:
     dir_cache = "..//hisim//inputs//cache"
     if os.path.isdir(dir_cache):
         for file in os.listdir(dir_cache):
             os.remove(os.path.join(dir_cache, file))
 
-    ##### System Parameters #####
+
+    # System Parameters
 
     year = 2021
 
@@ -119,7 +119,7 @@ def household_ac_explicit(
     power = 4e3
     load_module_data = False
     module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
-    integrateInverter = True
+    integrate_inverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     name = "PVSystem"
     azimuth = 180
@@ -152,7 +152,7 @@ def household_ac_explicit(
 
     # Set Air Conditioner
     ac_manufacturer = "Samsung"  # Other option: "Panasonic" , Further options are avilable in the smart_devices file
-    Model = "AC120HBHFKH/SA - AC120HCAFKH/SA"  # "AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
+    ac_model = "AC120HBHFKH/SA - AC120HCAFKH/SA"  # "AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
     hp_min_operation_time = 900  # Unit: seconds
     hp_min_idle_time = 300  # Unit: seconds
     control = "PID"  # Avialable options are: PID or on_off or MPC
@@ -169,7 +169,8 @@ def household_ac_explicit(
     # else:
     # seconds_per_timestep = 60
 
-    ##### Build Components #####
+
+    # Build components
 
     # Build system parameters
     if my_simulation_parameters is None:
@@ -183,7 +184,12 @@ def household_ac_explicit(
             "Full Year Simulation for " + location + " Control Type is " + control,
         )  # PID
         # if control == "MPC":
-        # my_simulation_parameters.result_directory = os.path.join("ac_results", location+" Full year " + str(seconds_per_timestep/60) + " min MPC controller results "+ flexibility_element + " for " + pricing_scheme + " pricing" + " for "+ mpc_scheme)
+        # my_simulation_parameters.result_directory = os.path.join(
+        #    "ac_results", location+" Full year "
+        #    + str(seconds_per_timestep/60) + " min MPC controller results "
+        #    + flexibility_element + " for "
+        #    + pricing_scheme + " pricing" + " for "+ mpc_scheme
+        # )
         # else:
         # my_simulation_parameters.result_directory = os.path.join("ac_results_5", "Full Year Simulation for " + location + " Control Type is "+ control)
 
@@ -236,7 +242,7 @@ def household_ac_explicit(
         power=power,
         load_module_data=load_module_data,
         module_name=module_name,
-        integrate_inverter=integrateInverter,
+        integrate_inverter=integrate_inverter,
         tilt=tilt,
         azimuth=azimuth,
         inverter_name=inverter_name,
@@ -291,7 +297,7 @@ def household_ac_explicit(
     """Air Conditioner"""
     my_air_conditioner_config = air_conditioner.AirConditionerConfig(
         name="AirConditioner",
-        model_name=Model,
+        model_name=ac_model,
         manufacturer=ac_manufacturer,
         min_operation_time=hp_min_operation_time,
         min_idle_time=hp_min_idle_time,

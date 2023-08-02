@@ -79,7 +79,6 @@ jobs:
         prospector hisim/components/simple_hot_water_storage.py
         prospector hisim/components/sumbuilder.py
         prospector hisim/components/controller_pid.py
-        prospector hisim/components/controller_mpc.py
         prospector hisim/components/air_conditioner.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py

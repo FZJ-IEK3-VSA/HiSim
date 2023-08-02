@@ -271,21 +271,21 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
     my_sim.add_component(my_building)
 
     """Price signal"""
-    my_price_signal = generic_price_signal.PriceSignal(
-        config=generic_price_signal.PriceSignalConfig(
-            name = "PriceSignal",
-            country = "Spain",
-            pricing_scheme = pricing_scheme,
-            installed_capacity = power,
-            #
-            price_signal_type = 'dummy',
-            fixed_price = [],
-            static_tou_price = [],
-            price_injection = 0.0,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_sim.add_component(my_price_signal)
+    # my_price_signal = generic_price_signal.PriceSignal(
+        # config=generic_price_signal.PriceSignalConfig(
+            # name = "PriceSignal",
+            # country = "Spain",
+            # pricing_scheme = pricing_scheme,
+            # installed_capacity = power,
+            
+            # price_signal_type = 'dummy',
+            # fixed_price = [],
+            # static_tou_price = [],
+            # price_injection = 0.0,
+        # ),
+        # my_simulation_parameters=my_simulation_parameters,
+    # )
+    # my_sim.add_component(my_price_signal)
 
     """Air Conditioner"""
     my_air_conditioner_config = air_conditioner.AirConditionerConfig(

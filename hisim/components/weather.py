@@ -166,14 +166,16 @@ class LocationEnum(Enum):
         "Madrid",
         "NSRDB",
         "Madrid",
-        "232500_40.45_-3.70_2019.csv",
+        "",
+        #"232500_40.45_-3.70_2019.csv",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Seville = (
         "Seville",
         "NSRDB",
         "Seville",
-        "172617_37.37_-5.98_2019.csv",
+        "",
+        #"172617_37.37_-5.98_2019.csv",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Athens = (
@@ -946,15 +948,11 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                 elif i > 1:
                     break
     elif source_enum == WeatherDataSourceEnum.NSRDB:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for (i, row) in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[1]
-                    lat = float(row[5])
-                    lon = float(row[6])
-                elif i > 1:
-                    break
+        with open(filepath + ".dat", encoding="utf-8") as file_stream:
+            lines = file_stream.readlines()
+            location_name = lines[0].split(maxsplit=2)[2].replace("\n", "")
+            lat = float(lines[1][20:37])
+            lon = float(lines[2][15:30])
     else:
         # get the geoposition
         with open(filepath + ".dat", encoding="utf-8") as file_stream:

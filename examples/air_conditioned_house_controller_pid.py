@@ -10,7 +10,7 @@ from hisim.components import generic_battery
 from hisim.components import controller_pid
 from hisim.components import air_conditioner
 from hisim.components import controller_mpc
-from hisim.components import generic_price_signal
+# from hisim.components import generic_price_signal
 import os
 
 __authors__ = "Marwa Alfouly"

@@ -682,9 +682,7 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
         )
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=kpi_compute_return,
-            headline=". KPIs"
+            report=report, lines=kpi_compute_return, headline=". KPIs"
         )
 
     def compute_and_write_opex_costs_to_report(
@@ -697,10 +695,10 @@ class PostProcessor:
             postprocessing_results=ppdt.results,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        self.write_new_chapter_with_text_content_to_report(
+        self.write_new_chapter_with_table_to_report(
             report=report,
-            lines=opex_compute_return,
-            headline=". Operational Costs and Emissions"
+            table_as_list_of_list=opex_compute_return,
+            headline=". Operational Costs and Emissions",
         )
 
     def compute_and_write_capex_costs_to_report(
@@ -711,10 +709,10 @@ class PostProcessor:
             components=ppdt.wrapped_components,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        self.write_new_chapter_with_text_content_to_report(
+        self.write_new_chapter_with_table_to_report(
             report=report,
-            lines=capex_compute_return,
-            headline=". Investment Cost and CO2-Emissions of devices",
+            table_as_list_of_list=capex_compute_return,
+            headline=". Investment Cost and CO2-Emissions of devices for simulated period",
         )
 
     def write_new_chapter_with_text_content_to_report(
@@ -726,6 +724,22 @@ class PostProcessor:
             [str(self.chapter_counter) + headline]
         )
         report.write_with_normal_alignment(lines)
+        self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
+        report.close()
+
+    def write_new_chapter_with_table_to_report(
+        self,
+        report: reportgenerator.ReportGenerator,
+        table_as_list_of_list: List,
+        headline: str,
+    ) -> None:
+        """Write new chapter with headline and a table to report."""
+        report.open()
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + headline]
+        )
+        report.write_tables_to_report(table_as_list_of_list)
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
         report.close()
@@ -803,7 +817,6 @@ class PostProcessor:
 
         # got through all components and read values, variables and units
         for column in ppdt.results_hourly:
-
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(

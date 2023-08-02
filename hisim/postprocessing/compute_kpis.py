@@ -4,6 +4,7 @@
 
 import os
 from typing import List, Tuple, Union
+from pathlib import Path
 
 import pandas as pd
 
@@ -438,25 +439,39 @@ def compute_kpis(
         timeresolution=simulation_parameters.seconds_per_timestep,
     )
 
-    # compute cost and co2 for investment/installation:
+    # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
+    # get CAPEX and OPEX costs for simulated period
     capex_results_path = os.path.join(
         simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
     )
     opex_results_path = os.path.join(
-        simulation_parameters.result_directory, "costs_co2_footprint.csv"
+        simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
     )
-    opex_df = pd.read_csv(opex_results_path, index_col=0)
-    capex_df = pd.read_csv(capex_results_path, index_col=0)
-    total_investment_cost_per_simulated_period = capex_df[
-        "Investment for simulated period in EUR"
-    ].iloc[-1]
-    total_device_co2_footprint_per_simulated_period = capex_df[
-        "Devices CO2 footprint for simulated period in kg"
-    ].iloc[-1]
-    total_operational_cost = opex_df["Operational Costs in EUR"].iloc[-1]
-    total_operational_emisions = opex_df["Operational C02 footprint in kg"].iloc[-1]
+    if Path(opex_results_path).exists():
+        opex_df = pd.read_csv(opex_results_path, index_col=0)
+        total_operational_cost = opex_df["Operational Costs in EUR"].iloc[-1]
+        total_operational_emisions = opex_df["Operational C02 footprint in kg"].iloc[-1]
+    else:
+        log.warning(
+            "OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX"
+        )
+        total_operational_cost = 0
+        total_operational_emisions = 0
+
+    if Path(capex_results_path).exists():
+        capex_df = pd.read_csv(capex_results_path, index_col=0)
+        total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
+        total_device_co2_footprint_per_simulated_period = capex_df[
+            "Device CO2-footprint in kg"
+        ].iloc[-1]
+    else:
+        log.warning(
+            "CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX"
+        )
+        total_investment_cost_per_simulated_period = 0
+        total_device_co2_footprint_per_simulated_period = 0
 
     # initilize lines for report
     lines: List = []
@@ -486,10 +501,10 @@ def compute_kpis(
         f"CO2 Footprint for equipment per simulated period: {total_device_co2_footprint_per_simulated_period:3.0f} kg"
     )
     lines.append(
-        f"Total Operational Cost for simulated period: {total_operational_cost:3.0f} EUR"
+        f"System operational Cost for simulated period: {total_operational_cost:3.0f} EUR"
     )
     lines.append(
-        f"Total Operiational Emissions for simulated period: {total_operational_emisions:3.0f} kg"
+        f"System operational Emissions for simulated period: {total_operational_emisions:3.0f} kg"
     )
     lines.append(
         f"Total costs for simulated period: {(total_investment_cost_per_simulated_period + total_operational_cost):3.0f} EUR"

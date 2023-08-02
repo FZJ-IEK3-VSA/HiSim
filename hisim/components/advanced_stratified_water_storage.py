@@ -67,7 +67,7 @@ class WaterSlice:
         :param temperature:
         """
         self.diameter = tank_diameter
-        self.area = math.pi / 4 * tank_diameter**2
+        self.area = math.pi / 4 * tank_diameter ** 2
         self.height = height
         self.temperature = temperature
         self.density = PhysicsConfig.water_density
@@ -218,7 +218,7 @@ class WarmWaterStorageSimulation:
 
         self.check_units_wws()
 
-        self.area = (pi / 4) * (self.diameter**2)
+        self.area = (pi / 4) * (self.diameter ** 2)
         self.volume = self.area * self.height_storage  # [m^3]
         self.my_slices = []
         self.my_slices.append(
@@ -505,7 +505,7 @@ class WarmWaterStorageSimulation:
         ws_bottom_height = deepcopy(ws_bottom.height)
 
         if ws_upper.height != slice_mass_input_upper * 4 / (
-            pi * (self.diameter**2) * PhysicsConfig.water_density
+            pi * (self.diameter ** 2) * PhysicsConfig.water_density
         ):
             log.information("huhuu")
             log.information(str(ws_upper.height))
@@ -513,13 +513,13 @@ class WarmWaterStorageSimulation:
                 str(
                     slice_mass_input_upper
                     * 4
-                    / (pi * (self.diameter**2) * PhysicsConfig.water_density)
+                    / (pi * (self.diameter ** 2) * PhysicsConfig.water_density)
                 )
             )
             raise ValueError
 
         if ws_bottom.height != slice_mass_input_bottom * 4 / (
-            pi * (self.diameter**2) * PhysicsConfig.water_density
+            pi * (self.diameter ** 2) * PhysicsConfig.water_density
         ):
             log.information("huhuu")
             log.information(str(ws_bottom.height))
@@ -527,7 +527,7 @@ class WarmWaterStorageSimulation:
                 str(
                     slice_mass_input_bottom
                     * 4
-                    / (pi * (self.diameter**2) * PhysicsConfig.water_density)
+                    / (pi * (self.diameter ** 2) * PhysicsConfig.water_density)
                 )
             )
             raise ValueError

@@ -17,7 +17,7 @@ from hisim.component import (
     ComponentConnection,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
-from hisim.loadtypes import LoadTypes, Units
+from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
@@ -142,6 +142,8 @@ class HeatPumpHplib(Component):
 
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
+        postprocessing_flag = [InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+
         # Component has states
         self.state = HeatPumpState(
             time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0
@@ -200,6 +202,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
+            postprocessing_flag=postprocessing_flag,
             output_description="Electricity input power in Watt",
         )
 
@@ -257,25 +260,19 @@ class HeatPumpHplib(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_pump_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_pump_controller(self,):
         """Get default connections."""
         log.information("setting heat pump controller default connections")
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.OnOffSwitch,
-                hpc_classname,
-                HeatPumpHplibController.State,
+                HeatPumpHplib.OnOffSwitch, hpc_classname, HeatPumpHplibController.State,
             )
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -297,9 +294,7 @@ class HeatPumpHplib(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -459,9 +454,7 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the Heat Pump State."""
         return HeatPumpState(
             self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
@@ -556,9 +549,7 @@ class HeatPumpHplibController(Component):
                 + "This might be because the heat distribution system  was not initialized before the advanced hplib controller."
                 + "Please check the order of the initialization of the components in your example."
             )
-        self.build(
-            mode=self.heatpump_controller_config.mode,
-        )
+        self.build(mode=self.heatpump_controller_config.mode,)
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -604,9 +595,7 @@ class HeatPumpHplibController(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -622,9 +611,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -638,9 +625,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -654,10 +639,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def build(
-        self,
-        mode: float,
-    ) -> None:
+    def build(self, mode: float,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -699,14 +681,12 @@ class HeatPumpHplibController(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = (
-                stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
             )
 
-            heating_flow_temperature_from_heat_distribution_system = (
-                stsv.get_input_value(
-                    self.heating_flow_temperature_from_heat_distribution_system_channel
-                )
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.heating_flow_temperature_from_heat_distribution_system_channel
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(

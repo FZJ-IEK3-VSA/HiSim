@@ -148,7 +148,7 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.phi_stC: cp.ComponentInput = self.add_input(
+        self.phi_st_c: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatFluxWallNode,
             LoadTypes.HEATING,
@@ -156,7 +156,7 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.phi_mC: cp.ComponentInput = self.add_input(
+        self.phi_m_c: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatFluxThermalMassNode,
             LoadTypes.HEATING,
@@ -304,8 +304,8 @@ class PIDController(cp.Component):
         if force_convergence:
             return
         # Retrieve Disturbance forecast
-        phi_m = stsv.get_input_value(self.phi_mC)
-        phi_st = stsv.get_input_value(self.phi_stC)
+        phi_m = stsv.get_input_value(self.phi_m_c)
+        phi_st = stsv.get_input_value(self.phi_st_c)
 
         # Retrieve building temperature
         building_temperature_t_mc = stsv.get_input_value(self.t_mC)

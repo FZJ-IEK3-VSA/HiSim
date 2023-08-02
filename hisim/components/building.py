@@ -537,14 +537,14 @@ class Building(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
         )
         #
-        self.phi_mC: cp.ComponentOutput = self.add_output(
+        self.phi_m_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatFluxThermalMassNode,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatFluxThermalMassNode} will follow.",
         )
-        self.phi_stC: cp.ComponentOutput = self.add_output(
+        self.phi_st_c: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatFluxWallNode,
             lt.LoadTypes.HEATING,

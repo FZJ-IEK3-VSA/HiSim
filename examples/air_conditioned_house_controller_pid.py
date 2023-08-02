@@ -455,7 +455,7 @@ def household_ac_explicit(my_sim: Simulator, my_simulation_parameters: Optional[
                                          # my_mpc_controller.component_name,
                                          # my_mpc_controller.Battery2Load)
 
-    my_building.connect_input(my_building.ThermalEnergyDelivered,
+    my_building.connect_input(my_building.ThermalPowerDelivered,
                               my_air_conditioner.component_name,
                               my_air_conditioner.ThermalEnergyDelivered)
                               

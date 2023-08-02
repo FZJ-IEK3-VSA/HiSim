@@ -681,8 +681,8 @@ class PostProcessor:
             all_outputs=ppdt.all_outputs,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        self.write_new_chapter_with_text_content_to_report(
-            report=report, lines=kpi_compute_return, headline=". KPIs"
+        self.write_new_chapter_with_table_to_report(
+            report=report, table_as_list_of_list=kpi_compute_return, headline=". KPIs"
         )
 
     def compute_and_write_opex_costs_to_report(

@@ -329,13 +329,6 @@ class ModularHeatPump(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Writes relevant data to report."""
-        # lines: List[str] = []
-        # lines.append(
-        #     "Name: {}".format(self.config.name + str(self.config.source_weight))
-        # )
-        # lines.append("Manufacturer: {}".format(self.config.name))
-        # lines.append("Max power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
-        # return lines
         return self.config.get_string_dict()
 
     def i_simulate(

@@ -330,13 +330,14 @@ class HeatPumpHplib(Component):
 
     def write_to_report(self):
         """Write configuration to the report."""
-        lines = []
-        lines.append("Name: " + str(self.component_name))
-        lines.append("Model: " + str(self.model))
-        lines.append("T_in: " + str(self.t_in))
-        lines.append("T_out_val: " + str(self.t_out_val))
-        lines.append("P_th_set: " + str(self.p_th_set))
-        return lines
+        # lines = []
+        # lines.append("Name: " + str(self.component_name))
+        # lines.append("Model: " + str(self.model))
+        # lines.append("T_in: " + str(self.t_in))
+        # lines.append("T_out_val: " + str(self.t_out_val))
+        # lines.append("P_th_set: " + str(self.p_th_set))
+        # return lines
+        return self.config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Save state."""

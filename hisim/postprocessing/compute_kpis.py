@@ -503,6 +503,7 @@ def compute_kpis(
 
     # initialize table for report
     table: List = []
+    table.append(["KPI", "Value", "Unit"])
     table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
     table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])

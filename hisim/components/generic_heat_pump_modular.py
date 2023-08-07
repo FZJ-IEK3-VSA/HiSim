@@ -59,6 +59,11 @@ class HeatPumpConfig(cp.ConfigBase):
     #: consumption of the heatpump in kWh
     consumption: float
 
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return ModularHeatPump.get_full_classname()
+
     @staticmethod
     def get_default_config_heating() -> "HeatPumpConfig":
         """Returns default configuration of a heat pump used for heating."""
@@ -329,13 +334,7 @@ class ModularHeatPump(cp.Component):
 
     def write_to_report(self) -> List[str]:
         """Writes relevant data to report."""
-        lines: List[str] = []
-        lines.append(
-            "Name: {}".format(self.config.name + str(self.config.source_weight))
-        )
-        lines.append("Manufacturer: {}".format(self.config.name))
-        lines.append("Max power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
-        return lines
+        return self.config.get_string_dict()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

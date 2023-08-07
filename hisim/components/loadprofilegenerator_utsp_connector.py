@@ -49,6 +49,11 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     consumption: float
 
     @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return UtspLpgConnector.get_full_classname()
+
+    @classmethod
     def get_default_UTSP_connector_config(cls) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 

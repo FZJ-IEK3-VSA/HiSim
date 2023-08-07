@@ -59,6 +59,11 @@ class HeatPumpConfig(cp.ConfigBase):
     #: consumption of the heatpump in kWh
     consumption: float
 
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return ModularHeatPump.get_full_classname()
+
     @staticmethod
     def get_default_config_heating() -> "HeatPumpConfig":
         """Returns default configuration of a heat pump used for heating."""

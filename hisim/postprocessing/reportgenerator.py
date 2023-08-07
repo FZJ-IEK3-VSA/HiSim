@@ -249,7 +249,14 @@ class ReportGenerator:
     def write_tables_to_report(self, table_as_list_of_lists: List) -> None:
         """Add table to the report."""
 
-        table = Table(table_as_list_of_lists)
+        table = Table(
+            table_as_list_of_lists,
+            style=[
+                ("LINEABOVE", (0, 0), (-1, 0), 1, "black"),
+                ("LINEABOVE", (0, 1), (-1, 1), 0.5, "black"),
+                ("LINEBELOW", (0, -1), (-1, -1), 1, "black"),
+            ],
+        )
         self.story.append(table)
 
     def write_heading_with_style_heading_one(self, text: List[str]) -> None:

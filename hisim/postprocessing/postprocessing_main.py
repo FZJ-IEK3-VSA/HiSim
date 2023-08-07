@@ -698,7 +698,13 @@ class PostProcessor:
         self.write_new_chapter_with_table_to_report(
             report=report,
             table_as_list_of_list=opex_compute_return,
-            headline=". Operational Costs and Emissions",
+            headline=". Operational Costs and Emissions for simulated period",
+            comment=[
+                "\n",
+                "Comments:",
+                "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
+                "Emissions are fuel emissions emitted during simulad period.",
+            ],
         )
 
     def compute_and_write_capex_costs_to_report(
@@ -733,6 +739,10 @@ class PostProcessor:
         report: reportgenerator.ReportGenerator,
         table_as_list_of_list: List,
         headline: str,
+        comment: List = [
+            "\n",
+            f"Here, a comment on the calculation of the numbers will follow",
+        ],
     ) -> None:
         """Write new chapter with headline and a table to report."""
         report.open()
@@ -740,6 +750,7 @@ class PostProcessor:
             [str(self.chapter_counter) + headline]
         )
         report.write_tables_to_report(table_as_list_of_list)
+        report.write_with_normal_alignment(comment)
         self.chapter_counter = self.chapter_counter + 1
         report.page_break()
         report.close()

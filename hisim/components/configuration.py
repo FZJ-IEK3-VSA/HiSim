@@ -221,6 +221,7 @@ class PhysicsConfig:
         natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
     )  # [J/kg]
 
+@dataclass_json
 @dataclass
 class EmissionFactorsAndCostsForFuelsConfig:
     # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!

@@ -365,7 +365,7 @@ def compute_kpis(
         autarky_rate = 0
         battery_losses = 0
         # battery_soc = 0
-    h2_system_losses = 0  # explicitly compute that
+    # h2_system_losses = 0  # explicitly compute that
 
     # Electricity Price
     electricity_price_constant, co2_price_constant = get_euro_and_co2(
@@ -425,19 +425,19 @@ def compute_kpis(
         co2 = co2 + fuel_co2
         price = price + fuel_price
 
-    (
-        cycles_dhw,
-        loss_dhw,
-        use_dhw,
-        cycles_buffer,
-        loss_buffer,
-        use_heating,
-    ) = compute_hot_water_storage_losses_and_cycles(
-        components=components,
-        all_outputs=all_outputs,
-        results=results,
-        timeresolution=simulation_parameters.seconds_per_timestep,
-    )
+    # (
+    #     cycles_dhw,
+    #     loss_dhw,
+    #     use_dhw,
+    #     cycles_buffer,
+    #     loss_buffer,
+    #     use_heating,
+    # ) = compute_hot_water_storage_losses_and_cycles(
+    #     components=components,
+    #     all_outputs=all_outputs,
+    #     results=results,
+    #     timeresolution=simulation_parameters.seconds_per_timestep,
+    # )
 
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
@@ -473,34 +473,6 @@ def compute_kpis(
         total_investment_cost_per_simulated_period = 0
         total_device_co2_footprint_per_simulated_period = 0
 
-    # initilize lines for report
-    # lines: List = []
-    # lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
-    # lines.append(f"Production: {production_sum:4.0f} kWh")
-    # lines.append(f"Self-Consumption: {self_consumption_sum:4.0f} kWh")
-    # lines.append(f"Injection: {injection_sum:4.0f} kWh")
-    # lines.append(f"Battery losses: {battery_losses:4.0f} kWh")
-    # lines.append(f"DHW storage heat loss: {loss_dhw:4.0f} kWh")
-    # lines.append(f"DHW storage heat cycles: {cycles_dhw:4.0f} Cycles")
-    # lines.append(f"DHW energy provided: {use_dhw:4.0f} kWh")
-    # lines.append(f"Buffer storage heat loss: {loss_buffer:4.0f} kWh")
-    # lines.append(f"Buffer storage heat cycles: {cycles_buffer:4.0f} Cycles")
-    # lines.append(f"Heating energy provided: {use_heating:4.0f} kWh")
-    # lines.append(f"Hydrogen system losses: {h2_system_losses:4.0f} kWh")
-    # lines.append(f"Hydrogen storage content: {0:4.0f} kWh")
-    # lines.append(f"Autarky Rate: {autarky_rate:3.1f} %")
-    # lines.append(f"Self Consumption Rate: {self_consumption_rate:3.1f} %")
-    # lines.append(f"Cost for energy use: {price:3.0f} EUR")
-    # lines.append(f"CO2 emitted due energy use: {co2:3.0f} kg")
-    # # lines.append(f"Annual investment cost for equipment: {investment_cost:3.0f} EUR")
-    # # lines.append(f"Annual CO2 Footprint for equipment: {co2_footprint:3.0f} kg")
-    # lines.append(f"Investment cost for equipment per simulated period: {total_investment_cost_per_simulated_period:3.0f} EUR")
-    # lines.append(f"CO2 Footprint for equipment per simulated period: {total_device_co2_footprint_per_simulated_period:3.0f} kg")
-    # lines.append(f"System operational Cost for simulated period: {total_operational_cost:3.0f} EUR")
-    # lines.append(f"System operational Emissions for simulated period: {total_operational_emisions:3.0f} kg")
-    # lines.append(f"Total costs for simulated period: {(total_investment_cost_per_simulated_period + total_operational_cost):3.0f} EUR")
-    # lines.append(f"Total Emissions for simulated period: {(total_device_co2_footprint_per_simulated_period + total_operational_emisions):3.0f} kg")
-
     # initialize table for report
     table: List = []
     table.append(["KPI", "Value", "Unit"])
@@ -509,20 +481,21 @@ def compute_kpis(
     table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
-    table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
-    table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
-    table.append(["DHW energy provided:", f"{use_dhw:4.0f}", "kWh"])
-    table.append(["Buffer storage heat loss:", f"{loss_buffer:4.0f}", "kWh"])
-    table.append(["Buffer storage heat cycles:", f"{cycles_buffer:4.0f}", "Cycles"])
-    table.append(["Heating energy provided:", f"{use_heating:4.0f}", "kWh"])
-    table.append(["Hydrogen system losses:", f"{h2_system_losses:4.0f}", "kWh"])
-    table.append(["Hydrogen storage content:", f"{0:4.0f}", "kWh"])
+    # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
+    # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
+    # table.append(["DHW energy provided:", f"{use_dhw:4.0f}", "kWh"])
+    # table.append(["Buffer storage heat loss:", f"{loss_buffer:4.0f}", "kWh"])
+    # table.append(["Buffer storage heat cycles:", f"{cycles_buffer:4.0f}", "Cycles"])
+    # table.append(["Heating energy provided:", f"{use_heating:4.0f}", "kWh"])
+    # table.append(["Hydrogen system losses:", f"{h2_system_losses:4.0f}", "kWh"])
+    # table.append(["Hydrogen storage content:", f"{0:4.0f}", "kWh"])
     table.append(["Autarky Rate:", f"{autarky_rate:3.1f}", "%"])
     table.append(["Self Consumption Rate:", f"{self_consumption_rate:3.1f}", "%"])
     table.append(["Cost for energy use:", f"{price:3.0f}", "EUR"])
     table.append(["CO2 emitted due energy use:", f"{co2:3.0f}", "kg"])
-    # table.append(["Annual investment cost for equipment:", f"{investment_cost:3.0f} EUR"])
-    # table.append(["Annual CO2 Footprint for equipment:", f"{co2_footprint:3.0f} kg"])
+    table.append(["Annual investment cost for equipment (old version):", f"{investment_cost:3.0f}", "EUR"])
+    table.append(["Annual CO2 Footprint for equipment (old versiom):", f"{co2_footprint:3.0f}", "kg"])
+    table.append(["------", "---", "---"])
     table.append(
         [
             "Investment cost for equipment per simulated period:",

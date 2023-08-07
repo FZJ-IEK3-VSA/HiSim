@@ -682,7 +682,10 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
         )
         self.write_new_chapter_with_table_to_report(
-            report=report, table_as_list_of_list=kpi_compute_return, headline=". KPIs"
+            report=report,
+            table_as_list_of_list=kpi_compute_return,
+            headline=". KPIs",
+            comment=["Here a comment on calculation of numbers will follow"],
         )
 
     def compute_and_write_opex_costs_to_report(
@@ -719,6 +722,7 @@ class PostProcessor:
             report=report,
             table_as_list_of_list=capex_compute_return,
             headline=". Investment Cost and CO2-Emissions of devices for simulated period",
+            comment=["Here a comment on calculation of numbers will follow"],
         )
 
     def write_new_chapter_with_text_content_to_report(
@@ -739,10 +743,7 @@ class PostProcessor:
         report: reportgenerator.ReportGenerator,
         table_as_list_of_list: List,
         headline: str,
-        comment: List = [
-            "\n",
-            f"Here, a comment on the calculation of the numbers will follow",
-        ],
+        comment: List,
     ) -> None:
         """Write new chapter with headline and a table to report."""
         report.open()

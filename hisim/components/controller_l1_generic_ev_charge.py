@@ -50,6 +50,11 @@ class ChargingStationConfig(cp.ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
 
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return L1Controller.get_full_classname()
+
     @staticmethod
     def get_default_config(
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,

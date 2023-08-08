@@ -54,19 +54,19 @@ def electrolyzer_example(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set CSV Parameters
     component_name = "CSV Loader"
-    csv_filename = "Windpark_Lastgang_2022_RWE_kopie.csv"
-    column = 5  # The column number in the CSV file containing the load profile data
+    csv_filename = "wind_generated_power_1_min.csv"
+    column = 1  # The column number in the CSV file containing the load profile data
     loadtype = lt.LoadTypes.ELECTRICITY  # Replace with the desired load type
     unit = lt.Units.KILOWATT  # Replace with the desired unit
-    column_name = "Wert2"
-    sep = ";"  # Separator used in the CSV file (e.g., "," or ";")
+    column_name = "generated_power"
+    sep = ","  # Separator used in the CSV file (e.g., "," or ";")
     decimal = "."  # Decimal indicator used in the CSV file (e.g., "." or ",")
     multiplier = 1  # Multiplier factor for amplification (if needed)
-    output_description = "Load profile data wind 15 min resolution"
+    output_description = "Load profile data wind 1 min resolution"
 
     # Set transformer and rectifier parameter
     name = "Standard transformer and rectifier unit"
@@ -75,19 +75,14 @@ def electrolyzer_example(
     unit = lt.Units.KILOWATT
 
     # Set controller parameter
-    electrolyzer_name = "elogen - E4000"
+    electrolyzer_name = "McPhy - McLyzer 200"
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_LINE
-    )
-
-    # my_simulation_parameters.postprocessing_options.append(PostProcessingOptions.OPEN_EXPLORER)
 
     # =================================================================================================================================
     # Build Components

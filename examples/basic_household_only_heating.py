@@ -50,6 +50,7 @@ def basic_household_only_heating(
     # Build Components
 
     # Build Simulation Parameters
+    # Build Simulation Parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep

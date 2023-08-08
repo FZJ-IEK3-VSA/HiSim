@@ -33,9 +33,7 @@ class PriceSignalConfig(cp.ConfigBase):
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
         """Default configuration for price signal."""
-        config = PriceSignalConfig(
-            name="PriceSignal",
-        )
+        config = PriceSignalConfig(name="PriceSignal",)
         return config
 
 

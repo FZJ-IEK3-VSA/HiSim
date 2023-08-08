@@ -114,9 +114,7 @@ class GenericGasHeaterControllerL1(Component):
             my_config=config,
         )
 
-        self.build(
-            mode=self.gas_heater_controller_config.mode,
-        )
+        self.build(mode=self.gas_heater_controller_config.mode,)
 
         # input channel
         self.water_temperature_input_channel: ComponentInput = self.add_input(
@@ -163,9 +161,7 @@ class GenericGasHeaterControllerL1(Component):
             self.get_default_connections_from_heat_distribution_controller()
         )
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple_hot_water_storage default connections."""
         log.information("setting simple_hot_water_storage default connections")
         connections = []
@@ -179,9 +175,7 @@ class GenericGasHeaterControllerL1(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get simple_hot_water_storage default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -195,9 +189,7 @@ class GenericGasHeaterControllerL1(Component):
         )
         return connections
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get heat distribution controller default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -211,10 +203,7 @@ class GenericGasHeaterControllerL1(Component):
         )
         return connections
 
-    def build(
-        self,
-        mode: float,
-    ) -> None:
+    def build(self, mode: float,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -242,9 +231,7 @@ class GenericGasHeaterControllerL1(Component):
         """Doublecheck."""
         pass
 
-    def write_to_report(
-        self,
-    ) -> List[str]:
+    def write_to_report(self,) -> List[str]:
         """Write important variables to report."""
         return self.gas_heater_controller_config.get_string_dict()
 
@@ -258,14 +245,12 @@ class GenericGasHeaterControllerL1(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = (
-                stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
             )
 
-            heating_flow_temperature_from_heat_distribution_system = (
-                stsv.get_input_value(
-                    self.heating_flow_temperature_from_heat_distribution_system_channel
-                )
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.heating_flow_temperature_from_heat_distribution_system_channel
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(

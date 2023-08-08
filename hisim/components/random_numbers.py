@@ -36,10 +36,7 @@ class RandomNumbersConfig(ConfigBase):
     def get_default_config(cls):
         """Gets a default config."""
         return RandomNumbersConfig(
-            name="RandomNumbers",
-            timesteps=100,
-            minimum=1,
-            maximum=20,
+            name="RandomNumbers", timesteps=100, minimum=1, maximum=20,
         )
 
 

@@ -17,9 +17,13 @@ import hisim.component as cp
 import hisim.dynamic_component as dycp
 import hisim.log
 from hisim import loadtypes as lt
-from hisim.components import (controller_l1_building_heating, generic_CHP,
-                              generic_heat_pump_modular, generic_heat_source,
-                              configuration)
+from hisim.components import (
+    controller_l1_building_heating,
+    generic_CHP,
+    generic_heat_pump_modular,
+    generic_heat_source,
+    configuration,
+)
 from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
@@ -97,8 +101,16 @@ class StorageConfig(cp.ConfigBase):
             1 / 3
         )  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,
-                               surface=surface, u_value=0.36, energy_full_cycle=None, power=0)
+        config = StorageConfig(
+            name="DHWBoiler",
+            use=lt.ComponentType.BOILER,
+            source_weight=1,
+            volume=volume,
+            surface=surface,
+            u_value=0.36,
+            energy_full_cycle=None,
+            power=0,
+        )
         return config
 
     @staticmethod
@@ -111,8 +123,15 @@ class StorageConfig(cp.ConfigBase):
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=0, surface=surface, u_value=0.36,
-            energy_full_cycle=None, power=power)
+            name="Buffer",
+            use=lt.ComponentType.BUFFER,
+            source_weight=1,
+            volume=0,
+            surface=surface,
+            u_value=0.36,
+            energy_full_cycle=None,
+            power=power,
+        )
         return config
 
     def compute_default_volume(
@@ -445,9 +464,13 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.volume = config.volume
         self.surface = config.surface
         self.u_value = config.u_value
-        self.drain_water_temperature = configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
-        self.warm_water_temperature = configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand \
+        self.drain_water_temperature = (
+            configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
+        )
+        self.warm_water_temperature = (
+            configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand
             - configuration.HouseholdWarmWaterDemandConfig.temperature_difference_hot
+        )
         self.power = config.power
         self.config = config
 
@@ -487,8 +510,7 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * 1e-3
             )  # 1e-3 conversion J to kJ
         heatconsumption: float = self.calculate_heat_consumption(
-            stsv=stsv,
-            thermal_energy_delivered=thermal_energy_delivered,
+            stsv=stsv, thermal_energy_delivered=thermal_energy_delivered,
         )
         stsv.set_output_value(self.power_from_water_storage_channel, heatconsumption)
 
@@ -515,9 +537,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         )
 
     def calculate_heat_consumption(
-        self,
-        stsv: cp.SingleTimeStepValues,
-        thermal_energy_delivered: float,
+        self, stsv: cp.SingleTimeStepValues, thermal_energy_delivered: float,
     ) -> float:
         """Calculates the heat consumption."""
         if self.use == lt.ComponentType.BOILER:

@@ -48,13 +48,9 @@ class HeatDistributionConfig(cp.ConfigBase):
     name: str
 
     @classmethod
-    def get_default_heatdistributionsystem_config(
-        cls,
-    ) -> Any:
+    def get_default_heatdistributionsystem_config(cls,) -> Any:
         """Get a default heat distribution system config."""
-        config = HeatDistributionConfig(
-            name="HeatDistributionSystem",
-        )
+        config = HeatDistributionConfig(name="HeatDistributionSystem",)
         return config
 
 
@@ -148,10 +144,8 @@ class HeatDistribution(cp.Component):
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
         ):
-            self.max_thermal_building_demand_in_watt = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-                )
+            self.max_thermal_building_demand_in_watt = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
             )
 
         else:
@@ -175,10 +169,8 @@ class HeatDistribution(cp.Component):
 
         self.build(heating_system=self.heating_system)
 
-        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
-            self.calc_heating_distribution_system_water_mass_flow_rate(
-                self.max_thermal_building_demand_in_watt
-            )
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
+            self.max_thermal_building_demand_in_watt
         )
 
         SingletonSimRepository().set_entry(
@@ -245,9 +237,7 @@ class HeatDistribution(cp.Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get heat distribution controller default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -261,9 +251,7 @@ class HeatDistribution(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_building(
-        self,
-    ):
+    def get_default_connections_from_building(self,):
         """Get building default connections."""
         log.information("setting building default connections")
         connections = []
@@ -285,9 +273,7 @@ class HeatDistribution(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -301,10 +287,7 @@ class HeatDistribution(cp.Component):
         )
         return connections
 
-    def build(
-        self,
-        heating_system: HeatingSystemType,
-    ) -> None:
+    def build(self, heating_system: HeatingSystemType,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -406,8 +389,7 @@ class HeatDistribution(cp.Component):
         )
 
     def calc_heating_distribution_system_water_mass_flow_rate(
-        self,
-        max_thermal_building_demand_in_watt: float,
+        self, max_thermal_building_demand_in_watt: float,
     ) -> Any:
         """Calculate water mass flow between heating distribution system and hot water storage."""
         specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
@@ -612,9 +594,7 @@ class HeatDistributionController(cp.Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get weather default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -628,9 +608,7 @@ class HeatDistributionController(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_building(
-        self,
-    ):
+    def get_default_connections_from_building(self,):
         """Get building default connections."""
         log.information("setting building default connections")
         connections = []
@@ -644,9 +622,7 @@ class HeatDistributionController(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple_hot_water_storage default connections."""
         log.information("setting simple_hot_water_storage default connections")
         connections = []
@@ -778,8 +754,7 @@ class HeatDistributionController(cp.Component):
             )
 
     def conditions_for_opening_or_shutting_heat_distribution(
-        self,
-        theoretical_thermal_building_demand_in_watt: float,
+        self, theoretical_thermal_building_demand_in_watt: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
 
@@ -876,15 +851,15 @@ class HeatDistributionController(cp.Component):
                 "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
             )
 
-        self.max_flow_temperature_in_celsius = (
-            list_of_maximum_flow_and_return_temperatures_in_celsius[0]
-        )
+        self.max_flow_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[
+            0
+        ]
         self.min_flow_temperature_in_celsius = (
             set_room_temperature_for_building_in_celsius
         )
-        self.max_return_temperature_in_celsius = (
-            list_of_maximum_flow_and_return_temperatures_in_celsius[1]
-        )
+        self.max_return_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[
+            1
+        ]
         self.min_return_temperature_in_celsius = (
             set_room_temperature_for_building_in_celsius
         )

@@ -12,7 +12,9 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
 )
-from hisim.components.controller_l1_generic_gas_heater import GenericGasHeaterControllerL1
+from hisim.components.controller_l1_generic_gas_heater import (
+    GenericGasHeaterControllerL1,
+)
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -53,9 +55,7 @@ class GenericGasHeaterConfig(ConfigBase):
     maximal_power_in_watt: float  # [W]
 
     @classmethod
-    def get_default_gasheater_config(
-        cls,
-    ) -> Any:
+    def get_default_gasheater_config(cls,) -> Any:
         """Get a default Building."""
         config = GenericGasHeaterConfig(
             name="GenericGasHeater",
@@ -245,21 +245,34 @@ class GasHeater(Component):
             maximum_power = control_signal * self.maximal_thermal_power_in_watt
             eff_th_real = self.eff_th_min + d_eff_th * control_signal
 
-        gas_power = maximum_power * eff_th_real * control_signal
+        gas_power_in_watt = maximum_power * eff_th_real * control_signal
         c_w = 4182
-        mass_out_temp = self.temperature_delta_in_celsius + stsv.get_input_value(
-            self.mass_flow_input_tempertaure_channel
+        mass_flow_out_temperature_in_celsius = (
+            self.temperature_delta_in_celsius
+            + stsv.get_input_value(self.mass_flow_input_tempertaure_channel)
         )
-        mass_out = gas_power / (c_w * self.temperature_delta_in_celsius)
+        mass_flow_out_in_kg_per_s = gas_power_in_watt / (
+            c_w * self.temperature_delta_in_celsius
+        )
         # p_th = (
-        #     c_w * mass_out * (mass_out_temp - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
+        #     c_w * mass_flow_out_in_kg_per_s * (mass_flow_out_temperature_in_celsius - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
         # )
+        gas_demand_in_kwh = (
+            gas_power_in_watt
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e6
+        )
 
         stsv.set_output_value(
-            self.thermal_output_power_channel, gas_power
+            self.thermal_output_power_channel, gas_power_in_watt
         )  # efficiency
         stsv.set_output_value(
-            self.mass_flow_output_temperature_channel, mass_out_temp
+            self.mass_flow_output_temperature_channel,
+            mass_flow_out_temperature_in_celsius,
         )  # efficiency
-        stsv.set_output_value(self.mass_flow_output_channel, mass_out)  # efficiency
-        stsv.set_output_value(self.gas_demand_channel, gas_power)  # gas consumption
+        stsv.set_output_value(
+            self.mass_flow_output_channel, mass_flow_out_in_kg_per_s
+        )  # efficiency
+        stsv.set_output_value(
+            self.gas_demand_channel, gas_demand_in_kwh
+        )  # gas consumption

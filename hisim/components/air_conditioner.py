@@ -177,11 +177,7 @@ class AirConditioner(cp.Component):
             True,
         )
         self.stateC: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.State,
-            LoadTypes.ANY,
-            Units.ANY,
-            False,
+            self.component_name, self.State, LoadTypes.ANY, Units.ANY, False,
         )
         self.feed_forward_signalC: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -198,18 +194,10 @@ class AirConditioner(cp.Component):
             False,
         )
         self.operating_modeC: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.OperatingMode,
-            LoadTypes.ANY,
-            Units.ANY,
-            False,
+            self.component_name, self.OperatingMode, LoadTypes.ANY, Units.ANY, False,
         )
         self.optimal_electric_power_pvC: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.PV2load,
-            LoadTypes.ELECTRICITY,
-            Units.WATT,
-            False,
+            self.component_name, self.PV2load, LoadTypes.ELECTRICITY, Units.WATT, False,
         )
         self.optimal_electric_power_gridC: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -246,10 +234,7 @@ class AirConditioner(cp.Component):
             output_description=f"here a description for Air Conditioner {self.ElectricityOutput} will follow.",
         )
         self.cooling_eerC: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.EER,
-            LoadTypes.ANY,
-            Units.ANY,
+            self.component_name, self.EER, LoadTypes.ANY, Units.ANY,
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())

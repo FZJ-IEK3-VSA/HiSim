@@ -346,8 +346,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Simulates iteration of surplus controller."""
-        # if force_convergence:
-        #     return
 
         if timestep == 0:
             self.sort_source_weights_and_components()

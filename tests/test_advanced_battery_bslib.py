@@ -24,12 +24,27 @@ def test_advanced_battery_bslib():
     e_bat_custom = 10  # kWh
     name = "Battery"
     source_weight = 1
+    charge_in_kwh = 0
+    discharge_in_kwh = 0
+    co2_footprint = e_bat_custom * 130.7
+    cost = e_bat_custom * 535.81
+    lifetime = 10
+    lifetime_in_cycles = 5e3
+    maintenance_cost_as_percentage_of_investment = 0.02
+
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
         custom_battery_capacity_generic_in_kilowatt_hour=e_bat_custom,
         name=name,
         source_weight=source_weight,
+        charge_in_kwh=charge_in_kwh,
+        discharge_in_kwh=discharge_in_kwh,
+        co2_footprint=co2_footprint,
+        cost=cost,
+        lifetime=lifetime,
+        lifetime_in_cycles=lifetime_in_cycles,
+        maintenance_cost_as_percentage_of_investment=maintenance_cost_as_percentage_of_investment
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         config=my_advanced_battery_config,

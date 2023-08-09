@@ -5,7 +5,6 @@ import sys
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 import string
-import json
 import pandas as pd
 
 from hisim.components import building
@@ -21,12 +20,16 @@ from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
-from hisim.postprocessing.opex_cost_calculation import opex_calculation
+from hisim.postprocessing.opex_and_capex_cost_calculation import (
+    opex_calculation,
+    capex_calculation,
+)
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.json_generator import JsonConfigurationGenerator
 
 
 class PostProcessor:
@@ -193,9 +196,16 @@ class PostProcessor:
             )
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
-                "Computing operational costs and C02 emissions produced in operation."
+                "Computing and writing operational costs and C02 emissions produced in operation to report."
             )
-            opex_calculation(components=ppdt.wrapped_components, all_outputs=ppdt.all_outputs, postprocessing_results=ppdt.results)
+            start = timer()
+            self.compute_and_write_opex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing operational costs and C02 emissions produced in operation to report took "
+                + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
             in ppdt.post_processing_options
@@ -232,6 +242,18 @@ class PostProcessor:
             duration = end - start
             log.information(
                 "Writing network charts toreport took " + f"{duration:1.2f}s."
+            )
+        if PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
+            log.information(
+                "Computing and writing investment costs and C02 emissions from production of devices to report."
+            )
+            start = timer()
+            self.compute_and_write_capex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing investment costs and C02 emissions from production of devices to report took "
+                + f"{duration:1.2f}s."
             )
         if (
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
@@ -496,21 +518,16 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write simulation parameters to report."""
-        report.open()
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". Simulation Parameters"]
+        lines = [
+            "The following information was used to configure the HiSim Building Simulation."
+        ]
+        simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
+        lines += simulation_parameters_list
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=lines,
+            headline=". Simulation Parameters",
         )
-        report.write_with_normal_alignment(
-            [
-                "The following information was used to configure the HiSim Building Simulation."
-            ]
-        )
-        report.write_with_normal_alignment(
-            ppdt.simulation_parameters.get_unique_key_as_list()
-        )
-        self.chapter_counter = self.chapter_counter + 1
-        report.page_break()
-        report.close()
 
     def write_components_to_report(
         self,
@@ -620,19 +637,16 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write all outputs to report."""
-        report.open()
         all_output_names: List[Optional[str]]
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". All Outputs"]
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=all_output_names,
+            headline=". All Outputs",
         )
-        self.chapter_counter = self.chapter_counter + 1
-        report.write_with_normal_alignment(all_output_names)
-        report.page_break()
-        report.close()
 
     def write_network_charts_to_report(
         self,
@@ -667,13 +681,79 @@ class PostProcessor:
             all_outputs=ppdt.all_outputs,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        lines = kpi_compute_return
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=kpi_compute_return,
+            headline=". KPIs",
+            comment=["Here a comment on calculation of numbers will follow"],
+        )
+
+    def compute_and_write_opex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
+        opex_compute_return = opex_calculation(
+            components=ppdt.wrapped_components,
+            all_outputs=ppdt.all_outputs,
+            postprocessing_results=ppdt.results,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=opex_compute_return,
+            headline=". Operational Costs and Emissions for simulated period",
+            comment=[
+                "\n",
+                "Comments:",
+                "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
+                "Emissions are fuel emissions emitted during simulad period.",
+            ],
+        )
+
+    def compute_and_write_capex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
+        capex_compute_return = capex_calculation(
+            components=ppdt.wrapped_components,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=capex_compute_return,
+            headline=". Investment Cost and CO2-Emissions of devices for simulated period",
+            comment=["Here a comment on calculation of numbers will follow"],
+        )
+
+    def write_new_chapter_with_text_content_to_report(
+        self, report: reportgenerator.ReportGenerator, lines: List, headline: str
+    ) -> None:
+        """Write new chapter with headline and some general information e.g. KPIs to report."""
         report.open()
         report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". KPIs"]
+            [str(self.chapter_counter) + headline]
         )
         report.write_with_normal_alignment(lines)
         self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
+        report.close()
+
+    def write_new_chapter_with_table_to_report(
+        self,
+        report: reportgenerator.ReportGenerator,
+        table_as_list_of_list: List,
+        headline: str,
+        comment: List,
+    ) -> None:
+        """Write new chapter with headline and a table to report."""
+        report.open()
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + headline]
+        )
+        report.write_tables_to_report(table_as_list_of_list)
+        report.write_with_normal_alignment(comment)
+        self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -701,6 +781,16 @@ class PostProcessor:
     ) -> None:
         """Prepare the results for the scenario evaluation with pyam."""
 
+        # create pyam data foler
+        pyam_data_folder = os.path.join(
+            ppdt.simulation_parameters.result_directory, "pyam_data"
+        )
+        if os.path.exists(pyam_data_folder) is False:
+            os.makedirs(pyam_data_folder)
+        else:
+            log.information("This pyam_data path exists already: " + pyam_data_folder)
+
+        # make dictionaries with pyam data structure for hourly and yearly data
         simple_dict_hourly_data: Dict = {
             "model": [],
             "scenario": [],
@@ -719,20 +809,38 @@ class PostProcessor:
             "year": [],
             "value": [],
         }
+        # set pyam model name
         model = "".join(["HiSim_", ppdt.module_filename])
-        scenario = ppdt.setup_function
-        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
-        year = ppdt.simulation_parameters.year
-        timeseries = (
-            ppdt.results_hourly.index
-        )  # .strftime("%Y-%m-%d %H:%M:%S").to_list()
 
+        # set pyam scenario name
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
+        ):
+            scenario = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
+            )
+        else:
+            scenario = ppdt.setup_function
+        # set pyam region
+        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        # set pyam year or timeseries
+        year = ppdt.simulation_parameters.year
+        timeseries = ppdt.results_hourly.index
+
+        # got through all components and read values, variables and units
         for column in ppdt.results_hourly:
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(
-                    "".join([x for x in column if x in string.ascii_letters + "'- "])
+                    "".join(
+                        [
+                            x
+                            for x in column
+                            if x in string.ascii_letters + "'- " + string.digits
+                        ]
+                    )
                 ).split(sep=" ")
+
                 variable = "".join(
                     [
                         column_splitted[0],
@@ -742,7 +850,9 @@ class PostProcessor:
                         column_splitted[2],
                     ]
                 )
+
                 unit = column_splitted[5]
+
                 simple_dict_hourly_data["model"].append(model)
                 simple_dict_hourly_data["scenario"].append(scenario)
                 simple_dict_hourly_data["region"].append(region)
@@ -755,11 +865,18 @@ class PostProcessor:
             value = ppdt.results_cumulative[column].values[0]
 
             column_splitted = str(
-                "".join([x for x in column if x in string.ascii_letters + "'- "])
+                "".join(
+                    [
+                        x
+                        for x in column
+                        if x in string.ascii_letters + "'- " + string.digits
+                    ]
+                )
             ).split(sep=" ")
             variable = "".join(
                 [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
             )
+
             unit = column_splitted[5]
             simple_dict_cumulative_data["model"].append(model)
             simple_dict_cumulative_data["scenario"].append(scenario)
@@ -772,7 +889,8 @@ class PostProcessor:
         # create dataframe
         simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
-        # write dictionary with all import parameters
+
+        # create dictionary with all import pyam information
         data_information_dict = {
             "model": model,
             "scenario": scenario,
@@ -780,54 +898,28 @@ class PostProcessor:
             "year": year,
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
-        component_counter = 0
-        for component in ppdt.wrapped_components:
-            try:
-                # rename keys because some get overwritten if key name exists several times
-                dict_config = component.my_component.config.to_dict()
-                rename_dict_config = {}
-                for key, value in dict_config.items():
-                    rename_dict_config[
-                        f"component {component_counter} {key}"
-                    ] = dict_config[key]
-                dict_config = rename_dict_config
-                del rename_dict_config
-            except BaseException as exc:
-                raise ValueError(
-                    "component.my_component.config.to_dict() does probably not work. "
-                    "That might be because the config of the component does not inherit from Configbase. "
-                    "Please change your config class according to the other component config classes with the configbase inheritance."
-                ) from exc
 
-            try:
-                # try json dumping and if it works append data information dict
-                component.my_component.config.to_json()
-                data_information_dict.update(dict_config)
-                component_counter = component_counter + 1
-
-            except Exception as ex:
-                # else try to convert data types so that json dumping works out
-                for key, value in dict_config.items():
-                    if not isinstance(value, (int, float, str, bool, type(None))):
-                        if isinstance(value, list):
-                            # transform list to string so it can be json serializable later
-                            dict_config[key] = str(value).strip("[]")
-                            # append data information dict
-                            data_information_dict.update(dict_config)
-                            component_counter = component_counter + 1
-                        else:
-                            raise ValueError(
-                                "Value in config dict has a datatype that is not json serializable. Check the data type and try to transform it to a built-in data type."
-                            ) from ex
-
-        # pyam_data_folder = ppdt.simulation_parameters.result_directory + "\\pyam_data\\"
-        pyam_data_folder = os.path.join(
-            ppdt.simulation_parameters.result_directory, "pyam_data"
+        # write json config with all component configs, module config, pyam information dict and simulation parameters
+        json_generator_config = JsonConfigurationGenerator(name=f"{scenario}")
+        json_generator_config.set_simulation_parameters(
+            my_simulation_parameters=ppdt.simulation_parameters
         )
-        if os.path.exists(pyam_data_folder) is False:
-            os.makedirs(pyam_data_folder)
-        else:
-            log.information("This pyam_data path exists already: " + pyam_data_folder)
+        if ppdt.my_module_config_path is not None:
+            json_generator_config.set_module_config(
+                my_module_config_path=ppdt.my_module_config_path
+            )
+        json_generator_config.set_pyam_data_information_dict(
+            pyam_data_information_dict=data_information_dict
+        )
+        for component in ppdt.wrapped_components:
+            json_generator_config.add_component(config=component.my_component.config)
+
+        # save the json config
+        json_generator_config.save_to_json(
+            filename=os.path.join(pyam_data_folder, "data_information_for_pyam.json")
+        )
+
+        # write csv files with all hourly and yearly data in the pyam data folder
         file_name_hourly = os.path.join(
             pyam_data_folder,
             f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
@@ -837,16 +929,7 @@ class PostProcessor:
             f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
         )
         simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly, index=None,
+            path_or_buf=file_name_hourly,
+            index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
-
-        # Serializing json
-        json_object = json.dumps(data_information_dict, indent=4)
-        # Writing to sample.json
-        with open(
-            os.path.join(pyam_data_folder, "data_information_for_pyam.json"),
-            "w",
-            encoding="utf-8",
-        ) as outfile:
-            outfile.write(json_object)

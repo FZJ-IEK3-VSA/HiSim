@@ -53,6 +53,10 @@ def dynamic_components_demonstration(
     azimuth = 180
     tilt = 30
     source_weight = 0
+    pv_co2_footprint = power * 1e-3 * 130.7
+    pv_cost = power * 1e-3 * 535.81
+    pv_maintenance_cost_as_percentage_of_investment = 0.01
+    pv_lifetime = 25
 
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
@@ -63,20 +67,18 @@ def dynamic_components_demonstration(
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig(
-        system_id="SG1",
-        custom_pv_inverter_power_generic_in_watt=5.0,
-        custom_battery_capacity_generic_in_kilowatt_hour=10.0,
-        name="Battery",
-        source_weight=1,
-    )
-    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig(
-        system_id="SG1",
-        custom_pv_inverter_power_generic_in_watt=2.5,
-        custom_battery_capacity_generic_in_kilowatt_hour=5.0,
-        name="Battery",
-        source_weight=2,
-    )
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
+    my_advanced_battery_config_1.system_id = "SG1"
+    my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
+    my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
+    my_advanced_battery_config_1.source_weight = 1
+
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
+    my_advanced_battery_config_2.system_id = "SG1"
+    my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
+    my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
+    my_advanced_battery_config_2.source_weight = 2
+
     my_advanced_battery_1 = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config_1,
@@ -134,6 +136,10 @@ def dynamic_components_demonstration(
         inverter_name=inverter_name,
         source_weight=source_weight,
         name=name,
+        co2_footprint=pv_co2_footprint,
+        cost=pv_cost,
+        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
+        lifetime=pv_lifetime,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,

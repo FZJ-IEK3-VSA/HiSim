@@ -108,9 +108,7 @@ class IdealizedElectricHeater(cp.Component):
             output_description=f"here a description for {self.HeatingPowerDelivered} will follow.",
         )
 
-    def build(
-        self,
-    ) -> None:
+    def build(self,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -161,8 +159,7 @@ class IdealizedElectricHeater(cp.Component):
         # Set outputs -----------------------------------------------------------------------------------------------------------
 
         stsv.set_output_value(
-            self.thermal_power_delivered_channel,
-            thermal_power_delivered_in_watt,
+            self.thermal_power_delivered_channel, thermal_power_delivered_in_watt,
         )
 
         stsv.set_output_value(self.heating_power_delivered_channel, heating_in_watt)

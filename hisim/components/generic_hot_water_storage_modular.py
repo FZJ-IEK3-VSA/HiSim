@@ -8,7 +8,8 @@ from dataclasses import dataclass
 
 # clean
 # Generic/Built-in
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
+import pandas as pd
 import numpy as np
 from dataclasses_json import dataclass_json
 
@@ -17,9 +18,13 @@ import hisim.component as cp
 import hisim.dynamic_component as dycp
 import hisim.log
 from hisim import loadtypes as lt
-from hisim.components import (controller_l1_building_heating, generic_CHP,
-                              generic_heat_pump_modular, generic_heat_source,
-                              configuration)
+from hisim.components import (
+    controller_l1_building_heating,
+    generic_CHP,
+    generic_heat_pump_modular,
+    generic_heat_source,
+    configuration,
+)
 from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
@@ -57,6 +62,14 @@ class StorageConfig(cp.ConfigBase):
     energy_full_cycle: Optional[float]
     #: power of heat source in kW
     power: float
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_main_classname(cls):
@@ -97,8 +110,20 @@ class StorageConfig(cp.ConfigBase):
             1 / 3
         )  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
-        config = StorageConfig(name='DHWBoiler', use=lt.ComponentType.BOILER, source_weight=1, volume=volume,
-                               surface=surface, u_value=0.36, energy_full_cycle=None, power=0)
+        config = StorageConfig(
+            name="DHWBoiler",
+            use=lt.ComponentType.BOILER,
+            source_weight=1,
+            volume=volume,
+            surface=surface,
+            u_value=0.36,
+            energy_full_cycle=None,
+            power=0,
+            co2_footprint=0,  # Todo: check value
+            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # SOURCE: VDI2067-1
+            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+        )
         return config
 
     @staticmethod
@@ -111,8 +136,19 @@ class StorageConfig(cp.ConfigBase):
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name='Buffer', use=lt.ComponentType.BUFFER, source_weight=1, volume=0, surface=surface, u_value=0.36,
-            energy_full_cycle=None, power=power)
+            name="Buffer",
+            use=lt.ComponentType.BUFFER,
+            source_weight=1,
+            volume=0,
+            surface=surface,
+            u_value=0.36,
+            energy_full_cycle=None,
+            power=power,
+            co2_footprint=100,  # Todo: check value
+            cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
+        )
         return config
 
     def compute_default_volume(
@@ -445,9 +481,13 @@ class HotWaterStorage(dycp.DynamicComponent):
         self.volume = config.volume
         self.surface = config.surface
         self.u_value = config.u_value
-        self.drain_water_temperature = configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
-        self.warm_water_temperature = configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand \
+        self.drain_water_temperature = (
+            configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
+        )
+        self.warm_water_temperature = (
+            configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand
             - configuration.HouseholdWarmWaterDemandConfig.temperature_difference_hot
+        )
         self.power = config.power
         self.config = config
 
@@ -546,3 +586,18 @@ class HotWaterStorage(dycp.DynamicComponent):
         raise Exception(
             "Modular storage must be defined either as buffer or as boiler."
         )
+
+    @staticmethod
+    def get_cost_capex(config: StorageConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for DHW Storage."""
+
+        return self.calc_maintenance_cost(), 0

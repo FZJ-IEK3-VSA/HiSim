@@ -67,6 +67,10 @@ def test_house_with_pyam(
     azimuth = 180
     tilt = 30
     source_weight = -1
+    pv_co2_footprint = power * 1e-3 * 130.7
+    pv_cost = power * 1e-3 * 535.81
+    pv_maintenance_cost_as_percentage_of_investment = 0.01
+    pv_lifetime = 25
 
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
@@ -106,6 +110,7 @@ def test_house_with_pyam(
         model_name=my_sim.setup_function,
         variant_name="pyam_test",
         sorting_option=SortingOptionEnum.FLAT,
+        hash_number=None,
     )
 
     # =================================================================================================================================
@@ -146,6 +151,10 @@ def test_house_with_pyam(
         inverter_name=inverter_name,
         source_weight=source_weight,
         name=name,
+        co2_footprint=pv_co2_footprint,
+        cost=pv_cost,
+        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
+        lifetime=pv_lifetime,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

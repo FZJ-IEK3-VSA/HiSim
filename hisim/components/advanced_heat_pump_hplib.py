@@ -2,9 +2,12 @@
 
 See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 """
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 from hplib import hplib as hpl
 
 # Import modules from HiSim
@@ -21,6 +24,7 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import log
 
 
@@ -54,6 +58,16 @@ class HeatPumpHplibConfig(ConfigBase):
     cycling_mode: bool
     minimum_running_time_in_seconds: Optional[int]
     minimum_idle_time_in_seconds: Optional[int]
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
+    #: consumption of the heatpump in kWh
+    consumption: float
 
     @classmethod
     def get_default_generic_advanced_hp_lib(cls):
@@ -62,16 +76,22 @@ class HeatPumpHplibConfig(ConfigBase):
         see default values for air/water hp on:
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
+        set_thermal_output_power_in_watt: float = 8000
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             group_id=4,
             heating_reference_temperature_in_celsius=-7,
             flow_temperature_in_celsius=52,
-            set_thermal_output_power_in_watt=8000,
+            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
+            co2_footprint=set_thermal_output_power_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            consumption=0,
         )
 
 
@@ -260,25 +280,19 @@ class HeatPumpHplib(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_pump_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_pump_controller(self,):
         """Get default connections."""
         log.information("setting heat pump controller default connections")
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.OnOffSwitch,
-                hpc_classname,
-                HeatPumpHplibController.State,
+                HeatPumpHplib.OnOffSwitch, hpc_classname, HeatPumpHplibController.State,
             )
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -300,9 +314,7 @@ class HeatPumpHplib(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -318,13 +330,7 @@ class HeatPumpHplib(Component):
 
     def write_to_report(self):
         """Write configuration to the report."""
-        lines = []
-        lines.append("Name: " + str(self.component_name))
-        lines.append("Model: " + str(self.model))
-        lines.append("T_in: " + str(self.t_in))
-        lines.append("T_out_val: " + str(self.t_out_val))
-        lines.append("P_th_set: " + str(self.p_th_set))
-        return lines
+        return self.config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Save state."""
@@ -451,6 +457,35 @@ class HeatPumpHplib(Component):
         self.state.time_off = time_off
         self.state.on_off_previous = on_off
 
+    @staticmethod
+    def get_cost_capex(config: HeatPumpHplibConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        """Calculate OPEX costs, consisting of maintenance costs.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == "HeatPumpHPLib"
+                and output.load_type == LoadTypes.ELECTRICITY
+            ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
+                self.config.consumption = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+
+        return self.calc_maintenance_cost(), 0.0
+
 
 @dataclass
 class HeatPumpState:
@@ -462,9 +497,7 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the Heat Pump State."""
         return HeatPumpState(
             self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
@@ -559,9 +592,7 @@ class HeatPumpHplibController(Component):
                 + "This might be because the heat distribution system  was not initialized before the advanced hplib controller."
                 + "Please check the order of the initialization of the components in your example."
             )
-        self.build(
-            mode=self.heatpump_controller_config.mode,
-        )
+        self.build(mode=self.heatpump_controller_config.mode,)
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -607,9 +638,7 @@ class HeatPumpHplibController(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -625,9 +654,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -641,9 +668,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -657,10 +682,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def build(
-        self,
-        mode: float,
-    ) -> None:
+    def build(self, mode: float,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -702,14 +724,12 @@ class HeatPumpHplibController(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = (
-                stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
             )
 
-            heating_flow_temperature_from_heat_distribution_system = (
-                stsv.get_input_value(
-                    self.heating_flow_temperature_from_heat_distribution_system_channel
-                )
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.heating_flow_temperature_from_heat_distribution_system_channel
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(

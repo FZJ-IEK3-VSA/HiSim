@@ -182,4 +182,3 @@ class ElectricityGrid(Component):
         if self.signal == "Negative":
             total = min(0, total)
         stsv.set_output_value(self.electricity_output_channel, total)
-

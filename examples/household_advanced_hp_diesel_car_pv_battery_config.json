@@ -137,7 +137,7 @@
     "name": "DHWBoiler",
     "source_weight": 1,
     "use": "Boiler",
-    "volume": 230,
+    "volume": 250,
     "surface": 2.181868240447087,
     "u_value": 0.36,
     "energy_full_cycle": null,

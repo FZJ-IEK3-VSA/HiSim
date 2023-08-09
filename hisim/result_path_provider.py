@@ -1,6 +1,7 @@
 """Result Path Provider Module."""
 
 # clean
+import sys
 import os
 import datetime
 import enum
@@ -126,8 +127,9 @@ def check_path_length(path: str) -> None:
     """Make sure that path name does not get too long for Windows."""
 
     character_limit_according_to_windows = 256
-
-    if len(path) >= character_limit_according_to_windows:
+    # check if the system is windows
+    is_windows = sys.platform.startswith('win')
+    if is_windows and len(path) >= character_limit_according_to_windows:
         raise NameError(
             f"The path {path} exceeds the limit of 256 characters which is the limit for Windows. Please make your path shorter."
         )

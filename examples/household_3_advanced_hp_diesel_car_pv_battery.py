@@ -85,7 +85,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
         household_config = HouseholdAdvancedHPDieselCarPVBatteryConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
-            dhw_controlable=True,
+            dhw_controlable=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -435,7 +435,8 @@ def household_advanced_hp_diesel_car_pv_battery(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
+            # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
+            source_weight=2,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",

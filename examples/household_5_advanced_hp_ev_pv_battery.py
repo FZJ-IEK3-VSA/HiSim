@@ -90,7 +90,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
         household_config = HouseholdAdvancedHpEvPvBatteryConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
-            dhw_controlable=True,
+            dhw_controlable=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(

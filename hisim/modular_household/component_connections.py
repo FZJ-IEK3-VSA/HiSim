@@ -370,6 +370,13 @@ def configure_battery(
                 source_weight=count,
                 system_id='SG1',
                 name='Battery',
+                charge_in_kwh=0,
+                discharge_in_kwh=0,
+                co2_footprint=battery_capacity * 130.7,
+                cost=battery_capacity * 535.81,
+                lifetime=10,  # todo set correct values
+                lifetime_in_cycles=5e3,  # todo set correct values
+                maintenance_cost_as_percentage_of_investment=0.02,
             )
         )
     else:

@@ -232,15 +232,21 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         # Width of a bar
         width = 0.4
 
+        # Rescale values in case they are too high
+        units = self.units
+        if max(abs(data)) > 1.5e3 and units != "-":
+            data = data * 1e-3
+            units = f"k{units}"
+
         plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        plt.bar(ind, data * 1e-3, width, label="HiSim")
+        plt.bar(ind, data, width, label="HiSim")
 
         plt.xticks(ind + width / 2, fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
         plt.title(f"{self.title} Monthly", fontsize=self.fontsize_title)
         plt.grid()
         plt.tight_layout()
-        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
+        plt.ylabel(f"[{units}]", fontsize=self.fontsize_label)
         plt.legend(loc="best", fontsize=self.fontsize_legend)
         # plt.savefig(self.filepath, bbox_inches='tight')
         plt.savefig(self.filepath2)
@@ -250,7 +256,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             output_description=self.output_description,
             component_output_folder_path=self.component_output_folder_path,
             file_path=self.filepath2,
-            unit=self.units,
+            unit=units,
             component_name=self.component_name,
             output_type=self.output_type,
         )

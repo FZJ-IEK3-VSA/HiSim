@@ -4,7 +4,7 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any
+from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -211,13 +211,22 @@ class PVSystemConfig(ConfigBase):
     tilt: float
     load_module_data: bool
     source_weight: int
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
+    #: lifetime in years
+    lifetime: float
 
     @classmethod
     def get_default_PV_system(cls):
         """Gets a default PV system."""
+        power = 10e3  # W
         return PVSystemConfig(
             time=2019,
-            power=10e3,
+            power=power,
             load_module_data=False,
             module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
             integrate_inverter=True,
@@ -227,6 +236,10 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             source_weight=0,
             location="Aachen",
+            co2_footprint=power * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
 
 
@@ -385,8 +398,27 @@ class PVSystem(cp.Component):
             tilt=30,
             load_module_data=False,
             source_weight=source_weight,
+            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
         return config
+
+    @staticmethod
+    def get_cost_capex(config: PVSystemConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for PV."""
+
+        return self.calc_maintenance_cost(), 0
 
     def get_default_connections_from_weather(self):
         log.information("setting weather default connections")
@@ -647,13 +679,11 @@ class PVSystem(cp.Component):
                 self.data_length = self.my_simulation_parameters.timesteps
 
         self.modules = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
-            index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]), index_col=0,
         )
 
         self.inverters = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]),
-            index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]), index_col=0,
         )
 
         self.temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
@@ -789,11 +819,7 @@ class PVSystem(cp.Component):
             aoi=aoi,
         )
         # calculate pv performance
-        sapm_out = pvlib.pvsystem.sapm(
-            sapm_irr,
-            module=self.module,
-            temp_cell=pvtemps,
-        )
+        sapm_out = pvlib.pvsystem.sapm(sapm_irr, module=self.module, temp_cell=pvtemps,)
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()

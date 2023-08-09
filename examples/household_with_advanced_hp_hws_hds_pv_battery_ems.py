@@ -8,11 +8,14 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import advanced_heat_pump_hplib
-from hisim.components import sumbuilder
+from hisim.components import (
+    advanced_heat_pump_hplib,
+    advanced_battery_bslib,
+    controller_l2_energy_management_system,
+)
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from hisim.postprocessingoptions import PostProcessingOptions
+from hisim import loadtypes as lt
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -23,7 +26,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def household_with_hds_and_advanced_hp(
+def household_with_hplib_hws_hds_pv_battery_ems(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Basic household example.
@@ -42,6 +45,8 @@ def household_with_hds_and_advanced_hp(
         - Heat Distribution System
         - Heat Distribution Controller
         - Heat Water Storage
+        - Battery
+        - Energy Management System
     """
 
     # =================================================================================================================================
@@ -88,12 +93,24 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.EXPORT_TO_CSV
-    )
+    # my_simulation_parameters.post_processing_options.append(
+    #     PostProcessingOptions.EXPORT_TO_CSV
+    # )
+    # my_simulation_parameters.post_processing_options.append(
+    #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+    # )
+    # my_simulation_parameters.post_processing_options.append(
+    #     PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+    # )
+    # my_simulation_parameters.post_processing_options.append(
+    #     PostProcessingOptions.PLOT_CARPET
+    # )
+    # my_simulation_parameters.post_processing_options.append(
+    #     PostProcessingOptions.PLOT_LINE
+    # )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
@@ -142,16 +159,6 @@ def household_with_hds_and_advanced_hp(
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build Base Electricity Load Profile
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig(
-            name="ElectrcityGrid_BaseLoad",
-            grid=[my_occupancy, "Subtract", my_photovoltaic_system],
-            signal=None,
-        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -205,11 +212,33 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Build EMS
+    my_electricity_controller_config = (
+        controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+    )
+    my_electricity_controller = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
+        )
+    )
+
+    # Build Battery
+    my_advanced_battery_config = (
+        advanced_battery_bslib.BatteryConfig.get_default_config()
+    )
+    my_advanced_battery = advanced_battery_bslib.Battery(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_battery_config,
+    )
+
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
+    # Connect PV
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     # -----------------------------------------------------------------------------------------------------------------
+    # Connect Building
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
@@ -218,19 +247,18 @@ def household_with_hds_and_advanced_hp(
     )
 
     # -----------------------------------------------------------------------------------------------------------------
-
+    # Connect Heat Pump
     my_heat_pump_controller.connect_only_predefined_connections(
         my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
     )
-
-    # -----------------------------------------------------------------------------------------------------------------
 
     my_heat_pump.connect_only_predefined_connections(
         my_heat_pump_controller, my_weather, my_simple_hot_water_storage
     )
     # -----------------------------------------------------------------------------------------------------------------
+    # Connect Water Storage
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )
@@ -246,12 +274,77 @@ def household_with_hds_and_advanced_hp(
     )
 
     # -----------------------------------------------------------------------------------------------------------------
+    # Connect Heat Distribution System
     my_heat_distribution_controller.connect_only_predefined_connections(
         my_weather, my_building, my_simple_hot_water_storage
     )
-    # -----------------------------------------------------------------------------------------------------------------
     my_heat_distribution_system.connect_only_predefined_connections(
         my_building, my_heat_distribution_controller, my_simple_hot_water_storage
+    )
+    # -----------------------------------------------------------------------------------------------------------------
+    # Connect EMS
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_occupancy,
+        source_component_output="ElectricityOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_photovoltaic_system,
+        source_component_output="ElectricityOutput",
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=999,
+    )
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_heat_pump,
+        source_component_output=my_heat_pump.ElectricalInputPower,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
+        source_weight=1,
+    )
+    my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Heat Pump. ",
+    )
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_advanced_battery,
+        source_component_output=my_advanced_battery.AcBatteryPower,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_weight=2,
+    )
+
+    electricity_to_or_from_battery_target = (
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.BATTERY,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
+    )
+    # -----------------------------------------------------------------------------------------------------------------
+    # Connect Battery
+    my_advanced_battery.connect_dynamic_input(
+        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+        src_object=electricity_to_or_from_battery_target,
     )
 
     # =================================================================================================================================
@@ -260,10 +353,11 @@ def household_with_hds_and_advanced_hp(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_base_electricity_load_profile)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_heat_distribution_system)
     my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
+    my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_electricity_controller)

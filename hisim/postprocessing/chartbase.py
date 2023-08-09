@@ -101,9 +101,9 @@ class Chart:  # noqa: too-few-public-methods
         self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format}"
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format.value}"
         else:
-            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format}"
+            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format.value}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
         result_path_provider.check_path_length(path=self.filepath)

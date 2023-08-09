@@ -4,6 +4,7 @@
 
 import os
 from typing import List, Tuple, Union
+from pathlib import Path
 
 import pandas as pd
 
@@ -60,10 +61,10 @@ def compute_consumption_production(
                 production_ids.append(index)
 
             elif (
-                    InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
-                    in output.postprocessing_flag
-                    or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-                    in output.postprocessing_flag
+                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
+                in output.postprocessing_flag
+                or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
+                in output.postprocessing_flag
             ):
                 consumption_ids.append(index)
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
@@ -75,21 +76,32 @@ def compute_consumption_production(
             continue
 
     postprocessing_results = pd.DataFrame()
-    postprocessing_results["consumption"] = pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
-    postprocessing_results["production"] = pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["consumption"] = (
+        pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
+    )
+    postprocessing_results["production"] = (
+        pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
+    )
 
-    postprocessing_results["battery_charge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
-    postprocessing_results["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(upper=0).sum(axis=1) * (-1)
+    postprocessing_results["battery_charge"] = (
+        pd.DataFrame(results.iloc[:, battery_charge_discharge_ids])
+        .clip(lower=0)
+        .sum(axis=1)
+    )
+    postprocessing_results["battery_discharge"] = pd.DataFrame(
+        results.iloc[:, battery_charge_discharge_ids]
+    ).clip(upper=0).sum(axis=1) * (-1)
 
     return postprocessing_results
 
 
 def compute_hot_water_storage_losses_and_cycles(
     components: List[ComponentWrapper],
-    all_outputs: List, results: pd.DataFrame,
+    all_outputs: List,
+    results: pd.DataFrame,
     timeresolution: int,
 ) -> Tuple[float, float, float, float, float, float]:
-    """Computes hot water storage losses and cycles. """
+    """Computes hot water storage losses and cycles."""
 
     # initialize columns consumption, production, battery_charge, battery_discharge, storage
     charge_sum_dhw = 0.0
@@ -101,7 +113,9 @@ def compute_hot_water_storage_losses_and_cycles(
 
     # get cycle of water storages
     for elem in components:
-        if isinstance(elem.my_component, generic_hot_water_storage_modular.HotWaterStorage):
+        if isinstance(
+            elem.my_component, generic_hot_water_storage_modular.HotWaterStorage
+        ):
             use = elem.my_component.use
             if use == ComponentType.BUFFER:
                 cycle_buffer = elem.my_component.config.energy_full_cycle
@@ -112,34 +126,60 @@ def compute_hot_water_storage_losses_and_cycles(
         if output.postprocessing_flag is not None:
             if InandOutputType.CHARGE in output.postprocessing_flag:
                 if InandOutputType.WATER_HEATING in output.postprocessing_flag:
-                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(
+                        power_timeseries=results.iloc[:, index],
+                        timeresolution=timeresolution,
+                    )
                 elif InandOutputType.HEATING in output.postprocessing_flag:
-                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(
+                        power_timeseries=results.iloc[:, index],
+                        timeresolution=timeresolution,
+                    )
             elif InandOutputType.DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BOILER in output.postprocessing_flag:
-                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(
+                        power_timeseries=results.iloc[:, index],
+                        timeresolution=timeresolution,
+                    )
                 elif ComponentType.BUFFER in output.postprocessing_flag:
-                    discharge_sum_buffer = discharge_sum_buffer + compute_energy_from_power(power_timeseries=results.iloc[:, index], timeresolution=timeresolution)
+                    discharge_sum_buffer = (
+                        discharge_sum_buffer
+                        + compute_energy_from_power(
+                            power_timeseries=results.iloc[:, index],
+                            timeresolution=timeresolution,
+                        )
+                    )
         else:
             continue
         if cycle_dhw is not None:
             cycles_dhw = charge_sum_dhw / cycle_dhw
         else:
             cycles_dhw = 0
-            log.error("Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. ")
+            log.error(
+                "Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. "
+            )
         storage_loss_dhw = charge_sum_dhw - discharge_sum_dhw
         if cycle_buffer is not None:
             cycles_buffer = charge_sum_buffer / cycle_buffer
         else:
             cycles_buffer = 0
-            log.error("Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. ")
+            log.error(
+                "Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. "
+            )
         storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
     if cycle_buffer == 0:
         building_heating = charge_sum_buffer
     else:
         building_heating = discharge_sum_buffer
 
-    return cycles_dhw, storage_loss_dhw, discharge_sum_dhw, cycles_buffer, storage_loss_buffer, building_heating
+    return (
+        cycles_dhw,
+        storage_loss_dhw,
+        discharge_sum_dhw,
+        cycles_buffer,
+        storage_loss_buffer,
+        building_heating,
+    )
 
 
 def compute_self_consumption_and_injection(
@@ -147,8 +187,13 @@ def compute_self_consumption_and_injection(
 ) -> Tuple[pd.Series, pd.Series]:
     """Computes the self consumption and the grid injection."""
     # account for battery
-    production_with_battery = postprocessing_results["production"] + postprocessing_results["battery_discharge"]
-    consumption_with_battery = postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
+    production_with_battery = (
+        postprocessing_results["production"]
+        + postprocessing_results["battery_discharge"]
+    )
+    consumption_with_battery = (
+        postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
+    )
 
     # evaluate injection and sum over time
     injection = production_with_battery - consumption_with_battery
@@ -176,11 +221,15 @@ def compute_self_consumption_and_injection(
 
 
 def search_electricity_prices_in_results(
-        all_outputs: List, results: pd.DataFrame
+    all_outputs: List, results: pd.DataFrame
 ) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
     """Extracts electricity price consumption and electricity price production from results."""
-    electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]
-    electricity_price_injection = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]
+    electricity_price_consumption = pd.Series(
+        dtype=pd.Float64Dtype
+    )  # type: pd.Series[float]
+    electricity_price_injection = pd.Series(
+        dtype=pd.Float64Dtype
+    )  # type: pd.Series[float]
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
             if LoadTypes.PRICE in output.postprocessing_flag:
@@ -225,10 +274,8 @@ def compute_cost_of_fuel_type(
                     continue
     if not fuel_consumption.empty:
         if fuel in [LoadTypes.ELECTRICITY, LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
-            consumption_sum = (
-                compute_energy_from_power(
-                    power_timeseries=fuel_consumption, timeresolution=timeresolution
-                )
+            consumption_sum = compute_energy_from_power(
+                power_timeseries=fuel_consumption, timeresolution=timeresolution
             )
         else:
             consumption_sum = sum(fuel_consumption)
@@ -265,7 +312,9 @@ def compute_kpis(
     price_frame = read_in_fuel_costs()
 
     # compute consumption and production and extract price signals
-    postprocessing_results = compute_consumption_production(all_outputs=all_outputs, results=results)
+    postprocessing_results = compute_consumption_production(
+        all_outputs=all_outputs, results=results
+    )
     (
         electricity_price_consumption,
         electricity_price_injection,
@@ -316,7 +365,7 @@ def compute_kpis(
         autarky_rate = 0
         battery_losses = 0
         # battery_soc = 0
-    h2_system_losses = 0  # explicitly compute that
+    # h2_system_losses = 0  # explicitly compute that
 
     # Electricity Price
     electricity_price_constant, co2_price_constant = get_euro_and_co2(
@@ -335,9 +384,10 @@ def compute_kpis(
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
             price = price + compute_energy_from_power(
-                power_timeseries=postprocessing_results["consumption"] - self_consumption,
+                power_timeseries=postprocessing_results["consumption"]
+                - self_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
-            )
+            )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
         else:
             price = (
                 price
@@ -349,7 +399,8 @@ def compute_kpis(
         if not electricity_price_consumption.empty:
             # substract self consumption from consumption for bill calculation
             price = price + compute_energy_from_power(
-                power_timeseries=postprocessing_results["consumption"] * electricity_price_consumption,
+                power_timeseries=postprocessing_results["consumption"]
+                * electricity_price_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
         else:
@@ -374,36 +425,119 @@ def compute_kpis(
         co2 = co2 + fuel_co2
         price = price + fuel_price
 
-    cycles_dhw, loss_dhw, use_dhw, cycles_buffer, loss_buffer, use_heating = compute_hot_water_storage_losses_and_cycles(
-        components=components, all_outputs=all_outputs, results=results, timeresolution=simulation_parameters.seconds_per_timestep,
-    )
+    # (
+    #     cycles_dhw,
+    #     loss_dhw,
+    #     use_dhw,
+    #     cycles_buffer,
+    #     loss_buffer,
+    #     use_heating,
+    # ) = compute_hot_water_storage_losses_and_cycles(
+    #     components=components,
+    #     all_outputs=all_outputs,
+    #     results=results,
+    #     timeresolution=simulation_parameters.seconds_per_timestep,
+    # )
 
-    # compute cost and co2 for investment/installation:
-    investment_cost, co2_footprint = compute_investment_cost(
-        components=components
-    )
+    # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
+    investment_cost, co2_footprint = compute_investment_cost(components=components)
 
-    # initilize lines for report
-    lines: List = []
-    lines.append(f"Consumption: {consumption_sum:4.0f} kWh")
-    lines.append(f"Production: {production_sum:4.0f} kWh")
-    lines.append(f"Self-Consumption: {self_consumption_sum:4.0f} kWh")
-    lines.append(f"Injection: {injection_sum:4.0f} kWh")
-    lines.append(f"Battery losses: {battery_losses:4.0f} kWh")
-    lines.append(f"DHW storage heat loss: {loss_dhw:4.0f} kWh")
-    lines.append(f"DHW storage heat cycles: {cycles_dhw:4.0f} Cycles")
-    lines.append(f"DHW energy provided: {use_dhw:4.0f} kWh")
-    lines.append(f"Buffer storage heat loss: {loss_buffer:4.0f} kWh")
-    lines.append(f"Buffer storage heat cycles: {cycles_buffer:4.0f} Cycles")
-    lines.append(f"Heating energy provided: {use_heating:4.0f} kWh")
-    lines.append(f"Hydrogen system losses: {h2_system_losses:4.0f} kWh")
-    lines.append(f"Hydrogen storage content: {0:4.0f} kWh")
-    lines.append(f"Autarky Rate: {autarky_rate:3.1f} %")
-    lines.append(f"Self Consumption Rate: {self_consumption_rate:3.1f} %")
-    lines.append(f"Cost for energy use: {price:3.0f} EUR")
-    lines.append(f"CO2 emitted due energy use: {co2:3.0f} kg")
-    lines.append(f"Annual investment cost for equipment: {investment_cost:3.0f} EUR")
-    lines.append(f"Annual CO2 Footprint for equipment: {co2_footprint:3.0f} kg")
+    # get CAPEX and OPEX costs for simulated period
+    capex_results_path = os.path.join(
+        simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
+    )
+    opex_results_path = os.path.join(
+        simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
+    )
+    if Path(opex_results_path).exists():
+        opex_df = pd.read_csv(opex_results_path, index_col=0)
+        total_operational_cost = opex_df["Operational Costs in EUR"].iloc[-1]
+        total_operational_emisions = opex_df["Operational C02 footprint in kg"].iloc[-1]
+    else:
+        log.warning(
+            "OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX"
+        )
+        total_operational_cost = 0
+        total_operational_emisions = 0
+
+    if Path(capex_results_path).exists():
+        capex_df = pd.read_csv(capex_results_path, index_col=0)
+        total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
+        total_device_co2_footprint_per_simulated_period = capex_df[
+            "Device CO2-footprint in kg"
+        ].iloc[-1]
+    else:
+        log.warning(
+            "CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX"
+        )
+        total_investment_cost_per_simulated_period = 0
+        total_device_co2_footprint_per_simulated_period = 0
+
+    # initialize table for report
+    table: List = []
+    table.append(["KPI", "Value", "Unit"])
+    table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
+    table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
+    table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
+    table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
+    table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
+    # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
+    # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
+    # table.append(["DHW energy provided:", f"{use_dhw:4.0f}", "kWh"])
+    # table.append(["Buffer storage heat loss:", f"{loss_buffer:4.0f}", "kWh"])
+    # table.append(["Buffer storage heat cycles:", f"{cycles_buffer:4.0f}", "Cycles"])
+    # table.append(["Heating energy provided:", f"{use_heating:4.0f}", "kWh"])
+    # table.append(["Hydrogen system losses:", f"{h2_system_losses:4.0f}", "kWh"])
+    # table.append(["Hydrogen storage content:", f"{0:4.0f}", "kWh"])
+    table.append(["Autarky Rate:", f"{autarky_rate:3.1f}", "%"])
+    table.append(["Self Consumption Rate:", f"{self_consumption_rate:3.1f}", "%"])
+    table.append(["Cost for energy use:", f"{price:3.0f}", "EUR"])
+    table.append(["CO2 emitted due energy use:", f"{co2:3.0f}", "kg"])
+    table.append(["Annual investment cost for equipment (old version):", f"{investment_cost:3.0f}", "EUR"])
+    table.append(["Annual CO2 Footprint for equipment (old versiom):", f"{co2_footprint:3.0f}", "kg"])
+    table.append(["------", "---", "---"])
+    table.append(
+        [
+            "Investment cost for equipment per simulated period:",
+            f"{total_investment_cost_per_simulated_period:3.0f}",
+            "EUR",
+        ]
+    )
+    table.append(
+        [
+            "CO2 Footprint for equipment per simulated period:",
+            f"{total_device_co2_footprint_per_simulated_period:3.0f}",
+            "kg",
+        ]
+    )
+    table.append(
+        [
+            "System operational Cost for simulated period:",
+            f"{total_operational_cost:3.0f}",
+            "EUR",
+        ]
+    )
+    table.append(
+        [
+            "System operational Emissions for simulated period:",
+            f"{total_operational_emisions:3.0f}",
+            "kg",
+        ]
+    )
+    table.append(
+        [
+            "Total costs for simulated period:",
+            f"{(total_investment_cost_per_simulated_period + total_operational_cost):3.0f}",
+            "EUR",
+        ]
+    )
+    table.append(
+        [
+            "Total Emissions for simulated period:",
+            f"{(total_device_co2_footprint_per_simulated_period + total_operational_emisions):3.0f}",
+            "kg",
+        ]
+    )
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(
@@ -419,4 +553,4 @@ def compute_kpis(
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
 
-    return lines
+    return table

@@ -206,7 +206,7 @@ class PhysicsConfig:
     # density H2:       0.08989 kg/m³   (S. 23) -> standard conditions
     hydrogen_density = 0.08989  # [kg/m³]
     hydrogen_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10**6  # [J/m³]
+    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10 ** 6  # [J/m³]
     hydrogen_specific_fuel_value_per_kg = (
         hydrogen_specific_fuel_value_per_m_3 / hydrogen_density
     )  # [J/kg]
@@ -216,7 +216,24 @@ class PhysicsConfig:
     # density Methan:       0.71750 kg/m³   (S. 23) -> standard conditions
     natural_gas_density = 0.71750  # [kg/m³]
     natural_gas_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
+    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10 ** 6  # [J/m³]
     natural_gas_specific_fuel_value_per_kg = (
         natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
     )  # [J/kg]
+
+@dataclass_json
+@dataclass
+class EmissionFactorsAndCostsForFuelsConfig:
+    # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
+    # Todo: check Literature for values
+    electricity_costs_in_euro_per_kwh = 0.2525  # EUR/kWh
+    electricity_footprint_in_kg_per_kwh = 0.44  # kgCO2eq/kWh
+    electricity_to_grid_revenue_in_euro_per_kwh = 0.2525  # EUR/kWh  # Todo: Change Value!!!
+    district_heating_costs_in_euro_per_kwh = 0.0033  # EUR/kWh
+    district_heating_footprint_in_kg_per_kwh = 0.02  # kgCO2eq/kWh
+    gas_costs_in_euro_per_kwh = 0.0861  # EUR/kWh
+    gas_footprint_in_kg_per_kwh = 0.24  # kgCO2eq/kWh
+    oil_costs_in_euro_per_l = 1.159835766  # EUR/l
+    oil_footprint_in_kg_per_l = 3.2  # kgCO2eq/l
+    diesel_costs_in_euro_per_l = 1.617572993  # EUR/l
+    diesel_footprint_in_kg_per_l = 2.6649  # kgCO2eq/l

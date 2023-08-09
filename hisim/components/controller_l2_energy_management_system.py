@@ -56,7 +56,7 @@ class EMSConfig(cp.ConfigBase):
     def get_default_config_ems(cls) -> "EMSConfig":
         """Default Config for Energy Management System."""
         config = EMSConfig(
-            name="EMS L2EMSElectricityController",
+            name="L2EMSElectricityController",
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_temperature_offset_value=2,

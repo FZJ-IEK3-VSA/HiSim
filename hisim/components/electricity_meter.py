@@ -1,9 +1,10 @@
 """Electricity meter module should replace the sumbuilder. """
 # clean
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 
 from dataclasses_json import dataclass_json
+import pandas as pd
 
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -13,6 +14,7 @@ from hisim.dynamic_component import (
     DynamicConnectionInput,
     DynamicConnectionOutput,
 )
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -28,11 +30,17 @@ class ElectricityMeterConfig(cp.ConfigBase):
         return ElectricityMeter.get_full_classname()
 
     name: str
+    total_energy_to_grid_in_kwh: float
+    total_energy_from_grid_in_kwh: float
 
     @classmethod
     def get_electricity_meter_default_config(cls):
         """Gets a default ElectricityMeter."""
-        return ElectricityMeterConfig(name="ElectricityMeter")
+        return ElectricityMeterConfig(
+            name="ElectricityMeter",
+            total_energy_to_grid_in_kwh=0.0,
+            total_energy_from_grid_in_kwh=0.0,
+        )
 
 
 class ElectricityMeter(DynamicComponent):
@@ -149,7 +157,6 @@ class ElectricityMeter(DynamicComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-
             self.production_inputs = self.get_dynamic_inputs(
                 tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
             )
@@ -221,6 +228,50 @@ class ElectricityMeter(DynamicComponent):
         self.state.cumulative_consumption_in_watt_hour = (
             cumulative_consumption_in_watt_hour
         )
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.config.name
+                and output.field_name == self.ElectricityToOrFromGrid
+            ):  # Todo: check component name from examples: find another way of using the correct outputs
+                self.config.total_energy_to_grid_in_kwh = round(
+                    postprocessing_results.iloc[:, index].clip(lower=0).sum()
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+                self.config.total_energy_from_grid_in_kwh = -round(
+                    postprocessing_results.iloc[:, index].clip(upper=0).sum()
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+
+        co2_per_unit = (
+            EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
+        )
+        euro_per_unit = (
+            EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
+        )
+        revenue_euro_per_unit = (
+            EmissionFactorsAndCostsForFuelsConfig.electricity_to_grid_revenue_in_euro_per_kwh
+        )
+
+        opex_cost_per_simulated_period_in_euro = (
+            self.config.total_energy_from_grid_in_kwh * euro_per_unit
+            - self.config.total_energy_to_grid_in_kwh * revenue_euro_per_unit
+        )
+        co2_per_simulated_period_in_kg = (
+            self.config.total_energy_from_grid_in_kwh * co2_per_unit
+        )
+
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
 
 
 @dataclass

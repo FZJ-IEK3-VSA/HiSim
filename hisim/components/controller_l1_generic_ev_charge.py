@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 """ Controller of EV battery with configuration and state. """
 
-from typing import List, Any
+from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
 
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from utspclient.helpers.lpgdata import ChargingStationSets
@@ -39,6 +41,19 @@ class ChargingStationConfig(cp.ConfigBase):
     charging_station_set: JsonReference
     #: set point for state of charge of battery
     battery_set: float
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime of charging station in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return L1Controller.get_full_classname()
 
     @staticmethod
     def get_default_config(
@@ -50,6 +65,10 @@ class ChargingStationConfig(cp.ConfigBase):
             source_weight=1,
             charging_station_set=charging_station_set,
             battery_set=0.8,
+            co2_footprint=100,  # Todo: check value
+            cost=1000,  # Todo: check value
+            lifetime=18,  # value similar to car # Todo: check value
+            maintenance_cost_as_percentage_of_investment=0.05,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
         )
         return config
 
@@ -277,3 +296,22 @@ class L1Controller(cp.Component):
         elif self.charging_location == 2:
             lines.append("At Work")
         return lines
+
+    @staticmethod
+    def get_cost_capex(config: ChargingStationConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs snd write total energy consumption to component-config.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
+
+        return self.calc_maintenance_cost(), 0

@@ -215,8 +215,10 @@ class Car(cp.Component):
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index]), 1
                     )
-                    co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_footprint_in_kg_per_l
-                    euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_costs_in_euro_per_l
+                    emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                        self.my_simulation_parameters.year)
+                    co2_per_unit = emissions_and_cost_factors.diesel_footprint_in_kg_per_l
+                    euro_per_unit = emissions_and_cost_factors.diesel_costs_in_euro_per_l
 
                     opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost() + self.config.consumption * euro_per_unit
                     co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit

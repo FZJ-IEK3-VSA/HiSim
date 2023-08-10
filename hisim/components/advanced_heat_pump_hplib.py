@@ -24,7 +24,6 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import log
 
 

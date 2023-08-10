@@ -93,8 +93,8 @@ class SimpleHotWaterStorage(cp.Component):
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
-    WaterTemperatureFromHeatDistributionSystem = (
-        "WaterTemperatureFromHeatDistributionSystem"
+    WaterTemperatureFromHeatDistribution = (
+        "WaterTemperatureFromHeatDistribution"
     )
     WaterTemperatureFromHeatGenerator = "WaterTemperaturefromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
@@ -102,8 +102,8 @@ class SimpleHotWaterStorage(cp.Component):
 
     # Output
 
-    WaterTemperatureToHeatDistributionSystem = (
-        "WaterTemperatureToHeatDistributionSystem"
+    WaterTemperatureToHeatDistribution = (
+        "WaterTemperatureToHeatDistribution"
     )
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
 
@@ -112,9 +112,9 @@ class SimpleHotWaterStorage(cp.Component):
     # make some more outputs for testing simple storage
 
     ThermalEnergyInStorage = "ThermalEnergyInStorage"
-    ThermalEnergyInputFromHeatGenerator = "ThermalEnergyInputFromHeatGenerator"
-    ThermalEnergyInputFromHeatDistributionSystem = (
-        "ThermalEnergyInputFromHeatDistributionSystem"
+    ThermalEnergyFromHeatGenerator = "ThermalEnergyFromHeatGenerator"
+    ThermalEnergyFromHeatDistribution = (
+        "ThermalEnergyFromHeatDistribution"
     )
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
@@ -180,7 +180,7 @@ class SimpleHotWaterStorage(cp.Component):
 
         self.water_temperature_heat_distribution_system_input_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.WaterTemperatureFromHeatDistributionSystem,
+            self.WaterTemperatureFromHeatDistribution,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
@@ -212,10 +212,10 @@ class SimpleHotWaterStorage(cp.Component):
 
         self.water_temperature_heat_distribution_system_output_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterTemperatureToHeatDistributionSystem,
+            self.WaterTemperatureToHeatDistribution,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
-            output_description=f"here a description for {self.WaterTemperatureToHeatDistributionSystem} will follow.",
+            output_description=f"here a description for {self.WaterTemperatureToHeatDistribution} will follow.",
         )
 
         self.water_temperature_heat_generator_output_channel: ComponentOutput = self.add_output(
@@ -241,19 +241,19 @@ class SimpleHotWaterStorage(cp.Component):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyInStorage} will follow.",
         )
-        self.thermal_energy_input_from_heat_generator_channel: ComponentOutput = self.add_output(
+        self.thermal_energy_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.ThermalEnergyInputFromHeatGenerator,
+            self.ThermalEnergyFromHeatGenerator,
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ThermalEnergyInputFromHeatGenerator} will follow.",
+            output_description=f"here a description for {self.ThermalEnergyFromHeatGenerator} will follow.",
         )
-        self.thermal_energy_input_from_heat_distribution_system_channel: ComponentOutput = self.add_output(
+        self.thermal_energy_input_heat_distribution_system_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.ThermalEnergyInputFromHeatDistributionSystem,
+            self.ThermalEnergyFromHeatDistribution,
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ThermalEnergyInputFromHeatDistributionSystem} will follow.",
+            output_description=f"here a description for {self.ThermalEnergyFromHeatDistribution} will follow.",
         )
 
         self.thermal_energy_increase_in_storage_channel: ComponentOutput = self.add_output(
@@ -458,11 +458,11 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         stsv.set_output_value(
-            self.thermal_energy_input_from_heat_generator_channel,
+            self.thermal_energy_from_heat_generator_channel,
             thermal_energy_input_from_heat_generator_in_watt_hour,
         )
         stsv.set_output_value(
-            self.thermal_energy_input_from_heat_distribution_system_channel,
+            self.thermal_energy_input_heat_distribution_system_channel,
             thermal_energy_input_from_heat_distribution_system_in_watt_hour,
         )
 

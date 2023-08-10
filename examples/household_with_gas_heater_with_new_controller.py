@@ -196,7 +196,7 @@ def household_gas_heater_with_new_controller(
     )
 
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution.component_name,
         my_heat_distribution.WaterTemperatureOutput,
     )

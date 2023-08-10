@@ -46,6 +46,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         log.trace("starting carpet plots")
         ydims = int(len(data) / xdims)  # number of calculated timesteps per day
         y_steps_per_hour = int(ydims / 24)
+
         try:
             database = data.values.reshape(xdims, ydims)
         except ValueError:
@@ -224,12 +225,10 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         width = 0.4
 
         # Rescale values in case they are too high
-        # data, self.units = self.rescale_y_axis(y_values=data, units=self.units)
+        data, self.units = self.rescale_y_axis(y_values=data, units=self.units)
 
         plt.subplots(figsize=self.figsize, dpi=self.dpi)
-        log.information("bar" + self.title + str(data))
         plt.bar(ind, data, width)
-        #  + width / 2
         plt.xticks(
             ticks=ind,
             labels=[str(i) for i in self.months_abbrev_uppercase],

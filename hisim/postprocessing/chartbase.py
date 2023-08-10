@@ -114,10 +114,23 @@ class Chart:  # noqa: too-few-public-methods
 
     def rescale_y_axis(self, y_values: Any, units: Any) -> tuple[Any, Any]:
         """Rescale y_values of plots."""
+        max_scale = np.max(np.abs(y_values))
+        if units != "-":
+            scale = ""
+            if max_scale >= 1e12:
+                y_values = y_values * 1e-12
+                scale = "T"
+            elif 1e9 <= max_scale < 1e12:
+                y_values = y_values * 1e-9
+                scale = "G"
+            elif 1e6 <= max_scale < 1e9:
+                y_values = y_values * 1e-6
+                scale = "M"
+            elif 1e3 <= max_scale < 1e6:
+                y_values = y_values * 1e-3
+                scale = "k"
 
-        if np.max(np.abs(y_values)) > 1.5e3 and units != "-":
-            y_values = y_values * 1e-3
-            units = f"k{units}"
+            units = f"{scale}{units}"
 
         return y_values, units
 

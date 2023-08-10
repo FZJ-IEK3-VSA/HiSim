@@ -2,8 +2,11 @@
 # clean
 import os
 import re
+from typing import Any
 from dataclasses import dataclass
+import numpy as np
 from hisim import result_path_provider
+
 
 class Chart:  # noqa: too-few-public-methods
 
@@ -59,10 +62,10 @@ class Chart:  # noqa: too-few-public-methods
 
         if hasattr(units, "value"):
             self.units = units.value
-            self.ylabel = units.value
+            # self.ylabel = units.value
         else:
             self.units = units
-            self.ylabel = units
+            # self.ylabel = units
         self.time_correction_factor = time_correction_factor
 
         self.title: str = ""
@@ -108,6 +111,15 @@ class Chart:  # noqa: too-few-public-methods
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
         result_path_provider.check_path_length(path=self.filepath)
         result_path_provider.check_path_length(path=self.filepath2)
+
+    def rescale_y_axis(self, y_values: Any, units: Any) -> tuple[Any, Any]:
+        """Rescale y_values of plots."""
+
+        if np.max(np.abs(y_values)) > 1.5e3 and units != "-":
+            y_values = y_values * 1e-3
+            units = f"k{units}"
+
+        return y_values, units
 
 
 @dataclass

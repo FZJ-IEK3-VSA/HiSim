@@ -462,7 +462,9 @@ def compute_kpis(
 
     if Path(capex_results_path).exists():
         capex_df = pd.read_csv(capex_results_path, index_col=0)
-        total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
+        total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[
+            -1
+        ]
         total_device_co2_footprint_per_simulated_period = capex_df[
             "Device CO2-footprint in kg"
         ].iloc[-1]
@@ -493,8 +495,20 @@ def compute_kpis(
     table.append(["Self Consumption Rate:", f"{self_consumption_rate:3.1f}", "%"])
     table.append(["Cost for energy use:", f"{price:3.0f}", "EUR"])
     table.append(["CO2 emitted due energy use:", f"{co2:3.0f}", "kg"])
-    table.append(["Annual investment cost for equipment (old version):", f"{investment_cost:3.0f}", "EUR"])
-    table.append(["Annual CO2 Footprint for equipment (old versiom):", f"{co2_footprint:3.0f}", "kg"])
+    table.append(
+        [
+            "Annual investment cost for equipment (old version):",
+            f"{investment_cost:3.0f}",
+            "EUR",
+        ]
+    )
+    table.append(
+        [
+            "Annual CO2 Footprint for equipment (old versiom):",
+            f"{co2_footprint:3.0f}",
+            "kg",
+        ]
+    )
     table.append(["------", "---", "---"])
     table.append(
         [

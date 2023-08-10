@@ -2,9 +2,12 @@
 # clean
 
 from enum import IntEnum
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 import hisim.component as cp
 from hisim.components.building import Building
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
@@ -46,11 +49,27 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
-    def get_default_heatdistributionsystem_config(cls,) -> Any:
+    def get_default_heatdistributionsystem_config(
+        cls,
+    ) -> Any:
         """Get a default heat distribution system config."""
-        config = HeatDistributionConfig(name="HeatDistributionSystem",)
+        config = HeatDistributionConfig(
+            name="HeatDistributionSystem",
+            co2_footprint=0,  # Todo: check value
+            cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in examples instead
+            lifetime=50,  # SOURCE: VDI2067-1
+            maintenance_cost_as_percentage_of_investment=0.01,  # SOURCE: VDI2067-1
+        )
         return config
 
 
@@ -144,8 +163,10 @@ class HeatDistribution(cp.Component):
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
         ):
-            self.max_thermal_building_demand_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+            self.max_thermal_building_demand_in_watt = (
+                SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
+                )
             )
 
         else:
@@ -169,8 +190,10 @@ class HeatDistribution(cp.Component):
 
         self.build(heating_system=self.heating_system)
 
-        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
-            self.max_thermal_building_demand_in_watt
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
+            self.calc_heating_distribution_system_water_mass_flow_rate(
+                self.max_thermal_building_demand_in_watt
+            )
         )
 
         SingletonSimRepository().set_entry(
@@ -237,7 +260,9 @@ class HeatDistribution(cp.Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_distribution_controller(self,):
+    def get_default_connections_from_heat_distribution_controller(
+        self,
+    ):
         """Get heat distribution controller default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -251,7 +276,9 @@ class HeatDistribution(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_building(self,):
+    def get_default_connections_from_building(
+        self,
+    ):
         """Get building default connections."""
         log.information("setting building default connections")
         connections = []
@@ -273,7 +300,9 @@ class HeatDistribution(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(self,):
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -282,12 +311,15 @@ class HeatDistribution(cp.Component):
             cp.ComponentConnection(
                 HeatDistribution.WaterTemperatureInput,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections
 
-    def build(self, heating_system: HeatingSystemType,) -> None:
+    def build(
+        self,
+        heating_system: HeatingSystemType,
+    ) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -389,7 +421,8 @@ class HeatDistribution(cp.Component):
         )
 
     def calc_heating_distribution_system_water_mass_flow_rate(
-        self, max_thermal_building_demand_in_watt: float,
+        self,
+        max_thermal_building_demand_in_watt: float,
     ) -> Any:
         """Calculate water mass flow between heating distribution system and hot water storage."""
         specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
@@ -478,6 +511,21 @@ class HeatDistribution(cp.Component):
             water_temperature_output_in_celsius,
             thermal_power_delivered_effective_in_watt,
         )
+
+    @staticmethod
+    def get_cost_capex(config: HeatDistributionConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+
+        return self.calc_maintenance_cost(), 0
 
 
 class HeatDistributionController(cp.Component):
@@ -594,7 +642,9 @@ class HeatDistributionController(cp.Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_weather(self,):
+    def get_default_connections_from_weather(
+        self,
+    ):
         """Get weather default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -608,7 +658,9 @@ class HeatDistributionController(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_building(self,):
+    def get_default_connections_from_building(
+        self,
+    ):
         """Get building default connections."""
         log.information("setting building default connections")
         connections = []
@@ -622,7 +674,9 @@ class HeatDistributionController(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(self,):
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
         """Get simple_hot_water_storage default connections."""
         log.information("setting simple_hot_water_storage default connections")
         connections = []
@@ -631,7 +685,7 @@ class HeatDistributionController(cp.Component):
             cp.ComponentConnection(
                 HeatDistributionController.WaterTemperatureInputFromHeatWaterStorage,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections
@@ -754,7 +808,8 @@ class HeatDistributionController(cp.Component):
             )
 
     def conditions_for_opening_or_shutting_heat_distribution(
-        self, theoretical_thermal_building_demand_in_watt: float,
+        self,
+        theoretical_thermal_building_demand_in_watt: float,
     ) -> None:
         """Set conditions for the valve in heat distribution."""
 
@@ -851,15 +906,15 @@ class HeatDistributionController(cp.Component):
                 "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
             )
 
-        self.max_flow_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[
-            0
-        ]
+        self.max_flow_temperature_in_celsius = (
+            list_of_maximum_flow_and_return_temperatures_in_celsius[0]
+        )
         self.min_flow_temperature_in_celsius = (
             set_room_temperature_for_building_in_celsius
         )
-        self.max_return_temperature_in_celsius = list_of_maximum_flow_and_return_temperatures_in_celsius[
-            1
-        ]
+        self.max_return_temperature_in_celsius = (
+            list_of_maximum_flow_and_return_temperatures_in_celsius[1]
+        )
         self.min_return_temperature_in_celsius = (
             set_room_temperature_for_building_in_celsius
         )

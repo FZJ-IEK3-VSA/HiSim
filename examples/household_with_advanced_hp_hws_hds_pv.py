@@ -67,6 +67,11 @@ def household_with_hds_and_advanced_hp(
     cycling_mode = True
     minimum_running_time_in_seconds = 600
     minimum_idle_time_in_seconds = 600
+    hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
+    hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
+    hp_lifetime = 10
+    hp_maintenance_cost_as_percentage_of_investment = 0.025
+    hp_consumption = 0
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
@@ -173,6 +178,11 @@ def household_with_hds_and_advanced_hp(
             cycling_mode=cycling_mode,
             minimum_running_time_in_seconds=minimum_running_time_in_seconds,
             minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
+            co2_footprint=hp_co2_footprint,
+            cost=hp_cost,
+            lifetime=hp_lifetime,
+            maintenance_cost_as_percentage_of_investment=hp_maintenance_cost_as_percentage_of_investment,
+            consumption=hp_consumption,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -220,7 +230,7 @@ def household_with_hds_and_advanced_hp(
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )

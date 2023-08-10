@@ -2,9 +2,12 @@
 
 See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 """
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 from hplib import hplib as hpl
 
 # Import modules from HiSim
@@ -21,6 +24,7 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import log
 
 
@@ -54,6 +58,16 @@ class HeatPumpHplibConfig(ConfigBase):
     cycling_mode: bool
     minimum_running_time_in_seconds: Optional[int]
     minimum_idle_time_in_seconds: Optional[int]
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
+    #: consumption of the heatpump in kWh
+    consumption: float
 
     @classmethod
     def get_default_generic_advanced_hp_lib(cls):
@@ -62,16 +76,22 @@ class HeatPumpHplibConfig(ConfigBase):
         see default values for air/water hp on:
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
+        set_thermal_output_power_in_watt: float = 8000
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             group_id=4,
             heating_reference_temperature_in_celsius=-7,
             flow_temperature_in_celsius=52,
-            set_thermal_output_power_in_watt=8000,
+            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
+            co2_footprint=set_thermal_output_power_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            consumption=0,
         )
 
 
@@ -310,13 +330,7 @@ class HeatPumpHplib(Component):
 
     def write_to_report(self):
         """Write configuration to the report."""
-        lines = []
-        lines.append("Name: " + str(self.component_name))
-        lines.append("Model: " + str(self.model))
-        lines.append("T_in: " + str(self.t_in))
-        lines.append("T_out_val: " + str(self.t_out_val))
-        lines.append("P_th_set: " + str(self.p_th_set))
-        return lines
+        return self.config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Save state."""
@@ -442,6 +456,35 @@ class HeatPumpHplib(Component):
         self.state.time_on_cooling = time_on_cooling
         self.state.time_off = time_off
         self.state.on_off_previous = on_off
+
+    @staticmethod
+    def get_cost_capex(config: HeatPumpHplibConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        """Calculate OPEX costs, consisting of maintenance costs.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == "HeatPumpHPLib"
+                and output.load_type == LoadTypes.ELECTRICITY
+            ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
+                self.config.consumption = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+
+        return self.calc_maintenance_cost(), 0.0
 
 
 @dataclass

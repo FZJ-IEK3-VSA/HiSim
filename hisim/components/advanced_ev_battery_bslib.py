@@ -35,7 +35,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig(ConfigBase):
-    """Configuration of a Car Battery. """
+    """Configuration of a Car Battery."""
 
     #: name of the device
     name: str
@@ -198,7 +198,6 @@ class CarBattery(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-
         # Parameters
         dt = self.my_simulation_parameters.seconds_per_timestep
 
@@ -225,8 +224,15 @@ class CarBattery(Component):
         return self.battery_config.get_string_dict()
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
     ) -> Tuple[float, float]:
+        """Calculate OPEX costs.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
@@ -248,6 +254,8 @@ class CarBattery(Component):
                         / 3.6e6,
                         1,
                     )
+        # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
+
         return 0, 0
 
 

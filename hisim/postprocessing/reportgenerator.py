@@ -6,12 +6,11 @@ import os
 from typing import Any, Optional, List, Union
 from reportlab.lib.enums import TA_JUSTIFY, TA_CENTER
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import Paragraph, Spacer, Image, PageBreak
+from reportlab.platypus import Paragraph, Spacer, Image, PageBreak, Table
 from reportlab.platypus.doctemplate import PageTemplate, BaseDocTemplate
 from reportlab.platypus.frames import Frame
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch, cm, mm
-from reportlab.platypus import Table
 from reportlab.platypus.tableofcontents import TableOfContents
 from hisim import utils
 
@@ -246,6 +245,19 @@ class ReportGenerator:
             self.story.append(image)
         else:
             raise ValueError("no files found")
+
+    def write_tables_to_report(self, table_as_list_of_lists: List) -> None:
+        """Add table to the report."""
+
+        table = Table(
+            table_as_list_of_lists,
+            style=[
+                ("LINEABOVE", (0, 0), (-1, 0), 1, "black"),
+                ("LINEABOVE", (0, 1), (-1, 1), 0.5, "black"),
+                ("LINEBELOW", (0, -1), (-1, -1), 1, "black"),
+            ],
+        )
+        self.story.append(table)
 
     def write_heading_with_style_heading_one(self, text: List[str]) -> None:
         """Write text as heading."""

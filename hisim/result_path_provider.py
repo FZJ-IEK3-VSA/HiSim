@@ -1,6 +1,7 @@
 """Result Path Provider Module."""
 
 # clean
+import sys
 import os
 import datetime
 import enum
@@ -78,33 +79,21 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         """Set simulation duration."""
         self.simulation_duration_in_days = simulation_duration_in_days
 
-    def get_result_directory_name(self) -> Any:  # *args
+    def get_result_directory_name(self) -> Any:
         """Get the result directory path."""
-        if None in (
-            self.base_path,
-            self.model_name,
-            self.variant_name,
-            self.hash_number,
-        ):
-            # The variables must be given a str-value, otherwise a result path can not be created.
-            return None
 
-        if [
-            isinstance(x, str)
-            for x in [
-                self.base_path,
-                self.model_name,
-                self.variant_name,
-                self.datetime_string,
-                self.hash_number,
-            ]
-        ]:
+        if (
+            self.base_path is not None
+            and self.model_name is not None
+            and self.variant_name is not None
+            and self.datetime_string is not None
+        ):
             if self.sorting_option == SortingOptionEnum.DEEP:
                 path = os.path.join(
-                    self.base_path,  # type: ignore
-                    self.model_name,  # type: ignore
-                    self.variant_name,  # type: ignore
-                    self.datetime_string,  # type: ignore
+                    self.base_path,
+                    self.model_name,
+                    self.variant_name,
+                    self.datetime_string,
                 )
             elif (
                 self.sorting_option
@@ -113,37 +102,36 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                 # schauen ob verzeichnis schon da und aufsteigende nummer anängen
                 idx = 1
                 path = os.path.join(
-                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)  # type: ignore
+                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)
                 )
                 while os.path.exists(path):
                     idx = idx + 1
                     path = os.path.join(
-                        self.base_path,  # type: ignore
-                        self.model_name,  # type: ignore
-                        self.variant_name + "_" + str(idx),  # type: ignore
+                        self.base_path,
+                        self.model_name,
+                        self.variant_name + "_" + str(idx),
                     )
-            elif (
-                self.sorting_option
-                == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
-            ):
-                # schauen ob verzeichnis schon da und hash nummer anängen
-                path = os.path.join(
-                    self.base_path, self.model_name, self.variant_name + "_" + self.hash_number  # type: ignore
-                )
             elif self.sorting_option == SortingOptionEnum.FLAT:
                 path = os.path.join(
-                    self.base_path,  # type: ignore
-                    self.model_name  # type: ignore
-                    + "_"
-                    + self.variant_name  # type: ignore
-                    + "_"
-                    + self.datetime_string,  # type: ignore
+                    self.base_path,
+                    self.model_name + "_" + self.variant_name + self.datetime_string,
                 )
 
+            check_path_length(path=path)
             return path
 
-        raise TypeError(
-            "The types of base_path, model_name, variant_name and datetime_string should be str."
+        return None
+
+
+def check_path_length(path: str) -> None:
+    """Make sure that path name does not get too long for Windows."""
+
+    character_limit_according_to_windows = 256
+    # check if the system is windows
+    is_windows = sys.platform.startswith('win')
+    if is_windows and len(path) >= character_limit_according_to_windows:
+        raise NameError(
+            f"The path {path} exceeds the limit of 256 characters which is the limit for Windows. Please make your path shorter."
         )
 
 

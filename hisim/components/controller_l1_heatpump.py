@@ -60,6 +60,11 @@ class L1HeatPumpConfig(ConfigBase):
     # minimal resting time of heat source
     min_idle_time_in_seconds: int
 
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return L1HeatPumpController.get_full_classname()
+
     @staticmethod
     def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of building heating."""

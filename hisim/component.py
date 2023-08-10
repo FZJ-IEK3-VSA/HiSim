@@ -298,6 +298,32 @@ class Component:
         """
         return 0, 0
 
+    @staticmethod
+    def get_cost_capex(config: ConfigBase) -> Tuple[float, float, float]:
+        # pylint: disable=unused-argument
+        """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device.
+
+        :return: [capex in euro, co2 footprint in kg, lifetime]
+        :rtype: Tuple[float,float, float]
+        """
+        return 0, 0, 1
+
+    def calc_maintenance_cost(self) -> float:
+        """Calc maintenance_cost per simulated period as share of capex of component."""
+        seconds_per_year = 365 * 24 * 60 * 60
+        investment = self.get_cost_capex(self.config)[0]
+
+        # add maintenance costs per simulated period
+        maintenance_cost_per_simulated_period_in_euro: float = (
+            self.config.maintenance_cost_as_percentage_of_investment
+            * investment
+            * (
+                self.my_simulation_parameters.duration.total_seconds()
+                / seconds_per_year
+            )
+        )
+        return maintenance_cost_per_simulated_period_in_euro
+
     def i_save_state(self) -> None:
         """ Abstract. Gets called at the beginning of a timestep to save the state. """
         raise NotImplementedError()

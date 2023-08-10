@@ -367,7 +367,7 @@ def household_advanced_hp_diesel_car_pv_battery(
     )
 
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution.component_name,
         my_heat_distribution.WaterTemperatureOutput,
     )

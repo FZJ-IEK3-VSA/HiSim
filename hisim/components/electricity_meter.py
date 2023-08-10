@@ -252,15 +252,15 @@ class ElectricityMeter(DynamicComponent):
                     / 3.6e6,
                     1,
                 )
-
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(self.my_simulation_parameters.year)
         co2_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
+            emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         )
         euro_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
+            emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
         )
         revenue_euro_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_to_grid_revenue_in_euro_per_kwh
+            emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
         )
 
         opex_cost_per_simulated_period_in_euro = (

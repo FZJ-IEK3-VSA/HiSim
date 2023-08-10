@@ -238,7 +238,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
     diesel_footprint_in_kg_per_l: float   # kgCO2eq/l
 
     @classmethod
-    def get_default(cls):
+    def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
         """These are old values copied from file emission_factors_and_costs_fuels.csv so far"""
         # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
         # Todo: check Literature for values
@@ -257,7 +257,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
         )
 
     @classmethod
-    def get_values_for_year(cls, year: int):
+    def get_values_for_year(cls, year: int) -> "EmissionFactorsAndCostsForFuelsConfig":
         """Get emission factors and fuel costs for certain year.
 
         Sources:

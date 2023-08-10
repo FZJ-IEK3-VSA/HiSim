@@ -66,7 +66,6 @@ def electrolyzer_example(
     sep = ","  # Separator used in the CSV file (e.g., "," or ";")
     decimal = "."  # Decimal indicator used in the CSV file (e.g., "." or ",")
     multiplier = 1  # Multiplier factor for amplification (if needed)
-    output_description = "Load profile data wind 1 min resolution"
 
     # Set transformer and rectifier parameter
     name = "Standard transformer and rectifier unit"
@@ -79,10 +78,12 @@ def electrolyzer_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+    
 
     # =================================================================================================================================
     # Build Components
@@ -99,7 +100,6 @@ def electrolyzer_example(
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description=output_description,
     )
 
     # Create new CSV loader object

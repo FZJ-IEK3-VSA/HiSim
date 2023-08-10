@@ -234,11 +234,13 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
             labels=[str(i) for i in self.months_abbrev_uppercase],
             fontsize=self.fontsize_ticks,
         )
+
         plt.yticks(fontsize=self.fontsize_ticks)
         plt.title(f"{self.title} Monthly", fontsize=self.fontsize_title)
         plt.grid()
         plt.tight_layout()
         plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
+
         plt.savefig(self.filepath2)
         plt.close()
         return ReportImageEntry(

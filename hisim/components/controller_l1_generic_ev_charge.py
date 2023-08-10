@@ -235,23 +235,23 @@ class L1Controller(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""
-        # if force_convergence:
-        #     self.state = self.processed_state.clone()
-        # else:
-        car_location = int(stsv.get_input_value(self.car_location))
-        car_consumption = stsv.get_input_value(self.car_consumption)
-        soc = stsv.get_input_value(self.state_of_charge)
-        if self.clever:
-            electricity_target = stsv.get_input_value(self.electricity_target)
+        if force_convergence:
+            self.state = self.processed_state.clone()
         else:
-            electricity_target = 0
-        self.state.power = self.control(
-            car_consumption,
-            car_location=car_location,
-            soc=soc,
-            electricity_target=electricity_target,
-        )
-        self.processed_state = self.state.clone()
+            car_location = int(stsv.get_input_value(self.car_location))
+            car_consumption = stsv.get_input_value(self.car_consumption)
+            soc = stsv.get_input_value(self.state_of_charge)
+            if self.clever:
+                electricity_target = stsv.get_input_value(self.electricity_target)
+            else:
+                electricity_target = 0
+            self.state.power = self.control(
+                car_consumption,
+                car_location=car_location,
+                soc=soc,
+                electricity_target=electricity_target,
+            )
+            self.processed_state = self.state.clone()
         stsv.set_output_value(self.p_set, self.state.power)
 
     def build(

@@ -65,9 +65,9 @@ class ChargingStationConfig(cp.ConfigBase):
             source_weight=1,
             charging_station_set=charging_station_set,
             battery_set=0.8,
-            co2_footprint=100,  # Todo: check value
+            co2_footprint=100,  # estimated value  # Todo: check value
             cost=1000,  # Todo: check value
-            lifetime=18,  # value similar to car # Todo: check value
+            lifetime=10,  # estimated value  # Todo: check value
             maintenance_cost_as_percentage_of_investment=0.05,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
         )
         return config

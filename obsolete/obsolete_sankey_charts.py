@@ -308,7 +308,7 @@ def make_sankey_plots() -> None:
 # Plot sankey
 @utils.measure_execution_time
 @utils.measure_memory_leak
-def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
+def run(ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
     if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
         log.information("Making sankey plots.")
         start = timer()

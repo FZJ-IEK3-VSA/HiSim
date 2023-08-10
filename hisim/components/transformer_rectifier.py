@@ -88,7 +88,7 @@ class Transformer(Component):
             self.transformerconfig.name,
             Transformer.TransformerInput,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
+            lt.Units.KILOWATT,
             True,
         )
 
@@ -96,7 +96,7 @@ class Transformer(Component):
             self.transformerconfig.name,
             Transformer.TransformerOutput,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.WATT,
+            lt.Units.KILOWATT,
             output_description="Output 1",
         )
 

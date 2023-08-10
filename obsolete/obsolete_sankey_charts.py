@@ -14,6 +14,8 @@ from hisim import utils
 from hisim import loadtypes as lt
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+
+
 class SankeyHISIM(Chart, ChartFontsAndSize):
 
     """Class for sankey charts."""
@@ -296,23 +298,28 @@ class SankeyHISIM(Chart, ChartFontsAndSize):
 
 """Sankey Plot implemenetation in postprocessing main module."""
 
-# Plot sankey
-ppdt = PostProcessingDataTransfer
-if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
-    log.information("Making sankey plots.")
-    start = timer()
-    self.make_sankey_plots()
-    end = timer()
-    duration = end - start
-    log.information("Making sankey plots took " + f"{duration:1.2f}s.")
 
-def make_sankey_plots(self) -> None:
+def make_sankey_plots() -> None:
     """Makes Sankey plots. Needs work."""
     log.information("Plotting sankeys.")
-    # TODO:   self.plot_sankeys()  
+    # TODO:   self.plot_sankeys()
+
+
+# Plot sankey
+@utils.measure_execution_time
+@utils.measure_memory_leak
+def run(self, ppdt: PostProcessingDataTransfer) -> None:  # noqa: MC0001
+    if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
+        log.information("Making sankey plots.")
+        start = timer()
+        make_sankey_plots()
+        end = timer()
+        duration = end - start
+        log.information("Making sankey plots took " + f"{duration:1.2f}s.")
+
 
 @utils.measure_execution_time
-def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
+def plot_sankeys(ppdt: PostProcessingDataTransfer) -> None:
     """For plotting the sankeys."""
     for i_display_name in [
         name for name, display_name in lt.DisplayNames.__members__.items()

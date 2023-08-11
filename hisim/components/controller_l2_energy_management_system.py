@@ -52,7 +52,7 @@ class EMSConfig(cp.ConfigBase):
     # increase in buffer set temperatures when PV surplus is available for heating
     storage_temperature_offset_value: float
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
-    simple_hot_water_storage_temperature_offset_value:float
+    simple_hot_water_storage_temperature_offset_value: float
     # Todo: does building temperature modifier and simplehotwaterstorage temperature modifier work both together?
 
     @classmethod
@@ -90,7 +90,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     FlexibleElectricity = "FlexibleElectricity"
     BuildingTemperatureModifier = "BuildingTemperatureModifier"
     StorageTemperatureModifier = "StorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
-    SimpleHotWaterStorageTemperatureModifier = "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
+    SimpleHotWaterStorageTemperatureModifier = (
+        "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
+    )
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -413,7 +415,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             consumption_uncontrolled + consumption_ems_controlled,
         )
         if flexible_electricity > 0:
-            # Todo: put the following lines in an extra condition maybe (and recalc flexible_electricity inbetween); order could then be changed by something similar to source_weights
+            # Todo: put the following lines in an extra condition maybe (and recalc flexible_electricity inbetween);
+            #  order could then be changed by something similar to source_weights
             stsv.set_output_value(
                 self.building_temperature_modifier,
                 self.building_temperature_offset_value,
@@ -428,9 +431,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)
-            stsv.set_output_value(
-                self.simple_hot_water_storage_temperature_modifier, 0
-            )
+            stsv.set_output_value(self.simple_hot_water_storage_temperature_modifier, 0)
         """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)

@@ -53,7 +53,8 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
 
     building_type: str
     number_of_apartments: int
-    dhw_controlable: bool
+    dhw_controlable: bool  # if dhw is controlled by EMS
+    heatpump_controlable: bool  # if heatpump is controlled by EMS
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -86,6 +87,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
             building_type="blub",
             number_of_apartments=number_of_apartments,
             dhw_controlable=False,
+            heatpump_controlable=True,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -178,9 +180,9 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         my_config = HouseholdAdvancedHPDieselCarPVBatteryConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        # my_config_json = my_config.to_json()
-        # with open(config_filename, "w", encoding="utf8") as system_config_file:
-        #     system_config_file.write(my_config_json)
+        my_config_json = my_config.to_json()
+        with open(config_filename, "w", encoding="utf8") as system_config_file:
+            system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters
@@ -452,25 +454,48 @@ def household_3_advanced_hp_diesel_car_pv_battery(
             source_weight=999,
         )
 
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_heat_pump,
-        source_component_output=my_heat_pump.ElectricalInputPower,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
-        source_weight=2,
-    )
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heat Pump. ",
-    )
+    # connect EMS with Heatpump
+    if my_config.heatpump_controlable:
+        my_heat_pump_controller.connect_input(
+            my_heat_pump_controller.StorageTemperatureModifierForSimpleHotWaterStorage,
+            my_electricity_controller.component_name,
+            my_electricity_controller.StorageTemperatureModifierForSimpleHotWaterStorage,
+        )
+
+        my_electricity_controller.add_component_input_and_connect(
+            source_component_class=my_heat_pump,
+            source_component_output=my_heat_pump.ElectricalInputPower,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
+            source_weight=2,
+        )
+
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heat Pump. ",
+        )
+
+    else:
+        my_electricity_controller.add_component_input_and_connect(
+            source_component_class=my_heat_pump,
+            source_component_output=my_heat_pump.ElectricalInputPower,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            source_weight=999,
+        )
+
+    # Todo: connect EMS BuildingTemperatureModifier with Building temperature with option to choose in config, similar to dhw and hp
+
+    # connect EMS with PV
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
         source_component_output=my_photovoltaic_system.ElectricityOutput,
@@ -480,6 +505,7 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         source_weight=999,
     )
 
+    # connect EMS with Battery
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_advanced_battery,
         source_component_output=my_advanced_battery.AcBatteryPower,

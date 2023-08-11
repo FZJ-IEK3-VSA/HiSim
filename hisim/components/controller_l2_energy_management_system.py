@@ -54,6 +54,7 @@ class EMSConfig(cp.ConfigBase):
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
     storage_temperature_offset_value_for_simple_hot_water_storage:float
     # Todo: does building temperature modifier and simplehotwaterstorage temperature modifier work both together?
+
     @classmethod
     def get_default_config_ems(cls) -> "EMSConfig":
         """Default Config for Energy Management System."""
@@ -64,7 +65,6 @@ class EMSConfig(cp.ConfigBase):
             building_temperature_offset_value=2,
             storage_temperature_offset_value=10,
             storage_temperature_offset_value_for_simple_hot_water_storage=10,
-
         )
         return config
 
@@ -298,7 +298,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:
-
             if deltademand > 0:
                 stsv.set_output_value(output=output, value=deltademand)
                 deltademand = deltademand - previous_signal
@@ -397,7 +396,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         if force_convergence:
-            stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid,)
+            stsv.set_output_value(
+                self.electricity_to_or_from_grid,
+                electricity_to_grid,
+            )
             return
 
         if self.strategy == "optimize_own_consumption":
@@ -410,7 +412,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.total_electricity_consumption_channel,
             consumption_uncontrolled + consumption_ems_controlled,
         )
-        if flexible_electricity > 0:  # Todo: put the following lines in an extra condition maybe (and recalc flexible_electricity inbetween); order could then be changed by something similar to source_weights
+        if flexible_electricity > 0:
+            # Todo: put the following lines in an extra condition maybe (and recalc flexible_electricity inbetween); order could then be changed by something similar to source_weights
             stsv.set_output_value(
                 self.building_temperature_modifier,
                 self.building_temperature_offset_value,
@@ -419,12 +422,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.storage_temperature_modifier, self.storage_temperature_offset_value
             )
             stsv.set_output_value(
-                self.storage_temperature_modifier_for_simple_hot_water_storage, self.storage_temperature_offset_value_for_simple_hot_water_storage
+                self.storage_temperature_modifier_for_simple_hot_water_storage,
+                self.storage_temperature_offset_value_for_simple_hot_water_storage,
             )
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)
-            stsv.set_output_value(self.storage_temperature_modifier_for_simple_hot_water_storage, 0)
+            stsv.set_output_value(
+                self.storage_temperature_modifier_for_simple_hot_water_storage, 0
+            )
         """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)

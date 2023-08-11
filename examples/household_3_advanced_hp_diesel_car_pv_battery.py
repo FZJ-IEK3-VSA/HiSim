@@ -411,7 +411,7 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         source_weight=999,
     )
 
-    #connect EMS with DHW
+    # connect EMS with DHW
     if my_config.dhw_controlable:
         my_domnestic_hot_water_heatpump_controller.connect_input(
             my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
@@ -467,7 +467,10 @@ def household_3_advanced_hp_diesel_car_pv_battery(
             source_component_output=my_heat_pump.ElectricalInputPower,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
-            source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP,
+                lt.InandOutputType.ELECTRICITY_REAL,
+            ],
             source_weight=2,
         )
 

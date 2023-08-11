@@ -52,7 +52,7 @@ class EMSConfig(cp.ConfigBase):
     # increase in buffer set temperatures when PV surplus is available for heating
     storage_temperature_offset_value: float
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
-    storage_temperature_offset_value_for_simple_hot_water_storage:float
+    simple_hot_water_storage_temperature_offset_value:float
     # Todo: does building temperature modifier and simplehotwaterstorage temperature modifier work both together?
 
     @classmethod
@@ -64,7 +64,7 @@ class EMSConfig(cp.ConfigBase):
             limit_to_shave=0,
             building_temperature_offset_value=2,
             storage_temperature_offset_value=10,
-            storage_temperature_offset_value_for_simple_hot_water_storage=10,
+            simple_hot_water_storage_temperature_offset_value=10,
         )
         return config
 
@@ -90,7 +90,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     FlexibleElectricity = "FlexibleElectricity"
     BuildingTemperatureModifier = "BuildingTemperatureModifier"
     StorageTemperatureModifier = "StorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
-    StorageTemperatureModifierForSimpleHotWaterStorage = "StorageTemperatureModifierForSimpleHotWaterStorage"  # used for HeatPumpHplibController
+    SimpleHotWaterStorageTemperatureModifier = "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -126,8 +126,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.storage_temperature_offset_value = (
             self.ems_config.storage_temperature_offset_value
         )
-        self.storage_temperature_offset_value_for_simple_hot_water_storage = (
-            self.ems_config.storage_temperature_offset_value_for_simple_hot_water_storage
+        self.simple_hot_water_storage_temperature_offset_value = (
+            self.ems_config.simple_hot_water_storage_temperature_offset_value
         )
 
         # Inputs
@@ -185,13 +185,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.StorageTemperatureModifier} will follow.",
         )
 
-        self.storage_temperature_modifier_for_simple_hot_water_storage: cp.ComponentOutput = self.add_output(
+        self.simple_hot_water_storage_temperature_modifier: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.StorageTemperatureModifierForSimpleHotWaterStorage,
+            field_name=self.SimpleHotWaterStorageTemperatureModifier,
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.StorageTemperatureModifierForSimpleHotWaterStorage} will follow.",
+            output_description=f"here a description for {self.SimpleHotWaterStorageTemperatureModifier} will follow.",
         )
 
         self.check_peak_shaving: cp.ComponentOutput = self.add_output(
@@ -422,14 +422,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.storage_temperature_modifier, self.storage_temperature_offset_value
             )
             stsv.set_output_value(
-                self.storage_temperature_modifier_for_simple_hot_water_storage,
-                self.storage_temperature_offset_value_for_simple_hot_water_storage,
+                self.simple_hot_water_storage_temperature_modifier,
+                self.simple_hot_water_storage_temperature_offset_value,
             )
         else:
             stsv.set_output_value(self.building_temperature_modifier, 0)
             stsv.set_output_value(self.storage_temperature_modifier, 0)
             stsv.set_output_value(
-                self.storage_temperature_modifier_for_simple_hot_water_storage, 0
+                self.simple_hot_water_storage_temperature_modifier, 0
             )
         """
         elif self.strategy == "seasonal_storage":

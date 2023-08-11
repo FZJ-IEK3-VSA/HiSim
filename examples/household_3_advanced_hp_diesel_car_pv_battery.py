@@ -457,9 +457,9 @@ def household_3_advanced_hp_diesel_car_pv_battery(
     # connect EMS with Heatpump
     if my_config.heatpump_controlable:
         my_heat_pump_controller.connect_input(
-            my_heat_pump_controller.StorageTemperatureModifierForSimpleHotWaterStorage,
+            my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.StorageTemperatureModifierForSimpleHotWaterStorage,
+            my_electricity_controller.SimpleHotWaterStorageTemperatureModifier,
         )
 
         my_electricity_controller.add_component_input_and_connect(

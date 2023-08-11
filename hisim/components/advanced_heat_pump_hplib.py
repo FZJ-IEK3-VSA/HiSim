@@ -572,8 +572,8 @@ class HeatPumpHplibController(Component):
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
-    StorageTemperatureModifierForSimpleHotWaterStorage = (
-        "StorageTemperatureModifierForSimpleHotWaterStorage"
+    SimpleHotWaterStorageTemperatureModifier = (
+        "SimpleHotWaterStorageTemperatureModifier"
     )
 
     HeatingFlowTemperatureFromHeatDistributionSystem = (
@@ -619,10 +619,10 @@ class HeatPumpHplibController(Component):
             Units.CELSIUS,
             True,
         )
-        self.storage_temperature_modifier_in_celsius_channel: ComponentInput = (
+        self.simple_hot_water_storage_temperature_modifier: ComponentInput = (
             self.add_input(
                 self.component_name,
-                self.StorageTemperatureModifierForSimpleHotWaterStorage,
+                self.SimpleHotWaterStorageTemperatureModifier,
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 mandatory=False,
@@ -774,7 +774,7 @@ class HeatPumpHplibController(Component):
                 self.daily_avg_outside_temperature_input_channel
             )
             storage_temperature_modifier = stsv.get_input_value(
-                self.storage_temperature_modifier_in_celsius_channel
+                self.simple_hot_water_storage_temperature_modifier
             )
 
             # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)

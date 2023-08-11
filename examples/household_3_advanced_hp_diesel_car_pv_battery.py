@@ -135,7 +135,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
         return household_config
 
 
-def household_advanced_hp_diesel_car_pv_battery(
+def household_3_advanced_hp_diesel_car_pv_battery(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Example with advanced hp and diesel car and PV.
@@ -167,7 +167,7 @@ def household_advanced_hp_diesel_car_pv_battery(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "household_advanced_hp_diesel_car_pv_battery_config.json"
+    config_filename = "household_3_advanced_hp_diesel_car_pv_battery_config.json"
 
     my_config: HouseholdAdvancedHPDieselCarPVBatteryConfig
     if Path(config_filename).is_file():

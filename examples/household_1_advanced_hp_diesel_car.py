@@ -118,7 +118,7 @@ class HouseholdAdvancedHPDieselCarConfig:
         return household_config
 
 
-def household_advanced_hp_diesel_car(
+def household_1_advanced_hp_diesel_car(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Example with advanced hp and diesel car.
@@ -147,7 +147,7 @@ def household_advanced_hp_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "household_advanced_hp_diesel_car_config.json"
+    config_filename = "household_1_advanced_hp_diesel_car_config.json"
 
     my_config: HouseholdAdvancedHPDieselCarConfig
     if Path(config_filename).is_file():

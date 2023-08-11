@@ -148,7 +148,7 @@ def household_reference_gas_heater_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "reference_household_config.json"
+    config_filename = "household_reference_gas_heater_diesel_car.json"
 
     my_config: ReferenceHouseholdConfig
     if Path(config_filename).is_file():

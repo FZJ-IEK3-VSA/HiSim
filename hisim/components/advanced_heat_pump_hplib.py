@@ -773,12 +773,9 @@ class HeatPumpHplibController(Component):
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
-            if self.storage_temperature_modifier_in_celsius_channel is not None:
-                storage_temperature_modifier = stsv.get_input_value(
-                    self.storage_temperature_modifier_in_celsius_channel
-                )
-            else:
-                storage_temperature_modifier = 0
+            storage_temperature_modifier = stsv.get_input_value(
+                self.storage_temperature_modifier_in_celsius_channel
+            )
 
             # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
             summer_heating_mode = self.summer_heating_condition(

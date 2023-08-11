@@ -221,6 +221,7 @@ class PhysicsConfig:
         natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
     )  # [J/kg]
 
+
 @dataclass_json
 @dataclass
 class EmissionFactorsAndCostsForFuelsConfig:
@@ -237,7 +238,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
     diesel_footprint_in_kg_per_l: float   # kgCO2eq/l
 
     @classmethod
-    def get_default(cls):
+    def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
         """These are old values copied from file emission_factors_and_costs_fuels.csv so far"""
         # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
         # Todo: check Literature for values
@@ -256,7 +257,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
         )
 
     @classmethod
-    def get_values_for_year(cls, year: int):
+    def get_values_for_year(cls, year: int) -> "EmissionFactorsAndCostsForFuelsConfig":
         """Get emission factors and fuel costs for certain year.
 
         Sources:
@@ -294,7 +295,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l = 1.2670,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
             )
-        elif year == 2020:
+        if year == 2020:
             return EmissionFactorsAndCostsForFuelsConfig(
                 electricity_costs_in_euro_per_kwh = 0.3005,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh = 0.369,  # kgCO2eq/kWh  # Source: [5]
@@ -308,7 +309,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l = 1.1240,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
             )
-        elif year == 2021:
+        if year == 2021:
             return EmissionFactorsAndCostsForFuelsConfig(
                 electricity_costs_in_euro_per_kwh = 0.3005,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh = 0.410,  # kgCO2eq/kWh  # Source: [5]
@@ -322,7 +323,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l = 1.399,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
             )
-        elif year == 2022:
+        if year == 2022:
             return EmissionFactorsAndCostsForFuelsConfig(
                 electricity_costs_in_euro_per_kwh = 0.43025,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh = 0.434,  # kgCO2eq/kWh  # Source: [5]
@@ -336,5 +337,5 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l = 1.96,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
             )
-        else:
-            raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")
+
+        raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")

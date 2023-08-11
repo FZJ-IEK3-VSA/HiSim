@@ -180,9 +180,9 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         my_config = HouseholdAdvancedHPDieselCarPVBatteryConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        my_config_json = my_config.to_json()
-        with open(config_filename, "w", encoding="utf8") as system_config_file:
-            system_config_file.write(my_config_json)
+        # my_config_json = my_config.to_json()
+        # with open(config_filename, "w", encoding="utf8") as system_config_file:
+        #     system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters

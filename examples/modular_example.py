@@ -21,14 +21,14 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs
+    read_in_configs,
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
 
 def cleanup_old_result_folders():
-    """ Removes old result folders of previous modular_household_explicit simulations. """
+    """Removes old result folders of previous modular_household_explicit simulations."""
     base_path = os.path.join(
         hisim.utils.hisim_abs_path, os.path.pardir, "examples", "results"
     )
@@ -40,15 +40,17 @@ def cleanup_old_result_folders():
 
 
 def cleanup_old_lpg_requests():
-    """ Removes old results of loadprofilegenerator_connector_utsp. """
+    """Removes old results of loadprofilegenerator_connector_utsp."""
     files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
     for file in files_in_folder:
         full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)
         os.remove(full_path)
 
 
-def get_heating_reference_temperature_and_season_from_location(location: str) -> Tuple[float, List[int]]:
-    """ Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.
+def get_heating_reference_temperature_and_season_from_location(
+    location: str,
+) -> Tuple[float, List[int]]:
+    """Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.
 
     Both relies on the location.
     :param location: location of the building, reference temperature and heating season depend on the climate (at the location)
@@ -59,11 +61,17 @@ def get_heating_reference_temperature_and_season_from_location(location: str) ->
     :rtype: Tuple[float, List[int]]
     """
 
-    converting_data = pd.read_csv(hisim.utils.HISIMPATH["housing_reference_temperatures"])
+    converting_data = pd.read_csv(
+        hisim.utils.HISIMPATH["housing_reference_temperatures"]
+    )
     converting_data.index = converting_data["Location"]
-    return (float(converting_data.loc[location]["HeatingReferenceTemperature"]),
-            [int(converting_data.loc[location]['HeatingSeasonEnd']),
-             int(converting_data.loc[location]['HeatingSeasonBegin'])])
+    return (
+        float(converting_data.loc[location]["HeatingReferenceTemperature"]),
+        [
+            int(converting_data.loc[location]["HeatingSeasonEnd"]),
+            int(converting_data.loc[location]["HeatingSeasonBegin"]),
+        ],
+    )
 
 
 def modular_household_explicit(
@@ -96,12 +104,24 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.PLOT_CARPET
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.GENERATE_PDF_REPORT
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
+        )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
@@ -129,9 +149,13 @@ def modular_household_explicit(
 
     # select if utsp is needed based on defined occupancy_profile:
     if occupancy_profile_utsp is None and occupancy_profile is None:
-        raise Exception('Either occupancy_profile_utsp or occupancy_profile need to be defined in archetype_config file.')
+        raise Exception(
+            "Either occupancy_profile_utsp or occupancy_profile need to be defined in archetype_config file."
+        )
     if occupancy_profile_utsp is not None and occupancy_profile is not None:
-        hisim.log.warning("Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. ")
+        hisim.log.warning(
+            "Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. "
+        )
     if occupancy_profile_utsp is not None:
         occupancy_profile = occupancy_profile_utsp
         utsp_connected = True
@@ -192,9 +216,10 @@ def modular_household_explicit(
     my_sim.add_component(my_weather)
 
     # Build building
-    reference_temperature, heating_season = get_heating_reference_temperature_and_season_from_location(
-        location=location
-    )
+    (
+        reference_temperature,
+        heating_season,
+    ) = get_heating_reference_temperature_and_season_from_location(location=location)
 
     my_building_config = building.BuildingConfig(
         name="Building_1",
@@ -204,7 +229,7 @@ def modular_household_explicit(
         heating_reference_temperature_in_celsius=reference_temperature,
         absolute_conditioned_floor_area_in_m2=floor_area,
         total_base_area_in_m2=None,
-        number_of_apartments=None
+        number_of_apartments=None,
     )
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -240,7 +265,7 @@ def modular_household_explicit(
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
-                consumption=0
+                consumption=0,
             )
         )
 
@@ -251,7 +276,9 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile or "", location,
+            "Occupancy",
+            occupancy_profile or "",
+            location,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -347,7 +374,9 @@ def modular_household_explicit(
     # """ EV BATTERY """
     if ev_included:
         if mobility_set is None:
-            raise Exception("If EV should be simulated mobility set needs to be defined.")
+            raise Exception(
+                "If EV should be simulated mobility set needs to be defined."
+            )
         _ = component_connections.configure_ev_batteries(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,  # noqa

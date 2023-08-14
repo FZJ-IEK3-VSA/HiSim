@@ -8,6 +8,7 @@ import os
 import pydot
 
 from hisim import log
+from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
 
@@ -20,7 +21,7 @@ class SystemChart:
         """Initizalizes the class."""
         self.ppdt: PostProcessingDataTransfer = ppdt
 
-    def make_chart(self) -> List[SystemChartEntry]:  # noqa: arg-type
+    def make_chart(self) -> List[SystemChartEntry]:  # type: ignore
         """Makes different charts. Entry point for the class."""
         files: List[SystemChartEntry] = []
         file1 = self.make_graphviz_chart(
@@ -55,7 +56,7 @@ class SystemChart:
             with_results=True,
         )
         if file4 is not None:
-            files.append(file3)
+            files.append(file4)
         return files
 
     def make_graphviz_chart(
@@ -109,10 +110,11 @@ class SystemChart:
                     )
                     if with_results:
                         # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
-                        output_cumulative_result = self.ppdt.results_cumulative.at[
-                            0, component_input.source_output.get_pretty_name()
-                        ]  # noqa: union-attr
-                        this_edge_label += f": {round(output_cumulative_result,3)}"
+                        if isinstance(component_input.source_output, ComponentOutput):
+                            output_cumulative_result = self.ppdt.results_cumulative.at[
+                                0, component_input.source_output.get_pretty_name()
+                            ]
+                            this_edge_label += f": {round(output_cumulative_result,3)}"
 
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")
                     if key not in edge_labels:

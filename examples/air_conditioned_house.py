@@ -124,6 +124,11 @@ def household_ac_explicit(
     azimuth = 180
     tilt = 30
     source_weight = -1
+    pv_co2_footprint = power * 1e-3 * 130.7
+    pv_cost = power * 1e-3 * 535.81
+    pv_maintenance_cost_as_percentage_of_investment = 0.01
+    pv_lifetime = 25
+
 
     # Set occupancy
     occupancy_profile = "CH01"
@@ -192,8 +197,13 @@ def household_ac_explicit(
         # my_simulation_parameters.result_directory = os.path.join("ac_results_5", "Full Year Simulation for " + location + " Control Type is "+ control)
 
     # if control == "MPC":
-    # my_simulation_parameters.reset_system_config(predictive=True, prediction_horizon=24 * 3600, pv_included=True, pv_peak_power=4e3, smart_devices_included=True,
-    # battery_included=True, battery_capacity=5e3)
+    # my_simulation_parameters.reset_system_config(
+    #   predictive=True, prediction_horizon=24 * 3600, 
+    #   pv_included=True, pv_peak_power=4e3, 
+    #   smart_devices_included=True,
+    #   battery_included=True, 
+    #   battery_capacity=5e3
+    # )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -246,6 +256,10 @@ def household_ac_explicit(
         inverter_name=inverter_name,
         source_weight=source_weight,
         name=name,
+        co2_footprint=pv_co2_footprint,
+        cost=pv_cost,
+        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
+        lifetime=pv_lifetime,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

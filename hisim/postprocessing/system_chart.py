@@ -59,7 +59,12 @@ class SystemChart:
         return files
 
     def make_graphviz_chart(
-        self, with_labels: bool, with_class_names: bool, filename: str, caption: str, with_results: bool=False
+        self,
+        with_labels: bool,
+        with_class_names: bool,
+        filename: str,
+        caption: str,
+        with_results: bool = False,
     ) -> Optional[SystemChartEntry]:
         """Generates the system charts with graphviz."""
 
@@ -104,7 +109,10 @@ class SystemChart:
                     )
                     if with_results:
                         # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
-                        this_edge_label += f": {round(self.ppdt.results_cumulative.at[0, component_input.source_output.get_pretty_name()],3)}"
+                        output_cumulative_result = self.ppdt.results_cumulative.at[
+                            0, component_input.source_output.get_pretty_name()
+                        ]
+                        this_edge_label += f": {round(output_cumulative_result,3)}"
 
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")
                     if key not in edge_labels:

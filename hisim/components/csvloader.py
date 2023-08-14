@@ -79,6 +79,7 @@ class CSVLoader(cp.Component):
             self.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
+            output_description="description will follow for CSV"
         )
         self.output1.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
@@ -117,6 +118,10 @@ class CSVLoader(cp.Component):
         stsv.set_output_value(
             self.output1, float(self.column[timestep]) * self.multiplier
         )
+
+    def i_prepare_simulation(self) -> None:
+        """Prepare the simulation."""
+        pass
 
     def i_save_state(self) -> None:
         pass

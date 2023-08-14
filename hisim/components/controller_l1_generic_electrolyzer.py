@@ -185,7 +185,7 @@ class ElectrolyzerController(Component):
         # Initialize variables
 
         self.standby_count = 0.0
-        self.current_mode = 0  #  standby
+        self.current_mode = 0.0  #  standby
         self.warm_count = 0.0
         self.cold_count = 0.0
         self.initial_state = 0
@@ -253,7 +253,7 @@ class ElectrolyzerController(Component):
             current_power = max_load
 
         if current_power >= min_load and self.current_mode == 1:
-                self.current_mode = 1
+                self.current_mode = 1.0
                 stsv.set_output_value(self.distributed_load, current_power)
 
         if current_power >= min_load and self.initial_state == -1:  # -1 equals to "off"
@@ -274,7 +274,7 @@ class ElectrolyzerController(Component):
 
         elif self.current_mode == -0.5 and self.cold_up_count >= cold_up_time:
             self.cold_count += 1
-            self.current_mode = 1
+            self.current_mode = 1.0
             current_power = nominal_load
 
         if self.current_mode == 0.5 and self.warm_up_count < warm_up_time:
@@ -284,7 +284,7 @@ class ElectrolyzerController(Component):
 
         elif self.current_mode == 0.5 and self.warm_up_count >= warm_up_time:
             self.warm_count += 1
-            self.current_mode = 1
+            self.current_mode = 1.0
             current_power = nominal_load
             stsv.set_output_value(self.distributed_load, current_power)
 
@@ -293,14 +293,14 @@ class ElectrolyzerController(Component):
         if current_power < min_load and current_power >= standby_threshold:
             # Power sufficient for standby mode
             if self.current_mode == 1:
-                self.current_mode = 0
+                self.current_mode = 0.0
                 self.initial_state = 0
                 self.standby_count += 1
                 current_power = standby_threshold  # Set the current power demand to the standby threshold value
                 stsv.set_output_value(self.distributed_load, current_power)
 
             elif self.current_mode == 0:
-                self.current_mode = 0
+                self.current_mode = 0.0
                 current_power = standby_threshold  # Set the current power demand to the standby threshold value
                 stsv.set_output_value(self.distributed_load, current_power)
 
@@ -310,7 +310,7 @@ class ElectrolyzerController(Component):
         elif current_power < min_load and current_power < standby_threshold:
             # The system is to be switched off completely
             if self.current_mode == 1:  # Check if the system is in the "on" state
-                self.current_mode = -1
+                self.current_mode = -1.0
                 self.initial_state = -1
                 self.off_count += 1
                 current_power = 0
@@ -319,7 +319,7 @@ class ElectrolyzerController(Component):
             elif (
                 self.current_mode == 0
             ):  # Check if the system is in the "standby" state
-                self.current_mode = -1
+                self.current_mode = -1.0
                 self.initial_state = -1
                 self.off_count += 1
                 current_power = 0

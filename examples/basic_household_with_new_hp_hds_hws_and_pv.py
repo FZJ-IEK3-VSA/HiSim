@@ -9,10 +9,11 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump_for_house_with_hds
-from hisim.components import sumbuilder
+from hisim.components import electricity_meter
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
 from hisim import postprocessingoptions
+from hisim import loadtypes
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -102,14 +103,10 @@ def household_with_hds(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Base Electricity Load Profile
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig(
-            name="ElectrcityGrid_BaseLoad",
-            grid=[my_occupancy, "Subtract", my_photovoltaic_system],
-            signal=None,
-        ),
+    # Build Electricity Meter
+    my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
     # Build Heat Pump Controller
@@ -153,6 +150,40 @@ def household_with_hds(
     # Connect Component Inputs with Outputs
 
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
+
+    # Electricity Grid
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_photovoltaic_system,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.PV,
+            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
+        source_weight=999,
+    )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_occupancy,
+        source_component_output=my_occupancy.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_heat_pump,
+        source_component_output=my_heat_pump.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.HEAT_PUMP,
+            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
     # -----------------------------------------------------------------------------------------------------------------
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
@@ -169,8 +200,8 @@ def household_with_hds(
     )
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
-        my_base_electricity_load_profile.component_name,
-        my_base_electricity_load_profile.ElectricityOutput,
+        my_electricity_meter.component_name,
+        my_electricity_meter.ElectricityToOrFromGrid,
     )
     # -----------------------------------------------------------------------------------------------------------------
     my_heat_pump.connect_only_predefined_connections(
@@ -210,7 +241,7 @@ def household_with_hds(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_base_electricity_load_profile)
+    my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_distribution_controller)
     my_sim.add_component(my_building)

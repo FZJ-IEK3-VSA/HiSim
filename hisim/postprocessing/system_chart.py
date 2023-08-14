@@ -20,7 +20,7 @@ class SystemChart:
         """Initizalizes the class."""
         self.ppdt: PostProcessingDataTransfer = ppdt
 
-    def make_chart(self) -> List[SystemChartEntry]:
+    def make_chart(self) -> List[SystemChartEntry]:  # noqa: arg-type
         """Makes different charts. Entry point for the class."""
         files: List[SystemChartEntry] = []
         file1 = self.make_graphviz_chart(
@@ -111,7 +111,7 @@ class SystemChart:
                         # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
                         output_cumulative_result = self.ppdt.results_cumulative.at[
                             0, component_input.source_output.get_pretty_name()
-                        ]
+                        ]  # noqa: union-attr
                         this_edge_label += f": {round(output_cumulative_result,3)}"
 
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")

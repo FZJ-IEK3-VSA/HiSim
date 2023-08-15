@@ -187,20 +187,6 @@
     "total_energy_to_grid_in_kwh": 0.0,
     "total_energy_from_grid_in_kwh": 0.0
   },
-  "advanced_battery_config": {
-    "name": "Battery",
-    "source_weight": 1,
-    "system_id": "SG1",
-    "custom_pv_inverter_power_generic_in_watt": 5000.0,
-    "custom_battery_capacity_generic_in_kilowatt_hour": 10,
-    "charge_in_kwh": 0,
-    "discharge_in_kwh": 0,
-    "co2_footprint": 1307.0,
-    "cost": 5358.099999999999,
-    "lifetime": 10,
-    "lifetime_in_cycles": 5000.0,
-    "maintenance_cost_as_percentage_of_investment": 0.02
-  },
   "electricity_controller_config": {
     "name": "L2EMSElectricityController",
     "strategy": "optimize_own_consumption",

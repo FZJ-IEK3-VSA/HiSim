@@ -94,7 +94,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
             number_of_apartments=number_of_apartments,
             # dhw_controlable=False,
             # heatpump_controlable=False,
-            surplus_control=True,
+            surplus_control=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -193,9 +193,9 @@ def household_5_advanced_hp_ev_pv_battery(
         my_config = HouseholdAdvancedHpEvPvBatteryConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        # my_config_json = my_config.to_json()
-        # with open(config_filename, "w", encoding="utf8") as system_config_file:
-        #     system_config_file.write(my_config_json)
+        my_config_json = my_config.to_json()
+        with open(config_filename, "w", encoding="utf8") as system_config_file:
+            system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters
@@ -209,7 +209,7 @@ def household_5_advanced_hp_ev_pv_battery(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_simulation_parameters.surplus_control = my_config.surplus_control

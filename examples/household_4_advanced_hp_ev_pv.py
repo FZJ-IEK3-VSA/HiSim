@@ -54,8 +54,8 @@ class HouseholdAdvancedHPEvPvConfig:
 
     building_type: str
     number_of_apartments: int
-    dhw_controlable: bool  # if dhw is controlled by EMS
-    heatpump_controlable: bool  # if heatpump is controlled by EMS
+    # dhw_controlable: bool  # if dhw is controlled by EMS
+    # heatpump_controlable: bool  # if heatpump is controlled by EMS
     surplus_control: bool  # decision on the consideration of smart control for EV charging and heat pump and dhw
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
@@ -90,9 +90,9 @@ class HouseholdAdvancedHPEvPvConfig:
         household_config = HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
-            dhw_controlable=False,
-            heatpump_controlable=False,
-            surplus_control=True,
+            # dhw_controlable=False,
+            # heatpump_controlable=False,
+            surplus_control=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -189,9 +189,9 @@ def household_4_advanced_hp_ev_pv(
         my_config = HouseholdAdvancedHPEvPvConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        # my_config_json = my_config.to_json()
-        # with open(config_filename, "w", encoding="utf8") as system_config_file:
-        #     system_config_file.write(my_config_json)
+        my_config_json = my_config.to_json()
+        with open(config_filename, "w", encoding="utf8") as system_config_file:
+            system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters

@@ -439,6 +439,8 @@ def compute_kpis(
     #     timeresolution=simulation_parameters.seconds_per_timestep,
     # )
 
+    consumption_from_grid_in_kwh = consumption_sum - self_consumption_sum
+
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
@@ -480,6 +482,7 @@ def compute_kpis(
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
     table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
+    table.append(["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
     # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
     # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])

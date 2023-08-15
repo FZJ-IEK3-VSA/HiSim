@@ -138,7 +138,9 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
             ),
         )
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_controller_config.mode = 2  # use heating and cooling as default
+        household_config.hp_controller_config.mode = (
+            2  # use heating and cooling as default
+        )
         return household_config
 
 

@@ -25,7 +25,6 @@ def test_electrolyzer():
     ramp_down_rate: float = 0.2  # [%/s]
 
     timestep = 1
-    force_convergence = False
 
     # ===================================================================================================================
     # Setup Electrolyzer

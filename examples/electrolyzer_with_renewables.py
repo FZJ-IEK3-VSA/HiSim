@@ -66,7 +66,6 @@ def electrolyzer_example(
     sep = ","  # Separator used in the CSV file (e.g., "," or ";")
     decimal = "."  # Decimal indicator used in the CSV file (e.g., "." or ",")
     multiplier = 1  # Multiplier factor for amplification (if needed)
-    output_description = "Wind power timeseries with 1 min resolution"
 
     # Set transformer and rectifier parameter
     name = "Standard transformer and rectifier unit"
@@ -101,7 +100,6 @@ def electrolyzer_example(
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description=output_description
     )
 
     # Create new CSV loader object

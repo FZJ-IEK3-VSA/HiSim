@@ -129,3 +129,7 @@ class CSVLoader(cp.Component):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
+    
+    def write_to_report(self) -> List[str]:
+        """Writes a report."""
+        return self.csvconfig.get_string_dict()

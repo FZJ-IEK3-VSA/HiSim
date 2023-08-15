@@ -407,7 +407,7 @@ class Electrolyzer(cp.Component):
 
         # Calculates system_power from stack power
         system_power = stack_power + aux_power
-        print("system_power: ", system_power)
+        #print("system_power: ", system_power)
 
         interp_function_h2_production_rate = interpolate.interp1d(
             system_power, h2_production_rate, kind="quadratic"
@@ -607,6 +607,8 @@ class Electrolyzer(cp.Component):
             electrolyzer_type, nominal_load, nom_h2_flow_rate, faraday_eff, i_cell_nom
         )
         # Current hydrogen prduction and specific hydrogen production rate
+        #print("self.state: ", self.state)
+        #print("self.current_load_state: ", self.current_load_state)
         (
             self.current_h2_production_rate,
             self.current_spec_h2_production_rate,

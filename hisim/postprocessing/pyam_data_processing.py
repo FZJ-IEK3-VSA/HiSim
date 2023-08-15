@@ -200,8 +200,8 @@ class PyAmChartGenerator:
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
-
         """Make plots for different kind of data."""
+
         log.information(f"Simulation duration: {simulation_duration_key} days.")
         pyam_dataframe = dict_of_data[simulation_duration_key]
 

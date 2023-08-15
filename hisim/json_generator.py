@@ -4,7 +4,7 @@ from typing import Any, Optional, List, Type, Dict
 import json
 from dataclasses import dataclass, field
 from dataclass_wizard import JSONWizard
-import json
+
 from hisim import log
 from hisim.component import ConfigBase
 from hisim.simulationparameters import SimulationParameters

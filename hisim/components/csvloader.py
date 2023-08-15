@@ -22,6 +22,7 @@ class CSVLoaderConfig(cp.ConfigBase):
     sep: str
     decimal: str
     multiplier: float
+    output_description: str
 
     @classmethod
     def get_main_classname(cls):
@@ -79,7 +80,7 @@ class CSVLoader(cp.Component):
             self.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
-            output_description="description will follow for CSV"
+            output_description="CSV loader output 1"
         )
         self.output1.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier

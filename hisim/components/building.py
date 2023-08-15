@@ -193,6 +193,8 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    HeatFluxWallNode="HeatFluxWallNode"
+    HeatFluxThermalMassNode="HeatFluxThermalMassNode"
 
     @utils.measure_execution_time
     def __init__(
@@ -487,6 +489,20 @@ class Building(dynamic_component.DynamicComponent):
             lt.Units.WATT,
             output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
         )
+        self.heat_flow_rate_to_thermal_mass_node_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatFluxThermalMassNode,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.HeatFluxThermalMassNode} will follow.",
+        )
+        self.heat_flow_rates_to_internal_surface_node_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatFluxWallNode,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.HeatFluxWallNode} will follow.",
+        )
 
         # =================================================================================================================================
         # Add and get default connections
@@ -695,6 +711,15 @@ class Building(dynamic_component.DynamicComponent):
         stsv.set_output_value(
             self.theoretical_thermal_building_demand_channel,
             theoretical_thermal_building_demand_in_watt,
+        )
+
+        stsv.set_output_value(
+                self.heat_flow_rate_to_thermal_mass_node_channel,
+                self.heat_flux_thermal_mass_in_watt
+        )
+        stsv.set_output_value(
+            self.heat_flow_rates_to_internal_surface_node_channel,
+            self.heat_flux_internal_room_surface_in_watt
         )
 
         # Saves solar gains cache
@@ -1440,11 +1465,11 @@ class Building(dynamic_component.DynamicComponent):
         """
 
         # Calculates the heat flows to various points of the building based on the breakdown in section C.2, formulas C.1-C.3
+
         # Heat flow to the air node in W, before labeled Phi_ia
-
         self.heat_flux_indoor_air_in_watt = 0.5 * internal_heat_gains_in_watt
-        # Heat flow to the surface node in W, before labeled Phi_st
 
+        # Heat flow to the surface node in W, before labeled Phi_st
         self.heat_flux_internal_room_surface_in_watt = (
             1
             - (self.effective_mass_area_in_m2 / self.total_internal_surface_area_in_m2)

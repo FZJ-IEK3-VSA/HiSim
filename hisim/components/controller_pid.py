@@ -2,7 +2,7 @@
 
 import numpy as np
 import control
-from typing import Optional
+# from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -16,6 +16,7 @@ from hisim.components.building import Building
 # from hisim.components.weather import Weather
 # from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim import log
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -108,7 +109,6 @@ class PIDController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        my_simulation_repository: Optional[cp.SimRepository],
         config: PIDControllerConfig,
     ) -> None:
         """Constructs all the neccessary attributes."""
@@ -119,7 +119,7 @@ class PIDController(cp.Component):
         )
 
         self.my_simulation_parameters = my_simulation_parameters
-        self.build(my_simulation_repository)
+        self.build()
         proportional_gain, integral_gain, derivative_gain = self.PIDtuning()
         # --------------------------------------------------
         # control saturation
@@ -146,7 +146,7 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.phi_stC: cp.ComponentInput = self.add_input(
+        self.heat_flow_rate_to_internal_surface_node_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatFluxWallNode,
             LoadTypes.HEATING,
@@ -154,7 +154,7 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.phi_mC: cp.ComponentInput = self.add_input(
+        self.heat_flow_rate_to_internal_mass_node_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatFluxThermalMassNode,
             LoadTypes.HEATING,
@@ -163,31 +163,60 @@ class PIDController(cp.Component):
         )
 
         self.thermal_power: cp.ComponentOutput = self.add_output(
-            self.component_name, self.ThermalPowerPID, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.ThermalPowerPID,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.ThermalPowerPID} will follow.",
         )
         self.error_pvalue_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error_pvalue, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.error_pvalue,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.error_pvalue} will follow.",
         )
-
         self.error_ivalue_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error_ivalue, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.error_ivalue,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.error_ivalue} will follow.",
         )
         self.error_dvalue_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error_dvalue, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.error_dvalue,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.error_dvalue} will follow.",
         )
         self.error_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.error, LoadTypes.ANY, Units.CELSIUS
+            self.component_name,
+            self.error,
+            LoadTypes.ANY,
+            Units.CELSIUS,
+            output_description=f"here a description for PV {self.error} will follow.",
         )
-
         self.derivator_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.derivator, LoadTypes.ANY, Units.CELSIUS
+            self.component_name,
+            self.derivator,
+            LoadTypes.ANY,
+            Units.CELSIUS,
+            output_description=f"here a description for PV {self.derivator} will follow.",
         )
-
         self.integrator_output: cp.ComponentOutput = self.add_output(
-            self.component_name, self.integrator, LoadTypes.ANY, Units.CELSIUS
+            self.component_name,
+            self.integrator,
+            LoadTypes.ANY,
+            Units.CELSIUS,
+            output_description=f"here a description for PV {self.integrator} will follow.",
         )
         self.feed_forward_signalC: cp.ComponentOutput = self.add_output(
-            self.component_name, self.FeedForwardSignal, LoadTypes.HEATING, Units.WATT
+            self.component_name,
+            self.FeedForwardSignal,
+            LoadTypes.HEATING,
+            Units.WATT,
+            output_description=f"here a description for PV {self.FeedForwardSignal} will follow.",
         )
 
     def get_building_default_connections(self):
@@ -223,26 +252,26 @@ class PIDController(cp.Component):
         """Prepare the simulation."""
         pass
 
-    def build(self, my_simulation_repository):
+    def build(self):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
-        self.h_tr_w = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_glazing
+        self.h_tr_w = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing
         )
-        self.h_tr_ms = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_opaque_ms
+        self.h_tr_ms = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms
         )
-        self.h_tr_em = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_opaque_em
+        self.h_tr_em = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em
         )
-        self.h_ve_adj = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_coefficient_ventillation
+        self.h_ve_adj = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation
         )
-        self.h_tr_is = my_simulation_repository.get_entry(
-            Building.Thermal_transmission_Surface_IndoorAir
+        self.h_tr_is = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir
         )
-        self.c_m = my_simulation_repository.get_entry(
-            Building.Thermal_capacity_envelope
+        self.c_m = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.Thermal_capacity_envelope
         )
 
     def i_save_state(self):
@@ -273,8 +302,8 @@ class PIDController(cp.Component):
         if force_convergence:
             return
         # Retrieve Disturbance forecast
-        phi_m = stsv.get_input_value(self.phi_mC)
-        phi_st = stsv.get_input_value(self.phi_stC)
+        phi_m = stsv.get_input_value(self.heat_flow_rate_to_internal_mass_node_channel)
+        phi_st = stsv.get_input_value(self.heat_flow_rate_to_internal_surface_node_channel)
 
         # Retrieve building temperature
         building_temperature_t_mc = stsv.get_input_value(self.t_mC)
@@ -312,7 +341,8 @@ class PIDController(cp.Component):
         # if timestep >= 304*24*3600/self.my_simulation_parameters.seconds_per_timestep:
         #     if manipulated_variable + feed_forward_signal < 0:
         #         manipulated_variable=0
-        # if timestep > (151-20)*24*3600/self.my_simulation_parameters.seconds_per_timestep and timestep <= 243*24*3600/self.my_simulation_parameters.seconds_per_timestep:
+        # if (timestep > (151-20)*24*3600/self.my_simulation_parameters.seconds_per_timestep and
+        # timestep <= 243*24*3600/self.my_simulation_parameters.seconds_per_timestep):
         #     if manipulated_variable + feed_forward_signal > 0:
         #         manipulated_variable = 0
 
@@ -394,8 +424,8 @@ class PIDController(cp.Component):
         d_d25=0
         """
 
-        A = np.matrix([[A11]])  # transition matrix
-        B = np.matrix([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
+        A = np.array([[A11]])  # transition matrix
+        B = np.array([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
         # C=np.matrix([[c11],[c21]]) #design matrix #comment out due to pylint warning W0612 (unused-variable)
         # D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]]) #comment out due to pylint warning W0612 (unused-variable)
 
@@ -424,9 +454,9 @@ class PIDController(cp.Component):
         u = np.zeros(ns + 1)
         for i in range(ns):
             if i == 0:
-                u = 0
+                u = 0*np.ones(ns + 1)
             else:
-                u = 22
+                u = 22*np.ones(ns + 1)
 
         """ Converting the state space model into transfer function.
         We have one state variable wich is the thermal mass temperature and 6 inputs...
@@ -437,8 +467,11 @@ class PIDController(cp.Component):
         tf_tm = control.TransferFunction([B[0, 0]], [1, -(A[0, 0])])
 
         # open loop step response:
-        timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
-        dummy1 = timestep_tm_o  # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable) since function 'control.forced_response' can only be used with a return value with a tuple of length 2
+        # timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
+        _, tm_o = control.forced_response(tf_tm, t, u)
+        # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable) 
+        # since function 'control.forced_response' can only be used with a return value with a tuple of length 2
+        # dummy1 = timestep_tm_o
 
         # steady state value:
         tm_steady_state = tm_o[ns]
@@ -469,7 +502,8 @@ class PIDController(cp.Component):
 
         desired pole = (- natural frequency * damping ratio) +/-  j (natural frequency * sqrt(1-damping ratio^2))
 
-        Closed loop transfer function = (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
+        Closed loop transfer function = 
+            (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
 
         simplified Closed loop transfer function of a first order system 1/ms+b= (Kp s + Ki) / ms^2+(b+Kp)s+Ki
 
@@ -494,8 +528,8 @@ class PIDController(cp.Component):
         proportional_gain = (natural_frequency * damping_ratio * 2 * m) - b
         derivative_gain = 0
 
-        log.information("gain Ki= {}".format(integral_gain))
-        log.information("gain Kp= {}".format(proportional_gain))
+        log.information(f"gain Ki= {integral_gain}")
+        log.information(f"gain Kp= {proportional_gain}")
         return proportional_gain, integral_gain, derivative_gain
 
     def determine_conditions(self, current_temperature: float, set_point: float) -> str:

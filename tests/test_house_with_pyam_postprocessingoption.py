@@ -12,7 +12,6 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
-from hisim.components import sumbuilder
 from hisim import postprocessingoptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
@@ -68,6 +67,10 @@ def test_house_with_pyam(
     azimuth = 180
     tilt = 30
     source_weight = -1
+    pv_co2_footprint = power * 1e-3 * 130.7
+    pv_cost = power * 1e-3 * 535.81
+    pv_maintenance_cost_as_percentage_of_investment = 0.01
+    pv_lifetime = 25
 
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
@@ -148,21 +151,16 @@ def test_house_with_pyam(
         inverter_name=inverter_name,
         source_weight=source_weight,
         name=name,
+        co2_footprint=pv_co2_footprint,
+        cost=pv_cost,
+        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
+        lifetime=pv_lifetime,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Base Electricity Load Profile
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig(
-            name="ElectrcityGrid_BaseLoad",
-            grid=[my_occupancy, "Subtract", my_photovoltaic_system],
-            signal=None,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
-    )
 
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
@@ -197,11 +195,6 @@ def test_house_with_pyam(
 
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
 
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.ElectricityInput,
-        my_base_electricity_load_profile.component_name,
-        my_base_electricity_load_profile.ElectricityOutput,
-    )
     my_heat_pump.connect_only_predefined_connections(
         my_weather, my_heat_pump_controller
     )
@@ -212,7 +205,6 @@ def test_house_with_pyam(
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_base_electricity_load_profile)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)

@@ -2,9 +2,12 @@
 # clean
 
 from enum import IntEnum
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
+import pandas as pd
+
 import hisim.component as cp
 from hisim.components.building import Building
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
@@ -46,11 +49,25 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_default_heatdistributionsystem_config(cls,) -> Any:
         """Get a default heat distribution system config."""
-        config = HeatDistributionConfig(name="HeatDistributionSystem",)
+        config = HeatDistributionConfig(
+            name="HeatDistributionSystem",
+            co2_footprint=0,  # Todo: check value
+            cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in examples instead
+            lifetime=50,  # SOURCE: VDI2067-1
+            maintenance_cost_as_percentage_of_investment=0.01,  # SOURCE: VDI2067-1
+        )
         return config
 
 
@@ -282,7 +299,7 @@ class HeatDistribution(cp.Component):
             cp.ComponentConnection(
                 HeatDistribution.WaterTemperatureInput,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections
@@ -479,6 +496,21 @@ class HeatDistribution(cp.Component):
             thermal_power_delivered_effective_in_watt,
         )
 
+    @staticmethod
+    def get_cost_capex(config: HeatDistributionConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> Tuple[float, float]:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+
+        return self.calc_maintenance_cost(), 0
+
 
 class HeatDistributionController(cp.Component):
 
@@ -631,7 +663,7 @@ class HeatDistributionController(cp.Component):
             cp.ComponentConnection(
                 HeatDistributionController.WaterTemperatureInputFromHeatWaterStorage,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistributionSystem,
+                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections

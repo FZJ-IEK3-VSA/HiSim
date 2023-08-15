@@ -365,11 +365,18 @@ def configure_battery(
     if battery_capacity is not None:
         my_advanced_battery_config = (
             advanced_battery_bslib.BatteryConfig(
-                e_bat_custom=battery_capacity,
-                p_inv_custom=battery_capacity * 0.5 * 1e3,
+                custom_battery_capacity_generic_in_kilowatt_hour=battery_capacity,
+                custom_pv_inverter_power_generic_in_watt=battery_capacity * 0.5 * 1e3,
                 source_weight=count,
                 system_id='SG1',
                 name='Battery',
+                charge_in_kwh=0,
+                discharge_in_kwh=0,
+                co2_footprint=battery_capacity * 130.7,
+                cost=battery_capacity * 535.81,
+                lifetime=10,  # todo set correct values
+                lifetime_in_cycles=5e3,  # todo set correct values
+                maintenance_cost_as_percentage_of_investment=0.02,
             )
         )
     else:

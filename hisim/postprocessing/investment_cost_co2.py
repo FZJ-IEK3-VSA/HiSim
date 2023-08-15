@@ -30,7 +30,9 @@ def read_in_component_costs() -> pd.DataFrame:
     return price_frame
 
 
-def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float, float]:
+def compute_investment_cost(
+    components: List[ComponentWrapper],
+) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
     :param components: List of all configured components in the HiSIM example.
@@ -71,10 +73,8 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
             column = price_frame.iloc[price_frame.index == "Hot Water tank"]
             component_capacity = component.my_component.volume
         elif isinstance(component.my_component, advanced_battery_bslib.Battery):
-            column = price_frame.iloc[
-                price_frame.index == "Lithium iron phosphate battery"
-            ]
-            component_capacity = component.my_component.e_bat_custom
+            column = price_frame.iloc[price_frame.index == "Lithium iron phosphate battery"]
+            component_capacity = component.my_component.custom_battery_capacity_generic_in_kilowatt_hour
         elif isinstance(component.my_component, generic_car.Car):
             if component.my_component.config.fuel == LoadTypes.ELECTRICITY:
                 column = price_frame.iloc[price_frame.index == "Electric vehicle"]

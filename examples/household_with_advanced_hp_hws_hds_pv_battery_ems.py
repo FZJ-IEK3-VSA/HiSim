@@ -54,7 +54,7 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set Heat Pump Controller
     hp_controller_mode = (
@@ -72,6 +72,11 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     cycling_mode = True
     minimum_running_time_in_seconds = 600
     minimum_idle_time_in_seconds = 600
+    hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
+    hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
+    hp_lifetime = 10
+    hp_maintenance_cost_as_percentage_of_investment = 0.025
+    hp_consumption = 0
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
@@ -180,6 +185,11 @@ def household_with_hplib_hws_hds_pv_battery_ems(
             cycling_mode=cycling_mode,
             minimum_running_time_in_seconds=minimum_running_time_in_seconds,
             minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
+            co2_footprint=hp_co2_footprint,
+            cost=hp_cost,
+            lifetime=hp_lifetime,
+            maintenance_cost_as_percentage_of_investment=hp_maintenance_cost_as_percentage_of_investment,
+            consumption=hp_consumption,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

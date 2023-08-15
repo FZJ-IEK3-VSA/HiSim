@@ -193,9 +193,9 @@ def household_5_advanced_hp_ev_pv_battery(
         my_config = HouseholdAdvancedHpEvPvBatteryConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        my_config_json = my_config.to_json()
-        with open(config_filename, "w", encoding="utf8") as system_config_file:
-            system_config_file.write(my_config_json)
+        # my_config_json = my_config.to_json()
+        # with open(config_filename, "w", encoding="utf8") as system_config_file:
+        #     system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters
@@ -212,9 +212,9 @@ def household_5_advanced_hp_ev_pv_battery(
         my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.surplus_control = my_config.surplus_control
+    # my_simulation_parameters.surplus_control = my_config.surplus_control # Todo: need to find solution for this, because electric vehicle charger is also controlled by my_simulation_parameters.surplus_control
+    clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    clever = my_simulation_parameters.surplus_control
 
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config

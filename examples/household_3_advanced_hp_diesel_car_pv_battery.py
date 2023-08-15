@@ -201,9 +201,9 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.surplus_control = my_config.surplus_control
+    # my_simulation_parameters.surplus_control = my_config.surplus_control # Todo: need to find solution for this, because electric vehicle charger is also controlled by my_simulation_parameters.surplus_control
+    clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    clever = my_simulation_parameters.surplus_control
 
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config

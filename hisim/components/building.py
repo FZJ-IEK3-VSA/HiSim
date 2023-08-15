@@ -193,8 +193,8 @@ class Building(dynamic_component.DynamicComponent):
     SolarGainThroughWindows = "SolarGainThroughWindows"
     HeatLoss = "HeatLoss"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
-    HeatFluxWallNode="HeatFluxWallNode"
-    HeatFluxThermalMassNode="HeatFluxThermalMassNode"
+    HeatFluxWallNode = "HeatFluxWallNode"
+    HeatFluxThermalMassNode = "HeatFluxThermalMassNode"
 
     @utils.measure_execution_time
     def __init__(
@@ -714,8 +714,8 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         stsv.set_output_value(
-                self.heat_flow_rate_to_thermal_mass_node_channel,
-                self.heat_flux_thermal_mass_in_watt
+            self.heat_flow_rate_to_thermal_mass_node_channel,
+            self.heat_flux_thermal_mass_in_watt
         )
         stsv.set_output_value(
             self.heat_flow_rates_to_internal_surface_node_channel,
@@ -803,7 +803,8 @@ class Building(dynamic_component.DynamicComponent):
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing, entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
+            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing,
+            entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir,

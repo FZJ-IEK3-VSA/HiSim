@@ -56,6 +56,7 @@ class HouseholdAdvancedHPEvPvConfig:
     number_of_apartments: int
     dhw_controlable: bool  # if dhw is controlled by EMS
     heatpump_controlable: bool  # if heatpump is controlled by EMS
+    surplus_control: bool  # decision on the consideration of smart control for EV charging and heat pump and dhw
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -91,6 +92,7 @@ class HouseholdAdvancedHPEvPvConfig:
             number_of_apartments=number_of_apartments,
             dhw_controlable=False,
             heatpump_controlable=False,
+            surplus_control=True,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -206,7 +208,9 @@ def household_4_advanced_hp_ev_pv(
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+    my_simulation_parameters.surplus_control = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
+    clever = my_simulation_parameters.surplus_control
 
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config
@@ -484,7 +488,7 @@ def household_4_advanced_hp_ev_pv(
     )
 
     # connect EMS with DHW
-    if my_config.dhw_controlable:
+    if clever:
         my_domnestic_hot_water_heatpump_controller.connect_input(
             my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -516,6 +520,7 @@ def household_4_advanced_hp_ev_pv(
             output_description="Target electricity for dhw heat pump.",
         )
 
+
     else:
         my_electricity_controller.add_component_input_and_connect(
             source_component_class=my_domnestic_hot_water_heatpump,
@@ -527,7 +532,7 @@ def household_4_advanced_hp_ev_pv(
         )
 
     # connect EMS with Heatpump
-    if my_config.heatpump_controlable:
+    if clever:
         my_heat_pump_controller.connect_input(
             my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,

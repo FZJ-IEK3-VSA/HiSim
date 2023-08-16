@@ -1,8 +1,7 @@
 {
   "building_type": "blub",
   "number_of_apartments": 1,
-  "dhw_controlable": false,
-  "heatpump_controlable": true,
+  "surplus_control": false,
   "occupancy_config": {
     "name": "UTSPConnector",
     "url": "http://134.94.131.167:443/api/v1/profilerequest",

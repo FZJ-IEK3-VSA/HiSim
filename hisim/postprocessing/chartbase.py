@@ -24,7 +24,7 @@ class Chart:  # noqa: too-few-public-methods
         "SEP",
         "OCT",
         "NOV",
-        "DEZ",
+        "DEC",
     ]
     label_months_lowercase = [
         "January",

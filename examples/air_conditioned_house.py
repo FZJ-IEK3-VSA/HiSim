@@ -12,6 +12,7 @@ from hisim.components import air_conditioner
 # from hisim.components import controller_mpc #mpc
 # from hisim.components import generic_battery #mpc
 # from hisim.components import generic_price_signal #mpc
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Marwa Alfouly"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -23,9 +24,34 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-def household_ac_explicit(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def household_with_air_conditioner_and_controller_mpc(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.get_default_values_full_year()
+
+    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
+
+    household_air_conditioner_generic(my_sim, "MPC", my_simulation_parameters)
+
+
+def household_with_air_conditioner_and_controller_pid(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.get_default_values_full_year()
+
+    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
+
+    household_air_conditioner_generic(my_sim, "PID", my_simulation_parameters)
+
+
+def household_with_air_conditioner_and_controller_onoff(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.get_default_values_full_year()
+
+    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
+
+    household_air_conditioner_generic(my_sim, "on_off", my_simulation_parameters)
+
+
+def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Household Model.
 
     This setup function emulates an air conditioned house. Here the residents have their electricity covered by a photovoltaic system,
@@ -106,7 +132,7 @@ def household_ac_explicit(
 
     year = 2021
 
-    # temperature comfort ramge
+    # temperature comfort range #mpc
     # min_comfort_temp = 21.0
     # max_comfort_temp = 24.0
 
@@ -143,12 +169,12 @@ def household_ac_explicit(
     total_base_area_in_m2 = None
     number_of_apartments = None
 
-    # Set Air Conditioner  on/off controller
+    # Set air conditioner: on/off controller #onoff
     # t_air_heating = min_comfort_temp
     # t_air_cooling = max_comfort_temp
     # offset = 0.5
 
-    # MPC controller settings
+    # MPC controller settings #mpc
     # mpc_scheme = 'optimization_once_aday_only'         # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
     # flexibility_element = 'PV_and_Battery'             # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
     # pricing_scheme = 'dynamic'                          # The two options are: 'dynamic' or 'fixed'
@@ -159,15 +185,15 @@ def household_ac_explicit(
     ac_model = "AC120HBHFKH/SA - AC120HCAFKH/SA"  # "AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
     hp_min_operation_time = 900  # Unit: seconds
     hp_min_idle_time = 300  # Unit: seconds
-    control = "PID"  # Avialable options are: PID or on_off or MPC
+    # control = "PID"  # Avialable options are: PID or on_off or MPC
 
-    # set Battery
+    # set Battery #mpc
     # batt_manufacturer = "sonnen"
     # batt_model = "sonnenBatterie 10 - 5,5 kWh"
     # batt_soc = 0.5 *5000
 
     # Set simulation parameters
-    seconds_per_timestep = 60  # PID
+    seconds_per_timestep = 60 #mpc#pid#onoff
     # if control == "MPC":
     # seconds_per_timestep = 60*20    # multiply seconds_per_timestep with factor (e.g. 20) to run MPC with bigger sampling time
     # else:
@@ -185,7 +211,8 @@ def household_ac_explicit(
         my_simulation_parameters.result_directory = os.path.join(
             "ac_results_5",
             "Full Year Simulation for " + location + " Control Type is " + control,
-        )  # PID
+        )  #pid
+        #mpc#pid#onoff
         # if control == "MPC":
         # my_simulation_parameters.result_directory = os.path.join(
         #    "ac_results", location+" Full year "
@@ -196,6 +223,7 @@ def household_ac_explicit(
         # else:
         # my_simulation_parameters.result_directory = os.path.join("ac_results_5", "Full Year Simulation for " + location + " Control Type is "+ control)
 
+    #mpc
     # if control == "MPC":
     # my_simulation_parameters.reset_system_config(
     #   predictive=True, prediction_horizon=24 * 3600, 
@@ -270,39 +298,22 @@ def household_ac_explicit(
     my_sim.add_component(my_photovoltaic_system)
 
     """Building"""
-    # my_building_config=building.BuildingConfig(
-    # name="Building1",
-    # building_code = building_code,
-    # building_heat_capacity_class = building_class,
-    # initial_internal_temperature_in_celsius = initial_temperature,
-    # heating_reference_temperature_in_celsius = heating_reference_temperature,
-
-    # absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-    # total_base_area_in_m2=total_base_area_in_m2,
-    # number_of_apartments=number_of_apartments,
-    # )
-    # my_building = building.Building(
-    # config=my_building_config,
-    # my_simulation_parameters=my_simulation_parameters,
-    # my_simulation_repository = my_sim.simulation_repository,
-    # )
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 
-    """Price signal"""
+    """Price signal""" #mpc
     # my_price_signal = generic_price_signal.PriceSignal(
-    # config=generic_price_signal.PriceSignalConfig(
-    # name = "PriceSignal",
-    # country = "Spain",
-    # pricing_scheme = pricing_scheme,
-    # installed_capacity = power,
-
-    # price_signal_type = 'dummy',
-    # fixed_price = [],
-    # static_tou_price = [],
-    # price_injection = 0.0,
-    # ),
-    # my_simulation_parameters=my_simulation_parameters,
+    #   config=generic_price_signal.PriceSignalConfig(
+    #       name = "PriceSignal",
+    #       country = "Spain",
+    #       pricing_scheme = pricing_scheme,
+    #       installed_capacity = power,
+    #       price_signal_type = 'dummy',
+    #       fixed_price = [],
+    #       static_tou_price = [],
+    #       price_injection = 0.0,
+    #   ),
+    #   my_simulation_parameters=my_simulation_parameters,
     # )
     # my_sim.add_component(my_price_signal)
 
@@ -332,75 +343,75 @@ def household_ac_explicit(
     )
     my_sim.add_component(my_air_conditioner)
 
-    """Generic Battery """
+    """Generic Battery """ #mpc
     # if control == "MPC":
     # my_battery_config = generic_battery.GenericBatteryConfig(
-    # manufacturer=batt_manufacturer,
-    # model=batt_model,
-    # soc=batt_soc,
-
-    # name="Generic Battery",
-    # base=False,
+    #   manufacturer=batt_manufacturer,
+    #   model=batt_model,
+    #   soc=batt_soc,
+    #   name="Generic Battery",
+    #   base=False,
     # )
     # my_battery=generic_battery.GenericBattery(
-    # config = my_battery_config,
-    # my_simulation_parameters = my_simulation_parameters,
+    #   config = my_battery_config,
+    #   my_simulation_parameters = my_simulation_parameters,
     # )
     # my_sim.add_component(my_battery)
 
-    """Model Predictive Controller"""
+    """Model Predictive Controller""" #mpc
     # if control == "MPC":
     # my_mpc_controller_config = controller_mpc.MpcControllerConfig(
-    # mpc_scheme=mpc_scheme,
-    # min_comfort_temp=min_comfort_temp,
-    # max_comfort_temp=max_comfort_temp,
-    # optimizer_sampling_rate=optimizer_sampling_rate,
-    # initial_temeperature = initial_temperature,
-    # flexibility_element = flexibility_element,
-    # initial_state_of_charge = batt_soc,
-
-    # name="MpcController",
-    # temp_forecast = [],
-    # phi_m_forecast = [],
-    # phi_st_forecast = [],
-    # phi_ia_forecast = [],
-    # pv_forecast_yearly = [],
-    # maximum_storage_capacity = 0.0,
-    # minimum_storage_capacity = 0.0,
-    # maximum_charging_power = 0.0,
-    # maximum_discharging_power = 0.0,
-    # battery_efficiency = 0.0,
-    # inverter_efficiency = 0.0,
-    # temperature_Forecast_24h_1min = [],
-    # phi_m_Forecast_24h_1min = [],
-    # phi_ia_Forecast_24h_1min = [],
-    # phi_st_Forecast_24h_1min = [],
-    # pv_forecast_24h_1min = [],
-    # PricePurchase_Forecast_24h_1min = [],
-    # PriceInjection_Forecast_24h_1min = [],
-    # optimal_cost = [],
-    # revenues = [],
-    # air_conditioning_electricity = [],
-    # cost_optimal_temperature_set_point = [],
-    # pv2load = [],
-    # electricity_from_grid = [],
-    # electricity_to_grid = [],
-    # battery_to_load = [],
-    # pv_to_battery_timestep = [],
-    # battery_power_flow_timestep = [],
-    # battery_control_state = [],
-    # batt_soc_actual_timestep = [],
-    # batt_soc_normalized_timestep = [],
+    #   mpc_scheme=mpc_scheme,
+    #   min_comfort_temp=min_comfort_temp,
+    #   max_comfort_temp=max_comfort_temp,
+    #   optimizer_sampling_rate=optimizer_sampling_rate,
+    #   initial_temeperature = initial_temperature,
+    #   flexibility_element = flexibility_element,
+    #   initial_state_of_charge = batt_soc,
+    #   name="MpcController",
+    #   temp_forecast = [],
+    #   phi_m_forecast = [],
+    #   phi_st_forecast = [],
+    #   phi_ia_forecast = [],
+    #   pv_forecast_yearly = [],
+    #   maximum_storage_capacity = 0.0,
+    #   minimum_storage_capacity = 0.0,
+    #   maximum_charging_power = 0.0,
+    #   maximum_discharging_power = 0.0,
+    #   battery_efficiency = 0.0,
+    #   inverter_efficiency = 0.0,
+    #   temperature_Forecast_24h_1min = [],
+    #   phi_m_Forecast_24h_1min = [],
+    #   phi_ia_Forecast_24h_1min = [],
+    #   phi_st_Forecast_24h_1min = [],
+    #   pv_forecast_24h_1min = [],
+    #   PricePurchase_Forecast_24h_1min = [],
+    #   PriceInjection_Forecast_24h_1min = [],
+    #   optimal_cost = [],
+    #   revenues = [],
+    #   air_conditioning_electricity = [],
+    #   cost_optimal_temperature_set_point = [],
+    #   pv2load = [],
+    #   electricity_from_grid = [],
+    #   electricity_to_grid = [],
+    #   battery_to_load = [],
+    #   pv_to_battery_timestep = [],
+    #   battery_power_flow_timestep = [],
+    #   battery_control_state = [],
+    #   batt_soc_actual_timestep = [],
+    #   batt_soc_normalized_timestep = [],
     # )
     # my_mpc_controller=controller_mpc.MPC_Controller(
-    # config = my_mpc_controller_config,
-    # my_simulation_parameters = my_simulation_parameters,
-    # my_simulation_repository = my_sim.simulation_repository,
+    #   config = my_mpc_controller_config,
+    #   my_simulation_parameters = my_simulation_parameters,
+    #   my_simulation_repository = my_sim.simulation_repository,
     # )
 
-    # my_mpc_controller.connect_input(my_mpc_controller.TemperatureMean,
-    # my_building.component_name,
-    # my_building.TemperatureMeanThermalMass)
+    # my_mpc_controller.connect_input(
+    #   my_mpc_controller.TemperatureMean,
+    #   my_building.component_name,
+    #   my_building.TemperatureMeanThermalMass
+    # )
 
     # my_sim.add_component(my_mpc_controller)
 
@@ -414,7 +425,7 @@ def household_ac_explicit(
     # my_mpc_controller.component_name,
     # my_mpc_controller.Battery2Load)
 
-    """PID controller"""
+    """PID controller""" #pid
     if control == "PID":
         my_pid_controller_config = (
             controller_pid.PIDControllerConfig.get_default_config()
@@ -451,23 +462,23 @@ def household_ac_explicit(
         )
         my_sim.add_component(pid_controller)
 
-    """Air conditioner on-off controller"""
+    """Air conditioner on-off controller""" #onoff
     # if control=="on_off":
     # my_air_conditioner_controller_config = air_conditioner.AirConditionerControllerConfig(
-    # t_air_heating=t_air_heating,
-    # t_air_cooling=t_air_cooling,
-    # offset=offset,
-    # name="AirConditioner",
+    #   t_air_heating=t_air_heating,
+    #   t_air_cooling=t_air_cooling,
+    #   offset=offset,
+    #   name="AirConditioner",
     # )
     # my_air_conditioner_controller=air_conditioner.AirConditionercontroller(
-    # config = my_air_conditioner_controller_config,
-    # my_simulation_parameters = my_simulation_parameters,
+    #   config = my_air_conditioner_controller_config,
+    #   my_simulation_parameters = my_simulation_parameters,
     # )
 
     # my_air_conditioner_controller.connect_input(
-    # my_air_conditioner_controller.TemperatureMean,
-    # my_building.component_name,
-    # my_building.TemperatureMeanThermalMass,
+    #   my_air_conditioner_controller.TemperatureMean,
+    #   my_building.component_name,
+    #   my_building.TemperatureMeanThermalMass,
     # )
 
     # my_sim.add_component(my_air_conditioner_controller)
@@ -477,18 +488,26 @@ def household_ac_explicit(
     # my_air_conditioner_controller.State)
 
     # if control == "MPC":
-    # my_air_conditioner.connect_input(my_air_conditioner.OperatingMode,
-    # my_mpc_controller.component_name,
-    # my_mpc_controller.OperatingMode)
-    # my_air_conditioner.connect_input(my_air_conditioner.GridImport,
-    # my_mpc_controller.component_name,
-    # my_mpc_controller.GridImport)
-    # my_air_conditioner.connect_input(my_air_conditioner.PV2load,
-    # my_mpc_controller.component_name,
-    # my_mpc_controller.PV2load)
-    # my_air_conditioner.connect_input(my_air_conditioner.Battery2Load,
-    # my_mpc_controller.component_name,
-    # my_mpc_controller.Battery2Load)
+    # my_air_conditioner.connect_input(
+    #   my_air_conditioner.OperatingMode,
+    #   my_mpc_controller.component_name,
+    #   my_mpc_controller.OperatingMode
+    # )
+    # my_air_conditioner.connect_input(
+    #   my_air_conditioner.GridImport,
+    #   my_mpc_controller.component_name,
+    #   my_mpc_controller.GridImport
+    # )
+    # my_air_conditioner.connect_input(
+    #   my_air_conditioner.PV2load,
+    #   my_mpc_controller.component_name,
+    #   my_mpc_controller.PV2load
+    # )
+    # my_air_conditioner.connect_input(
+    #   my_air_conditioner.Battery2Load,
+    #   my_mpc_controller.component_name,
+    #   my_mpc_controller.Battery2Load
+    # )
 
     my_building.connect_input(
         my_building.ThermalPowerDelivered,

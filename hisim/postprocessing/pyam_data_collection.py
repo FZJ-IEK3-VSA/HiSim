@@ -293,7 +293,10 @@ class PyamDataCollector:
                 dataframe = pd.read_csv(csv_file)
 
                 if rename_scenario is True:
-                    if parameter_key is not None and list_with_parameter_key_values is not None:
+                    if (
+                        parameter_key is not None
+                        and list_with_parameter_key_values is not None
+                    ):
                         # rename scenario adding paramter key, value pair
                         dataframe[
                             "scenario"

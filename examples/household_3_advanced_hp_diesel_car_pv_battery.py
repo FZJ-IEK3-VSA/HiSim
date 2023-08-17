@@ -89,7 +89,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
             number_of_apartments=number_of_apartments,
             # dhw_controlable=False,
             # heatpump_controlable=False,
-            surplus_control=True,
+            surplus_control=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(

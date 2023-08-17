@@ -9,72 +9,55 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import controller_pid
 from hisim.components import air_conditioner
-# from hisim.components import controller_mpc #mpc
-# from hisim.components import generic_battery #mpc
-# from hisim.components import generic_price_signal #mpc
+from hisim.components import controller_mpc #mpc
+from hisim.components import generic_battery #mpc
+from hisim.components import generic_price_signal #mpc
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
-__authors__ = "Marwa Alfouly"
-__copyright__ = "Copyright 2021, the House Infrastructure Project"
+__authors__ = "Marwa Alfouly, Sebastian Dickler"
+__copyright__ = "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
+__maintainer__ = "Sebastian Dickler"
+__email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
-
 def household_with_air_conditioner_and_controller_mpc(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.get_default_values_full_year()
-
-    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
-
     household_air_conditioner_generic(my_sim, "MPC", my_simulation_parameters)
 
 
 def household_with_air_conditioner_and_controller_pid(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.get_default_values_full_year()
-
-    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
-
     household_air_conditioner_generic(my_sim, "PID", my_simulation_parameters)
 
 
 def household_with_air_conditioner_and_controller_onoff(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
-    if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.get_default_values_full_year()
-
-    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
-
     household_air_conditioner_generic(my_sim, "on_off", my_simulation_parameters)
 
 
 def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Household Model.
 
-    This setup function emulates an air conditioned house. Here the residents have their electricity covered by a photovoltaic system,
-    a battery, and the electric grid.
-
+    This setup function emulates an air-conditioned house. 
+    Here the residents have their electricity covered by a photovoltaic system, a battery, and the electric grid.
     Thermal load of the building is covered with an air conditioner.
 
-    Connnected Components are:
+    Connected components are:
         - Occupancy (Residents' Demands)
         - Weather
         - Price signal
         - Photovoltaic System
         - Building
         - Air conditioner
-        - Controllers: Three options are available: on-off control / pid controller / model predictive controller.
+        - Controllers: Three options are available: on-off control / PID controller / model predictive controller.
         Please adjust the variable "control = .... " accordingly
 
     Analyzed region: Southern Europe.
 
-    Represetative Locations selected according to climate zone with focus on the Mediterranean climate as it has the highest cooling
-    demand.
+    Representative locations selected according to climate zone with
+    focus on the Mediterranean climate as it has the highest cooling demand.
 
-    TABULA code for the examplery single family household are chosen according to the construction year class:
+    TABULA code for the exemplary single-family household is chosen according to the construction year class:
 
         1. Seville: ES.ME.SFH.05.Gen.ReEx.001.001 , construction year: 1980 - 2006 okay
         2. Madrid:  ES.ME.SFH.05.Gen.ReEx.001.001 , construction year: 1980 - 2006 okay
@@ -88,45 +71,49 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
         6. Athens: GR.ZoneB.SFH.03.Gen.ReEx.001.001 , construction year: 2001 - 2010
         7. Cyprus: CY.N.SFH.03.Gen.ReEx.001.003, , construction year: 2007 - 2013
 
-
     Remarks about the model predictive controller (MPC):
 
-        You Need to intsall HSL solvers. Please refer to https://www.hsl.rl.ac.uk/ipopt/
+        You need to install HSL solvers. Please refer to https://www.hsl.rl.ac.uk/ipopt/
 
-        MPC applies a moving horizon principle where the optimization is excuted at each timestep. This leads to a very high
+        MPC applies a moving horizon principle where the optimization is executed at each timestep. This leads to a very high
         simulation time. Therefore, there are two options to get the optimal solution (adjust the variable "mpc_scheme =...."
         to choose your desired approach):
 
             1. 'optimization_once_aday_only': The optimization is done once each 24 hours and the optimal solution is
-            applied for the next 24 hours --> Simualtion time for building with PV and Battery is 10 min for a time_step size = 20 min
+            applied for the next 24 hours --> Simulation time for building with PV and Battery is 10 min for a time_step size = 20 min
 
-            Note: for this option it is possible to simulate hisim with timestep size of 1 minutes and adjust the sampling
-            time for optimization to a higher value e.g. 15  to reduce the computational complexitity. Disadvantage
-            of this option is that temperature may deviate by around 0.02 C from the set point. To use this feature please
-            adjust the sampling_rate accordingly
+            Note: for this option it is possible to simulate HiSim with timestep size of 1 minutes and adjust the sampling
+            time for optimization to a higher value (e.g., 15) to reduce the computational complexity. Disadvantage
+            of this option is that temperature may deviate by around 0.02 °C from the set point. To use this feature please
+            adjust the sampling_rate accordingly.
 
-
-            2. 'moving_horizon_control': Oprtimization is done each timestep. Pros: can react to sudden disturbance,
+            2. 'moving_horizon_control': Optimization is done each timestep. Pros: can react to sudden disturbance,
             cons: very high simulation time (2 steps/s if timestep size is 20 min)
 
         You can run the optimization for:
             1. a basic case that only includes building - air conditioning. No PV or battery
-            2. a building with pv generation installed
+            2. a building with PV generation installed
             3. a building with PV and battery.
             Please adjust the variable "flexibility_element = ... " accordingly
 
         To investigate the impact of Demand response programs. Fixed and dynamic price signal are available.
         Please adjust the variable "pricing_scheme=..." accordingly
 
-        Future work: improving the implemtation with automatic scaling of the optimal control problem formulation. This (could)
-        make a moving horizon scheme possible in reasonable time
+        Future work: Improving the implementation with automatic scaling of the optimal control problem formulation.
+        This could make/makes a moving horizon scheme possible in reasonable time.
     """
 
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.one_week_only(2021,60)
+        # my_simulation_parameters = SimulationParameters.three_months_only(2021,60)
+
+    SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
+
     # delete all files in cache:
-    dir_cache = "..//hisim//inputs//cache"
-    if os.path.isdir(dir_cache):
-        for file in os.listdir(dir_cache):
-            os.remove(os.path.join(dir_cache, file))
+    # dir_cache = "..//hisim//inputs//cache"
+    # if os.path.isdir(dir_cache):
+    #     for file in os.listdir(dir_cache):
+    #         os.remove(os.path.join(dir_cache, file))
 
     # System Parameters
 

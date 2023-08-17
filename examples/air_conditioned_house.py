@@ -23,17 +23,21 @@ __maintainer__ = "Sebastian Dickler"
 __email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
+# Define simulation parameters
+year = 2021
+seconds_per_timestep = 60
+my_simulation_parameters = SimulationParameters.one_week_only(year, seconds_per_timestep)
+# my_simulation_parameters = SimulationParameters.three_months_only(year, seconds_per_timestep)
+# my_simulation_parameters = SimulationParameters.full_year_all_options(year, seconds_per_timestep)
+
 def household_with_air_conditioner_and_controller_mpc(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
     household_air_conditioner_generic(my_sim, "MPC", my_simulation_parameters)
-
 
 def household_with_air_conditioner_and_controller_pid(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
     household_air_conditioner_generic(my_sim, "PID", my_simulation_parameters)
 
-
 def household_with_air_conditioner_and_controller_onoff(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
     household_air_conditioner_generic(my_sim, "on_off", my_simulation_parameters)
-
 
 def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Household Model.
@@ -105,7 +109,6 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
 
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.one_week_only(2021,60)
-        # my_simulation_parameters = SimulationParameters.three_months_only(2021,60)
 
     SingletonSimRepository().set_entry(key="prediction_horizon", entry=24 * 3600)
 

@@ -89,7 +89,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
             number_of_apartments=number_of_apartments,
             # dhw_controlable=False,
             # heatpump_controlable=False,
-            surplus_control=False,
+            surplus_control=True,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -475,7 +475,7 @@ def household_3_advanced_hp_diesel_car_pv_battery(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=2,
+            source_weight=3,
         )
 
         my_electricity_controller.add_component_output(
@@ -484,7 +484,7 @@ def household_3_advanced_hp_diesel_car_pv_battery(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heat Pump. ",

@@ -1,6 +1,7 @@
 {
   "building_type": "blub",
   "number_of_apartments": 1,
+  "surplus_control": false,
   "occupancy_config": {
     "name": "UTSPConnector",
     "url": "http://134.94.131.167:443/api/v1/profilerequest",
@@ -161,5 +162,13 @@
     "name": "ElectricityMeter",
     "total_energy_to_grid_in_kwh": 0.0,
     "total_energy_from_grid_in_kwh": 0.0
+  },
+  "electricity_controller_config": {
+    "name": "L2EMSElectricityController",
+    "strategy": "optimize_own_consumption",
+    "limit_to_shave": 0,
+    "building_temperature_offset_value": 2,
+    "storage_temperature_offset_value": 10,
+    "simple_hot_water_storage_temperature_offset_value": 10
   }
 }

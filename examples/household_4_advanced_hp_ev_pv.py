@@ -464,7 +464,8 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.CAR_BATTERY,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=car_battery_controller.source_weight,
+            # source_weight=car_battery_controller.source_weight,
+            source_weight=1,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target Electricity for EV Battery Controller. ",
@@ -548,7 +549,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=2,
+            source_weight=3,
         )
 
         my_electricity_controller.add_component_output(
@@ -557,7 +558,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.HEAT_PUMP,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heat Pump. ",

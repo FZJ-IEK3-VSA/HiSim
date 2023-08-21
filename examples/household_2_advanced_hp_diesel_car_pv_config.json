@@ -79,7 +79,7 @@
   "hp_controller_config": {
     "name": "HeatPumpController",
     "mode": 2,
-    "set_heating_threshold_outside_temperature_in_celsius": null,
+    "set_heating_threshold_outside_temperature_in_celsius": 16.0,
     "set_cooling_threshold_outside_temperature_in_celsius": 20.0
   },
   "hp_config": {
